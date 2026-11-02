@@ -43,6 +43,10 @@ def _open_vocab_body() -> dict[str, Any]:
     return {'display_name': 'Sweep', 'targets': [{'prompt': 'test object', 'class_name': 'sweep'}]}
 
 
+def _ingest_profile_body() -> dict[str, Any]:
+    return {'primary': {'model': 'sweep-model'}}
+
+
 def _running_job(job_dir: str) -> Any:
     """A cancel acts on a running job: mark ``slug``'s one running (a
     fresh state, no heartbeat yet) right before its cancel is called."""
@@ -282,6 +286,34 @@ def _prepare_vlm(env: Any, slug: str) -> None:
     _seed_vlm(env, slug)
 
 
+def _stored_ingest_profile(env: Any, slug: str) -> None:
+    """(Re-)seed ``ingest:<slug>-model`` at a known revision 1, with no
+    activation recorded -- mirrors ``_stored_open_vocab``."""
+    from src.config.curation_roles import IndexRole
+
+    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
+    name = f'{slug}-model'
+    now = '2026-01-01T00:00:00+00:00'
+    docs = env.transport.store.setdefault(index, {})
+    doc = {
+        'doc_type': 'config',
+        'kind': 'ingest_profile',
+        'name': name,
+        'revision': 1,
+        'body': _ingest_profile_body(),
+        'description': '',
+        'created_at': now,
+        'updated_at': now,
+        'updated_by': None,
+        'cloned_from': None,
+    }
+    docs[f'ingest:{name}'] = doc
+    docs[f'ingest:{name}@1'] = {**doc, 'doc_type': 'revision'}
+    docs.pop('activation:ingest_profile', None)
+    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
+    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
+
+
 def _stored_open_vocab(env: Any, slug: str) -> None:
     """(Re-)seed ``ovset:<slug>-model`` at a known revision 1, with no
     activation recorded -- mirrors ``_stored_region_profile``."""
@@ -347,6 +379,10 @@ PREPARE: dict[tuple[str, str], Any] = {
     ('PUT', '/region_profiles/{name}'): _stored_region_profile,
     ('DELETE', '/region_profiles/{name}'): _stored_region_profile,
     ('POST', '/region_profiles/{name}/activate'): _stored_region_profile,
+    ('POST', '/ingest_profiles/{name}/clone'): _stored_ingest_profile,
+    ('PUT', '/ingest_profiles/{name}'): _stored_ingest_profile,
+    ('DELETE', '/ingest_profiles/{name}'): _stored_ingest_profile,
+    ('POST', '/ingest_profiles/{name}/activate'): _stored_ingest_profile,
     ('POST', '/open_vocab/{name}/clone'): _stored_open_vocab,
     ('PUT', '/open_vocab/{name}'): _stored_open_vocab,
     ('DELETE', '/open_vocab/{name}'): _stored_open_vocab,

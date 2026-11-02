@@ -48,10 +48,7 @@ def client(monkeypatch: pytest.MonkeyPatch, segmenter: dict[str, Any]) -> TestCl
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
-    monkeypatch.setattr(
-        'src.config.ingest_profiles.ingest_primary_profile',
-        type('P', (), {'detector_model': ''}),
-    )
+    monkeypatch.delenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', raising=False)
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     fake = FakeConfigOpenSearch()
@@ -220,10 +217,7 @@ def test_cap_is_configurable_within_the_ceiling(client: TestClient) -> None:
 def test_target_named_like_a_detector_class_is_a_warning(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        'src.config.ingest_profiles.ingest_primary_profile',
-        type('P', (), {'detector_model': 'det'}),
-    )
+    monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'det')
     monkeypatch.setattr('src.utils.class_names.get_class_names', lambda _m: {0: 'Cup', 1: 'person'})
     r = client.post(
         f'{PREFIX}/validate',

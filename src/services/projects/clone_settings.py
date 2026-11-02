@@ -35,7 +35,7 @@ async def clone_settings_document(
         if source_policy.revision:
             await put_ingest_policy(
                 client,
-                IngestPolicyBody(detect=source_policy.detect, embedding=source_policy.embedding),
+                IngestPolicyBody(**source_policy.model_dump(exclude={'revision'})),
                 expected_revision=(await get_ingest_policy(client)).revision,
             )
         if source_vlm_policy.revision:

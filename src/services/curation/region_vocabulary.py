@@ -16,9 +16,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.region_rejection import rejection_reason_catalog
 from src.config.region_source import CANDIDATE_SEGMENTER_TEXT_HINT, CANDIDATE_SOURCES
+from src.services.curation.ingest_detector import project_ingest_profiles
 from src.services.detection.profile_registry import get_active_region_profile
 
 
@@ -85,11 +85,12 @@ def _detectors() -> list[dict[str, Any]]:
     for endpoint in available_vlm_endpoints():
         add(endpoint.model_id, f'VLM ({endpoint.model_id})', 'verifier', filterable=False)
 
-    primary = ingest_primary_profile()
+    ingest = project_ingest_profiles()
+    primary = ingest.primary
     p_model = primary.detector_model or primary.name
     add(p_model, f'Proposer ({p_model})', 'proposal', filterable=False)
 
-    secondary = ingest_secondary_profile()
+    secondary = ingest.secondary
     if secondary is not None:
         s_model = secondary.detector_model or secondary.name
         add(s_model, f'Classifier ({s_model})', 'classifier', filterable=False)

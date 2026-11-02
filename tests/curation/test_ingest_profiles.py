@@ -245,12 +245,13 @@ def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> No
     }
     # The primary's ``_model`` source is reserved for classes it assigns, by id
     # (assigns_class) or by name (the project's ingest policy).
-    assert cs.classifier_class_sources() == {'proposer_model'}
+    assert cs.classifier_class_sources() == {'proposer_model', 'secondary_model'}
     assert cs.confident_class_sources() == (
         'assist_propagated',
         'external_label',
         'human',
         'proposer_model',
+        'secondary_model',
         'vlm',
     )
 

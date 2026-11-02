@@ -54,10 +54,7 @@ def env(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
-    monkeypatch.setattr(
-        'src.config.ingest_profiles.ingest_primary_profile',
-        type('P', (), {'detector_model': ''}),
-    )
+    monkeypatch.delenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', raising=False)
     monkeypatch.delenv('OP_SEGMENTER_URL', raising=False)
     app = FastAPI()
     mount_curation_routers(app, curation_router)

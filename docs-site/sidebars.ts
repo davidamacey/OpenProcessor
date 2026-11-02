@@ -27,6 +27,7 @@ const sidebars: SidebarsConfig = {
             'guides/ingest-large-folder',
             'guides/ingest-sources',
             'guides/ingest-policy',
+            'guides/ingest-profiles',
             'guides/dataset-import',
           ],
         },

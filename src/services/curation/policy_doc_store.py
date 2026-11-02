@@ -16,6 +16,10 @@ from typing import Any
 from pydantic import BaseModel
 
 from src.config import IndexRole, get_curation_config, index_name
+from src.core.logging import get_logger
+
+
+logger = get_logger(__name__)
 
 
 SETTINGS_DOC_ID = 'default'
@@ -31,10 +35,15 @@ def _is_not_found(exc: Exception) -> bool:
 
 
 async def read_policy[P: BaseModel](
-    client: Any, key: str, model: type[P]
+    client: Any, key: str, model: type[P], *, retired_fields: dict[str, str] | None = None
 ) -> tuple[P, dict[str, Any] | None]:
     """The stored policy under ``key`` (the model's defaults when never written)
-    and the raw settings response (``None`` when the document does not exist)."""
+    and the raw settings response (``None`` when the document does not exist).
+
+    ``retired_fields`` maps a field the model no longer has to what replaced it:
+    a stored value is reset (dropped, with a logged warning naming the
+    replacement) instead of failing the read, since the strict model would
+    otherwise break every read of the project. The next write removes it."""
     index = index_name(get_curation_config(), IndexRole.SETTINGS)
     try:
         resp = await client.get(index=index, id=SETTINGS_DOC_ID)
@@ -43,6 +52,17 @@ async def read_policy[P: BaseModel](
             return model(), None
         raise
     stored = (resp.get('_source') or {}).get(key)
+    if stored and retired_fields:
+        for name, replacement in retired_fields.items():
+            if name in stored:
+                stored = {k: v for k, v in stored.items() if k != name}
+                logger.warning(
+                    'retired_policy_field_reset',
+                    policy=key,
+                    field=name,
+                    project=get_curation_config().project_slug,
+                    use=replacement,
+                )
     return (model.model_validate(stored) if stored else model()), resp
 
 

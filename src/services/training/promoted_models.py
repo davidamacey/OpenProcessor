@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.pe_encoder import PE_IMAGE_MODEL
 from src.config.curation_accessors import get_curation_config
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
+from src.services.curation.ingest_detector import project_ingest_profiles
 from src.services.training.model_classes import is_model_shared, model_owner_project
 from src.services.training.triton_repo import resolve_triton_models_dir
 
@@ -53,7 +53,8 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     # the models that produced most of the labels. Both are resolved
     # from OP_INGEST_PRIMARY_*/OP_INGEST_SECONDARY_* (ingest_profiles.py),
     # never hardcoded.
-    primary = ingest_primary_profile()
+    ingest = project_ingest_profiles()
+    primary = ingest.primary
     if primary.detector_model:
         entries.append(
             (
@@ -63,7 +64,7 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
                 'TensorRT detection',
             )
         )
-    secondary = ingest_secondary_profile()
+    secondary = ingest.secondary
     if secondary is not None and secondary.detector_model:
         entries.append(
             (

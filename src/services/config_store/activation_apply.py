@@ -30,6 +30,7 @@ AXIS_STORAGE: dict[str, tuple[ConfigKind, str, str]] = {
     'prompt_pack': ('prompt_pack', 'packs', 'active_pack'),
     'detection_profile': ('region_profile', 'profiles', 'active_profile'),
     'open_vocab': ('open_vocab_set', 'open_vocab_sets', 'active_open_vocab'),
+    'ingest_profile': ('ingest_profile', 'ingest_profiles', 'active_ingest_profile'),
 }
 
 

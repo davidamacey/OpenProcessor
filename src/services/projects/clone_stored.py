@@ -1,5 +1,5 @@
 """Copy one project's stored configs of one kind into another (the
-``prompt_packs`` and ``open_vocab`` clone axes): current revision only,
+``prompt_packs``, ``open_vocab`` and ``ingest_profile`` clone axes): current revision only,
 revision history is not carried over. Split out of ``clone.py`` for the
 700-LOC ratchet; the source is always read under a read-only bind."""
 

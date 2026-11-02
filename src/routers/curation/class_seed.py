@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from src.clients.curation_opensearch.registry import ClassRegistryError
-from src.config.ingest_profiles import ingest_primary_profile
 from src.routers.curation._api_error import api_error
 from src.routers.curation._class_models import (
     SeedConflict,
@@ -19,8 +18,10 @@ from src.routers.curation._error_models import (
 )
 from src.routers.curation.classes_write import create_registry_class
 from src.services.curation.detector_vocabulary import detector_labels, plan_seed
-from src.services.curation.ingest_detector import effective_profile
-from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.services.curation.ingest_detector import (
+    IngestProfileUnresolvedError,
+    refreshed_ingest_profiles,
+)
 from src.utils.class_names import class_name_deprecation_index
 
 
@@ -46,17 +47,15 @@ async def seed_from_detector(
     list) is configured.
     """
     try:
-        profile = effective_profile(
-            ingest_primary_profile(), (await get_ingest_policy(opensearch)).detector
-        )
+        profile = (await refreshed_ingest_profiles(opensearch)).primary
         labels = detector_labels(profile) if profile.detector_model else []
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, IngestProfileUnresolvedError) as exc:
         raise api_error(503, 'detector_unavailable', f'ingest misconfigured: {exc}') from exc
     if not labels:
         raise api_error(
             503,
             'detector_unavailable',
-            'no ingest detector labels available; set OP_INGEST_PRIMARY_DETECTOR_MODEL',
+            'no ingest detector labels available; activate an ingest profile or set OP_INGEST_PRIMARY_DETECTOR_MODEL',
         )
     reg = get_class_registry()
     existing = class_name_deprecation_index(reg.load().classes)

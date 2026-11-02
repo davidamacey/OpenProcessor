@@ -293,9 +293,16 @@ def leak_env(
 
     env.app = app
     app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+
     # Ingest runs end to end: a fake detector pool and PE encoder at the
     # service boundary (the same fakes the ingest integration tests use).
-    monkeypatch.setattr(resources_module, 'get_async_triton_pool', FakeTritonPool)
+    class _LeakTritonPool(FakeTritonPool):
+        # An ingest-profile activation asks Triton whether its models are ready;
+        # the sweep has no server, which the route's `force` bypasses.
+        async def is_model_ready(self, _name: str) -> bool:
+            raise ConnectionError('triton disabled in the leak test')
+
+    monkeypatch.setattr(resources_module, 'get_async_triton_pool', _LeakTritonPool)
     had_encoder = hasattr(app.state, 'pe_encoder')
     previous_encoder = getattr(app.state, 'pe_encoder', None)
     app.state.pe_encoder = _LeakPEEncoder()

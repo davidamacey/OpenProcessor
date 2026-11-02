@@ -524,7 +524,7 @@ What was built, where it differs from the plan above, and what is left.
 - **Wave 3.** Axis `open_vocab` (kind `open_vocab_set`, doc id prefix `ovset:`),
   decoder `src/services/detection/open_vocab_set.py`, validation
   `open_vocab_validation.py`, routes `open_vocab.py` / `_open_vocab_clone.py`,
-  project clone axis `open_vocab` (`clone_open_vocab.py`; the stored-config copy
+  project clone axis `open_vocab` (`clone_named_axis.py`; the stored-config copy
   is now `clone_stored.copy_stored_configs`, shared with `prompt_packs`). The
   activation tables are `activation_apply.AXIS_STORAGE`. Not on the settings
   defaults bridge (`PUT /settings`): sets have their own activate routes.

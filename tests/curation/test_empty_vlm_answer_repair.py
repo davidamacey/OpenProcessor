@@ -17,16 +17,11 @@ UPDATED = '2026-09-24T14:28:23+00:00'
 
 @pytest.fixture(autouse=True)
 def _profiles(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        repair,
-        'ingest_primary_profile',
-        lambda: SimpleNamespace(name='det', detector_model='det_x', assigns_class=False),
+    profiles = SimpleNamespace(
+        primary=SimpleNamespace(name='det', detector_model='det_x', assigns_class=False),
+        secondary=SimpleNamespace(name='item', detector_model='item_x', assigns_class=True),
     )
-    monkeypatch.setattr(
-        repair,
-        'ingest_secondary_profile',
-        lambda: SimpleNamespace(name='item', detector_model='item_x', assigns_class=True),
-    )
+    monkeypatch.setattr(repair, 'project_ingest_profiles', lambda: profiles)
 
 
 def _doc(crop_id: str, **kw: Any) -> dict[str, Any]:
