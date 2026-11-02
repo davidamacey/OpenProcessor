@@ -96,3 +96,9 @@ _.read_liveness  # reads back the heartbeat file write_liveness wrote; the per-p
 _._guard_condition_matches  # plain-Python twin of the painless guard, the oracle the parity tests compare against
 _.CHOICE_SOURCES  # the choices_from table the config vocabulary contract test checks against the vocabulary
 _.ALL_STEPS  # the registry the next-steps completeness test enumerates
+
+# Landed ahead of their routes (#67 P1): wire models and their converter, first used by the
+# /analyze plan executor in P2. Delete these entries in that change.
+_.PlanReport  # src/schemas/processing_plan.py, response model of the plan-aware routes (P2)
+_.ProcessingPlan  # src/schemas/processing_plan.py, request model of the plan-aware routes (P2)
+_.to_request  # ProcessingPlan.to_request, called by the route that parses the plan (P2)

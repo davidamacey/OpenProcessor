@@ -1,13 +1,14 @@
 # Request-driven processing plans: run only the requested models and branches (#67)
 
-Status: design only (owner decision 2026-10-31: v0.9.0 delivers this document; implementation
-starts after #220, uint8 OCR input and faces and OCR on resident frames, has landed). Nothing here
-is implemented. Issue: #67. Umbrella: #40. Depends on: #220 (and through it #40). Related: #219,
+Status: design, P1 implemented (the pure domain module, the wire models and their tests; no route
+uses them yet). Owner decision 2026-10-31: v0.9.0 delivers this document; route work (P2 onward)
+starts after #220 PR 1 (the uint8 OCR input contract) has landed, and GPU face alignment is part of
+P5 here, not of #220. The rest is not implemented. Issue: #67. Umbrella: #40. Depends on: #220 (and through it #40). Related: #219,
 #52 (selective embedding, shipped), #231.
 
 A fresh agent with no memory of the planning conversation must be able to implement this from the
 file alone. Paths are relative to the repository root. File:line references were read on `main` at
-`04cb44bc` and will drift; re-find by symbol before editing. Settings this plan proposes are
+`04cb44bc`, re-checked at `1fc87ef2` (section 2.1 and 5 lines updated), and will drift; re-find by symbol before editing. Settings this plan proposes are
 written in lowercase (`plan_executor`) as proposals; any env name is chosen at implementation time
 and added to `env.template` and `tests/test_env_surface.py` in the same change. Routes are written
 with a method only where they exist today.
@@ -54,16 +55,16 @@ Read first, do not duplicate:
 
 | Route | What the code always runs | What the request can turn off | Evidence |
 |---|---|---|---|
-| `POST /analyze` | detector + whole-frame MobileCLIP + MobileCLIP per detection (`infer_yolo_clip_cpu`), SCRFD + alignment + ArcFace, OCR when `enable_ocr` (default true) | only OCR; `include_embedding` and `include_face_embeddings` only hide outputs | `src/services/analyze_pipeline.py:232-310`, `src/clients/triton_client.py:213-291` |
-| `POST /analyze` with `include_embedding=true` | the per-detection MobileCLIP vectors are computed **twice**: once inside `infer_yolo_clip_cpu` (`embed_boxes_from_full_res`, `triton_client.py:276-280`, result unused by `/analyze`) and again by `_run_crop_embeddings` (`analyze_pipeline.py:179-200`), which decodes the file again with PIL (`crop_batch_tensor`, `:130`) | | |
-| `POST /analyze/batch` | detector + MobileCLIP (both vectors) and SCRFD + ArcFace for every image even when `include_full_results=false` returns counts only; face confidence fixed at 0.5 | OCR (default off) | `analyze_pipeline.py:355-419` (`:380`) |
-| `POST /ingest` (core) | `enable_detection` or `enable_clip` runs the whole `infer_yolo_clip_cpu` (detector, frame vector, crop vectors) either way; faces at fixed 0.5 | `enable_faces`, `enable_ocr`; `enable_clip=false` writes a 512-d **zero vector** as the global embedding and still runs near-duplicate grouping on it | `src/services/visual_search/ingest_single.py:24-56`, `:144-148` |
+| `POST /analyze` | detector + whole-frame MobileCLIP + MobileCLIP per detection (`infer_yolo_clip_cpu`), SCRFD + alignment + ArcFace, OCR when `enable_ocr` (default true) | only OCR; `include_embedding` and `include_face_embeddings` only hide outputs | `src/services/analyze_pipeline.py:233-298`, `src/clients/triton_client.py:219-297` |
+| `POST /analyze` with `include_embedding=true` | the per-detection MobileCLIP vectors are computed **twice**: once inside `infer_yolo_clip_cpu` (`embed_boxes_from_full_res`, `triton_client.py:282-286`, result unused by `/analyze`) and again by `_run_crop_embeddings` (`analyze_pipeline.py:180-200`), which decodes the file again with PIL (`crop_batch_tensor`, `:130`) | | |
+| `POST /analyze/batch` | detector + MobileCLIP (both vectors) and SCRFD + ArcFace for every image even when `include_full_results=false` returns counts only; face confidence fixed at 0.5 | OCR (default off) | `analyze_pipeline.py:362-...` (`:388`) |
+| `POST /ingest` (core) | `enable_detection` or `enable_clip` runs the whole `infer_yolo_clip_cpu` (detector, frame vector, crop vectors) either way; faces at fixed 0.5 | `enable_faces`, `enable_ocr`; `enable_clip=false` writes a 512-d **zero vector** as the global embedding and still runs near-duplicate grouping on it | `src/services/visual_search/ingest_single.py:24-56`, `:146-150` |
 | Curation ingest (`POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, bulk) | decode once, detector, crop JPEGs, blur; PE per the project's embedding policy | per project, not per request (`IngestPolicy`, `src/services/curation/ingest_policy.py`) | `src/services/curation/ingest.py` |
 | Curation ingest, GPU decode route, policy `none` | the whole-frame PE vector is computed inside `gpu_image_prep` and then dropped | | `src/services/curation/ingest_index.py:226-240` (docstring says so) |
-| Curation ingest, GPU decode route, policy `selected` | every detection's crop square is embedded (`embed_crops` is one boolean, true unless `lazy`/`none`); the policy mask is applied after the PE work | | `src/services/curation/ingest_batch.py:85`, `models/gpu_image_prep/1/model.py:286-315` |
+| Curation ingest, GPU decode route, policy `selected` | every detection's crop square is embedded (`embed_crops` is one boolean, true unless `lazy`/`none`); the policy mask is applied after the PE work | | `src/services/curation/ingest_batch.py:85`, `models/gpu_image_prep/1/model.py:288-318` |
 
 Decodes of one image's bytes on `/analyze` with OCR and embeddings: PIL in `infer_yolo_clip_cpu`
-(`triton_client.py:230`), OpenCV in the face client (`src/clients/fast_face_client.py:154`), the
+(`triton_client.py:236`), OpenCV in the face client (`src/clients/fast_face_client.py:155`), the
 OCR service's validation decode (`src/services/ocr_service.py:90`), OpenCV again in
 `src/clients/triton_ocr.py:33`, and PIL again in `crop_batch_tensor`. That makes five decodes for
 one image. Curation ingest already decodes once (shipped in 0.6.0, `gpu_decode_plan.md` section 13).
@@ -91,7 +92,7 @@ Reading:
   16 clients (31.8 ms at 1 client), against 2.3 + 2.2 ms for ArcFace and SCRFD and 3.7 ms for the
   detector. `/analyze` spends that even when the response omits every embedding.
 - OCR is bound by the single `ocr_pipeline` Python instance and by the FP32 full-frame input
-  (765 ms per photo). That is #220's problem, but a plan that does not ask for OCR must never pay it.
+  (765 ms per photo; #220 PR 1 sends uint8, a quarter of the bytes). That is #220's problem, but a plan that does not ask for OCR must never pay it.
 - Curation ingest shows what skipping a branch is worth. In `gpu_decode_plan.md` section 13, detect
   only (policy `lazy`) ran at 44.0 against 35.0 photos/s with embedding on set B, and at 120.3
   against 28.6 frames/s on set A ("Measured ingest speed" and the per-image cost table in
@@ -121,7 +122,7 @@ branches that run.
 | `embed_frame` | core: `mobileclip2_s2_image_encoder`; curation: `pe_image_encoder` | | one whole-image vector | all |
 | `embed_crops` | same encoder as `embed_frame` | `detect` | one vector per detection (curation: per policy-selected detection) | all |
 | `faces` | `scrfd_10g_bnkps` | | face boxes, 5-point landmarks, score, quality (quality is box-based, `fast_face_client.py` `_compute_quality`) | `/analyze`, core `/ingest` |
-| `face_embed` | `arcface_w600k_r50` (+ host or, after #220, GPU alignment) | `faces` | one ArcFace vector per face | `/analyze`, core `/ingest` |
+| `face_embed` | `arcface_w600k_r50` (+ host alignment; GPU alignment is P5 here) | `faces` | one ArcFace vector per face | `/analyze`, core `/ingest` |
 | `ocr` | `ocr_pipeline` (calls `paddleocr_det_trt`, `paddleocr_rec_trt`) | | text lines, quads, scores | `/analyze`, core `/ingest` |
 | `near_duplicates` | none (OpenSearch k-NN on the frame vector) | `embed_frame` | duplicate group assignment | core `/ingest` |
 | `region` | none at ingest; seeds `pending_detection` for the region worker when a region profile is active | `detect` | region queue seed | curation ingest |
@@ -132,7 +133,7 @@ Derived shared stages, run at most once per image and only when a branch needs t
 |---|---|---|
 | hash (imohash, dedup) | the route stores (core `/ingest`, curation) | `ingest_single._imohash`, `ingest_helpers._imohash_bytes` |
 | decode (EXIF upright, uint8) | any pixel branch runs | `src/services/curation/image_decode.py` (CPU), `gpu_image_prep` (GPU) |
-| detector letterbox | `detect` | `preprocess_yolo_cpu`, `gpu_image_prep._detect` |
+| detector letterbox (built as uint8; the wire datatype is the model's own, FP32 or UINT8, via `images_input` and `get_model_input_datatype`, #428; the metadata read is made only when `detect` runs) | `detect` | `preprocess_yolo_cpu`, `gpu_image_prep._detect` |
 | encoder square of the frame | `embed_frame` | `preprocess_clip_cpu` (core), `pe_preprocess.whole_frame_rgb_from_image` (curation) |
 | crop squares | `embed_crops` (only for the selected detections) | `embed_boxes_from_full_res` / `center_crop_cpu`; `gpu_image_prep._embed` |
 | face working copy (long side at most 1024) | `faces` | `fast_face_client.recognize` (`MAX_DIM`) |
@@ -281,6 +282,9 @@ added, dropped or guessed.
 | `empty_plan` | `branches: []` | 422 |
 | `duplicate_branch` | a branch listed twice | 422 |
 | `branch_not_supported` | a valid branch outside `ALLOWED[route]` | 422, names the branch and the route |
+| `faces_disabled` | `faces` or `face_embed` requested explicitly while `OP_FACES_ENABLED=false` (#379); the default plan of a route leaves both out when faces are off. Reuses the existing `faces_disabled` refusal (`src/config/faces.py`, `src/core/error_handlers.py`), not a new code | 422 as today |
+| `empty_condition` | a `when` entry whose class names are all empty after normalization | 422 |
+| `plan_required` | a curation route without a plan before `policy_plan` exists (P4); the curation default comes from the project policy, so there is no static default | 422 |
 | `missing_dependency` | for example `embed_crops` without `detect`, `face_embed` without `faces`, `near_duplicates` without `embed_frame`, `if_detected` without `detect`. **Refused, not auto-added** (Q6). The plan a client sends is the plan that runs. | 422, names the missing branch |
 | `condition_on_unconditional` | `when` names a branch outside `CONDITIONAL`, or a branch not in `branches` | 422 |
 | `unknown_class` | an `if_detected` name the detector does not label (core: the model's `labels.txt` via `src/utils/affine.py`'s label lookup; curation: the detector vocabulary, `src/services/curation/detector_vocabulary.py`) | 422, lists the names |
@@ -291,9 +295,9 @@ added, dropped or guessed.
 Runtime failure of one branch: the outcome is `status: error` with the message. The branch's
 output field is `null`, never an empty list, so a failure is never read as "no faces". The HTTP
 status stays 200 while at least one requested branch is `ok`. When every requested branch fails it
-is 502. This generalizes today's `ocr_error` (`analyze_pipeline.py:42-48`). It replaces the
+is 502. This generalizes today's `ocr_error` (`analyze_pipeline.py:40-46`). It replaces the
 fail-open face path, where a face error becomes `faces: []`
-(`analyze_pipeline.py:283-285`, `inference.py:136-200`). Retry exhaustion keeps its existing
+(about `analyze_pipeline.py:282-284`, `inference.py:136-200`). Retry exhaustion keeps its existing
 handler (`RetryExhaustedError`, 503). Q5 asks the owner to confirm.
 
 Output fields of a branch that was not requested are `null`, not empty: `detections`, `faces`,
@@ -348,7 +352,7 @@ on set A.
 
 `gpu_image_prep` is already the plan executor for the curation branches: a decoupled Python BLS
 that decodes once, runs the detector and PE through BLS and returns only small outputs
-(`models/gpu_image_prep/config.pbtxt` header, `model.py:270-315`). The plan extends it rather than
+(`models/gpu_image_prep/config.pbtxt` header, `model.py:270-318`). The plan extends it rather than
 adding a new model:
 
 - Replace the single optional input `embed_crops` (BOOL) with optional `embed_frame` (BOOL,
@@ -442,9 +446,12 @@ Short tiers first. One full confirmation per bundle, and no full factorial.
   `gpu_image_prep` request flags (GPU). #220's plan doc (`faces_ocr_resident_crops_plan.md`, not
   written yet) should name its new OCR input as a view of the shared frame, so no plan branch
   decodes or converts the frame a second time.
-- Order: #220 first (owner decision). Phases P1-P3 (section 10) touch only the CPU route and the
-  wire, and could technically go first. They wait anyway, so that the OCR branch's input contract
-  changes once and parity is measured once.
+- Order: P1 (pure domain module, wire models, tests) touches no route, model or existing wire and
+  does not wait. #220 PR 1 fixes the OCR branch's input contract (uint8 `ocr_images` and
+  `original_image`, datatype read from model metadata, `MODEL_VERSION`), so P2 onward waits for it:
+  the input changes once and parity is measured once. Width-bucketed recognition (#220 PR 2) is
+  inside the BLS and does not change the contract. GPU face alignment on resident frames (the old
+  #220 item 4) is part of P5 here: no face route holds a GPU frame today.
 - #219 (work crops at model size) and #40 (resident crops) make the views cheaper. The plan makes
   them conditional. Neither changes the plan wire.
 
@@ -493,7 +500,15 @@ so a benchmark row is labeled by its plan key.
 Red first: each test is watched failing before the code that makes it pass, and each skip test has
 a mutation check (remove the `plan.runs` guard, and the test must fail).
 
-### 9.1 Pure resolution (`tests/test_processing_plan.py`, no I/O)
+### 9.1 Pure resolution (`tests/test_processing_plan.py`, no I/O; implemented in P1)
+
+`resolve(route, requested, *, faces_enabled)` takes the deployment face switch instead of
+`known_classes`; the class-name check is a separate step in the route that owns the detector
+vocabulary. `PlanRequest` is the pure-domain input and `ProcessingPlan.to_request()` builds it;
+`ProcessingPlan.branches` is `list[str]` so an unknown name reaches `resolve` and carries the
+`unknown_branch` reason code. `if_detected` names are normalized with
+`src/utils/class_names.normalize_class_name`, the normalizer `name_match` is built on (a domain
+module may not import `src/services`).
 
 - A table test per row of section 4, one case per reason code, asserting the code and the named
   branch.
@@ -543,7 +558,8 @@ Unknown names are 422 (9.4).
 
 ### 9.5 Unchanged behavior for existing requests
 
-The existing characterization suites stay green without edits to their expectations:
+The "unchanged behaviour" baseline includes the faces-off case (`OP_FACES_ENABLED=false`: faces skipped on
+`/analyze`, forced off on core `/ingest`). The existing characterization suites stay green without edits to their expectations:
 `tests/test_ingest_single_characterization.py`, `tests/test_ingest_batch_characterization.py`, the
 curation ingest and policy tests, and the reprocess tests. Where a legacy flag is removed, only the
 request changes (flag to plan) and the expected response stays byte-identical except for the
@@ -571,12 +587,12 @@ documents contain, not existing ones.
 
 | Phase | Starts after | Content | Gate |
 |---|---|---|---|
-| P0 | #220 merged | M1; per-plan baselines from today's code where expressible (`/faces/recognize`, `/detect`, `/analyze`) on set A and set B | numbers in `docs/PERFORMANCE.md`, C1 recorded |
-| P1 | P0 | `src/domain/processing_plan.py`, `src/schemas/processing_plan.py`, metrics in `stage_timing.py`; no route uses them yet | 9.1 green |
-| P2 | P1 | `/analyze` and `/analyze/batch` on the CPU executor: `ImageViews`, decode once, split model clients, legacy flags removed, `null` semantics, per-branch outcomes; `infer_yolo_clip_cpu` callers moved and the method deleted | 9.2-9.5 for these routes, M3, M4, P-face/P-ocr parity (Q2) |
+| P0 | #220 PR 1 merged | M1; per-plan baselines from today's code where expressible (`/faces/recognize`, `/detect`, `/analyze`) on set A and set B | numbers in `docs/PERFORMANCE.md`, C1 recorded |
+| P1 (done) | none | `src/domain/processing_plan.py`, `src/schemas/processing_plan.py`, `tests/test_processing_plan.py`; no route uses them yet. The `stage_timing.py` metrics (section 8) and the `unknown_class`, `branch_not_in_policy` checks move to the phase whose route first uses them, so the unused-code ratchet stays clean | 9.1 green |
+| P2 | P0, P1 | `faces_enabled` deleted from the analyze responses (superseded by the `PlanReport` outcome `disabled`, #379); section 8 metrics added; `/analyze` and `/analyze/batch` on the CPU executor: `ImageViews`, decode once, split model clients, legacy flags removed, `null` semantics, per-branch outcomes; `infer_yolo_clip_cpu` callers moved and the method deleted | 9.2-9.5 for these routes, M3, M4, P-face/P-ocr parity (Q2) |
 | P3 | P2 | core `/ingest` family on the executor; zero global vector removed; `near_duplicates` dependency | 9.2-9.5, M3 |
 | P4 | P1 | curation: `policy_plan`, request narrowing on ingest routes, bulk runs and sources; `gpu_image_prep` `embed_frame` flag and the `selected` mask (Q4); `make contracts` | curation characterization green, 9.6, M3 on the GPU route (policy `all`), plus a `none` and `selected` row |
-| P5 | P2, #220 | `faces`, `face_embed`, `ocr` as `gpu_image_prep` branches for photos on `/analyze` and core `/ingest` | M2 with the 15 % rule per plan; parity gates |
+| P5 | P2, #220 PR 1 | `faces`, `face_embed`, `ocr` as `gpu_image_prep` branches for photos on `/analyze` and core `/ingest`, including GPU face alignment on the resident frame (moved here from #220; acceptance: ArcFace cosine p01 at least 0.995, P-face 1.0) | M2 with the 15 % rule per plan; parity gates |
 | P6 | P5 | docs (`README.md` API table, `docs/CURATION.md` ingest section, `docs-site` ingest pages), `docs/PERFORMANCE.md` per-plan table, this doc's status to implemented, close #67 | `scripts/docs/check_docs_vs_code.py` 0 problems |
 
 ## 11. Non-goals
