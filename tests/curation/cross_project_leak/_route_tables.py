@@ -103,6 +103,7 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/region_profiles/validate'): 'dry-run report; never writes',
     ('POST', '/region_profiles/validate_segmenter_prompt'): 'dry-run report; never writes',
     ('POST', '/open_vocab/validate'): 'dry-run report; never writes',
+    ('POST', '/ingest_profiles/validate'): 'dry-run report; never writes',
     ('POST', '/open_vocab/test'): 'runs a target over a stored image and previews; never writes',
     (
         'POST',
@@ -189,6 +190,10 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('POST', '/region_profiles/active/rollback'): (
         'a fresh per-slug config store has no prior activation to roll back to '
         '(409 no_previous); rollback success is covered by test_region_profiles_router.py'
+    ),
+    ('POST', '/ingest_profiles/active/rollback'): (
+        'a fresh per-slug config store has no prior activation to roll back to '
+        '(409 no_previous); rollback success is covered by test_ingest_profiles_router.py'
     ),
     ('POST', '/open_vocab/active/rollback'): (
         'a fresh per-slug config store has no prior activation to roll back to '

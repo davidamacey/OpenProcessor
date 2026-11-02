@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import File, Query, Response, UploadFile
 
 from src.config import get_curation_config
-from src.config.ingest_profiles import ingest_primary_profile
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._dataset_import_models import (
@@ -62,7 +61,10 @@ from src.services.curation.dataset_import.upload import (
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest import CurationIngestService
-from src.services.curation.ingest_detector import effective_profile
+from src.services.curation.ingest_detector import (
+    IngestProfileUnresolvedError,
+    refreshed_ingest_profiles,
+)
 from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.utils.timeutil import now_iso
 
@@ -137,7 +139,7 @@ async def _already_indexed(opensearch: Any, prepared: PreparedImport) -> int:
     return len(found & set(paths))
 
 
-def _import_service(
+async def _import_service(
     opensearch: Any, registry: Any, *, need_detector: bool, policy: IngestPolicy
 ) -> CurationIngestService:
     from src.app.resources import get_async_triton_pool
@@ -147,8 +149,8 @@ def _import_service(
     if pe_encoder is None:
         raise api_error(503, 'config_store_unavailable', 'PE encoder not initialized')
     try:
-        profile = effective_profile(ingest_primary_profile(), policy.detector)
-    except ValueError as exc:
+        profile = (await refreshed_ingest_profiles(opensearch)).primary
+    except (ValueError, IngestProfileUnresolvedError) as exc:
         raise api_error(503, 'config_store_unavailable', f'ingest misconfigured: {exc}') from exc
     if need_detector and not profile.detector_model:
         raise api_error(
@@ -177,7 +179,7 @@ async def _context(
     state = store.job.read()
     has_region = any(t.kind == 'region' for t in resolved.targets.values())
     need_detector = request.options.processing == 'propose' or (has_region and parents == 'detect')
-    service = _import_service(
+    service = await _import_service(
         opensearch,
         registry,
         need_detector=need_detector,

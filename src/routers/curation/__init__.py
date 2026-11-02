@@ -48,6 +48,7 @@ import src.routers.curation.ingest_bulk
 import src.routers.curation.ingest_bulk_preview
 import src.routers.curation.ingest_objects
 import src.routers.curation.ingest_policy
+import src.routers.curation.ingest_profiles
 import src.routers.curation.ingest_sources
 import src.routers.curation.ingest_upload
 import src.routers.curation.keymap

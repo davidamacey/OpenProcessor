@@ -259,12 +259,17 @@ async def _validate_clone(
                 source_active_refs=source_active_refs,
                 activation_axes=activation_axes,
             )
-    if 'open_vocab' in resolved_axes:
-        from src.services.projects.clone_open_vocab import validate_open_vocab_clone
+    from src.services.projects.clone_named_axis import (
+        INGEST_PROFILE,
+        OPEN_VOCAB,
+        validate_named_axis_clone,
+    )
 
-        target_activations['open_vocab'] = await validate_open_vocab_clone(
-            client, target_record=target_record
-        )
+    for named in (OPEN_VOCAB, INGEST_PROFILE):
+        if named.axis in resolved_axes:
+            target_activations[named.axis] = await validate_named_axis_clone(
+                client, axis=named, target_record=target_record
+            )
     if 'vlm_activation' in resolved_axes:
         from src.services.projects.clone_vlm import validate_vlm_activation_clone
 

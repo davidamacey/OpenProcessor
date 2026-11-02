@@ -1,65 +1,116 @@
-"""The ingest detector a project runs: the deployment's primary profile, or the
-project's own model from its ingest policy.
+"""The ingest detectors a project runs: the deployment's ``OP_INGEST_*`` profiles,
+or the project's active ``ingest_profile`` laid over them.
 
-``effective_profile`` is the one place a policy's detector override is laid over
-the env profile, so ingest, the detector info, class seeding and a dataset
-import's propose mode all see the same detector for a project. An override's
-classes are never registry ids (``assigns_class`` is forced off).
+:func:`project_ingest_profiles` is the one place the active profile is resolved,
+so ingest, the detector info, class seeding, a dataset import's propose mode,
+the open-vocabulary validation, the model catalogs and the unload guard all see
+the same detectors for a project. It reads the bound project's config-store
+snapshot (synchronous, no new cache); async callers use
+:func:`refreshed_ingest_profiles` to see another worker's activation first.
+
+Fail closed: an unbound project raises, and so does an activation whose pinned
+revision cannot be read or decoded. Only "never activated" and "off" fall back to
+the environment. A stored profile's classes are never registry ids
+(``assigns_class`` is forced off) and its ``name`` stays ``item`` / ``secondary``.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Literal
 
-from src.clients.model_adapters import END2END_OUTPUTS
-from src.services.curation.ingest_policy_store import get_ingest_policy
+from pydantic import ValidationError
+
+from src.config.detection_profile import DetectionProfile
+from src.config.ingest_profiles import (
+    INGEST_SECONDARY_ENV_PREFIX,
+    ingest_primary_profile,
+    ingest_secondary_profile,
+)
+from src.schemas.curation.ingest_profile import IngestDetectorSpec, IngestProfileBody
+from src.services.config_store import get_config_store
 
 
 if TYPE_CHECKING:
-    from src.config import DetectionProfile
-    from src.services.curation.ingest_policy import DetectorOverride, IngestPolicy
+    from src.services.config_store.snapshot import StoredConfig
 
 
-def effective_profile(
-    base: DetectionProfile, override: DetectorOverride | None
-) -> DetectionProfile:
-    """``base`` with the project's detector laid over it (``base`` itself when
-    the project has none)."""
-    if override is None:
-        return base
+class IngestProfileUnresolvedError(RuntimeError):
+    """The project's active ingest profile cannot be read; ingest refuses
+    rather than falling back to the deployment default."""
+
+
+@dataclass(frozen=True)
+class IngestProfiles:
+    primary: DetectionProfile
+    secondary: DetectionProfile | None
+    source: Literal['env', 'stored']
+    ref: tuple[str, int] | None = None
+
+
+def lay_spec(base: DetectionProfile, spec: IngestDetectorSpec) -> DetectionProfile:
+    """``base`` with the stored detector spec laid over it; fields the spec leaves
+    ``None`` keep ``base``'s value."""
     changes: dict[str, Any] = {
-        'detector_model': override.model,
-        'detector_version': override.version,
-        'labels_path': override.labels_path,
+        'detector_model': spec.model,
+        'detector_version': spec.version,
+        'labels_path': spec.labels_path,
         'assigns_class': False,
     }
-    if override.input_size is not None:
-        changes['input_size'] = override.input_size
+    for field in ('input_size', 'confidence_floor', 'batch_limit'):
+        if getattr(spec, field) is not None:
+            changes[field] = getattr(spec, field)
     return dataclasses.replace(base, **changes)
 
 
-async def project_ingest_profile(
-    client: Any, base: DetectionProfile
-) -> tuple[DetectionProfile, IngestPolicy]:
-    """The bound project's effective ingest detector and its policy."""
-    policy = await get_ingest_policy(client)
-    return effective_profile(base, policy.detector), policy
-
-
-async def detector_problems(pool: Any, override: DetectorOverride) -> list[str]:
-    """Why ``override`` cannot serve ingest (empty when it can): the model is not
-    ready on Triton, or lacks the end2end output tensors."""
-    if not await pool.is_model_ready(override.model):
-        return [f'{override.model!r} is not loaded and ready on Triton']
+def _decode(pinned: StoredConfig) -> IngestProfileBody:
     try:
-        outputs = set(await pool.get_model_output_names(override.model))
-    except Exception as exc:
-        return [f'could not read {override.model!r} metadata from Triton: {exc}']
-    missing = [name for name in END2END_OUTPUTS if name not in outputs]
-    if missing:
-        return [f'{override.model!r} does not serve the end2end outputs {missing}']
-    return []
+        return IngestProfileBody.model_validate(pinned.body)
+    except ValidationError as exc:
+        msg = (
+            f'the active ingest profile {pinned.name!r} (revision {pinned.revision}) '
+            f'is invalid: {exc}'
+        )
+        raise IngestProfileUnresolvedError(msg) from exc
 
 
-__all__ = ['detector_problems', 'effective_profile', 'project_ingest_profile']
+def project_ingest_profiles() -> IngestProfiles:
+    """The bound project's ingest detectors (raises when no project is bound)."""
+    current = get_config_store().current
+    ref = current.active_ingest_profile
+    if not isinstance(ref, tuple):
+        return IngestProfiles(
+            primary=ingest_primary_profile(), secondary=ingest_secondary_profile(), source='env'
+        )
+    pinned = current.active_ingest_profile_body
+    if pinned is None or ref[1] is None:
+        msg = (
+            f'the active ingest profile {ref[0]!r} could not be read from the config store; '
+            'activate an ingest profile again or deactivate it'
+        )
+        raise IngestProfileUnresolvedError(msg)
+    body = _decode(pinned)
+    secondary_base = DetectionProfile.from_env(INGEST_SECONDARY_ENV_PREFIX, name='secondary')
+    return IngestProfiles(
+        primary=lay_spec(ingest_primary_profile(), body.primary),
+        secondary=lay_spec(secondary_base, body.secondary) if body.secondary else None,
+        source='stored',
+        ref=(ref[0], ref[1]),
+    )
+
+
+async def refreshed_ingest_profiles(client: Any) -> IngestProfiles:
+    """:func:`project_ingest_profiles` after refreshing the snapshot when it is
+    over a second old, so an activation made through another worker is seen."""
+    await get_config_store().ensure_fresh(client)
+    return project_ingest_profiles()
+
+
+__all__ = [
+    'IngestProfileUnresolvedError',
+    'IngestProfiles',
+    'lay_spec',
+    'project_ingest_profiles',
+    'refreshed_ingest_profiles',
+]

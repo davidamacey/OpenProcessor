@@ -176,8 +176,6 @@ def test_the_scope_detail_accepts_every_value_type_it_carries() -> None:
         ('post', '/region_stage/pause', '409', 'no_active_profile'),
         ('post', '/classes/seed_from_detector', '503', 'detector_unavailable'),
         ('post', '/classes/seed_from_detector', '422', 'unknown_detector_names'),
-        ('put', '/ingest/policy', '422', 'detector_not_servable'),
-        ('put', '/ingest/policy', '503', 'detector_unavailable'),
     ],
 )
 def test_the_error_bodies_are_typed_in_the_contract(
@@ -192,15 +190,6 @@ def test_the_error_bodies_are_typed_in_the_contract(
         'enum'
     ) == [code]
     assert 'message' in detail['properties']
-
-
-def test_the_policy_422_publishes_reasons_as_strings() -> None:
-    schemas = _contract()['components']['schemas']
-    assert schemas['DetectorNotServableDetail']['properties']['reasons'] == {
-        'items': {'type': 'string'},
-        'title': 'Reasons',
-        'type': 'array',
-    }
 
 
 # --- ordered views hand back the embed request --------------------------------

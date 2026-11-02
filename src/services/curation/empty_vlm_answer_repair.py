@@ -45,10 +45,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.domain.ingest_class_sources import VLM_CLASS_SOURCE
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE
 from src.services.curation.class_write_guard import class_write_locked
+from src.services.curation.ingest_detector import project_ingest_profiles
 from src.services.curation.item_doc import INGEST_CLASS_LABELER
 from src.services.curation.vlm_class_attempt import (
     EmptyClassReason,
@@ -111,12 +111,13 @@ def ingest_class_source(doc: dict[str, Any]) -> str | None:
     class state is inconsistent with what that detector writes)."""
     detector = doc.get('class_detector')
     has_class = doc.get('class_id') is not None
-    primary = ingest_primary_profile()
+    ingest = project_ingest_profiles()
+    primary = ingest.primary
     if detector in {primary.detector_model, primary.name}:
         if not primary.assigns_class:
             return None if has_class else f'{primary.name}_proposal'
         return f'{primary.name}_model' if has_class else f'{primary.name}_low_conf'
-    secondary = ingest_secondary_profile()
+    secondary = ingest.secondary
     if secondary is not None and detector in {secondary.detector_model, secondary.name}:
         return f'{secondary.name}_model' if has_class else None
     return None

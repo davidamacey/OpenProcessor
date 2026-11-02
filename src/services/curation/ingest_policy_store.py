@@ -16,11 +16,19 @@ from src.services.curation.policy_doc_store import PolicyConflictError, read_pol
 
 
 KEY = 'ingest_policy'
+# `detector` moved to the ingest_profile config kind; a stored value is reset,
+# never migrated: the operator picks a profile.
+RETIRED_FIELDS = {
+    'detector': (
+        'the detector was reset: create and activate an ingest profile '
+        '(POST /curation/projects/{project}/ingest_profiles/{name}/activate)'
+    )
+}
 
 
 async def get_ingest_policy(client: Any) -> IngestPolicy:
     """The bound project's policy; the defaults when none was ever written."""
-    return (await read_policy(client, KEY, IngestPolicy))[0]
+    return (await read_policy(client, KEY, IngestPolicy, retired_fields=RETIRED_FIELDS))[0]
 
 
 async def put_ingest_policy(
@@ -28,7 +36,7 @@ async def put_ingest_policy(
 ) -> IngestPolicy:
     """Replace the policy. Raises :class:`PolicyConflictError` when
     ``expected_revision`` is not the stored revision (or a concurrent writer won)."""
-    current, resp = await read_policy(client, KEY, IngestPolicy)
+    current, resp = await read_policy(client, KEY, IngestPolicy, retired_fields=RETIRED_FIELDS)
     if current.revision != expected_revision:
         msg = f'stored revision is {current.revision}, expected {expected_revision}'
         raise PolicyConflictError(msg)

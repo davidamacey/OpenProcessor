@@ -18,7 +18,7 @@ from src.core.exceptions import RequestRejectedError
 from src.services.config_store.index import activate, get_activation, save_config
 from src.services.config_store.store import get_config_store, reset_config_stores
 from src.services.projects.clone import _apply_clone
-from src.services.projects.clone_open_vocab import validate_open_vocab_clone
+from src.services.projects.clone_named_axis import OPEN_VOCAB, validate_named_axis_clone
 
 
 if TYPE_CHECKING:
@@ -163,6 +163,6 @@ async def test_clone_refuses_an_occupied_target(occupied: str) -> None:
     reset_config_stores()
 
     with pytest.raises(RequestRejectedError) as exc:
-        await validate_open_vocab_clone(client, target_record=target)
+        await validate_named_axis_clone(client, axis=OPEN_VOCAB, target_record=target)
     assert exc.value.status_code == 409
     assert exc.value.detail['error'] == 'target_not_empty'

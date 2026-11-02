@@ -10,6 +10,7 @@ from integration.ingest_fakes import jpeg_bytes
 from curation.cross_project_leak._seeded_files import _source_root
 from curation.cross_project_leak._seeders import (
     _VLM_ACTIVE,
+    _ingest_profile_body,
     _open_vocab_body,
     _prompt_pack_body,
     _region_profile_body,
@@ -279,6 +280,25 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('DELETE', '/region_profiles/{name}'): {'params': {'expected_revision': '1'}},
         ('POST', '/region_profiles/{name}/activate'): {
+            'json': {'revision': None, 'expected_active': None, 'force': True}
+        },
+        # Ingest detector profiles: same shape as the open-vocabulary routes.
+        ('POST', '/ingest_profiles'): {
+            'json': {'name': f'{slug}-newprofile', 'body': _ingest_profile_body()}
+        },
+        ('POST', '/ingest_profiles/validate'): {
+            'json': {'name': None, 'body': _ingest_profile_body()}
+        },
+        ('POST', '/ingest_profiles/active/rollback'): {'json': {'expected_active': None}},
+        ('POST', '/ingest_profiles/deactivate'): {'json': {'expected_active': None}},
+        ('POST', '/ingest_profiles/{name}/clone'): {
+            'json': {'new_name': f'{slug}-profileclone', 'source': 'stored'}
+        },
+        ('PUT', '/ingest_profiles/{name}'): {
+            'json': {'expected_revision': 1, 'body': _ingest_profile_body()}
+        },
+        ('DELETE', '/ingest_profiles/{name}'): {'params': {'expected_revision': '1'}},
+        ('POST', '/ingest_profiles/{name}/activate'): {
             'json': {'revision': None, 'expected_active': None, 'force': True}
         },
         # Open-vocabulary prompt sets: same shape as the region-profile routes.

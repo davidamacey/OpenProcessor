@@ -186,6 +186,18 @@ detector output, an `embedding.mode` (`all`, `selected`, `lazy` or `none`, the l
 being detection only with no vector at all) and a `clustering.automatic` switch. It
 affects future ingests only. [Ingest policy](../docs-site/docs/guides/ingest-policy.mdx).
 
+### Ingest profiles
+
+A project's ingest detector is its active **ingest profile**, a named, revisioned config
+document (`/curation/projects/{project}/ingest_profiles`) with a required `primary`
+detector and an optional `secondary` classifier, each with `model`, `version`,
+`input_size`, `labels_path`, `confidence_floor` and `batch_limit`. With none active, the
+deployment's `OP_INGEST_PRIMARY_*` / `OP_INGEST_SECONDARY_*` settings apply. Activating
+checks that Triton serves the models. The ingest policy no longer has a `detector` field:
+a stored one is reset with a logged message and the project falls back to the deployment
+detector until a profile is activated.
+[Ingest profiles](../docs-site/docs/guides/ingest-profiles.mdx).
+
 ### Items without an embedding
 
 An item stored without a vector has `embedding_state` `not_selected`, `deferred` or
@@ -274,8 +286,9 @@ Nothing here ships a pretrained region detector, VLM or trainer weights.
   tower `pe_text_encoder` is needed for semantic search. Build both with
   `make export-pe`. If it fails with `ModuleNotFoundError: No module named 'core'`,
   the `api` image predates the source tree: rebuild it first.
-- **An item detector for ingest**, named by `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
-  Ingest returns 503 until one is configured and loaded.
+- **An item detector for ingest**, named by `OP_INGEST_PRIMARY_DETECTOR_MODEL` or by a
+  project's active [ingest profile](#ingest-profiles). Ingest returns 503 until one is
+  configured and loaded.
 - **A segmenter and a region profile**, if you want regions (`OP_SEGMENTER_URL`).
 - **An OCR model**, if your region has readable text.
 - **A VLM**: see [Choosing a VLM](#choosing-a-vlm).

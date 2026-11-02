@@ -24,12 +24,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.domain.embedding_state import DEFERRED, EMBEDDED, NOT_SELECTED
 from src.services.curation.class_write_guard import class_write_locked
 from src.services.curation.name_match import name_matches, normalized_names
-from src.utils.class_names import confine_labels_path, normalize_class_name
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -58,29 +58,6 @@ class DetectFilter(_Criteria):
     classes: list[str] | None = None
     exclude_classes: list[str] = Field(default_factory=list)
     class_resolution: Literal['proposal', 'by_name'] = 'proposal'
-
-
-class DetectorOverride(BaseModel):
-    """A per-project ingest detector: replaces the deployment's primary model for
-    this project. It must serve the end2end four-tensor contract, and its class
-    ids are never read as registry ids (its detections are proposals, or are
-    resolved by name)."""
-
-    model_config = ConfigDict(extra='forbid')
-
-    model: str = Field(min_length=1)
-    version: str = '1'
-    input_size: int | None = Field(default=None, ge=32, le=4096)
-    # labels.txt-style file naming the model's classes; empty reads the one in
-    # the model's own directory.
-    labels_path: str = ''
-
-    @field_validator('labels_path')
-    @classmethod
-    def _labels_path_in_model_repository(cls, value: str) -> str:
-        if value:
-            confine_labels_path(value)
-        return value
 
 
 class EmbeddingPolicy(_Criteria):
@@ -117,8 +94,6 @@ class IngestPolicyBody(BaseModel):
     detect: DetectFilter = Field(default_factory=DetectFilter)
     embedding: EmbeddingPolicy = Field(default_factory=EmbeddingPolicy)
     clustering: ClusteringPolicy = Field(default_factory=ClusteringPolicy)
-    # null = the deployment's primary detector.
-    detector: DetectorOverride | None = None
 
 
 class IngestPolicy(IngestPolicyBody):
@@ -284,7 +259,6 @@ def unknown_names(policy: IngestPolicyBody, known_slugs: set[str]) -> list[str]:
 __all__ = [
     'Candidate',
     'DetectFilter',
-    'DetectorOverride',
     'EmbeddingPolicy',
     'IngestPolicy',
     'IngestPolicyBody',

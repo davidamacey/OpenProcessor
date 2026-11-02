@@ -53,10 +53,7 @@ def app_client():
 def _no_ingest_detector(monkeypatch: pytest.MonkeyPatch) -> None:
     # No OpenSearch behind these routes; the ingest-detector guard is
     # exercised explicitly at the bottom of the file.
-    monkeypatch.setattr(
-        'src.routers.curation.models.get_ingest_policy',
-        AsyncMock(return_value=type('_P', (), {'detector': None})()),
-    )
+    _ingest_detector(monkeypatch, None)
 
 
 def _mock_unload(monkeypatch: pytest.MonkeyPatch, **overrides) -> AsyncMock:
@@ -364,15 +361,19 @@ def test_external_service_model_names_includes_segmenter_and_vlm(
 # =============================================================================
 
 
-class _Policy:
-    def __init__(self, model: str | None) -> None:
-        self.detector = None if model is None else type('_D', (), {'model': model})()
-
-
 def _ingest_detector(monkeypatch: pytest.MonkeyPatch, model: str | None) -> None:
+    """The project's resolved ingest detectors: ``model`` from an active stored profile,
+    or the env default (``None``)."""
+    from types import SimpleNamespace
+
+    resolved = SimpleNamespace(
+        source='env' if model is None else 'stored',
+        primary=SimpleNamespace(detector_model=model or 'env_model'),
+        secondary=None,
+    )
     monkeypatch.setattr(
-        'src.routers.curation.models.get_ingest_policy',
-        AsyncMock(return_value=_Policy(model)),
+        'src.routers.curation.models.refreshed_ingest_profiles',
+        AsyncMock(return_value=resolved),
     )
 
 

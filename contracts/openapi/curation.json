@@ -132,7 +132,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -303,7 +304,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -9490,85 +9492,6 @@
         "title": "DetectorEntry",
         "type": "object"
       },
-      "DetectorNotServableDetail": {
-        "properties": {
-          "error": {
-            "const": "detector_not_servable",
-            "title": "Error",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "reasons": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Reasons",
-            "type": "array"
-          }
-        },
-        "required": [
-          "error",
-          "message",
-          "reasons"
-        ],
-        "title": "DetectorNotServableDetail",
-        "type": "object"
-      },
-      "DetectorNotServableResponse": {
-        "description": "422: the detector override cannot be served; ``reasons`` lists every problem.",
-        "properties": {
-          "detail": {
-            "$ref": "#/components/schemas/DetectorNotServableDetail"
-          }
-        },
-        "required": [
-          "detail"
-        ],
-        "title": "DetectorNotServableResponse",
-        "type": "object"
-      },
-      "DetectorOverride": {
-        "additionalProperties": false,
-        "description": "A per-project ingest detector: replaces the deployment's primary model for\nthis project. It must serve the end2end four-tensor contract, and its class\nids are never read as registry ids (its detections are proposals, or are\nresolved by name).",
-        "properties": {
-          "input_size": {
-            "anyOf": [
-              {
-                "maximum": 4096.0,
-                "minimum": 32.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Input Size"
-          },
-          "labels_path": {
-            "default": "",
-            "title": "Labels Path",
-            "type": "string"
-          },
-          "model": {
-            "minLength": 1,
-            "title": "Model",
-            "type": "string"
-          },
-          "version": {
-            "default": "1",
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "model"
-        ],
-        "title": "DetectorOverride",
-        "type": "object"
-      },
       "DetectorUnavailableDetail": {
         "properties": {
           "error": {
@@ -11197,6 +11120,70 @@
         "title": "IngestDetectorLabel",
         "type": "object"
       },
+      "IngestDetectorSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_limit": {
+            "anyOf": [
+              {
+                "maximum": 256.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Limit"
+          },
+          "confidence_floor": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Floor"
+          },
+          "input_size": {
+            "anyOf": [
+              {
+                "maximum": 4096.0,
+                "minimum": 32.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Size"
+          },
+          "labels_path": {
+            "default": "",
+            "title": "Labels Path",
+            "type": "string"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "version": {
+            "default": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "IngestDetectorSpec",
+        "type": "object"
+      },
       "IngestImageRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11372,16 +11359,6 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -11402,16 +11379,6 @@
           },
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
-          },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
@@ -11483,16 +11450,6 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -11522,16 +11479,6 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -11545,6 +11492,723 @@
           "expected_revision"
         ],
         "title": "IngestPolicyUpdate",
+        "type": "object"
+      },
+      "IngestProfileActivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "IngestProfileActivateRequest",
+        "type": "object"
+      },
+      "IngestProfileActivateResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm",
+              "open_vocab",
+              "ingest_profile"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision",
+          "validation"
+        ],
+        "title": "IngestProfileActivateResponse",
+        "type": "object"
+      },
+      "IngestProfileBody": {
+        "additionalProperties": false,
+        "properties": {
+          "primary": {
+            "$ref": "#/components/schemas/IngestDetectorSpec"
+          },
+          "secondary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestDetectorSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "primary"
+        ],
+        "title": "IngestProfileBody",
+        "type": "object"
+      },
+      "IngestProfileCloneRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "from_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Project"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "stored",
+                  "template"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "IngestProfileCloneRequest",
+        "type": "object"
+      },
+      "IngestProfileCreateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "IngestProfileCreateRequest",
+        "type": "object"
+      },
+      "IngestProfileDeactivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "IngestProfileDeactivateRequest",
+        "type": "object"
+      },
+      "IngestProfileDoc": {
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body"
+        ],
+        "title": "IngestProfileDoc",
+        "type": "object"
+      },
+      "IngestProfileFieldSchema": {
+        "properties": {
+          "default": {
+            "title": "Default"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "help": {
+            "default": "",
+            "title": "Help",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "scope": {
+            "enum": [
+              "primary",
+              "secondary"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "int",
+              "float"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "field",
+          "label",
+          "type"
+        ],
+        "title": "IngestProfileFieldSchema",
+        "type": "object"
+      },
+      "IngestProfileList": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileSummary"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileTemplateSummary"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "templates",
+          "active",
+          "config_revision"
+        ],
+        "title": "IngestProfileList",
+        "type": "object"
+      },
+      "IngestProfileRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "IngestProfileRevisionSummary",
+        "type": "object"
+      },
+      "IngestProfileRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "IngestProfileRevisionsResponse",
+        "type": "object"
+      },
+      "IngestProfileRollbackRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "IngestProfileRollbackRequest",
+        "type": "object"
+      },
+      "IngestProfileSaveRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "IngestProfileSaveRequest",
+        "type": "object"
+      },
+      "IngestProfileSchema": {
+        "description": "One row per detector field, for both the ``primary`` and ``secondary``\ndetector, so a form renders each control with its range. A field left null\ninherits the deployment's ``OP_INGEST_*`` value.",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "IngestProfileSchema",
+        "type": "object"
+      },
+      "IngestProfileSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "primary_model": {
+            "title": "Primary Model",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "secondary_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Model"
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "primary_model",
+          "active"
+        ],
+        "title": "IngestProfileSummary",
+        "type": "object"
+      },
+      "IngestProfileTemplateSummary": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "primary_model": {
+            "title": "Primary Model",
+            "type": "string"
+          },
+          "read_only": {
+            "const": true,
+            "default": true,
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "source": {
+            "const": "template",
+            "default": "template",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "primary_model"
+        ],
+        "title": "IngestProfileTemplateSummary",
+        "type": "object"
+      },
+      "IngestProfileValidateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "IngestProfileValidateRequest",
         "type": "object"
       },
       "IngestRegionDrainConfig": {
@@ -17162,7 +17826,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -19509,6 +20174,7 @@
               "keymap",
               "prompt_packs",
               "open_vocab",
+              "ingest_profile",
               "vlm_activation"
             ],
             "items": {
@@ -21751,7 +22417,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -31939,6 +32606,9 @@
               "open_vocab_detector_class",
               "open_vocab_class_new",
               "open_vocab_vlm_not_configured",
+              "ingest_profile_name_invalid",
+              "ingest_profile_name_reserved",
+              "ingest_profile_field_invalid",
               "unmapped_class",
               "mapping_target_invalid",
               "source_not_found",
@@ -32217,7 +32887,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -44011,21 +44682,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DetectorNotServableResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DetectorUnavailableResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
         "summary": "Put Policy",
@@ -44643,6 +45304,754 @@
           }
         },
         "summary": "Curation Ingest Upload",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles": {
+      "get": {
+        "operationId": "list_ingest_profiles_curation_projects__project__ingest_profiles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
+            "in": "query",
+            "name": "include_templates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
+              "title": "Include Templates",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ingest Profiles",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "create_ingest_profile_curation_projects__project__ingest_profiles_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/active": {
+      "get": {
+        "operationId": "get_active_ingest_profile_curation_projects__project__ingest_profiles_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/active/rollback": {
+      "post": {
+        "operationId": "rollback_active_ingest_profile_curation_projects__project__ingest_profiles_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/deactivate": {
+      "post": {
+        "operationId": "deactivate_ingest_profile_curation_projects__project__ingest_profiles_deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/schema": {
+      "get": {
+        "operationId": "get_ingest_profile_schema_curation_projects__project__ingest_profiles_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingest Profile Schema",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/validate": {
+      "post": {
+        "operationId": "validate_ingest_profile_route_curation_projects__project__ingest_profiles_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "for_activation",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "For Activation",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Ingest Profile Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}": {
+      "delete": {
+        "operationId": "delete_ingest_profile_curation_projects__project__ingest_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "get": {
+        "operationId": "get_ingest_profile_curation_projects__project__ingest_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "operationId": "save_ingest_profile_curation_projects__project__ingest_profiles__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/activate": {
+      "post": {
+        "operationId": "activate_ingest_profile_curation_projects__project__ingest_profiles__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileActivateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/clone": {
+      "post": {
+        "operationId": "clone_ingest_profile_curation_projects__project__ingest_profiles__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/revisions": {
+      "get": {
+        "operationId": "list_ingest_profile_revisions_curation_projects__project__ingest_profiles__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ingest Profile Revisions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_ingest_profile_revision_curation_projects__project__ingest_profiles__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingest Profile Revision",
         "tags": [
           "Curation"
         ]

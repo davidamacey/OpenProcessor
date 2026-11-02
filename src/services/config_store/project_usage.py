@@ -72,18 +72,32 @@ async def active_detector_users(client: Any, model_name: str) -> list[tuple[str,
 
 
 async def ingest_detector_users(client: Any, model_name: str) -> list[str]:
-    """Slugs of the projects whose ingest policy names ``model_name`` as their
-    own ingest detector."""
-    from src.services.curation.ingest_policy_store import get_ingest_policy
+    """Slugs of the projects whose ACTIVE ingest profile names ``model_name`` as
+    their primary or secondary ingest detector."""
+    from opensearchpy.exceptions import NotFoundError
 
-    async def own_detector(_index: str) -> str | None:
-        override = (await get_ingest_policy(client)).detector
-        return override.model if override is not None else None
+    from src.schemas.curation.ingest_profile import IngestProfileBody
+    from src.services.config_store.index import config_doc_id, get_activation
+
+    async def own_models(index: str) -> frozenset[str]:
+        activation = await get_activation(client, index, 'ingest_profile')
+        name = (activation or {}).get('name')
+        revision = (activation or {}).get('revision')
+        if not name or revision is None:
+            return frozenset()
+        try:
+            doc = await client.get(
+                index=index, id=config_doc_id('ingest_profile', name, int(revision))
+            )
+        except NotFoundError:
+            return frozenset()
+        body = IngestProfileBody.model_validate(doc['_source'].get('body') or {})
+        return frozenset(spec.model for spec in (body.primary, body.secondary) if spec is not None)
 
     return [
         slug
-        for slug, model in (await read_each_project(own_detector)).items()
-        if model == model_name
+        for slug, models in (await read_each_project(own_models)).items()
+        if model_name in models
     ]
 
 

@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 # confidence_floor since the two detectors are calibrated differently.
 SECONDARY_IOU_MATCH = 0.3
 
-_RAW_OUTPUT = 'output0'
+RAW_OUTPUT = 'output0'
 
 logger = get_logger(__name__)
 
@@ -282,7 +282,7 @@ class WholeImageDetector:
     def _secondary_outputs() -> list[Any]:
         from tritonclient.grpc import InferRequestedOutput
 
-        return [InferRequestedOutput(_RAW_OUTPUT)]
+        return [InferRequestedOutput(RAW_OUTPUT)]
 
     async def run_secondary_raw(self, img: Image.Image) -> SecondaryOutput:
         """Run the secondary (raw-output) ensemble detector on one image."""
@@ -299,7 +299,7 @@ class WholeImageDetector:
         result = await self.triton_pool.infer(
             profile.detector_model, [inp], outputs=self._secondary_outputs()
         )
-        return SecondaryOutput(raw=result.as_numpy(_RAW_OUTPUT))
+        return SecondaryOutput(raw=result.as_numpy(RAW_OUTPUT))
 
     async def run_secondary_raw_batch(self, imgs: list[Image.Image]) -> list[SecondaryOutput]:
         """Batched variant of :meth:`run_secondary_raw`.
@@ -337,7 +337,7 @@ class WholeImageDetector:
             chunk = full_batch[start : start + step]
             inp = await self._images(profile.detector_model, chunk)
             result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
-            raws = result.as_numpy(_RAW_OUTPUT)
+            raws = result.as_numpy(RAW_OUTPUT)
             rows.extend(SecondaryOutput(raw=raws[i]) for i in range(raws.shape[0]))
         return rows[: len(imgs)]
 

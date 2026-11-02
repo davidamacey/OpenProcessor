@@ -1,0 +1,52 @@
+---
+sidebar_position: 13
+title: Ingest profiles
+---
+
+# Ingest profiles
+
+An ingest profile names the detector a project's ingest runs: a required `primary`
+(an end2end, already-NMS'd proposer) and an optional `secondary` (a raw-output
+classifier). Profiles are revisioned config documents like prompt packs and region
+profiles: save as often as you like, activate a revision, roll back.
+
+With no profile active, the deployment's `OP_INGEST_PRIMARY_*` / `OP_INGEST_SECONDARY_*`
+settings apply. The active profile replaces them for that project only.
+
+```bash
+B=http://localhost:4603/curation/projects/demo/ingest_profiles
+curl -s -X POST $B -H 'content-type: application/json' \
+  -d '{"name": "coco", "body": {"primary": {"model": "yolov11_small_trt_end2end"}}}'
+curl -s -X POST $B/coco/activate -H 'content-type: application/json' -d '{}'
+```
+
+## Body
+
+| Field | Meaning |
+|---|---|
+| `primary.model`, `secondary.model` | A Triton model name. The primary must serve the end2end outputs; the secondary the raw `output0` tensor. |
+| `version` | Model version, default `1`. |
+| `input_size` | Letterbox size, 32 to 4096. Empty inherits the deployment value. |
+| `labels_path` | A `labels.txt` inside the model repository; empty reads the one in the model's own directory. |
+| `confidence_floor`, `batch_limit` | Empty inherits the deployment value. |
+
+A profile never assigns registry class ids (its detections are proposals, or resolved by
+name through the ingest policy), and its `class_source` prefix stays `item` /
+`secondary`. A profile without a `secondary` runs none, even when the deployment sets one.
+
+## Saving and activating
+
+Saving checks the shape only, so a profile may name a model that is not loaded yet.
+Activating checks Triton: the model must be loaded and ready and serve the outputs ingest
+reads (422 `validation_failed` with the reasons otherwise). `force` bypasses only a Triton
+outage (`triton_unreachable`).
+
+`GET .../ingest_profiles/active` names the active revision; `POST .../deactivate` returns
+the project to the deployment settings; `POST .../active/rollback` re-activates the
+previous revision. The shipped template `coco80` (`?include_templates=true`) is read-only:
+clone it. A profile in use cannot be deleted. Deleting the Triton model an active profile
+names is refused (`detector_in_use`) unless forced. Project clone carries profiles and the
+activation with the `ingest_profile` axis.
+
+Items already ingested keep the detector name they were stamped with; switching a profile
+does not reprocess them.

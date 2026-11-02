@@ -139,8 +139,9 @@ Credentials are not an `OP_` setting: the `api` container's `AWS_ACCESS_KEY_ID` 
 already-NMS'd proposer); `OP_INGEST_SECONDARY_<FIELD>` an optional
 raw-output detector whose IoU-matched hits override the primary's class.
 Field names come from the `DetectionProfile` dataclass; tuple fields take
-a comma-separated value. These are deployment settings shared by every
-project.
+a comma-separated value. These are the deployment defaults shared by every
+project; a project's active [ingest profile](../guides/ingest-profiles.mdx) replaces
+them for that project.
 
 | Variable | Example / default |
 |---|---|

@@ -12,14 +12,9 @@ import dataclasses
 from collections import Counter
 
 from src.config import get_curation_config
-from src.config.ingest_profiles import ingest_primary_profile
 from src.domain.embedding_state import DEFERRED, EMBEDDED, FAILED, NOT_SELECTED
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._error_models import (
-    DetectorNotServableResponse,
-    DetectorUnavailableResponse,
-)
 from src.routers.curation._ingest_policy_models import (
     IngestPolicyPreview,
     IngestPolicyPutResponse,
@@ -29,9 +24,11 @@ from src.routers.curation._ingest_policy_models import (
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.index_bootstrap import ensure_indexes
-from src.services.curation.ingest_detector import detector_problems, effective_profile
+from src.services.curation.ingest_detector import (
+    IngestProfileUnresolvedError,
+    project_ingest_profiles,
+)
 from src.services.curation.ingest_policy import (
-    DetectorOverride,
     IngestPolicy,
     IngestPolicyBody,
     candidate_from_doc,
@@ -61,36 +58,17 @@ _PREVIEW_FIELDS = [
 ]
 
 
-def _known_slugs(policy: IngestPolicyBody) -> set[str]:
+def _known_slugs() -> set[str]:
     """Names a policy can sensibly mention: registry classes and the labels of the
     detector the project will run."""
     known = {c.class_name for c in get_class_registry().load().classes}
     try:
-        profile = effective_profile(ingest_primary_profile(), policy.detector)
+        profile = project_ingest_profiles().primary
         if profile.detector_model:
             known |= {label.slug for label in detector_labels(profile)}
-    except (ValueError, OSError):
+    except (ValueError, OSError, IngestProfileUnresolvedError):
         pass
     return known
-
-
-async def _require_servable(override: DetectorOverride) -> None:
-    """``422`` unless the project's own detector is loaded on Triton and serves
-    the end2end outputs ingest reads (``503`` when Triton cannot be asked)."""
-    from src.app.resources import get_async_triton_pool
-
-    try:
-        pool = get_async_triton_pool()
-    except RuntimeError as exc:
-        raise api_error(503, 'detector_unavailable', f'triton unavailable: {exc}') from exc
-    reasons = list(dict.fromkeys(p for p in await detector_problems(pool, override) if p))
-    if reasons:
-        raise api_error(
-            422,
-            'detector_not_servable',
-            f'detector {override.model!r} cannot serve ingest ({len(reasons)} problem(s); see reasons)',
-            reasons=reasons,
-        )
 
 
 @router.get('/ingest/policy', response_model=IngestPolicy)
@@ -104,11 +82,7 @@ async def get_policy(opensearch: OpenSearchDep) -> IngestPolicy:
 @router.put(
     '/ingest/policy',
     response_model=IngestPolicyPutResponse,
-    responses={
-        409: {'model': ApiErrorResponse},
-        422: {'model': DetectorNotServableResponse},
-        503: {'model': DetectorUnavailableResponse},
-    },
+    responses={409: {'model': ApiErrorResponse}},
 )
 async def put_policy(
     body: IngestPolicyUpdate, opensearch: OpenSearchDep
@@ -121,10 +95,7 @@ async def put_policy(
         detect=body.detect,
         embedding=body.embedding,
         clustering=body.clustering,
-        detector=body.detector,
     )
-    if body.detector is not None:
-        await _require_servable(body.detector)
     try:
         stored = await put_ingest_policy(
             opensearch, policy_body, expected_revision=body.expected_revision
@@ -132,7 +103,7 @@ async def put_policy(
     except PolicyConflictError as exc:
         raise api_error(409, 'revision_conflict', f'ingest policy changed: {exc}') from exc
     return IngestPolicyPutResponse(
-        **stored.model_dump(), unknown_names=unknown_names(policy_body, _known_slugs(policy_body))
+        **stored.model_dump(), unknown_names=unknown_names(policy_body, _known_slugs())
     )
 
 

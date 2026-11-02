@@ -11,6 +11,20 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Added
+
+- **Ingest profiles** (#366). A project's ingest detector is now a named, revisioned config document (`/curation/projects/{project}/ingest_profiles`: list, create, get, revisions, save, delete, validate, schema, clone, activate, active, rollback, deactivate), with the same history and rollback as prompt packs and region profiles. A profile has a required `primary` detector and an optional `secondary` classifier, each with `model`, `version`, `input_size`, `labels_path`, `confidence_floor` and `batch_limit`; a field left empty inherits the `OP_INGEST_*` value. Activation checks Triton serves the models (422 with the reasons; `force` bypasses only an outage). With no profile active the deployment's `OP_INGEST_*` settings apply. A read-only `coco80` template ships; the `ingest_profile` project-clone axis copies profiles and the activation.
+- Every reader of the ingest detector now resolves it through one function, so a project's own detector is also used by the open-vocabulary validation, the class-source catalog and the empty-VLM-answer repair, the model catalogs, and `DELETE /models/{name}` (refused with `detector_in_use` while an active profile names the model).
+
+### Removed
+
+- **Breaking: `detector` is gone from the ingest policy** (`GET`/`PUT /ingest/policy`, and its 422 `detector_not_servable` / 503 responses). It moved to ingest profiles. There is no migration: a `detector` already stored in a project's policy is reset when the policy is next read (logged as `retired_policy_field_reset`, naming the replacement), and the project runs the deployment's `OP_INGEST_PRIMARY_*` detector until you create and activate an ingest profile.
+
+### Fixed
+
+- Project clone's `settings_defaults` axis dropped the ingest policy's `clustering` switch.
+- The `secondary_model` class source counts as classifier output even when the deployment sets no `OP_INGEST_SECONDARY_*` model, so a project-level secondary's rows are no longer treated as unclassified.
+
 ### Security
 
 - Renaming a person no longer logs the name (#379).

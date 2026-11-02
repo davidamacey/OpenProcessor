@@ -29,7 +29,7 @@ from src.routers.curation._models_class_mapping import (
     listing_fields,
 )
 from src.routers.curation._models_vlm import vlm_status_rows
-from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.services.curation.ingest_detector import refreshed_ingest_profiles
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.detection.segmenter_health import (
     build_segmenter_entry,
@@ -344,21 +344,22 @@ async def unload_model(
 
     if not force:
         try:
-            policy = await get_ingest_policy(opensearch)
+            ingest = await refreshed_ingest_profiles(opensearch)
         except Exception as exc:
             raise api_error(
                 503,
                 'config_store_unavailable',
-                'could not read the ingest policy to see whether this is the ingest '
+                'could not read the active ingest profile to see whether this is the ingest '
                 'detector; retry, or pass force',
             ) from exc
-        if policy.detector is not None and policy.detector.model == model_name:
+        own = (ingest.primary, ingest.secondary) if ingest.source == 'stored' else ()
+        if any(p is not None and p.detector_model == model_name for p in own):
             raise api_error(
                 409,
                 'detector_in_use',
                 f"{model_name!r} is this project's ingest detector; deleting it makes "
-                'ingest fail until another detector is set. Change the ingest policy '
-                'first, or pass force=true.',
+                'ingest fail until another ingest profile is active. Change the active '
+                'ingest profile first, or pass force=true.',
             )
 
     try:

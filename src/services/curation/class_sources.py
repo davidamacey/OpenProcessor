@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from typing import Any, Literal, get_args
 
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.domain.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
     DEFAULT_PROPOSAL_CLASS_SOURCE,
@@ -30,6 +29,7 @@ from src.domain.ingest_class_sources import (
     is_classifier_class_source,
 )
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.ingest_detector import project_ingest_profiles
 from src.services.detection.region_text import VLM_TEXT_CONFIDENCE
 
 
@@ -137,7 +137,8 @@ def class_source_catalog() -> list[dict[str, str]]:
     deployment can write: the configured ingest profiles' values first,
     then the fixed writer values. Reads the ingest env on every call."""
     out: list[dict[str, str]] = []
-    primary = ingest_primary_profile()
+    ingest = project_ingest_profiles()
+    primary = ingest.primary
     p_model = primary.detector_model or primary.name
     out.append(_entry(f'{primary.name}_proposal', f'Proposed by {p_model}', 'proposal', 'Proposal'))
     if primary.assigns_class:
@@ -150,7 +151,7 @@ def class_source_catalog() -> list[dict[str, str]]:
             )
         )
         out.append(_entry(f'{primary.name}_model', f'Classified by {p_model}', 'model', 'Model'))
-    secondary = ingest_secondary_profile()
+    secondary = ingest.secondary
     if secondary is not None:
         s_model = secondary.detector_model or secondary.name
         out.append(

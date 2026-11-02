@@ -24,7 +24,13 @@ def test_active_config_response_axis_literal_matches() -> None:
     from src.schemas.curation.config_common import ActiveConfigResponse
 
     literal_values = set(get_args(ActiveConfigResponse.model_fields['axis'].annotation))
-    assert literal_values == {'prompt_pack', 'detection_profile', 'vlm', 'open_vocab'}
+    assert literal_values == {
+        'prompt_pack',
+        'detection_profile',
+        'vlm',
+        'open_vocab',
+        'ingest_profile',
+    }
     assert 'region_profile' not in literal_values
 
 

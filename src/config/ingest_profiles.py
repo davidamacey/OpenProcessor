@@ -57,6 +57,20 @@ def ingest_secondary_profile() -> DetectionProfile | None:
     return profile if profile.detector_model else None
 
 
+def ingest_primary_name() -> str:
+    """The primary profile's name (``item`` unless ``OP_INGEST_PRIMARY_NAME``): the
+    ``class_source`` prefix. Deployment-wide: a project's ingest profile never
+    changes it."""
+    return ingest_primary_profile().name
+
+
+def ingest_secondary_name() -> str:
+    """The secondary profile's name (``secondary`` unless ``OP_INGEST_SECONDARY_NAME``),
+    whether or not the deployment configures a secondary model: a project's own
+    secondary writes ``{name}_model`` too."""
+    return DetectionProfile.from_env(INGEST_SECONDARY_ENV_PREFIX, name='secondary').name
+
+
 @lru_cache(maxsize=8)
 def load_label_names(path: str) -> tuple[str, ...]:
     """Read a ``labels.txt``-style file (one label per line, line index =
@@ -84,7 +98,9 @@ def proposer_label(profile: DetectionProfile, class_id: int) -> str:
 __all__ = [
     'INGEST_PRIMARY_ENV_PREFIX',
     'INGEST_SECONDARY_ENV_PREFIX',
+    'ingest_primary_name',
     'ingest_primary_profile',
+    'ingest_secondary_name',
     'ingest_secondary_profile',
     'load_label_names',
     'proposer_label',
