@@ -137,6 +137,21 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
     'openimages_image_unreferenced': IssueSpec(
         'info', False, False, 'Image file has no Open Images box row (not imported)'
     ),
+    'labelstudio_json_invalid': IssueSpec('error', True, False, 'Label Studio export is invalid'),
+    'labelstudio_task_skipped': IssueSpec(
+        'warning', False, False, 'Label Studio task skipped (no image, or several annotations)'
+    ),
+    'createml_json_invalid': IssueSpec('error', True, False, 'CreateML annotation file is invalid'),
+    'labelme_json_invalid': IssueSpec(
+        'warning', False, False, 'LabelMe annotation file is invalid'
+    ),
+    'yolo_names_file_invalid': IssueSpec(
+        'error', True, False, 'YOLO class names file is empty, unreadable or has a bad name'
+    ),
+    'cvat_xml_invalid': IssueSpec('error', True, False, 'CVAT annotations.xml is invalid'),
+    'shape_not_box_skipped': IssueSpec(
+        'info', False, False, 'A shape that is not an axis-aligned box was skipped'
+    ),
     'image_file_missing': IssueSpec('warning', False, False, 'Referenced image file not found'),
 }
 

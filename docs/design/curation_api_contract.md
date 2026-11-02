@@ -1828,12 +1828,14 @@ planning and writing wins.
 | POST | `/datasets/imports/{import_id}/undo` | `DatasetUndoRequest` | `200 DatasetUndoReportWire` for a dry run, else `202 DatasetImportJob` | `409 import_not_undoable`, `409 import_busy` |
 
 `DatasetSource`: `path`, `format` (`auto`, `yolo`, `coco`, `voc`,
-`openimages`, `openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
+`openimages`, `cvat`, `labelstudio`, `kitti`, `createml`, `labelme`,
+`openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
 split}`). Auto-detection tries an OpenProcessor export, then YOLO (a data
 YAML), then COCO (`annotations/*.json` with no `labels/` directory, so
 `images/` next to `annotations/` is COCO), then Pascal VOC (`Annotations/*.xml`
 with no JSON), then Open Images (a boxes CSV and a class-descriptions CSV in the
-root), then YOLO (an `images/` directory,
+root), then CVAT (`annotations.xml`), Label Studio, CreateML and LabelMe (JSON
+files whose first 64 KiB carry the format's keys), KITTI (`label_2/`), then YOLO (an `images/` directory,
 or a child with one). The path must lie under a source root, the project's
 upload root or the project's export root, after symlinks are resolved
 (`422 dataset_path_not_allowed`). References inside a dataset must stay

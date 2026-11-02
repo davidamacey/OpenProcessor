@@ -30,6 +30,11 @@ def formats_response() -> DatasetFormatsResponse:
             DatasetFormatInfo(
                 format='openimages', label='Open Images (boxes CSV + class descriptions)'
             ),
+            DatasetFormatInfo(format='cvat', label='CVAT for images 1.1 (annotations.xml)'),
+            DatasetFormatInfo(format='labelstudio', label='Label Studio (JSON export)'),
+            DatasetFormatInfo(format='kitti', label='KITTI (label_2 + image_2)'),
+            DatasetFormatInfo(format='createml', label='CreateML (JSON)'),
+            DatasetFormatInfo(format='labelme', label='LabelMe (JSON per image)'),
             DatasetFormatInfo(format='openprocessor_export', label='OpenProcessor export'),
         ],
         issues=[

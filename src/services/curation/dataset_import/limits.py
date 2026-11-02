@@ -81,6 +81,14 @@ MAX_COCO_JSON_BYTES = 128 * 1024**2
 MAX_MANIFEST_BYTES = 16 * 1024**2
 # A VOC annotation is a few KiB; one over 1 MiB is not an annotation.
 MAX_VOC_XML_BYTES = 1 * 1024**2
+# A CVAT export holds a whole task; ElementTree holds it in memory, several
+# times its size.
+MAX_CVAT_XML_BYTES = 64 * 1024**2
+# The JSON annotation formats are parsed whole (see MAX_COCO_JSON_BYTES).
+MAX_LABELSTUDIO_JSON_BYTES = 128 * 1024**2
+MAX_CREATEML_JSON_BYTES = 128 * 1024**2
+# One LabelMe file describes one image (and may embed it as base64).
+MAX_LABELME_JSON_BYTES = 64 * 1024**2
 # Read row by row (csv streaming), so this bounds time, not memory. The full
 # Open Images train boxes file (~2.3 GB) is refused; its validation (~23 MB)
 # and test (~70 MB) files and any filtered subset fit.
@@ -92,6 +100,10 @@ MAX_YAML_DEPTH = 32
 
 __all__ = [
     'MAX_COCO_JSON_BYTES',
+    'MAX_CREATEML_JSON_BYTES',
+    'MAX_CVAT_XML_BYTES',
+    'MAX_LABELME_JSON_BYTES',
+    'MAX_LABELSTUDIO_JSON_BYTES',
     'MAX_LABEL_FILE_BYTES',
     'MAX_MANIFEST_BYTES',
     'MAX_OPENIMAGES_CSV_BYTES',
