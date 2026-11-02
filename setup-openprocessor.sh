@@ -2248,6 +2248,9 @@ do_rollback() {
         echo "DRY: restore ${newest} into ${OP_DIR} (current files saved to ${undo})"
         return 0
     fi
+    # Load this installer's library before the restore swaps scripts/lib/ for the older release's; never re-source after it.
+    # shellcheck source=scripts/lib/image_keys.sh
+    source "${OP_DIR}/scripts/lib/image_keys.sh"
     mkdir -p "$undo"
     chmod 700 "${OP_DIR}/.install/rollback-undo" "$undo"
     while IFS= read -r -d '' rel; do
@@ -2268,12 +2271,7 @@ do_rollback() {
     fi
     PINNED_IMAGES=()
     local k
-    # shellcheck source=scripts/lib/image_keys.sh
-    source "${OP_DIR}/scripts/lib/image_keys.sh"
-    for k in $(for rel in $(image_keys); do image_key_field "$rel" env; done | sort -u); do
-        rel="$(read_env_var "$ENV_FILE" "$k" || true)"
-        [[ -n "$rel" ]] && PINNED_IMAGES+=("$rel")
-    done
+    while IFS='=' read -r k rel; do [[ "$k" == *_IMAGE && -n "$rel" ]] && PINNED_IMAGES+=("$rel"); done < "$ENV_FILE"
     assert_compose_config
     pull_images
     if [[ "$IMAGE_MODE" == lock ]]; then

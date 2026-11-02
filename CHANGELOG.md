@@ -96,6 +96,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The unused `ingest_faces` service and OpenSearch client methods, which nothing in production called (#379).
 
 ### Fixed
+- **`setup-openprocessor.sh --rollback` works across a library change.** The rollback sourced `scripts/lib/image_keys.sh` after restoring the previous release's files, so an older library replaced the running installer's functions and the image pull died with `compose_image_refs: command not found`. The installer now loads its library before the restore, never re-sources it mid-run, and reads the restored image pins from the restored `.env`.
 - The model-export worker stops an export that runs over 4 hours and marks it failed, so one hung build cannot hold the queue while the heartbeat says the worker is alive. At start it also fails a task left running with no job file (for example one the in-API export left behind at an upgrade).
 - A COCO image whose only annotations are crowd boxes is imported as `unlabeled`, not `negative`: it contains objects, so it is not a verified empty image (#370).
 - **The VLM connection is pinned to the validated address** (#101): the URL policy resolves the endpoint host once and the labeler and the endpoint probe connect only to those addresses (Host header, TLS server name and certificate check unchanged), closing the DNS-rebinding window between the check and the connect. A pinned client ignores proxy environment variables.
