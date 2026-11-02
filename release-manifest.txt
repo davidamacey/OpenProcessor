@@ -20,6 +20,7 @@ scripts/lib/export.sh
 scripts/lib/export_steps.sh
 scripts/lib/model_groups.sh
 scripts/lib/model_setup.sh
+scripts/lib/model_stamps.sh
 scripts/lib/vlm_catalog.sh
 scripts/lib/vlm_switch.sh
 scripts/lib/image_keys.sh
