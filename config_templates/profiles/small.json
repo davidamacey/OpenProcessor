@@ -1,0 +1,13 @@
+{
+  "name": "small",
+  "description": "12-15GB VRAM (RTX 3080 Ti, RTX 4070 Ti, RTX 3060 12GB)",
+  "instance_count": 1,
+  "max_batch_size": 16,
+  "preferred_batch_sizes": [4, 8, 16],
+  "ocr_pipeline_instances": 1,
+  "gpu_image_prep_instances": 1,
+  "ingest_gpu_decode": false,
+  "python_backend_budget_mib": 768,
+  "models": "all",
+  "notes": "All models on a 12 GB card: one instance each, engines built with a 2 GB workspace and half the standard max batch (OP_TRT_BUILD_TARGET=small)."
+}

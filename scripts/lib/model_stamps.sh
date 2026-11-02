@@ -24,13 +24,42 @@ _ms_precision_file() {
     printf '%s' "${MODEL_SETUP_PRECISION_FILE:-${OP_DIR:?OP_DIR not set}/.install/precision.tsv}"
 }
 
+# _ms_build_flags MODEL: the build settings recorded in (and compared with) an engine
+# stamp: the build target and workspace of scripts/lib/trt_settings.sh. A profile
+# switch (standard <-> full) leaves them unchanged, so it does not rebuild; standard
+# <-> small changes them, so it does.
+_ms_build_flags() {
+    local target ws
+    target="$(trt_target)" || return 1
+    ws="$(trt_workspace_gb "$1")" || return 1
+    printf 'target=%s workspace=%sG' "$target" "$ws"
+}
+
 # The PE engine's trtexec profile (_ms_pe_trtexec), recorded in its stamp.
-_MS_PE_FLAGS="min1/opt8/max32 336x336 workspace8G strongly-typed input=uint8"
+_ms_pe_flags() {
+    local build
+    build="$(_ms_build_flags pe_image_encoder)" || return 1
+    printf 'min1/opt8/max%s 336x336 %s strongly-typed input=uint8' \
+        "$(trt_max_batch pe_image_encoder 32)" "$build"
+}
 _MS_PE_ONNX_REL="pytorch_models/pe_image_encoder.onnx"
 
-# _ms_compute_cap: compute capability of the lowest GPU id given to Triton.
+# _ms_build_gpu_id MODEL: the card MODEL's engine is built on. The PE trtexec runs in a
+# triton-server container (TRITON_GPU_ID); every other engine is built by the model-export
+# container (API_GPU_ID). Two cards of different architectures must not share one stamp value.
+_ms_build_gpu_id() {
+    local id
+    if [[ "${1:-}" == pe_image_encoder ]]; then
+        id="${TRITON_GPU_ID:-0}"
+    else
+        id="${API_GPU_ID:-${TRITON_GPU_ID:-0}}"
+    fi
+    printf '%s' "${id%%,*}"
+}
+
+# _ms_compute_cap [MODEL]: compute capability of the card MODEL's engine is built on.
 _ms_compute_cap() {
-    nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${TRITON_GPU_ID:-0}" 2>/dev/null \
+    nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "$(_ms_build_gpu_id "${1:-}")" 2>/dev/null \
         | head -n1 | tr -d '[:space:]'
 }
 
@@ -54,7 +83,7 @@ _ms_record_precision() {
     local trt="" cc="" sha=""
     if [[ -n "$onnx_rel" ]]; then
         trt="$(_ms_trt_version)"
-        cc="$(_ms_compute_cap)"
+        cc="$(_ms_compute_cap "$model")"
         sha="$(_ms_onnx_sha256 "$onnx_rel")"
     fi
     f="$(_ms_precision_file)"
@@ -86,13 +115,38 @@ model_setup_stamp_report() {
     awk -F'\t' -v OFS='\t' '$4 != "" { print $1, $2, $4, $5, substr($6, 1, 12) }' "$f"
 }
 
+# _ms_flags_stale MODEL FLAGS: prints why and returns 0 when the build target or
+# workspace recorded in FLAGS is not what this host would build now. A stamp without
+# the fields (written before #42) was built with the default target and workspace, so it
+# stays current under those and is never rebuilt just for lacking them.
+_ms_flags_stale() {
+    local model="$1" flags=" $2 " want_target want_ws have
+    want_target="$(trt_target)" || { echo "invalid OP_TRT_BUILD_TARGET"; return 0; }
+    want_ws="$(trt_workspace_gb "$model")" || { echo "invalid OP_TRT_WORKSPACE_GB"; return 0; }
+    if [[ "$flags" != *" target="* ]]; then
+        # Written before #42: built with the default target and that model's default workspace.
+        flags="${flags}target=default workspace=$(OP_TRT_BUILD_TARGET=default GPU_PROFILE='' OP_TRT_WORKSPACE_GB='' trt_workspace_gb "$model")G "
+    fi
+    if [[ "$flags" != *" target=${want_target} "* ]]; then
+        have="$(sed -n -E 's/.* target=([a-z]+) .*/\1/p' <<< "$flags")"
+        echo "built for target ${have:-unknown}, now ${want_target}"
+        return 0
+    fi
+    if [[ "$flags" != *" workspace=${want_ws}G "* ]]; then
+        have="$(sed -n -E 's/.* workspace=([0-9]+G) .*/\1/p' <<< "$flags")"
+        echo "built with workspace ${have:-unknown}, now ${want_ws}G"
+        return 0
+    fi
+    return 1
+}
+
 # model_setup_stamp_stale MODEL ONNX_REL: prints why and returns 0 when the
 # recorded stamp of MODEL no longer describes what this host would build
 # (no stamp, a fallback precision, another GPU architecture or another ONNX);
 # returns 1 when the engine is current. The TensorRT build is covered by the
 # Triton image digest that group_should_skip already compares.
 model_setup_stamp_stale() {
-    local model="$1" onnx_rel="$2" f row precision cc sha now_cc now_sha want
+    local model="$1" onnx_rel="$2" f row precision cc sha now_cc now_sha want why
     f="$(_ms_precision_file)"
     row="$(awk -F'\t' -v m="$model" '$1 == m' "$f" 2>/dev/null | tail -n1)"
     if [[ -z "$row" ]]; then echo "no build stamp"; return 0; fi
@@ -105,8 +159,9 @@ model_setup_stamp_stale() {
         echo "engine input datatype is not the config's ${want}"
         return 0
     fi
+    if why="$(_ms_flags_stale "$model" "$(cut -f7 <<< "$row")")"; then echo "$why"; return 0; fi
     if [[ -z "$sha" ]]; then echo "stamp has no ONNX hash"; return 0; fi
-    now_cc="$(_ms_compute_cap)"
+    now_cc="$(_ms_compute_cap "$model")"
     if [[ -n "$now_cc" && "$cc" != "$now_cc" ]]; then
         echo "built for compute capability ${cc:-unknown}, GPU is ${now_cc}"
         return 0
@@ -138,7 +193,10 @@ _ms_adopt_unstamped() {
     [[ -n "$(_ms_onnx_sha256 "$onnx_rel")" ]] || return 1
     dtype="$(_ms_config_input_dtype "$model")"
     [[ -n "$dtype" ]] || return 1
-    cc="$(_ms_compute_cap)"
+    # Pre-stamp engines were all built with the default target and workspaces: they can
+    # only be adopted while the host still asks for exactly that.
+    [[ "$(trt_target)" == default && -z "${OP_TRT_WORKSPACE_GB:-}" ]] || return 1
+    cc="$(_ms_compute_cap "$model")"
     [[ -n "$cc" ]] || return 1
     trt="$(_ms_trt_version)"
     [[ -n "$trt" ]] || return 1
@@ -146,11 +204,13 @@ _ms_adopt_unstamped() {
     if [[ -n "$pe" ]]; then
         pe_trt="$(cut -f4 <<< "$pe")"
         pe_cc="$(cut -f5 <<< "$pe")"
-        [[ -n "$pe_trt" && "$pe_trt" == "$trt" && "$pe_cc" == "$cc" ]] || return 1
+        [[ -n "$pe_trt" && "$pe_trt" == "$trt" ]] || return 1
+        # The compute capabilities are only comparable when both engines were built on one card.
+        [[ "$(_ms_build_gpu_id "$model")" != "$(_ms_build_gpu_id pe_image_encoder)" || "$pe_cc" == "$cc" ]] || return 1
     fi
     triton_model_ready "$model" || return 1
     _ms_record_precision "$model" "$precision" "adopted: built before per-engine stamps" "$onnx_rel" \
-        "adopted input=${dtype,,}"
+        "adopted input=${dtype,,} $(_ms_build_flags "$model")"
 }
 
 # _ms_group_stamp_stale GROUP: logs and returns 0 when any engine of the group
@@ -181,6 +241,6 @@ _ms_record_group_stamps() {
         [[ -n "$model" ]] || continue
         dtype="$(_ms_config_input_dtype "$model")"
         _ms_record_precision "$model" "$precision" "" "$onnx_rel" \
-            "trt-python-api ${precision}${dtype:+ input=${dtype,,}}"
+            "trt-python-api ${precision}${dtype:+ input=${dtype,,}} $(_ms_build_flags "$model")"
     done < <(model_setup_group_engines "$1")
 }

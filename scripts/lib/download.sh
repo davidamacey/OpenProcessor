@@ -330,7 +330,7 @@ estimate_download_size() {
             # Essential models only (~250MB)
             total_mb=250
             ;;
-        standard|full|all)
+        small|standard|full|all)
             # All models (~500MB)
             total_mb=500
             ;;

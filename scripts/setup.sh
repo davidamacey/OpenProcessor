@@ -142,7 +142,7 @@ Usage: ./scripts/setup.sh [OPTIONS]
 
 Options:
   --yes, -y           Skip confirmation prompts (auto-accept defaults)
-  --profile=NAME      Force GPU profile (minimal, standard, full)
+  --profile=NAME      Force GPU profile (minimal, small, standard, full)
   --gpu=ID            Use specific GPU ID (default: 0)
   --skip-export       Skip TensorRT export (use existing models)
   --skip-download     Skip model download (use existing)
@@ -168,7 +168,8 @@ already claims -- see env.template's "Isolation" section.
 
 GPU Profiles:
   minimal   6-8GB VRAM (RTX 3060, RTX 4060) - core models only
-  standard  12-24GB VRAM (RTX 3080, RTX 4090) - all models, balanced
+  small     12-15GB VRAM (RTX 3080 Ti, RTX 3060 12GB) - all models, smaller engines
+  standard  16-24GB VRAM (RTX 4080, RTX 4090) - all models, balanced
   full      40GB+ VRAM (A6000, A100) - maximum parallelism
 EOF
 }
@@ -310,6 +311,7 @@ generate_configs_step() {
     print_section "Generating Configuration"
 
     # Generate Triton model configs
+    export GPU_PROFILE="$SELECTED_PROFILE"  # the host-side export reads it for the TensorRT build target
     generate_all_configs "$SELECTED_PROFILE" "$GPU_ID"
 
     # Generate .env file (G-04: never overwrites an existing one unless

@@ -6,14 +6,8 @@ import logging
 import time
 from pathlib import Path
 
-from scrfd_constants import (
-    FPN_STRIDES,
-    INPUT_SIZE,
-    MAX_BATCH_SIZE,
-    NUM_ANCHORS,
-    TRITON_MODEL_NAME,
-    WORKSPACE_GB,
-)
+from scrfd_constants import FPN_STRIDES, INPUT_SIZE, MAX_BATCH_SIZE, NUM_ANCHORS, TRITON_MODEL_NAME
+from trt_build_settings import workspace_bytes
 
 
 logger = logging.getLogger(__name__)
@@ -56,7 +50,9 @@ def convert_to_tensorrt(
 
         # Configure
         config = builder.create_builder_config()
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, WORKSPACE_GB << 30)
+        config.set_memory_pool_limit(
+            trt.MemoryPoolType.WORKSPACE, workspace_bytes(TRITON_MODEL_NAME)
+        )
 
         if fp16 and enable_fp16(builder, config):
             logger.info('  FP16 mode enabled')

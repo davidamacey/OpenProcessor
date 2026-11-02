@@ -44,7 +44,7 @@ _DIRECT_ENV_RE = re.compile(
 # importable from ``src/`` but they read ``OP_*`` vars a deployment has to set,
 # so leaving them unscanned would let the trainer's whole env surface drift out
 # of env.template unnoticed.
-_SCANNED_ROOTS = ('src', 'scripts', 'docker')
+_SCANNED_ROOTS = ('src', 'scripts', 'docker', 'export')
 
 # Prefixes documented via a "2-3 examples + see the dataclass" convention
 # rather than one env.template line per field (RegionFields has ~30

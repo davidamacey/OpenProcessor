@@ -22,13 +22,19 @@ cmd_models() {
         status|list) cmd_models_status ;;
         install|repair)
             local only=""
-            if [[ "${1:-}" == "--only" ]]; then
-                only="${2:?--only needs a group name}"
-            fi
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --only) only="${2:?--only needs a group name}"; shift 2 ;;
+                    --build-target) OP_TRT_BUILD_TARGET="${2:?--build-target needs default or small}"; shift 2 ;;
+                    --workspace) OP_TRT_WORKSPACE_GB="${2:?--workspace needs a whole number of GB}"; shift 2 ;;
+                    *) log_error "unknown option: $1"; return 2 ;;
+                esac
+            done
+            export OP_TRT_BUILD_TARGET OP_TRT_WORKSPACE_GB
             cmd_models_install "$only"
             ;;
         *)
-            log_error "usage: openprocessor models status|install [--only GROUP]|repair"
+            log_error "usage: openprocessor models status|install|repair [--only GROUP] [--build-target default|small] [--workspace GB]"
             return 2
             ;;
     esac
@@ -95,13 +101,19 @@ cmd_models_install() {
     OP_FACES_ENABLED="$(_env_value OP_FACES_ENABLED)"
     OP_HEALTH_HOST=127.0.0.1
     GPU_PROFILE="$(_env_value GPU_PROFILE)"
+    TRITON_GPU_ID="$(_env_value TRITON_GPU_ID)"
+    API_GPU_ID="$(_env_value API_GPU_ID)"
+    # A flag beats .env; .env (what the model-export-worker also reads) beats the profile.
+    OP_TRT_BUILD_TARGET="${OP_TRT_BUILD_TARGET:-$(_env_value OP_TRT_BUILD_TARGET)}"
+    OP_TRT_WORKSPACE_GB="${OP_TRT_WORKSPACE_GB:-$(_env_value OP_TRT_WORKSPACE_GB)}"
     MODEL_SETUP_TRITON_DIGEST=""
     if [[ -f "$PROJECT_DIR/.install/state.json" ]]; then
         MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" | head -n1)"
     else
         log_info "no .install/state.json (a checkout, not an installed directory): every model group is built"
     fi
-    export OP_DIR OP_FACES_ENABLED OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST
+    export OP_DIR OP_FACES_ENABLED OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST \
+        TRITON_GPU_ID API_GPU_ID OP_TRT_BUILD_TARGET OP_TRT_WORKSPACE_GB
     dc up -d triton-server
     if model_setup_run_groups "$tiers" "$only"; then
         log_success "model groups done"
@@ -319,7 +331,7 @@ Service Commands:
 
 Model Commands:
   models [status]     List Triton models and their state
-  models install [--only GROUP]
+  models install [--only GROUP] [--build-target default|small] [--workspace GB]
                       Export/load model groups (skips up-to-date ones)
   models repair       Same as install: re-runs failed or missing groups
   export <model>      Export model to TensorRT
@@ -329,7 +341,7 @@ Model Commands:
 
 Configuration:
   profile [name]      Show/switch GPU profile
-                      Options: minimal, standard, full
+                      Options: minimal, small, standard, full
 
 Testing:
   test [type]         Run tests

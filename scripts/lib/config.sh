@@ -186,6 +186,9 @@ get_batch_sizes_string() {
         minimal)
             echo "4, 8, 16"
             ;;
+        small)
+            echo "4, 8, 16"
+            ;;
         standard)
             echo "8, 16, 32"
             ;;
@@ -286,7 +289,7 @@ generate_env_file() {
 # =============================================================================
 
 # GPU Profile
-# Options: minimal (6-8GB), standard (12-24GB), full (40GB+)
+# Options: minimal (6-10GB), small (12-15GB), standard (16-24GB), full (40GB+)
 GPU_PROFILE=$profile
 GPU_ID=$gpu_id
 

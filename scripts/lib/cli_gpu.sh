@@ -28,6 +28,7 @@ _gpu_plan_placement() {
     fi
     case "$(_env_value GPU_PROFILE)" in
         minimal) primary_mib=8192 ;;
+        small) primary_mib=10240 ;;
         full) primary_mib=17408 ;;
         *) primary_mib=12288 ;;
     esac

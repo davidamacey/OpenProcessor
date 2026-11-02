@@ -37,7 +37,7 @@
 #                                    OP_IMAGE_REPO picks the repo prefix
 #   OP_TIERS / --tiers               comma list of tiers, or --all
 #   OP_GPU_PLAN / --gpu-plan         triton=1,segmenter=0,vlm=2,trainer=0 (triton=0+2: PE encoder on both)
-#   GPU_PROFILE / --profile          minimal|standard|full
+#   GPU_PROFILE / --profile          minimal|small|standard|full
 #   OP_VLM_URL / --vlm-remote, OP_VLM_MODEL / --vlm-model,
 #   OP_VLM_KEY_FILE / --vlm-key-file remote OpenAI-compatible VLM
 #   OP_VLM_CATALOG_ID / --vlm-model-id   explicit local VLM catalog entry
@@ -724,6 +724,7 @@ docker_runtime_has_nvidia() {
 _triton_need_gb() {
     case "$1" in
         minimal) echo 8 ;;
+        small) echo 10 ;;
         full) echo 17 ;;
         *) echo 12 ;;
     esac
@@ -732,7 +733,7 @@ _triton_need_gb() {
 # Least free VRAM on the Triton card for the full profile: its models (17,408 MiB) plus the 2
 # gpu_image_prep instances it turns on (2 x 8,704 MiB) is 34,816 MiB, so 32 GB cards get standard (#373).
 _profile_min_free_gb() { case "$1" in full) echo 40 ;; *) echo 12 ;; esac; }
-_profile_for_free_gb() { if (( $1 >= $(_profile_min_free_gb full) )); then echo full; elif (( $1 >= 12 )); then echo standard; else echo minimal; fi; }
+_profile_for_free_gb() { if (( $1 >= $(_profile_min_free_gb full) )); then echo full; elif (( $1 >= 16 )); then echo standard; elif (( $1 >= 12 )); then echo small; else echo minimal; fi; }
 
 # GPU decode per profile; mirrors "ingest_gpu_decode" in config_templates/profiles/*.json.
 _ingest_gpu_decode_for_profile() {
@@ -806,12 +807,8 @@ recommend_plan() {
         single=1
         tri=${usable[0]}; vlm=$tri; seg=$tri; trn=$tri
         local f=${free[tri]}
-        if (( f < 16 )); then
-            profile=minimal
-        else
-            profile=standard
-            (( f >= 24 )) && inst=2
-        fi
+        profile=standard; (( f < 16 )) && profile=small; (( f < 12 )) && profile=minimal
+        (( f >= 24 )) && inst=2
     elif (( k == 2 )); then
         a=${usable[0]}; b=${usable[1]}
         if (( free[a] > free[b] )); then c=$a; a=$b; b=$c; fi
@@ -2296,7 +2293,7 @@ Usage: setup-openprocessor.sh [options]
   --tiers LIST | --all    core,curation,segmenter,vlm,trainer,cropwright
   --gpu-plan K=V,...      override placement: triton=1,segmenter=0,vlm=2,trainer=0
                           (triton=0+2 also runs the PE image encoder on GPU 2)
-  --profile NAME          minimal|standard|full (Triton instance profile)
+  --profile NAME          minimal|small|standard|full (Triton instance profile)
   --vlm-remote URL --vlm-model NAME [--vlm-key-file PATH]
   --vlm-model-id ID       choose a VLM catalog entry explicitly
   --bind ADDR             publish address (default 127.0.0.1); a specific non-loopback
@@ -2426,8 +2423,8 @@ parse_args() {
     if [[ -n "$OP_PORT_BASE" ]] && { [[ ! "$OP_PORT_BASE" =~ ^[0-9]+$ ]] || (( OP_PORT_BASE < 1024 || OP_PORT_BASE > 65500 )); }; then
         die "--port-base must be a number in 1024..65500" "$EXIT_USAGE"
     fi
-    if [[ -n "$GPU_PROFILE_FLAG" && ! "$GPU_PROFILE_FLAG" =~ ^(minimal|standard|full)$ ]]; then
-        die "--profile must be minimal, standard or full" "$EXIT_USAGE"
+    if [[ -n "$GPU_PROFILE_FLAG" && ! "$GPU_PROFILE_FLAG" =~ ^(minimal|small|standard|full)$ ]]; then
+        die "--profile must be minimal, small, standard or full" "$EXIT_USAGE"
     fi
     if [[ -n "$OP_IMAGE_TAG" && ! "$OP_IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
         die "--image-tag is not a valid Docker tag" "$EXIT_USAGE"

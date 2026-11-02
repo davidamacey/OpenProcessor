@@ -29,8 +29,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")
 MODELS_DIR="$PROJECT_DIR/models"
 PYTORCH_MODELS_DIR="$PROJECT_DIR/pytorch_models"
 
-# TensorRT export settings
-TRT_WORKSPACE="${TRT_WORKSPACE:-4G}"
+# TensorRT export settings: workspace and build target come from trt_settings.sh
 # TRT_FP16 (G-21): removed. trtexec --fp16 no longer exists on TRT 11.1
 # (strongly-typed builds follow the ONNX dtypes); this var was defined but
 # never read by anything in this file. See scripts/export_paddleocr.sh for

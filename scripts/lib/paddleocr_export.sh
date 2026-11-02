@@ -11,6 +11,9 @@
 [[ -n "${_PADDLEOCR_EXPORT_SH_LOADED:-}" ]] && return 0
 _PADDLEOCR_EXPORT_SH_LOADED=1
 
+# shellcheck source=trt_settings.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/trt_settings.sh"
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -147,7 +150,7 @@ export_detection() {
     log_info "  Min shapes: $DET_MIN_SHAPES"
     log_info "  Opt shapes: $DET_OPT_SHAPES"
     log_info "  Max shapes: $DET_MAX_SHAPES"
-    log_info "  Workspace: $TRT_WORKSPACE"
+    log_info "  Workspace: $(trt_workspace_gb paddleocr_det_trt)G"
 
     # Use 'docker compose run' instead of 'exec' to avoid requiring triton-server
     # to be running with all models loaded (chicken-and-egg on fresh install).
@@ -160,7 +163,7 @@ export_detection() {
         --minShapes="$DET_MIN_SHAPES" \
         --optShapes="$DET_OPT_SHAPES" \
         --maxShapes="$DET_MAX_SHAPES" \
-        --memPoolSize=workspace:$TRT_WORKSPACE \
+        --memPoolSize=workspace:"$(trt_workspace_gb paddleocr_det_trt)"G \
         $TRT_FP16 \
         2>&1 | tee /tmp/trtexec_det.log
 
@@ -203,7 +206,7 @@ export_recognition() {
     log_info "  Min shapes: $REC_MIN_SHAPES"
     log_info "  Opt shapes: $REC_OPT_SHAPES"
     log_info "  Max shapes: $REC_MAX_SHAPES"
-    log_info "  Workspace: $TRT_WORKSPACE"
+    log_info "  Workspace: $(trt_workspace_gb paddleocr_rec_trt)G"
     log_warn "This may take 10-20 minutes for dynamic width optimization..."
 
     # Use 'docker compose run' instead of 'exec' to avoid chicken-and-egg problem.
@@ -213,7 +216,7 @@ export_recognition() {
         --minShapes="$REC_MIN_SHAPES" \
         --optShapes="$REC_OPT_SHAPES" \
         --maxShapes="$REC_MAX_SHAPES" \
-        --memPoolSize=workspace:$TRT_WORKSPACE \
+        --memPoolSize=workspace:"$(trt_workspace_gb paddleocr_rec_trt)"G \
         $TRT_FP16 \
         2>&1 | tee /tmp/trtexec_rec.log
 

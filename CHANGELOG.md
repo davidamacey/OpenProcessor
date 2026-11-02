@@ -11,12 +11,22 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Added
+
+- **A `small` GPU profile for 12 GB cards** (#42). The installer and `setup.sh` pick it for a Triton card with 12 to 15 GB free (`standard` is now 16 GB and up, `minimal` under 12 GB): all models, one instance each, max batch 16. It builds engines with the new small TensorRT target (2 GB workspace, engine max batch halved, floor 16). `./openprocessor models install|repair` take `--build-target default|small` and `--workspace GB`; `.env` keys `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`. `standard` is unchanged. See INSTALLATION.md, "12 GB cards".
+- Engine build stamps record the build target and workspace, so a changed target rebuilds only the affected engines and a switch between `standard` and `full` rebuilds nothing. Stamps written before this release count as the default target and workspace, so an upgrade rebuilds nothing.
+
 ### Changed
+
+- **TensorRT workspace and engine max batch are decided in one module** (`export/trt_build_settings.py`, `scripts/lib/trt_settings.sh`) instead of ten literals; the defaults are the old values. The unconditional 8 GB workspace of `scripts/export_paddleocr.sh` is gone: det builds with 4 GB and rec with 8 GB like the Python exporters.
+- The engine stamp's compute capability is read from the card that built the engine (`API_GPU_ID` for the export container, `TRITON_GPU_ID` for the PE trtexec) instead of always the Triton card.
+- The engine-build out-of-memory hint names `--build-target small`.
 
 - **Promoted detector models take uint8 pixels like the built-in engines** (#429). The promote step writes the served `model.onnx` with the `/255` scaling inside the graph (`src/utils/uint8_input.py`, the same prefix `export/uint8_input.py` applies to built-in engines) and declares `TYPE_UINT8`, so a request carries a quarter of the bytes. The trainer's `best.onnx` stays standard FP32. Models promoted earlier keep their FP32 input and are still served: the client sends each model the datatype it declares.
 
 ### Added
 
+- **Per-stage timing on curation kNN search** (#414, #356). `GET /search/text` and `GET /search/similar` answer with a `Server-Timing` header naming the wall milliseconds of `bootstrap`, `encode` (text only), `source_vector` (similar only), `filter_build`, `knn_page`, `knn`, `unembedded_count` and `hydrate`, plus `encode_cache_hit` and OpenSearch's own `os_took_ms`; the same stages feed the `op_search_stage_seconds{route,stage}` Prometheus histogram. `knn` and `unembedded_count` run together, so `knn_page` is their wall span. The JSON body and `contracts/` are unchanged, and an error response carries no header. `retrieval_eval.py latency` reports p50/p95/p99 per stage on distinct COCO captions, unfiltered and by filter selectivity band, and `scripts/bench/replicate_items.py` grows a project's real items to a target size for the 100k and 1M item checks. The numbers are in `docs/PERFORMANCE.md`.
 - **Ingest profiles** (#366). A project's ingest detector is now a named, revisioned config document (`/curation/projects/{project}/ingest_profiles`: list, create, get, revisions, save, delete, validate, schema, clone, activate, active, rollback, deactivate), with the same history and rollback as prompt packs and region profiles. A profile has a required `primary` detector and an optional `secondary` classifier, each with `model`, `version`, `input_size`, `labels_path`, `confidence_floor` and `batch_limit`; a field left empty inherits the `OP_INGEST_*` value. Activation checks Triton serves the models (422 with the reasons; `force` bypasses only an outage). With no profile active the deployment's `OP_INGEST_*` settings apply. A read-only `coco80` template ships; the `ingest_profile` project-clone axis copies profiles and the activation.
 - Every reader of the ingest detector now resolves it through one function, so a project's own detector is also used by the open-vocabulary validation, the class-source catalog and the empty-VLM-answer repair, the model catalogs, and `DELETE /models/{name}` (refused with `detector_in_use` while an active profile names the model).
 
@@ -26,6 +36,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- The export GPU-memory check logged the card's total memory as "free"; it now reads the free memory.
 - Project clone's `settings_defaults` axis dropped the ingest policy's `clustering` switch.
 - **Ingest profiles fail closed.** A project whose config store never loaded, or whose last refresh failed, now answers `503 config_store_unavailable` (and the empty-VLM-answer repair script refuses) instead of silently running the deployment's `OP_INGEST_*` detector. A config store that recovered at an unchanged revision now clears its stale flag. `PUT /ingest/policy` refuses rather than skipping the unknown-names check, and the class-source, models and region-vocabulary routes refresh the store first.
 - Unloading or deleting a model (`/models/...` and `/curation/projects/{project}/models/...`) is refused with 403, even with `force`, while another project's active ingest profile runs it; the models list marks it `is_region_protected`. An unreadable project refuses with 503.

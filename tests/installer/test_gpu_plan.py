@@ -83,6 +83,38 @@ def test_10gb_is_minimal_core_without_segmenter_or_local_vlm() -> None:
     assert 'no tested catalog entry' in kv['refuse']
 
 
+@pytest.mark.parametrize(
+    ('total_gb', 'profile'),
+    [
+        (8, 'minimal'),
+        (10, 'minimal'),
+        (11, 'minimal'),
+        (12, 'small'),
+        (14, 'small'),
+        (15, 'small'),
+        (16, 'standard'),
+    ],
+)
+def test_the_profile_follows_the_free_vram_of_a_single_card(total_gb: int, profile: str) -> None:
+    rc, kv, _ = plan([(0, gb(total_gb), 0)], '', 'force=1')
+    assert rc == 0
+    assert kv['GPU_PROFILE'] == profile
+    assert kv['OP_INGEST_GPU_DECODE'] == '0'
+
+
+def test_a_12gb_card_with_other_users_gets_the_core_profile() -> None:
+    rc, kv, _ = plan([(0, gb(12), gb(3))], '', 'force=1')
+    assert rc == 0
+    assert kv['GPU_PROFILE'] == 'minimal'
+
+
+def test_the_small_profile_exists_and_matches_the_build_floor() -> None:
+    data = _profile_json('small')
+    assert data['instance_count'] == 1
+    assert data['models'] == 'all'
+    assert data['max_batch_size'] <= _profile_json('standard')['max_batch_size']
+
+
 def test_14gb_offers_one_segmenter_instance_but_does_not_recommend_it() -> None:
     rc, kv, _ = plan([(0, gb(14), 0)])
     assert 'segmenter' not in kv['recommended_tiers']
@@ -183,7 +215,7 @@ def test_three_gpus_shaped_like_this_host() -> None:
     assert kv['TRITON_GPU_ID'] == '1'
     assert kv['VLM_GPU_ID'] == '0'
     assert kv['SEGMENTER_GPU_ID'] == kv['OP_TRAIN_GPU_ORDER'] == kv['EVALUATOR_GPU_ID'] == '2'
-    assert kv['GPU_PROFILE'] == 'standard'
+    assert kv['GPU_PROFILE'] == 'small'
     assert kv['OP_GPU_ALLOWED_IDS'] == '0,1,2'
     assert kv['VLM_GPU_TOTAL_MIB'] == str(48 * 1024)
 
@@ -344,7 +376,7 @@ def _profile_json(name: str) -> dict:
 def _planned_triton_mib(kv: dict[str, str]) -> int:
     """Models plus the GPU decode the plan turns on, on the Triton card (#373)."""
     profile = kv['GPU_PROFILE']
-    models = {'minimal': 8192, 'standard': 12288, 'full': 17408}[profile]
+    models = {'minimal': 8192, 'small': 10240, 'standard': 12288, 'full': 17408}[profile]
     data = _profile_json(profile)
     decode = (
         _decode_mib() * data['gpu_image_prep_instances'] if kv['OP_INGEST_GPU_DECODE'] == '1' else 0
@@ -363,6 +395,7 @@ HOSTS = {
     '2x48': [(0, 49140, 0), (1, 49140, 0)],
     '3x24': [(0, gb(24), 0), (1, gb(24), 0), (2, gb(24), 0)],
     '3x(48,12,48)': [(0, 49140, 0), (1, 12288, 0), (2, 49140, 0)],
+    '1x12': [(0, gb(12), 0)],
 }
 
 
@@ -378,6 +411,7 @@ def test_the_planned_triton_footprint_fits_the_triton_card(host: str) -> None:
 @pytest.mark.parametrize(
     ('host', 'profile', 'decode'),
     [
+        ('1x12', 'small', '0'),
         ('1x24', 'standard', '0'),
         ('1x32', 'standard', '0'),
         ('1x40', 'standard', '0'),

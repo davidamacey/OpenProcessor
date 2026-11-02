@@ -70,7 +70,9 @@ def _put_onnx(tmp_path: Path, group: str) -> None:
 
 
 def _row(model: str, precision: str, *, cc: str = '8.6', sha: str | None = None) -> str:
-    return f'{model}\t{precision}\t\tv110100\t{cc}\t{sha or _sha(model)}\ttrt-python-api\n'
+    ws = 8 if model == 'paddleocr_rec_trt' else 4
+    flags = f'trt-python-api target=default workspace={ws}G'
+    return f'{model}\t{precision}\t\tv110100\t{cc}\t{sha or _sha(model)}\t{flags}\n'
 
 
 def _good_stamps(group: str) -> dict[str, str]:
@@ -307,3 +309,58 @@ def test_every_engine_of_a_group_is_stamped_when_docker_reads_stdin(
     )
     assert 'rc=0' in out.stdout
     assert set(_rows(tmp_path)) == set(ENGINES[group])
+
+
+# ---- upgrade: stamps written before the build-target fields (#42) must not rebuild ----
+
+
+def _old_format_stamps(group: str) -> dict[str, str]:
+    return {
+        m: f'{m}\t{prec}\t\tv110100\t8.6\t{_sha(m)}\ttrt-python-api {prec}\n'
+        for m, (_, prec) in ENGINES[group].items()
+    }
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_old_format_stamps_under_the_default_target_skip_every_group(
+    tmp_path: Path, bash, group: str
+) -> None:
+    prelude = _installed(tmp_path, group, _old_format_stamps(group)) + (
+        'dc() { touch "$OP_DIR/rebuilt"; return 0; }; '
+    )
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'up to date, skipped' in out
+    assert not (tmp_path / 'rebuilt').exists()
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_old_format_stamps_rebuild_under_the_small_target(tmp_path: Path, bash, group: str) -> None:
+    prelude = _installed(tmp_path, group, _old_format_stamps(group))
+    out = bash(prelude + f'OP_TRT_BUILD_TARGET=small; model_setup_run_group {group}').stdout
+    assert 'skipped' not in out
+    assert 'built for target default, now small' in out
+
+
+def test_a_group_already_built_small_is_kept_under_the_small_target(tmp_path: Path, bash) -> None:
+    fresh = {
+        m: f'{m}\t{prec}\t\tv110100\t8.6\t{_sha(m)}\ttrt-python-api {prec} target=small workspace=2G\n'
+        for m, (_, prec) in ENGINES['yolo'].items()
+    }
+    prelude = _installed(tmp_path, 'yolo', fresh)
+    out = bash(prelude + 'OP_TRT_BUILD_TARGET=small; model_setup_run_group yolo').stdout
+    assert 'up to date, skipped' in out
+
+
+def test_a_v060_ledger_keeps_every_engine(tmp_path: Path, bash) -> None:
+    """v0.6.0 stamped only the PE encoder (old flags); the other engines are adopted, none rebuilt."""
+    pe = (
+        'pe_image_encoder\tfp16\t\tv110100\t8.6\t'
+        + 'a' * 64
+        + '\tmin1/opt8/max32 336x336 workspace8G strongly-typed input=uint8\n'
+    )
+    for group in GROUPS:
+        prelude = _unstamped(tmp_path, group, pe_row=pe)
+        out = bash(prelude + f'model_setup_run_group {group}').stdout
+        assert 'up to date, skipped' in out, group
+    assert not (tmp_path / 'rebuilt').exists()
+    assert _rows(tmp_path)['pe_image_encoder'][5] == 'a' * 64

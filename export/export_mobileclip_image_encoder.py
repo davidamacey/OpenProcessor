@@ -30,6 +30,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
+from trt_build_settings import max_batch, workspace_bytes
 
 
 # Import bundled reparameterize function (no external reference repos needed)
@@ -314,7 +315,9 @@ def _build_engine(
     print('  ✓ ONNX parsed successfully')
 
     config = builder.create_builder_config()
-    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)  # 4GB workspace
+    config.set_memory_pool_limit(
+        trt.MemoryPoolType.WORKSPACE, workspace_bytes('mobileclip2_s2_image_encoder')
+    )
 
     if fp16 and enable_fp16(builder, config):
         print('  ✓ FP16 mode enabled')
@@ -439,7 +442,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument('--fp32', action='store_true', help='Use FP32 instead of FP16 for TensorRT')
     parser.add_argument(
-        '--max-batch-size', type=int, default=128, help='Maximum batch size for TensorRT engine'
+        '--max-batch-size',
+        type=int,
+        default=max_batch('mobileclip2_s2_image_encoder', 128),
+        help='Maximum batch size for TensorRT engine',
     )
     return parser.parse_args()
 

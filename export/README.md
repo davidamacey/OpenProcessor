@@ -391,8 +391,22 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
 
 All exports use these common settings:
 - Precision: FP16 (configurable)
-- Workspace: 4GB
+- Workspace: 4 GB, except the PE image encoder and the PaddleOCR recognizer (8 GB)
 - Optimization profiles for dynamic batching
+
+Workspace and engine max batch come from one place, `export/trt_build_settings.py`
+(`scripts/lib/trt_settings.sh` for the shell builds):
+
+| Setting | Effect |
+|---|---|
+| `OP_TRT_BUILD_TARGET=small` (implied by `GPU_PROFILE=small`) | 2 GB workspace for every engine; engine max batch halved, never below 16 and never raised |
+| `OP_TRT_WORKSPACE_GB=N` | workspace of every engine, whole GB, wins over the target |
+
+An invalid value fails the build. The values are recorded in the engine stamp, so a change
+rebuilds the engine. The workspace caps only the build's scratch memory; serve-time memory is
+set by the max batch and the Triton instance count. Pass them to the installer's export with
+`./openprocessor models install --build-target small --workspace 2`; `.env` keys of the same
+names are read by the `model-export-worker` as well.
 
 ## Troubleshooting
 
@@ -402,8 +416,9 @@ Download PyTorch models first:
 make download-models
 ```
 
-### "Failed to build TensorRT engine"
-Check GPU memory and reduce batch size if needed:
+### "Failed to build TensorRT engine" / `permanent:oom`
+The build card also holds loaded Triton engines. Free it, or rebuild with the small target
+(`./openprocessor models repair --build-target small`). Check GPU memory:
 ```bash
 docker compose exec api nvidia-smi
 ```

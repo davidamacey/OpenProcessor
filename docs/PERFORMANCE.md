@@ -3772,6 +3772,109 @@ the run record with `stage_s`. It reads the stack only (HTTP, `nvidia-smi`, `doc
 on the host for the resource samples.
 
 
+## Search latency at 100k and 1M items
+
+`GET /curation/projects/{project}/search/text` (page size 20) measured stage by stage through its `Server-Timing` header
+(#414, #356). Bar: p99 under 300 ms at 100k and at 1M items, unfiltered and filtered. **Met at both sizes.**
+
+What was measured, so the numbers can be read honestly:
+
+- **Data.** 10,000 public COCO images ingested through the product (64,455 items, real PE vectors). The 100,000 and 964,455
+  item indexes were grown from those items with `scripts/bench/replicate_items.py`: every copy keeps the real document and
+  gets its PE vector jittered by Gaussian noise (sigma 0.01 per dimension, cosine about 0.95 to the original) and
+  re-normalised. The class mix, filters and document sizes are real; the vector geometry is a jittered copy of one real set,
+  **not 964k independent photos**. The target was 1,000,000; a replica-id collision with the 100k step overwrote 35,545 copies
+  (fixed in the script), so the large index holds 964,455 items. Scale is counted in items (crops), the unit the kNN searches.
+- **Index.** Lucene HNSW, `m` 16, `ef_construction` 128 (the defaults); force-merged to 16 segments after the bulk load.
+- **Queries.** Distinct real COCO captions (never repeated, so the per-worker text cache does not hit), 128 warm-up requests
+  discarded (kept separately as `cold`), then 600 measured requests per condition, 3 runs, one request at a time. Filters are
+  `detector_class_name` bands whose share of items was measured from the index at run start.
+- **Stack.** Own compose project, API 32 workers, Triton and OpenSearch (24 GB heap) on one host with GPU 0.
+  The host was **not idle**: other work on the machine kept load1 between 13 and 54 during these runs, which widens the encode
+  tail below; treat the percentiles as an upper bound.
+
+Tables are the median over the 3 runs of each percentile. `served_total_ms` is the route's whole time as the middleware
+reports it. `knn` and `unembedded_count` overlap, so their sum exceeds the page time. Stages not shown: `bootstrap` 0.01 ms,
+`filter_build` 0.1 ms, `hydrate` 1.2 ms (p99 below 3 ms in every condition), `unembedded_count` p50 2.5 ms.
+Raw results: the JSON files of `retrieval_eval.py latency`.
+
+Findings:
+
+- **No 1.5 s outlier.** 0 of 18,000 measured requests exceeded 300 ms at either size; the slowest served total was 250 ms.
+  The 1.5 s outlier and the 1.8 s first-search cost of #356 do not recur (see below).
+- **The text encode is the largest stage.** About 53 ms at p50 (uncached, Triton `pe_text_encoder`); it is also where the tail
+  comes from under host load. A repeated query skips it (`encode` 0.3 ms) and answers in about 21 ms.
+- **kNN cost grows with a restrictive filter, not with size.** Unfiltered kNN is about 7-8 ms p50 at both sizes. A filter that
+  keeps 3-5% of the items costs 29 ms (3%) and 47 ms (5%) p50 at 964k, against 7 ms at 100k: the filtered HNSW traversal
+  visits far more nodes. It stays far inside the bar, so the HNSW `m` 32 trial was not run.
+- **#356 cold start.** The earlier outliers were the per-worker, per-project index bootstrap (`ensure_indexes`: 380-470 ms
+  cold, paid by each of the 32 workers on its first request to each project). With the startup bootstrap and the schema
+  marker, the `bootstrap` stage of a worker's first request to a project is now one marker read of 8-9 ms and 0.01 ms after.
+  Probe: 3 fresh projects, 60-150 searches each over new connections (so every worker answers), including right after an API
+  restart: the first search took 166 ms and the slowest 212 ms with no ingest running (454 ms while an ingest was
+  running). The 1.5 s and 1.8 s costs do not reproduce, and no code change was needed beyond the timing: the fix already on
+  the branch holds, and `tests/curation/test_index_schema_marker.py` guards the one-read bootstrap.
+
+**100,000 items** (3 run(s), median of the runs; ms)
+
+| Condition (share of items) | Stage | p50 | p95 | p99 |
+|---|---|---:|---:|---:|
+| unfiltered | encode | 53.8 | 106.4 | 147.8 |
+|  | knn | 8.1 | 12.6 | 15.4 |
+|  | served_total_ms | 69.9 | 130.0 | 169.5 |
+| rare (`fork`, 0.5%) | encode | 54.4 | 63.9 | 71.8 |
+|  | knn | 6.1 | 7.5 | 9.4 |
+|  | served_total_ms | 69.5 | 79.4 | 87.7 |
+| about_3pct (`bottle`, 2.9%) | encode | 53.5 | 68.5 | 100.8 |
+|  | knn | 6.7 | 8.8 | 10.8 |
+|  | served_total_ms | 69.0 | 85.0 | 122.6 |
+| about_15pct (`car`, 5.4%) | encode | 53.7 | 63.3 | 69.4 |
+|  | knn | 7.4 | 9.4 | 10.6 |
+|  | served_total_ms | 69.9 | 80.0 | 86.2 |
+| about_45pct (`person`, 32.2%) | encode | 54.7 | 114.1 | 150.4 |
+|  | knn | 12.0 | 21.8 | 26.0 |
+|  | served_total_ms | 76.3 | 147.2 | 176.8 |
+| repeated_query | encode | 0.3 | 1.4 | 2.2 |
+|  | knn | 8.8 | 12.5 | 15.0 |
+|  | served_total_ms | 19.9 | 25.1 | 31.2 |
+
+Worst single served total in any run: 250 ms.
+
+**964,455 items** (3 run(s), median of the runs; ms)
+
+| Condition (share of items) | Stage | p50 | p95 | p99 |
+|---|---|---:|---:|---:|
+| unfiltered | encode | 53.1 | 61.0 | 70.4 |
+|  | knn | 7.4 | 9.3 | 12.5 |
+|  | served_total_ms | 69.6 | 79.0 | 86.9 |
+| rare (`sports_ball`, 0.5%) | encode | 53.7 | 63.6 | 71.4 |
+|  | knn | 10.7 | 12.7 | 14.1 |
+|  | served_total_ms | 74.2 | 85.0 | 92.5 |
+| about_3pct (`bottle`, 2.7%) | encode | 53.3 | 61.9 | 68.2 |
+|  | knn | 29.3 | 32.1 | 35.6 |
+|  | served_total_ms | 93.2 | 102.9 | 108.8 |
+| about_15pct (`car`, 5.4%) | encode | 53.9 | 62.8 | 68.5 |
+|  | knn | 47.2 | 52.8 | 58.5 |
+|  | served_total_ms | 110.7 | 122.8 | 129.9 |
+| about_45pct (`person`, 32.5%) | encode | 52.8 | 63.0 | 67.0 |
+|  | knn | 16.4 | 40.1 | 51.2 |
+|  | served_total_ms | 81.0 | 106.6 | 114.5 |
+| repeated_query | encode | 0.3 | 0.4 | 0.6 |
+|  | knn | 8.7 | 10.9 | 12.8 |
+|  | served_total_ms | 21.0 | 24.4 | 28.1 |
+
+Worst single served total in any run: 225 ms.
+
+Reproduce (a project with embedded items and its OpenSearch URL):
+
+```bash
+.venv/bin/python scripts/bench/replicate_items.py --opensearch-url http://127.0.0.1:4607 \
+  --index op_prj_<slug>__items --target-items 1000000 --seed 20261102
+.venv/bin/python scripts/bench/retrieval_eval.py latency --api http://127.0.0.1:4603 --project <slug> \
+  --work <scratch> --opensearch-url http://127.0.0.1:4607 --index op_prj_<slug>__items \
+  --captions-file captions_train2017.json --warmup 128 --measured 600
+```
+
 ## 0.7.0 stage profile
 
 Where one ingested photo spends its time, per stage, on public data (set A: 1,846 measured COCO images, CPU route;

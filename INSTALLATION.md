@@ -70,7 +70,7 @@ Every flag also has an environment variable (the flag wins).
 | `--image-tag TAG` | `OP_IMAGE_TAG` | run images by tag (prefix `OP_IMAGE_REPO`) instead of `images.lock` digests; local builds only, never pulled |
 | `--tiers LIST` / `--all` | `OP_TIERS` | comma list of `core,curation,segmenter,vlm,trainer,cropwright`, or all of them |
 | `--gpu-plan K=V,...` | `OP_GPU_PLAN` | override GPU placement, e.g. `triton=1,segmenter=0,vlm=2,trainer=0` |
-| `--profile NAME` | `GPU_PROFILE` | Triton instance profile: `minimal`, `standard` or `full` |
+| `--profile NAME` | `GPU_PROFILE` | Triton instance profile: `minimal`, `small`, `standard` or `full` (picked automatically from the free VRAM of the Triton card) |
 | `--vlm-remote URL --vlm-model NAME` | `OP_VLM_URL`, `OP_VLM_MODEL` | use a remote OpenAI-compatible VLM instead of the local one |
 | `--vlm-key-file PATH` | `OP_VLM_KEY_FILE` | API key for the remote VLM (stored in `secrets/vlm/`, never in `.env`) |
 | `--vlm-model-id ID` | `OP_VLM_CATALOG_ID` | choose a VLM catalog entry explicitly |
@@ -555,8 +555,9 @@ not choose which models exist.
 
 | Profile | VRAM Range | Triton instances per model | Max batch | `ocr_pipeline` instances | Example GPUs |
 |---------|------------|----------------------------|-----------|--------------------------|--------------|
-| **minimal** | 6-8GB | 1 | 16 | 1 | RTX 3060, RTX 4060 |
-| **standard** | 12-39GB | 2 | 32 | 2 | RTX 3080, RTX 4090 |
+| **minimal** | under 12GB | 1 | 16 | 1 | RTX 3060 8GB, RTX 4060 |
+| **small** | 12-15GB | 1 | 16 | 1 | RTX 3080 Ti, RTX 3060 12GB |
+| **standard** | 16-39GB | 2 | 32 | 2 | RTX 4080, RTX 4090 |
 | **full** | 40GB+ | 4 | 64 | 4 | A6000, A100 |
 
 The values come from `config_templates/profiles/*.json`. No per-profile throughput has
@@ -565,7 +566,25 @@ been measured; measured numbers (one RTX A6000) are in `docs/PERFORMANCE.md`.
 The profile also decides the GPU decode (about 8.5 GB more on the Triton card per `gpu_image_prep`
 instance; every profile runs one, 8,704 MiB; two need `OP_LOAD_PROFILE=ingest`, see [the ingest load profile](docs-site/docs/operations/ingest-load-profile.mdx)):
 `setup.sh` and the installer write `OP_INGEST_GPU_DECODE=1` for **full** and `0` for **minimal**
-and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan` shows the result.
+, **small** and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan` shows the result.
+
+### 12 GB cards (the small profile)
+
+A card with 12 to 15 GB free gets `small` automatically: every model, one Triton instance each,
+a max batch of 16, and engines built with the **small TensorRT target** (a 2 GB workspace and half
+the engine max batch, never below 16). Engine memory at serve time is dominated by each engine's
+max-batch profile times the instance count, so the small profile lowers both; the workspace limit
+only caps the scratch memory of the build itself. The GPU decode stays off, and a segmenter or
+local VLM does not fit next to Triton on such a card (the plan says so).
+
+- The profile is chosen by the installer and written to `GPU_PROFILE`; force one with `--profile`.
+- Engine stamps (`.install/precision.tsv`) record the build target and workspace, so
+  `./openprocessor models install` rebuilds only the engines whose target changed (for example
+  after moving from `standard` to `small`); switching between `standard` and `full` rebuilds nothing.
+- Build the small engines on any profile with `./openprocessor models install --build-target small`,
+  or set a workspace with `--workspace GB`. The flags win over `.env`; `.env` keys are
+  `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`, which the `model-export-worker` (API model upload) also reads.
+- An engine build that runs out of memory (`permanent:oom`) names this option in its hint.
 
 ### What a profile does and does not do
 

@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from trt_build_settings import max_batch, workspace_bytes
 
 
 # Model configuration
@@ -46,7 +47,7 @@ NUM_CHARS = 18385  # 18383 multilingual chars + blank + space
 # Batch sizes (recognition processes many text crops per image)
 MIN_BATCH = 1
 OPT_BATCH = 32  # Higher optimal batch for text crops
-MAX_BATCH = 64  # Match Triton max_batch_size
+MAX_BATCH = max_batch('paddleocr_rec_trt', 64)  # Match Triton max_batch_size
 
 # Paths (relative to project root, which is one level up from this script's directory)
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -232,7 +233,9 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         trt.init_libnvinfer_plugins(trt_logger, '')
         builder = trt.Builder(trt_logger)
         config = builder.create_builder_config()
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 8192 * (1 << 20))
+        config.set_memory_pool_limit(
+            trt.MemoryPoolType.WORKSPACE, workspace_bytes('paddleocr_rec_trt')
+        )
 
         # NetworkDefinitionCreationFlag.EXPLICIT_BATCH was removed in
         # TRT 11 (networks are always explicit-batch now); the hardcoded

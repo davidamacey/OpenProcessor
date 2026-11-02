@@ -78,6 +78,7 @@ from ultralytics_patches import apply_end2end_patch  # noqa: E402  # imports fol
 apply_end2end_patch()
 
 # Import after patch (REQUIRED - patch must be applied before importing ultralytics)
+from trt_build_settings import max_batch, workspace_gb  # noqa: E402  # imports follow the interpreter re-exec guard above
 from trt_utils import engine_output_dtypes  # noqa: E402  # imports follow the interpreter re-exec guard above
 from ultralytics import YOLO  # noqa: E402  # imports follow the interpreter re-exec guard above
 from yolo_export_cli import build_parser  # noqa: E402  # imports follow the interpreter re-exec guard above
@@ -87,7 +88,7 @@ from yolo_export_report import (  # noqa: E402  # imports follow the interpreter
     print_summary,
     save_results_file,
 )
-from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD, WORKSPACE_GB  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD  # noqa: E402  # imports follow the interpreter re-exec guard above
 from yolo_formats import (  # noqa: E402  # imports follow the interpreter re-exec guard above
     check_gpu_memory,
     export_onnx_end2end,
@@ -233,6 +234,7 @@ def export_model(
     logger.info(f'Processing {model_id} -> {config["triton_name"]}')
     logger.info('=' * 70)
 
+    config = {**config, 'max_batch': max_batch('yolo', config['max_batch'])}
     pt_file = config['pt_file']
 
     # Validate input file
@@ -426,7 +428,7 @@ def _log_run_banner(args: argparse.Namespace, models_to_export: dict[str, dict[s
     logger.info(f'Image size: {IMG_SIZE}x{IMG_SIZE}')
     logger.info(f'Device: {f"cuda:{DEVICE}" if DEVICE != "cpu" else "cpu"}')
     logger.info(f'Precision: {"FP16" if HALF else "FP32"}')
-    logger.info(f'Workspace: {WORKSPACE_GB}GB')
+    logger.info(f'Workspace: {workspace_gb("yolo")}GB')
     if 'onnx_end2end' in args.formats or 'trt_end2end' in args.formats or 'all' in args.formats:
         logger.info(f'NMS IoU threshold: {IOU_THRESHOLD}')
         logger.info(f'Confidence threshold: {CONF_THRESHOLD}')

@@ -20,7 +20,9 @@
 #   MODEL_SETUP_STATE     state.json path (default $OP_DIR/.install/state.json)
 #   MODEL_SETUP_GROUPS_FILE  per-group results, TSV name<TAB>status<TAB>seconds
 #   MODEL_SETUP_TRITON_DIGEST  the Triton image digest engines are built with
-#   GPU_PROFILE           minimal|standard|full (preflight's config pass)
+#   GPU_PROFILE           minimal|small|standard|full (preflight's config pass); small builds
+#                         engines with the small target (scripts/lib/trt_settings.sh)
+#   OP_TRT_BUILD_TARGET / OP_TRT_WORKSPACE_GB   optional overrides of the build target / workspace
 
 [[ -n "${_MODEL_SETUP_SH_LOADED:-}" ]] && return 0
 _MODEL_SETUP_SH_LOADED=1
@@ -95,7 +97,7 @@ permanent_hint() {
         permanent:disk)
             echo "no space left on the install filesystem" ;;
         permanent:oom)
-            echo "out of GPU memory (Triton and the export share a card with too little free VRAM); move Triton with --gpu-plan triton=N, or free the card, then re-run" ;;
+            echo "out of GPU memory (the build card also holds loaded Triton engines); free the card, move Triton with --gpu-plan triton=N, or rebuild with './openprocessor models repair --build-target small' (2 GB workspace, half the max batch)" ;;
         *)
             echo "" ;;
     esac
@@ -221,6 +223,8 @@ group_should_skip() {
 }
 
 # Groups (section 4.2 table): the tables live in model_groups.sh.
+# shellcheck source=trt_settings.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/trt_settings.sh"
 # shellcheck source=model_groups.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model_groups.sh"
 # shellcheck source=model_stamps.sh
@@ -228,10 +232,22 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model_stamps.sh"
 
 # One-shot export-image and Triton-image containers (never need a running API). The export
 # image holds TensorRT, ModelOpt and the model-repo seed; the API image has none of them.
-_ms_export() { dc run --rm --no-deps -T -w /app model-export "$@"; }
+_ms_export() { dc run --rm --no-deps -T -w /app "${_MS_TRT_ENV[@]}" model-export "$@"; }
 # </dev/null: `docker compose run` forwards stdin even with -T, which would swallow the rest of
 # a `while read` loop that stamps the next engine.
 _ms_triton() { dc run --rm --no-deps -T triton-server "$@" </dev/null; }
+
+# _ms_trt_env: the build target and workspace the one-shot export containers must see.
+# `dc run` does not inherit this shell's environment, so they are passed with -e; the
+# target is always explicit (GPU_PROFILE=small resolves to small here, once).
+_ms_trt_env() {
+    local target
+    target="$(trt_target)" || return 1
+    _MS_TRT_ENV=(-e "OP_TRT_BUILD_TARGET=${target}")
+    [[ -n "${OP_TRT_WORKSPACE_GB:-}" ]] && _MS_TRT_ENV+=(-e "OP_TRT_WORKSPACE_GB=${OP_TRT_WORKSPACE_GB}")
+    return 0
+}
+_MS_TRT_ENV=()
 
 # Same as PE_NORMALIZE in export/build_pe_trt.sh (a test keeps them equal).
 _MS_PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
@@ -262,8 +278,8 @@ _ms_pe_trtexec() {
         --saveEngine=/models/pe_image_encoder/1/model.plan \
         --minShapes=images:1x3x336x336 \
         --optShapes=images:8x3x336x336 \
-        --maxShapes=images:32x3x336x336 \
-        --memPoolSize=workspace:8G \
+        --maxShapes=images:"$(trt_max_batch pe_image_encoder 32)"x3x336x336 \
+        --memPoolSize=workspace:"$(trt_workspace_gb pe_image_encoder)"G \
         --skipInference
 }
 
@@ -310,7 +326,7 @@ _ms_pe_build_engine() {
         rm -f "$raw"
         cat "$attempt_log"
         _ms_export rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
-        _ms_record_precision pe_image_encoder fp16 "" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
+        _ms_record_precision pe_image_encoder fp16 "" "$_MS_PE_ONNX_REL" "$(_ms_pe_flags)"
         return 0
     fi
     ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
@@ -322,7 +338,7 @@ _ms_pe_build_engine() {
     _ms_export cp /app/pytorch_models/pe_image_encoder.onnx /app/models/pe_image_encoder.build.onnx
     if _ms_pe_uint8_prepare && _ms_pe_trtexec pe_image_encoder.build.u8.onnx; then
         _ms_export rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
-        _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
+        _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}" "$_MS_PE_ONNX_REL" "$(_ms_pe_flags)"
         return 0
     fi
     return 1
@@ -443,6 +459,7 @@ model_setup_run_group() {
         return 0
     fi
 
+    _ms_trt_env || return 1
     started=$SECONDS
     log_step "model group: ${group}"
     if ! _ms_run_group_steps "$group" _ms_retry3; then

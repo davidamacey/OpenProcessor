@@ -21,10 +21,10 @@
 #                    <repo>/pytorch_models/pe_image_encoder.onnx)
 #   MODELS_DIRS      Space-separated Triton model repositories to install
 #                    into (default: <repo>/models)
-#   MAX_BATCH        Engine + config max batch size (default: 32)
+#   MAX_BATCH        Engine + config max batch size (default: 32; halved on the small target)
 #   OPT_BATCH        Engine optimization-profile opt batch (default: 8)
 #   IMAGE_SIZE       Input resolution (default: 336)
-#   WORKSPACE        trtexec workspace memory pool (default: 8G)
+#   WORKSPACE        trtexec workspace memory pool (default: trt_workspace_gb, 8G; 2G on the small target)
 #   PYTHON           Interpreter used to render config.pbtxt (default:
 #                    <repo>/.venv/bin/python if present, else python3)
 #   TRTEXEC          trtexec invocation override (default: docker compose)
@@ -41,10 +41,12 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 ONNX_PATH="${ONNX_PATH:-$REPO_DIR/pytorch_models/pe_image_encoder.onnx}"
 MODELS_DIRS="${MODELS_DIRS:-$REPO_DIR/models}"
 PLAN_TMP="${PLAN_TMP:-$(dirname "$ONNX_PATH")/pe_image_encoder.plan}"
-MAX_BATCH="${MAX_BATCH:-32}"
+# shellcheck source=../scripts/lib/trt_settings.sh
+source "$REPO_DIR/scripts/lib/trt_settings.sh"
+MAX_BATCH="${MAX_BATCH:-$(trt_max_batch pe_image_encoder 32)}"
 OPT_BATCH="${OPT_BATCH:-8}"
 IMAGE_SIZE="${IMAGE_SIZE:-336}"
-WORKSPACE="${WORKSPACE:-8G}"
+WORKSPACE="${WORKSPACE:-$(trt_workspace_gb pe_image_encoder)G}"
 MODEL_NAME="pe_image_encoder"
 INPUT_TENSOR="images"
 
