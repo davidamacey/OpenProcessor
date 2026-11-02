@@ -52,6 +52,82 @@ def _happy_routes() -> dict[tuple[str, str], tuple[int, object]]:
     }
 
 
+def _endpoints(*items: tuple[str, str, str]) -> dict:
+    return {
+        'endpoints': [{'name': n, 'source': src, 'status': st} for n, src, st in items],
+        'config_revision': 1,
+    }
+
+
+def _vlm_routes(endpoints: dict) -> dict[tuple[str, str], tuple[int, object]]:
+    routes = _happy_routes()
+    routes[('GET', '/curation/vlm/endpoints')] = (200, endpoints)
+    routes[('GET', f'{P}/vlm/endpoints/active')] = (
+        200,
+        {'active': {'name': None, 'revision': None}, 'source': 'off'},
+    )
+    routes[('GET', f'{P}/crops')] = (200, {'total': 1, 'crops': [{'crop_id': 'c0'}]})
+    routes[('POST', f'{P}/vlm/label_batch')] = (200, {'predicted': 1})
+    return routes
+
+
+def _activated(f: Fake) -> list[str]:
+    return [
+        r[1].split('/vlm/endpoints/')[1].split('/')[0]
+        for r in f.raw
+        if r[0] == 'POST' and r[1].endswith('/activate')
+    ]
+
+
+def test_vlm_label_activates_the_named_endpoint(fake, tmp_path):
+    routes = _vlm_routes(_endpoints(('env', 'env', 'ready'), ('fake', 'stored', 'ready')))
+    routes[('POST', f'{P}/vlm/endpoints/fake/activate')] = (200, {'active': {'name': 'fake'}})
+    f = fake(routes)
+    _proc, data = run(f, tmp_path, '--only', 'vlm_label', '--vlm-endpoint', 'fake')
+    assert by_name(data)['vlm_label']['status'] == 'pass', data
+    assert _activated(f) == ['fake']
+
+
+def test_vlm_label_without_option_uses_the_only_endpoint_the_stack_has(fake, tmp_path):
+    routes = _vlm_routes(_endpoints(('fake', 'stored', 'ready')))
+    routes[('POST', f'{P}/vlm/endpoints/fake/activate')] = (200, {'active': {'name': 'fake'}})
+    f = fake(routes)
+    _proc, data = run(f, tmp_path, '--only', 'vlm_label')
+    assert by_name(data)['vlm_label']['status'] == 'pass', data
+    assert _activated(f) == ['fake']
+
+
+def test_vlm_label_without_option_prefers_env_when_present(fake, tmp_path):
+    routes = _vlm_routes(_endpoints(('fake', 'stored', 'ready'), ('env', 'env', 'ready')))
+    routes[('POST', f'{P}/vlm/endpoints/env/activate')] = (200, {'active': {'name': 'env'}})
+    f = fake(routes)
+    _proc, data = run(f, tmp_path, '--only', 'vlm_label')
+    assert by_name(data)['vlm_label']['status'] == 'pass', data
+    assert _activated(f) == ['env']
+
+
+def test_vlm_label_fails_naming_the_option_when_the_stack_has_no_endpoint(fake, tmp_path):
+    f = fake(_vlm_routes(_endpoints()))
+    _proc, data = run(f, tmp_path, '--only', 'vlm_label')
+    ph = by_name(data)['vlm_label']
+    assert ph['status'] == 'fail'
+    assert '--vlm-endpoint' in ph['message']
+    assert _activated(f) == []
+
+
+def test_vlm_label_probes_an_untested_endpoint_before_activating(fake, tmp_path):
+    routes = _vlm_routes(_endpoints(('fake', 'stored', 'unprobed')))
+    routes[('POST', '/curation/vlm/endpoints/fake/probe')] = (200, {'ok': True})
+    routes[('POST', f'{P}/vlm/endpoints/fake/activate')] = (200, {'active': {'name': 'fake'}})
+    f = fake(routes)
+    _proc, data = run(f, tmp_path, '--only', 'vlm_label')
+    assert by_name(data)['vlm_label']['status'] == 'pass', data
+    calls = [(r[0], r[1]) for r in f.raw]
+    assert calls.index(('POST', '/curation/vlm/endpoints/fake/probe')) < calls.index(
+        ('POST', f'{P}/vlm/endpoints/fake/activate')
+    )
+
+
 class Fake:
     def __init__(self, routes: dict[tuple[str, str], tuple[int, object]]) -> None:
         self.routes = routes
@@ -368,6 +444,7 @@ def test_confirm_one_class_then_train_single_class_subset(fake, tmp_path):
         {'active': {'name': None, 'revision': None}, 'source': 'off'},
     )
     routes[('POST', f'{P}/vlm/endpoints/env/activate')] = (200, {'active': {'name': 'env'}})
+    routes[('GET', '/curation/vlm/endpoints')] = (200, _endpoints(('env', 'env', 'ready')))
     f = fake(routes)
     proc, data = run(
         f, tmp_path, '--only', 'vlm_label,confirm_labels,train', '--confirm-crops', '40'

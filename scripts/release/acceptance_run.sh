@@ -52,6 +52,7 @@ SLUG="acc-$(date +%s)"
 IMAGES_DIR=""
 IMAGE_COUNT=100
 VLM_CROPS=20
+VLM_ENDPOINT=""
 CONFIRM_CROPS=40
 TRAIN_GPU="${ACC_TRAIN_GPU:-0}"
 TRAIN_EPOCHS=2
@@ -87,6 +88,8 @@ Options:
   --images-dir DIR       COCO (or any) JPEG/PNG directory for ingest
   --image-count N        images to ingest (default 100)
   --vlm-crops N          crops to VLM-label (default 20)
+  --vlm-endpoint NAME    VLM endpoint to activate for the vlm_label phase (default: `env` when the
+                         stack has one, else its only saved endpoint; an untested one is probed first)
   --confirm-crops N      crops to human-confirm into one class for training (default 40; trainer floor is 20)
   --train-gpu IDS        CUDA_VISIBLE_DEVICES for the trainer (default $ACC_TRAIN_GPU or 0)
   --train-epochs N       probe-profile epochs (default 2)
@@ -121,6 +124,7 @@ while (($#)); do
         --images-dir) IMAGES_DIR="${2:?}"; shift 2 ;;
         --image-count) IMAGE_COUNT="${2:?}"; shift 2 ;;
         --vlm-crops) VLM_CROPS="${2:?}"; shift 2 ;;
+        --vlm-endpoint) VLM_ENDPOINT="${2:?}"; shift 2 ;;
         --confirm-crops) CONFIRM_CROPS="${2:?}"; shift 2 ;;
         --train-gpu) TRAIN_GPU="${2:?}"; shift 2 ;;
         --train-epochs) TRAIN_EPOCHS="${2:?}"; shift 2 ;;

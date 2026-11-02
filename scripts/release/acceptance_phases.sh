@@ -157,16 +157,39 @@ ph_cluster() {
     check_cluster_facets
 }
 
+# The endpoint to activate: --vlm-endpoint, else the built-in `env` when the
+# stack has one (OP_VLM_URL set), else the one saved endpoint it has. An installed
+# stack without a VLM tier has no `env`; the run then needs a saved endpoint.
+vlm_endpoint_pick() {
+    if [[ -n "$VLM_ENDPOINT" ]]; then VLM_PICKED="$VLM_ENDPOINT"; return 0; fi
+    api GET "${API_PREFIX}/vlm/endpoints"; expect 200
+    local names
+    names="$(jqb '[.endpoints[]?.name]')"
+    [[ "$(jq 'length' <<< "$names")" -gt 0 ]] \
+        || fail "the stack has no VLM endpoint: save one (POST ${API_PREFIX}/vlm/endpoints), set OP_VLM_URL, or name it with --vlm-endpoint"
+    if jq -e 'index("env")' <<< "$names" > /dev/null; then VLM_PICKED="env"; else VLM_PICKED="$(jq -r '.[0]' <<< "$names")"; fi
+}
+
 # A project calls no VLM until it activates one, so the phase opts in to the
 # deployment's endpoint first (the OCC value is what the project reports now).
+# An untested endpoint cannot be activated: probe it first.
 ph_vlm_label() {
-    local current
+    local current endpoint status
+    vlm_endpoint_pick
+    endpoint="$VLM_PICKED"
+    api GET "${API_PREFIX}/vlm/endpoints"; expect 200
+    status="$(jq -r --arg n "$endpoint" '[.endpoints[]? | select(.name == $n) | .status] | first // "missing"' "$BODY")"
+    [[ "$status" != missing ]] || fail "VLM endpoint '${endpoint}' is not known to the stack"
+    if [[ "$status" != ready ]]; then
+        api POST "${API_PREFIX}/vlm/endpoints/${endpoint}/probe"; expect 200
+        ev "probed ${endpoint} (was ${status}): $(snippet)"
+    fi
     api GET "${PROJECT_API}/vlm/endpoints/active"; expect 200
     current="$(jqb '{name: .active.name, revision: .active.revision}')"
-    api_json POST "${PROJECT_API}/vlm/endpoints/env/activate" \
+    api_json POST "${PROJECT_API}/vlm/endpoints/${endpoint}/activate" \
         "$(jq -nc --argjson c "$current" '{revision:null, expected_active:$c}')"
     expect 200
-    ev "vlm activated for the project: env"
+    ev "vlm activated for the project: ${endpoint}"
     api GET "${PROJECT_API}/crops?limit=${VLM_CROPS}"; expect 200
     local ids
     ids="$(jqb "[.crops[]? | (.crop_id // .id)] | .[0:${VLM_CROPS}]")"
