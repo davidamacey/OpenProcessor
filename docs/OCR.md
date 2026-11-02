@@ -66,7 +66,7 @@ The OCR pipeline consists of three Triton models working together:
 | **Model** | PP-OCRv5 Mobile Detection |
 | **Architecture** | DB++ (Differentiable Binarization) |
 | **Input Shape** | `[B, 3, H, W]` where H,W are multiples of 32, max 960 |
-| **Input Format** | FP32, BGR, normalized (x/127.5 - 1) |
+| **Input Format** | FP32, BGR, normalized (x/127.5 - 1); the `ocr_pipeline` BLS builds this from the uint8 pixels it receives |
 | **Output Shape** | `[B, 1, H, W]` probability map |
 | **Output Range** | [0, 1] sigmoid probabilities |
 | **Max Batch Size** | 4 |
@@ -330,12 +330,12 @@ max_batch_size: 0  # BLS handles batching
 input [
   {
     name: "ocr_images"
-    data_type: TYPE_FP32
-    dims: [ 3, -1, -1 ]  # Preprocessed for detection
+    data_type: TYPE_UINT8
+    dims: [ 3, -1, -1 ]  # BGR pixels; the BLS normalizes (x/127.5 - 1) for detection
   },
   {
     name: "original_image"
-    data_type: TYPE_FP32
+    data_type: TYPE_UINT8
     dims: [ 3, -1, -1 ]  # For text crop extraction
   },
   {

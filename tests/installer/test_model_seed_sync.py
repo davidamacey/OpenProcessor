@@ -130,3 +130,18 @@ def test_the_preflight_group_syncs_instead_of_cp_rn() -> None:
     seed = next(ln for ln in done.stdout.splitlines() if ln.startswith('STEP preflight_seed'))
     assert '/app/export/sync_model_seed.py /opt/openprocessor/model_repo_seed /app/models' in seed
     assert '-rn' not in seed
+
+
+def test_the_shipped_ocr_pipeline_replaces_an_unversioned_install(tmp_path: Path) -> None:
+    """The uint8 OCR inputs (#220) reach an upgraded install; engines beside it stay."""
+    seed = REPO_ROOT / 'models'
+    assert (seed / 'ocr_pipeline' / 'MODEL_VERSION').is_file()
+    dest = tmp_path / 'models'
+    _write(dest, 'ocr_pipeline/config.pbtxt', 'data_type: TYPE_FP32')
+    _write(dest, 'ocr_pipeline/1/model.py', 'old')
+    _write(dest, 'paddleocr_rec_trt/1/model.plan', 'engine')
+    updated = _load().sync(seed, dest)
+    assert 'ocr_pipeline' in updated
+    assert 'TYPE_UINT8' in (dest / 'ocr_pipeline/config.pbtxt').read_text()
+    assert (dest / 'ocr_pipeline/1/model.py').read_text() != 'old'
+    assert (dest / 'paddleocr_rec_trt/1/model.plan').read_text() == 'engine'

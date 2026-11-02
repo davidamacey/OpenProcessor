@@ -12,17 +12,62 @@ import numpy as np
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.config.settings import TritonModelConfig
+from src.utils.stage_timing import stage_timer
 
 
 logger = logging.getLogger(__name__)
 
+OCR_IMAGE_INPUTS = ('ocr_images', 'original_image')
 
-def infer_ocr(infer: Callable[[str, list, list], Any], image_bytes: bytes) -> dict[str, Any]:
+
+def require_uint8_ocr_inputs(model_name: str, datatype_of: Callable[[str], str]) -> None:
+    """Refuse an OCR pipeline model whose image inputs are not UINT8.
+
+    ``datatype_of`` maps an input name to the datatype the loaded model declares. A pipeline
+    still declaring FP32 is an installed model repository the upgrade did not replace; there is
+    no FP32 fallback, so the operation fails closed with the repair command.
+
+    Raises:
+        ValueError: an image input is not ``UINT8``.
+    """
+    for name in OCR_IMAGE_INPUTS:
+        datatype = datatype_of(name)
+        if datatype != 'UINT8':
+            msg = (
+                f"model '{model_name}' declares input '{name}' as {datatype or '<none>'!r}, "
+                'but OCR sends UINT8 pixels. The installed model repository is out of date: '
+                'run `./openprocessor models repair`.'
+            )
+            raise ValueError(msg)
+
+
+def _uint8_bgr(img: np.ndarray) -> np.ndarray:
+    """A decoded image as 3-channel uint8 BGR (grey, RGBA and 16-bit inputs included)."""
+    import cv2
+
+    if img.dtype != np.uint8:
+        img = cv2.convertScaleAbs(img, alpha=255.0 / 65535.0)
+    if img.ndim == 2:
+        return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    if img.shape[2] == 4:
+        alpha = img[:, :, 3:4] / 255.0
+        rgb = img[:, :, :3]
+        white_bg = np.ones_like(rgb) * 255
+        return (rgb * alpha + white_bg * (1 - alpha)).astype(np.uint8)
+    return img
+
+
+def infer_ocr(
+    infer: Callable[[str, list, list], Any],
+    image_bytes: bytes,
+    datatype_of: Callable[[str], str],
+) -> dict[str, Any]:
     """
     OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
 
     Args:
         image_bytes: Raw JPEG/PNG bytes
+        datatype_of: input name -> datatype the loaded ``ocr_pipeline`` declares
 
     Returns:
         Dict with num_texts, texts, text_boxes, text_boxes_normalized,
@@ -30,6 +75,7 @@ def infer_ocr(infer: Callable[[str, list, list], Any], image_bytes: bytes) -> di
     """
     import cv2
 
+    require_uint8_ocr_inputs(TritonModelConfig.OCR_PIPELINE_MODEL, datatype_of)
     img_array = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
     if img_array is None:
         return {
@@ -41,14 +87,7 @@ def infer_ocr(infer: Callable[[str, list, list], Any], image_bytes: bytes) -> di
             'rec_scores': np.array([]),
         }
 
-    # Handle different channel formats
-    if len(img_array.shape) == 2:
-        img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
-    elif img_array.shape[2] == 4:
-        alpha = img_array[:, :, 3:4] / 255.0
-        rgb = img_array[:, :, :3]
-        white_bg = np.ones_like(rgb) * 255
-        img_array = (rgb * alpha + white_bg * (1 - alpha)).astype(np.uint8)
+    img_array = _uint8_bgr(img_array)
 
     orig_h, orig_w = img_array.shape[:2]
 
@@ -77,23 +116,18 @@ def infer_ocr(infer: Callable[[str, list, list], Any], image_bytes: bytes) -> di
         padded[:resize_h, :resize_w, :] = resized
         resized = padded
 
-    # Normalize: (x / 127.5) - 1 for PP-OCR
-    ocr_input = resized.astype(np.float32) / 127.5 - 1.0
-    ocr_input = ocr_input.transpose(2, 0, 1)
-
-    # Original image for cropping
-    orig_normalized = img_array.astype(np.float32) / 255.0
-    orig_normalized = orig_normalized.transpose(2, 0, 1)
-
-    inputs = [
-        InferInput('ocr_images', list(ocr_input.shape), 'FP32'),
-        InferInput('original_image', list(orig_normalized.shape), 'FP32'),
-        InferInput('orig_shape', [2], 'INT32'),
-    ]
-
-    inputs[0].set_data_from_numpy(ocr_input)
-    inputs[1].set_data_from_numpy(orig_normalized)
-    inputs[2].set_data_from_numpy(np.array([orig_h, orig_w], dtype=np.int32))
+    # The BLS normalizes ((x / 127.5) - 1 for the detector) and crops from the raw pixels.
+    with stage_timer('triton_request', nbytes=resized.nbytes + img_array.nbytes):
+        ocr_input = np.ascontiguousarray(resized.transpose(2, 0, 1))
+        orig_chw = np.ascontiguousarray(img_array.transpose(2, 0, 1))
+        inputs = [
+            InferInput('ocr_images', list(ocr_input.shape), 'UINT8'),
+            InferInput('original_image', list(orig_chw.shape), 'UINT8'),
+            InferInput('orig_shape', [2], 'INT32'),
+        ]
+        inputs[0].set_data_from_numpy(ocr_input)
+        inputs[1].set_data_from_numpy(orig_chw)
+        inputs[2].set_data_from_numpy(np.array([orig_h, orig_w], dtype=np.int32))
 
     outputs = [
         InferRequestedOutput('num_texts'),

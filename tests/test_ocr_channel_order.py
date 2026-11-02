@@ -42,8 +42,8 @@ def test_original_image_tensor_is_bgr(recognizer: PaddleOcrTextRecognizer) -> No
     assert orig_shape.tolist() == [48, 64]  # [H, W]
     assert orig_in.shape == (3, 48, 64)  # C, H, W
 
-    # De-normalize back to uint8 pixel values per channel.
-    channel_means = (orig_in.reshape(3, -1).mean(axis=1) * 255.0).round()
+    # Per-channel mean of the uint8 pixels.
+    channel_means = orig_in.reshape(3, -1).mean(axis=1).round()
 
     # BGR order: channel 0 = Blue (200), channel 1 = Green (20), channel 2 = Red (10).
     assert channel_means[0] == pytest.approx(b, abs=1)
@@ -77,6 +77,6 @@ def test_original_image_tensor_matches_cv2_imdecode_convention(
     # Re-decode the same bytes with PIL (as the worker does) and preprocess.
     reloaded = Image.open(io.BytesIO(jpeg_bytes)).convert('RGB')
     _ocr_in, orig_in, _orig_shape = recognizer._preprocess(reloaded)
-    worker_channel_means = orig_in.reshape(3, -1).mean(axis=1) * 255.0
+    worker_channel_means = orig_in.reshape(3, -1).mean(axis=1)
 
     assert np.allclose(worker_channel_means, cv2_channel_means, atol=2.0)
