@@ -92,6 +92,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(
             return_value=_ocr_pipeline_mock_result(
                 n=3,
@@ -121,6 +122,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(
             return_value=_ocr_pipeline_mock_result(
                 n=2,
@@ -146,6 +148,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(
             return_value=_ocr_pipeline_mock_result(
                 n=3,
@@ -172,6 +175,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(
             return_value=_ocr_pipeline_mock_result(
                 n=1,
@@ -193,6 +197,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(
             return_value=_ocr_pipeline_mock_result(
                 n=1,
@@ -212,6 +217,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(
             return_value=_ocr_pipeline_mock_result(
                 n=1,
@@ -232,6 +238,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(
             return_value=_ocr_pipeline_mock_result(
                 n=2,
@@ -257,6 +264,7 @@ class TestPaddleOcrTextRecognizer:
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
         pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
         pool.infer = AsyncMock(side_effect=RuntimeError('triton down'))
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())

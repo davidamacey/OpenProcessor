@@ -84,6 +84,7 @@ class TritonClient:
         # replaced under the same name must not keep its old size, and the API
         # runs many worker processes, so an in-process invalidation could not
         # reach them all.
+        self._input_datatypes: dict[tuple[str, str], tuple[float, str]] = {}
         self._model_info: dict[str, tuple[float, DetectionAdapter, int, str]] = {}
         logger.info(f'Unified Triton client initialized (sync, retries={max_retries})')
 
@@ -125,6 +126,26 @@ class TritonClient:
                 size = dims[2]
         self._model_info[model_name] = (now + MODEL_INFO_TTL_S, adapter, size, datatype)
         return adapter, size, datatype
+
+    def _input_datatype(self, model_name: str, input_name: str) -> str:
+        """Datatype ``model_name`` declares for ``input_name``, cached for ``MODEL_INFO_TTL_S``.
+
+        Raises:
+            ValueError: the model declares no such input.
+        """
+        now = time.monotonic()
+        key = (model_name, input_name)
+        cached = self._input_datatypes.get(key)
+        if cached is not None and cached[0] > now:
+            return cached[1]
+        ensure_loaded_sync(self.client, model_name)
+        for tensor in self.client.get_model_metadata(model_name).inputs:
+            if tensor.name == input_name:
+                datatype = str(tensor.datatype)
+                self._input_datatypes[key] = (now + MODEL_INFO_TTL_S, datatype)
+                return datatype
+        msg = f"model '{model_name}' declares no '{input_name}' input"
+        raise ValueError(msg)
 
     def _get_detection_adapter(self, model_name: str) -> DetectionAdapter:
         return self._read_model_info(model_name)[0]
@@ -355,7 +376,11 @@ class TritonClient:
             Dict with num_texts, texts, text_boxes, text_boxes_normalized,
             text_scores, rec_scores
         """
-        return infer_ocr(self._infer_with_retry, image_bytes)
+        return infer_ocr(
+            self._infer_with_retry,
+            image_bytes,
+            lambda name: self._input_datatype(TritonModelConfig.OCR_PIPELINE_MODEL, name),
+        )
 
     # =========================================================================
     # Formatting Utilities

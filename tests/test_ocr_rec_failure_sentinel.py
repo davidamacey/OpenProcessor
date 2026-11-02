@@ -58,7 +58,9 @@ def triton_client(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(
         tc_mod.TritonClientManager, 'get_sync_client', staticmethod(lambda *_a, **_k: object())
     )
-    return tc_mod.TritonClient()
+    client = tc_mod.TritonClient()
+    monkeypatch.setattr(client, '_input_datatype', lambda _model, _name: 'UINT8')
+    return client
 
 
 def test_infer_ocr_replaces_negative_sentinel_with_none_and_reason(
