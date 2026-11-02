@@ -19,7 +19,6 @@ function json(body: unknown, status = 200): Response {
 const POLICY = {
   detect: { class_resolution: 'proposal', classes: null, exclude_classes: [] },
   embedding: { mode: 'all', classes: [] },
-  detector: null,
   revision: 4,
 };
 const PREVIEW = {
@@ -61,6 +60,18 @@ beforeEach(() => {
       }
       if (u.endsWith('/ingest/policy') && method === 'PUT') return putResponse();
       if (u.endsWith('/ingest/policy')) return json(POLICY);
+      if (u.endsWith('/ingest_profiles/active')) {
+        return json({
+          axis: 'ingest_profile',
+          active: { name: 'yolo-primary', revision: 3 },
+          source: 'stored',
+          activated_at: null,
+          previous: null,
+          config_revision: 9,
+          stale: false,
+          applied: [],
+        });
+      }
       if (u.endsWith('/ingest/config')) {
         return json(
           servedIngestConfig({
@@ -110,6 +121,9 @@ const puts = () => requests.filter((r) => r.method === 'PUT');
 describe('ingest policy page', () => {
   it('loads the served policy and previews it once', async () => {
     await mountPage();
+    expect(q('active-ingest-profile-name')?.textContent).toContain('yolo-primary');
+    expect(q('active-ingest-profile-name')?.textContent).toContain('revision 3');
+    expect(document.querySelector('[data-testid="policy-detector-section"]')).toBeNull();
     expect((q('policy-mode') as HTMLSelectElement).value).toBe('all');
     await vi.waitFor(() => {
       flushSync();

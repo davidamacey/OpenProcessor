@@ -64,20 +64,10 @@ const CASES: [string, string[]][] = [
     }),
   ],
   [
-    'DetectorOverride',
-    keys<keyof T.DetectorOverride>({
-      input_size: true,
-      labels_path: true,
-      model: true,
-      version: true,
-    }),
-  ],
-  [
     'IngestPolicy',
     keys<keyof T.IngestPolicy>({
       clustering: true,
       detect: true,
-      detector: true,
       embedding: true,
       revision: true,
     }),
@@ -87,7 +77,6 @@ const CASES: [string, string[]][] = [
     keys<keyof T.IngestPolicyBody>({
       clustering: true,
       detect: true,
-      detector: true,
       embedding: true,
     }),
   ],
@@ -96,7 +85,6 @@ const CASES: [string, string[]][] = [
     keys<keyof T.IngestPolicyUpdate>({
       clustering: true,
       detect: true,
-      detector: true,
       embedding: true,
       expected_revision: true,
     }),
@@ -106,7 +94,6 @@ const CASES: [string, string[]][] = [
     keys<keyof T.IngestPolicyPutResponse>({
       clustering: true,
       detect: true,
-      detector: true,
       embedding: true,
       revision: true,
       unknown_names: true,

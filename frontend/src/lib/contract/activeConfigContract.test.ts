@@ -84,6 +84,7 @@ const AXES = [
   'detection_profile',
   'vlm',
   'open_vocab',
+  'ingest_profile',
 ] as const satisfies readonly ConfigAxis[];
 
 describe('ActiveConfigResponse', () => {
