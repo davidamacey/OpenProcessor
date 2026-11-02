@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 from pydantic import BaseModel
 
+from src.routers._errors import server_error
 from src.services.training import job_campaigns, jobs as train_jobs, promote_job
 from src.services.training.job_models import TrainJobStatus
 
@@ -23,7 +24,7 @@ async def latest_status() -> TrainJobStatus | None:
     try:
         return await train_jobs.get_active_job()
     except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise server_error(500, 'training status unavailable', exc) from exc
 
 
 @router.get('/status/{job_id}', response_model=TrainJobStatus)

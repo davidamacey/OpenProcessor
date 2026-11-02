@@ -27,6 +27,7 @@ from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.domain.region_boxes import read_boxes
+from src.routers._errors import server_error
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
     _fetch_crop,
@@ -191,7 +192,7 @@ async def crop_thumbnail(
         raise _source_missing_error(crop) from exc
     except Exception as exc:
         logger.error('crop_thumbnail_failed', crop_id=crop_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f'thumbnail render failed: {exc}') from exc
+        raise server_error(500, 'thumbnail render failed', exc) from exc
 
     return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
 
@@ -234,7 +235,7 @@ async def crop_full_image(
         raise _source_missing_error(crop) from exc
     except Exception as exc:
         logger.error('crop_full_image_failed', crop_id=crop_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f'image render failed: {exc}') from exc
+        raise server_error(500, 'image render failed', exc) from exc
 
     return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
 
@@ -285,9 +286,7 @@ async def crop_region_thumbnail(
         raise _source_missing_error(crop) from exc
     except Exception as exc:
         logger.error('region_thumbnail_failed', crop_id=crop_id, error=str(exc))
-        raise HTTPException(
-            status_code=500, detail=f'region thumbnail render failed: {exc}'
-        ) from exc
+        raise server_error(500, 'region thumbnail render failed', exc) from exc
 
     return Response(content=jpeg, media_type='image/jpeg', headers=headers)
 

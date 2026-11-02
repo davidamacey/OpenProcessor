@@ -20,6 +20,7 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 
 from src.config import get_curation_config
+from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, images_index, router
 from src.routers.curation._common_models import (
@@ -180,5 +181,5 @@ async def curation_presign_object(body: ObjectPresignRequest) -> ObjectPresignRe
     try:
         url = await asyncio.to_thread(get_object_store().presign, ref, body.expires_in)
     except ObjectStoreError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from None
+        raise server_error(502, 'object store request failed', exc) from None
     return ObjectPresignResponse(url=url, expires_in=body.expires_in)

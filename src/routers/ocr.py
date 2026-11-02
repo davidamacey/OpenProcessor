@@ -16,6 +16,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from src.core.wire_json import WireJSONResponse
+from src.routers._errors import server_error
 from src.schemas.detection import ImageMetadata
 from src.services.ocr_service import OcrService
 from src.utils.retry import RetryExhaustedError
@@ -39,8 +40,8 @@ def ocr_error_http(result: dict[str, Any]) -> HTTPException | None:
         return None
     if result.get('error_kind') == 'input':
         return HTTPException(status_code=422, detail=result.get('error', 'unusable image'))
-    return HTTPException(
-        status_code=502, detail=f'OCR inference failed: {result.get("error", "unknown error")}'
+    return server_error(
+        502, 'OCR inference failed', RuntimeError(str(result.get('error', 'unknown error')))
     )
 
 
@@ -220,7 +221,7 @@ def ocr_predict(
         raise
     except Exception as e:
         logger.error(f'OCR failed for {filename}: {e}')
-        raise HTTPException(status_code=500, detail=f'OCR extraction failed: {e!s}') from e
+        raise server_error(500, 'OCR extraction failed', e) from e
 
 
 @router.post('/batch', response_model=BatchOcrResponse)
@@ -412,4 +413,4 @@ async def search_by_ocr(
         raise
     except Exception as e:
         logger.error(f'OCR search failed for "{text}": {e}')
-        raise HTTPException(status_code=500, detail=f'Search failed: {e!s}') from e
+        raise server_error(500, 'Search failed', e) from e

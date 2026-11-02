@@ -18,6 +18,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 ### Security
 
 - Search routes answer an unavailable backend with a generic 503 message; the cause is logged server-side.
+- Error responses (500, 502, 503) no longer include the underlying exception text in the body on any route; the status codes are unchanged and the cause is logged server-side. A test scans the routers so it cannot come back.
 - The open-vocabulary target test upload refuses an image whose longest side is over the 16384-pixel cap other image paths use, before decoding it.
 - Renaming a person no longer logs the name (#379).
 - **Model upload and export refuse a model name that is not a slug.** `POST /models/upload` took `triton_name` (or the uploaded file name) straight into a path under `pytorch_models/`, the model directory and the export command, so `../` wrote outside the model directories and `:` broke the export argument. The name must now match `^[a-z0-9][a-z0-9_]{0,63}$` after the usual lower-casing (else 400, before anything is saved or queued); `POST /models/{model_name}/export` checks its path name the same way, and the export queue refuses a bad name too.

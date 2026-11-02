@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from src.config.faces import faces_enabled
+from src.routers._errors import server_error
 from src.schemas.analyze import AnalyzeResponse, BatchAnalyzeResponse
 from src.services.analyze_pipeline import (
     BatchTotals,
@@ -101,7 +102,7 @@ def analyze_image(
         raise
     except Exception as e:
         logger.error(f'Analysis failed for {filename}: {e}')
-        raise HTTPException(status_code=500, detail=f'Analysis failed: {e!s}') from e
+        raise server_error(500, 'Analysis failed', e) from e
 
 
 @router.post('/batch', response_model=BatchAnalyzeResponse)

@@ -27,6 +27,7 @@ from src.domain.history import (
     find_undo_snapshot,
     record_class_snapshot,
 )
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, is_not_found, items_index, router
 from src.routers.curation._common_models import (
     CropDiscardBatchRequest,
@@ -326,7 +327,7 @@ async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
     except Exception as exc:
         if is_not_found(exc):
             raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     history = (resp.get('_source') or {}).get('class_id_history') or []
     entries = [
         {k: entry.get(k) for k in _HISTORY_KEYS} for entry in history if isinstance(entry, dict)
@@ -357,7 +358,7 @@ async def review_undismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
     except Exception as exc:
         if is_not_found(exc):
             raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     items = await _items_by_ids(opensearch, [crop_id])
     if not items:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')

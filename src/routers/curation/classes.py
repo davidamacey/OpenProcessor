@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+from src.routers._errors import server_error
 from src.routers.curation._class_hotkeys import project_reserved_hotkeys
 from src.routers.curation._class_models import ClassEntry, ClassListResponse
 from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
@@ -111,7 +112,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             cid = int(bucket['key'])
             cluster_size[cid] = int(bucket.get('doc_count', 0))
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
 
     # A region-of-interest class (e.g. the active region profile's
     # region_class_name) lives as a sub-bbox on every parent item that has

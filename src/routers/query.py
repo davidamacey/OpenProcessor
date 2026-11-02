@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Path, Query
 
 from src.core.dependencies import VisualSearchDep
 from src.routers import query_duplicates
+from src.routers._errors import server_error
 from src.schemas.query import (
     AllIndexStatsResponse,
     DeleteImageResponse,
@@ -115,7 +116,7 @@ async def get_all_stats(
 
     except Exception as e:
         logger.error(f'Get stats failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Stats retrieval failed: {e!s}') from e
+        raise server_error(500, 'Stats retrieval failed', e) from e
 
 
 @router.get('/image/{image_id}', response_model=ImageQueryResponse)
@@ -147,7 +148,7 @@ async def get_image_data(
         raise
     except Exception as e:
         logger.error(f'Get image data failed for {image_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Query failed: {e!s}') from e
+        raise server_error(500, 'Query failed', e) from e
 
 
 @router.delete('/image/{image_id}', response_model=DeleteImageResponse)
@@ -178,7 +179,7 @@ async def delete_image(
 
     except Exception as e:
         logger.error(f'Delete image failed for {image_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Deletion failed: {e!s}') from e
+        raise server_error(500, 'Deletion failed', e) from e
 
 
 router.include_router(query_duplicates.router)

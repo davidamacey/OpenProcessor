@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
 from src.config.faces import require_faces
+from src.routers._errors import server_error
 from src.services.face_identity import get_face_identity_service
 
 
@@ -241,7 +242,7 @@ async def cluster_faces(
 
     except Exception as e:
         logger.error(f'Face clustering failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Clustering failed: {e!s}') from e
+        raise server_error(500, 'Clustering failed', e) from e
 
 
 @router.get('', response_model=ListPersonsResponse)
@@ -288,7 +289,7 @@ async def list_persons(
 
     except Exception as e:
         logger.error(f'List persons failed: {e}')
-        raise HTTPException(status_code=500, detail=f'List persons failed: {e!s}') from e
+        raise server_error(500, 'List persons failed', e) from e
 
 
 @router.get('/{person_id}', response_model=PersonDetailResponse)
@@ -347,7 +348,7 @@ async def get_person(
         raise
     except Exception as e:
         logger.error(f'Get person failed for {person_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Get person failed: {e!s}') from e
+        raise server_error(500, 'Get person failed', e) from e
 
 
 @router.put('/{person_id}/name', response_model=RenameResponse)
@@ -390,7 +391,7 @@ async def rename_person(
 
     except Exception as e:
         logger.error(f'Rename person failed for {person_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Rename failed: {e!s}') from e
+        raise server_error(500, 'Rename failed', e) from e
 
 
 @router.post('/merge', response_model=MergeResponse)
@@ -446,7 +447,7 @@ async def merge_persons(
         raise
     except Exception as e:
         logger.error(f'Merge persons failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Merge failed: {e!s}') from e
+        raise server_error(500, 'Merge failed', e) from e
 
 
 @router.delete('/{person_id}', response_model=DeleteResponse)
@@ -499,4 +500,4 @@ async def delete_person(
 
     except Exception as e:
         logger.error(f'Delete person failed for {person_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Delete failed: {e!s}') from e
+        raise server_error(500, 'Delete failed', e) from e

@@ -16,6 +16,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from src.config.settings import TritonModelConfig
+from src.routers._errors import server_error
 from src.schemas.detection import BatchInferenceResult, InferenceResult
 from src.services.inference import InferenceService
 from src.utils.retry import RetryExhaustedError
@@ -93,7 +94,7 @@ def detect_single(
         raise
     except Exception as e:
         logger.error(f'Detection failed for {filename}: {e}')
-        raise HTTPException(status_code=500, detail=f'Detection failed: {e!s}') from e
+        raise server_error(500, 'Detection failed', e) from e
 
 
 @router.post('/batch', response_model=BatchInferenceResult)
@@ -224,7 +225,4 @@ def detect_batch(
         raise
     except Exception as e:
         logger.error(f'Batch detection failed: {e}')
-        raise HTTPException(
-            status_code=500,
-            detail=f'Batch detection failed: {e!s}',
-        ) from e
+        raise server_error(500, 'Batch detection failed', e) from e

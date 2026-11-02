@@ -42,7 +42,7 @@ def test_predict_is_502_when_inference_fails(
 ) -> None:
     response = client.post('/ocr/predict', files={'image': ('t.jpg', jpeg, 'image/jpeg')})
     assert response.status_code == 502, response.text
-    assert 'shape mismatch' in response.text
+    assert 'shape mismatch' not in response.text
 
 
 def test_predict_is_422_for_an_undecodable_image(client: TestClient) -> None:
