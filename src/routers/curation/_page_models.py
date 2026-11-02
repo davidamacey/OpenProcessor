@@ -87,10 +87,16 @@ class SearchSimilarResponse(SearchTextResponse):
     kNN similarity to the source crop's stored vector."""
 
 
+class SearchImageResponse(SearchTextResponse):
+    """``POST /search/image``: the ``/search/text`` page; ``semantic_score`` is the kNN
+    similarity to the encoded picture (or to its ``box``)."""
+
+
 __all__ = [
     'ReviewItemDoc',
     'ReviewLocateResponse',
     'ReviewQueuePage',
+    'SearchImageResponse',
     'SearchSimilarResponse',
     'SearchTextResponse',
 ]
