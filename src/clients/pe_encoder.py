@@ -95,6 +95,7 @@ from src.utils.pe_preprocess import (
     to_chw_into,
     whole_frame_rgb_from_image,
 )
+from src.utils.search_timing import search_annotate
 from src.utils.stage_timing import stage_timer
 
 
@@ -529,6 +530,7 @@ class PEEncoder:
                     found[query] = cached
                     self._cache_hits += 1
 
+        search_annotate('encode_cache_hit', int(not missing))
         if missing:
             vectors = self._encode_uncached(missing)
             with self._cache_lock:
