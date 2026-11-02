@@ -33,7 +33,7 @@ def _client(
     def get_metadata(name: str) -> Any:
         meta_calls.append(name)
         return SimpleNamespace(
-            inputs=[SimpleNamespace(name='images', shape=shape)],
+            inputs=[SimpleNamespace(name='images', shape=shape, datatype='UINT8')],
             outputs=[SimpleNamespace(name='n', shape=[-1, 1]) for _ in range(1)],
         )
 
@@ -73,7 +73,7 @@ def test_a_model_replaced_at_another_size_is_picked_up_after_the_ttl(
     assert client._model_input_size('m') == 640
     client.reshape(1280)
     assert client._model_input_size('m') == 640  # still inside the TTL
-    now[0] += tc._MODEL_INFO_TTL_S + 1
+    now[0] += tc.MODEL_INFO_TTL_S + 1
     assert client._model_input_size('m') == 1280
     assert meta_calls == ['m', 'm']
 

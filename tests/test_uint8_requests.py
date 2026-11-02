@@ -38,6 +38,9 @@ class _Pool:
     def __init__(self) -> None:
         self.inputs: list[Any] = []
 
+    async def get_model_input_datatype(self, _model: str) -> str:
+        return 'UINT8'
+
     async def infer(self, _model: str, inputs: list[Any], **_kw: Any) -> Any:
         self.inputs.extend(inputs)
         n = inputs[0].shape()[0]

@@ -69,6 +69,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TritonClient:
     monkeypatch.setattr(c, '_infer_with_retry', fake_infer_with_retry)
     monkeypatch.setattr(c, '_get_detection_adapter', lambda model_name: _FakeAdapter())  # noqa: ARG005
     monkeypatch.setattr(c, '_model_input_size', lambda model_name: 640)  # noqa: ARG005
+    monkeypatch.setattr(c, '_model_input_datatype', lambda model_name: 'UINT8')  # noqa: ARG005
     return c
 
 

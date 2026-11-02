@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.clients.model_adapters import END2END_OUTPUTS
-from src.clients.triton_pool_core import uint8_images_input
+from src.clients.triton_pool_core import images_input
 from src.config.ingest_profiles import proposer_label
 from src.core.logging import get_logger
 from src.services.curation.item_doc import DetectedItem
@@ -94,6 +94,11 @@ class WholeImageDetector:
         self.profile = profile
         self.secondary_profile = secondary_profile
 
+    async def _images(self, model: str, pixels: np.ndarray) -> Any:
+        """The ``images`` input for ``model`` in the datatype it declares."""
+        datatype = await self.triton_pool.get_model_input_datatype(model)
+        return await run_cpu(images_input, pixels, datatype, nbytes=pixels.nbytes)
+
     # ------------------------------------------------------------------
     # Primary (end2end) detector
     # ------------------------------------------------------------------
@@ -116,7 +121,7 @@ class WholeImageDetector:
             fill=self.profile.letterbox_fill,
             nbytes=_rgb_bytes(img),
         )
-        inp = await run_cpu(uint8_images_input, chw, nbytes=chw.nbytes)
+        inp = await self._images(self.profile.detector_model, chw)
         outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
         return self.decode_primary_row(
@@ -170,7 +175,7 @@ class WholeImageDetector:
         step = max(1, self.profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = await run_cpu(uint8_images_input, chunk, nbytes=chunk.nbytes)
+            inp = await self._images(self.profile.detector_model, chunk)
             result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
             for name in END2END_OUTPUTS:
                 rows[name].extend(result.as_numpy(name))
@@ -290,7 +295,7 @@ class WholeImageDetector:
             fill=profile.letterbox_fill,
             nbytes=_rgb_bytes(img),
         )
-        inp = await run_cpu(uint8_images_input, chw, nbytes=chw.nbytes)
+        inp = await self._images(profile.detector_model, chw)
         result = await self.triton_pool.infer(
             profile.detector_model, [inp], outputs=self._secondary_outputs()
         )
@@ -330,7 +335,7 @@ class WholeImageDetector:
         step = max(1, profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = await run_cpu(uint8_images_input, chunk, nbytes=chunk.nbytes)
+            inp = await self._images(profile.detector_model, chunk)
             result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
             raws = result.as_numpy(_RAW_OUTPUT)
             rows.extend(SecondaryOutput(raw=raws[i]) for i in range(raws.shape[0]))

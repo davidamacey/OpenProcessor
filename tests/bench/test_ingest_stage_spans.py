@@ -106,6 +106,9 @@ def test_detector_request_build_is_timed() -> None:
             }[name]
 
     class _Pool:
+        async def get_model_input_datatype(self, _model):
+            return 'UINT8'
+
         async def infer(self, _model, _inputs, **_kw):
             return _Result()
 
