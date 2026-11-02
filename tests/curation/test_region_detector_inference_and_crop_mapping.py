@@ -39,6 +39,37 @@ class TestRegionDetectorSingle:
         assert 0.0 <= result.bbox_norm[1] < result.bbox_norm[3] <= 1.0
 
     @pytest.mark.asyncio
+    async def test_uint8_model_gets_a_batched_uint8_pixel_tensor(self) -> None:
+        raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.85)
+        pool = _make_mock_pool(raw, input_datatype='UINT8')
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
+
+        assert await detector.detect(_make_jpeg()) is not None
+
+        sent = pool.infer.await_args.args[1][0]
+        size = NEUTRAL_REGION_PROFILE.input_size
+        assert sent.datatype() == 'UINT8'
+        assert list(sent.shape()) == [1, 3, size, size]
+        # The model scales in its graph: the pixels must stay 0-255, not 0-1.
+        assert int(np.frombuffer(sent._get_content(), dtype=np.uint8).max()) > 1
+
+    @pytest.mark.asyncio
+    async def test_fp32_model_gets_pixels_scaled_to_unit_range(self) -> None:
+        raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.85)
+        pool = _make_mock_pool(raw, input_datatype='FP32')
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
+
+        assert await detector.detect(_make_jpeg()) is not None
+
+        sent = pool.infer.await_args.args[1][0]
+        size = NEUTRAL_REGION_PROFILE.input_size
+        assert sent.datatype() == 'FP32'
+        assert list(sent.shape()) == [1, 3, size, size]
+        pixels = np.frombuffer(sent._get_content(), dtype=np.float32)
+        assert float(pixels.min()) >= 0.0
+        assert float(pixels.max()) <= 1.0
+
+    @pytest.mark.asyncio
     async def test_detect_below_floor_returns_none(self) -> None:
         raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.05)
         pool = _make_mock_pool(raw)

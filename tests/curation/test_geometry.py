@@ -154,17 +154,22 @@ class TestLetterboxPixels:
         chw, _scale, _pad = letterbox_to_square(Image.new('RGB', (50, 30)), 64)
         assert chw.flags['C_CONTIGUOUS']
 
-    def test_the_region_detector_float_letterbox_is_the_unit_range_division(self) -> None:
-        """Promoted ORT models still take float32 in [0, 1]: the same bits the lookup table gave."""
+    def test_the_region_detector_letterbox_stays_uint8_and_an_fp32_model_gets_the_unit_range(
+        self,
+    ) -> None:
+        """The wire datatype is chosen from the model; an older FP32 model gets pixels / 255."""
         from PIL import Image
 
+        from src.clients.triton_pool_core import images_input
         from src.services.detection.cascade_detect.preprocess import _letterbox
 
         img = Image.fromarray(
             np.random.default_rng(5).integers(0, 256, (30, 50, 3), dtype=np.uint8)
         )
-        floats, _scale, _pad = _letterbox(img, target=64)
-        pixels, _s, _p = letterbox_to_square(img, 64)
-        assert floats.dtype == np.float32
-        legacy = pixels.astype(np.float32) / 255.0
-        assert np.array_equal(floats.view(np.uint32), legacy.view(np.uint32))
+        pixels, _scale, _pad = _letterbox(img, target=64)
+        expected, _s, _p = letterbox_to_square(img, 64)
+        assert pixels.dtype == np.uint8
+        assert np.array_equal(pixels, expected)
+        sent = np.frombuffer(images_input(pixels, 'FP32')._get_content(), dtype=np.float32)
+        legacy = expected.astype(np.float32) / 255.0
+        assert np.array_equal(sent.view(np.uint32), legacy.reshape(-1).view(np.uint32))

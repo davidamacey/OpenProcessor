@@ -6,8 +6,9 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
-from tritonclient.grpc import InferInput, InferRequestedOutput
+from tritonclient.grpc import InferRequestedOutput
 
+from src.clients.triton_pool_core import images_input
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.preprocess import _decode_jpeg, _letterbox
 from src.services.detection.geometry import undo_letterbox
@@ -284,11 +285,12 @@ class RegionDetector:
             logger.warning('region_letterbox_failed: %s', exc)
             return None
 
-        inp = InferInput('images', list(chw.shape), 'FP32')
-        inp.set_data_from_numpy(chw)
         outs = [InferRequestedOutput('output0')]
 
         try:
+            datatype = await self.triton_pool.get_model_input_datatype(self.model_name)
+            # A promoted model declares UINT8 (the graph scales); an older one FP32.
+            inp = images_input(chw, datatype)
             result = await self.triton_pool.infer(self.model_name, [inp], outputs=outs)
         except Exception:
             logger.exception('region_infer_failed')
