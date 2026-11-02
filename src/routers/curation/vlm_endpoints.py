@@ -92,9 +92,13 @@ _NO_PROBE_CODES = frozenset(
 _PREFIX = '/vlm/endpoints'
 
 
-async def _registry(client: Any) -> Any:
+async def _registry(client: Any, *, name: str | None = None) -> Any:
+    """The refreshed registry. A ``name`` that is not in it forces a second read: an endpoint
+    written through another API worker bumps a revision doc this process may hold as absent."""
     store = get_global_config_store()
     await store.refresh(client)
+    if name is not None and get_vlm_endpoint(name) is None:
+        await store.refresh(client, force=True)
     return store.current
 
 
@@ -243,7 +247,7 @@ async def validate_vlm_draft(
 async def get_vlm_endpoint_doc(
     name: str, client: OpenSearchDep, response: Response
 ) -> VlmEndpointDoc:
-    await _registry(client)
+    await _registry(client, name=name)
     endpoint = _require_existing(name)
     usage = await _active_in(client)
     response.headers['ETag'] = f'"{endpoint.etag}"'
@@ -254,7 +258,7 @@ async def get_vlm_endpoint_doc(
     f'{_PREFIX}/{{name}}/revisions', response_model=VlmRevisionsResponse, tags=['VLM']
 )
 async def list_vlm_endpoint_revisions(name: str, client: OpenSearchDep) -> VlmRevisionsResponse:
-    await _registry(client)
+    await _registry(client, name=name)
     endpoint = _require_existing(name)
     if endpoint.source == 'env':
         return VlmRevisionsResponse(name=name, revisions=[])
@@ -278,7 +282,7 @@ async def list_vlm_endpoint_revisions(name: str, client: OpenSearchDep) -> VlmRe
 async def get_vlm_endpoint_revision(
     name: str, revision: int, client: OpenSearchDep
 ) -> VlmEndpointDoc:
-    registry = await _registry(client)
+    registry = await _registry(client, name=name)
     _require_stored(name)
     item = await fetch_revision(client, name, revision)
     if item is None:
@@ -310,7 +314,7 @@ async def create_vlm_endpoint(payload: VlmEndpointCreate, client: OpenSearchDep)
 async def clone_vlm_endpoint(
     name: str, payload: VlmEndpointCloneRequest, client: OpenSearchDep
 ) -> VlmEndpointDoc:
-    registry = await _registry(client)
+    registry = await _registry(client, name=name)
     source = _require_existing(name)
     if payload.revision is not None and source.source == 'stored':
         item = await fetch_revision(client, name, payload.revision)
@@ -362,7 +366,7 @@ async def update_vlm_endpoint(
 ) -> VlmEndpointDoc:
     """A new revision. Does not change what any project runs until it is
     activated there."""
-    await _registry(client)
+    await _registry(client, name=name)
     current = _require_stored(name)
     report = await _validated(payload.body, name=None, existing=None)
     try:
@@ -391,7 +395,7 @@ async def delete_vlm_endpoint(
 ) -> Response:
     """409 ``in_use`` while any project runs it (read live, so an unreadable
     project blocks the delete rather than being skipped)."""
-    await _registry(client)
+    await _registry(client, name=name)
     _require_stored(name)
     projects = slugs_running(await activations_by_project(client), name)
     if projects:
@@ -419,7 +423,7 @@ async def probe_vlm_endpoint(name: str, client: OpenSearchDep) -> VlmProbeResult
     (it also picks up a rotated key file). Never bumps the endpoint's
     revision; bumps the config revision so every process and worker sees
     the new ``json_mode`` / model facts."""
-    await _registry(client)
+    await _registry(client, name=name)
     endpoint = _require_existing(name)
     report, locality = await validate_vlm_endpoint(
         endpoint.body,
