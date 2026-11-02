@@ -21,12 +21,11 @@ Lives in config (not the router) so services and workers can derive the
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 
 from src.config.detection_profile import DetectionProfile, reject_legacy_detection_env
 from src.config.env import env_is_set
 from src.core.logging import get_logger
-from src.utils.class_names import get_class_names
+from src.utils.class_names import confine_labels_path, get_class_names
 
 
 logger = get_logger(__name__)
@@ -61,9 +60,11 @@ def ingest_secondary_profile() -> DetectionProfile | None:
 @lru_cache(maxsize=8)
 def load_label_names(path: str) -> tuple[str, ...]:
     """Read a ``labels.txt``-style file (one label per line, line index =
-    model class id). Raises ``OSError`` if unreadable — a configured but
-    missing labels file is a deployment error, not something to guess."""
-    return tuple(line.strip() for line in Path(path).read_text().splitlines())
+    model class id). The path must lie inside the model repository
+    (``ValueError`` otherwise, nothing read). Raises ``OSError`` if unreadable
+    — a configured but missing labels file is a deployment error, not
+    something to guess."""
+    return tuple(line.strip() for line in confine_labels_path(path).read_text().splitlines())
 
 
 def proposer_label(profile: DetectionProfile, class_id: int) -> str:

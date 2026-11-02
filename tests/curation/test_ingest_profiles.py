@@ -23,6 +23,11 @@ from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.detection import profile_registry
 
 
+@pytest.fixture(autouse=True)
+def _labels_inside_the_model_repository(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
+
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
