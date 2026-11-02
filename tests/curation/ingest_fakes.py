@@ -75,6 +75,9 @@ class FakeTritonPool:
         self.batch_sizes: list[int] = []
         self.fail_on_batch_gt = fail_on_batch_gt
 
+    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+        return 'UINT8'
+
     async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:  # noqa: ARG002
         batch = int(inputs[0].shape()[0]) if hasattr(inputs[0], 'shape') else 1
         if self.fail_on_batch_gt is not None and batch > self.fail_on_batch_gt:

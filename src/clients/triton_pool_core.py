@@ -30,6 +30,10 @@ from src.utils.stage_timing import stage_timer
 
 logger = logging.getLogger(__name__)
 
+# How long a model's metadata (input size, datatype, adapter) is trusted before it is re-read,
+# so a model re-promoted under the same name is picked up.
+MODEL_INFO_TTL_S = 30.0
+
 
 def uint8_images_input(tensor: np.ndarray) -> grpcclient.InferInput:
     """The Triton ``images`` input for a uint8 NCHW pixel tensor.
@@ -48,6 +52,31 @@ def uint8_images_input(tensor: np.ndarray) -> grpcclient.InferInput:
     with stage_timer('triton_request', nbytes=batch.nbytes):
         inp = grpcclient.InferInput('images', list(batch.shape), 'UINT8')
         inp.set_data_from_numpy(batch)
+    return inp
+
+
+def images_input(tensor: np.ndarray, datatype: str) -> grpcclient.InferInput:
+    """The Triton ``images`` input in the datatype the model declares.
+
+    ``UINT8`` sends the pixels as they are (built-in engines scale in the graph); ``FP32``
+    sends the same pixels divided by 255 (a promoted project model takes RGB in [0, 1]).
+
+    Raises:
+        ValueError: ``datatype`` is neither ``UINT8`` nor ``FP32``.
+        TypeError: ``tensor`` is not uint8.
+    """
+    if datatype == 'UINT8':
+        return uint8_images_input(tensor)
+    if datatype != 'FP32':
+        msg = f'model declares images datatype {datatype or "<none>"!r}; only UINT8 and FP32 are supported'
+        raise ValueError(msg)
+    if tensor.dtype != np.uint8:
+        msg = f'images must be uint8 pixels, got {tensor.dtype}'
+        raise TypeError(msg)
+    scaled = tensor.astype(np.float32) / np.float32(255.0)
+    with stage_timer('triton_request', nbytes=scaled.nbytes):
+        inp = grpcclient.InferInput('images', list(scaled.shape), 'FP32')
+        inp.set_data_from_numpy(scaled)
     return inp
 
 
@@ -170,6 +199,7 @@ class AsyncTritonPool:
         self._lock: asyncio.Lock | None = None
         self._initialized = False
         self._stats = PoolStats()
+        self._input_datatypes: dict[str, tuple[float, str]] = {}
 
     async def initialize(self) -> None:
         """
@@ -348,6 +378,26 @@ class AsyncTritonPool:
         Raises on any Triton error.
         """
         return await self._metadata_names(model_name, 'inputs', timeout)
+
+    async def get_model_input_datatype(self, model_name: str, timeout: float = 10.0) -> str:
+        """The datatype of the model's ``images`` input (``UINT8``, ``FP32``, ...), cached for
+        ``MODEL_INFO_TTL_S``. Raises when the model has no ``images`` input."""
+        now = time.monotonic()
+        cached = self._input_datatypes.get(model_name)
+        if cached is not None and cached[0] > now:
+            return cached[1]
+        if not self._initialized:
+            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
+        client = self._clients[await self._get_client_index()]
+        await ensure_loaded(client, model_name)
+        metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
+        for tensor in metadata.get('inputs', []):
+            if tensor.get('name') == 'images':
+                datatype = str(tensor.get('datatype', ''))
+                self._input_datatypes[model_name] = (now + MODEL_INFO_TTL_S, datatype)
+                return datatype
+        msg = f"model '{model_name}' declares no 'images' input"
+        raise ValueError(msg)
 
     async def _metadata_names(self, model_name: str, key: str, timeout: float) -> list[str]:
         if not self._initialized:

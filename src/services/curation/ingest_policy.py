@@ -24,12 +24,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.domain.embedding_state import DEFERRED, EMBEDDED, NOT_SELECTED
 from src.services.curation.class_write_guard import class_write_locked
 from src.services.curation.name_match import name_matches, normalized_names
-from src.utils.class_names import normalize_class_name
+from src.utils.class_names import confine_labels_path, normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -74,6 +74,13 @@ class DetectorOverride(BaseModel):
     # labels.txt-style file naming the model's classes; empty reads the one in
     # the model's own directory.
     labels_path: str = ''
+
+    @field_validator('labels_path')
+    @classmethod
+    def _labels_path_in_model_repository(cls, value: str) -> str:
+        if value:
+            confine_labels_path(value)
+        return value
 
 
 class EmbeddingPolicy(_Criteria):
