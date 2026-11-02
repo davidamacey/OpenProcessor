@@ -2242,7 +2242,7 @@ do_rollback() {
     log_step "Rollback to $(basename "$newest")"
     echo "restores: $(cd "$newest" && find . -type f | sed 's#^\./##' | tr '\n' ' ')"
     require_destructive_consent "Restore these files and restart ${OP_PROJECT}"
-    local undo
+    local undo k
     undo="${OP_DIR}/.install/rollback-undo/$(date -u +%Y%m%dT%H%M%SZ)"
     if [[ "$OP_DRY_RUN" == 1 ]]; then
         echo "DRY: restore ${newest} into ${OP_DIR} (current files saved to ${undo})"
@@ -2270,7 +2270,6 @@ do_rollback() {
         OP_IMAGE_TAG="$(read_env_var "$ENV_FILE" OP_IMAGE_TAG || true)"
     fi
     PINNED_IMAGES=()
-    local k
     while IFS='=' read -r k rel; do [[ "$k" == *_IMAGE && -n "$rel" ]] && PINNED_IMAGES+=("$rel"); done < "$ENV_FILE"
     assert_compose_config
     pull_images
@@ -2586,6 +2585,7 @@ do_install() {
         fi
         if [[ "$(state_get image_mode)" == tag && -z "$OP_IMAGE_TAG" ]]; then
             OP_IMAGE_TAG="$(state_get image_tag)"
+            [[ "$OP_IMAGE_REPO" == "$OP_IMAGE_NAMESPACE" ]] && OP_IMAGE_REPO="$(read_env_var "$ENV_FILE" OP_IMAGE_REPO || echo "$OP_IMAGE_REPO")"
         fi
     fi
     if (( existing )); then
