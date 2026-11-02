@@ -1,6 +1,6 @@
 <!--
   The ingest-policy draft as a form: embedding (always open), the detect
-  filter and the detector override (collapsed advanced sections). It writes
+  filter (collapsed advanced sections). It writes
   the editor's draft in place; nothing is validated here (the server's 422
   is shown on save and its preview error under the cost preview). Help text
   is frontend copy quoting the backend's documented behavior.
@@ -45,13 +45,6 @@
   }
   function setDetect(patch: Record<string, unknown>): void {
     editor.draft.detect = { ...(editor.draft.detect ?? {}), ...patch };
-  }
-  function setDetector(patch: Record<string, unknown>): void {
-    editor.draft.detector = {
-      model: '',
-      ...(editor.draft.detector ?? {}),
-      ...patch,
-    };
   }
 </script>
 
@@ -210,64 +203,6 @@
           >{RESOLUTION_HELP[detect.class_resolution ?? 'proposal']}</span
         >
       </label>
-    </div>
-  </details>
-
-  <details class="surface p-4" data-testid="policy-detector-section">
-    <summary class="cursor-pointer text-sm font-semibold">
-      Detector override (advanced)
-    </summary>
-    <div class="mt-3 space-y-3 text-xs">
-      <label class="flex items-center gap-2">
-        <input
-          type="checkbox"
-          data-testid="policy-use-deployment-detector"
-          checked={draft.detector == null}
-          onchange={(e) =>
-            e.currentTarget.checked
-              ? (editor.draft.detector = null)
-              : setDetector({ model: '' })}
-        />
-        <span class="text-zinc-200">Use the deployment detector</span>
-      </label>
-      {#if draft.detector != null}
-        <div class="flex flex-wrap gap-3">
-          <label class="flex flex-col gap-1">
-            <span class="text-zinc-400">Model</span>
-            <input
-              class="input w-56"
-              value={draft.detector.model}
-              oninput={(e) => setDetector({ model: e.currentTarget.value })}
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-zinc-400">Version</span>
-            <input
-              class="input w-24"
-              value={draft.detector.version ?? ''}
-              oninput={(e) => setDetector({ version: e.currentTarget.value })}
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-zinc-400">Input size</span>
-            <input
-              class="input w-24"
-              type="number"
-              step="1"
-              value={draft.detector.input_size ?? ''}
-              oninput={(e) => setDetector({ input_size: num(e.currentTarget.value) })}
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-zinc-400">Labels path</span>
-            <input
-              class="input w-64"
-              value={draft.detector.labels_path ?? ''}
-              oninput={(e) => setDetector({ labels_path: e.currentTarget.value })}
-            />
-          </label>
-        </div>
-      {/if}
     </div>
   </details>
 </div>

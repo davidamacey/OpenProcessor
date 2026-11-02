@@ -17,6 +17,7 @@ import type {
   SeedFromDetectorRequest,
   SeedFromDetectorResponse,
 } from '$lib/types_detector';
+import type { ActiveConfigResponse } from '$lib/types_config';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** `POST /classes/seed_from_detector`. `dry_run` is always sent explicitly;
@@ -40,8 +41,7 @@ export function getIngestPolicy(signal?: AbortSignal): Promise<IngestPolicy> {
   return apiFetch<IngestPolicy>(`${scoped()}/ingest/policy`, {}, signal);
 }
 
-/** `PUT /ingest/policy` (409 `revision_conflict`, 422 `detector_not_servable`,
- *  503 `detector_unavailable`). */
+/** `PUT /ingest/policy` (409 `revision_conflict`). */
 export function putIngestPolicy(
   req: IngestPolicyUpdate,
   signal?: AbortSignal,
@@ -51,6 +51,14 @@ export function putIngestPolicy(
     { method: 'PUT', body: JSON.stringify(req) },
     signal,
   );
+}
+
+/** `GET /ingest_profiles/active`: the project's active ingest profile (the
+ *  detector an ingest runs; edited through the ingest-profile routes). */
+export function getActiveIngestProfile(
+  signal?: AbortSignal,
+): Promise<ActiveConfigResponse> {
+  return apiFetch<ActiveConfigResponse>(`${scoped()}/ingest_profiles/active`, {}, signal);
 }
 
 /** `POST /ingest/policy/preview`: what the draft would embed among the
@@ -82,7 +90,7 @@ export function getDetectionsSummary(
 export interface DetectorErrorDetail {
   error: string;
   message: string;
-  /** 422 `detector_not_servable`. */
+  /** A served list of refusal reasons. */
   reasons?: string[];
   /** 422 `unknown_detector_names`. */
   unknown_names?: string[];

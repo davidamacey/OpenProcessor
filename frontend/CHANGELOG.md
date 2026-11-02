@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
+
 ### Added
 
 - Search by image (#402): a "Search by image" control on `/clusters` takes a dropped or chosen picture, optionally with a region dragged on its preview, and lists the crops nearest to it through `POST /search/image`. A Crops / Regions switch next to the search box applies to text, "More like this" and picture search; with Regions each result names the region that matched (`region b2`, marked stale when its vector predates a move of the box).

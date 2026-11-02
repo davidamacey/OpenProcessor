@@ -53,19 +53,10 @@ export interface ClusteringPolicy {
   automatic?: boolean;
 }
 
-/** `DetectorOverride`: a per-project detector instead of the deployment's. */
-export interface DetectorOverride {
-  input_size?: number | null;
-  labels_path?: string;
-  model: string;
-  version?: string;
-}
-
 /** `IngestPolicy`: the served policy (a GET). */
 export interface IngestPolicy {
   detect?: DetectFilter;
   clustering?: ClusteringPolicy;
-  detector?: DetectorOverride | null;
   embedding?: EmbeddingPolicy;
   revision?: number;
 }
@@ -74,7 +65,6 @@ export interface IngestPolicy {
 export interface IngestPolicyBody {
   detect?: DetectFilter;
   clustering?: ClusteringPolicy;
-  detector?: DetectorOverride | null;
   embedding?: EmbeddingPolicy;
 }
 
