@@ -25,6 +25,7 @@ import logging
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.routers import models_export, models_lifecycle
+from src.routers._errors import server_error
 from src.schemas.model_admin import TestInferenceResponse
 from src.services.triton_control import TritonControlService
 
@@ -145,7 +146,4 @@ async def test_model_inference(
 
     except Exception as e:
         logger.exception(f'Test inference failed for {model_name}')
-        raise HTTPException(
-            status_code=500,
-            detail=f'Inference failed: {e!s}',
-        ) from e
+        raise server_error(500, 'Inference failed', e) from e

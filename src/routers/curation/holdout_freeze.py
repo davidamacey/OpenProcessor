@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, logger, router
 from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
@@ -73,7 +74,7 @@ async def freeze_test_holdout(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
 
     crop_ids_by_class: dict[int, list[str]] = {}
     for bucket in strata:
@@ -104,7 +105,7 @@ async def freeze_test_holdout(
     try:
         await opensearch.bulk(body=bulk, refresh=True)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'bulk failed: {exc}') from exc
+        raise server_error(503, 'bulk failed', exc) from exc
 
     digest = compute_holdout_sha(chosen_ids)
 
@@ -143,7 +144,7 @@ async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     buckets = (resp.get('aggregations') or {}).get('by_class', {}).get('buckets', [])
     return {

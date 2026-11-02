@@ -22,11 +22,12 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from fastapi import HTTPException, Query
+from fastapi import Query
 
 from src.config import get_region_fields
 from src.config.project_context import current_project, project_api_base
 from src.config.region_state import RegionStatus
+from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
@@ -131,7 +132,7 @@ async def refine_region_cluster_endpoint(
         result = await refine_region_cluster(opensearch, cluster_id)
     except Exception as exc:
         logger.error('region_refine_failed', cluster_id=cluster_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f'region refine failed: {exc}') from exc
+        raise server_error(500, 'region refine failed', exc) from exc
     # Anchor the re-partition TTL on good-bucket refines so a later one-click
     # recluster won't wipe this fresh sub-cluster work (the FP bucket is rebuilt
     # by its own centroid job, not protected here).
@@ -225,7 +226,7 @@ async def list_region_clusters(
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
 
     scoped = ((resp.get('aggregations') or {}).get('boxes') or {}).get('in_scope') or {}
     buckets = (scoped.get('clusters') or {}).get('buckets') or []
@@ -380,7 +381,7 @@ async def suspected_false_positives(
         try:
             rows = await fp_candidate_rows(opensearch)
         except Exception as exc:
-            raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+            raise server_error(503, 'opensearch unavailable', exc) from exc
         subids = store.metadata.get('subids', [])
         scored = []
         if rows:

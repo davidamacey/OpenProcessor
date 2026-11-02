@@ -17,6 +17,7 @@ import numpy as np
 from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
 from PIL import Image
 
+from src.routers._errors import server_error
 from src.schemas.embed import (
     BatchEmbeddingResponse,
     BatchEmbeddingResult,
@@ -109,7 +110,7 @@ def embed_image(
         raise
     except Exception as e:
         logger.error(f'Image embedding failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Embedding generation failed: {e!s}') from e
+        raise server_error(500, 'Embedding generation failed', e) from e
 
 
 @router.post('/text', response_model=TextEmbeddingResponse)
@@ -149,7 +150,7 @@ def embed_text(
         raise
     except Exception as e:
         logger.error(f'Text embedding failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Embedding generation failed: {e!s}') from e
+        raise server_error(500, 'Embedding generation failed', e) from e
 
 
 @router.post('/batch', response_model=BatchEmbeddingResponse)
@@ -347,6 +348,4 @@ def embed_boxes(
         raise
     except Exception as e:
         logger.error(f'Box embeddings failed: {e}')
-        raise HTTPException(
-            status_code=500, detail=f'Box embedding extraction failed: {e!s}'
-        ) from e
+        raise server_error(500, 'Box embedding extraction failed', e) from e

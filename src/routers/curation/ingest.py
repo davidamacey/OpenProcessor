@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.config.ingest_profiles import ingest_primary_profile
+from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
     RegistryDep,
@@ -292,7 +293,7 @@ async def ingest_status(
     try:
         resp = await opensearch.search(index=images_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     aggs = resp.get('aggregations') or {}
     return IngestStatusResponse(
@@ -342,7 +343,7 @@ async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
     try:
         detector = _detector_info(effective_profile(ingest_primary_profile(), policy.detector))
     except ValueError as exc:
-        raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
+        raise server_error(503, 'ingest misconfigured', exc) from exc
     return IngestConfigResponse(
         upload=IngestUploadConfig(
             max_images_per_request=cfg.upload_max_images_per_request,
@@ -421,7 +422,7 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
     except Exception as exc:
         # Never answer zeros on an outage: total_unfinished == 0 is the
         # "worker caught up" signal a walker proceeds on.
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     raw: dict[str, int] = {}
     for bucket in (resp.get('aggregations') or {}).get('by_status', {}).get('buckets', []):
         raw[bucket.get('key', '')] = int(bucket.get('doc_count', 0))

@@ -24,6 +24,7 @@ from src.services.curation.image_serving import is_servable_image_path
 from src.services.curation.open_vocab_run import GateContext, plan_open_vocab_image
 from src.services.detection.open_vocab_set import decode_open_vocab_set
 from src.services.detection.segmenter_gate import RUN, GateDecision
+from src.utils.image_processing import MAX_IMAGE_DIMENSION
 
 
 if TYPE_CHECKING:
@@ -67,7 +68,14 @@ def decode_upload(image_base64: str) -> Image.Image:
         raise TrialImageError(f'the uploaded image is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB')
     try:
         img = Image.open(io.BytesIO(data))
+        if max(img.size) > MAX_IMAGE_DIMENSION:
+            raise TrialImageError(
+                f'the uploaded image is too large: {img.width}x{img.height} '
+                f'(longest side is capped at {MAX_IMAGE_DIMENSION} pixels)'
+            )
         img.load()
+    except Image.DecompressionBombError as exc:
+        raise TrialImageError('the uploaded image is too large to decode') from exc
     except (UnidentifiedImageError, OSError) as exc:
         raise TrialImageError('the uploaded bytes are not a readable image') from exc
     return img

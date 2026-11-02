@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException, Query
+from fastapi import Query
 
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.review_terms import (
@@ -53,7 +54,7 @@ async def review_unmatched_terms(
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
 
     return unmatched_terms_response(resp)
 
@@ -101,6 +102,6 @@ async def review_raw_label_clusters(
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
 
     return raw_label_clusters_response(resp)

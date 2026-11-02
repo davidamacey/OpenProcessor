@@ -55,7 +55,7 @@ class TritonHttpControl:
                     {
                         'name': 'images',
                         'shape': [batch, 3, input_size, input_size],
-                        'datatype': 'FP32',
+                        'datatype': 'UINT8',
                         # ints keep the JSON body ~2.5x smaller than 0.0
                         'data': [0] * (batch * 3 * input_size * input_size),
                     }

@@ -294,13 +294,13 @@ def test_single_empty_upload_is_a_400(client: TestClient, backends: Backends) ->
     assert response.json()['detail'] == 'Empty image file'
 
 
-def test_single_unexpected_failure_is_a_500_with_the_message(
+def test_single_unexpected_failure_is_a_500_without_the_cause(
     client: TestClient, jpeg: bytes, backends: Backends
 ) -> None:
     backends.triton.yolo_error = ValueError('bad tensor')
     response = _post(client, jpeg)
     assert response.status_code == 500
-    assert response.json()['detail'] == 'Analysis failed: bad tensor'
+    assert response.json()['detail'] == 'Analysis failed'
 
 
 def test_single_retry_exhaustion_passes_through_to_the_triton_handler(

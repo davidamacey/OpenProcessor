@@ -17,7 +17,8 @@ Critical YOLO26 specifics:
 * ``class_id`` is float-encoded; clients must cast to int. We avoid
   ``half=True`` on export so FP16 doesn't lose integer precision above
   2048 (Ultralytics issue #24428).
-* Input is ``BCHW float32 RGB normalized to [0, 1]`` -- same as YOLO11.
+* Input is ``BCHW uint8 RGB``; the ``/255`` scaling is inside the served graph
+  (``src/utils/uint8_input.py``), same as the built-in engines.
 
 The companion ``triton_promote`` service handles the orchestration
 (checkpoint -> ONNX -> config.pbtxt -> labels.txt -> load); this module
@@ -110,7 +111,7 @@ max_batch_size: {cfg.max_batch_size}
 input [
   {{
     name: "images"
-    data_type: TYPE_FP32
+    data_type: TYPE_UINT8
     dims: [ 3, {cfg.input_size}, {cfg.input_size} ]
   }}
 ]

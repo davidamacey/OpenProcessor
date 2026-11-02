@@ -24,6 +24,7 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, logger, router
 from src.routers.curation._common_models import ExportSingleClassRequest
 from src.services.curation.export_models import MANIFEST_FILENAME, SingleClassExportProfile
@@ -88,7 +89,7 @@ async def export_single_class(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         logger.error('single_class_export_failed', error=str(exc))
-        raise HTTPException(status_code=500, detail=f'single-class export failed: {exc}') from exc
+        raise server_error(500, 'single-class export failed', exc) from exc
 
     return {
         'status': 'success',

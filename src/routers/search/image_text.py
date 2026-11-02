@@ -6,6 +6,7 @@ import time
 from fastapi import File, HTTPException, Query, UploadFile, status
 
 from src.core.dependencies import VisualSearchDep
+from src.routers._errors import server_error
 from src.routers.search._router import router
 from src.routers.search.models import SearchResponse, SearchResult
 from src.utils.upstream_errors import UpstreamError
@@ -106,10 +107,7 @@ async def search_by_image(
         raise
     except Exception as e:
         logger.error(f'Image search failed: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Image search failed: {e!s}',
-        ) from e
+        raise server_error(500, 'Image search failed', e) from e
 
 
 @router.post(
@@ -217,7 +215,4 @@ async def search_by_text(
         raise
     except Exception as e:
         logger.error(f'Text search failed: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Text search failed: {e!s}',
-        ) from e
+        raise server_error(500, 'Text search failed', e) from e

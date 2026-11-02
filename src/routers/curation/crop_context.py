@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
     images_index,
@@ -81,7 +82,7 @@ async def _get_source(opensearch: Any, index: str, doc_id: str, **kw: Any) -> di
     except Exception as exc:
         if is_not_found(exc):
             return None
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     if not resp.get('found', True):
         return None
     return resp.get('_source') or {}
@@ -143,7 +144,7 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
         try:
             resp = await opensearch.search(index=items_index(), body=body)
         except Exception as exc:
-            raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+            raise server_error(503, 'opensearch unavailable', exc) from exc
         hits = (resp.get('hits') or {}).get('hits') or []
         items = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]
     return {'image': image, 'items': items}

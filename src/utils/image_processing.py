@@ -14,6 +14,9 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+#: Longest accepted side, in pixels, of an uploaded image (16K: OOM guard).
+MAX_IMAGE_DIMENSION = 16384
+
 
 def decode_image(image_bytes: bytes, filename: str = 'unknown') -> np.ndarray:
     """
@@ -129,7 +132,10 @@ def decode_image(image_bytes: bytes, filename: str = 'unknown') -> np.ndarray:
 
 
 def validate_image(
-    img: np.ndarray, filename: str = 'unknown', max_dimension: int = 16384, min_dimension: int = 16
+    img: np.ndarray,
+    filename: str = 'unknown',
+    max_dimension: int = MAX_IMAGE_DIMENSION,
+    min_dimension: int = 16,
 ) -> None:
     """
     Fast validation for security and early error detection.

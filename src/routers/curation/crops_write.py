@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
     RegistryDep,
@@ -252,6 +253,6 @@ async def flag_new_class(
     try:
         resp = await opensearch.bulk(body=bulk, refresh=False)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
     n_errors = sum(1 for it in resp.get('items', []) if any('error' in v for v in it.values()))
     return {'flagged': len(payload.crop_ids) - n_errors, 'errors': n_errors}

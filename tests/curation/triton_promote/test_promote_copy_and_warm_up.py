@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
+import onnx
 import pytest
 
 from curation.triton_promote._helpers import CLASS_MAP, _promoter
@@ -66,7 +67,12 @@ async def test_promote_does_not_rmtree_before_copy(
         'the old version must survive completely untouched'
     )
     assert result.version == '2'
-    assert (model_dir / '2' / 'model.onnx').read_bytes() == b'ONNX-V1-BYTES'
+    served = onnx.load(str(model_dir / '2' / 'model.onnx'))
+    assert served.graph.input[0].type.tensor_type.elem_type == onnx.TensorProto.UINT8
+    # the trainer's own best.onnx (the shared/exported copy) stays standard FP32
+    source = onnx.load(str(Path(fake_status.checkpoint_path).with_suffix('.onnx')))
+    assert source.graph.input[0].type.tensor_type.elem_type == onnx.TensorProto.FLOAT
+    assert 'TYPE_UINT8' in (model_dir / 'config.pbtxt').read_text()
 
 
 @pytest.mark.asyncio
@@ -121,13 +127,16 @@ async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_cle
 
     calls: list[str] = []
     batches: list[int] = []
+    datatypes: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request.url.path)
         if request.url.path.endswith('/infer'):
             import json
 
-            batches.append(json.loads(request.content)['inputs'][0]['shape'][0])
+            body = json.loads(request.content)['inputs'][0]
+            batches.append(body['shape'][0])
+            datatypes.append(body['datatype'])
         return httpx.Response(200, json={})
 
     real = httpx.AsyncClient
@@ -145,6 +154,7 @@ async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_cle
         '/v2/models/op_warm_up_ok/infer',
         '/v2/models/op_warm_up_ok/infer',
     ]
+    assert datatypes == ['UINT8', 'UINT8']
     assert batches == [1, 8]  # batch 1 AND the config's max_batch_size
     assert result.cold_start_expected_on_first_inference is False
 

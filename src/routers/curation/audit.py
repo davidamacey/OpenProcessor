@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException, Query
+from fastapi import Query
 
+from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
 from src.routers.curation._audit_models import (
     AuditQueueResponse,
@@ -77,7 +78,7 @@ async def audit_queue(
             },
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     hits = (resp.get('hits') or {}).get('hits') or []
     return {
         'total': int(((resp.get('hits') or {}).get('total') or {}).get('value', 0)),

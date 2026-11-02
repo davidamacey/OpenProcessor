@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.routers.curation._common_models import CropExcludeRequest, CropUnexcludeRequest
 from src.routers.curation._selection import selected_crop_ids
@@ -86,7 +87,7 @@ async def _occ_bulk_human_write(
             writer_id=writer_id,
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
     failures = len(resp.get('errors') or []) + int(resp.get('skipped_due_to_conflict') or 0)
     return list(resp.get('updated_ids') or []), failures
 
@@ -120,7 +121,7 @@ async def batch_unexclude_crops(
     try:
         live = await live_candidate_ids(opensearch, items_index(), ids)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
     now = now_iso()
     updated_ids, n_errors = await _occ_bulk_human_write(
         opensearch,
