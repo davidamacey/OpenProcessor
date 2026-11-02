@@ -1623,7 +1623,7 @@ writes a cluster field.
 | GET | `/assist/loops/{loop_id}/nodes` | `level`, `decision`, `after`, `limit` (1 to 500, default 100) | `{nodes: LoopNode[], next_after}` by level then path |
 | GET | `/assist/loops/{loop_id}/nodes/{node_path}/members` | `after`, `limit` (1 to 5000, default 500) | `{crop_ids, next_after}` in id order |
 | POST | `/assist/loops/{loop_id}/cancel` | | `AssistLoopState`; the loop stops after the requests in flight, what it wrote stays |
-| POST | `/assist/loops/{loop_id}/resume` | | `AssistLoopState` (`queued`); for an `interrupted`, `paused` or `cancelled` loop |
+| POST | `/assist/loops/{loop_id}/resume` | | `AssistLoopState` (`queued`); for an `interrupted`, `paused` or `cancelled` loop, or a `failed` one with `stop_reason` `vlm_failed` |
 | POST | `/assist/loops/{loop_id}/rollback` | `{node_paths: string[] \| null, dry_run: true}` | `{dry_run, matched, restored, kept_changed, conflicts}` |
 
 `AssistLoopRequest` (unknown keys are `422`; the defaults are the ones shown):
@@ -1668,7 +1668,7 @@ writes a cluster field.
 `AssistLoopState`: `loop_id` (null on a dry run), `status` (`dry_run`, `queued`, `running`,
 `paused`, `completed`, `cancelled`, `failed`, `interrupted`: a loop whose worker died reads
 `interrupted` until resumed), `stop_reason` (`done`, `budget_crops`, `budget_requests`,
-`budget_time`), `pause_reason` (`user`, `audit`), `created_at`, `started_at`, `finished_at`,
+`budget_time` on `completed`; `vlm_failed` on `failed`, see below), `pause_reason` (`user`, `audit`), `created_at`, `started_at`, `finished_at`,
 `updated_at`, `error`, `request` (as normalised), `pinned`, `plan`, `partition`, `budget`,
 `levels`, `totals` and `audit`.
 

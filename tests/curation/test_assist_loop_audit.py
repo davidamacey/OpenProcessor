@@ -22,6 +22,7 @@ from src.services.curation.assist_loop.audit import (
 )
 from src.services.curation.assist_loop.budget import BudgetLimits, LoopBudget
 from src.services.curation.assist_loop.store import LoopStore, replay
+from src.services.curation.assist_loop.vlm_failure import VlmFailedError
 from src.services.curation.class_write_guard import ClassWriteGuard
 from src.services.curation.vlm_class_batch import class_context
 
@@ -258,3 +259,15 @@ def test_no_audit_endpoint_means_the_audit_is_off(vlm_api: Any) -> None:
         asyncio.run(resolve_audit_vlm(vlm_api.fake_os, None, pack=None, acknowledge_external=False))
         is None
     )
+
+
+def test_an_audit_whose_every_call_fails_is_not_recorded_as_ok(
+    world: World, tmp_path: Path
+) -> None:
+    store, _ids = _batch_world(world, tmp_path)
+    auditor = _auditor(store, FakeVlm(world.truth, fail_rate=1.0), world)
+
+    with pytest.raises(VlmFailedError):
+        asyncio.run(auditor.run_batch(replay(store.events())))
+
+    assert not any(e['event'] == 'audit' for e in store.events()), 'the batch stays uncovered'

@@ -34,6 +34,7 @@
     budget_crops: 'the crop budget was spent',
     budget_requests: 'the request budget was spent',
     budget_time: 'the time budget ran out',
+    vlm_failed: 'the VLM did not answer; fix the endpoint or model, then resume',
   };
   const PAUSE_TEXT: Record<string, string> = {
     user: 'paused by a person',
@@ -108,7 +109,7 @@
             Cancel the loop
           </button>
         {/if}
-        {#if isResumableLoop(loop.status)}
+        {#if isResumableLoop(loop.status, loop.stop_reason)}
           <button
             type="button"
             class="btn btn-sm btn-primary"

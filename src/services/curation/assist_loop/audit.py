@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.clients.curation_opensearch.crops import mget_crops
 from src.domain.loop_stats import wilson_lower_bound
 from src.services.curation.assist_loop.budget import AUDIT
+from src.services.curation.assist_loop.vlm_failure import VlmFailedError
 from src.services.curation.autolabel.run_vlm import resolve_run_vlm
 from src.services.curation.vlm_class_attempt import NEW_CLASS_SENTINEL
 from src.services.curation.vlm_class_batch import chunk_crops
@@ -89,6 +90,10 @@ class AuditJudge:
         self._ctx = ctx
         self.images_per_call = max(1, images_per_call)
         self._semaphore = semaphore
+        self.request_failed = 0
+        """Crops whose call failed so far (no reply at all)."""
+        self.replied = 0
+        """Crops the model replied about so far, usable or not."""
 
     def _name(self, pred: Any) -> str | None:
         if pred.failure is not None or not pred.class_name.strip():
@@ -118,6 +123,8 @@ class AuditJudge:
                 if crops
                 else []
             )
+        self.request_failed += sum(1 for pred in preds if pred.failure == 'request_failed')
+        self.replied += sum(1 for pred in preds if pred.failure != 'request_failed')
         out: dict[str, str | None] = dict.fromkeys(chunk)
         for pred in preds:
             out[pred.img_id] = self._name(pred)
@@ -244,7 +251,12 @@ class Auditor:
         batch = self._batch(tree)
         number = len(tree.audits) + 1
         picked = self._sample(batch, number)
+        failed_before, replied_before = self._judge.request_failed, self._judge.replied
         answers, refused = await self._ask(picked)
+        if self._judge.request_failed > failed_before and self._judge.replied == replied_before:
+            # no log line: the batch stays uncovered and a resume audits it again
+            msg = 'every audit VLM call failed: check the audit endpoint and model'
+            raise VlmFailedError(msg)
         rows = [
             {
                 'batch': number,

@@ -35,6 +35,8 @@ if TYPE_CHECKING:
 
 ACTIVE = frozenset({'queued', 'running'})
 RESUMABLE = frozenset({'interrupted', 'paused', 'cancelled'})
+VLM_FAILED = 'vlm_failed'
+"""A ``failed`` loop with this ``stop_reason`` stopped on a VLM outage and can be resumed."""
 TRIGGER_FILE = 'trigger.json'
 PAUSE_FLAG = 'pause.flag'
 
@@ -183,13 +185,14 @@ def create_loop(*, state: dict[str, Any], request: dict[str, Any]) -> FileJob:
 
 
 def resume_loop(loop_id: str) -> FileJob:
-    """Re-queue an ``interrupted``, ``paused`` or ``cancelled`` loop and trigger the worker;
+    """Re-queue an ``interrupted``, ``paused`` or ``cancelled`` loop (or a ``failed`` one that stopped ``vlm_failed``) and trigger the worker;
     the loop replays its log and continues where it stopped."""
     loop = _existing(loop_id)
     root = ensure_marked_dir(jobs_root())
     with exclusive_start_lock(root / 'start.lock') as acquired:
         state = read_state(loop_id) or {}
-        if state.get('status') not in RESUMABLE:
+        outage = state.get('status') == 'failed' and state.get('stop_reason') == VLM_FAILED
+        if state.get('status') not in RESUMABLE and not outage:
             raise rejection(
                 409,
                 'assist_loop_not_resumable',

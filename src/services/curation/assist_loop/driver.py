@@ -8,7 +8,8 @@ per VLM call, in an order fixed for a given tree. Up to ``node_concurrency`` nod
 worked on at once; their VLM requests share one semaphore.
 
 The loop stops when the queue is empty (``completed``, ``stop_reason`` ``done``, or the
-budget that left nodes unvisited), on ``cancel.flag`` (``cancelled``), ``pause.flag``
+budget that left nodes unvisited), on ``cancel.flag`` (``cancelled``), a node whose every VLM call failed (``failed``,
+``stop_reason`` ``vlm_failed``, the node left open for a resume), ``pause.flag``
 (``paused``, ``pause_reason`` ``user``) or a failing audit batch (``paused``,
 ``pause_reason`` ``audit``; see :mod:`~src.services.curation.assist_loop.audit`). Requests in flight finish and their answers are
 kept; nodes they belong to stay open for a resume. ``state.json`` carries the per-level
@@ -36,6 +37,7 @@ from src.services.curation.assist_loop.partition import read_snapshot, write_sna
 from src.services.curation.assist_loop.progress import level_rows, totals
 from src.services.curation.assist_loop.rollback import rollback_loop
 from src.services.curation.assist_loop.store import replay
+from src.services.curation.assist_loop.vlm_failure import STOP_REASON as VLM_FAILED, VlmFailedError
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.utils.timeutil import now_iso
@@ -285,6 +287,10 @@ async def run_loop(
         run = await _prepare(store, params, deps, budget, scope)
         outcome = await schedule(run)
         write_progress(run, **_final_fields(outcome))
+    except VlmFailedError as exc:
+        logger.error('assist_loop_vlm_failed', loop=store.loop_id, error=str(exc))
+        outcome = LoopOutcome('failed', stop_reason=VLM_FAILED, error=str(exc))
+        store.job.update(**_final_fields(outcome), updated_at=now_iso())
     except RUN_ERRORS as exc:
         logger.error('assist_loop_failed', loop=store.loop_id, error=str(exc))
         outcome = LoopOutcome('failed', error=str(exc))

@@ -29,6 +29,7 @@ from src.domain.loop_tree import child_sample
 from src.services.curation.assist.proposal import ClassAnswer, compute_proposal
 from src.services.curation.assist.sample_eval import ask_sample
 from src.services.curation.assist_loop.budget import VLM
+from src.services.curation.assist_loop.vlm_failure import VlmFailedError
 from src.utils.class_names import normalize_class_name
 
 
@@ -44,6 +45,10 @@ if TYPE_CHECKING:
 
 ASK_ACTIONS = ('classify',)
 VETO_MIN_TRUTH = 3
+MIN_CONSECUTIVE_FAILURES = 5
+"""Failed crops in a row, with no reply in between, that count as an outage rather than a
+flaky request. A node whose own crops all failed is only stopped on when the VLM has been
+silent this long, so one lost request in a tiny node is still just a re-drawn failure."""
 """Ground-truth members a node needs before they can veto its class."""
 
 
@@ -138,6 +143,14 @@ def slot_run_id(loop_id: str, path: str) -> str:
     return f'{loop_id}/{path}'
 
 
+@dataclass(frozen=True)
+class Asked:
+    answers: dict[str, ClassAnswer]
+    """The usable answers by crop id; a crop missing from it got none."""
+    request_failed: frozenset[str]
+    """Crops whose call failed (no reply at all), not crops the VLM answered with nothing usable."""
+
+
 class VlmAsker:
     """Asks the loop's VLM about crops through the assist core."""
 
@@ -155,17 +168,16 @@ class VlmAsker:
         self._meta = meta
         self.images_per_call = max(1, images_per_call)
         self._semaphore = semaphore
+        self.silent_crops = 0
+        """Crops in a row (across nodes) whose call failed, with no reply since."""
 
     @property
     def registry(self) -> frozenset[str]:
         return frozenset(self._ctx.class_names)
 
-    async def ask(
-        self, path: str, chunk: list[str], admit: Callable[[], bool]
-    ) -> dict[str, ClassAnswer] | None:
+    async def ask(self, path: str, chunk: list[str], admit: Callable[[], bool]) -> Asked | None:
         """Ask about one chunk; ``None`` when ``admit`` (called once the chunk has its
-        turn on the shared semaphore, before anything is sent) refused it. The result
-        has the usable answers by crop id; a crop missing from it got none."""
+        turn on the shared semaphore, before anything is sent) refused it."""
         admitted = False
 
         def refused() -> bool:
@@ -186,7 +198,16 @@ class VlmAsker:
         )
         if not admitted:
             return None
-        return {a.crop_id: a for a in out.answers if a.crop_id and (a.class_name or a.proposed)}
+        if out.request_failed_ids and out.predicted == len(out.request_failed_ids):
+            self.silent_crops += len(out.request_failed_ids)
+        elif out.predicted:
+            self.silent_crops = 0
+        return Asked(
+            answers={
+                a.crop_id: a for a in out.answers if a.crop_id and (a.class_name or a.proposed)
+            },
+            request_failed=frozenset(out.request_failed_ids),
+        )
 
     async def recover(self, path: str, ids: Sequence[str]) -> dict[str, ClassAnswer | None]:
         """Answers the items carry from an earlier ask of this node whose log line was
@@ -264,6 +285,8 @@ class _Node:
         self.node = node
         self.path = node.record.path
         self.drawable = [i for i in node.eligible if i not in node.known_failed]
+        self.request_failed: set[str] = set()
+        """Crops whose call failed in this run of the node (not logged as ``failed``)."""
 
     def answers(self) -> dict[str, ClassAnswer]:
         return {**self.node.reused, **self.node.record.answers}
@@ -315,13 +338,14 @@ class _Node:
                 held.append(res)
             return res is not None
 
-        got = await self.ec.asker.ask(self.path, chunk, admit)
-        if got is None:
+        asked = await self.ec.asker.ask(self.path, chunk, admit)
+        if asked is None:
             return False
         (res,) = held
-        failed = [i for i in chunk if i not in got]
+        failed = [i for i in chunk if i not in asked.answers]
+        self.request_failed |= asked.request_failed
         self.ec.store.append(
-            'answers', path=self.path, rid=res.rid, answers=_dump(got), failed=failed
+            'answers', path=self.path, rid=res.rid, answers=_dump(asked.answers), failed=failed
         )
         self.ec.budget.settle(res)
         return True
@@ -339,11 +363,29 @@ class _Node:
         done = await asyncio.gather(*[self._chunk(c) for c in chunks])
         if not all(done):
             raise _Stop(None if self.ec.should_stop() else self.ec.budget.refused)
+        self._check_outage(missing)
+
+    def _check_outage(self, asked: list[str]) -> None:
+        """Raise when this ask got no answer and every miss is a failed call: the VLM said
+        nothing, so the gate has no evidence to decide on. Misses that are answers with no
+        usable class (or unreadable crops) mean the VLM is up and keep the gate's say."""
+        answers = self.node.record.answers
+        misses = [i for i in asked if i not in answers]
+        if len(misses) < len(asked) or not misses or not self.request_failed.issuperset(misses):
+            return
+        if self.ec.asker.silent_crops < MIN_CONSECUTIVE_FAILURES:
+            return
+        self.ec.store.append('vlm_failed', path=self.path, ids=sorted(misses))
+        msg = (
+            f'every VLM call for node {self.path} failed ({len(misses)} crops): '
+            'check the endpoint and the model; the node is left open for a resume'
+        )
+        raise VlmFailedError(msg)
 
     async def stage(self, before: list[str], ids: list[str], tag: str) -> list[str]:
         """Ask ``ids`` and re-draw their failures once; every id the stage asked."""
         await self.ask(ids)
-        failed = sum(1 for i in ids if i in self.node.record.failed)
+        failed = sum(1 for i in ids if i in self.node.record.failed or i in self.request_failed)
         again = self.draw([*before, *ids], failed, f'#redraw{tag}')
         await self.ask(again)
         return [*ids, *again]
@@ -376,7 +418,7 @@ async def evaluate_node(ec: EvalContext, node: NodeInput) -> Evaluation:
     except _Stop as stop:
         return Evaluation(verdict=None, unvisited=stop.unvisited)
     record = node.record
-    sampled = set(worker.answers()) | (record.failed & set(node.eligible))
+    sampled = set(worker.answers()) | ((record.failed | worker.request_failed) & set(node.eligible))
     return Evaluation(verdict=verdict, sampled=len(sampled), answers=worker.answers())
 
 

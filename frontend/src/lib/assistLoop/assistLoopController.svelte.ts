@@ -62,8 +62,16 @@ export function isLiveLoop(status: AssistLoopStatus | undefined): boolean {
 }
 
 /** A loop that stopped and the server will queue again. */
-export function isResumableLoop(status: AssistLoopStatus | undefined): boolean {
-  return status === 'paused' || status === 'interrupted' || status === 'cancelled';
+export function isResumableLoop(
+  status: AssistLoopStatus | undefined,
+  stopReason?: string | null,
+): boolean {
+  return (
+    status === 'paused' ||
+    status === 'interrupted' ||
+    status === 'cancelled' ||
+    (status === 'failed' && stopReason === 'vlm_failed')
+  );
 }
 
 export class AssistLoopController {

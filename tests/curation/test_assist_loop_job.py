@@ -160,6 +160,17 @@ def test_a_loop_in_any_other_state_cannot_be_resumed(status: str) -> None:
     assert loop.read()['status'] == status
 
 
+def test_a_loop_that_stopped_on_a_vlm_outage_can_be_resumed() -> None:
+    loop = _queued()
+    loop.update(status='failed', stop_reason='vlm_failed', error='every VLM call failed')
+    loop.touch_heartbeat()
+
+    job.resume_loop(loop.directory.name)
+
+    assert loop.read()['status'] == 'queued'
+    assert loop.read()['stop_reason'] is None
+
+
 def test_resume_is_refused_while_another_loop_is_live() -> None:
     old = _queued()
     old.update(status='paused')

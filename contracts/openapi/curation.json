@@ -885,7 +885,7 @@
                 "type": "null"
               }
             ],
-            "description": "'done', 'budget_crops', 'budget_requests' or 'budget_time'.",
+            "description": "'done', 'budget_crops', 'budget_requests' or 'budget_time' (completed); 'vlm_failed' (failed: every VLM call of a node failed; resumable).",
             "title": "Stop Reason"
           },
           "totals": {
@@ -36810,7 +36810,7 @@
     },
     "/curation/projects/{project}/assist/loops/{loop_id}/resume": {
       "post": {
-        "description": "Queue an `interrupted`, `paused` or `cancelled` loop again; it continues from its\nevent log. 409 `assist_loop_not_resumable` for any other status, `assist_loop_busy` while\nanother loop is live.",
+        "description": "Queue an `interrupted`, `paused` or `cancelled` loop (or a `failed` one with `stop_reason` `vlm_failed`) again; it continues from its\nevent log. 409 `assist_loop_not_resumable` for any other status, `assist_loop_busy` while\nanother loop is live.",
         "operationId": "resume_assist_loop_curation_projects__project__assist_loops__loop_id__resume_post",
         "parameters": [
           {

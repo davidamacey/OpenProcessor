@@ -215,7 +215,11 @@ class AssistLoopState(BaseModel):
     loop_id: str | None = Field(default=None, description='null on a dry run.')
     status: LoopStatus
     stop_reason: str | None = Field(
-        default=None, description="'done', 'budget_crops', 'budget_requests' or 'budget_time'."
+        default=None,
+        description=(
+            "'done', 'budget_crops', 'budget_requests' or 'budget_time' (completed); "
+            "'vlm_failed' (failed: every VLM call of a node failed; resumable)."
+        ),
     )
     pause_reason: str | None = Field(default=None, description="'user' or 'audit'.")
     created_at: str | None = None
