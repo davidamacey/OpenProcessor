@@ -130,12 +130,10 @@ def _mismatches(group: str) -> dict[str, dict[str, str]]:
     last = list(ENGINES[group])[-1]
     other_sha = {**_good_stamps(group), first: _row(first, ENGINES[group][first][1], sha='0' * 64)}
     other_arch = {**_good_stamps(group), last: _row(last, ENGINES[group][last][1], cc='7.5')}
-    missing = {m: s for m, s in _good_stamps(group).items() if m != last}
     fallback = {**_good_stamps(group), first: _row(first, 'fp32_fallback')}
     return {
         'ONNX changed': other_sha,
         'compute capability 7.5': other_arch,
-        'no build stamp': missing,
         'built as fp32_fallback': fallback,
     }
 
@@ -159,3 +157,122 @@ def test_precision_report_lists_only_recorded_fallbacks(tmp_path: Path, bash) ->
     (tmp_path / '.install' / 'precision.tsv').write_text(''.join(stamps.values()))
     out = bash(f'source {LIB}; OP_DIR="{tmp_path}" model_setup_precision_report').stdout
     assert out.strip() == 'scrfd_10g_bnkps\tfp32_fallback'
+
+
+# Engines built before per-engine stamps (v0.6.0 stamped only pe_image_encoder).
+PE_ROW = 'pe_image_encoder\tfp16\t\tv110100\t8.6\t' + 'a' * 64 + '\tflags\n'
+
+
+def _unstamped(tmp_path: Path, group: str, *, pe_row: str | None = PE_ROW) -> str:
+    """An installed group whose engines have no ledger rows, only (optionally) the PE row."""
+    prelude = _installed(tmp_path, group, {})
+    for model in ENGINES[group]:
+        cfg = tmp_path / 'models' / model / 'config.pbtxt'
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        cfg.write_text('input [\n  {\n    name: "x"\n    data_type: TYPE_FP32\n  }\n]\n')
+    if pe_row is not None:
+        (tmp_path / '.install' / 'precision.tsv').write_text(pe_row)
+    # Any docker compose call is a rebuild step: leave a marker.
+    return prelude + 'dc() { touch "$OP_DIR/rebuilt"; return 0; }; '
+
+
+def _rows(tmp_path: Path) -> dict[str, list[str]]:
+    text = (tmp_path / '.install' / 'precision.tsv').read_text()
+    return {r[0]: r for r in (line.split('\t') for line in text.splitlines())}
+
+
+@pytest.mark.parametrize('with_pe_row', [True, False])
+@pytest.mark.parametrize('group', GROUPS)
+def test_a_valid_unstamped_engine_is_adopted_not_rebuilt(
+    tmp_path: Path, bash, group: str, with_pe_row: bool
+) -> None:
+    prelude = _unstamped(tmp_path, group, pe_row=PE_ROW if with_pe_row else None)
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'up to date, skipped' in out
+    assert not (tmp_path / 'rebuilt').exists()
+    rows = _rows(tmp_path)
+    for model, (_, precision) in ENGINES[group].items():
+        assert rows[model][1] == precision
+        assert rows[model][2].startswith('adopted: built before per-engine stamps')
+        assert rows[model][3:6] == ['v110100', '8.6', _sha(model)]
+    if with_pe_row:
+        assert rows['pe_image_encoder'][5] == 'a' * 64  # the reference row is untouched
+    # once adopted the engine is an ordinary stamped one
+    again = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'up to date, skipped' in again
+
+
+def test_an_adopted_yolo_stamp_records_the_config_input_datatype(tmp_path: Path, bash) -> None:
+    prelude = _unstamped(tmp_path, 'yolo')
+    cfg = tmp_path / 'models' / 'yolov11_small_trt_end2end' / 'config.pbtxt'
+    cfg.write_text('input [\n  {\n    name: "images"\n    data_type: TYPE_UINT8\n  }\n]\n')
+    assert 'up to date, skipped' in bash(prelude + 'model_setup_run_group yolo').stdout
+    assert 'input=uint8' in _rows(tmp_path)['yolov11_small_trt_end2end'][6]
+
+
+def _unadoptable(tmp_path: Path, group: str, case: str) -> str:
+    first = next(iter(ENGINES[group]))
+    pe_row = PE_ROW
+    extra = ''
+    if case == 'tensorrt differs from the PE stamp':
+        pe_row = PE_ROW.replace('v110100', 'v100000')
+    elif case == 'compute capability differs from the PE stamp':
+        pe_row = PE_ROW.replace('\t8.6\t', '\t7.5\t')
+    elif case == 'not READY in Triton':
+        extra = 'triton_model_ready() { return 1; }; '
+    elif case == 'no GPU compute capability':
+        extra = '_ms_compute_cap() { :; }; '
+    elif case == 'no TensorRT version':
+        extra = '_ms_trt_version() { :; }; '
+    prelude = _unstamped(tmp_path, group, pe_row=pe_row) + extra
+    if case == 'ONNX missing':
+        (tmp_path / ENGINES[group][first][0]).unlink()
+    elif case == 'engine missing':
+        (tmp_path / 'models' / PLANS[group][0] / '1' / 'model.plan').unlink()
+    elif case == 'no config input datatype':
+        (tmp_path / 'models' / first / 'config.pbtxt').unlink()
+    elif case == 'engine empty':
+        (tmp_path / 'models' / PLANS[group][0] / '1' / 'model.plan').write_text('')
+    return prelude
+
+
+UNADOPTABLE = [
+    'tensorrt differs from the PE stamp',
+    'compute capability differs from the PE stamp',
+    'not READY in Triton',
+    'no GPU compute capability',
+    'no TensorRT version',
+    'ONNX missing',
+    'engine missing',
+    'engine empty',
+    'no config input datatype',
+]
+
+
+@pytest.mark.parametrize('case', UNADOPTABLE)
+@pytest.mark.parametrize('group', GROUPS)
+def test_an_unstamped_engine_that_cannot_be_verified_is_rebuilt(
+    tmp_path: Path, bash, group: str, case: str
+) -> None:
+    prelude = _unadoptable(tmp_path, group, case)
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'skipped' not in out, case
+    assert 'engine stamp is stale (no build stamp' in out, case
+    assert 'adopted' not in (tmp_path / '.install' / 'precision.tsv').read_text(), case
+    assert (tmp_path / 'rebuilt').exists(), case
+
+
+def test_a_missing_pe_stamp_is_never_adopted(tmp_path: Path, bash) -> None:
+    prelude = (
+        f'source {LIB}; OP_DIR="{tmp_path}"; MODEL_SETUP_TRITON_DIGEST=sha256:abc; {STAMP_STUBS}'
+        'triton_model_ready() { return 0; }; triton_load_and_wait() { return 0; }; '
+        'dc() { touch "$OP_DIR/rebuilt"; return 0; }; '
+    )
+    (tmp_path / '.install').mkdir()
+    (tmp_path / '.install' / 'state.json').write_text('{"triton_image_digest": "sha256:abc"}')
+    for rel in ('models/pe_image_encoder/1/model.plan', 'pytorch_models/pe_image_encoder.onnx'):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text('x')
+    out = bash(prelude + 'model_setup_run_group pe').stdout
+    assert 'engine stamp is stale (no build stamp' in out
+    assert (tmp_path / 'rebuilt').exists()
