@@ -45,6 +45,19 @@ describe('ImageSearchPicker', () => {
     expect((q('image-search-run') as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('stays inside a narrow viewport instead of hanging off the button', () => {
+    q('image-search-toggle').click();
+    flushSync();
+    // Anchored to the button the 20rem panel runs past a 430px screen's right edge.
+    const classes = q('image-search-panel').className.split(/\s+/);
+    expect(classes).toContain('max-sm:fixed');
+    expect(classes).toContain('max-sm:inset-x-2');
+    // top-full on a fixed box would be a full viewport below the button, off screen.
+    expect(classes).toContain('max-sm:top-14');
+    // A tall picture must scroll inside the panel, not push Search off the screen.
+    expect(classes).toContain('max-sm:overflow-y-auto');
+  });
+
   it('searches by the whole picture when no region is drawn', () => {
     choose(png);
     q('image-search-run').click();

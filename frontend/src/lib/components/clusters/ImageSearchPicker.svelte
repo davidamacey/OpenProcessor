@@ -88,7 +88,7 @@
   </button>
   {#if open}
     <div
-      class="absolute left-0 top-full z-30 mt-1 w-80 rounded-md border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-lg"
+      class="absolute left-0 top-full z-30 mt-1 w-80 max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:max-h-[calc(100dvh-4.5rem)] max-sm:w-auto max-sm:overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-lg"
       data-testid="image-search-panel"
     >
       {#if previewUrl}
