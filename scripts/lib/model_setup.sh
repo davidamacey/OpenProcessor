@@ -229,7 +229,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model_stamps.sh"
 # One-shot export-image and Triton-image containers (never need a running API). The export
 # image holds TensorRT, ModelOpt and the model-repo seed; the API image has none of them.
 _ms_export() { dc run --rm --no-deps -T -w /app model-export "$@"; }
-_ms_triton() { dc run --rm --no-deps -T triton-server "$@"; }
+# </dev/null: `docker compose run` forwards stdin even with -T, which would swallow the rest of
+# a `while read` loop that stamps the next engine.
+_ms_triton() { dc run --rm --no-deps -T triton-server "$@" </dev/null; }
 
 # Same as PE_NORMALIZE in export/build_pe_trt.sh (a test keeps them equal).
 _MS_PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
@@ -250,7 +252,7 @@ _ms_pe_uint8_prepare() {
 _ms_config_input_dtype() {
     local cfg="${OP_DIR:?OP_DIR not set}/models/$1/config.pbtxt"
     [[ -f "$cfg" ]] || return 0
-    awk '/^input[[:space:]]*\[/ {in_in=1} in_in && /data_type:/ {sub(/.*TYPE_/, ""); print $1; exit}' "$cfg"
+    awk '/^input[[:space:]]*[\[{]/ {in_in=1} in_in && /data_type:/ {sub(/.*TYPE_/, ""); print $1; exit}' "$cfg"
 }
 
 _ms_pe_trtexec() {
