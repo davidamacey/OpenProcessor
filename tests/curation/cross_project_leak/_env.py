@@ -114,7 +114,8 @@ def leak_env(
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
     # The seed-from-detector route reads the detector's label list.
     # It must live inside the model repository (OP_TRITON_MODEL_REPO above).
-    labels = tmp_path / 'models' / 'fake_item_detector' / 'labels.txt'
+    # Not the model's own directory: that lookup is cached across tests.
+    labels = tmp_path / 'models' / '_sweep_labels' / 'detector_labels.txt'
     labels.parent.mkdir(parents=True, exist_ok=True)
     labels.write_text('seed probe\n')
     monkeypatch.setenv('OP_INGEST_PRIMARY_LABELS_PATH', str(labels))
