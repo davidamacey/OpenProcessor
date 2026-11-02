@@ -8,6 +8,7 @@ Subcommands (each writes JSON under ``--out``; defaults keep raw output in ``art
     text-curation     text-to-image through ``GET /curation/projects/{project}/search/text``
     text-core         text-to-image through ``POST /search/text``
     image-core        leave-one-out image-to-image through ``POST /search/image``
+    latency           per-stage text-search p50/p95/p99 from Server-Timing, unfiltered and by band (#414)
     filters           class_name / cluster_id filtered curation search: latency and correctness
     dedupe            near-duplicate variants through the core ingest and ``GET /query/duplicates``
     core-cleanup      delete this sample's images from the core indexes (``DELETE /query/image``)
@@ -36,7 +37,11 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from scripts.bench import retrieval_eval_data as data, retrieval_eval_runs as runs
+from scripts.bench import (
+    retrieval_eval_data as data,
+    retrieval_eval_latency as latency,
+    retrieval_eval_runs as runs,
+)
 
 
 def host_load() -> dict[str, Any]:
@@ -89,6 +94,11 @@ def emit(a: argparse.Namespace, name: str, payload: dict[str, Any]) -> None:
     print(f'wrote {path}')
 
 
+def cmd_latency(a: argparse.Namespace) -> None:
+    started = datetime.now(UTC).isoformat(timespec='seconds')
+    emit(a, f'latency_{a.tag}', {'_started': started, **latency.run(a)})
+
+
 def cmd_eval(a: argparse.Namespace) -> None:
     sample = runs.load_sample(a.work)
     started = datetime.now(UTC).isoformat(timespec='seconds')
@@ -125,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
             'text-core',
             'image-core',
             'filters',
+            'latency',
             'dedupe',
             'core-cleanup',
         ],
@@ -150,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         '--variants', type=int, default=100, help='images turned into near-duplicate variants'
     )
+    latency.add_arguments(p)
     a = p.parse_args(argv)
     if a.cmd == 'prep':
         cmd_prep(a)
@@ -159,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
         cmd_ingest_core(a)
     elif a.cmd == 'core-cleanup':
         cmd_core_cleanup(a)
+    elif a.cmd == 'latency':
+        cmd_latency(a)
     else:
         cmd_eval(a)
     return 0

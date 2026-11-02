@@ -40,6 +40,7 @@ from src.services.curation.semantic_search_box import (
 )
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.rejections import rejection
+from src.utils.search_timing import search_annotate, search_span
 
 
 logger = get_logger(__name__)
@@ -275,23 +276,31 @@ async def _knn_page(
     # paid on top of the search (#384).
     # kNN only sees items with a vector, so "no results" must not read as "no
     # matches": say how many in-scope items it could not search.
-    resp, unembedded = await asyncio.gather(
-        opensearch.search(index=cfg.items_index, body=body),
-        opensearch.count(
-            index=cfg.items_index,
-            body={'query': {'bool': {'filter': [*filter_clause, unsearchable]}}},
-        ),
-    )
+    async def _knn() -> Any:
+        with search_span('knn'):
+            return await opensearch.search(index=cfg.items_index, body=body)
+
+    async def _unembedded_count() -> Any:
+        with search_span('unembedded_count'):
+            return await opensearch.count(
+                index=cfg.items_index,
+                body={'query': {'bool': {'filter': [*filter_clause, unsearchable]}}},
+            )
+
+    with search_span('knn_page'):
+        resp, unembedded = await asyncio.gather(_knn(), _unembedded_count())
+    search_annotate('os_took_ms', int(resp.get('took') or 0))
     hits = (resp.get('hits') or {}).get('hits') or []
     total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
 
     items: list[dict[str, Any]] = []
-    for hit in hits:
-        item = _hydrate_item(hit, fields, project_api_base())
-        if target is SearchTarget.BOX and not attach_match(item, hit, fields, skip=skip_box):
-            total = max(0, total - 1)
-            continue
-        items.append(item)
+    with search_span('hydrate'):
+        for hit in hits:
+            item = _hydrate_item(hit, fields, project_api_base())
+            if target is SearchTarget.BOX and not attach_match(item, hit, fields, skip=skip_box):
+                total = max(0, total - 1)
+                continue
+            items.append(item)
 
     return {
         'items': items,
@@ -364,20 +373,22 @@ async def semantic_text_search(
     region_fields = fields or get_region_fields()
 
     loop = asyncio.get_running_loop()
-    vectors = await run_in_executor_bound(loop, executor, pe_encoder.encode_text, [query])
+    with search_span('encode'):
+        vectors = await run_in_executor_bound(loop, executor, pe_encoder.encode_text, [query])
     vector = vectors[0].tolist()
 
-    filter_clause = _filter_for(
-        item_filter=item_filter,
-        tab=tab,
-        cluster_id=cluster_id,
-        date_from=date_from,
-        date_to=date_to,
-        max_rank=max_rank,
-        min_blur_ratio=min_blur_ratio,
-        hide_near_duplicates=hide_near_duplicates,
-        include_test=include_test,
-    )
+    with search_span('filter_build'):
+        filter_clause = _filter_for(
+            item_filter=item_filter,
+            tab=tab,
+            cluster_id=cluster_id,
+            date_from=date_from,
+            date_to=date_to,
+            max_rank=max_rank,
+            min_blur_ratio=min_blur_ratio,
+            hide_near_duplicates=hide_near_duplicates,
+            include_test=include_test,
+        )
     return await _knn_page(
         opensearch=opensearch,
         vector=vector,
@@ -427,21 +438,22 @@ async def semantic_similar_search(
     cfg = config or get_curation_config()
     region_fields = fields or get_region_fields()
 
-    resp = await opensearch.search(
-        index=cfg.items_index,
-        body={
-            'size': 1,
-            'query': {'ids': {'values': [crop_id]}},
-            '_source': {
-                'includes': [
-                    ITEM_EMBEDDING_FIELD,
-                    'embedding_state',
-                    f'{region_fields.boxes}.box_id',
-                    *box_vector_source_includes(region_fields),
-                ]
+    with search_span('source_vector'):
+        resp = await opensearch.search(
+            index=cfg.items_index,
+            body={
+                'size': 1,
+                'query': {'ids': {'values': [crop_id]}},
+                '_source': {
+                    'includes': [
+                        ITEM_EMBEDDING_FIELD,
+                        'embedding_state',
+                        f'{region_fields.boxes}.box_id',
+                        *box_vector_source_includes(region_fields),
+                    ]
+                },
             },
-        },
-    )
+        )
     hits = (resp.get('hits') or {}).get('hits') or []
     if not hits:
         raise rejection(404, 'not_found', f"no crop '{crop_id}' in this project")
@@ -456,17 +468,18 @@ async def semantic_similar_search(
         vector = stored
     skip_box = None
 
-    filter_clause = _filter_for(
-        item_filter=item_filter,
-        tab=tab,
-        cluster_id=cluster_id,
-        date_from=date_from,
-        date_to=date_to,
-        max_rank=max_rank,
-        min_blur_ratio=min_blur_ratio,
-        hide_near_duplicates=hide_near_duplicates,
-        include_test=include_test,
-    )
+    with search_span('filter_build'):
+        filter_clause = _filter_for(
+            item_filter=item_filter,
+            tab=tab,
+            cluster_id=cluster_id,
+            date_from=date_from,
+            date_to=date_to,
+            max_rank=max_rank,
+            min_blur_ratio=min_blur_ratio,
+            hide_near_duplicates=hide_near_duplicates,
+            include_test=include_test,
+        )
     if exclude_self:
         if box_id is not None and target is SearchTarget.BOX:
             skip_box = (crop_id, box_id)

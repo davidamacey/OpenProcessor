@@ -13,11 +13,12 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import HTTPException, Query, Request
+from fastapi import HTTPException, Query, Request, Response
 
 from src.config.env import env_bool
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
+from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
@@ -26,6 +27,7 @@ from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
+from src.utils.search_timing import bind_search_timer, search_span
 
 
 logger = get_logger(__name__)
@@ -84,7 +86,7 @@ async def search_text(
         ),
     ] = SearchTarget.ITEM,
     include_test: bool = False,
-) -> dict[str, Any]:
+) -> Response:
     """Semantic kNN search over the items index's ``pe_embedding`` field.
 
     Encodes ``q`` through the PE-Core-L14-336 text tower
@@ -117,45 +119,49 @@ async def search_text(
             ),
         )
 
-    await ensure_indexes(opensearch)
+    with bind_search_timer('text') as timer:
+        with search_span('bootstrap'):
+            await ensure_indexes(opensearch)
 
-    # Looked up at call time so a test replaces the accessor in one place
-    # (src.app.resources), not in every caller.
-    from src.app.resources import get_shared_executor
+        # Looked up at call time so a test replaces the accessor in one place
+        # (src.app.resources), not in every caller.
+        from src.app.resources import get_shared_executor
 
-    try:
-        executor = get_shared_executor()
-    except RuntimeError:
-        # Lifespan hasn't run (e.g. a router-only TestClient in tests) —
-        # fall back to the event loop's default executor. encode_text is
-        # still offloaded via run_in_executor either way; this only
-        # changes which thread pool it runs on.
-        executor = None
+        try:
+            executor = get_shared_executor()
+        except RuntimeError:
+            # Lifespan hasn't run (e.g. a router-only TestClient in tests) —
+            # fall back to the event loop's default executor. encode_text is
+            # still offloaded via run_in_executor either way; this only
+            # changes which thread pool it runs on.
+            executor = None
 
-    try:
-        return await semantic_search.semantic_text_search(
-            opensearch=opensearch,
-            pe_encoder=pe_encoder,
-            executor=executor,
-            query=q,
-            page=page,
-            page_size=page_size,
-            cluster_id=cluster_id,
-            tab=tab,
-            date_from=date_from,
-            date_to=date_to,
-            item_filter=item_filter,
-            min_blur_ratio=min_blur_ratio,
-            hide_near_duplicates=hide_near_duplicates,
-            min_score=min_score,
-            include_test=include_test,
-            target=target,
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception('semantic_search_failed')
-        raise HTTPException(status_code=503, detail='semantic search unavailable') from exc
+        try:
+            result = await semantic_search.semantic_text_search(
+                opensearch=opensearch,
+                pe_encoder=pe_encoder,
+                executor=executor,
+                query=q,
+                page=page,
+                page_size=page_size,
+                cluster_id=cluster_id,
+                tab=tab,
+                date_from=date_from,
+                date_to=date_to,
+                item_filter=item_filter,
+                min_blur_ratio=min_blur_ratio,
+                hide_near_duplicates=hide_near_duplicates,
+                min_score=min_score,
+                include_test=include_test,
+                target=target,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception('semantic_search_failed')
+            raise HTTPException(status_code=503, detail='semantic search unavailable') from exc
+        headers = {'Server-Timing': timer.finish()}
+    return WireJSONResponse(result, headers=headers)
 
 
 @router.get(
@@ -204,7 +210,7 @@ async def search_similar(
         ),
     ] = SearchTarget.ITEM,
     include_test: bool = False,
-) -> dict[str, Any]:
+) -> Response:
     """kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.
 
     No encoder is involved. Same filters, default exclusions and page shape as
@@ -222,29 +228,33 @@ async def search_similar(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    await ensure_indexes(opensearch)
+    with bind_search_timer('similar') as timer:
+        with search_span('bootstrap'):
+            await ensure_indexes(opensearch)
 
-    try:
-        return await semantic_search.semantic_similar_search(
-            opensearch=opensearch,
-            crop_id=crop_id,
-            box_id=box_id,
-            target=target,
-            exclude_self=exclude_self,
-            page=page,
-            page_size=page_size,
-            cluster_id=cluster_id,
-            tab=tab,
-            date_from=date_from,
-            date_to=date_to,
-            item_filter=item_filter,
-            min_blur_ratio=min_blur_ratio,
-            hide_near_duplicates=hide_near_duplicates,
-            min_score=min_score,
-            include_test=include_test,
-        )
-    except (HTTPException, RequestRejectedError):
-        raise
-    except Exception as exc:
-        logger.exception('similar_search_failed')
-        raise HTTPException(status_code=503, detail='similar search unavailable') from exc
+        try:
+            result = await semantic_search.semantic_similar_search(
+                opensearch=opensearch,
+                crop_id=crop_id,
+                box_id=box_id,
+                target=target,
+                exclude_self=exclude_self,
+                page=page,
+                page_size=page_size,
+                cluster_id=cluster_id,
+                tab=tab,
+                date_from=date_from,
+                date_to=date_to,
+                item_filter=item_filter,
+                min_blur_ratio=min_blur_ratio,
+                hide_near_duplicates=hide_near_duplicates,
+                min_score=min_score,
+                include_test=include_test,
+            )
+        except (HTTPException, RequestRejectedError):
+            raise
+        except Exception as exc:
+            logger.exception('similar_search_failed')
+            raise HTTPException(status_code=503, detail='similar search unavailable') from exc
+        headers = {'Server-Timing': timer.finish()}
+    return WireJSONResponse(result, headers=headers)
