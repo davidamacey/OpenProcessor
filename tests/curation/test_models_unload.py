@@ -50,6 +50,14 @@ def app_client():
 
 
 @pytest.fixture(autouse=True)
+def _no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _none(_client: object) -> dict[str, frozenset[str]]:
+        return {}
+
+    monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)
+
+
+@pytest.fixture(autouse=True)
 def _no_ingest_detector(monkeypatch: pytest.MonkeyPatch) -> None:
     # No OpenSearch behind these routes; the ingest-detector guard is
     # exercised explicitly at the bottom of the file.

@@ -72,6 +72,8 @@ def _activate(client: TestClient, name: str, model: str, **primary: Any) -> None
 def test_with_nothing_active_the_env_profile_applies(world: Any) -> None:
     from src.services.curation.ingest_detector import project_ingest_profiles
 
+    client, *_ = world
+    client.get(f'{PROFILES}/active')
     resolved = project_ingest_profiles()
     assert resolved.source == 'env'
     assert resolved.primary.detector_model == 'env_model'
@@ -286,12 +288,14 @@ def test_the_class_source_catalog_names_the_project_model(world: Any) -> None:
 
 def test_items_from_the_project_profile_get_their_ingest_class_source(world: Any) -> None:
     from src.services.curation.empty_vlm_answer_repair import ingest_class_source
+    from src.services.curation.ingest_detector import project_ingest_profiles
 
     client, *_ = world
     doc = {'class_detector': 'birds', 'class_id': None}
-    assert ingest_class_source(doc) is None
+    client.get(f'{PROFILES}/active')  # loads the store: nothing active yet
+    assert ingest_class_source(doc, project_ingest_profiles()) is None
     _activate(client, 'mine', 'birds')
-    assert ingest_class_source(doc) == 'item_proposal'
+    assert ingest_class_source(doc, project_ingest_profiles()) == 'item_proposal'
 
 
 # --- usage -------------------------------------------------------------------
@@ -358,6 +362,7 @@ def test_the_policy_rejects_a_detector_and_publishes_none(world: Any) -> None:
 
 def test_put_stores_the_clustering_switch(world: Any) -> None:
     client, *_ = world
+    client.get(f'{PROFILES}/active')  # a worker that has loaded its store
     body_ = {'expected_revision': 0, 'clustering': {'automatic': False}}
     put = client.put(URL, json=body_)
     assert put.status_code == 200, put.text
@@ -395,3 +400,29 @@ async def test_a_stored_policy_detector_is_reset_with_a_logged_message(world: An
     await put_ingest_policy(fake, plain, expected_revision=4)
     after = (await fake.get(index=index, id=SETTINGS_DOC_ID))['_source']['ingest_policy']
     assert 'detector' not in after
+
+
+def test_an_older_revision_can_be_pinned_by_activation(world: Any) -> None:
+    client, *_ = world
+    _activate(client, 'mine', 'birds')
+    saved = client.put(f'{PROFILES}/mine', json={'expected_revision': 1, 'body': body('boats')})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()['revision'] == 2
+
+    active = client.get(f'{PROFILES}/active').json()['active']
+    assert (
+        client.post(
+            f'{PROFILES}/mine/activate', json={'revision': 2, 'expected_active': active}
+        ).status_code
+        == 200
+    )
+    active = client.get(f'{PROFILES}/active').json()['active']
+    pinned = client.post(
+        f'{PROFILES}/mine/activate', json={'revision': 1, 'expected_active': active}
+    )
+    assert pinned.status_code == 200, pinned.text
+    assert client.get(f'{PROFILES}/active').json()['active']['revision'] == 1
+    assert (
+        client.get('/curation/projects/default/ingest/config').json()['detector']['model']
+        == 'birds'
+    )

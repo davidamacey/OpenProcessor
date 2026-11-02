@@ -11,6 +11,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.core.dependencies import get_curation_opensearch
 from src.routers import models as models_router, models_lifecycle
 
 
@@ -28,8 +29,16 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(models_lifecycle, 'TRITON_MODELS_DIR', tmp_path / 'models')
     monkeypatch.setattr(models_lifecycle, 'PYTORCH_MODELS_DIR', tmp_path / 'pytorch_models')
     monkeypatch.setattr(models_lifecycle, 'TritonControlService', _Triton)
+
+    async def _no_other_projects(_client: object) -> dict[str, frozenset[str]]:
+        return {}
+
+    monkeypatch.setattr(
+        'src.services.model_unload_guard.ingest_models_by_project', _no_other_projects
+    )
     app = FastAPI()
     app.include_router(models_router.router)
+    app.dependency_overrides[get_curation_opensearch] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     return TestClient(app)
 
 

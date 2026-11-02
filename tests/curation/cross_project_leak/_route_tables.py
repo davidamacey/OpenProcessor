@@ -47,6 +47,7 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'POST',
         '/ingest/policy/preview',
     ): 'counts what a candidate policy would embed; writes nothing',
+    ('POST', '/search/image'): 'kNN search by a stored or uploaded picture; stores nothing',
     ('POST', '/train/preflight'): 'read-only validation under POST',
     ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
     ('POST', '/reprocess/jobs/{job_id}/cancel'): (
@@ -147,11 +148,17 @@ EXPECTED_5XX: dict[tuple[str, str], str] = {
 # is None``) rather than bound to the slug in the URL.
 # Routes that GET documents from OTHER projects' ``configs`` index by design,
 # each read inside a read-only bind of the project it reads: the model-sharing
-# route names which projects run a detector profile on the model. Nothing
+# route names which projects run a detector profile on the model, and the model
+# unload / delete guard and the models list read each project's active ingest
+# profile (a model is deployment-wide). Nothing
 # else of another project (items, images, labels) may be reached, and no
 # write.
 CROSS_PROJECT_CONFIG_READS: frozenset[tuple[str, str]] = frozenset(
-    {('PUT', '/models/{model_name}/sharing')}
+    {
+        ('PUT', '/models/{model_name}/sharing'),
+        ('DELETE', '/models/{model_name}'),
+        ('GET', '/models/status'),
+    }
 )
 
 UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(

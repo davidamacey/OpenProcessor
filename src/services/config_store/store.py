@@ -105,7 +105,10 @@ class ConfigStore:
             self.current = replace(self.current, stale=True)
             return self.current
 
-        if not force and revision == self.current.config_revision and self.current.loaded_at:
+        # A stale snapshot is reloaded even at the same revision: nothing else clears
+        # `stale`, so skipping here would leave a recovered store refusing forever.
+        unchanged = revision == self.current.config_revision and self.current.loaded_at
+        if not force and unchanged and not self.current.stale:
             return self.current
 
         try:

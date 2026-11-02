@@ -304,6 +304,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         # Open-vocabulary prompt sets: same shape as the region-profile routes.
         ('POST', '/open_vocab'): {'json': {'name': f'{slug}-newset', 'body': _open_vocab_body()}},
         ('POST', '/open_vocab/validate'): {'json': {'name': None, 'body': _open_vocab_body()}},
+        ('POST', '/search/image'): {'data': {'image_id': f'{slug}-img-0001'}},
         ('POST', '/open_vocab/test'): {
             'json': {'image_id': f'{slug}-img-0001', 'target': _open_vocab_body()['targets'][0]}
         },

@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from src.routers._errors import server_error
 from src.routers.curation._class_hotkeys import project_reserved_hotkeys
 from src.routers.curation._class_models import ClassEntry, ClassListResponse
-from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.routers.curation._common import (
+    OpenSearchDep,
+    _raw_opensearch_dep,
+    get_class_registry,
+    items_index,
+    router,
+)
 from src.services.curation.class_sources import class_source_catalog
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
 
-@router.get('/class_sources')
+@router.get('/class_sources', dependencies=[Depends(_raw_opensearch_dep)])
 async def list_class_sources() -> dict[str, list[dict[str, str]]]:
     """Every ``class_source`` value this deployment can write.
 

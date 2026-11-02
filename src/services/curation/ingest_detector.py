@@ -8,8 +8,9 @@ the same detectors for a project. It reads the bound project's config-store
 snapshot (synchronous, no new cache); async callers use
 :func:`refreshed_ingest_profiles` to see another worker's activation first.
 
-Fail closed: an unbound project raises, and so does an activation whose pinned
-revision cannot be read or decoded. Only "never activated" and "off" fall back to
+Fail closed: an unbound project raises, so does a store that never loaded or is
+stale, and so does an activation whose pinned revision cannot be read or decoded.
+Only "never activated" and "off", read from a loaded fresh store, fall back to
 the environment. A stored profile's classes are never registry ids
 (``assigns_class`` is forced off) and its ``name`` stays ``item`` / ``secondary``.
 """
@@ -76,8 +77,18 @@ def _decode(pinned: StoredConfig) -> IngestProfileBody:
 
 
 def project_ingest_profiles() -> IngestProfiles:
-    """The bound project's ingest detectors (raises when no project is bound)."""
+    """The bound project's ingest detectors (raises when no project is bound).
+
+    Refuses unless the snapshot is loaded and fresh: a store that never loaded or
+    whose last refresh failed cannot say whether a profile is active, and the
+    environment profile is only right when it can say none is."""
     current = get_config_store().current
+    if not current.loaded_at:
+        msg = 'the config store has not loaded; the active ingest profile is unknown'
+        raise IngestProfileUnresolvedError(msg)
+    if current.stale:
+        msg = 'the config store could not be refreshed; the active ingest profile is unconfirmed'
+        raise IngestProfileUnresolvedError(msg)
     ref = current.active_ingest_profile
     if not isinstance(ref, tuple):
         return IngestProfiles(

@@ -25,6 +25,9 @@ from src.services.detection.open_vocab_select import DropReason
 from src.services.detection.segmenter_gate import GateReason
 
 
+pytestmark = pytest.mark.usefixtures('no_other_projects')
+
+
 PREFIX = '/curation/projects/default/open_vocab'
 CONTRACT = Path(__file__).resolve().parents[2] / 'contracts' / 'openapi' / 'curation.json'
 
@@ -34,6 +37,9 @@ def _reset():
     from src.services.config_store.store import reset_config_stores
 
     reset_config_stores()
+    from _curation_app import mark_config_store_loaded
+
+    mark_config_store_loaded()
     profile_registry._reset_registry_for_tests()
     yield
     reset_config_stores()
@@ -250,7 +256,7 @@ async def test_models_status_lists_a_segmenter_row_with_no_region_profile(
         raise httpx.ConnectError('refused', request=request)
 
     _patch_http(monkeypatch, handler)
-    rows = [m for m in (await models_mod.models_status())['models'] if m['kind'] == 'external']
+    rows = [m for m in (await models_mod.models_status(None))['models'] if m['kind'] == 'external']
     assert len(rows) == 1
     assert rows[0]['name'] == 'sam3'
     assert rows[0]['status'] == status

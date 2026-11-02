@@ -84,11 +84,13 @@ def install_project_exception_handlers(app: FastAPI) -> None:
     """Map the isolation exceptions to structured responses (§2.4): a
     cross-project access or an unbound project-scoped read is a server
     bug -> 500 ``internal_isolation_error`` (never partial data); a write
-    to a read-only binding -> 409 ``project_read_only``; a service's refusal
+    to a read-only binding -> 409 ``project_read_only``; an ingest profile the
+    config store cannot confirm -> 503 ``config_store_unavailable``; a service's refusal
     (:class:`RequestRejectedError`) -> the status and body it carries."""
     from src.config.project_context import ProjectNotBound
     from src.core.error_handlers import request_rejected_response
     from src.core.exceptions import RequestRejectedError
+    from src.services.curation.ingest_detector import IngestProfileUnresolvedError
     from src.services.projects.guard_errors import CrossProjectAccess, ProjectReadOnly
 
     async def _isolation_error(_request: Request, exc: Exception) -> JSONResponse:
@@ -108,6 +110,11 @@ def install_project_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(status_code=409, content={'detail': detail.model_dump()})
 
+    async def _ingest_profile_unresolved(_request: Request, exc: Exception) -> JSONResponse:
+        detail = ConfigErrorDetail(error='config_store_unavailable', message=str(exc))
+        return JSONResponse(status_code=503, content={'detail': detail.model_dump()})
+
+    app.add_exception_handler(IngestProfileUnresolvedError, _ingest_profile_unresolved)
     app.add_exception_handler(CrossProjectAccess, _isolation_error)
     app.add_exception_handler(ProjectNotBound, _isolation_error)
     app.add_exception_handler(ProjectReadOnly, _read_only)

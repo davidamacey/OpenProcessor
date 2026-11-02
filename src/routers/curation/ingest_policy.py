@@ -8,6 +8,7 @@ over the items already stored, without writing anything.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 from collections import Counter
 
@@ -24,10 +25,7 @@ from src.routers.curation._ingest_policy_models import (
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.index_bootstrap import ensure_indexes
-from src.services.curation.ingest_detector import (
-    IngestProfileUnresolvedError,
-    project_ingest_profiles,
-)
+from src.services.curation.ingest_detector import project_ingest_profiles
 from src.services.curation.ingest_policy import (
     IngestPolicy,
     IngestPolicyBody,
@@ -62,12 +60,13 @@ def _known_slugs() -> set[str]:
     """Names a policy can sensibly mention: registry classes and the labels of the
     detector the project will run."""
     known = {c.class_name for c in get_class_registry().load().classes}
-    try:
-        profile = project_ingest_profiles().primary
-        if profile.detector_model:
+    # An unresolvable profile propagates (503): an unknown-names answer built from
+    # the wrong detector would be silently wrong.
+    profile = project_ingest_profiles().primary
+    if profile.detector_model:
+        # a detector with no readable label list contributes no names
+        with contextlib.suppress(ValueError, OSError):
             known |= {label.slug for label in detector_labels(profile)}
-    except (ValueError, OSError, IngestProfileUnresolvedError):
-        pass
     return known
 
 
@@ -96,6 +95,7 @@ async def put_policy(
         embedding=body.embedding,
         clustering=body.clustering,
     )
+    known = _known_slugs()  # before the write: a refused answer must not follow a stored policy
     try:
         stored = await put_ingest_policy(
             opensearch, policy_body, expected_revision=body.expected_revision
@@ -103,7 +103,7 @@ async def put_policy(
     except PolicyConflictError as exc:
         raise api_error(409, 'revision_conflict', f'ingest policy changed: {exc}') from exc
     return IngestPolicyPutResponse(
-        **stored.model_dump(), unknown_names=unknown_names(policy_body, _known_slugs())
+        **stored.model_dump(), unknown_names=unknown_names(policy_body, known)
     )
 
 

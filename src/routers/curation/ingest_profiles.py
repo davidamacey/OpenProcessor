@@ -388,6 +388,9 @@ async def activate_ingest_profile(
 
     await get_config_store().refresh(opensearch)
     record = build_record(name, revision=body.revision)
+    if record is None and body.revision is not None:
+        # the snapshot holds only each profile's current revision; an older one is read
+        record = await get_revision_record(opensearch, name, body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known ingest profile')
     report = await run_activation_gate(

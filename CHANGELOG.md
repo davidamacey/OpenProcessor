@@ -27,6 +27,9 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 ### Fixed
 
 - Project clone's `settings_defaults` axis dropped the ingest policy's `clustering` switch.
+- **Ingest profiles fail closed.** A project whose config store never loaded, or whose last refresh failed, now answers `503 config_store_unavailable` (and the empty-VLM-answer repair script refuses) instead of silently running the deployment's `OP_INGEST_*` detector. A config store that recovered at an unchanged revision now clears its stale flag. `PUT /ingest/policy` refuses rather than skipping the unknown-names check, and the class-source, models and region-vocabulary routes refresh the store first.
+- Unloading or deleting a model (`/models/...` and `/curation/projects/{project}/models/...`) is refused with 403, even with `force`, while another project's active ingest profile runs it; the models list marks it `is_region_protected`. An unreadable project refuses with 503.
+- `POST /ingest_profiles/{name}/activate` could not pin an older revision (404); it now can.
 - The `secondary_model` class source counts as classifier output even when the deployment sets no `OP_INGEST_SECONDARY_*` model, so a project-level secondary's rows are no longer treated as unclassified.
 
 ### Security

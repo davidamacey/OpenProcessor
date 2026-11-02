@@ -13,6 +13,7 @@ from fastapi import File, Form, HTTPException, Query, Request, UploadFile
 
 from src.config import get_curation_config
 from src.core.exceptions import RequestRejectedError
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchImageResponse
@@ -118,4 +119,4 @@ async def search_image(
     except (HTTPException, RequestRejectedError):
         raise
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'image search failed: {exc}') from exc
+        raise server_error(503, 'image search failed', exc) from exc

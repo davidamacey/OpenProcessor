@@ -19,6 +19,9 @@ def _reset_caches():
     from src.services.detection import profile_registry
 
     reset_config_stores()
+    from _curation_app import mark_config_store_loaded
+
+    mark_config_store_loaded()
     profile_registry._reset_registry_for_tests()
     yield
     reset_config_stores()

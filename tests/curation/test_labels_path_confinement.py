@@ -136,3 +136,17 @@ def test_region_profile_body_rejects_an_outside_labels_path(
         assert resp.status_code == 422, bad
         resp = profile_client.post(prefix + '/validate', json={'body': _body(labels_path=bad)})
         assert resp.status_code == 422, bad
+
+
+@pytest.mark.parametrize('case', ['outside_repository', 'dot_dot', 'not_txt'])
+def test_each_kind_of_bad_labels_path_is_refused_by_the_profile_schema(
+    case: str, repo: Path, outside: Path
+) -> None:
+    (repo / 'det' / 'notes.json').write_text('{}')
+    bad = {
+        'outside_repository': str(outside),
+        'dot_dot': str(repo / 'det' / '..' / '..' / 'secret.txt'),
+        'not_txt': str(repo / 'det' / 'notes.json'),
+    }[case]
+    with pytest.raises(ValueError, match='labels_path'):
+        IngestDetectorSpec(model='m', labels_path=bad)

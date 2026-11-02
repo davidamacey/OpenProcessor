@@ -71,9 +71,10 @@ async def active_detector_users(client: Any, model_name: str) -> list[tuple[str,
     return sorted([*region_users, *ingest_users])
 
 
-async def ingest_detector_users(client: Any, model_name: str) -> list[str]:
-    """Slugs of the projects whose ACTIVE ingest profile names ``model_name`` as
-    their primary or secondary ingest detector."""
+async def ingest_models_by_project(client: Any) -> dict[str, frozenset[str]]:
+    """``slug -> models`` its ACTIVE ingest profile names as primary or secondary
+    ingest detector (empty when none is active). Raises when any project cannot be
+    read, so a caller that refuses on the result fails closed."""
     from opensearchpy.exceptions import NotFoundError
 
     from src.schemas.curation.ingest_profile import IngestProfileBody
@@ -94,9 +95,15 @@ async def ingest_detector_users(client: Any, model_name: str) -> list[str]:
         body = IngestProfileBody.model_validate(doc['_source'].get('body') or {})
         return frozenset(spec.model for spec in (body.primary, body.secondary) if spec is not None)
 
+    return await read_each_project(own_models)
+
+
+async def ingest_detector_users(client: Any, model_name: str) -> list[str]:
+    """Slugs of the projects whose ACTIVE ingest profile names ``model_name`` as
+    their primary or secondary ingest detector."""
     return [
         slug
-        for slug, models in (await read_each_project(own_models)).items()
+        for slug, models in (await ingest_models_by_project(client)).items()
         if model_name in models
     ]
 
@@ -118,6 +125,7 @@ __all__ = [
     'INGEST_DETECTOR_USER',
     'active_detector_users',
     'ingest_detector_users',
+    'ingest_models_by_project',
     'model_dependents',
     'read_each_project',
 ]

@@ -15,13 +15,18 @@ INDEX = 'test_items'
 UPDATED = '2026-09-24T14:28:23+00:00'
 
 
+PROFILES = SimpleNamespace(
+    primary=SimpleNamespace(name='det', detector_model='det_x', assigns_class=False),
+    secondary=SimpleNamespace(name='item', detector_model='item_x', assigns_class=True),
+)
+
+
 @pytest.fixture(autouse=True)
 def _profiles(monkeypatch: pytest.MonkeyPatch) -> None:
-    profiles = SimpleNamespace(
-        primary=SimpleNamespace(name='det', detector_model='det_x', assigns_class=False),
-        secondary=SimpleNamespace(name='item', detector_model='item_x', assigns_class=True),
-    )
-    monkeypatch.setattr(repair, 'project_ingest_profiles', lambda: profiles)
+    async def _resolved(_client: Any) -> Any:
+        return PROFILES
+
+    monkeypatch.setattr(repair, 'refreshed_ingest_profiles', _resolved)
 
 
 def _doc(crop_id: str, **kw: Any) -> dict[str, Any]:
@@ -112,7 +117,8 @@ async def test_plans_restore_the_pre_write_class_source() -> None:
 
 def test_primary_with_a_class_is_not_guessed() -> None:
     # A proposer never writes a class_id; such a doc is inconsistent.
-    assert repair.ingest_class_source({'class_detector': 'det_x', 'class_id': 2}) is None
+    doc = {'class_detector': 'det_x', 'class_id': 2}
+    assert repair.ingest_class_source(doc, PROFILES) is None
 
 
 @pytest.mark.asyncio
