@@ -47,11 +47,14 @@ COPY --from=sam3-src /src/sam3 /opt/sam3
 
 RUN pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
     && pip install --user --no-cache-dir --no-warn-script-location \
-        'fastapi==0.115.4' \
+        'fastapi==0.143.3' \
         'uvicorn[standard]==0.32.0' \
         'pydantic>=2.7,<3' \
         'numpy>=1.26,<2.0' \
-        'pillow>=10.0' \
+        'pillow>=13.0.0' \
+        'certifi>=2026.10.18' \
+        'filelock>=4.2.1' \
+        'dnspython>=2.9.0' \
         'opencv-python-headless>=4.10' \
         'scikit-image>=0.24' \
         'huggingface-hub>=0.24' \
@@ -85,18 +88,20 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# The base's system python lags security fixes the release gate fails on: certifi
-# (GHSA-6q48-6c7w-9gw2) and pillow (fixed in 13.0.0) are raised, and uv, which nothing here
-# runs, is removed. Then no package manager at run time: the base's /usr/local copy and the
-# Debian python3-pip copy beneath it (the user-site copy is stripped in the builder stage).
-RUN PIP_BREAK_SYSTEM_PACKAGES=1 pip install --no-cache-dir --upgrade 'pillow>=13.0.0' 'certifi>=2026.10.18' \
-    && PIP_BREAK_SYSTEM_PACKAGES=1 pip uninstall -y uv \
-    && rm -rf /usr/local/lib/python3.12/dist-packages/pip \
+# The base's system python lags security fixes the scans fail on. The builder stage installs the
+# fixed pillow, certifi, filelock and dnspython into the user site (which shadows the system
+# site), so the base's stale copies are deleted here rather than upgraded: no pip runs in this
+# stage. uv, which nothing here runs, goes too, and so does every pip so no package manager is
+# left at run time.
+RUN rm -rf /usr/local/lib/python3.12/dist-packages/pip \
         /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
         /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
-        /usr/lib/python3/dist-packages/pip \
-        /usr/lib/python3/dist-packages/pip-*.dist-info \
-        /usr/bin/pip /usr/bin/pip3
+        /usr/lib/python3/dist-packages/pip /usr/lib/python3/dist-packages/pip-*.dist-info \
+        /usr/bin/pip /usr/bin/pip3 /usr/local/bin/uv /usr/local/bin/uvx \
+    && site=/usr/local/lib/python3.12/dist-packages \
+    && rm -rf "$site"/PIL "$site"/pillow-*.dist-info "$site"/pillow.libs \
+        "$site"/certifi "$site"/certifi-*.dist-info "$site"/filelock "$site"/filelock-*.dist-info \
+        "$site"/dns "$site"/dnspython-*.dist-info "$site"/uv "$site"/uv-*.dist-info
 
 # Ubuntu 24.04 bases ship an `ubuntu` user at uid 1000; appuser must own that
 # uid to read the host-owned HF cache bind mount. No-op on bases without it.

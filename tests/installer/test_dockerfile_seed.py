@@ -109,16 +109,37 @@ def test_dockerfile_triton_upgrades_the_python_packages_the_scan_flags() -> None
         assert requirement in upgrade
 
 
-def test_dockerfile_segmenter_raises_the_base_python_packages_the_scan_flags() -> None:
-    """The PyTorch base's system python ships certifi, pillow and uv with fixable CRITICALs that
-    fail the release gate. The runtime stage raises certifi and pillow before pip is stripped and
-    removes uv, which nothing in the service runs."""
+def test_dockerfile_triton_upgrades_the_packages_torch_leaves_stale() -> None:
+    """filelock and virtualenv in the NGC image carry fixable HIGHs the CI image scan fails on; the
+    upgrade runs after the torch install, which would otherwise keep the stale filelock."""
+    text = (REPO_ROOT / 'Dockerfile.triton').read_text()
+    line = "pip install --no-cache-dir --upgrade 'filelock>=4.2.1' 'virtualenv>=21.7.13'"
+    assert line in text
+    assert text.index('torch==') < text.index(line)
+
+
+def test_dockerfile_segmenter_replaces_the_base_python_packages_the_scan_flags() -> None:
+    """The PyTorch base's system python ships pillow, certifi, filelock, dnspython and uv with
+    fixable findings. The builder installs fixed copies into the user site; the runtime stage runs
+    no pip and deletes the stale system copies so only the fixed ones remain."""
     text = (REPO_ROOT / 'docker' / 'segmenter' / 'Dockerfile').read_text()
-    runtime = text[text.rindex('FROM pytorch/pytorch') :]
-    upgrade = runtime[runtime.index('pip install --no-cache-dir --upgrade') :].splitlines()[0]
-    for requirement in ("'pillow>=13.0.0'", "'certifi>=2026.10.18'"):
-        assert requirement in upgrade
-    assert 'pip uninstall -y uv' in runtime
-    assert runtime.index('pip install --no-cache-dir --upgrade') < runtime.index(
-        'dist-packages/pip \\'
-    )
+    runtime_start = text.rindex('FROM pytorch/pytorch')
+    builder, runtime = text[:runtime_start], text[runtime_start:]
+    for requirement in (
+        "'fastapi==0.143.3'",
+        "'pillow>=13.0.0'",
+        "'certifi>=2026.10.18'",
+        "'filelock>=4.2.1'",
+        "'dnspython>=2.9.0'",
+    ):
+        assert requirement in builder
+    assert 'pip install' not in runtime
+    for stale in (
+        '"$site"/PIL ',
+        '"$site"/certifi ',
+        '"$site"/filelock ',
+        '"$site"/dns ',
+        '"$site"/uv ',
+        '/usr/local/bin/uv ',
+    ):
+        assert stale in runtime

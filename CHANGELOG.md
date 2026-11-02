@@ -98,6 +98,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The unused `ingest_faces` service and OpenSearch client methods, which nothing in production called (#379).
 
 ### Fixed
+- **The segmenter and Triton images clear the CI scan's fixable HIGH findings.** The segmenter builds fixed pillow, certifi, filelock, dnspython and fastapi (and so starlette) into its user site and deletes the base image's stale copies, with no pip in the runtime stage; Triton upgrades filelock and virtualenv after torch.
 - A VLM endpoint looked up by name right after it was created no longer answers 404 "not a known VLM endpoint"; a miss forces a registry re-read, as the prompt-pack and region-profile routes already do.
 - **`setup-openprocessor.sh --repair` of an `--image-tag` install keeps `OP_IMAGE_REPO`.** Repair reused the installed tag but reset the repo prefix to `davidamacey`, so a local build under another repo was looked up as `davidamacey/<image>:<tag>`. Tag mode resolves every image, the evaluator and export images included, to `${OP_IMAGE_REPO}/<image>:<tag>` and clears the per-image digest pins a lock install left behind.
 - **Stopping the model-export worker is seen by the API at once.** The worker now handles SIGTERM (what `docker compose stop` sends) by leaving its loop cleanly and removes its heartbeat file on every exit, so `POST /models/upload` answers 503 immediately instead of queueing a job nobody runs until the heartbeat ages out.
