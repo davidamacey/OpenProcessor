@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from curation.triton_promote._helpers import write_float_image_onnx
 from src.services.training.job_models import TrainJobStatus
 from src.services.training.triton_promote import TritonPromoter
 
@@ -21,7 +22,7 @@ def fake_checkpoint(tmp_path: Path) -> Path:
     run_dir = tmp_path / 'jobs' / 'job-abc'
     run_dir.mkdir(parents=True)
     (run_dir / 'best.pt').write_bytes(b'not-a-real-checkpoint')
-    (run_dir / 'best.onnx').write_bytes(b'ONNX-V1-BYTES')
+    write_float_image_onnx(run_dir / 'best.onnx')
     return run_dir / 'best.pt'
 
 

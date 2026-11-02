@@ -22,6 +22,8 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
+from curation.triton_promote._helpers import write_float_image_onnx
+
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_new
@@ -52,7 +54,7 @@ def fake_checkpoint(tmp_path: Path) -> Path:
     run_dir = tmp_path / 'jobs' / 'job-abc'
     run_dir.mkdir(parents=True)
     (run_dir / 'best.pt').write_bytes(b'not-a-real-checkpoint')
-    (run_dir / 'best.onnx').write_bytes(b'ONNX-BYTES')
+    write_float_image_onnx(run_dir / 'best.onnx')
     return run_dir / 'best.pt'
 
 
