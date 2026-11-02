@@ -26,6 +26,7 @@ def labels_file(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / 'labels.txt'
     path.write_text('person\ncar\ntraffic light\nhot dog\n')
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_detector')
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
     monkeypatch.setenv('OP_INGEST_PRIMARY_LABELS_PATH', str(path))
 
 

@@ -151,6 +151,9 @@ class FakeTriton:
         self.detections = detections
         self.calls = 0
 
+    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+        return 'UINT8'
+
     async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:  # noqa: ARG002
         self.calls += 1
         batch = int(inputs[0].shape()[0]) if hasattr(inputs[0], 'shape') else 1

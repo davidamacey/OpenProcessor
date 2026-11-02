@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.config.settings import TritonModelConfig
 from src.schemas.curation.config_common import ActivateResponse, ActiveRef, ValidationReport
 from src.services.curation.region_impact import ActivationImpact  # noqa: TC001  # pydantic field type
+from src.utils.class_names import confine_labels_path
 
 
 ProfileSourceWire = Literal['env', 'registered', 'stored', 'template']
@@ -87,6 +88,13 @@ class RegionProfileBody(BaseModel):
     region_class_name: str = ''
     display_name: str = ''
     display_name_singular: str = ''
+
+    @field_validator('labels_path')
+    @classmethod
+    def _labels_path_in_model_repository(cls, value: str) -> str:
+        if value:
+            confine_labels_path(value)
+        return value
 
 
 class RegionProfileEffective(BaseModel):

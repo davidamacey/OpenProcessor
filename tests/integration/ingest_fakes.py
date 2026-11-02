@@ -54,6 +54,9 @@ class FakeTritonPool:
     def __init__(self) -> None:
         self.batch_sizes: list[int] = []
 
+    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+        return 'UINT8'
+
     async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:  # noqa: ARG002
         batch = int(inputs[0].shape()[0])
         self.batch_sizes.append(batch)

@@ -13,9 +13,11 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Security
 
+- Renaming a person no longer logs the name (#379).
 - **Model upload and export refuse a model name that is not a slug.** `POST /models/upload` took `triton_name` (or the uploaded file name) straight into a path under `pytorch_models/`, the model directory and the export command, so `../` wrote outside the model directories and `:` broke the export argument. The name must now match `^[a-z0-9][a-z0-9_]{0,63}$` after the usual lower-casing (else 400, before anything is saved or queued); `POST /models/{model_name}/export` checks its path name the same way, and the export queue refuses a bad name too.
 - The release script refuses `--push` with a `--scan-severity` that drops CRITICAL from the gate.
 - The release Trivy gate blocks fixable findings only (`--ignore-unfixed`), as the CI scan already did; a finding with no upstream fix (today 14 kernel-header CVEs in `linux-libc-dev` in the Triton and segmenter images) no longer blocks a release. The `--report-dir` reports now list unfixed findings too.
+- **A detector `labels_path` set through the API must name a file inside the model repository.** A path outside it, or a symlink leading out, is refused when a project policy or region profile is saved and again when the file would be read. `OP_INGEST_PRIMARY_LABELS_PATH` is held to the same rule.
 - **Examples no longer use a real LAN address.** Docs, docstrings and tests now use the RFC 5737 documentation address `192.0.2.10`, and the naming-leak scan rejects the old host address anywhere in the tracked tree.
 - **The 0.6.0 API image shipped local, untracked model files.** `davidamacey/openprocessor:0.6.0` contained 24 files (about 1.55 GB) under `/opt/openprocessor/model_repo_seed`: a promoted throwaway project model, ONNX exports, TensorRT engine leftovers and bytecode from the build host's `models/` directory. The 0.6.0 tag is re-published clean. The release script now builds every image (including the segmenter and frontend contexts) from an archive of the committed revision, never from the working directory, refuses an uncommitted revision, and audits every built image against the committed tree (and for model artifacts) before anything is pushed. The `.dockerignore` files also exclude model artifacts and caches at any depth, so local builds stay clean.
 
@@ -100,6 +102,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - **Stopping the model-export worker is seen by the API at once.** The worker now handles SIGTERM (what `docker compose stop` sends) by leaving its loop cleanly and removes its heartbeat file on every exit, so `POST /models/upload` answers 503 immediately instead of queueing a job nobody runs until the heartbeat ages out.
 - **`setup-openprocessor.sh --rollback` works across a library change.** The rollback sourced `scripts/lib/image_keys.sh` after restoring the previous release's files, so an older library replaced the running installer's functions and the image pull died with `compose_image_refs: command not found`. The installer now loads its library before the restore, never re-sources it mid-run, and reads the restored image pins from the restored `.env`.
 - The model-export worker stops an export that runs over 4 hours and marks it failed, so one hung build cannot hold the queue while the heartbeat says the worker is alive. At start it also fails a task left running with no job file (for example one the in-API export left behind at an upgrade).
+- **A promoted project model answered 500 on `/detect` and as an ingest detector.** The client sent uint8 pixels to the model's float32 `images` input. Detector requests now use the input datatype the model declares (read from its Triton metadata): uint8 for the built-in engines, float32 (pixels / 255, same letterbox) for a promoted model. Any other datatype is refused with a clear error.
 - A COCO image whose only annotations are crowd boxes is imported as `unlabeled`, not `negative`: it contains objects, so it is not a verified empty image (#370).
 - **The VLM connection is pinned to the validated address** (#101): the URL policy resolves the endpoint host once and the labeler and the endpoint probe connect only to those addresses (Host header, TLS server name and certificate check unchanged), closing the DNS-rebinding window between the check and the connect. A pinned client ignores proxy environment variables.
 - **`/health` and `/ready` report not ready when a required Triton model failed to load** (#391). Triton runs with `--exit-on-error=false`, so a missing engine (an empty `models/pe_image_encoder/1/`) used to leave `/health` at `status: ready`. The probe now reads the repository index and answers `503`, naming each model that is not `READY` in `services.models.not_ready`. Required models default to YOLO, SCRFD, ArcFace, MobileCLIP and the PE image encoder; `OP_REQUIRED_MODELS` replaces the list; the installer writes it from the installed tiers, so a core-only install is not held back by the PE encoder. `/live` and `GET /` are unchanged, and a control-plane-only install (no Triton) keeps its OpenSearch-only wait.
@@ -121,8 +124,6 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - Region vectors no longer depend on a JPEG round trip, so CPU and GPU routes agree (#360).
 - Project delete leaves no crop-cache files behind (#359).
 
-### Security
-- Renaming a person no longer logs the name (#379).
 
 ## [0.6.0] - 2026-10-16
 
