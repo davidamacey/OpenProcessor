@@ -39,6 +39,8 @@ class ChunkOutcome:
     predicted: int = 0
     updated: int = 0
     failed: int = 0
+    request_failed_ids: list[str] = field(default_factory=list)
+    """Crops whose call never got an answer (as opposed to an answer with no usable class)."""
     unreadable: int = 0
     locked_suggest_only: int = 0
     items_written: int = 0
@@ -94,6 +96,7 @@ async def _classify(
         )
     out.predicted += len(preds)
     out.failed += sum(1 for p in preds if p.failure == 'request_failed')
+    out.request_failed_ids += [p.img_id for p in preds if p.failure == 'request_failed']
     updates, _proposals = updates_from_predictions(preds, ctx, set_cluster=False)
     locked = {cid for cid in updates if class_write_locked(sources.get(cid, {}))}
     writable = {cid: u for cid, u in updates.items() if cid not in locked}

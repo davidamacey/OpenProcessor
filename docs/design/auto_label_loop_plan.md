@@ -194,7 +194,10 @@ reported, never created), no holdout freeze.
 
 `dry_run` (response only) -> `queued` -> `running` <-> `paused` (audit or user) -> `completed` |
 `cancelled` | `failed`; a dead worker (stale heartbeat) shows `interrupted` until resumed.
-`stop_reason` on `completed`: `done`, `budget_crops`, `budget_requests`, `budget_time`.
+`stop_reason` on `completed`: `done`, `budget_crops`, `budget_requests`, `budget_time`. A node
+whose sampled crops all got a failed VLM call (not an answer with no usable class) is not
+decided: the loop ends `failed` with `stop_reason: vlm_failed` and the error, the node stays
+open, and that `failed` loop can be resumed.
 
 ### 5.2 Per node
 

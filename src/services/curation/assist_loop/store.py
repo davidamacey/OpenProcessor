@@ -273,6 +273,8 @@ def _apply(tree: LoopTree, event: dict[str, Any]) -> None:
         node.failed |= set(event.get('failed') or []) - set(answers)
         if event.get('rid') is not None:
             node.pending.pop(int(event['rid']), None)
+    elif kind == 'vlm_failed':
+        tree.node(event['path']).failed -= set(event.get('ids') or [])
     elif kind == 'decision':
         tree.node(event['path']).decision = event
     elif kind == 'children':

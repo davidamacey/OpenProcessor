@@ -112,7 +112,7 @@ async def cancel_assist_loop(loop_id: str) -> AssistLoopState:
 
 @router.post('/assist/loops/{loop_id}/resume', response_model=AssistLoopState)
 async def resume_assist_loop(loop_id: str) -> AssistLoopState:
-    """Queue an `interrupted`, `paused` or `cancelled` loop again; it continues from its
+    """Queue an `interrupted`, `paused` or `cancelled` loop (or a `failed` one with `stop_reason` `vlm_failed`) again; it continues from its
     event log. 409 `assist_loop_not_resumable` for any other status, `assist_loop_busy` while
     another loop is live."""
     job.resume_loop(loop_id)

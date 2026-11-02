@@ -64,8 +64,10 @@ unless a run produced the output.
    again. To undo the loop, `POST .../rollback` (a dry run unless `"dry_run": false`).
 
 `cancel` stops a loop after the requests in flight; `resume` continues an `interrupted`,
-`paused` or `cancelled` loop from its log. If the worker dies the loop reads `interrupted`
-until you resume it.
+`paused` or `cancelled` loop from its log. If the worker dies the loop reads
+`interrupted` until you resume it. A loop whose VLM stopped answering ends `failed` with
+`stop_reason: vlm_failed` and the error; it spends nothing more and writes nothing for that
+node, and (unlike other `failed` loops) it can be resumed: after the endpoint or model is fixed asks the node again.
 
 ## In the app
 

@@ -11,6 +11,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The auto-label loop no longer burns its budget when the VLM is down** (#286). A node whose sampled crops all got a failed VLM call was read as failing the gate and split, so the loop spent the whole crop budget with zero answers and ended `completed`. It now stops `failed` with `stop_reason: vlm_failed` and the error, leaves the node open, writes nothing and spends no more; that `failed` loop can be resumed once the endpoint works. The same applies to a top-up whose calls all fail and to an audit batch whose calls all fail (previously recorded as `ok`). An answer with no usable class is unchanged.
+
 ### Added
 
 - **A `small` GPU profile for 12 GB cards** (#42). The installer and `setup.sh` pick it for a Triton card with 12 to 15 GB free (`standard` is now 16 GB and up, `minimal` under 12 GB): all models, one instance each, max batch 16. It builds engines with the new small TensorRT target (2 GB workspace, engine max batch halved, floor 16). `./openprocessor models install|repair` take `--build-target default|small` and `--workspace GB`; `.env` keys `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`. `standard` is unchanged. See INSTALLATION.md, "12 GB cards".
