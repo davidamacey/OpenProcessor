@@ -31,7 +31,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build -- resolve every wheel into a relocatable --user tree
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS builder
+FROM python:3.14-slim-trixie@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS builder
 
 WORKDIR /build
 
@@ -69,7 +69,7 @@ RUN pip install --user --no-cache-dir --no-warn-script-location \
 # -----------------------------------------------------------------------------
 # Stage 2: runtime
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.14-slim-trixie@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8
 
 LABEL org.opencontainers.image.title="OpenProcessor Curation Trainer" \
       org.opencontainers.image.description="YOLO training service driven by the curation job-file protocol" \
