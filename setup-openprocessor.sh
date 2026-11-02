@@ -2164,9 +2164,9 @@ do_uninstall() {
     fi
 
     if [[ "$OP_PURGE_VOLUMES" == 1 ]]; then
-        dc down --remove-orphans -v || die "compose down -v failed"
+        dc --profile '*' down --remove-orphans -v || die "compose down -v failed"  # all profiles: opt-in containers too
     else
-        dc down --remove-orphans || die "compose down failed"
+        dc --profile '*' down --remove-orphans || die "compose down failed"
     fi
 
     local p

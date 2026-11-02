@@ -298,7 +298,11 @@ def test_uninstall_targets_the_installs_own_project(shimmed: Shimmed) -> None:
     result = shimmed.run(['--uninstall', '--unattended', '--dir', 'inst'])
     assert result.returncode == 0, result.stderr
     m = shimmed.mutating_docker_calls()
-    assert [ln for ln in m if ln.endswith('down --remove-orphans') and f' -p {PROJECT} ' in ln]
+    assert [
+        ln
+        for ln in m
+        if ln.endswith(' --profile * down --remove-orphans') and f' -p {PROJECT} ' in ln
+    ]
     assert not [ln for ln in m if ' -p openprocessor ' in ln]
     assert f'uninstalled project {PROJECT}' in result.stdout
 
@@ -366,7 +370,11 @@ def test_purge_data_deletes_only_inside_the_install(shimmed: Shimmed) -> None:
     assert (outside / 'keep.jpg').exists()
     assert f'volumes to delete: {PROJECT}_opensearch_data' in result.stdout
     assert f'keeping OP_SOURCE_ROOT_HOST ({outside.resolve()})' in result.stdout + result.stderr
-    assert [ln for ln in shimmed.mutating_docker_calls() if ln.endswith('down --remove-orphans -v')]
+    assert [
+        ln
+        for ln in shimmed.mutating_docker_calls()
+        if ln.endswith(' --profile * down --remove-orphans -v')
+    ]
     assert (inst / '.env').exists()
 
 
