@@ -135,3 +135,21 @@ def test_a_segmenter_outage_is_a_502_not_no_hits(env: dict[str, Any]) -> None:
     env['seg'].down = True
     r = env['client'].post(URL, json=_body())
     assert (r.status_code, r.json()['detail']['error']) == (502, 'segmenter_error')
+
+
+def test_decode_upload_rejects_an_image_over_the_pixel_cap_before_decoding() -> None:
+    """A small file can declare a huge canvas (decompression bomb): the header
+    size is checked against the same per-side cap other uploads use, before the
+    pixels are decoded."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    from src.services.curation.open_vocab_test_run import TrialImageError, decode_upload
+
+    buf = io.BytesIO()
+    Image.new('1', (17000, 17000)).save(buf, format='PNG')
+    assert buf.tell() < 12 * 1024 * 1024
+    with pytest.raises(TrialImageError, match='too large'):
+        decode_upload(base64.b64encode(buf.getvalue()).decode())
