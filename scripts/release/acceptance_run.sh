@@ -52,6 +52,8 @@ SLUG="acc-$(date +%s)"
 IMAGES_DIR=""
 IMAGE_COUNT=100
 VLM_CROPS=20
+VLM_ENDPOINT=""
+INSTALLER_ARGS=""
 CONFIRM_CROPS=40
 TRAIN_GPU="${ACC_TRAIN_GPU:-0}"
 TRAIN_EPOCHS=2
@@ -87,6 +89,8 @@ Options:
   --images-dir DIR       COCO (or any) JPEG/PNG directory for ingest
   --image-count N        images to ingest (default 100)
   --vlm-crops N          crops to VLM-label (default 20)
+  --vlm-endpoint NAME    VLM endpoint to activate for the vlm_label phase (default: `env` when the
+                         stack has one, else its only saved endpoint; an untested one is probed first)
   --confirm-crops N      crops to human-confirm into one class for training (default 40; trainer floor is 20)
   --train-gpu IDS        CUDA_VISIBLE_DEVICES for the trainer (default $ACC_TRAIN_GPU or 0)
   --train-epochs N       probe-profile epochs (default 2)
@@ -94,6 +98,9 @@ Options:
   --phase-timeout S      seconds for other long polls (default 900)
   --only a,b             run only these phases (they are then all required)
   --skip a,b             skip these phases
+  --installer-args "A.." extra arguments for the installer_rerun/repair/upgrade phases, e.g. for a stack
+                         installed from a local bundle: "--release-dir DIR --version vX.Y.Z --image-tag TAG"
+                         (without them the installer re-downloads the published release over the install)
   --vlm-switch-id ID     enable vlm_switch: `./openprocessor vlm use ID --yes`
   --vlm-switch-force     add --force to vlm use
   --upgrade-version vX   enable installer_upgrade (upgrade to vX, then --rollback)
@@ -121,6 +128,8 @@ while (($#)); do
         --images-dir) IMAGES_DIR="${2:?}"; shift 2 ;;
         --image-count) IMAGE_COUNT="${2:?}"; shift 2 ;;
         --vlm-crops) VLM_CROPS="${2:?}"; shift 2 ;;
+        --vlm-endpoint) VLM_ENDPOINT="${2:?}"; shift 2 ;;
+        --installer-args) INSTALLER_ARGS="${2:?}"; shift 2 ;;
         --confirm-crops) CONFIRM_CROPS="${2:?}"; shift 2 ;;
         --train-gpu) TRAIN_GPU="${2:?}"; shift 2 ;;
         --train-epochs) TRAIN_EPOCHS="${2:?}"; shift 2 ;;
@@ -166,6 +175,7 @@ PHASES_JSONL="$WORKDIR/phases.jsonl"
 : > "$PHASES_JSONL"
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 START_EPOCH="$(date +%s)"
+read -r -a INSTALLER_ARGS_ARR <<< "${INSTALLER_ARGS}"
 PROJECT_API="${API_PREFIX}/projects/${SLUG}"
 
 _ACC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

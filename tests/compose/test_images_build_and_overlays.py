@@ -18,12 +18,14 @@ from compose._helpers import COMPOSE_PATH, REPO_ROOT, _load_yaml, _services
 # than a dev checkout's live `git rev-parse HEAD` fallback.
 # =============================================================================
 
-_BUILD_SHA_SERVICES = ('api', 'curation-trainer', 'curation-evaluator')
+_BUILD_SHA_SERVICES = ('api', 'model-export', 'curation-trainer', 'curation-evaluator')
 
+# (Dockerfile, stage the published image is built to; None = the last stage)
 _BUILD_SHA_DOCKERFILES = (
-    REPO_ROOT / 'Dockerfile',
-    REPO_ROOT / 'docker' / 'trainer' / 'Dockerfile',
-    REPO_ROOT / 'docker' / 'evaluator' / 'Dockerfile',
+    (REPO_ROOT / 'Dockerfile', 'api'),
+    (REPO_ROOT / 'Dockerfile', 'export'),
+    (REPO_ROOT / 'Dockerfile', 'evaluator'),
+    (REPO_ROOT / 'docker' / 'trainer' / 'Dockerfile', None),
 )
 
 
@@ -44,11 +46,16 @@ def test_build_sha_passed_as_a_build_arg_on_core_services() -> None:
 
 
 def test_build_sha_baked_into_the_final_stage_of_every_dockerfile() -> None:
-    for path in _BUILD_SHA_DOCKERFILES:
+    for path, stage in _BUILD_SHA_DOCKERFILES:
         lines = path.read_text(encoding='utf-8').splitlines()
         from_indices = [i for i, line in enumerate(lines) if line.startswith('FROM ')]
         assert from_indices, f'{path}: no FROM instruction found'
-        tail = '\n'.join(lines[from_indices[-1] :])
+        if stage is None:
+            start, end = from_indices[-1], len(lines)
+        else:
+            start = next(i for i in from_indices if lines[i].endswith(f' AS {stage}'))
+            end = min((i for i in from_indices if i > start), default=len(lines))
+        tail = '\n'.join(lines[start:end])
         assert 'ARG OP_BUILD_SHA' in tail, f'{path}: missing ARG OP_BUILD_SHA after final FROM'
         assert 'ENV OP_BUILD_SHA=${OP_BUILD_SHA}' in tail, f'{path}: missing ENV OP_BUILD_SHA'
         assert 'org.opencontainers.image.revision=${OP_BUILD_SHA}' in tail, (
@@ -85,6 +92,8 @@ _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'curation-auto-label-worker': 'OP_API_IMAGE',
     'curation-assist-loop-worker': 'OP_API_IMAGE',
     'curation-cluster-refresh': 'OP_API_IMAGE',
+    'model-export': 'OP_EXPORT_IMAGE',
+    'model-export-worker': 'OP_EXPORT_IMAGE',
     'curation-evaluator': 'OP_EVALUATOR_IMAGE',
     'segmenter': 'OP_SEGMENTER_IMAGE',
     'curation-trainer': 'OP_TRAINER_IMAGE',
@@ -127,10 +136,14 @@ def test_dev_overlay_carries_every_build_block_and_source_mount() -> None:
         assert name in dev_services, f'{name} missing from docker-compose.dev.yml'
         assert 'build' in dev_services[name], f'{name} missing build: in docker-compose.dev.yml'
     api_mounts = [str(v) for v in dev_services['api'].get('volumes') or []]
-    for prefix in _FORBIDDEN_BASE_MOUNT_PREFIXES:
+    # ./export is mounted into the export image's service only: the API image has no export/.
+    for prefix in (p for p in _FORBIDDEN_BASE_MOUNT_PREFIXES if p != './export'):
         assert any(m.startswith(prefix + ':') for m in api_mounts), (
             f'docker-compose.dev.yml/api missing a mount for {prefix}'
         )
+    assert not any(m.startswith('./export:') for m in api_mounts)
+    export_mounts = [str(v) for v in dev_services['model-export'].get('volumes') or []]
+    assert any(m.startswith('./export:') for m in export_mounts)
 
 
 def test_every_custom_image_has_a_per_service_override_and_no_latest_fallback() -> None:

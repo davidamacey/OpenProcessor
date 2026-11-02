@@ -56,15 +56,34 @@ def _logical_lines(text: str) -> list[str]:
     return lines
 
 
-def _final_stage_copies(dockerfile_text: str) -> list[tuple[list[str], str]]:
-    """Return [(sources, absolute_dest)] for the COPYs of the final stage."""
+def _stage_name(from_args: str) -> str | None:
+    words = [w for w in from_args.split() if not w.startswith('--')]
+    return words[2] if len(words) == 3 and words[1].upper() == 'AS' else None
+
+
+def _final_stage_copies(
+    dockerfile_text: str, target: str | None = None
+) -> list[tuple[list[str], str]]:
+    """Return [(sources, absolute_dest)] for the COPYs of the final stage, or of the stage named
+    `target` (a `docker build --target` build ends there). A stage built `FROM` an earlier stage
+    starts in that stage's working directory."""
     copies: list[tuple[list[str], str]] = []
     workdir = '/'
+    workdirs: dict[str, str] = {}
+    name: str | None = None
+    found = target is None
     for line in _logical_lines(dockerfile_text):
         word, _, rest = line.partition(' ')
         word = word.upper()
         if word == 'FROM':
-            copies, workdir = [], '/'
+            if name is not None:
+                workdirs[name] = workdir
+            if target is not None:
+                if found:
+                    break
+                found = _stage_name(rest) == target
+            parent = next(w for w in rest.split() if not w.startswith('--'))
+            copies, workdir, name = [], workdirs.get(parent, '/'), _stage_name(rest)
         elif word == 'WORKDIR':
             workdir = posixpath.normpath(posixpath.join(workdir, rest.strip()))
         elif word == 'COPY':
@@ -76,13 +95,15 @@ def _final_stage_copies(dockerfile_text: str) -> list[tuple[list[str], str]]:
                 continue
             dest = posixpath.normpath(posixpath.join(workdir, args[-1]))
             copies.append((args[:-1], dest + ('/' if args[-1].endswith('/') else '')))
+    if not found:
+        raise ContextMismatchError(f'the Dockerfile has no stage {target!r}')
     return copies
 
 
 def _expected_and_roots(
-    dockerfile_text: str, context: str, tracked: set[str]
+    dockerfile_text: str, context: str, tracked: set[str], target: str | None = None
 ) -> tuple[set[str], set[str]]:
-    copies = _final_stage_copies(dockerfile_text)
+    copies = _final_stage_copies(dockerfile_text, target)
     prefix = '' if context in ('', '.') else context.rstrip('/') + '/'
     expected: set[str] = set()
     roots: set[str] = set()
@@ -116,9 +137,11 @@ def _expected_and_roots(
     return expected, roots
 
 
-def directory_copy_roots(dockerfile_text: str, context: str, tracked: set[str]) -> list[str]:
-    """In-image directories populated by a directory COPY in the final stage."""
-    return sorted(_expected_and_roots(dockerfile_text, context, tracked)[1])
+def directory_copy_roots(
+    dockerfile_text: str, context: str, tracked: set[str], target: str | None = None
+) -> list[str]:
+    """In-image directories populated by a directory COPY in the final (or target) stage."""
+    return sorted(_expected_and_roots(dockerfile_text, context, tracked, target)[1])
 
 
 def _pyc_has_tracked_source(path: str, expected: set[str]) -> bool:
@@ -131,10 +154,14 @@ def _pyc_has_tracked_source(path: str, expected: set[str]) -> bool:
 
 
 def untracked_files(
-    dockerfile_text: str, context: str, tracked: set[str], listing: set[str] | list[str]
+    dockerfile_text: str,
+    context: str,
+    tracked: set[str],
+    listing: set[str] | list[str],
+    target: str | None = None,
 ) -> list[str]:
     """Files of `listing` under a directory-COPY destination that git does not track."""
-    expected, roots = _expected_and_roots(dockerfile_text, context, tracked)
+    expected, roots = _expected_and_roots(dockerfile_text, context, tracked, target)
     bad: list[str] = []
     for path in sorted(set(listing)):
         if not any(path.startswith(f'{r}/') for r in roots) or path in expected:
@@ -153,10 +180,10 @@ class ContextMismatchError(ValueError):
     """A directory COPY source has no tracked files: --context is not repo-relative."""
 
 
-def model_roots(dockerfile_text: str) -> list[str]:
+def model_roots(dockerfile_text: str, target: str | None = None) -> list[str]:
     """Model-repository roots: the seed dir plus every final-stage `COPY models/` destination."""
     roots = {SEED_ROOT}
-    for sources, dest in _final_stage_copies(dockerfile_text):
+    for sources, dest in _final_stage_copies(dockerfile_text, target):
         if any(posixpath.basename(posixpath.normpath(src)) == 'models' for src in sources):
             roots.add(dest.rstrip('/'))
     return sorted(roots)
@@ -235,6 +262,7 @@ def _audit() -> int:
     ap.add_argument('--context', required=True, help='build context dir, relative to the repo')
     ap.add_argument('--repo', required=True)
     ap.add_argument('--rev', required=True)
+    ap.add_argument('--target', help='the Dockerfile stage the image was built to (--target)')
     ap.add_argument('--docker-bin', default='docker')
     ap.add_argument('--allowlist', required=True)
     args = ap.parse_args()
@@ -245,11 +273,11 @@ def _audit() -> int:
     text = Path(args.dockerfile).read_text()
     problems: list[str] = []
 
-    for root in directory_copy_roots(text, args.context, tracked):
+    for root in directory_copy_roots(text, args.context, tracked, args.target):
         listing = _image_listing(args.docker_bin, args.image, f'{root} -type f')
         problems += [
             f'untracked in image (not in git at {args.rev}): {p}'
-            for p in untracked_files(text, args.context, tracked, listing)
+            for p in untracked_files(text, args.context, tracked, listing, args.target)
         ]
 
     everything = _image_listing(
@@ -267,7 +295,7 @@ def _audit() -> int:
         )
     )
     allowlist = load_allowlist(Path(args.allowlist))
-    forbidden = forbidden_files(everything, allowlist, large, model_roots(text))
+    forbidden = forbidden_files(everything, allowlist, large, model_roots(text, args.target))
     problems += [f'forbidden model artifact in image: {p}' for p in forbidden]
 
     for p in problems:

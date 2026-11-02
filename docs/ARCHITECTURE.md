@@ -83,6 +83,8 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | `curation-auto-label-worker` | `curation` | | Drives the auto-label job protocol |
 | `curation-assist-loop-worker` | `curation` | | Runs auto-label loops (cluster-sampled VLM labeling), one per project |
 | `curation-cluster-refresh` | `curation` | | Schedules the residual-clustering retrain as an auto-label job, when ingest is quiet |
+| `model-export` | `setup` | | One-shot engine-build toolchain (TensorRT, ModelOpt, the export scripts and the model-repo seed): the `export` target of the root `Dockerfile`, which shares its runtime layers with `api`. `models install`, `export` and the `make` export targets run it |
+| `model-export-worker` | `export` | | The same image as a long-running worker for `POST /models/upload` and `POST /models/{model_name}/export`: the API queues a job file, the worker builds the engine and loads it into Triton (503 from the routes while it is down) |
 | `curation-evaluator` | `evaluator` | | Runs bake-off job specs |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt, `docker/segmenter/` |
 | `curation-trainer` | `training` | | Runs training jobs from `job.json` files, `docker/trainer/` |

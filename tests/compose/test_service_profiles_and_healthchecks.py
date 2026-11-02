@@ -214,3 +214,21 @@ def test_evaluator_is_on_demand_not_in_the_curation_profile() -> None:
     """It reserves a GPU and has no restart policy, so `--profile curation up -d` must skip it (#285)."""
     profiles = _services()['curation-evaluator'].get('profiles') or []
     assert profiles == ['evaluator']
+
+
+def test_model_export_services_are_opt_in_and_share_the_api_jobs_volume() -> None:
+    """The export image (~15 GB) never starts on a bare `up`: model-export is the one-shot
+    toolchain container (`run --rm`, profile setup); model-export-worker serves the API's
+    /models/upload and /models/{name}/export through job files on the shared jobs volume."""
+    services = _services()
+    one_shot, worker = services['model-export'], services['model-export-worker']
+    assert one_shot['profiles'] == ['setup']
+    assert worker['profiles'] == ['export']
+    assert one_shot['restart'] == 'no'
+    assert not one_shot.get('ports')
+    assert not worker.get('ports')
+    assert one_shot['image'] == worker['image']
+    assert 'openprocessor-jobs:/jobs' in worker['volumes']
+    assert 'openprocessor-jobs:/jobs' in services['api']['volumes']
+    assert worker['command'][:3] == ['python', '-m', 'export.export_worker']
+    assert 'healthcheck' in worker

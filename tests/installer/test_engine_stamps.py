@@ -276,3 +276,34 @@ def test_a_missing_pe_stamp_is_never_adopted(tmp_path: Path, bash) -> None:
     out = bash(prelude + 'model_setup_run_group pe').stdout
     assert 'engine stamp is stale (no build stamp' in out
     assert (tmp_path / 'rebuilt').exists()
+
+
+def test_a_brace_style_config_input_is_adopted_not_rebuilt(tmp_path: Path, bash) -> None:
+    # the shipped arcface config writes `input {` rather than `input [`
+    prelude = _unstamped(tmp_path, 'faces')
+    for model in ENGINES['faces']:
+        cfg = tmp_path / 'models' / model / 'config.pbtxt'
+        cfg.write_text(
+            'input {\n  name: "input"\n  data_type: TYPE_FP32\n  dims: [3, 112, 112]\n}\n'
+        )
+    out = bash(prelude + 'model_setup_run_group faces').stdout
+    assert 'up to date, skipped' in out
+    assert not (tmp_path / 'rebuilt').exists()
+    assert 'input=fp32' in _rows(tmp_path)['arcface_w600k_r50'][6]
+
+
+@pytest.mark.parametrize('group', ['mobileclip', 'faces', 'ocr'])
+def test_every_engine_of_a_group_is_stamped_when_docker_reads_stdin(
+    tmp_path: Path, bash, group: str
+) -> None:
+    # `docker compose run` forwards stdin even with -T: the stamp loop must not lose its
+    # remaining engines to the TensorRT version probe
+    _put_onnx(tmp_path, group)
+    (tmp_path / '.install').mkdir()
+    out = bash(
+        f'source {LIB}; OP_DIR="{tmp_path}"; _ms_compute_cap() {{ echo 8.6; }}; '
+        'dc() { cat > /dev/null; echo "TensorRT v110100"; }; '
+        f'_ms_record_group_stamps {group}; echo "rc=$?"'
+    )
+    assert 'rc=0' in out.stdout
+    assert set(_rows(tmp_path)) == set(ENGINES[group])

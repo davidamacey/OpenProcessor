@@ -12,7 +12,7 @@ Sources:
 
 Usage:
     # From api container:
-    docker compose exec api python /app/export/download_face_models.py
+    docker compose run --rm model-export python /app/export/download_face_models.py
 
     # Or from host with venv:
     python export/download_face_models.py

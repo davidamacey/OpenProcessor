@@ -32,13 +32,8 @@ dependencies = [
     "ultralytics>=8.4.82,<8.5",
     "tritonclient[all]",
     "onnx>=1.12.0,<1.22",
-    "onnxslim>=0.1.71",
-    "onnxsim>=0.4.33",
-    "onnxscript",
-    "onnxruntime-gpu",
-    "onnx-graphsurgeon",
-    "tensorrt-cu13==11.1.0.106",
-    "nvidia-modelopt[onnx]",
+    "onnxruntime-gpu>=1.24.2,<1.25",
+    "cupy-cuda12x>=14.2,<15",
     "torch",
     "torchvision",
     "opencv-python",
@@ -79,6 +74,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The engine-build toolchain: image-only (requirements-export.txt), installed on top of the
+# runtime set into the export image.
+export = [
+    "tensorrt-cu13==11.1.0.106",
+    "nvidia-modelopt[onnx]",
+    "onnx-graphsurgeon",
+    "onnxsim>=0.4.33",
+    "onnxslim>=0.1.71",
+    "onnxscript",
+]
 # Install with `pip install --no-deps` (see Dockerfile): its own requirements
 # exact-pin research packages that conflict with open-clip-torch>=3.2.
 pe = [

@@ -9,7 +9,7 @@
 # job.json, and deployment paths arrive as OP_* env vars (env.template).
 #
 # Multi-stage + slim base + non-root, matching this repo's other images
-# (./Dockerfile, docker/evaluator/Dockerfile). Torch comes from the PyTorch
+# (./Dockerfile, which holds the api, export and evaluator targets). Torch comes from the PyTorch
 # CUDA wheel index, which bundles the CUDA runtime libraries -- so this stays
 # on a python:*-slim base rather than a multi-GB nvidia/cuda one. The host
 # still needs an NVIDIA driver and the container toolkit; GPU access is
@@ -56,13 +56,15 @@ ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
 
 COPY docker/trainer/requirements.txt requirements.txt
 
-# hadolint ignore=DL3013
-RUN pip install --user --no-cache-dir --upgrade pip \
-    && pip install --user --no-cache-dir --no-warn-script-location \
+# The base image's own pip does the install; no pip is copied into the runtime stage.
+RUN pip install --user --no-cache-dir --no-warn-script-location \
         --extra-index-url "${TORCH_CUDA_INDEX}" \
         -r requirements.txt \
     && pip install --user --no-cache-dir --no-warn-script-location \
-        "ultralytics @ git+https://github.com/ultralytics/ultralytics.git@${ULTRALYTICS_SHA}"
+        "ultralytics @ git+https://github.com/ultralytics/ultralytics.git@${ULTRALYTICS_SHA}" \
+    && rm -rf /root/.local/lib/python3.12/site-packages/pip \
+        /root/.local/lib/python3.12/site-packages/pip-*.dist-info \
+        /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.12
 
 # -----------------------------------------------------------------------------
 # Stage 2: runtime
@@ -74,20 +76,6 @@ LABEL org.opencontainers.image.title="OpenProcessor Curation Trainer" \
       org.opencontainers.image.vendor="OpenProcessor" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
-
-# Build identity: the commit this trainer image was built from. Read by
-# job_manifest.build_lineage() as code_versions.trainer_sha (preferred over
-# the API's submit-time trainer_image_revision observation, since this is
-# the image actually running the code) -- see docker-compose.yml build.args.
-ARG OP_BUILD_SHA=""
-ENV OP_BUILD_SHA=${OP_BUILD_SHA}
-LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
-
-ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
-# Promoted from ARG to ENV so it is readable at *runtime*
-# (`os.environ['ULTRALYTICS_SHA']`) and lands in each run's manifest under
-# code_versions.ultralytics_sha. An ARG alone only exists at build time.
-ENV ULTRALYTICS_SHA=${ULTRALYTICS_SHA}
 
 # Runtime-only system packages: cv2/Pillow image libs, curl+jq for probes,
 # procps for the healthcheck's pgrep.
@@ -101,6 +89,13 @@ RUN apt-get update && apt-get upgrade -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# No package manager in the runtime image (Trivy flags the vendored libraries of even the
+# newest pip, and nothing here installs packages at run time). The builder's user-site copy is
+# stripped in the builder stage.
+RUN rm -rf /usr/local/lib/python3.12/site-packages/pip \
+        /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
+        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
 
 # Non-root user, uid 1000 with the video group -- same as this repo's other
 # images so bind-mounted volumes keep consistent ownership on the host.
@@ -138,3 +133,17 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
 
 ENTRYPOINT ["python", "-m", "trainer"]
 CMD ["--watch", "/jobs"]
+
+# Build identity, last so a new commit rewrites only metadata and never a dependency layer.
+# Read by job_manifest.build_lineage() as code_versions.trainer_sha (preferred over the API's
+# submit-time trainer_image_revision observation, since this is the image actually running the
+# code) -- see docker-compose.yml build.args.
+ARG OP_BUILD_SHA=""
+ENV OP_BUILD_SHA=${OP_BUILD_SHA}
+LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
+
+ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
+# Promoted from ARG to ENV so it is readable at *runtime*
+# (`os.environ['ULTRALYTICS_SHA']`) and lands in each run's manifest under
+# code_versions.ultralytics_sha. An ARG alone only exists at build time.
+ENV ULTRALYTICS_SHA=${ULTRALYTICS_SHA}

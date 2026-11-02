@@ -102,16 +102,9 @@ download_models() {
 
     # Fall back to Docker container if host .venv didn't work
     if [ "$download_ok" = false ]; then
-        if check_container "api"; then
-            log_info "Using running api container for download..."
-            if dc exec -T api python /app/export/download_paddleocr.py; then
-                download_ok=true
-            fi
-        else
-            log_info "Using temporary api container for download..."
-            if dc run --rm --no-deps -T api python /app/export/download_paddleocr.py; then
-                download_ok=true
-            fi
+        log_info "Using a temporary model-export container for download..."
+        if dc run --rm --no-deps -T model-export python /app/export/download_paddleocr.py; then
+            download_ok=true
         fi
     fi
 

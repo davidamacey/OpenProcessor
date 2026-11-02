@@ -62,7 +62,7 @@ fi
 # shellcheck source=../lib/image_keys.sh
 source "$REPO_ROOT/scripts/lib/image_keys.sh"
 
-# service_key -> "dockerfile|build_context|image_name", from the shared table.
+# service_key -> "dockerfile|build_context|image_name|target", from the shared table.
 # image_name is the repo-local part; the pushed tag is
 # "${OP_IMAGE_NAMESPACE}/${image_name}:${VERSION}".
 declare -A IMAGE_SPECS=()
@@ -73,7 +73,7 @@ for _key in $(image_keys build); do
     [[ "$_key" == segmenter ]] && _ctx="docker/segmenter"
     # The Cropwright frontend is its own build context (frontend/), like the segmenter.
     [[ "$_key" == cropwright ]] && _ctx="frontend"
-    IMAGE_SPECS[$_key]="$(image_key_field "$_key" dockerfile)|${_ctx}|$(image_key_field "$_key" image)"
+    IMAGE_SPECS[$_key]="$(image_key_field "$_key" dockerfile)|${_ctx}|$(image_key_field "$_key" image)|$(image_key_field "$_key" target)"
 done
 ALL_SERVICES="$(image_keys build | tr '\n' ' ')"
 THIRD_PARTY_KEYS="$(image_keys third | tr '\n' ' ')"
@@ -86,20 +86,25 @@ VERSION_OVERRIDE=""
 ALLOW_DIRTY=false
 LOCAL_TAG_SUFFIX=""
 BUILD_REV="HEAD"
+SCAN_SEVERITY="CRITICAL"   # the gate
+REPORT_DIR=""
 
 usage() {
     cat >&2 <<'EOF'
 Usage: build_and_publish.sh (--dry-run|--push) [--only svc1,svc2] [--version vX.Y.Z]
                              [--namespace NAME] [--allow-dirty] [--local-tag-suffix SUF] [--rev REV]
+                             [--scan-severity LIST] [--report-dir DIR]
 
   --dry-run           build + scan every selected image, never push
   --push              build + scan + push, resolve third-party digests, write images.lock
-  --only LIST         comma-separated subset of: api,triton,evaluator,segmenter,trainer
+  --only LIST         comma-separated subset of: api,export,evaluator,triton,segmenter,trainer,cropwright
   --version vX.Y.Z    override the VERSION file (must equal it unless --allow-dirty)
   --namespace NAME    override OP_IMAGE_NAMESPACE (default: davidamacey)
   --allow-dirty       skip the clean-worktree / VERSION-tag gate (local testing only)
   --rev REV           committed revision to build from (default HEAD); never the working tree
   --local-tag-suffix  append -SUF to every local tag, for a throwaway proof build
+  --scan-severity L   Trivy severities whose fixable findings fail the gate (default CRITICAL; --push needs CRITICAL)
+  --report-dir DIR    also write a CRITICAL,HIGH Trivy JSON report per image (never gates)
 EOF
 }
 
@@ -115,12 +120,19 @@ while (( $# > 0 )); do
         --allow-dirty) ALLOW_DIRTY=true; shift ;;
         --rev) BUILD_REV="$2"; shift 2 ;;
         --local-tag-suffix) LOCAL_TAG_SUFFIX="$2"; shift 2 ;;
+        --scan-severity) SCAN_SEVERITY="$2"; shift 2 ;;
+        --report-dir) REPORT_DIR="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) err "unknown option: $1"; usage; exit "$EXIT_MISUSE" ;;
     esac
 done
 
 [[ -n "$MODE" ]] || { err "one of --dry-run or --push is required"; exit "$EXIT_MISUSE"; }
+# --scan-severity may widen the gate for a push, never drop CRITICAL from it.
+if [[ "$MODE" == push && ",${SCAN_SEVERITY}," != *",CRITICAL,"* ]]; then
+    err "--push needs CRITICAL in --scan-severity (got '$SCAN_SEVERITY')"
+    exit "$EXIT_MISUSE"
+fi
 
 if [[ -n "$ONLY" ]]; then
     IFS=',' read -r -a SERVICES <<< "$ONLY"
@@ -224,7 +236,7 @@ build_trivy_ignorefile() {
 
 build_image() {
     local svc="$1"
-    IFS='|' read -r dockerfile context image_name <<< "${IMAGE_SPECS[$svc]}"
+    IFS='|' read -r dockerfile context image_name target <<< "${IMAGE_SPECS[$svc]}"
     local repo="${OP_IMAGE_NAMESPACE}/${image_name}"
     local version_tag="${repo}:${VERSION}${LOCAL_TAG_SUFFIX}"
     local latest_tag="${repo}:latest${LOCAL_TAG_SUFFIX}"
@@ -234,9 +246,13 @@ build_image() {
     local -a build_args=(--build-arg "OP_BUILD_SHA=${REVISION}")
     [[ "$svc" == cropwright ]] && build_args=(--build-arg "VERSION=${VERSION}" --build-arg "REVISION=${REVISION}")
 
-    log "building $svc -> $version_tag (cache on, $dockerfile)"
+    local -a target_args=()
+    [[ -n "$target" ]] && target_args=(--target "$target")
+
+    log "building $svc -> $version_tag (cache on, $dockerfile${target:+ target $target})"
     "$DOCKER_BIN" build \
         --file "$EXPORT_DIR/$dockerfile" \
+        "${target_args[@]}" \
         --tag "$version_tag" \
         --tag "$latest_tag" \
         "${build_args[@]}" \
@@ -252,8 +268,10 @@ build_image() {
 # audit_image SVC TAG: the files inside the built image must be tracked in git at BUILD_COMMIT
 # and carry no model artifacts (third guard behind the git-tree context and .dockerignore).
 audit_image() {
-    local svc="$1" tag="$2" dockerfile context
-    IFS='|' read -r dockerfile context _ <<< "${IMAGE_SPECS[$svc]}"
+    local svc="$1" tag="$2" dockerfile context target
+    IFS='|' read -r dockerfile context _ target <<< "${IMAGE_SPECS[$svc]}"
+    local -a target_args=()
+    [[ -n "$target" ]] && target_args=(--target "$target")
     log "auditing $svc ($tag) against the committed tree"
     python3 "$SCRIPT_DIR/audit_image_files.py" \
         --image "$tag" \
@@ -261,6 +279,7 @@ audit_image() {
         --context "$context" \
         --repo "$REPO_ROOT" \
         --rev "$BUILD_COMMIT" \
+        "${target_args[@]}" \
         --docker-bin "$DOCKER_BIN" \
         --allowlist "$SCRIPT_DIR/image_audit_allowlist.txt" || { err "image audit failed for $svc; nothing will be pushed"; return 1; }
     ok "audit clean: $svc"
@@ -282,22 +301,41 @@ scan_image() {
     # --exit-code 10 is reserved for "findings": any other non-zero exit
     # (timeout, DB download failure, ...) is a scanner error, not a finding.
     # Vuln scanner only: the secret scanner walks the baked model seed.
-    log "scanning $svc ($tag) -- fail on CRITICAL (timeout $TRIVY_TIMEOUT)"
+    log "scanning $svc ($tag) -- fail on a fixable $SCAN_SEVERITY (timeout $TRIVY_TIMEOUT)"
     local rc=0
-    "$TRIVY_BIN" image --scanners vuln --severity CRITICAL --exit-code 10 \
+    # --ignore-unfixed, as in the CI scan: the gate blocks what a rebuild or a pin can fix. A
+    # finding with no upstream fix yet cannot be acted on here; the report below still lists it.
+    "$TRIVY_BIN" image --scanners vuln --severity "$SCAN_SEVERITY" --ignore-unfixed --exit-code 10 \
         --timeout "$TRIVY_TIMEOUT" --ignorefile "$ignorefile" "$tag" || rc=$?
     case "$rc" in
-        0) ok "$tag -- no un-allowlisted CRITICAL findings"; return 0 ;;
-        10) err "$tag has a CRITICAL finding not in $ALLOWLIST_FILE"; return 1 ;;
+        0) ok "$tag -- no fixable un-allowlisted $SCAN_SEVERITY findings"; return 0 ;;
+        10) err "$tag has a fixable $SCAN_SEVERITY finding not in $ALLOWLIST_FILE"; return 1 ;;
         *) err "$tag: Trivy scan ERROR (exit $rc, e.g. timeout or DB failure) -- the image was NOT assessed; raise TRIVY_TIMEOUT or fix the scanner"; return 1 ;;
     esac
+}
+
+# report_image SVC TAG: CRITICAL+HIGH JSON report (fixed and unfixed) for the record; never gates.
+report_image() {
+    local svc="$1" tag="$2" image_name
+    [[ -n "$REPORT_DIR" && "$HAVE_TRIVY" == true ]] || return 0
+    IFS='|' read -r _ _ image_name _ <<< "${IMAGE_SPECS[$svc]}"
+    mkdir -p "$REPORT_DIR"
+    local ignorefile
+    ignorefile="$(mktemp)"
+    trap 'rm -f "$ignorefile"' RETURN
+    build_trivy_ignorefile "$ignorefile" || { warn "no report for $svc: the allowlist did not parse"; return 0; }
+    log "writing the CRITICAL,HIGH report for $svc -> $REPORT_DIR/${image_name}.json"
+    "$TRIVY_BIN" image --scanners vuln --severity CRITICAL,HIGH \
+        --timeout "$TRIVY_TIMEOUT" --ignorefile "$ignorefile" --format json \
+        -o "$REPORT_DIR/${image_name}.json" "$tag" \
+        || warn "report for $svc failed (the gate is unaffected)"
 }
 
 # ── push + digest capture ───────────────────────────────────────────────────
 
 push_image() {
     local svc="$1" tag="$2"
-    IFS='|' read -r _ _ image_name <<< "${IMAGE_SPECS[$svc]}"
+    IFS='|' read -r _ _ image_name _ <<< "${IMAGE_SPECS[$svc]}"
     local repo="${OP_IMAGE_NAMESPACE}/${image_name}"
     local latest_tag="${repo}:latest"
 
@@ -333,7 +371,7 @@ write_images_lock() {
     local key
     : > "$LOCK_FILE"
     for svc in "${SERVICES[@]}"; do
-        IFS='|' read -r _ _ image_name <<< "${IMAGE_SPECS[$svc]}"
+        IFS='|' read -r _ _ image_name _ <<< "${IMAGE_SPECS[$svc]}"
         echo "${svc}=${OP_IMAGE_NAMESPACE}/${image_name}:${VERSION}@${digests_ref[$svc]}" >> "$LOCK_FILE"
     done
     for key in $THIRD_PARTY_KEYS; do
@@ -366,6 +404,7 @@ $FAILED && { err "one or more builds failed"; exit "$EXIT_GATE"; }
 
 for svc in "${SERVICES[@]}"; do
     scan_image "$svc" "${BUILT_TAGS[$svc]}" || FAILED=true
+    report_image "$svc" "${BUILT_TAGS[$svc]}"
 done
 
 $FAILED && { err "one or more images failed the Trivy gate"; exit "$EXIT_GATE"; }

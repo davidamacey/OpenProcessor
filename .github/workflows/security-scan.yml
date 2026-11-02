@@ -41,27 +41,71 @@ jobs:
         with:
           sarif_file: trivy-fs.sarif
 
-  api-image-scan:
-    name: API image scan
+  # Every published image is built and scanned, one image per job so a hosted runner's disk
+  # fits it; the free-disk step reclaims ~30 GB of preinstalled toolchains first and each job's
+  # image is removed after its scan. Sizes are in docs/image_size_audit.md.
+  image-scan:
+    name: Image scan (${{ matrix.image }})
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            file: Dockerfile
+            context: .
+            target: api
+          - image: export
+            file: Dockerfile
+            context: .
+            target: export
+          - image: evaluator
+            file: Dockerfile
+            context: .
+            target: evaluator
+          - image: trainer
+            file: docker/trainer/Dockerfile
+            context: .
+            target: ''
+          - image: segmenter
+            file: docker/segmenter/Dockerfile
+            context: docker/segmenter
+            target: ''
+          - image: cropwright
+            file: frontend/Dockerfile
+            context: frontend
+            target: ''
+          # ~32 GB: the Triton NGC base plus the TensorRT pin layer. Needs the free-disk step.
+          - image: triton
+            file: Dockerfile.triton
+            context: .
+            target: ''
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build API image
-        run: docker build -t openprocessor-api:scan -f Dockerfile .
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Build image
+        env:
+          TARGET: ${{ matrix.target }}
+        run: >
+          docker build ${TARGET:+--target "$TARGET"}
+          -t openprocessor-scan:${{ matrix.image }}
+          -f ${{ matrix.file }} ${{ matrix.context }}
 
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: openprocessor-api:scan
+          image-ref: openprocessor-scan:${{ matrix.image }}
           severity: CRITICAL,HIGH
           exit-code: '1'
           ignore-unfixed: true
           # Same owner-accepted CVEs (with reasons) the release gate honours.
           trivyignores: scripts/release/trivy-allowlist.txt
-          # ~19 GB image: default 5m analysis deadline is far too short
+          # Multi-GB images: the default 5m analysis deadline is far too short
           timeout: 30m
-
-  # The Triton image is ~20 GB (NGC base) — too heavy for hosted runners'
-  # disk on every PR. It is scanned locally via `make scan-triton` before
-  # any Docker Hub publish instead.

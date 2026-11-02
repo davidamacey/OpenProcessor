@@ -23,7 +23,7 @@ Key steps:
 
 Usage:
     # From api container:
-    docker compose exec api python /app/export/export_scrfd.py
+    docker compose run --rm model-export python /app/export/export_scrfd.py
 
     # From host with venv:
     python export/export_scrfd.py

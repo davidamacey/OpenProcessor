@@ -10,6 +10,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -104,8 +105,12 @@ def test_install_performs_every_step_in_order(shimmed: Shimmed) -> None:
     result = install(shimmed)
     assert result.returncode == 0, result.stderr[-3000:]
     assert f'OpenProcessor {RELEASE} is installed and healthy' in result.stdout
+    # the export image stays (re-exports need it); the summary says how to reclaim its space
+    assert re.search(r'docker image rm \S*openprocessor-export\S*', result.stdout)
     m = shimmed.mutating_docker_calls()
     pull = index_of(m, 'docker pull davidamacey/openprocessor-triton@sha256:')
+    # the export image is pulled (and digest-verified) up front, not on the first `run`
+    index_of(m, 'docker pull davidamacey/openprocessor-export@sha256:')
     probe = index_of(m, 'docker run --rm --gpus device=0 --entrypoint nvidia-smi')
     triton = index_of(m, ' up -d triton-server')
     preflight = index_of(m, 'python -m export.preflight')
@@ -181,7 +186,7 @@ def test_no_start_starts_nothing(shimmed: Shimmed) -> None:
 def test_image_tag_mode_runs_local_images_without_pulling(shimmed: Shimmed) -> None:
     images = shimmed.state / 'images'
     images.mkdir()
-    for name in ('openprocessor', 'openprocessor-triton'):
+    for name in ('openprocessor', 'openprocessor-export', 'openprocessor-triton'):
         (images / f'opinst_{name}_localtest').write_text(f'opinst/{name}@sha256:{"0" * 64}\n')
     result = install(shimmed, '--image-tag', 'localtest', OP_IMAGE_REPO='opinst')
     assert result.returncode == 0, result.stderr[-2000:]
@@ -293,7 +298,11 @@ def test_uninstall_targets_the_installs_own_project(shimmed: Shimmed) -> None:
     result = shimmed.run(['--uninstall', '--unattended', '--dir', 'inst'])
     assert result.returncode == 0, result.stderr
     m = shimmed.mutating_docker_calls()
-    assert [ln for ln in m if ln.endswith('down --remove-orphans') and f' -p {PROJECT} ' in ln]
+    assert [
+        ln
+        for ln in m
+        if ln.endswith(' --profile * down --remove-orphans') and f' -p {PROJECT} ' in ln
+    ]
     assert not [ln for ln in m if ' -p openprocessor ' in ln]
     assert f'uninstalled project {PROJECT}' in result.stdout
 
@@ -361,7 +370,11 @@ def test_purge_data_deletes_only_inside_the_install(shimmed: Shimmed) -> None:
     assert (outside / 'keep.jpg').exists()
     assert f'volumes to delete: {PROJECT}_opensearch_data' in result.stdout
     assert f'keeping OP_SOURCE_ROOT_HOST ({outside.resolve()})' in result.stdout + result.stderr
-    assert [ln for ln in shimmed.mutating_docker_calls() if ln.endswith('down --remove-orphans -v')]
+    assert [
+        ln
+        for ln in shimmed.mutating_docker_calls()
+        if ln.endswith(' --profile * down --remove-orphans -v')
+    ]
     assert (inst / '.env').exists()
 
 
@@ -460,7 +473,7 @@ def test_local_release_dir_and_local_image_tags_install_end_to_end(shimmed: Shim
     # local-only tags. Nothing is fetched from GitHub or Docker Hub.
     images = shimmed.state / 'images'
     images.mkdir()
-    for name in ('openprocessor', 'openprocessor-triton'):
+    for name in ('openprocessor', 'openprocessor-export', 'openprocessor-triton'):
         (images / f'opinst_{name}_localtest').write_text(f'opinst/{name}@sha256:{"0" * 64}\n')
     pinned = f'opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}'
     (images / pinned.replace('/', '_').replace(':', '_').replace('@', '_')).write_text(
@@ -546,7 +559,11 @@ def test_third_party_images_are_pinned_and_verified(shimmed: Shimmed) -> None:
     # OpenSearch image is pulled, and its digest is checked like ours.
     images = shimmed.state / 'images'
     images.mkdir()
-    for key, name in (('api', 'openprocessor'), ('triton', 'openprocessor-triton')):
+    for key, name in (
+        ('api', 'openprocessor'),
+        ('export', 'openprocessor-export'),
+        ('triton', 'openprocessor-triton'),
+    ):
         ref = f'davidamacey/{name}@{fake_digest(key)}'
         (images / ref.replace('/', '_').replace(':', '_').replace('@', '_')).write_text(
             f'davidamacey/{name}@{fake_digest(key)}\n'

@@ -36,7 +36,7 @@ scripts/release/acceptance_run.sh \
 
 Useful flags: `--only a,b` and `--skip a,b` (see `--list` for phase names),
 `--train-gpu`, `--control-plane-only`, `--triton-metrics-url <url>`,
-`--decode-fallback-max <percent>`, `--label-ops-crops <n>`, `--vlm-switch-id <id>`, `--upgrade-version vX.Y.Z`, `--strict`.
+`--decode-fallback-max <percent>`, `--label-ops-crops <n>`, `--vlm-endpoint <name>` (the endpoint the vlm_label phase activates; default `env`, else the stack's only saved endpoint), `--installer-args "<flags>"` (flags added to the installer_rerun, installer_repair and installer_upgrade calls; a stack installed from a local bundle needs `--release-dir`, `--version` and `--image-tag` or the installer re-downloads the published release), `--vlm-switch-id <id>`, `--upgrade-version vX.Y.Z`, `--strict`.
 The JSON report records, per phase, pass/fail/skip, seconds and evidence; the exit
 status is non-zero when a required phase fails. A cleanup trap always removes the
 throwaway project and any model the run promoted.

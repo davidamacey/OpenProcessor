@@ -260,7 +260,7 @@ directory created. Run `./openprocessor help` for the list.
 | `faces purge [--dry-run] [--yes]` | report or delete every stored face record, person id and name, and the face FAISS files; `--yes` requires `OP_FACES_ENABLED=false` first (see [SECURITY.md](SECURITY.md#privacy-face-data)) |
 | `export <model>` / `download <model>` | export to TensorRT / download weights. Targets include `all`, `essential`, `status`; `export` also takes `yolo`, `scrfd`, `arcface`, `clip-image`, `clip-text`, `ocr`; `download` also takes `ocr` |
 | `curation [up\|down\|logs\|status]` | start, stop, follow or list the curation workers (`status` is the default) |
-| `sample coco [--full]` | fetch the public COCO sample into `data/samples/` using the API image |
+| `sample coco [--full]` | fetch the public COCO sample into `data/samples/` using the export image |
 | `config show` | print `.env` with every token, key, secret and password redacted |
 | `gpu plan` | print the GPU keys from `.env`, then where the PE image encoder runs and whether this host can honour it (see [Spreading the PE encoder over GPUs](#spreading-the-pe-encoder-over-gpus)) |
 | `vlm ...` | local VLM catalog and switching, see [Choosing a VLM](#choosing-a-vlm) |
@@ -332,6 +332,15 @@ Run these from the install directory.
   updates the image pins, re-runs the model groups that need it, restarts and
   checks health. Changing version asks once (`--yes` to skip the prompt). A
   re-run with no `--tiers` keeps the installed tiers.
+- **Upgrading from a release with the single API image (0.6.x and earlier)**: the
+  model export toolchain moved out of the `openprocessor` image into the new
+  `openprocessor-export` image. The upgrade pulls and digest-verifies it,
+  `OP_EXPORT_IMAGE` appears in `.env`, and `docker compose exec api python
+  /app/export/...` no longer works: use `./openprocessor models install|repair`,
+  `./openprocessor export <model>` or `docker compose run --rm model-export
+  python /app/export/...`. Engines built before stay valid (same TensorRT, same
+  Triton image). The upgrade does not remove the old images; `docker image rm`
+  the previous `openprocessor*` tags to reclaim their disk space.
 - **Repair**: the same at the installed version. Re-verifies files,
   re-pulls missing images, re-runs failed or missing model groups.
 - **Rollback**: restores the **newest backup of a different version** than

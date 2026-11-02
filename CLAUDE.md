@@ -62,7 +62,7 @@ at port 4603.
 | `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
 | `models/` | Triton model repository (`config.pbtxt` per model; `.plan` engines are built, not committed) |
 | `export/` | Model export scripts, see [export/README.md](export/README.md) |
-| `docker/` | Side-car images: `segmenter/`, `trainer/`, `evaluator/`, `test/` (live harness), `hardened/` |
+| `docker/` | Side-car images: `segmenter/`, `trainer/`, `test/` (live harness), `hardened/`; the root `Dockerfile` holds the `api`, `export` and `evaluator` targets |
 | `contracts/` | Generated OpenAPI and TypeScript/JSON wire contracts. Do not hand-edit |
 | `examples/` | Region profiles, prompt packs, bake-off profiles, the VLM catalog (`vlm/catalog.tsv`) |
 | `tests/` | Offline pytest suite; `tests/live/` needs the live harness |
@@ -83,6 +83,8 @@ Docker socket (read its header first).
 | `api` | none | 4603 | FastAPI, all routes |
 | `opensearch` | none | 4607 | k-NN store and the curation datastore |
 | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh` | `curation` | | Region cascade, VLM loop, auto-label driver, clustering refresh |
+| `model-export` | `setup` | | One-shot engine-build toolchain (TensorRT, ModelOpt, export scripts, model-repo seed); `models install`, `export` and the `make` export targets run it; never started by `up` |
+| `model-export-worker` | `export` | | Runs the engine builds the API queues for `POST /models/upload` and `POST /models/{model_name}/export` (job files under `/jobs/model_export`); the routes answer 503 while it is down |
 | `curation-evaluator` | `evaluator` | | Bake-off runner, on demand (`./openprocessor curation up curation-evaluator`) |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt |
 | `vlm` | `vlm` | 4612 | Local vLLM serving a catalog model |

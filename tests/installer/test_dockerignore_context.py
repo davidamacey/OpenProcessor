@@ -23,7 +23,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILDS = [
     ('Dockerfile', '.'),
     ('Dockerfile.triton', '.'),
-    ('docker/evaluator/Dockerfile', '.'),
     ('docker/trainer/Dockerfile', '.'),
     ('docker/segmenter/Dockerfile', 'docker/segmenter'),
     ('frontend/Dockerfile', 'frontend'),

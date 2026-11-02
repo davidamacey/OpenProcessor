@@ -1,4 +1,4 @@
-"""A running api container is found through compose, not by a bare name match.
+"""Containers are found through compose, not by a bare name match.
 
 The container is named ``${COMPOSE_PROJECT_NAME}-api``, so ``docker ps | grep
 '^api$'`` never matched and download.sh / export_paddleocr.sh always took the
@@ -32,9 +32,10 @@ def _compose_calls(shimmed: Shimmed) -> list[str]:
     return shimmed.log_lines('docker compose')
 
 
-def test_download_paddleocr_execs_in_the_running_project_prefixed_api(
+def test_download_paddleocr_always_runs_in_a_temporary_export_container(
     shimmed: Shimmed, repo_root: Path, tmp_path: Path
 ) -> None:
+    """The API image has no export/ and no toolchain; a running api is never the place."""
     _running_api(shimmed)
     script = f"""
 set -u
@@ -46,25 +47,11 @@ download_paddleocr_models
     result = run_bash(script, env=shimmed.env())
     assert result.returncode == 0, result.stdout + result.stderr
     calls = _compose_calls(shimmed)
-    assert any(f'-p {PROJECT} exec -T api' in c for c in calls), calls
-    assert not any(' run ' in c for c in calls), calls
-
-
-def test_download_paddleocr_uses_a_temporary_container_when_api_is_down(
-    shimmed: Shimmed, repo_root: Path, tmp_path: Path
-) -> None:
-    shimmed.flag('allow_mutations')
-    script = f"""
-set -u
-PROJECT_DIR={tmp_path}
-source {repo_root}/{DOWNLOAD_SH}
-dc() {{ docker compose -p {PROJECT} "$@"; }}
-download_paddleocr_models
-"""
-    result = run_bash(script, env=shimmed.env())
-    assert result.returncode == 0, result.stdout + result.stderr
-    calls = _compose_calls(shimmed)
-    assert any(f'-p {PROJECT} run --rm --no-deps -T api' in c for c in calls), calls
+    assert any(
+        f'-p {PROJECT} run --rm --no-deps -T model-export python /app/export/download_paddleocr.py'
+        in c
+        for c in calls
+    ), calls
     assert not any(' exec ' in c for c in calls), calls
 
 

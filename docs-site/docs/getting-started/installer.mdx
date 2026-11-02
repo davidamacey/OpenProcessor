@@ -46,9 +46,9 @@ Not sure which tiers to pick? See [Choose your path](./choose-your-path.mdx).
 
 | Tier | What you get | Extra images | Needs |
 |---|---|---|---|
-| `core` | Triton, the API (port 4603), OpenSearch | ~53 GB | ~16 GB VRAM (`--profile minimal` for 6-8 GB cards) |
-| `curation` | curation workers, PE-Core embeddings, evaluator | + ~15 GB | + ~2 GB VRAM; implies `core` |
-| `segmenter` | SAM 3 segmenter | + ~7 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
+| `core` | Triton, the API (port 4603), OpenSearch | ~42 GB | ~16 GB VRAM (`--profile minimal` for 6-8 GB cards) |
+| `curation` | curation workers, PE-Core embeddings, evaluator | + ~0.3 GB | + ~2 GB VRAM; implies `core` |
+| `segmenter` | SAM 3 segmenter | + ~8 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
 | `vlm` | local vLLM serving a model from the VLM catalog | + ~19 GB | ~23 GB VRAM for the default; implies `curation` |
 | `trainer` | training service + MLflow | + ~9 GB | at least 16 GB free VRAM while training; implies `curation` |
 | `cropwright` | the Cropwright web UI (separate compose project) | + ~65 MB | implies `curation` |

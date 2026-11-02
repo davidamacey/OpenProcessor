@@ -145,6 +145,7 @@ _IMPORT_TO_DIST = {
     'sklearn': 'scikit-learn',
     'google': 'protobuf',
     'faiss': 'faiss-gpu-cu12',
+    'cupy': 'cupy-cuda12x',
     'onnxruntime': 'onnxruntime-gpu',
     'umap': 'umap-learn',
     # facebookresearch/perception_models installs a top-level `core`
@@ -171,11 +172,10 @@ _ALLOWLIST = {
     'cachetools': 'optional soft dependency with an in-repo fallback on ImportError',
     # GPU-accelerated clustering overlay (see docker-compose.gpu-clustering.yml
     # / `make cluster-gpu`): src/services/curation/clustering/backend.py's
-    # _try_import_cuml() wraps both in a try/except and returns (None, None)
+    # _try_import_cuml() wraps it in a try/except and returns (None, None)
     # on failure, with every caller falling back to sklearn/umap on CPU.
-    # Not part of the base image by design.
+    # Not part of the base image by design. (cupy itself is declared.)
     'cuml': 'optional GPU-clustering overlay dependency with a CPU (sklearn/umap) fallback',
-    'cupy': 'optional GPU-clustering overlay dependency with a CPU (sklearn/umap) fallback',
     # src/services/training/gpu_arbiter.py's _docker_client() wraps the
     # import (and the socket connection) in a try/except Exception and
     # returns None on any failure, falling back to the sentinel-only path.
@@ -222,6 +222,25 @@ def _pyproject_dependencies() -> set[str]:
 def _requirements_txt_dependencies() -> set[str]:
     lines = (REPO_ROOT / 'requirements.txt').read_text().splitlines()
     return {n for line in lines if (n := _normalize(line))}
+
+
+def _pyproject_export_extra() -> set[str]:
+    with (REPO_ROOT / 'pyproject.toml').open('rb') as f:
+        data = tomllib.load(f)
+    return {_normalize(d) for d in data['project']['optional-dependencies']['export']}
+
+
+def _requirements_export_dependencies() -> set[str]:
+    lines = (REPO_ROOT / 'requirements-export.txt').read_text().splitlines()
+    return {n for line in lines if (n := _normalize(line))}
+
+
+def test_requirements_export_txt_equals_the_export_extra() -> None:
+    assert _requirements_export_dependencies() == _pyproject_export_extra()
+
+
+def test_export_extra_is_disjoint_from_the_runtime_dependencies() -> None:
+    assert not (_pyproject_export_extra() & _pyproject_dependencies())
 
 
 def test_pyproject_and_requirements_txt_agree() -> None:
@@ -283,7 +302,11 @@ def _collect_third_party_import_roots() -> dict[str, list[Path]]:
 
 
 def test_every_third_party_import_under_src_is_declared_or_allowlisted() -> None:
-    declared = _pyproject_dependencies() | _requirements_txt_dependencies()
+    # src/ultralytics_patches is loaded only by export/ inside the export image, so the export
+    # extra counts as declared.
+    declared = (
+        _pyproject_dependencies() | _requirements_txt_dependencies() | _pyproject_export_extra()
+    )
     import_roots = _collect_third_party_import_roots()
 
     undeclared = {}

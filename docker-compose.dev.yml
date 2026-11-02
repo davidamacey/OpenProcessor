@@ -38,6 +38,7 @@ services:
     build: &root-build
       context: .
       dockerfile: Dockerfile
+      target: api
       args:
         OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     environment:
@@ -50,7 +51,6 @@ services:
       - OP_MLFLOW_PORT=${MLFLOW_PORT:-4609}
     volumes:
       - ./src:/app/src
-      - ./export:/app/export
       - ./scripts:/app/scripts
       - ./tests:/app/tests
       - ./benchmarks:/app/benchmarks
@@ -98,10 +98,37 @@ services:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
 
+  # The engine-build toolchain image (profile `setup`); edits under ./export and ./src apply
+  # without a rebuild.
+  model-export:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: export
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src
+      - ./export:/app/export
+      - ./scripts:/app/scripts
+      - ./VERSION:/app/VERSION:ro
+
+  model-export-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: export
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src:ro
+      - ./export:/app/export:ro
+
   curation-evaluator:
     build:
       context: .
-      dockerfile: docker/evaluator/Dockerfile
+      dockerfile: Dockerfile
+      target: evaluator
       args:
         OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     volumes:

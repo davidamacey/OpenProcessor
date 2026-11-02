@@ -2,7 +2,7 @@
 # =============================================================================
 # export_steps.sh - per-model TensorRT export steps
 # =============================================================================
-# Sourced by export.sh, which supplies run_in_api_container(),
+# Sourced by export.sh, which supplies run_in_export_container(),
 # check_triton_container(), unload_models_for_export(), the path and TRT
 # settings and log_*().
 
@@ -34,7 +34,7 @@ export_yolo_detection() {
     mkdir -p "$MODELS_DIR/$model_name/1"
 
     # Run export via export_models.py (needs all formats for end2end dependency)
-    if run_in_api_container python /app/export/export_models.py \
+    if run_in_export_container python /app/export/export_models.py \
         --models small \
         --formats onnx_end2end trt_end2end \
         --normalize-boxes \
@@ -69,7 +69,7 @@ export_scrfd() {
     mkdir -p "$MODELS_DIR/$model_name/1"
 
     # export_scrfd.py handles download + ONNX patching + TensorRT conversion
-    if run_in_api_container python /app/export/export_scrfd.py \
+    if run_in_export_container python /app/export/export_scrfd.py \
         2>&1 | tee /tmp/export_scrfd.log; then
 
         if [[ -f "$plan_path" ]] && [[ -s "$plan_path" ]]; then
@@ -109,7 +109,7 @@ export_arcface() {
 
     log_info "Running ArcFace export (Python TensorRT API)..."
 
-    if run_in_api_container python /app/export/export_face_recognition.py \
+    if run_in_export_container python /app/export/export_face_recognition.py \
         --onnx "/app/pytorch_models/$source_model" \
         --plan "/app/models/$model_name/1/model.plan" \
         --max-batch 128 \
@@ -141,7 +141,7 @@ export_mobileclip_image() {
 
     mkdir -p "$MODELS_DIR/$model_name/1"
 
-    if run_in_api_container python /app/export/export_mobileclip_image_encoder.py \
+    if run_in_export_container python /app/export/export_mobileclip_image_encoder.py \
         --model S2 \
         2>&1 | tee /tmp/export_mobileclip_image.log; then
 
@@ -169,7 +169,7 @@ export_mobileclip_text() {
 
     mkdir -p "$MODELS_DIR/$model_name/1"
 
-    if run_in_api_container python /app/export/export_mobileclip_text_encoder.py \
+    if run_in_export_container python /app/export/export_mobileclip_text_encoder.py \
         --model S2 \
         2>&1 | tee /tmp/export_mobileclip_text.log; then
 
@@ -240,13 +240,13 @@ export_pe() {
 
     mkdir -p "$MODELS_DIR/pe_image_encoder/1"
 
-    if ! run_in_api_container python /app/export/download_pe_weights.py 2>&1 | tee /tmp/export_pe_download.log; then
+    if ! run_in_export_container python /app/export/download_pe_weights.py 2>&1 | tee /tmp/export_pe_download.log; then
         log_error "PE-Core weight download failed"
         log_info "Check log: /tmp/export_pe_download.log"
         return 1
     fi
 
-    if ! run_in_api_container python /app/export/export_pe_image_encoder.py 2>&1 | tee /tmp/export_pe_image.log; then
+    if ! run_in_export_container python /app/export/export_pe_image_encoder.py 2>&1 | tee /tmp/export_pe_image.log; then
         log_error "PE-Core image tower ONNX export failed"
         log_info "Check log: /tmp/export_pe_image.log"
         return 1
@@ -273,7 +273,7 @@ export_pe() {
     # hard failure of the whole export step (semantic-search TEXT
     # queries degrade to PyTorch eager; embeddings/near-dup/clustering,
     # which only need the image tower above, are unaffected).
-    if ! run_in_api_container python /app/export/export_pe_text_encoder.py 2>&1 | tee /tmp/export_pe_text.log; then
+    if ! run_in_export_container python /app/export/export_pe_text_encoder.py 2>&1 | tee /tmp/export_pe_text.log; then
         log_warn "PE-Core text tower export failed -- semantic-search text queries will fall back to PyTorch eager"
         log_info "Check log: /tmp/export_pe_text.log"
     fi

@@ -146,7 +146,8 @@ ingest preview, and note the results in the verification summary of `docs/releas
    tampered tarball and installer are refused).
 3. Build, Trivy-scan and dry-run the images, nothing pushed: `make release-dry-run`. It
    builds all six images, including Cropwright from `frontend/`. The Trivy CRITICAL gate must
-   pass (allowlist: `scripts/release/trivy-allowlist.txt`).
+   pass: no fixable CRITICAL outside the allowlist (`scripts/release/trivy-allowlist.txt`).
+   Findings with no upstream fix do not gate; `--report-dir DIR` writes them per image.
 4. Push images and pin them: `docker login`, pull the 11 third-party images, then
    `make release`. It pushes
    `davidamacey/{openprocessor,openprocessor-triton,openprocessor-evaluator,openprocessor-segmenter,openprocessor-trainer,cropwright}:0.6.0`

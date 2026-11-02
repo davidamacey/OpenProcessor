@@ -322,6 +322,92 @@ services:
           - op-api
 
   # ===================================================================
+  # model-export: the engine-build toolchain (TensorRT, ModelOpt, the YOLO11 venv, the
+  # model-repo seed). One-shot: `openprocessor models install|repair` and `export` run it with
+  # `docker compose run --rm --no-deps -T model-export ...`; `up` never starts it (profile
+  # `setup`). The API image carries none of this.
+  # ===================================================================
+  model-export:
+    image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export
+    logging: *default-logging
+    profiles:
+      - setup
+    restart: "no"
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+    volumes:
+      - ./models:/app/models
+      - ./pytorch_models:/app/pytorch_models
+      - ./data:/app/data
+      - ./cache/huggingface:/home/appuser/.cache/huggingface
+    shm_size: 8g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
+          devices:
+            - driver: nvidia
+              device_ids: [ '${API_GPU_ID:-0}' ]
+              capabilities:
+                - gpu
+    networks:
+      - triton_net
+
+  # ===================================================================
+  # model-export-worker: runs the engine builds the API queues for POST /models/upload and
+  # POST /models/{model_name}/export (job files on the shared jobs volume; the API answers 503
+  # naming this service while it is down). Opt in with `--profile export`.
+  # ===================================================================
+  model-export-worker:
+    image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export-worker
+    logging: *default-logging
+    profiles:
+      - export
+    restart: unless-stopped
+    command: ["python", "-m", "export.export_worker", "--watch", "/jobs/model_export"]
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+    volumes:
+      - ./models:/app/models
+      - ./pytorch_models:/app/pytorch_models
+      - openprocessor-jobs:/jobs
+      - ./cache/huggingface:/home/appuser/.cache/huggingface
+    shm_size: 8g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    healthcheck:
+      test: ["CMD-SHELL", "test -n \"$$(find /jobs/model_export/worker.heartbeat -mmin -1 2>/dev/null)\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
+          devices:
+            - driver: nvidia
+              device_ids: [ '${API_GPU_ID:-0}' ]
+              capabilities:
+                - gpu
+    networks:
+      - triton_net
+
+  # ===================================================================
   # Cropwright: the labeling frontend, opt-in via `--profile cropwright`. It is
   # also the gateway (OP_GATEWAY_SUBPATHS=true): the one published port for the
   # app, the API docs and the monitoring UIs, which then stay on loopback.
@@ -660,7 +746,7 @@ services:
     networks:
       - triton_net
 
-  # On-demand only (no `restart:` — see docker/evaluator/Dockerfile): its own
+  # On-demand only (no `restart:`, see the `evaluator` target of the root Dockerfile): its own
   # profile, so `--profile curation up -d` does not reserve a GPU for it.
   # `docker compose run --rm curation-evaluator`.
   curation-evaluator:
@@ -741,8 +827,10 @@ services:
       # loaded=false while weights download and the pool builds.
       test:
         [
-          "CMD-SHELL",
-          "wget -qO- http://127.0.0.1:8000/health | grep -q '\"loaded\":true'",
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if b'\"loaded\":true' in urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read() else 1)",
         ]
       interval: 30s
       timeout: 10s

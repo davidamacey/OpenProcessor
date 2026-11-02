@@ -226,9 +226,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model_groups.sh"
 # shellcheck source=model_stamps.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model_stamps.sh"
 
-# One-shot API-image and Triton-image containers (never need a running API).
-_ms_api() { dc run --rm --no-deps -T -w /app api "$@"; }
-_ms_triton() { dc run --rm --no-deps -T triton-server "$@"; }
+# One-shot export-image and Triton-image containers (never need a running API). The export
+# image holds TensorRT, ModelOpt and the model-repo seed; the API image has none of them.
+_ms_export() { dc run --rm --no-deps -T -w /app model-export "$@"; }
+# </dev/null: `docker compose run` forwards stdin even with -T, which would swallow the rest of
+# a `while read` loop that stamps the next engine.
+_ms_triton() { dc run --rm --no-deps -T triton-server "$@" </dev/null; }
 
 # Same as PE_NORMALIZE in export/build_pe_trt.sh (a test keeps them equal).
 _MS_PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
@@ -237,9 +240,9 @@ _MS_PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
 # float32), then fail unless the input datatype is the one config.pbtxt declares.
 _ms_pe_uint8_prepare() {
     # shellcheck disable=SC2086
-    _ms_api python /app/export/uint8_input.py /app/models/pe_image_encoder.build.onnx \
+    _ms_export python /app/export/uint8_input.py /app/models/pe_image_encoder.build.onnx \
         /app/models/pe_image_encoder.build.u8.onnx $_MS_PE_NORMALIZE \
-        && _ms_api python /app/export/check_input_dtype.py \
+        && _ms_export python /app/export/check_input_dtype.py \
             /app/models/pe_image_encoder.build.u8.onnx /app/models/pe_image_encoder/config.pbtxt \
         || { log_error "pe_image_encoder: the engine input would not match config.pbtxt; Triton would refuse to load it"; return 1; }
 }
@@ -249,7 +252,7 @@ _ms_pe_uint8_prepare() {
 _ms_config_input_dtype() {
     local cfg="${OP_DIR:?OP_DIR not set}/models/$1/config.pbtxt"
     [[ -f "$cfg" ]] || return 0
-    awk '/^input[[:space:]]*\[/ {in_in=1} in_in && /data_type:/ {sub(/.*TYPE_/, ""); print $1; exit}' "$cfg"
+    awk '/^input[[:space:]]*[\[{]/ {in_in=1} in_in && /data_type:/ {sub(/.*TYPE_/, ""); print $1; exit}' "$cfg"
 }
 
 _ms_pe_trtexec() {
@@ -290,7 +293,7 @@ _ms_warn_if_degraded() {
 _ms_pe_build_engine() {
     local attempt_log raw reason
     if [[ "${OP_DRY_RUN:-0}" == "1" ]]; then
-        _ms_api python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
+        _ms_export python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
             /app/models/pe_image_encoder.build.onnx
         _ms_pe_uint8_prepare
         _ms_pe_trtexec pe_image_encoder.build.u8.onnx
@@ -298,15 +301,15 @@ _ms_pe_build_engine() {
     fi
     attempt_log="$(_model_setup_logdir)/pe_image_trt.fp16_attempt.log"
     raw="$(mktemp "${attempt_log}.XXXXXX")"
-    _ms_api mkdir -p /app/models/pe_image_encoder/1
-    if { _ms_api python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
+    _ms_export mkdir -p /app/models/pe_image_encoder/1
+    if { _ms_export python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
             /app/models/pe_image_encoder.build.onnx \
         && _ms_pe_uint8_prepare \
         && _ms_pe_trtexec pe_image_encoder.build.u8.onnx; } >"$raw" 2>&1; then
         ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
         rm -f "$raw"
         cat "$attempt_log"
-        _ms_api rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
+        _ms_export rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
         _ms_record_precision pe_image_encoder fp16 "" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
         return 0
     fi
@@ -316,9 +319,9 @@ _ms_pe_build_engine() {
     reason="$(grep -m1 -E 'bake_fp16_onnx failed|\[E\]|Error' "$attempt_log" | cut -c1-300)"
     reason="${reason:-FP16 build failed, see ${attempt_log}}"
     echo "FP16 engine build failed (${reason}); retrying from the FP32 ONNX"
-    _ms_api cp /app/pytorch_models/pe_image_encoder.onnx /app/models/pe_image_encoder.build.onnx
+    _ms_export cp /app/pytorch_models/pe_image_encoder.onnx /app/models/pe_image_encoder.build.onnx
     if _ms_pe_uint8_prepare && _ms_pe_trtexec pe_image_encoder.build.u8.onnx; then
-        _ms_api rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
+        _ms_export rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
         _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
         return 0
     fi
@@ -333,43 +336,43 @@ _ms_run_group_steps() {
     local group="$1" runner="$2"
     case "$group" in
         preflight)
-            "$runner" preflight_image _ms_api python -m export.preflight || return 1
-            "$runner" preflight_seed dc run --rm --no-deps -T --entrypoint python api \
+            "$runner" preflight_image _ms_export python -m export.preflight || return 1
+            "$runner" preflight_seed dc run --rm --no-deps -T --entrypoint python model-export \
                 /app/export/sync_model_seed.py /opt/openprocessor/model_repo_seed /app/models || return 1
-            "$runner" preflight_profile _ms_api bash -c \
+            "$runner" preflight_profile _ms_export bash -c \
                 'PROJECT_DIR=/app; source /app/scripts/lib/config.sh && generate_all_configs "$1" 0' \
                 _ "${GPU_PROFILE:-standard}" || return 1
             ;;
         base)
-            "$runner" base_weights _ms_api bash -c 'source scripts/lib/download.sh && download_essential_models' || return 1
+            "$runner" base_weights _ms_export bash -c 'source scripts/lib/download.sh && download_essential_models' || return 1
             ;;
         yolo)
-            "$runner" yolo_export _ms_api python /app/export/export_models.py --models small \
+            "$runner" yolo_export _ms_export python /app/export/export_models.py --models small \
                 --formats trt_end2end --normalize-boxes --save-labels --generate-config || return 1
             "$runner" yolo_stamp _ms_record_group_stamps yolo || return 1
             ;;
         mobileclip)
-            "$runner" mobileclip_image _ms_api python /app/export/export_mobileclip_image_encoder.py || return 1
-            "$runner" mobileclip_text _ms_api python /app/export/export_mobileclip_text_encoder.py || return 1
+            "$runner" mobileclip_image _ms_export python /app/export/export_mobileclip_image_encoder.py || return 1
+            "$runner" mobileclip_text _ms_export python /app/export/export_mobileclip_text_encoder.py || return 1
             "$runner" mobileclip_stamp _ms_record_group_stamps mobileclip || return 1
             ;;
         faces)
-            "$runner" faces_download _ms_api python /app/export/download_face_models.py || return 1
-            "$runner" faces_arcface _ms_api python /app/export/export_face_recognition.py || return 1
-            "$runner" faces_scrfd _ms_api python /app/export/export_scrfd.py || return 1
+            "$runner" faces_download _ms_export python /app/export/download_face_models.py || return 1
+            "$runner" faces_arcface _ms_export python /app/export/export_face_recognition.py || return 1
+            "$runner" faces_scrfd _ms_export python /app/export/export_scrfd.py || return 1
             "$runner" faces_stamp _ms_record_group_stamps faces || return 1
             ;;
         ocr)
-            "$runner" ocr_download _ms_api python /app/export/download_paddleocr.py || return 1
-            "$runner" ocr_det _ms_api python /app/export/export_paddleocr_det.py || return 1
-            "$runner" ocr_rec _ms_api python /app/export/export_paddleocr_rec.py || return 1
+            "$runner" ocr_download _ms_export python /app/export/download_paddleocr.py || return 1
+            "$runner" ocr_det _ms_export python /app/export/export_paddleocr_det.py || return 1
+            "$runner" ocr_rec _ms_export python /app/export/export_paddleocr_rec.py || return 1
             "$runner" ocr_stamp _ms_record_group_stamps ocr || return 1
             ;;
         pe)
-            "$runner" pe_weights _ms_api python /app/export/download_pe_weights.py || return 1
-            "$runner" pe_image_onnx _ms_api python /app/export/export_pe_image_encoder.py || return 1
+            "$runner" pe_weights _ms_export python /app/export/download_pe_weights.py || return 1
+            "$runner" pe_image_onnx _ms_export python /app/export/export_pe_image_encoder.py || return 1
             "$runner" pe_image_trt _ms_pe_build_engine || return 1
-            "$runner" pe_text _ms_api python /app/export/export_pe_text_encoder.py \
+            "$runner" pe_text _ms_export python /app/export/export_pe_text_encoder.py \
                 --install-triton --models-dir /app/models || return 1
             ;;
         *)
@@ -544,14 +547,14 @@ model_setup_run_groups() {
 }
 
 # model_setup_sample_coco [--full]
-# Public COCO sample (plan section 6.3), fetched inside the API image.
+# Public COCO sample (plan section 6.3), fetched inside the export image.
 model_setup_sample_coco() {
     local manifest=scripts/datasets/manifests/coco_va_200.json n=200
     if [[ "${1:-}" == "--full" ]]; then
         manifest=scripts/datasets/manifests/coco_va_800.json
         n=800
     fi
-    _ms_api python -m scripts.datasets.fetch_coco_subset \
+    _ms_export python -m scripts.datasets.fetch_coco_subset \
         --out /app/data/samples/coco_va_readme --n "$n" \
         --manifest "$manifest" --cache-dir /app/data/.cache/datasets
 }

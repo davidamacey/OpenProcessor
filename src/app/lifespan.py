@@ -133,24 +133,13 @@ async def _start_event_bus_tail() -> None:
 
 
 def _reconcile_orphaned_state() -> None:
-    """Fix up job and export state left behind by a killed process."""
+    """Fix up job state left behind by a killed process (export tasks belong to the worker)."""
     # Reconcile job state.json files left at status='running' by a killed
     # process; best-effort and isolated per module (see each module's
     # reconcile_orphaned_jobs() docstring).
     from src.services.curation.startup_reconcile import reconcile_all_jobs
 
     reconcile_all_jobs()
-
-    # Gap 2 (model export): same idea, different shape — see
-    # src.services.model_export's module docstring.
-    try:
-        from src.services.model_export import reconcile_orphaned_export_tasks
-
-        n_reconciled = reconcile_orphaned_export_tasks()
-        if n_reconciled:
-            logger.warning('orphaned_export_tasks_reconciled', count=n_reconciled)
-    except Exception as exc:
-        logger.warning('orphaned_export_tasks_reconcile_skipped', error=str(exc))
 
 
 async def _arbiter_reconcile_loop(

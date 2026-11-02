@@ -59,7 +59,7 @@ see [GPU sizing](./gpu-sizing.mdx) and the plan it prints.
 ## Disk
 
 - The installer checks free space on the install filesystem and on Docker's data
-  root before pulling images (about 60 GB for core, about 135 GB for every tier,
+  root before pulling images (about 47 GB for core, about 126 GB for every tier,
   plus 20 GB headroom) and stops unless `--force`.
 - OpenSearch keeps its default disk watermarks (85% low, 90% high, 95%
   flood-stage, which makes indexes read-only). Keep the volume under 80% full.

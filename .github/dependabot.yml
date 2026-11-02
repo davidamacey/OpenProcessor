@@ -131,7 +131,6 @@ updates:
   - package-ecosystem: "docker"
     directories:
       - "/"
-      - "/docker/evaluator"
       - "/docker/segmenter"
       - "/docker/trainer"
       - "/docker/hardened/triton"

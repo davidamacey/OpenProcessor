@@ -33,6 +33,7 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      target: api
     user: root
     entrypoint: ["sh", "-c", "mkdir -p /verify-data/jobs /verify-data/state /verify-data/source && chown -R 1000:1000 /verify-data"]
     volumes:

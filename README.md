@@ -135,17 +135,17 @@ tiers you want, picks GPUs, exports the TensorRT engines inside the
 containers, starts everything and runs a health check.
 
 **Needs:** Linux, Docker with Compose v2, an NVIDIA GPU with the NVIDIA
-Container Toolkit, and disk for the tiers you pick (about 60 GB for `core`,
-about 135 GB for everything). First install takes 30-60 minutes, mostly image
+Container Toolkit, and disk for the tiers you pick (about 50 GB for `core`,
+about 125 GB for everything). First install takes 30-60 minutes, mostly image
 pulls and TensorRT export.
 
 ### Tiers
 
 | Tier | What you get | Extra images | Needs |
 |---|---|---|---|
-| `core` | Triton, the API (port 4603), OpenSearch | ~53 GB | ~16 GB VRAM (`--profile minimal` for 6-8 GB cards) |
-| `curation` | curation workers, PE-Core embeddings, evaluator | + ~15 GB | + ~2 GB VRAM; implies `core` |
-| `segmenter` | SAM 3 segmenter | + ~7 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
+| `core` | Triton, the API (port 4603), OpenSearch | ~42 GB | ~16 GB VRAM (`--profile minimal` for 6-8 GB cards) |
+| `curation` | curation workers, PE-Core embeddings, evaluator | + ~0.3 GB | + ~2 GB VRAM; implies `core` |
+| `segmenter` | SAM 3 segmenter | + ~8 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
 | `vlm` | local vLLM serving a model from the VLM catalog | + ~19 GB | ~23 GB VRAM for the default; implies `curation` |
 | `trainer` | training service + MLflow | + ~9 GB | >= 16 GB free VRAM while training; implies `curation` |
 | `cropwright` | the Cropwright web UI (a profile of the same compose project) | + ~65 MB | implies `curation` |
@@ -373,7 +373,7 @@ YOLO26.
   (`export/export_yolo26.py`, natively NMS-free engines):
 
   ```bash
-  docker compose -p openprocessor exec api python /app/export/export_yolo26.py --models small
+  docker compose -p openprocessor run --rm model-export python /app/export/export_yolo26.py --models small
   curl -X POST http://localhost:4603/models/yolo26_small_trt/load
   ```
 
@@ -382,6 +382,11 @@ YOLO26.
   interchangeably. Set `YOLO_MODEL=yolo26_small_trt` to change the default
   detector. Models load and unload at runtime with `POST /models/{name}/load`
   and `POST /models/{name}/unload`.
+- `POST /models/upload` and `POST /models/{model_name}/export` queue the
+  TensorRT build for the `model-export-worker` service (the export image; the
+  API image has no TensorRT). Start it with
+  `docker compose --profile export up -d model-export-worker`; while it is down
+  both routes answer 503 naming it.
 
 ---
 

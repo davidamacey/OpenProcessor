@@ -278,18 +278,10 @@ download_paddleocr_models() {
         fi
     fi
 
-    # Try running container, fall back to temporary container
-    # Resolve through compose: the container is named ${COMPOSE_PROJECT_NAME}-api.
-    if [[ -n "$(dc ps -q api 2>/dev/null)" ]]; then
-        if dc exec -T api python /app/export/download_paddleocr.py; then
-            log_success "PaddleOCR models downloaded"
-            return 0
-        fi
-    else
-        if dc run --rm --no-deps -T api python /app/export/download_paddleocr.py; then
-            log_success "PaddleOCR models downloaded"
-            return 0
-        fi
+    # The export image runs it as a one-shot container (the API image has no export/).
+    if dc run --rm --no-deps -T model-export python /app/export/download_paddleocr.py; then
+        log_success "PaddleOCR models downloaded"
+        return 0
     fi
 
     log_error "PaddleOCR download failed"

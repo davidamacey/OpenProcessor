@@ -75,7 +75,8 @@ under a different Triton model name. Leave them unset for the stock names.
 
 `OP_IMAGE_REPO` and `OP_IMAGE_TAG` are on the basic page. Each built
 service also has an override that wins over both: `OP_API_IMAGE`,
-`OP_TRITON_IMAGE`, `OP_EVALUATOR_IMAGE`, `OP_SEGMENTER_IMAGE` and
+`OP_EXPORT_IMAGE` (the model-export image), `OP_TRITON_IMAGE`, `OP_EVALUATOR_IMAGE`,
+`OP_SEGMENTER_IMAGE` and
 `OP_TRAINER_IMAGE`. The installer sets them to digest-pinned references; a
 checkout rarely needs them.
 

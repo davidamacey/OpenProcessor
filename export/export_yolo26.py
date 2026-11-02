@@ -19,10 +19,10 @@ Formats:
 Usage:
 ------
 # Export nano + small to TensorRT (default)
-docker compose exec api python /app/export/export_yolo26.py
+docker compose run --rm model-export python /app/export/export_yolo26.py
 
 # Specific sizes / formats
-docker compose exec api python /app/export/export_yolo26.py --models small --formats trt
+docker compose run --rm model-export python /app/export/export_yolo26.py --models small --formats trt
 """
 
 import argparse

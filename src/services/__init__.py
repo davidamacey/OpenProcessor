@@ -10,7 +10,6 @@ from src.services.model_export import (
     create_export_task,
     get_export_task,
     list_export_tasks,
-    run_export,
     save_uploaded_file,
     validate_pytorch_model,
 )
@@ -26,7 +25,6 @@ __all__ = [
     'create_export_task',
     'get_export_task',
     'list_export_tasks',
-    'run_export',
     'save_uploaded_file',
     'validate_pytorch_model',
 ]

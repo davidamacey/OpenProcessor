@@ -1694,7 +1694,7 @@ image_repo_digests() {
 # pull_images -- pull every image of the active services that is missing
 pull_images() {
     local images=() img missing=() out
-    out="$(dc config --images)" || die "compose config --images failed"
+    out="$(compose_image_refs)" || die "compose config --images failed"
     mapfile -t images <<< "$out"
     ACTIVE_IMAGES=("${images[@]}")
     for img in "${images[@]}"; do
@@ -1754,7 +1754,7 @@ verify_image_digests() {
     else
         local img
         TRITON_DIGEST=""
-        for img in openprocessor openprocessor-triton; do
+        for img in openprocessor openprocessor-export openprocessor-triton; do
             ref="${OP_IMAGE_REPO}/${img}:${OP_IMAGE_TAG}"
             digest="$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null || true)"
             [[ -n "$digest" ]] && IMAGE_DIGESTS+=("${ref}=${digest}")
@@ -2164,9 +2164,9 @@ do_uninstall() {
     fi
 
     if [[ "$OP_PURGE_VOLUMES" == 1 ]]; then
-        dc down --remove-orphans -v || die "compose down -v failed"
+        dc --profile '*' down --remove-orphans -v || die "compose down -v failed"  # all profiles: opt-in containers too
     else
-        dc down --remove-orphans || die "compose down failed"
+        dc --profile '*' down --remove-orphans || die "compose down failed"
     fi
 
     local p
@@ -2242,12 +2242,15 @@ do_rollback() {
     log_step "Rollback to $(basename "$newest")"
     echo "restores: $(cd "$newest" && find . -type f | sed 's#^\./##' | tr '\n' ' ')"
     require_destructive_consent "Restore these files and restart ${OP_PROJECT}"
-    local undo
+    local undo k
     undo="${OP_DIR}/.install/rollback-undo/$(date -u +%Y%m%dT%H%M%SZ)"
     if [[ "$OP_DRY_RUN" == 1 ]]; then
         echo "DRY: restore ${newest} into ${OP_DIR} (current files saved to ${undo})"
         return 0
     fi
+    # Load this installer's library before the restore swaps scripts/lib/ for the older release's; never re-source after it.
+    # shellcheck source=scripts/lib/image_keys.sh
+    source "${OP_DIR}/scripts/lib/image_keys.sh"
     mkdir -p "$undo"
     chmod 700 "${OP_DIR}/.install/rollback-undo" "$undo"
     while IFS= read -r -d '' rel; do
@@ -2267,13 +2270,7 @@ do_rollback() {
         OP_IMAGE_TAG="$(read_env_var "$ENV_FILE" OP_IMAGE_TAG || true)"
     fi
     PINNED_IMAGES=()
-    local k
-    # shellcheck source=scripts/lib/image_keys.sh
-    source "${OP_DIR}/scripts/lib/image_keys.sh"
-    for k in $(for rel in $(image_keys); do image_key_field "$rel" env; done | sort -u); do
-        rel="$(read_env_var "$ENV_FILE" "$k" || true)"
-        [[ -n "$rel" ]] && PINNED_IMAGES+=("$rel")
-    done
+    while IFS='=' read -r k rel; do [[ "$k" == *_IMAGE && -n "$rel" ]] && PINNED_IMAGES+=("$rel"); done < "$ENV_FILE"
     assert_compose_config
     pull_images
     if [[ "$IMAGE_MODE" == lock ]]; then
@@ -2588,6 +2585,7 @@ do_install() {
         fi
         if [[ "$(state_get image_mode)" == tag && -z "$OP_IMAGE_TAG" ]]; then
             OP_IMAGE_TAG="$(state_get image_tag)"
+            [[ "$OP_IMAGE_REPO" == "$OP_IMAGE_NAMESPACE" ]] && OP_IMAGE_REPO="$(read_env_var "$ENV_FILE" OP_IMAGE_REPO || echo "$OP_IMAGE_REPO")"
         fi
     fi
     if (( existing )); then
@@ -2897,8 +2895,8 @@ YAML
     state_write
 
     # --- disk -----------------------------------------------------------------
-    local need=58 free_kib root
-    _has_tier curation && need=$((need + 19))
+    local need=47 free_kib root
+    _has_tier curation && need=$((need + 5))
     _has_tier segmenter && need=$((need + 11))
     _has_tier vlm && need=$((need + 34))
     _has_tier trainer && need=$((need + 29))

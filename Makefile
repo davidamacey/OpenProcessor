@@ -25,6 +25,8 @@ V := .venv/bin
 # system python3 for a fresh checkout that hasn't created .venv yet.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 API_SERVICE := api
+# One-shot export-image container: TensorRT, ModelOpt and the export scripts are not in the API image.
+EXPORT_RUN = $(COMPOSE) run --rm --no-deps -T model-export
 AUTO_LABEL_SERVICE := curation-auto-label-worker
 TRITON_SERVICE := triton-server
 OPENSEARCH_SERVICE := opensearch
@@ -590,30 +592,30 @@ api-test-quick: ## Quick API test (no export, just endpoint verification)
 
 .PHONY: download-models
 download-models: ## Fetch the .pt/.onnx weights export-models etc. need (yolo11s.pt, SCRFD, ArcFace, MobileCLIP)
-	@echo "Downloading base model weights into pytorch_models/ (inside $(API_SERVICE))..."
-	$(COMPOSE) exec $(API_SERVICE) bash -c 'source scripts/lib/download.sh && download_essential_models'
+	@echo "Downloading base model weights into pytorch_models/ (inside the model-export image)..."
+	$(EXPORT_RUN) bash -c 'source scripts/lib/download.sh && download_essential_models'
 
 .PHONY: export-models
 export-models: ## Export YOLO models (TRT + End2End with normalized boxes)
 	@echo "Exporting YOLO models to TensorRT formats (normalized boxes)..."
 	@echo "(run 'make download-models' first on a fresh clone if yolo11s.pt is missing)"
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --models small --formats trt trt_end2end --normalize-boxes --save-labels --generate-config
+	$(EXPORT_RUN) python /app/export/export_models.py --models small --formats trt trt_end2end --normalize-boxes --save-labels --generate-config
 
 .PHONY: export-all
 export-all: ## Export all models (nano through xlarge) in all formats
 	@echo "Exporting all YOLO models in all formats (normalized boxes)..."
 	@echo "WARNING: This will take 60-120 minutes depending on GPU"
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --models nano small medium large xlarge --formats all --normalize-boxes --save-labels --generate-config
+	$(EXPORT_RUN) python /app/export/export_models.py --models nano small medium large xlarge --formats all --normalize-boxes --save-labels --generate-config
 
 .PHONY: export-small
 export-small: ## Quick export for small model (TRT + End2End with normalized boxes)
 	@echo "Exporting small model (TRT + End2End, normalized boxes)..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --models small --formats trt trt_end2end --normalize-boxes --save-labels --generate-config
+	$(EXPORT_RUN) python /app/export/export_models.py --models small --formats trt trt_end2end --normalize-boxes --save-labels --generate-config
 
 .PHONY: export-onnx
 export-onnx: ## Export ONNX-only format (with normalized boxes)
 	@echo "Exporting ONNX models only (normalized boxes)..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --models small --formats onnx onnx_end2end --normalize-boxes --save-labels
+	$(EXPORT_RUN) python /app/export/export_models.py --models small --formats onnx onnx_end2end --normalize-boxes --save-labels
 
 .PHONY: export-custom
 export-custom: ## Export custom model (usage: make export-custom MODEL=/path/to/model.pt [NAME=custom_name] [BATCH=32])
@@ -630,7 +632,7 @@ export-custom: ## Export custom model (usage: make export-custom MODEL=/path/to/
 	if [ -n "$(NAME)" ]; then CUSTOM_ARG="$$CUSTOM_ARG:$(NAME)"; elif [ -n "$(BATCH)" ]; then CUSTOM_ARG="$$CUSTOM_ARG:"; fi; \
 	if [ -n "$(BATCH)" ]; then CUSTOM_ARG="$$CUSTOM_ARG:$(BATCH)"; fi; \
 	echo "Exporting custom model: $$CUSTOM_ARG"; \
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py \
+	$(EXPORT_RUN) python /app/export/export_models.py \
 		--custom-model "$$CUSTOM_ARG" \
 		--formats trt trt_end2end \
 		--normalize-boxes \
@@ -652,7 +654,7 @@ export-config: ## Export models from YAML config file (usage: make export-config
 		exit 1; \
 	fi
 	@echo "Exporting models from config: $(CONFIG)"
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py \
+	$(EXPORT_RUN) python /app/export/export_models.py \
 		--config-file "$(CONFIG)" \
 		--formats trt trt_end2end \
 		--normalize-boxes \
@@ -661,27 +663,27 @@ export-config: ## Export models from YAML config file (usage: make export-config
 
 .PHONY: export-list
 export-list: ## List available built-in models
-	@$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --list-models
+	@$(EXPORT_RUN) python /app/export/export_models.py --list-models
 
 .PHONY: export-mobileclip
 export-mobileclip: ## Export MobileCLIP models
 	@echo "Exporting MobileCLIP image encoder..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_image_encoder.py
+	$(EXPORT_RUN) python /app/export/export_mobileclip_image_encoder.py
 	@echo "Exporting MobileCLIP text encoder..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_text_encoder.py
+	$(EXPORT_RUN) python /app/export/export_mobileclip_text_encoder.py
 	@$(MAKE) restart-triton
 
 # PE-Core-L14-336 (curation embeddings). Walkthrough: export/README.md
-# "PE-Core Encoders". Steps run in the API container (torch +
+# "PE-Core Encoders". Steps run in the model-export container (torch +
 # perception_models + the mounted HF cache); the TRT build shells out to
 # the Triton image for trtexec.
 .PHONY: pe-download
 pe-download: ## PE-Core: download + SHA-256 verify the pinned checkpoint into the HF cache
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/download_pe_weights.py
+	$(EXPORT_RUN) python /app/export/download_pe_weights.py
 
 .PHONY: pe-export-image
 pe-export-image: ## PE-Core: image tower -> pytorch_models/pe_image_encoder.onnx (+ config.pbtxt)
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_pe_image_encoder.py
+	$(EXPORT_RUN) python /app/export/export_pe_image_encoder.py
 
 .PHONY: pe-build-trt
 pe-build-trt: ## PE-Core: image ONNX -> TensorRT plan in models/pe_image_encoder (Path 1)
@@ -693,11 +695,11 @@ pe-build-ort: ## PE-Core: serve the image ONNX via Triton onnxruntime instead (P
 
 .PHONY: pe-export-text
 pe-export-text: ## PE-Core: text tower -> pytorch_models/pe_text_encoder.onnx (parity-gated vs PyTorch)
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_pe_text_encoder.py
+	$(EXPORT_RUN) python /app/export/export_pe_text_encoder.py
 
 .PHONY: pe-export-text-triton
 pe-export-text-triton: ## PE-Core: text export + install as optional Triton model pe_text_encoder
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_pe_text_encoder.py \
+	$(EXPORT_RUN) python /app/export/export_pe_text_encoder.py \
 		--install-triton --models-dir /app/models
 
 .PHONY: pe-text-status
@@ -752,12 +754,12 @@ validate-exports: ## Validate that Triton can load exported models
 .PHONY: download-face-models
 download-face-models: ## Download ArcFace face recognition models
 	@echo "Downloading face recognition models..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/download_face_models.py
+	$(EXPORT_RUN) python /app/export/download_face_models.py
 
 .PHONY: export-face-recognition
 export-face-recognition: ## Export ArcFace to TensorRT
 	@echo "Exporting ArcFace face recognition to TensorRT..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_face_recognition.py
+	$(EXPORT_RUN) python /app/export/export_face_recognition.py
 	@$(MAKE) load-face-models
 
 .PHONY: load-face-models
@@ -788,7 +790,7 @@ download-face-test-data: ## Download LFW and WIDER Face test datasets
 .PHONY: export-scrfd
 export-scrfd: ## Download + export SCRFD to TensorRT for Triton
 	@echo "Exporting SCRFD face detection to TensorRT..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_scrfd.py
+	$(EXPORT_RUN) python /app/export/export_scrfd.py
 
 .PHONY: load-scrfd
 load-scrfd: ## Load SCRFD model into Triton
@@ -826,17 +828,17 @@ test-models: ## Verify all Triton models are loaded
 .PHONY: download-paddleocr
 download-paddleocr: ## Download PP-OCRv5 ONNX models and dictionaries
 	@echo "Downloading PP-OCRv5 models..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/download_paddleocr.py
+	$(EXPORT_RUN) python /app/export/download_paddleocr.py
 
 .PHONY: export-paddleocr-det
 export-paddleocr-det: ## Export PaddleOCR detection model to TensorRT
 	@echo "Exporting PP-OCRv5 detection to TensorRT..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_paddleocr_det.py
+	$(EXPORT_RUN) python /app/export/export_paddleocr_det.py
 
 .PHONY: export-paddleocr-rec
 export-paddleocr-rec: ## Export PaddleOCR recognition model to TensorRT
 	@echo "Exporting PP-OCRv5 recognition to TensorRT..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_paddleocr_rec.py
+	$(EXPORT_RUN) python /app/export/export_paddleocr_rec.py
 
 .PHONY: export-paddleocr
 export-paddleocr: export-paddleocr-det export-paddleocr-rec ## Export both PaddleOCR models to TensorRT

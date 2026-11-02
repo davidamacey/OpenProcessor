@@ -155,11 +155,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
             'reconcile_all_jobs',
             _sync_step(w, 'reconcile_jobs'),
         ),
-        (
-            'src.services.model_export',
-            'reconcile_orphaned_export_tasks',
-            _sync_step(w, 'reconcile_exports', 0),
-        ),
         ('src.config', 'get_gpu_arbiter_config', fake_get_arbiter_config),
         ('src.services.training.gpu_arbiter', 'reconcile_on_startup', fake_reconcile_on_startup),
         ('src.services.training.triton_reload', 'reload_promoted_models_best_effort', fake_reload),
@@ -217,7 +212,6 @@ EXPECTED_STARTUP = [
     'config_store_bootstrap',
     'event_hub_start',
     'reconcile_jobs',
-    'reconcile_exports',
     'arbiter_config',
     'arbiter_reconcile',
     'reload:promoted_models_reload_on_startup',
@@ -295,13 +289,6 @@ def test_a_failing_event_hub_stop_does_not_stop_the_rest_of_shutdown(world: Worl
     _run_lifespan()
     tail = _normalized(world.events)[len(EXPECTED_STARTUP) :]
     assert tail == EXPECTED_SHUTDOWN
-
-
-def test_a_failing_export_reconcile_is_skipped(world: World) -> None:
-    world.fail = {'reconcile_exports'}
-    _run_lifespan()
-    assert 'arbiter_config' in world.events
-    assert 'start_background_jobs' in world.events
 
 
 def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_reload(world: World) -> None:
