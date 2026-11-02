@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
+  import ImageSearchPicker from '$components/clusters/ImageSearchPicker.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
@@ -58,25 +59,56 @@
        is the entire point of this control, unlike the cluster_id-scoped
        SemanticSearchBox on /clusters/[id]. -->
   {#if modes.semanticSearchAvailable && !isSlotFilter}
-    <SemanticSearchBox
-      pageSize={200}
-      filter={{ ...gridItemFilter() }}
-      initialQuery={modes.similarTo ? null : page.url.searchParams.get('q')}
-      onQueryChange={(q) => (modes.searchQuery = q)}
-      onResults={(res) => {
-        modes.searchModeActive = true;
-        modes.searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
-        modes.searchResults = res.items;
-        modes.searchTotal = res.total;
-        modes.syncSearchUrl(modes.searchQuery);
-        void modes.ensureClusterMeta([
-          ...new Set(
-            res.items.map((it) => it.cluster_id).filter((id): id is number => id != null),
-          ),
-        ]);
-      }}
-      onClear={modes.exitSearchMode}
-    />
+    <!-- Re-mounted on a target switch: the box re-runs the typed query with the new target. -->
+    {#key modes.searchTarget}
+      <SemanticSearchBox
+        pageSize={200}
+        filter={{
+          ...gridItemFilter(),
+          ...(modes.searchTarget === 'box' ? { target: 'box' } : {}),
+        }}
+        initialQuery={modes.similarTo ? null : page.url.searchParams.get('q')}
+        onQueryChange={(q) => (modes.searchQuery = q)}
+        onResults={(res) => {
+          modes.searchModeActive = true;
+          modes.searchScores = new Map(
+            res.items.map((it) => [it.id, it.similarity_score]),
+          );
+          modes.noteMatches(res.items);
+          modes.searchResults = res.items;
+          modes.searchTotal = res.total;
+          modes.syncSearchUrl(modes.searchQuery);
+          void modes.ensureClusterMeta([
+            ...new Set(
+              res.items
+                .map((it) => it.cluster_id)
+                .filter((id): id is number => id != null),
+            ),
+          ]);
+        }}
+        onClear={modes.exitSearchMode}
+      />
+    {/key}
+    <div
+      class="inline-flex overflow-hidden rounded-md border border-zinc-700 text-xs"
+      role="group"
+      aria-label="Search target"
+      data-testid="search-target"
+    >
+      {#each [{ id: 'item', label: 'Crops' }, { id: 'box', label: 'Regions' }] as opt (opt.id)}
+        <button
+          type="button"
+          class="px-2 py-1 {modes.searchTarget === opt.id
+            ? 'bg-blue-500/20 text-blue-200'
+            : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}"
+          aria-pressed={modes.searchTarget === opt.id}
+          onclick={() => void modes.setSearchTarget(opt.id as 'item' | 'box')}
+        >
+          {opt.label}
+        </button>
+      {/each}
+    </div>
+    <ImageSearchPicker onSearch={(file, box) => void modes.runImage({ file, box })} />
   {/if}
 
   <!-- Item-text search (G8) — literal OCR text search over

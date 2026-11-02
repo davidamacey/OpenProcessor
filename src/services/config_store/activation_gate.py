@@ -113,6 +113,8 @@ async def run_activation_gate(
     """
     from src.services.rejections import rejection
 
+    if axis == 'ingest_profile':
+        return await _run_ingest_profile_gate(name, revision, force=force, client=client, body=body)
     if axis == 'open_vocab':
         return await _run_open_vocab_gate(name, revision, force=force, client=client, body=body)
     if axis == 'prompt_pack':
@@ -208,6 +210,43 @@ async def run_activation_gate(
         for e in report.errors
         if not (force and e.code in (VLM_BYPASSABLE if e in vlm_errors else BYPASSABLE_CODES))
     ]
+    if blocking:
+        raise rejection(
+            422,
+            'validation_failed',
+            f'{name!r} has {len(blocking)} blocking error(s)',
+            report=report,
+        )
+    return report
+
+
+async def _run_ingest_profile_gate(
+    name: str, revision: int | None, *, force: bool, client: Any, body: dict[str, Any] | None
+) -> ValidationReport:
+    """The ``for_activation`` gate of an ingest profile: its body must validate
+    and its models must be servable on Triton. ``force`` bypasses only a Triton
+    outage; a model that is not ready or lacks the outputs never activates."""
+    from src.app.resources import get_async_triton_pool
+    from src.services.config_store.ingest_profile_validation import (
+        BYPASSABLE_CODES,
+        validate_ingest_profile,
+    )
+    from src.services.config_store.ingest_profiles import build_record, get_revision_record
+    from src.services.rejections import rejection
+
+    if body is None:
+        record = build_record(name, revision=revision)
+        if record is None and revision is not None and client is not None:
+            record = await get_revision_record(client, name, revision)
+        if record is None:
+            raise rejection(404, 'not_found', f'{name!r} is not a known ingest profile')
+        if record.read_only and record.source == 'template':
+            raise rejection(403, 'read_only', f'{name!r} is a template; clone it first')
+        body = record.body
+    report = await validate_ingest_profile(
+        name, body, for_activation=True, pool_provider=get_async_triton_pool
+    )
+    blocking = [e for e in report.errors if not (force and e.code in BYPASSABLE_CODES)]
     if blocking:
         raise rejection(
             422,

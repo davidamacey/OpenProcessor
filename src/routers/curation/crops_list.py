@@ -6,6 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
+from src.routers._errors import server_error
 from src.routers.curation._common import (
     CropsPageResponse,
     ItemDoc,
@@ -192,7 +193,7 @@ async def list_crops(
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     # Computed orders (outliers / core_first / diverse) rank the matched
     # pool; None falls through to the plain sort above.

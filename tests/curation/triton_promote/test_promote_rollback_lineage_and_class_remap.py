@@ -44,7 +44,7 @@ async def test_promote_restores_previous_version_on_failure(
         msg = 'simulated disk failure mid-copy'
         raise OSError(msg)
 
-    monkeypatch.setattr('src.services.training.triton_promote.shutil.copy2', _boom)
+    monkeypatch.setattr('src.services.training.triton_promote.add_uint8_input', _boom)
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
 
     promoter = _promoter(scratch_models_dir)

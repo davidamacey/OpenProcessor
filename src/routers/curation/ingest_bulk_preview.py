@@ -13,9 +13,10 @@ import threading
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-from fastapi import HTTPException, Request
+from fastapi import Request  # noqa: TC002 - FastAPI resolves the annotation
 
 from src.config import get_curation_config
+from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import router
 from src.routers.curation._ingest_bulk_preview_models import (
@@ -183,7 +184,7 @@ async def preview_bulk_ingest(body: BulkPreviewRequest, request: Request) -> Bul
     except S3NotAllowedError as exc:
         raise api_error(422, 's3_not_allowed', str(exc), project=slug()) from None
     except ObjectStoreError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from None
+        raise server_error(502, 'object store request failed', exc) from None
     finally:
         cancelled.set()
         watcher.cancel()

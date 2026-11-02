@@ -78,10 +78,17 @@ class _FakeInferResult:
 
 
 def _make_mock_pool(
-    raw_output: np.ndarray | None = None, *, raises: BaseException | None = None
+    raw_output: np.ndarray | None = None,
+    *,
+    raises: BaseException | None = None,
+    input_datatype: str = 'UINT8',
 ) -> MagicMock:
-    """Build an :class:`AsyncTritonPool` mock that returns one canned output."""
+    """Build an :class:`AsyncTritonPool` mock that returns one canned output.
+
+    ``input_datatype`` is what the mocked model declares for its ``images`` input.
+    """
     pool = MagicMock()
+    pool.get_model_input_datatype = AsyncMock(return_value=input_datatype)
     if raises is not None:
         pool.infer = AsyncMock(side_effect=raises)
     else:

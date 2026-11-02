@@ -132,7 +132,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -303,7 +304,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -3167,6 +3169,49 @@
           "images"
         ],
         "title": "Body_curation_ingest_upload_curation_projects__project__ingest_upload_post",
+        "type": "object"
+      },
+      "Body_search_image_curation_projects__project__search_image_post": {
+        "properties": {
+          "box": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Normalized \"x1,y1,x2,y2\": search by this region of the picture.",
+            "title": "Box"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The query picture.",
+            "title": "Image"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An image already in this project, instead of an upload.",
+            "title": "Image Id"
+          }
+        },
+        "title": "Body_search_image_curation_projects__project__search_image_post",
         "type": "object"
       },
       "Body_upload_dataset_curation_projects__project__datasets_uploads_post": {
@@ -6292,6 +6337,11 @@
               "revision_conflict",
               "not_found",
               "crop_not_embedded",
+              "box_not_found",
+              "box_not_embedded",
+              "image_unreadable",
+              "bad_box",
+              "image_encoder_unavailable",
               "unknown_revision",
               "active_conflict",
               "no_previous",
@@ -8644,6 +8694,13 @@
               "openimages_group_skipped",
               "openimages_image_split_conflict",
               "openimages_image_unreferenced",
+              "cvat_xml_invalid",
+              "yolo_names_file_invalid",
+              "labelstudio_json_invalid",
+              "labelstudio_task_skipped",
+              "createml_json_invalid",
+              "labelme_json_invalid",
+              "shape_not_box_skipped",
               "image_file_missing"
             ],
             "title": "Code",
@@ -8901,6 +8958,11 @@
               "coco",
               "voc",
               "openimages",
+              "cvat",
+              "labelstudio",
+              "kitti",
+              "createml",
+              "labelme",
               "openprocessor_export"
             ],
             "title": "Format",
@@ -9488,85 +9550,6 @@
           "source"
         ],
         "title": "DetectorEntry",
-        "type": "object"
-      },
-      "DetectorNotServableDetail": {
-        "properties": {
-          "error": {
-            "const": "detector_not_servable",
-            "title": "Error",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "reasons": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Reasons",
-            "type": "array"
-          }
-        },
-        "required": [
-          "error",
-          "message",
-          "reasons"
-        ],
-        "title": "DetectorNotServableDetail",
-        "type": "object"
-      },
-      "DetectorNotServableResponse": {
-        "description": "422: the detector override cannot be served; ``reasons`` lists every problem.",
-        "properties": {
-          "detail": {
-            "$ref": "#/components/schemas/DetectorNotServableDetail"
-          }
-        },
-        "required": [
-          "detail"
-        ],
-        "title": "DetectorNotServableResponse",
-        "type": "object"
-      },
-      "DetectorOverride": {
-        "additionalProperties": false,
-        "description": "A per-project ingest detector: replaces the deployment's primary model for\nthis project. It must serve the end2end four-tensor contract, and its class\nids are never read as registry ids (its detections are proposals, or are\nresolved by name).",
-        "properties": {
-          "input_size": {
-            "anyOf": [
-              {
-                "maximum": 4096.0,
-                "minimum": 32.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Input Size"
-          },
-          "labels_path": {
-            "default": "",
-            "title": "Labels Path",
-            "type": "string"
-          },
-          "model": {
-            "minLength": 1,
-            "title": "Model",
-            "type": "string"
-          },
-          "version": {
-            "default": "1",
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "model"
-        ],
-        "title": "DetectorOverride",
         "type": "object"
       },
       "DetectorUnavailableDetail": {
@@ -11197,6 +11180,70 @@
         "title": "IngestDetectorLabel",
         "type": "object"
       },
+      "IngestDetectorSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_limit": {
+            "anyOf": [
+              {
+                "maximum": 256.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Limit"
+          },
+          "confidence_floor": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Floor"
+          },
+          "input_size": {
+            "anyOf": [
+              {
+                "maximum": 4096.0,
+                "minimum": 32.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Size"
+          },
+          "labels_path": {
+            "default": "",
+            "title": "Labels Path",
+            "type": "string"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "version": {
+            "default": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "IngestDetectorSpec",
+        "type": "object"
+      },
       "IngestImageRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11372,16 +11419,6 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -11402,16 +11439,6 @@
           },
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
-          },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
@@ -11483,16 +11510,6 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -11522,16 +11539,6 @@
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
-          "detector": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DetectorOverride"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "embedding": {
             "$ref": "#/components/schemas/EmbeddingPolicy"
           },
@@ -11545,6 +11552,723 @@
           "expected_revision"
         ],
         "title": "IngestPolicyUpdate",
+        "type": "object"
+      },
+      "IngestProfileActivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "IngestProfileActivateRequest",
+        "type": "object"
+      },
+      "IngestProfileActivateResponse": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "applied": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AppliedRuntime"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "axis": {
+            "enum": [
+              "prompt_pack",
+              "detection_profile",
+              "vlm",
+              "open_vocab",
+              "ingest_profile"
+            ],
+            "title": "Axis",
+            "type": "string"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "env",
+              "off"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "axis",
+          "active",
+          "source",
+          "config_revision",
+          "validation"
+        ],
+        "title": "IngestProfileActivateResponse",
+        "type": "object"
+      },
+      "IngestProfileBody": {
+        "additionalProperties": false,
+        "properties": {
+          "primary": {
+            "$ref": "#/components/schemas/IngestDetectorSpec"
+          },
+          "secondary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestDetectorSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "primary"
+        ],
+        "title": "IngestProfileBody",
+        "type": "object"
+      },
+      "IngestProfileCloneRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "from_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Project"
+          },
+          "new_name": {
+            "title": "New Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "stored",
+                  "template"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "new_name"
+        ],
+        "title": "IngestProfileCloneRequest",
+        "type": "object"
+      },
+      "IngestProfileCreateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "IngestProfileCreateRequest",
+        "type": "object"
+      },
+      "IngestProfileDeactivateRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "IngestProfileDeactivateRequest",
+        "type": "object"
+      },
+      "IngestProfileDoc": {
+        "properties": {
+          "active": {
+            "default": false,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "description",
+          "body"
+        ],
+        "title": "IngestProfileDoc",
+        "type": "object"
+      },
+      "IngestProfileFieldSchema": {
+        "properties": {
+          "default": {
+            "title": "Default"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "help": {
+            "default": "",
+            "title": "Help",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "scope": {
+            "enum": [
+              "primary",
+              "secondary"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "int",
+              "float"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "field",
+          "label",
+          "type"
+        ],
+        "title": "IngestProfileFieldSchema",
+        "type": "object"
+      },
+      "IngestProfileList": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/ActiveRef"
+          },
+          "config_revision": {
+            "title": "Config Revision",
+            "type": "integer"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileSummary"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileTemplateSummary"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "templates",
+          "active",
+          "config_revision"
+        ],
+        "title": "IngestProfileList",
+        "type": "object"
+      },
+      "IngestProfileRevisionSummary": {
+        "properties": {
+          "cloned_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloned From"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          }
+        },
+        "required": [
+          "revision",
+          "saved_at",
+          "cloned_from",
+          "description"
+        ],
+        "title": "IngestProfileRevisionSummary",
+        "type": "object"
+      },
+      "IngestProfileRevisionsResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileRevisionSummary"
+            },
+            "title": "Revisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revisions"
+        ],
+        "title": "IngestProfileRevisionsResponse",
+        "type": "object"
+      },
+      "IngestProfileRollbackRequest": {
+        "properties": {
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "IngestProfileRollbackRequest",
+        "type": "object"
+      },
+      "IngestProfileSaveRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "body"
+        ],
+        "title": "IngestProfileSaveRequest",
+        "type": "object"
+      },
+      "IngestProfileSchema": {
+        "description": "One row per detector field, for both the ``primary`` and ``secondary``\ndetector, so a form renders each control with its range. A field left null\ninherits the deployment's ``OP_INGEST_*`` value.",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/IngestProfileFieldSchema"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "IngestProfileSchema",
+        "type": "object"
+      },
+      "IngestProfileSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "primary_model": {
+            "title": "Primary Model",
+            "type": "string"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "secondary_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary Model"
+          },
+          "source": {
+            "enum": [
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "primary_model",
+          "active"
+        ],
+        "title": "IngestProfileSummary",
+        "type": "object"
+      },
+      "IngestProfileTemplateSummary": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "primary_model": {
+            "title": "Primary Model",
+            "type": "string"
+          },
+          "read_only": {
+            "const": true,
+            "default": true,
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "source": {
+            "const": "template",
+            "default": "template",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "primary_model"
+        ],
+        "title": "IngestProfileTemplateSummary",
+        "type": "object"
+      },
+      "IngestProfileValidateRequest": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/IngestProfileBody"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "IngestProfileValidateRequest",
         "type": "object"
       },
       "IngestRegionDrainConfig": {
@@ -17162,7 +17886,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -19509,6 +20234,7 @@
               "keymap",
               "prompt_packs",
               "open_vocab",
+              "ingest_profile",
               "vlm_activation"
             ],
             "items": {
@@ -21751,7 +22477,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -28203,6 +28930,44 @@
         "title": "ScoresComputeRequest",
         "type": "object"
       },
+      "SearchImageResponse": {
+        "description": "``POST /search/image``: the ``/search/text`` page; ``semantic_score`` is the kNN\nsimilarity to the encoded picture (or to its ``box``).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SearchItemDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unembedded_in_scope": {
+            "description": "In-scope items the search cannot see because they have no vector: an empty result with a non-zero count is not \"no matches\".",
+            "title": "Unembedded In Scope",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "unembedded_in_scope"
+        ],
+        "title": "SearchImageResponse",
+        "type": "object"
+      },
       "SearchItemDoc": {
         "properties": {
           "assist": {
@@ -28753,6 +29518,30 @@
               }
             ],
             "title": "Mask Polygon"
+          },
+          "matched_box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`target=box` only: the box of this item whose vector matched best.",
+            "title": "Matched Box Id"
+          },
+          "matched_box_stale": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`target=box` only: true when the matched vector was computed from geometry the box no longer has (or the box is gone).",
+            "title": "Matched Box Stale"
           },
           "mistakenness_method": {
             "anyOf": [
@@ -29463,6 +30252,15 @@
         ],
         "title": "SearchSimilarResponse",
         "type": "object"
+      },
+      "SearchTarget": {
+        "description": "``item``: the crop's own vector (``pe_embedding``). ``box``: the per-box vectors inside\nan item (``region_box_embeddings``); the page is still one card per item.",
+        "enum": [
+          "item",
+          "box"
+        ],
+        "title": "SearchTarget",
+        "type": "string"
       },
       "SearchTextResponse": {
         "description": "``GET /search/text``.",
@@ -31939,6 +32737,9 @@
               "open_vocab_detector_class",
               "open_vocab_class_new",
               "open_vocab_vlm_not_configured",
+              "ingest_profile_name_invalid",
+              "ingest_profile_name_reserved",
+              "ingest_profile_field_invalid",
               "unmapped_class",
               "mapping_target_invalid",
               "source_not_found",
@@ -32217,7 +33018,8 @@
               "prompt_pack",
               "detection_profile",
               "vlm",
-              "open_vocab"
+              "open_vocab",
+              "ingest_profile"
             ],
             "title": "Axis",
             "type": "string"
@@ -44011,21 +44813,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DetectorNotServableResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DetectorUnavailableResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
         "summary": "Put Policy",
@@ -44643,6 +45435,754 @@
           }
         },
         "summary": "Curation Ingest Upload",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles": {
+      "get": {
+        "operationId": "list_ingest_profiles_curation_projects__project__ingest_profiles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
+            "in": "query",
+            "name": "include_templates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also return the shipped example templates in `templates`; they are omitted by default.",
+              "title": "Include Templates",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ingest Profiles",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "create_ingest_profile_curation_projects__project__ingest_profiles_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/active": {
+      "get": {
+        "operationId": "get_active_ingest_profile_curation_projects__project__ingest_profiles_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Active Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/active/rollback": {
+      "post": {
+        "operationId": "rollback_active_ingest_profile_curation_projects__project__ingest_profiles_active_rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Active Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/deactivate": {
+      "post": {
+        "operationId": "deactivate_ingest_profile_curation_projects__project__ingest_profiles_deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileDeactivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deactivate Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/schema": {
+      "get": {
+        "operationId": "get_ingest_profile_schema_curation_projects__project__ingest_profiles_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingest Profile Schema",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/validate": {
+      "post": {
+        "operationId": "validate_ingest_profile_route_curation_projects__project__ingest_profiles_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "for_activation",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "For Activation",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Ingest Profile Route",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}": {
+      "delete": {
+        "operationId": "delete_ingest_profile_curation_projects__project__ingest_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "get": {
+        "operationId": "get_ingest_profile_curation_projects__project__ingest_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "put": {
+        "operationId": "save_ingest_profile_curation_projects__project__ingest_profiles__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/activate": {
+      "post": {
+        "operationId": "activate_ingest_profile_curation_projects__project__ingest_profiles__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileActivateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/clone": {
+      "post": {
+        "operationId": "clone_ingest_profile_curation_projects__project__ingest_profiles__name__clone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestProfileCloneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Ingest Profile",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/revisions": {
+      "get": {
+        "operationId": "list_ingest_profile_revisions_curation_projects__project__ingest_profiles__name__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileRevisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ingest Profile Revisions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest_profiles/{name}/revisions/{revision}": {
+      "get": {
+        "operationId": "get_ingest_profile_revision_curation_projects__project__ingest_profiles__name__revisions__revision__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestProfileDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingest Profile Revision",
         "tags": [
           "Curation"
         ]
@@ -52643,10 +54183,10 @@
         ]
       }
     },
-    "/curation/projects/{project}/search/similar": {
-      "get": {
-        "description": "kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.\n\nNo encoder is involved. Same filters, default exclusions and page shape as\n``GET /search/text``; ``semantic_score`` is the similarity to the source crop.",
-        "operationId": "search_similar_curation_projects__project__search_similar_get",
+    "/curation/projects/{project}/search/image": {
+      "post": {
+        "description": "kNN over the PE vectors using the encoded picture as the query.\n\nThe picture goes through the same crop preprocessing the indexed vectors were made with.\n``semantic_score`` is the similarity to the picture; with ``target=box`` each item also\ncarries ``matched_box_id``. Nothing is stored.",
+        "operationId": "search_image_curation_projects__project__search_image_post",
         "parameters": [
           {
             "in": "path",
@@ -52658,25 +54198,14 @@
             }
           },
           {
-            "description": "The source crop in this project (\"More like this\").",
+            "description": "`item` ranks crop vectors; `box` ranks per-box vectors.",
             "in": "query",
-            "name": "crop_id",
-            "required": true,
-            "schema": {
-              "description": "The source crop in this project (\"More like this\").",
-              "minLength": 1,
-              "title": "Crop Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "exclude_self",
+            "name": "target",
             "required": false,
             "schema": {
-              "default": true,
-              "title": "Exclude Self",
-              "type": "boolean"
+              "$ref": "#/components/schemas/SearchTarget",
+              "default": "item",
+              "description": "`item` ranks crop vectors; `box` ranks per-box vectors."
             }
           },
           {
@@ -53131,6 +54660,601 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_search_image_curation_projects__project__search_image_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchImageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "invalid_request, bad_box, image_unreadable"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "image_not_found (image_id)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "upload_too_large (bytes or pixels)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "image_encoder_unavailable"
+          }
+        },
+        "summary": "Search Image",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/search/similar": {
+      "get": {
+        "description": "kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.\n\nNo encoder is involved. Same filters, default exclusions and page shape as\n``GET /search/text``; ``semantic_score`` is the similarity to the source crop (or box,\nwith ``box_id``).",
+        "operationId": "search_similar_curation_projects__project__search_similar_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The source crop in this project (\"More like this\").",
+            "in": "query",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "description": "The source crop in this project (\"More like this\").",
+              "minLength": 1,
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Use this box of `crop_id` as the query instead of the crop.",
+            "in": "query",
+            "name": "box_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Use this box of `crop_id` as the query instead of the crop.",
+              "title": "Box Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_self",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Exclude Self",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cluster_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cluster Id"
+            }
+          },
+          {
+            "description": "Optional review-tab cohort id, as /search/text.",
+            "in": "query",
+            "name": "tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional review-tab cohort id, as /search/text.",
+              "title": "Tab"
+            }
+          },
+          {
+            "description": "ISO date/datetime lower bound on created_at.",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime lower bound on created_at.",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "ISO date/datetime upper bound on created_at.",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime upper bound on created_at.",
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_near_duplicates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Hide Near Duplicates",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Drop hits below this cosine-similarity score.",
+            "in": "query",
+            "name": "min_score",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Drop hits below this cosine-similarity score.",
+              "title": "Min Score"
+            }
+          },
+          {
+            "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`.",
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SearchTarget",
+              "default": "item",
+              "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`."
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -53150,7 +55274,7 @@
                 }
               }
             },
-            "description": "not_found (crop not in this project)"
+            "description": "not_found (crop not in this project) or box_not_found"
           },
           "409": {
             "content": {
@@ -53160,7 +55284,7 @@
                 }
               }
             },
-            "description": "crop_not_embedded"
+            "description": "crop_not_embedded or box_not_embedded"
           },
           "422": {
             "content": {
@@ -53343,6 +55467,17 @@
               ],
               "description": "Drop hits below this cosine-similarity score.",
               "title": "Min Score"
+            }
+          },
+          {
+            "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`.",
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SearchTarget",
+              "default": "item",
+              "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`."
             }
           },
           {

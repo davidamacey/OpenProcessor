@@ -24,7 +24,7 @@ or breaks something that works.
 | Item | Why | Evidence | Issue | Size / risk |
 |---|---|---|---|---|
 | **PE-Core-L stays** | No challenger passed the registered Recall@1 gain on CARS196, CUB or SOP. PE-Core-G is best on all three but costs about eight times the encode time and five times the memory. The set C ranking (MobileCLIP2 first) did not hold on the standard benchmarks | [`wb2_standard_benchmarks.md`](../research/wb2_standard_benchmarks.md) | #347 (evaluation of a newer text-and-image embedding model), #365 (model swap with a dual-field migration) | Do not swap. Any new candidate needs a text tower, because search uses it (4 of the 5 encoders tested have one). The registered sanity check of WB2 was not met, so its comparisons are exploratory |
-| **Semantic search over crops** | Item and box vectors exist. `GET {P}/search/text` queries item vectors only; `{P}/search/similar`, `{P}/search/image` and a `target=item|box|frame` option are proposed, none built. Cheapest first step is "more like this" from a stored vector (no encode) | plan section 4 | to file | M; risk low. Related: #384 (a `class_name` filter makes text search 4 to 5 times slower), #356 (about 1.5 s outlier on 1 in 10 queries) |
+| **Semantic search over crops** | Item and box vectors exist. `GET {P}/search/text` queries item vectors only; `{P}/search/similar`, `{P}/search/image` and `target=item|box` are built (#402); `target=frame` and `group_by=image` are deferred | plan section 4 | to file | M; risk low. Related: #384 (a `class_name` filter makes text search 4 to 5 times slower), #356 (about 1.5 s outlier on 1 in 10 queries) |
 | **Search filter cost** | A class filter slows text search; the unfiltered path is fast | issue text | #384, #356 | S to M |
 
 ## 3. Ingest speed

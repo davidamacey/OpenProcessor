@@ -71,19 +71,40 @@ async def active_detector_users(client: Any, model_name: str) -> list[tuple[str,
     return sorted([*region_users, *ingest_users])
 
 
+async def ingest_models_by_project(client: Any) -> dict[str, frozenset[str]]:
+    """``slug -> models`` its ACTIVE ingest profile names as primary or secondary
+    ingest detector (empty when none is active). Raises when any project cannot be
+    read, so a caller that refuses on the result fails closed."""
+    from opensearchpy.exceptions import NotFoundError
+
+    from src.schemas.curation.ingest_profile import IngestProfileBody
+    from src.services.config_store.index import config_doc_id, get_activation
+
+    async def own_models(index: str) -> frozenset[str]:
+        activation = await get_activation(client, index, 'ingest_profile')
+        name = (activation or {}).get('name')
+        revision = (activation or {}).get('revision')
+        if not name or revision is None:
+            return frozenset()
+        try:
+            doc = await client.get(
+                index=index, id=config_doc_id('ingest_profile', name, int(revision))
+            )
+        except NotFoundError:
+            return frozenset()
+        body = IngestProfileBody.model_validate(doc['_source'].get('body') or {})
+        return frozenset(spec.model for spec in (body.primary, body.secondary) if spec is not None)
+
+    return await read_each_project(own_models)
+
+
 async def ingest_detector_users(client: Any, model_name: str) -> list[str]:
-    """Slugs of the projects whose ingest policy names ``model_name`` as their
-    own ingest detector."""
-    from src.services.curation.ingest_policy_store import get_ingest_policy
-
-    async def own_detector(_index: str) -> str | None:
-        override = (await get_ingest_policy(client)).detector
-        return override.model if override is not None else None
-
+    """Slugs of the projects whose ACTIVE ingest profile names ``model_name`` as
+    their primary or secondary ingest detector."""
     return [
         slug
-        for slug, model in (await read_each_project(own_detector)).items()
-        if model == model_name
+        for slug, models in (await ingest_models_by_project(client)).items()
+        if model_name in models
     ]
 
 
@@ -104,6 +125,7 @@ __all__ = [
     'INGEST_DETECTOR_USER',
     'active_detector_users',
     'ingest_detector_users',
+    'ingest_models_by_project',
     'model_dependents',
     'read_each_project',
 ]

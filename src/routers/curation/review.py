@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import HTTPException, Path as PathParam, Query
 
 from src.config import get_region_fields
+from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
     get_class_registry,
@@ -186,7 +187,7 @@ async def review_queue(
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
 
     total_obj = (resp.get('hits') or {}).get('total') or {}
     total = int(total_obj.get('value', 0))
@@ -309,7 +310,7 @@ async def review_locate(
         try:
             resp = await opensearch.count(index=items_index(), body={'query': query})
         except Exception as exc:
-            raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+            raise server_error(503, 'opensearch unavailable', exc) from exc
         return int(resp.get('count', 0))
 
     try:
@@ -317,7 +318,7 @@ async def review_locate(
     except Exception as exc:
         if is_not_found(exc):
             return {**out, 'reason': 'not_found'}
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     if not doc.get('found', True):
         return {**out, 'reason': 'not_found'}
     source_doc = {**(doc.get('_source') or {}), 'crop_id': crop_id}

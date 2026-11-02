@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.ingest import CurationIngestService
-from src.services.curation.ingest_detector import project_ingest_profile
+from src.services.curation.ingest_detector import (
+    IngestProfileUnresolvedError,
+    refreshed_ingest_profiles,
+)
+from src.services.curation.ingest_policy_store import get_ingest_policy
 
 
 async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:
@@ -22,17 +25,19 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
             detail='PE encoder not initialized; ingest is unavailable until app startup completes',
         )
     try:
-        base_profile = ingest_primary_profile()
-        secondary = ingest_secondary_profile()
-    except ValueError as exc:
+        profiles = await refreshed_ingest_profiles(opensearch)
+    except (ValueError, IngestProfileUnresolvedError) as exc:
         raise RequestRejectedError(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
-    profile, policy = await project_ingest_profile(opensearch, base_profile)
+    profile, secondary = profiles.primary, profiles.secondary
+    policy = await get_ingest_policy(opensearch)
     if not profile.detector_model:
         raise RequestRejectedError(
             status_code=503,
             detail=(
-                'No detector configured for ingest — set OP_INGEST_PRIMARY_DETECTOR_MODEL '
-                'to a Triton model name that serves item proposals for this deployment'
+                'No detector configured for ingest — activate an ingest profile for this project '
+                '(POST /curation/projects/{project}/ingest_profiles/{name}/activate) or set '
+                'OP_INGEST_PRIMARY_DETECTOR_MODEL to a Triton model name that serves item '
+                'proposals for this deployment'
             ),
         )
     return CurationIngestService(

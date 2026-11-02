@@ -6,8 +6,8 @@ title: Dataset import
 # Dataset import
 
 Bring an already-labeled dataset into a project: a YOLO dataset, a COCO
-dataset, a Pascal VOC dataset, an Open Images dataset, or an OpenProcessor
-export. Classes are mapped by name, never by
+dataset, a Pascal VOC dataset, an Open Images dataset, a CVAT, Label Studio,
+KITTI, CreateML or LabelMe export, or an OpenProcessor export. Classes are mapped by name, never by
 index. A dataset's class order is not trusted across the boundary.
 
 `API=http://localhost:4603` and project `cars` are assumed.
@@ -25,7 +25,10 @@ index. A dataset's class order is not trusted across the boundary.
   then Pascal VOC (`Annotations/` or `annotations/` holding `*.xml` and no
   `*.json`), then Open Images (a `*annotations-bbox*.csv` and a
   `*class-descriptions*.csv` directly in the directory), then YOLO (an
-  `images/` directory, or a child directory with `images/`). A `data.yaml`
+  `images/` directory, or a child directory with `images/`). Between Open
+  Images and the final YOLO rule, CVAT (an `annotations.xml`), Label Studio,
+  CreateML and LabelMe (JSON files whose first 64 KiB carry the format's keys)
+  and KITTI (`label_2/`) are tried in that order. A `data.yaml`
   always wins, so a YOLO dataset that also carries VOC or Open Images files is
   YOLO; an `annotations/` directory with both JSON and XML is COCO. Force a
   format with `source.format`.
@@ -43,6 +46,20 @@ index. A dataset's class order is not trusted across the boundary.
   of the MID. Group boxes are skipped, depiction boxes are kept, an image is
   never a verified negative (it is `unlabeled` when it has no kept box), and
   images with no box row are not imported.
+- **CVAT, Label Studio, KITTI, CreateML, LabelMe.** Format ids `cvat`,
+  `labelstudio`, `kitti`, `createml`, `labelme`. CVAT is the "for images 1.1"
+  `annotations.xml` with the images in `images/`. Label Studio is the full JSON
+  export (not `JSON_MIN`) with `rectanglelabels` results; its image reference
+  (`/data/upload/<n>/file` or `/data/local-files/?d=path`) is looked up in
+  `images/` or the directory, and a task with several annotations is skipped.
+  KITTI is `label_2/*.txt` with `image_2/` (also under `training/`). CreateML
+  boxes are centre-based pixels and LabelMe boxes are `rectangle` shapes.
+  The class is always the label text. An image with no object is a verified
+  negative; rotated boxes, polygons, masks and other non-box shapes are
+  skipped (`shape_not_box_skipped`). The layout table is in `docs/CURATION.md`, section "Importing other formats".
+- **YOLO names files.** A YOLO dataset may name its classes in `classes.txt`
+  (or `obj.names`, `names.txt`), one per line, beside `images/` and `labels/`.
+  With no `data.yaml` and no names file the dataset is refused.
 - **Allowed paths.** `source.path` must be absolute and, after symlinks are
   resolved, sit under a configured image source root (`OP_SOURCE_ROOT` and
   `OP_SOURCE_PATH_ALIASES`), the project's upload root, or the project's
@@ -262,6 +279,7 @@ Common warnings: `label_file_missing`, `label_row_malformed`,
 `label_box_degenerate`, `image_unreadable`, `image_size_mismatch`,
 `coco_bbox_out_of_image`, `voc_xml_invalid`, `openimages_class_unknown`,
 `openimages_image_split_conflict`, `image_file_missing`,
+`labelstudio_task_skipped`, `labelme_json_invalid`, `shape_not_box_skipped`,
 `label_conflicts_locked`.
 
 ## Errors

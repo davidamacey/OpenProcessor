@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -92,7 +93,7 @@ def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.Mon
     from src.routers import models_lifecycle
 
     monkeypatch.setattr(models_lifecycle, 'TRITON_MODELS_DIR', repo)
-    monkeypatch.setattr(models_lifecycle, 'check_unload', lambda *_a, **_k: None)
+    monkeypatch.setattr(models_lifecycle, 'check_unload', AsyncMock(return_value=False))
 
     class _Triton:
         async def unload_model(self, name: str) -> tuple[bool, str]:
@@ -102,8 +103,14 @@ def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.Mon
             return True, f'{name} loaded'
 
     monkeypatch.setattr(models_lifecycle, 'TritonControlService', _Triton)
+    from src.core.dependencies import get_curation_opensearch
     from src.main import app
 
+    monkeypatch.setitem(
+        app.dependency_overrides,
+        get_curation_opensearch,
+        lambda: object(),  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    )
     client = TestClient(app)
     assert client.post('/models/cars__det/unload').status_code == 200
     assert (repo / 'cars__det' / UNLOADED_MARKER).exists()

@@ -9,6 +9,7 @@ from typing import Literal
 from fastapi import HTTPException, Query, status
 
 from src.core.dependencies import VisualSearchDep
+from src.routers._errors import server_error
 from src.routers.ingest._router import router
 from src.schemas.ingest import BatchIndexedCounts, DirectoryIngestResponse
 
@@ -271,7 +272,4 @@ async def ingest_directory(
         raise
     except Exception as e:
         logger.error(f'Directory ingestion failed: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Directory ingestion failed: {e!s}',
-        ) from e
+        raise server_error(500, 'Directory ingestion failed', e) from e

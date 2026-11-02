@@ -10,6 +10,9 @@ Unloading the wrong model breaks live serving instantly, so:
 - the models the configured pipeline depends on (the primary item proposer,
   the optional secondary classifier, the region detector, OCR det/rec): 403,
   never unloadable here, not even with ``force``;
+- a model any OTHER project's active ingest profile runs: 403, never with
+  ``force`` (models are deployment-wide; the caller's own project is left to its
+  route, which can let ``force`` through);
 - the other core models (CLIP image encoder, face detect / recognition):
   409 unless ``force``.
 
@@ -20,9 +23,11 @@ never by a hardcoded model list.
 from __future__ import annotations
 
 import contextlib
+from typing import Any
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
+from src.services.config_store.project_usage import ingest_models_by_project
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_endpoints import available_vlm_endpoints
 
@@ -58,10 +63,24 @@ def region_protected_models() -> frozenset[str]:
     )
 
 
-def is_region_protected_model(model_name: str) -> bool:
-    return model_name in region_protected_models() or model_name.startswith(
-        REGION_PROTECTED_PREFIXES
+def is_region_protected_model(
+    model_name: str, *, used_elsewhere: frozenset[str] = frozenset()
+) -> bool:
+    """Whether no ``force`` can unload ``model_name``. ``used_elsewhere`` is the
+    models other projects' active ingest profiles run
+    (:func:`models_run_by_other_projects`)."""
+    return (
+        model_name in region_protected_models()
+        or model_name in used_elsewhere
+        or model_name.startswith(REGION_PROTECTED_PREFIXES)
     )
+
+
+async def models_run_by_other_projects(client: Any, own_project: str | None) -> frozenset[str]:
+    """Every model a project other than ``own_project`` runs as an ingest detector,
+    read live from each project's config docs. Raises when a project is unreadable."""
+    by_project = await ingest_models_by_project(client)
+    return frozenset().union(*(m for slug, m in by_project.items() if slug != own_project))
 
 
 def core_pipeline_models() -> frozenset[str]:
@@ -89,10 +108,15 @@ def external_service_model_names() -> frozenset[str]:
     return frozenset(names)
 
 
-def check_unload(model_name: str, *, force: bool) -> bool:
+async def check_unload(
+    model_name: str, *, force: bool, client: Any, own_project: str | None = None
+) -> bool:
     """Raise :class:`UnloadRefusedError` unless ``model_name`` may be unloaded.
     Returns whether it is a core pipeline model (only reachable with
-    ``force``), so the caller can warn that live inference is now down."""
+    ``force``), so the caller can warn that live inference is now down.
+
+    ``client`` reads every project's active ingest profile; ``own_project`` is the
+    bound project of a project route (its own use is that route's to weigh)."""
     if model_name in external_service_model_names():
         raise UnloadRefusedError(
             400,
@@ -106,6 +130,22 @@ def check_unload(model_name: str, *, force: bool) -> bool:
             f'{model_name!r} is a region-detector pipeline model (detector or OCR) '
             'and can never be unloaded through this endpoint, even with '
             'force=true. Manage it out of band.',
+        )
+    try:
+        by_project = await ingest_models_by_project(client)
+    except Exception as exc:
+        raise UnloadRefusedError(
+            503,
+            'could not read every project to see whether another project runs '
+            f'{model_name!r}; retry (force does not skip this check)',
+        ) from exc
+    users = sorted(s for s, m in by_project.items() if s != own_project and model_name in m)
+    if users:
+        raise UnloadRefusedError(
+            403,
+            f'{model_name!r} is the ingest detector of project(s) {", ".join(users)}; models are '
+            'deployment-wide, so it can never be unloaded here, even with force=true. Change '
+            'their active ingest profile first.',
         )
     is_core = model_name in core_pipeline_models()
     if is_core and not force:
@@ -125,5 +165,6 @@ __all__ = [
     'core_pipeline_models',
     'external_service_model_names',
     'is_region_protected_model',
+    'models_run_by_other_projects',
     'region_protected_models',
 ]

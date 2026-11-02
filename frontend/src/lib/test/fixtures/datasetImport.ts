@@ -22,6 +22,11 @@ export function formatsFixture(
       { format: 'coco', label: 'COCO JSON' },
       { format: 'voc', label: 'Pascal VOC (XML per image)' },
       { format: 'openimages', label: 'Open Images (boxes CSV + class descriptions)' },
+      { format: 'cvat', label: 'CVAT for images 1.1 (annotations.xml)' },
+      { format: 'labelstudio', label: 'Label Studio (JSON export)' },
+      { format: 'kitti', label: 'KITTI (label_2 + image_2)' },
+      { format: 'createml', label: 'CreateML (JSON)' },
+      { format: 'labelme', label: 'LabelMe (JSON per image)' },
       { format: 'openprocessor_export', label: 'OpenProcessor export' },
     ],
     processing_modes: [

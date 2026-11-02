@@ -17,8 +17,10 @@ from typing import Annotated, Any
 
 import httpx
 from fastapi import HTTPException, Query
+from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel
 
+from src.config import get_curation_config
 from src.config.env import env_str
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, logger, router
@@ -29,7 +31,7 @@ from src.routers.curation._models_class_mapping import (
     listing_fields,
 )
 from src.routers.curation._models_vlm import vlm_status_rows
-from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.services.curation.ingest_detector import refreshed_ingest_profiles
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.detection.segmenter_health import (
     build_segmenter_entry,
@@ -40,6 +42,7 @@ from src.services.model_unload_guard import (
     check_unload,
     core_pipeline_models,
     is_region_protected_model,
+    models_run_by_other_projects,
 )
 from src.services.training.promote_errors import ModelNotPromotedError, PromoteError
 from src.services.training.promoted_models import (
@@ -89,8 +92,23 @@ def _parse_triton_metrics(text: str) -> dict[str, dict[str, float]]:
     return out
 
 
+async def _models_other_projects_run(opensearch: Any) -> frozenset[str]:
+    """The models other projects' active ingest profiles run (the listing's
+    ``is_region_protected`` flag); 503 when a project cannot be read, since the
+    flag would otherwise under-report."""
+    try:
+        return await models_run_by_other_projects(opensearch, get_curation_config().project_slug)
+    except (OpenSearchException, OSError, RuntimeError) as exc:
+        raise api_error(
+            503,
+            'config_store_unavailable',
+            'could not read every project to see which models are in use; retry',
+        ) from exc
+
+
 @router.get('/models/status')
 async def models_status(
+    opensearch: OpenSearchDep,
     include_other_projects: Annotated[
         bool,
         Query(description="Also list other projects' promoted models their owners shared"),
@@ -129,6 +147,8 @@ async def models_status(
                 metrics_by_model = _parse_triton_metrics(r.text)
         except httpx.HTTPError as exc:
             logger.warning('models_status_metrics_failed', error=str(exc))
+
+    used_elsewhere = await _models_other_projects_run(opensearch)
 
     def _build_triton_entry(
         name: str,
@@ -180,7 +200,7 @@ async def models_status(
             # Unload guard flags — same source of truth the
             # DELETE /models/{name} endpoint enforces (see
             # src/services/model_unload_guard.py).
-            'is_region_protected': is_region_protected_model(name),
+            'is_region_protected': is_region_protected_model(name, used_elsewhere=used_elsewhere),
             'requires_force_to_unload': name in core_pipeline_models(),
             'job_id': job_id,
             'promoted_at': promoted_at,
@@ -338,27 +358,33 @@ async def unload_model(
         )
 
     try:
-        is_core = check_unload(model_name, force=force)
+        is_core = await check_unload(
+            model_name,
+            force=force,
+            client=opensearch,
+            own_project=get_curation_config().project_slug,
+        )
     except UnloadRefusedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     if not force:
         try:
-            policy = await get_ingest_policy(opensearch)
+            ingest = await refreshed_ingest_profiles(opensearch)
         except Exception as exc:
             raise api_error(
                 503,
                 'config_store_unavailable',
-                'could not read the ingest policy to see whether this is the ingest '
+                'could not read the active ingest profile to see whether this is the ingest '
                 'detector; retry, or pass force',
             ) from exc
-        if policy.detector is not None and policy.detector.model == model_name:
+        own = (ingest.primary, ingest.secondary) if ingest.source == 'stored' else ()
+        if any(p is not None and p.detector_model == model_name for p in own):
             raise api_error(
                 409,
                 'detector_in_use',
                 f"{model_name!r} is this project's ingest detector; deleting it makes "
-                'ingest fail until another detector is set. Change the ingest policy '
-                'first, or pass force=true.',
+                'ingest fail until another ingest profile is active. Change the active '
+                'ingest profile first, or pass force=true.',
             )
 
     try:

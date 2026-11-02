@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import io
+from typing import TYPE_CHECKING
 
-import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.services.detection.geometry import letterbox_to_square
+
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 # =============================================================================
@@ -40,12 +44,11 @@ def _letterbox(
     target: int = 640,
     fill: tuple[int, int, int] = (114, 114, 114),
 ) -> tuple[np.ndarray, float, tuple[float, float]]:
-    """Letterbox a PIL image to ``target`` by ``target`` for the detector.
+    """Letterbox a PIL image to ``target`` by ``target`` as a uint8 ``(1, 3, target, target)`` tensor.
 
     Thin wrapper over :func:`src.services.detection.geometry.letterbox_to_square`
     (shared with the curation ingest service) kept here so call sites in
-    this module don't need to change. The promoted ORT models behind the region
-    detector take float32 in ``[0, 1]``, so the uint8 letterbox is scaled here.
+    this module don't need to change. The pixels stay 0-255: the caller picks the
+    wire datatype the model declares (``images_input`` scales for an FP32 model).
     """
-    chw, scale, pad = letterbox_to_square(img, target=target, fill=fill)
-    return chw.astype(np.float32) / np.float32(255.0), scale, pad
+    return letterbox_to_square(img, target=target, fill=fill)

@@ -6,6 +6,7 @@ import time
 from fastapi import File, HTTPException, Query, UploadFile, status
 
 from src.core.dependencies import VisualSearchDep
+from src.routers._errors import server_error
 from src.routers.search._router import router
 from src.routers.search.models import ObjectSearchResponse, ObjectSearchResult
 from src.utils.upstream_errors import UpstreamError
@@ -148,7 +149,4 @@ async def search_by_object(
         raise
     except Exception as e:
         logger.error(f'Object search failed: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Object search failed: {e!s}',
-        ) from e
+        raise server_error(500, 'Object search failed', e) from e

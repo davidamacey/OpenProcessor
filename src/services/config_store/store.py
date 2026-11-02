@@ -105,7 +105,10 @@ class ConfigStore:
             self.current = replace(self.current, stale=True)
             return self.current
 
-        if not force and revision == self.current.config_revision and self.current.loaded_at:
+        # A stale snapshot is reloaded even at the same revision: nothing else clears
+        # `stale`, so skipping here would leave a recovered store refusing forever.
+        unchanged = revision == self.current.config_revision and self.current.loaded_at
+        if not force and unchanged and not self.current.stale:
             return self.current
 
         try:
@@ -141,6 +144,7 @@ class ConfigStore:
         profiles: dict[str, StoredConfig] = {}
         vlm_endpoints: dict[str, StoredConfig] = {}
         open_vocab_sets: dict[str, StoredConfig] = {}
+        ingest_profiles: dict[str, StoredConfig] = {}
         for hit in resp['hits']['hits']:
             src = hit['_source']
             item = StoredConfig(
@@ -161,6 +165,8 @@ class ConfigStore:
                 vlm_endpoints[src['name']] = item
             elif src['kind'] == 'open_vocab_set':
                 open_vocab_sets[src['name']] = item
+            elif src['kind'] == 'ingest_profile':
+                ingest_profiles[src['name']] = item
 
         from src.services.config_store import vlm_snapshot
 
@@ -177,6 +183,9 @@ class ConfigStore:
         active_pack = _axis_ref(pack_activation)
         active_profile = _axis_ref(profile_activation)
         active_open_vocab = _axis_ref(await get_activation(client, self.index, 'open_vocab'))
+        active_ingest_profile = _axis_ref(
+            await get_activation(client, self.index, 'ingest_profile')
+        )
         active_pack_body = await _resolve_active_body(
             client, self.index, kind='prompt_pack', ref=active_pack, current=packs
         )
@@ -199,6 +208,15 @@ class ConfigStore:
                 kind='open_vocab_set',
                 ref=active_open_vocab,
                 current=open_vocab_sets,
+            ),
+            ingest_profiles=ingest_profiles,
+            active_ingest_profile=active_ingest_profile,
+            active_ingest_profile_body=await _resolve_active_body(
+                client,
+                self.index,
+                kind='ingest_profile',
+                ref=active_ingest_profile,
+                current=ingest_profiles,
             ),
             loaded_at=time.monotonic(),
             stale=False,
@@ -245,6 +263,14 @@ class ConfigStore:
         packs = dict(current.packs)
         profiles = dict(current.profiles)
         open_vocab_sets = dict(current.open_vocab_sets)
+        ingest_profiles = dict(current.ingest_profiles)
+        if 'ingest_profile' in patch:
+            ip_item: StoredConfig | None = patch['ingest_profile']
+            ip_name = ip_item.name if ip_item is not None else patch['name']
+            if ip_item is None:
+                ingest_profiles.pop(ip_name, None)
+            else:
+                ingest_profiles[ip_name] = ip_item
         if 'open_vocab_set' in patch:
             ov_item: StoredConfig | None = patch['open_vocab_set']
             ov_name = ov_item.name if ov_item is not None else patch['name']
@@ -287,6 +313,11 @@ class ConfigStore:
             active_open_vocab=patch.get('active_open_vocab', current.active_open_vocab),
             active_open_vocab_body=patch.get(
                 'active_open_vocab_body', current.active_open_vocab_body
+            ),
+            ingest_profiles=ingest_profiles,
+            active_ingest_profile=patch.get('active_ingest_profile', current.active_ingest_profile),
+            active_ingest_profile_body=patch.get(
+                'active_ingest_profile_body', current.active_ingest_profile_body
             ),
         )
         self.current = new_current

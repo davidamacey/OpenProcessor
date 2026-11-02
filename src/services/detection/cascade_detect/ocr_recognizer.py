@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
+from src.clients.triton_ocr import OCR_IMAGE_INPUTS, require_uint8_ocr_inputs
 from src.services.detection.cascade_detect.preprocess import _decode_jpeg
 from src.services.detection.region_text import OcrLine
 
@@ -298,9 +299,14 @@ class PaddleOcrTextRecognizer:
         except ValueError:
             return []
 
+        datatypes = {
+            name: await self.triton_pool.get_model_input_datatype(self.model_name, input_name=name)
+            for name in OCR_IMAGE_INPUTS
+        }
+        require_uint8_ocr_inputs(self.model_name, datatypes.__getitem__)
         inputs = [
-            InferInput('ocr_images', list(ocr_in.shape), 'FP32'),
-            InferInput('original_image', list(orig_in.shape), 'FP32'),
+            InferInput('ocr_images', list(ocr_in.shape), 'UINT8'),
+            InferInput('original_image', list(orig_in.shape), 'UINT8'),
             InferInput('orig_shape', list(orig_shape.shape), 'INT32'),
         ]
         inputs[0].set_data_from_numpy(ocr_in)
@@ -404,11 +410,11 @@ class PaddleOcrTextRecognizer:
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Build the three input tensors the OCR pipeline model expects.
 
+        All image tensors are uint8 CHW; the BLS normalizes the detector input itself.
+
         * ``ocr_images``: detection-network input. BGR, scaled to a
-          multiple-of-32 size from :func:`ocr_det_input_size`,
-          normalized to ``[-1, 1]``.
-        * ``original_image``: full-resolution **BGR** normalized to
-          ``[0, 1]``. The BLS (``models*/ocr_pipeline/1/model.py``)
+          multiple-of-32 size from :func:`ocr_det_input_size`.
+        * ``original_image``: full-resolution **BGR** pixels. The BLS (``models*/ocr_pipeline/1/model.py``)
           reads this tensor straight into HWC uint8 and perspective-warps
           text crops from it with no channel swap; the recognition
           network's preprocessing (``_resize_norm_img*``) documents its
@@ -430,17 +436,16 @@ class PaddleOcrTextRecognizer:
         # so the worker MUST NOT add a leading batch axis here.
         # `img` is a PIL image (RGB); flip to BGR to match the BLS's
         # expected channel order (see docstring above).
-        orig_bgr = np.asarray(img, dtype=np.float32)[:, :, ::-1] / 255.0
+        orig_bgr = np.asarray(img, dtype=np.uint8)[:, :, ::-1]
         orig_chw = np.transpose(orig_bgr, (2, 0, 1))
         orig_shape = np.asarray([h, w], dtype=np.int32)
 
         new_w, new_h = det_size or ocr_det_input_size(w, h)
         resized = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
-        arr = np.asarray(resized, dtype=np.float32)[:, :, ::-1]  # BGR
-        arr = arr / 127.5 - 1.0
+        arr = np.asarray(resized, dtype=np.uint8)[:, :, ::-1]  # BGR
         ocr_chw = np.transpose(arr, (2, 0, 1))
         return (
-            np.ascontiguousarray(ocr_chw, dtype=np.float32),
-            np.ascontiguousarray(orig_chw, dtype=np.float32),
+            np.ascontiguousarray(ocr_chw, dtype=np.uint8),
+            np.ascontiguousarray(orig_chw, dtype=np.uint8),
             orig_shape,
         )

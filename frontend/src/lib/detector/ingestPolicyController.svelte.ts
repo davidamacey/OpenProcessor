@@ -12,11 +12,13 @@
 import {
   detectorErrorDetail,
   detectorErrorLines,
+  getActiveIngestProfile,
   getIngestPolicy,
   previewIngestPolicy,
   putIngestPolicy,
 } from '$lib/api_detector';
 import { getIngestConfig } from '$lib/api_ingest';
+import type { ActiveConfigResponse } from '$lib/types_config';
 import type {
   IngestDetectorInfo,
   IngestPolicy,
@@ -28,6 +30,7 @@ import type {
 
 export interface IngestPolicyDeps {
   getPolicy: (signal?: AbortSignal) => Promise<IngestPolicy>;
+  getActiveProfile: (signal?: AbortSignal) => Promise<ActiveConfigResponse>;
   getConfig: (signal?: AbortSignal) => Promise<{ detector?: IngestDetectorInfo | null }>;
   putPolicy: (
     req: IngestPolicyUpdate,
@@ -42,6 +45,7 @@ export interface IngestPolicyDeps {
 
 const DEFAULT_DEPS: IngestPolicyDeps = {
   getPolicy: getIngestPolicy,
+  getActiveProfile: getActiveIngestProfile,
   getConfig: getIngestConfig,
   putPolicy: putIngestPolicy,
   previewPolicy: previewIngestPolicy,
@@ -53,7 +57,6 @@ function bodyOf(p: IngestPolicy | IngestPolicyPutResponse): IngestPolicyBody {
   if (p.detect !== undefined) body.detect = structuredClone(p.detect);
   if (p.embedding !== undefined) body.embedding = structuredClone(p.embedding);
   if (p.clustering !== undefined) body.clustering = structuredClone(p.clustering);
-  if (p.detector !== undefined) body.detector = structuredClone(p.detector);
   return body;
 }
 
@@ -64,6 +67,9 @@ export class IngestPolicyEditor {
   revision = $state<number | null>(null);
   draft = $state<IngestPolicyBody>({});
   detector = $state<IngestDetectorInfo | null>(null);
+  /** The project's active ingest profile (read-only here). */
+  activeProfile = $state<ActiveConfigResponse | null>(null);
+  profileError = $state<string | null>(null);
 
   preview = $state<IngestPolicyPreview | null>(null);
   previewing = $state(false);
@@ -110,11 +116,23 @@ export class IngestPolicyEditor {
       ]);
       this.#adopt(policy);
       this.detector = config.detector ?? null;
+      await this.#loadProfile(signal);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.loadError = detectorErrorLines(e).join(' ');
     } finally {
       this.loading = false;
+    }
+  }
+
+  async #loadProfile(signal?: AbortSignal): Promise<void> {
+    this.profileError = null;
+    try {
+      this.activeProfile = await this.#deps.getActiveProfile(signal);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      this.activeProfile = null;
+      this.profileError = detectorErrorLines(e).join(' ');
     }
   }
 

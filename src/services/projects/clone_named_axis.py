@@ -1,8 +1,10 @@
-"""The ``open_vocab`` clone axis: copy a project's stored prompt sets and the
-activation of the one in use into another project."""
+"""The stored-config clone axes with one activation (``open_vocab``,
+``ingest_profile``): copy a project's stored configs and the activation of the
+one in use into another project."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
@@ -22,10 +24,26 @@ from src.services.rejections import rejection
 
 if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
+    from src.services.config_store.index import ConfigAxis, ConfigKind
 
 
-async def validate_open_vocab_clone(
-    client: Any, *, target_record: ProjectRecord
+@dataclass(frozen=True)
+class NamedAxis:
+    """One clone axis: its activation ``axis``, stored ``kind``, the snapshot
+    field holding the stored configs and the noun used in refusals."""
+
+    axis: ConfigAxis
+    kind: ConfigKind
+    stored_field: str
+    what: str
+
+
+OPEN_VOCAB = NamedAxis('open_vocab', 'open_vocab_set', 'open_vocab_sets', 'open-vocabulary set')
+INGEST_PROFILE = NamedAxis('ingest_profile', 'ingest_profile', 'ingest_profiles', 'ingest profile')
+
+
+async def validate_named_axis_clone(
+    client: Any, *, axis: NamedAxis, target_record: ProjectRecord
 ) -> dict[str, Any] | None:
     """Refuse a target that already has stored sets or an active one (a clone
     is a starting point, never a merge). Returns the ``expected_active`` the
@@ -34,21 +52,21 @@ async def validate_open_vocab_clone(
     with bind_project(target_record):
         store = get_config_store()
         await store.ensure_fresh(client)
-        if store.current.open_vocab_sets:
+        if getattr(store.current, axis.stored_field):
             raise rejection(
                 409,
                 'target_not_empty',
-                f"'{target_record.slug}' already has stored open-vocabulary sets; "
-                'open_vocab cannot be cloned',
+                f"'{target_record.slug}' already has stored {axis.what}s; "
+                f'{axis.axis} cannot be cloned',
                 project=target_record.slug,
             )
-        existing = await get_activation(client, get_curation_config().configs_index, 'open_vocab')
+        existing = await get_activation(client, get_curation_config().configs_index, axis.axis)
     if existing and existing.get('name'):
         raise rejection(
             409,
             'target_not_empty',
-            f"'{target_record.slug}' already has an active open-vocabulary set; "
-            'open_vocab cannot be cloned',
+            f"'{target_record.slug}' already has an active {axis.what}; "
+            f'{axis.axis} cannot be cloned',
             project=target_record.slug,
         )
     return (
@@ -58,9 +76,10 @@ async def validate_open_vocab_clone(
     )
 
 
-async def apply_open_vocab_clone(
+async def apply_named_axis_clone(
     client: Any,
     *,
+    axis: NamedAxis,
     source: ProjectRecord,
     target_record: ProjectRecord,
     expected_active: dict[str, Any] | None,
@@ -69,12 +88,12 @@ async def apply_open_vocab_clone(
         client,
         target_record=target_record,
         source=source,
-        kind='open_vocab_set',
-        stored_field='open_vocab_sets',
+        kind=axis.kind,
+        stored_field=axis.stored_field,
     )
     with bind_project(source, read_only=True):
         source_index = get_curation_config().configs_index
-        activation = await get_activation(client, source_index, 'open_vocab')
+        activation = await get_activation(client, source_index, axis.axis)
         if not activation or not activation.get('name') or activation.get('revision') is None:
             return
         name, revision = activation['name'], int(activation['revision'])
@@ -85,7 +104,7 @@ async def apply_open_vocab_clone(
 
         try:
             stored = await client.get(
-                index=source_index, id=config_doc_id('open_vocab_set', name, revision)
+                index=source_index, id=config_doc_id(axis.kind, name, revision)
             )
         except NotFoundError:
             return
@@ -102,7 +121,7 @@ async def apply_open_vocab_clone(
                 doc = await save_config(
                     client,
                     target_index,
-                    kind='open_vocab_set',
+                    kind=axis.kind,
                     name=name,
                     body=body,
                     expected_revision=sibling.revision if sibling else None,
@@ -112,7 +131,7 @@ async def apply_open_vocab_clone(
             await activate(
                 client,
                 target_index,
-                axis='open_vocab',
+                axis=axis.axis,
                 name=name,
                 revision=target_revision,
                 expected_active=expected_active,
@@ -121,9 +140,15 @@ async def apply_open_vocab_clone(
         raise rejection(
             409,
             'target_not_empty',
-            f"'{target_record.slug}' changed while open_vocab was being cloned",
+            f"'{target_record.slug}' changed while {axis.axis} was being cloned",
             project=target_record.slug,
         ) from exc
 
 
-__all__ = ['apply_open_vocab_clone', 'validate_open_vocab_clone']
+__all__ = [
+    'INGEST_PROFILE',
+    'OPEN_VOCAB',
+    'NamedAxis',
+    'apply_named_axis_clone',
+    'validate_named_axis_clone',
+]

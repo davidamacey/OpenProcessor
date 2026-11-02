@@ -16,6 +16,7 @@ from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, items_index, logger, router
 from src.routers.curation._common_models import ExportYoloRequest
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
@@ -84,7 +85,7 @@ async def export_yolo(
         raise HTTPException(status_code=422, detail=f'nothing to export: {exc}') from exc
     except Exception as exc:
         logger.error('export_failed', error=str(exc))
-        raise HTTPException(status_code=500, detail=f'export failed: {exc}') from exc
+        raise server_error(500, 'export failed', exc) from exc
     return {
         'status': 'success',
         'export_dir': result.export_dir,

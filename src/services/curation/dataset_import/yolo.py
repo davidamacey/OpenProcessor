@@ -42,6 +42,7 @@ from src.services.curation.dataset_import.scan import (
 
 IMAGE_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.bmp', '.webp'})
 _SPLIT_KEYS = ('train', 'val', 'valid', 'test')
+_NAMES_FILES = ('classes.txt', 'obj.names', 'names.txt')
 _CLAMP_TOLERANCE = 1e-3
 
 
@@ -148,9 +149,63 @@ def _nc_matches(nc: Any, names: dict[int, str]) -> bool:
     return value in (len(names), max(names) + 1 if names else 0)
 
 
+def _read_names_file(path: Path, issues: IssueCollector) -> dict[int, str] | None:
+    """``{line number: name}`` from a names file, or ``None`` after recording
+    why not. A blank or repeated name is refused: a name is the class identity,
+    and a gap would shift every later index."""
+    text = read_text_capped(path, MAX_YAML_BYTES)
+    if text is None:
+        issues.add(
+            'yolo_names_file_invalid', file=path.name, detail={'reason': 'unreadable or too large'}
+        )
+        return None
+    lines = [line.strip() for line in text.splitlines()]
+    while lines and not lines[-1]:
+        lines.pop()
+    if not lines or not all(lines) or len(set(lines)) != len(lines):
+        issues.add(
+            'yolo_names_file_invalid',
+            file=path.name,
+            detail={'reason': 'empty, or a blank or repeated class name'},
+        )
+        return None
+    return dict(enumerate(lines))
+
+
+def _discover_names_file(
+    root: Path, issues: IssueCollector, path_guard: PathGuard | None
+) -> tuple[dict[str | None, list[Path]], dict[int, str]]:
+    """A ``classes.txt`` / ``obj.names`` plus ``images/`` (optionally
+    ``images/<split>/``) layout. With no names file the dataset has no class
+    identity and is refused as undetected."""
+    names_path = next((root / n for n in _NAMES_FILES if (root / n).is_file()), None)
+    images_root = root / 'images'
+    if names_path is None or not images_root.is_dir():
+        raise FormatUndetectedError(str(root))
+    if path_guard is not None and not path_guard(names_path):
+        issues.add('dataset_path_not_allowed', file=names_path.name)
+        return {}, {}
+    names = _read_names_file(names_path, issues)
+    if names is None:
+        return {}, {}
+    splits: dict[str | None, list[Path]] = {}
+    for key in _SPLIT_KEYS:
+        folder = images_root / key
+        if not folder.is_dir():
+            continue
+        if path_guard is not None and not path_guard(folder):
+            issues.add('dataset_path_not_allowed', file=str(folder.name))
+            continue
+        stored_key = 'val' if key == 'valid' else key
+        splits.setdefault(stored_key, []).extend(_images_under(folder, folder.parent))
+    if not splits:
+        splits[None] = _images_under(images_root, root)
+    return {k: sorted(set(v)) for k, v in splits.items()}, names
+
+
 def discover_yolo(
     root: Path, issues: IssueCollector, path_guard: PathGuard | None = None
-) -> tuple[dict[str, list[Path]], dict[int, str]]:
+) -> tuple[dict[str | None, list[Path]], dict[int, str]]:
     """Return ``({split: [image paths]}, {class index: class name})``. Emits
     ``data_yaml_invalid`` / ``data_yaml_names_missing`` / ``split_dir_missing``
     / ``data_yaml_names_sparse`` / ``dataset_path_not_allowed``.
@@ -161,8 +216,7 @@ def discover_yolo(
     """
     yaml_path = _find_yaml(root)
     if yaml_path is None:
-        # images/<split> or <split>/images tree, no data.yaml.
-        raise FormatUndetectedError(str(root))
+        return _discover_names_file(root, issues, path_guard)
 
     data = _load_data_yaml(yaml_path, issues)
     if data is None:
@@ -198,7 +252,7 @@ def discover_yolo(
         )
 
     root_field = data.get('path') if isinstance(data.get('path'), str) else None
-    splits: dict[str, list[Path]] = {}
+    splits: dict[str | None, list[Path]] = {}
     for key in _SPLIT_KEYS:
         value = data.get(key)
         if not value:
@@ -223,8 +277,8 @@ def discover_yolo(
                 continue
             images.extend(_images_under(resolved, resolved.parent))
         splits.setdefault(stored_key, []).extend(images)
-    for key, value_images in splits.items():
-        splits[key] = sorted(set(value_images))
+    for split_key, value_images in splits.items():
+        splits[split_key] = sorted(set(value_images))
     return splits, names
 
 

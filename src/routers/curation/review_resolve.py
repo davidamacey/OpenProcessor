@@ -17,6 +17,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.routers._errors import server_error
 from src.routers.curation._class_models import (
     ResolveConflict,
     ResolveNewClassRequest,
@@ -153,7 +154,7 @@ async def resolve_new_class_proposal(
     try:
         count_resp = await opensearch.count(index=items_index(), body={'query': query})
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     total = int(count_resp.get('count', 0))
     if total > _RESOLVE_SAFETY_CAP:
         raise HTTPException(
@@ -166,7 +167,7 @@ async def resolve_new_class_proposal(
     try:
         hits = await scroll_hits(opensearch, index=items_index(), query=query, source=['crop_id'])
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     crop_ids = _selected_crop_ids(hits)
     matched = len(crop_ids)
 

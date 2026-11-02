@@ -67,13 +67,16 @@
             class="h-8 w-8 rounded-sm border border-zinc-700 object-cover"
           />
           <span class="font-medium text-blue-200">{modes.similarTo}</span>
+        {:else if modes.imageQueryName}
+          result{modes.searchTotal === 1 ? '' : 's'} like the picture
+          <span class="font-medium text-blue-200">{modes.imageQueryName}</span>
         {:else}
           result{modes.searchTotal === 1 ? '' : 's'} for
           <span class="font-medium text-blue-200">"{modes.searchQuery}"</span>
           across the dataset
         {/if}
       </span>
-      {#if modes.similarTo}
+      {#if modes.similarTo || modes.imageQueryName}
         <UnembeddedBanner count={modes.searchUnembedded} context="search" />
       {/if}
       <span class="grow"></span>
@@ -91,7 +94,7 @@
       </p>
     {:else if modes.searchResults.length === 0}
       <p class="text-sm text-zinc-500">
-        {modes.similarTo
+        {modes.similarTo || modes.imageQueryName
           ? 'No similar crops in this scope.'
           : 'No crops matched that search.'}
       </p>
@@ -104,6 +107,18 @@
         {onsimilar}
       >
         {#snippet cornerBadge(crop)}
+          {#if modes.matchOf(crop.id)}
+            {@const match = modes.matchOf(crop.id)}
+            <span
+              class="rounded-sm border border-blue-500/40 bg-blue-500/10 px-1 py-0.5 font-mono text-[10px] text-blue-200"
+              title={match?.stale
+                ? 'Matched region; its vector predates a move of the box'
+                : 'Matched region'}
+              data-testid="matched-box"
+            >
+              region {match?.boxId}{match?.stale ? ' (stale)' : ''}
+            </span>
+          {/if}
           {#if crop.cluster_id != null}
             <ClusterBadge
               clusterId={crop.cluster_id}

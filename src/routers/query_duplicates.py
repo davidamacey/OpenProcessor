@@ -9,9 +9,10 @@ Duplicate group routes of the data retrieval API.
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Path, Query
 
 from src.core.dependencies import VisualSearchDep
+from src.routers._errors import server_error
 from src.schemas.query import (
     DuplicateGroupDetailResponse,
     DuplicateGroupMember,
@@ -83,7 +84,7 @@ async def list_duplicate_groups(
 
     except Exception as e:
         logger.error(f'List duplicates failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Query failed: {e!s}') from e
+        raise server_error(500, 'Query failed', e) from e
 
 
 @router.get('/duplicates/stats', response_model=DuplicateStatsResponse)
@@ -118,7 +119,7 @@ async def get_duplicate_stats(
 
     except Exception as e:
         logger.error(f'Get duplicate stats failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Stats retrieval failed: {e!s}') from e
+        raise server_error(500, 'Stats retrieval failed', e) from e
 
 
 @router.get('/duplicates/{group_id}', response_model=DuplicateGroupDetailResponse)
@@ -174,4 +175,4 @@ async def get_duplicate_group(
 
     except Exception as e:
         logger.error(f'Get duplicate group failed for {group_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Query failed: {e!s}') from e
+        raise server_error(500, 'Query failed', e) from e

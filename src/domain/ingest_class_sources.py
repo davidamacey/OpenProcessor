@@ -14,7 +14,7 @@ deployment's detector names.
 
 from __future__ import annotations
 
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
+from src.config.ingest_profiles import ingest_primary_name, ingest_secondary_name
 
 
 # Non-ingest writers these sets fold in (unchanged literals: they name the
@@ -51,21 +51,19 @@ LABEL_SOURCE_IMPORT = 'import'
 def unlabeled_proposal_class_sources() -> frozenset[str]:
     """Sources of items no one has decided a class for yet: what the ingest
     detectors left without a class, and the open-vocabulary pass's hits."""
-    name = ingest_primary_profile().name
+    name = ingest_primary_name()
     return frozenset({f'{name}_proposal', f'{name}_low_conf', OPEN_VOCAB_CLASS_SOURCE})
 
 
 def classifier_class_sources() -> frozenset[str]:
-    """Sources written by a classifier at ingest: the secondary (when
-    configured) and the primary's ``_model`` source."""
-    sources: set[str] = set()
-    secondary = ingest_secondary_profile()
-    if secondary is not None:
-        sources.add(f'{secondary.name}{CLASSIFIER_SOURCE_SUFFIX}')
+    """Sources written by a classifier at ingest: the secondary's and the
+    primary's ``_model`` source. The secondary's is always listed: any project
+    can run one through its ingest profile, and the name does not depend on it."""
+    sources: set[str] = {f'{ingest_secondary_name()}{CLASSIFIER_SOURCE_SUFFIX}'}
     # The primary writes ``_model`` when it assigns classes, and also for a
     # project whose ingest policy resolves classes by name; the suffix is
     # reserved for that, so the source is always a classifier one.
-    sources.add(f'{ingest_primary_profile().name}{CLASSIFIER_SOURCE_SUFFIX}')
+    sources.add(f'{ingest_primary_name()}{CLASSIFIER_SOURCE_SUFFIX}')
     return frozenset(sources)
 
 

@@ -10,8 +10,9 @@ Doc ids:
 - ``profile:<name>`` / ``profile:<name>@<rev>``
 - ``vlm:<name>`` / ``vlm:<name>@<rev>`` (global index only)
 - ``ovset:<name>`` / ``ovset:<name>@<rev>`` (open-vocabulary prompt sets)
+- ``ingest:<name>`` / ``ingest:<name>@<rev>`` (ingest detector profiles)
 - ``activation:<axis>`` (``axis`` is ``prompt_pack`` | ``detection_profile`` | ``vlm`` |
-  ``open_vocab``)
+  ``open_vocab`` | ``ingest_profile``)
 - ``activation_event:<uuid4>``
 - ``meta:config_revision``
 - ``runtime:<process>:<hostname>``
@@ -40,8 +41,10 @@ TEMPLATE_DESCRIPTION = 'Template (clone to use)'
 
 logger = get_logger(__name__)
 
-ConfigKind = Literal['prompt_pack', 'region_profile', 'vlm_endpoint', 'open_vocab_set']
-ConfigAxis = Literal['prompt_pack', 'detection_profile', 'vlm', 'open_vocab']
+ConfigKind = Literal[
+    'prompt_pack', 'region_profile', 'vlm_endpoint', 'open_vocab_set', 'ingest_profile'
+]
+ConfigAxis = Literal['prompt_pack', 'detection_profile', 'vlm', 'open_vocab', 'ingest_profile']
 
 # Every config write blocks until a search can see it, so a write answered to the
 # caller is readable by the next request on any worker (#196).
@@ -52,6 +55,7 @@ KIND_TO_PREFIX: dict[str, str] = {
     'region_profile': 'profile',
     'vlm_endpoint': 'vlm',
     'open_vocab_set': 'ovset',
+    'ingest_profile': 'ingest',
 }
 
 META_CONFIG_REVISION_DOC_ID = 'meta:config_revision'

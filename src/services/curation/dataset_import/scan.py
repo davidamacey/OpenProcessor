@@ -29,7 +29,19 @@ if TYPE_CHECKING:
 
 
 LabelState = Literal['labeled', 'negative', 'unlabeled']
-DatasetFormat = Literal['yolo', 'coco', 'voc', 'openimages', 'openprocessor_export', 'project']
+DatasetFormat = Literal[
+    'yolo',
+    'coco',
+    'voc',
+    'openimages',
+    'cvat',
+    'labelstudio',
+    'kitti',
+    'createml',
+    'labelme',
+    'openprocessor_export',
+    'project',
+]
 
 
 class FormatUndetectedError(Exception):
@@ -117,6 +129,11 @@ def _child_has_images(root: Path) -> bool:
 
 def detect_format(root: Path) -> DatasetFormat:
     """First match wins; the order is the documented precedence."""
+    from src.services.curation.dataset_import.createml import is_createml
+    from src.services.curation.dataset_import.cvat import is_cvat
+    from src.services.curation.dataset_import.kitti import is_kitti
+    from src.services.curation.dataset_import.labelme import is_labelme
+    from src.services.curation.dataset_import.labelstudio import is_labelstudio
     from src.services.curation.dataset_import.op_export import is_op_export
     from src.services.curation.dataset_import.openimages import is_openimages
     from src.services.curation.dataset_import.voc import is_voc
@@ -130,6 +147,11 @@ def detect_format(root: Path) -> DatasetFormat:
         ('coco', lambda r: _has_coco_json(r) and not (r / 'labels').is_dir()),
         ('voc', is_voc),
         ('openimages', is_openimages),
+        ('cvat', is_cvat),
+        ('labelstudio', is_labelstudio),
+        ('createml', is_createml),
+        ('labelme', is_labelme),
+        ('kitti', is_kitti),
         ('yolo', lambda r: (r / 'images').is_dir()),
         ('yolo', _child_has_images),
         ('coco', _has_coco_json),
@@ -197,13 +219,38 @@ def _coco_files(source: DatasetSource, root: Path) -> list[CocoAnnotationFile]:
     ]
 
 
+def _scan_path_reader(fmt: DatasetFormat, root: Path, path_guard: PathGuard) -> DatasetScan | None:
+    """The scan of a format whose reader takes only the root and the guard, or
+    ``None`` for any other format."""
+    from src.services.curation.dataset_import.createml import scan_createml
+    from src.services.curation.dataset_import.cvat import scan_cvat
+    from src.services.curation.dataset_import.kitti import scan_kitti
+    from src.services.curation.dataset_import.labelme import scan_labelme
+    from src.services.curation.dataset_import.labelstudio import scan_labelstudio
+    from src.services.curation.dataset_import.openimages import scan_openimages
+    from src.services.curation.dataset_import.voc import scan_voc
+
+    readers: dict[str, Callable[..., DatasetScan]] = {
+        'voc': scan_voc,
+        'openimages': scan_openimages,
+        'cvat': scan_cvat,
+        'labelstudio': scan_labelstudio,
+        'kitti': scan_kitti,
+        'createml': scan_createml,
+        'labelme': scan_labelme,
+    }
+    reader = readers.get(fmt)
+    return None if reader is None else reader(root, path_guard=path_guard)
+
+
 def scan_dataset(
     source: DatasetSource,
     *,
     path_guard: PathGuard,
     missing_label: str = 'unlabeled',
 ) -> DatasetScan:
-    """Scan ``source`` (YOLO, COCO, Pascal VOC, Open Images or an OpenProcessor export) into a :class:`DatasetScan`.
+    """Scan ``source`` (YOLO, COCO, Pascal VOC, Open Images, CVAT, Label Studio,
+    KITTI, CreateML, LabelMe or an OpenProcessor export) into a :class:`DatasetScan`.
 
     Raises :class:`DatasetPathNotAllowedError` when the root (or an explicit
     COCO annotation/images path) fails ``path_guard``, and
@@ -211,8 +258,6 @@ def scan_dataset(
     written and no image is decoded beyond the COCO size spot-check.
     """
     from src.services.curation.dataset_import.coco import scan_coco
-    from src.services.curation.dataset_import.openimages import scan_openimages
-    from src.services.curation.dataset_import.voc import scan_voc
     from src.services.curation.dataset_import.yolo import scan_yolo
 
     root = Path(source.path)
@@ -227,10 +272,9 @@ def scan_dataset(
             if not path_guard(f.path):
                 raise DatasetPathNotAllowedError(str(f.path))
         return scan_coco(files, path_guard=path_guard)
-    if fmt == 'voc':
-        return scan_voc(root, path_guard=path_guard)
-    if fmt == 'openimages':
-        return scan_openimages(root, path_guard=path_guard)
+    scan = _scan_path_reader(fmt, root, path_guard)
+    if scan is not None:
+        return scan
     from src.services.curation.dataset_import.op_export import read_op_export
 
     return read_op_export(root, path_guard=path_guard)

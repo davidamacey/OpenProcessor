@@ -166,7 +166,8 @@ audit passes. (issue #280). See
 - **Semantic search** (`GET /search/text`, on by
   default; `OP_SEMANTIC_SEARCH_ENABLED=0` turns it off) finds items by description, e.g. "blurry
   close-up". `GET /search/similar?crop_id=...` ranks items by similarity to a crop's stored vector
-  instead (no encoder).
+  instead (no encoder). `POST /search/image` ranks by an uploaded picture, or by a region of it
+  (`box`); `target=box` on any of the three ranks the per-box vectors.
 
 ## 6. Regions of interest (optional)
 

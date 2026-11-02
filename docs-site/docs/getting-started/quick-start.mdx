@@ -307,7 +307,9 @@ one; drop `run_vlm=true` to cluster without a VLM.
 - **Switching detectors.** Set `OP_INGEST_PRIMARY_DETECTOR_MODEL` (and
   `OP_INGEST_PRIMARY_LABELS_PATH` if the model directory has no `labels.txt`)
   in `.env`, then recreate `api`. The model must be loaded in Triton and
-  serve the end2end four-tensor output. The detector is deployment-wide.
+  serve the end2end four-tensor output. This sets the deployment default; a
+  project can run its own through an
+  [ingest profile](../guides/ingest-profiles.mdx).
 - **Ingest returns `503`** until `OP_INGEST_PRIMARY_DETECTOR_MODEL` is set
   and that model is loaded in Triton. The installer sets it; a checkout does
   not.

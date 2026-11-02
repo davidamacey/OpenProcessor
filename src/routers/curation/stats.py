@@ -26,6 +26,7 @@ from src.domain.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
+from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._stats_models import DatasetStatsResponse
@@ -103,7 +104,7 @@ async def stats_classes(opensearch: OpenSearchDep, item_filter: ItemFilterQuery)
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
     aggs = resp.get('aggregations') or {}
 
     counts: dict[int, int] = {}
@@ -149,7 +150,7 @@ async def stats_classes(opensearch: OpenSearchDep, item_filter: ItemFilterQuery)
                 }
             )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'class registry unavailable: {exc}') from exc
+        raise server_error(503, 'class registry unavailable', exc) from exc
 
     return {**aggs, 'classes': classes, 'thresholds': threshold_values}
 
@@ -314,7 +315,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
         # can't make results staler than they already are.
         resp = await opensearch.search(index=items_index(), body=body, request_cache=True)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
 
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     aggs = resp.get('aggregations') or {}

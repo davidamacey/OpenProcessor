@@ -33,3 +33,16 @@ def mount_curation_routers(app: FastAPI, *routers: APIRouter) -> FastAPI:
 def curation_test_app(*routers: APIRouter) -> FastAPI:
     """A new app with ``routers`` mounted (see :func:`mount_curation_routers`)."""
     return mount_curation_routers(FastAPI(), *routers)
+
+
+def mark_config_store_loaded() -> None:
+    """The bound project's config store as a worker that loaded it and found
+    nothing active (``loaded_at`` is in the future so ``ensure_fresh`` never
+    reads the test's fake). For tests that ``reset_config_stores()`` themselves."""
+    import dataclasses
+    import time
+
+    from src.services.config_store import get_config_store
+
+    store = get_config_store()
+    store.current = dataclasses.replace(store.current, loaded_at=time.monotonic() + 1e9)

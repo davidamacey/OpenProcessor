@@ -37,6 +37,8 @@ class TestRenderConfig:
         assert f'dims: [ 3, {DEFAULT_INPUT_SIZE}, {DEFAULT_INPUT_SIZE} ]' in out
         assert f'dims: [ {YOLO26_TOPK}, {YOLO26_DET_DIMS} ]' in out
         assert 'name: "output0"' in out
+        # the served graph takes uint8 pixels and scales inside (like the built-in engines)
+        assert 'name: "images"\n    data_type: TYPE_UINT8' in out
         # No EfficientNMS plugin reference (the YOLO11 path has this; YOLO26
         # must NOT — NMS is internal to the forward pass).
         assert 'EfficientNMS' not in out

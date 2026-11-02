@@ -76,12 +76,19 @@ class ConfigSnapshot:
     open_vocab_sets: dict[str, StoredConfig] = field(default_factory=dict)
     active_open_vocab: AxisRef = None
     active_open_vocab_body: StoredConfig | None = None
+    # Ingest detector profiles: this project's stored profiles and its
+    # activation (the activated revision's body pinned).
+    ingest_profiles: dict[str, StoredConfig] = field(default_factory=dict)
+    active_ingest_profile: AxisRef = None
+    active_ingest_profile_body: StoredConfig | None = None
 
     def active_ref(self, axis: ConfigAxis) -> AxisRef:
         if axis == 'vlm':
             return self.active_vlm
         if axis == 'open_vocab':
             return self.active_open_vocab
+        if axis == 'ingest_profile':
+            return self.active_ingest_profile
         return self.active_pack if axis == 'prompt_pack' else self.active_profile
 
 

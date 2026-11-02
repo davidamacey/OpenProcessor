@@ -162,15 +162,21 @@ async def _apply_clone(
             target_activations=target_activations or {},
         )
 
-    if 'open_vocab' in axes:
-        from src.services.projects.clone_open_vocab import apply_open_vocab_clone
+    from src.services.projects.clone_named_axis import (
+        INGEST_PROFILE,
+        OPEN_VOCAB,
+        apply_named_axis_clone,
+    )
 
-        await apply_open_vocab_clone(
-            client,
-            source=source,
-            target_record=target_record,
-            expected_active=(target_activations or {}).get('open_vocab'),
-        )
+    for named in (OPEN_VOCAB, INGEST_PROFILE):
+        if named.axis in axes:
+            await apply_named_axis_clone(
+                client,
+                axis=named,
+                source=source,
+                target_record=target_record,
+                expected_active=(target_activations or {}).get(named.axis),
+            )
 
     if 'vlm_activation' in axes:
         from src.services.projects.clone_vlm import apply_vlm_activation_clone

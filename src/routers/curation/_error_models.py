@@ -45,25 +45,12 @@ class UnknownDetectorNamesResponse(BaseModel):
     detail: UnknownDetectorNamesDetail
 
 
-class DetectorNotServableDetail(BaseModel):
-    error: Literal['detector_not_servable']
-    message: str
-    reasons: list[str]
-
-
-class DetectorNotServableResponse(BaseModel):
-    """422: the detector override cannot be served; ``reasons`` lists every problem."""
-
-    detail: DetectorNotServableDetail
-
-
 REGION_PROFILE_RESPONSES: dict[int | str, dict[str, Any]] = {
     409: {'model': RegionProfileUnavailableResponse}
 }
 
 __all__ = [
     'REGION_PROFILE_RESPONSES',
-    'DetectorNotServableResponse',
     'DetectorUnavailableResponse',
     'RegionProfileUnavailableResponse',
     'UnknownDetectorNamesResponse',

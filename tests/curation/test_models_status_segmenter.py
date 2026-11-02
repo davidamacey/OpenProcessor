@@ -23,7 +23,7 @@ import pytest
 from src.services.detection import profile_registry
 
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.usefixtures('no_other_projects')]
 
 
 @pytest.fixture(autouse=True)
@@ -174,7 +174,7 @@ async def test_models_status_routes_segmenter_to_external_not_triton(
 
     _patch_async_client(monkeypatch, models_mod, handler)
 
-    result = await models_mod.models_status()
+    result = await models_mod.models_status(None)
 
     models_by_name = {m['name']: m for m in result['models']}
     assert 'sam3' in models_by_name

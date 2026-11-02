@@ -391,7 +391,10 @@ class TestRejectionReasonVocabulary:
         app = FastAPI()
         from _curation_app import mount_curation_routers
 
+        from src.routers.curation import _raw_opensearch_dep
+
         mount_curation_routers(app, curation_router)
+        app.dependency_overrides[_raw_opensearch_dep] = lambda: None
         with TestClient(app) as client:
             body = client.get('/curation/projects/default/regions/vocabulary').json()
         assert body['rejection_reasons'] == rejection_reason_catalog()

@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from fastapi import HTTPException, Query
 
+from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
@@ -177,7 +178,7 @@ async def cluster_representatives(
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f'representatives query failed: {exc}') from exc
+        raise server_error(500, 'representatives query failed', exc) from exc
 
     buckets = resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])
     page_cluster_ids: list[int] = [int(b['key']) for b in buckets[offset : offset + max_clusters]]

@@ -45,10 +45,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.domain.ingest_class_sources import VLM_CLASS_SOURCE
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE
 from src.services.curation.class_write_guard import class_write_locked
+from src.services.curation.ingest_detector import IngestProfiles, refreshed_ingest_profiles
 from src.services.curation.item_doc import INGEST_CLASS_LABELER
 from src.services.curation.vlm_class_attempt import (
     EmptyClassReason,
@@ -105,18 +105,18 @@ def candidate_query(*, id_prefix: str | None = None) -> dict[str, Any]:
     return query
 
 
-def ingest_class_source(doc: dict[str, Any]) -> str | None:
+def ingest_class_source(doc: dict[str, Any], ingest: IngestProfiles) -> str | None:
     """The class source ingest stamps for this doc's detector, or ``None``
     when the detector isn't a configured ingest detector (or the doc's
     class state is inconsistent with what that detector writes)."""
     detector = doc.get('class_detector')
     has_class = doc.get('class_id') is not None
-    primary = ingest_primary_profile()
+    primary = ingest.primary
     if detector in {primary.detector_model, primary.name}:
         if not primary.assigns_class:
             return None if has_class else f'{primary.name}_proposal'
         return f'{primary.name}_model' if has_class else f'{primary.name}_low_conf'
-    secondary = ingest_secondary_profile()
+    secondary = ingest.secondary
     if secondary is not None and detector in {secondary.detector_model, secondary.name}:
         return f'{secondary.name}_model' if has_class else None
     return None
@@ -134,7 +134,7 @@ def _cleanup(doc: dict[str, Any], *, record_attempt: bool) -> dict[str, Any]:
 
 
 def plan_repair(
-    crop_id: str, doc: dict[str, Any], *, record_attempt: bool = False
+    crop_id: str, doc: dict[str, Any], ingest: IngestProfiles, *, record_attempt: bool = False
 ) -> RepairPlan | None:
     """The repair plan for one doc, or ``None`` if it isn't a candidate."""
     if not is_candidate(doc):
@@ -162,7 +162,7 @@ def plan_repair(
             {**restore, **_cleanup(doc, record_attempt=record_attempt)},
         )
     if labeler == INGEST_CLASS_LABELER:
-        ingest_source = ingest_class_source(doc)
+        ingest_source = ingest_class_source(doc, ingest)
         if ingest_source is not None:
             restore = {'class_source': ingest_source, 'label_source': ingest_source}
             return RepairPlan(
@@ -203,7 +203,10 @@ async def plan_repairs(
     page_size: int = 500,
     record_attempt: bool = False,
 ) -> list[RepairPlan]:
-    """Scan ``index`` for candidates (paged by ``crop_id``) and plan each."""
+    """Scan ``index`` for candidates (paged by ``crop_id``) and plan each.
+    Refuses (:class:`IngestProfileUnresolvedError`) when the bound project's ingest
+    profile cannot be read, since which detector wrote a class depends on it."""
+    ingest = await refreshed_ingest_profiles(client)
     plans: list[RepairPlan] = []
     cursor: list[Any] | None = None
     while True:
@@ -221,7 +224,9 @@ async def plan_repairs(
             break
         cursor = hits[-1].get('sort')
         for h in hits:
-            plan = plan_repair(h['_id'], h.get('_source') or {}, record_attempt=record_attempt)
+            plan = plan_repair(
+                h['_id'], h.get('_source') or {}, ingest, record_attempt=record_attempt
+            )
             if plan is not None:
                 plans.append(plan)
         if len(hits) < page_size or cursor is None:

@@ -1,0 +1,4 @@
+{
+  "_comment": "Public COCO 80-class end2end detector (the shipped yolov11_small_trt_end2end). Clone it, then edit.",
+  "primary": {"model": "yolov11_small_trt_end2end", "version": "1", "input_size": 640}
+}

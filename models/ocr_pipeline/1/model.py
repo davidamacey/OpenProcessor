@@ -12,8 +12,8 @@ Complete OCR pipeline that handles text detection and recognition via BLS:
 
 Architecture:
     Inputs:
-        - ocr_images: [3, H, W] Preprocessed image for OCR (normalized [-1, 1])
-        - original_image: [3, H, W] Original image for cropping
+        - ocr_images: [3, H, W] UINT8 BGR image for detection (normalized here to [-1, 1])
+        - original_image: [3, H, W] UINT8 BGR original image for cropping
         - orig_shape: [2] Original image shape [H, W]
 
     Outputs:
@@ -146,8 +146,12 @@ class TritonPythonModel:
         original_image = pb_utils.get_input_tensor_by_name(request, 'original_image').as_numpy()
         orig_shape = pb_utils.get_input_tensor_by_name(request, 'orig_shape').as_numpy()
 
-        # Inputs: ocr_image is a [3, H, W] tensor normalized to [-1, 1], original_image a
-        # [3, H, W] tensor normalized to [0, 1], and orig_shape the pair (H, W).
+        # Inputs: ocr_image and original_image are uint8 [3, H, W] BGR; orig_shape is (H, W).
+        # An old FP32 client is refused rather than guessed at: the scale would be wrong.
+        for name, tensor in (('ocr_images', ocr_image), ('original_image', original_image)):
+            if tensor.dtype != np.uint8:
+                raise ValueError(f"input '{name}' must be UINT8, got {tensor.dtype}")
+        ocr_image = ocr_image.astype(np.float32) / 127.5 - 1.0
 
         orig_h, orig_w = int(orig_shape[0]), int(orig_shape[1])
 
@@ -169,8 +173,7 @@ class TritonPythonModel:
             det_scores = det_scores[: self.max_texts]
 
         # Step 4: Crop text regions
-        # Convert original image from CHW [0,1] to HWC [0,255] uint8
-        orig_img_hwc = (original_image.transpose(1, 2, 0) * 255).astype(np.uint8)
+        orig_img_hwc = np.ascontiguousarray(original_image.transpose(1, 2, 0))
         logger.debug(f'Processing: {len(boxes)} boxes, orig_img shape={orig_img_hwc.shape}')
         text_crops = self._get_text_crops(orig_img_hwc, boxes)
         logger.debug(f'Got {len(text_crops)} text crops')
@@ -219,9 +222,8 @@ class TritonPythonModel:
         """
         Recognition model via BLS with optimized preprocessing.
 
-        TensorRT engine supports batch=1 only, so each crop is processed
-        individually. Parallelism achieved via 4 model instances handling
-        concurrent API requests.
+        The engine takes batch up to 64 (widths 48-2048), but this loop still runs one
+        crop per BLS call; concurrent requests are served by the model's instance group.
         """
         if not text_crops or self.ctc_decode is None:
             return [], []

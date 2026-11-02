@@ -17,6 +17,7 @@ from fastapi import HTTPException, Query
 from src.config import DetectionProfile, get_region_fields
 from src.config.region_state import RegionStatus, region_status_catalog
 from src.domain.region_boxes import BOX_STATES, box_query
+from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
@@ -224,7 +225,7 @@ async def list_regions(
             source_excludes=_REGION_SOURCE_EXCLUDES,
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
 
 
 def _training_candidate_query(
@@ -394,7 +395,7 @@ async def training_candidates(
             row_keys={'selection_reason': reason},
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        raise server_error(503, 'opensearch unavailable', exc) from exc
     return {**page_body, 'mode': mode, 'selection_reason': reason}
 
 
@@ -409,7 +410,7 @@ async def region_statuses() -> dict[str, Any]:
 
 
 @router.get('/regions/vocabulary', response_model=RegionVocabularyResponse)
-async def regions_vocabulary() -> dict[str, Any]:
+async def regions_vocabulary(opensearch: OpenSearchDep) -> dict[str, Any]:
     """The deployment-configured detector/segmenter/verifier vocabulary.
 
     ``{detectors: [{id, label, role, filterable}], region_sources:
@@ -425,7 +426,5 @@ async def regions_vocabulary() -> dict[str, Any]:
     with contextlib.suppress(Exception):
         # Best-effort: the verifier entries come from the endpoint registry;
         # an unreachable store just leaves them out.
-        from src.services.projects.guard import make_curation_opensearch
-
-        await refresh_vlm_state(await make_curation_opensearch())
+        await refresh_vlm_state(opensearch)
     return region_vocabulary_catalog()

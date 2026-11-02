@@ -329,6 +329,7 @@ class FakeOpenSearch:
         index: str,  # noqa: ARG002
         id: str,  # noqa: A002
         _source_excludes: list[str] | None = None,
+        ignore: Any = None,  # noqa: ARG002
     ) -> dict[str, Any]:
         return {'_id': id, '_source': self.items.get(id, {}), '_seq_no': 1, '_primary_term': 1}
 

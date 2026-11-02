@@ -31,6 +31,9 @@ def _reset_caches():
     from src.services.config_store.store import reset_config_stores
 
     reset_config_stores()
+    from _curation_app import mark_config_store_loaded
+
+    mark_config_store_loaded()
     yield
     reset_config_stores()
 

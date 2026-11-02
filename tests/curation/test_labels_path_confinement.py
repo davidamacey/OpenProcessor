@@ -9,12 +9,9 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation.query_fakes import SettingsFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.ingest_profiles import load_label_names
 from src.routers.curation import _raw_opensearch_dep, router as curation_router
-from src.services.curation import index_bootstrap
-from src.services.curation.ingest_policy import DetectorOverride
+from src.schemas.curation.ingest_profile import IngestDetectorSpec
 
 
 class _Pool:
@@ -75,38 +72,40 @@ def test_load_label_names_reads_a_labels_file_inside_the_repository(repo: Path) 
     assert load_label_names(str(repo / 'det' / 'labels.txt')) == ('a', 'b')
 
 
-def test_the_override_rejects_bad_paths_and_accepts_a_good_one(repo: Path, outside: Path) -> None:
+def test_the_detector_spec_rejects_bad_paths_and_accepts_a_good_one(
+    repo: Path, outside: Path
+) -> None:
     for bad in _bad_paths(repo, outside):
         with pytest.raises(ValueError, match='labels_path'):
-            DetectorOverride(model='m', labels_path=bad)
+            IngestDetectorSpec(model='m', labels_path=bad)
     good = repo / 'det2.txt'
     good.write_text('a\n')
-    assert DetectorOverride(model='m', labels_path=str(good)).labels_path == str(good)
-    assert DetectorOverride(model='m').labels_path == ''
+    assert IngestDetectorSpec(model='m', labels_path=str(good)).labels_path == str(good)
+    assert IngestDetectorSpec(model='m').labels_path == ''
 
 
 @pytest.fixture
-def policy_client(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
-    fake = SettingsFakeOpenSearch()
-    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
-    registry = ClassRegistry(path=repo.parent / 'class_registry.json')
-    monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
-    monkeypatch.setattr('src.routers.curation.class_seed.get_class_registry', lambda: registry)
-    monkeypatch.setattr('src.routers.curation.ingest_policy.get_class_registry', lambda: registry)
-    monkeypatch.setattr('src.app.resources.get_async_triton_pool', _Pool)
+def ingest_profile_client(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    from unittest.mock import AsyncMock
+
+    from curation._fake_config_opensearch import FakeConfigOpenSearch
+
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
-    with TestClient(app) as client:
-        yield client
+    app.dependency_overrides[_raw_opensearch_dep] = FakeConfigOpenSearch
+    return TestClient(app)
 
 
-def test_put_policy_answers_422_for_an_outside_labels_path(
-    policy_client: Any, repo: Path, outside: Path
+def test_ingest_profile_answers_422_for_an_outside_labels_path(
+    ingest_profile_client: Any, repo: Path, outside: Path
 ) -> None:
+    prefix = '/curation/projects/default/ingest_profiles'
     for bad in _bad_paths(repo, outside):
-        body = {'expected_revision': 0, 'detector': {'model': 'm', 'labels_path': bad}}
-        resp = policy_client.put(POLICY_URL, json=body)
+        body = {'primary': {'model': 'm', 'labels_path': bad}}
+        resp = ingest_profile_client.post(prefix, json={'name': 'p1', 'body': body})
         assert resp.status_code == 422, bad
         assert 'TOP-SECRET' not in resp.text
 
@@ -137,3 +136,17 @@ def test_region_profile_body_rejects_an_outside_labels_path(
         assert resp.status_code == 422, bad
         resp = profile_client.post(prefix + '/validate', json={'body': _body(labels_path=bad)})
         assert resp.status_code == 422, bad
+
+
+@pytest.mark.parametrize('case', ['outside_repository', 'dot_dot', 'not_txt'])
+def test_each_kind_of_bad_labels_path_is_refused_by_the_profile_schema(
+    case: str, repo: Path, outside: Path
+) -> None:
+    (repo / 'det' / 'notes.json').write_text('{}')
+    bad = {
+        'outside_repository': str(outside),
+        'dot_dot': str(repo / 'det' / '..' / '..' / 'secret.txt'),
+        'not_txt': str(repo / 'det' / 'notes.json'),
+    }[case]
+    with pytest.raises(ValueError, match='labels_path'):
+        IngestDetectorSpec(model='m', labels_path=bad)

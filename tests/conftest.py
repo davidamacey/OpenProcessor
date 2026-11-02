@@ -341,3 +341,37 @@ def reference_ingest_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_INGEST_PRIMARY_NAME', 'coco_yolo11')
     monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'classifier')
     monkeypatch.setenv('OP_INGEST_SECONDARY_NAME', 'classifier')
+
+
+@pytest.fixture(autouse=True)
+def ingest_store_loaded(_bind_default_project: None) -> Iterator[None]:
+    """The ``default`` project's config store as a worker that has already loaded it
+    and found nothing active: ``project_ingest_profiles()`` resolves to the env
+    profiles (it refuses on a store that never loaded or is stale). Production
+    always has this because the route dependency refreshes the store; tests that
+    hand a route a fake client skip that dependency. ``loaded_at`` is in the future
+    so ``ensure_fresh`` does not try to read the fake. Tests of the load/refusal
+    path call ``reset_config_stores()`` first."""
+    from _curation_app import mark_config_store_loaded
+
+    from src.config.project_context import try_current_project
+    from src.services.config_store.store import reset_config_stores
+
+    if try_current_project() is None:
+        yield
+        return
+    reset_config_stores()
+    mark_config_store_loaded()
+    yield
+    reset_config_stores()
+
+
+@pytest.fixture
+def no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No other project runs any ingest detector (the unload guard and the models
+    list scan every project's active ingest profile)."""
+
+    async def _none(_client: object) -> dict[str, frozenset[str]]:
+        return {}
+
+    monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)

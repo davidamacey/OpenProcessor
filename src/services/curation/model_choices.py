@@ -15,8 +15,8 @@ from typing import Any
 from src.config import get_curation_config
 from src.config.env import env_optional_str, env_str
 from src.config.faces import faces_enabled
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
+from src.services.curation.ingest_detector import project_ingest_profiles
 
 
 def _choice(value: str) -> dict[str, str]:
@@ -116,8 +116,8 @@ def build_model_choices(
 
     config = get_curation_config()
     profile = get_active_region_profile()
-    primary = ingest_primary_profile()
-    secondary = ingest_secondary_profile()
+    ingest = project_ingest_profiles()
+    primary, secondary = ingest.primary, ingest.secondary
     sizes = sorted({str(p['model_size']) for p in get_profiles() if p.get('model_size')})
     return [
         _row(

@@ -6,6 +6,7 @@ import time
 from fastapi import HTTPException, Query, status
 
 from src.core.dependencies import VisualSearchDep
+from src.routers._errors import server_error
 from src.routers.search._router import router
 from src.routers.search.models import OCRSearchResponse, OCRSearchResult
 from src.utils.upstream_errors import UpstreamError
@@ -117,7 +118,4 @@ async def search_by_ocr(
         raise
     except Exception as e:
         logger.error(f'OCR search failed: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'OCR search failed: {e!s}',
-        ) from e
+        raise server_error(500, 'OCR search failed', e) from e

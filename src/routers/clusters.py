@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from src.config.faces import require_faces
 from src.core.dependencies import VisualSearchDep
+from src.routers._errors import server_error
 from src.utils.upstream_errors import UpstreamError
 
 
@@ -244,7 +245,7 @@ async def train_clusters(
         raise
     except Exception as e:
         logger.error(f'Cluster training failed for {index_name}: {e}')
-        raise HTTPException(status_code=500, detail=f'Training failed: {e!s}') from e
+        raise server_error(500, 'Training failed', e) from e
 
 
 @router.post(
@@ -293,7 +294,7 @@ async def assign_unclustered(
         raise
     except Exception as e:
         logger.error(f'Cluster assignment failed for {index_name}: {e}')
-        raise HTTPException(status_code=500, detail=f'Assignment failed: {e!s}') from e
+        raise server_error(500, 'Assignment failed', e) from e
 
 
 @router.get(
@@ -357,7 +358,7 @@ async def get_cluster_stats(
         raise
     except Exception as e:
         logger.error(f'Get cluster stats failed for {index_name}: {e}')
-        raise HTTPException(status_code=500, detail=f'Stats retrieval failed: {e!s}') from e
+        raise server_error(500, 'Stats retrieval failed', e) from e
 
 
 @router.post(
@@ -418,7 +419,7 @@ async def rebalance_clusters(
         raise
     except Exception as e:
         logger.error(f'Cluster rebalancing failed for {index_name}: {e}')
-        raise HTTPException(status_code=500, detail=f'Rebalancing failed: {e!s}') from e
+        raise server_error(500, 'Rebalancing failed', e) from e
 
 
 @router.get(
@@ -476,7 +477,7 @@ async def check_cluster_balance(
         raise
     except Exception as e:
         logger.error(f'Balance check failed for {index_name}: {e}')
-        raise HTTPException(status_code=500, detail=f'Balance check failed: {e!s}') from e
+        raise server_error(500, 'Balance check failed', e) from e
 
 
 @router.get('/albums', response_model=ListAlbumsResponse)
@@ -517,7 +518,7 @@ async def list_albums(
         raise
     except Exception as e:
         logger.error(f'List albums failed: {e}')
-        raise HTTPException(status_code=500, detail=f'List albums failed: {e!s}') from e
+        raise server_error(500, 'List albums failed', e) from e
 
 
 # Declared last: `/{index}/{cluster_id}` is two free path segments, so any
@@ -596,4 +597,4 @@ async def get_cluster_members(
         raise
     except Exception as e:
         logger.error(f'Get cluster members failed for {index_name}/{cluster_id}: {e}')
-        raise HTTPException(status_code=500, detail=f'Members retrieval failed: {e!s}') from e
+        raise server_error(500, 'Members retrieval failed', e) from e

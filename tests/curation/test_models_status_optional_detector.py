@@ -28,7 +28,7 @@ import pytest
 from src.services.detection import profile_registry
 
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.usefixtures('no_other_projects')]
 
 
 @pytest.fixture(autouse=True)
@@ -81,7 +81,7 @@ async def test_detector_missing_from_index_with_segmenter_is_optional_not_instal
 
     _patch_async_client(monkeypatch, models_mod, handler)
 
-    result = await models_mod.models_status()
+    result = await models_mod.models_status(None)
     models_by_name = {m['name']: m for m in result['models']}
 
     detector = models_by_name['license_plate_detector']
@@ -130,7 +130,7 @@ async def test_detector_present_but_unloaded_stays_not_ready(
 
     _patch_async_client(monkeypatch, models_mod, handler)
 
-    result = await models_mod.models_status()
+    result = await models_mod.models_status(None)
     models_by_name = {m['name']: m for m in result['models']}
 
     detector = models_by_name['license_plate_detector']
@@ -171,7 +171,7 @@ async def test_no_segmenter_configured_detector_not_optional(
 
     _patch_async_client(monkeypatch, models_mod, handler)
 
-    result = await models_mod.models_status()
+    result = await models_mod.models_status(None)
     models_by_name = {m['name']: m for m in result['models']}
 
     detector = models_by_name['license_plate_detector']

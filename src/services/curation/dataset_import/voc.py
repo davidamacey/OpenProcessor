@@ -20,13 +20,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from src.services.curation.dataset_import.box_norm import CLAMP_TOLERANCE_PX, normalize_box
-from src.services.curation.dataset_import.capped_io import read_bytes_capped, read_text_capped
+from src.services.curation.dataset_import.capped_io import read_bytes_capped
 from src.services.curation.dataset_import.coco import PREVIEW_SIZE_CHECKS
 from src.services.curation.dataset_import.issues import IssueCollector
-from src.services.curation.dataset_import.limits import (
-    MAX_LABEL_FILE_BYTES,
-    MAX_VOC_XML_BYTES,
-    preview_max_files,
+from src.services.curation.dataset_import.limits import MAX_VOC_XML_BYTES, preview_max_files
+from src.services.curation.dataset_import.native_common import (
+    entry_state,
+    read_split_lists,
+    rel_path,
 )
 from src.services.curation.dataset_import.paths import (
     DatasetPathNotAllowedError,
@@ -38,7 +39,6 @@ from src.services.curation.dataset_import.scan import (
     DatasetScan,
     FormatUndetectedError,
     LabelBox,
-    LabelState,
     ScanEntry,
     class_box_counts,
     exif_transposed_size,
@@ -51,7 +51,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _ANNOTATION_DIRS = ('Annotations', 'annotations')
-_SPLIT_ORDER = ('test', 'val', 'train')
 
 
 def _annotation_dir(root: Path) -> Path | None:
@@ -81,23 +80,6 @@ class _Ctx:
     size_checks_left: int
 
 
-def _read_splits(root: Path, issues: IssueCollector) -> dict[str, str]:
-    owner: dict[str, str] = {}
-    for split in _SPLIT_ORDER:
-        path = root / 'ImageSets' / 'Main' / f'{split}.txt'
-        if not path.is_file():
-            continue
-        text = read_text_capped(path, MAX_LABEL_FILE_BYTES)
-        if text is None:
-            issues.add('dataset_file_too_large', file=path.name)
-            continue
-        for line in text.splitlines():
-            tokens = line.split()
-            if tokens:
-                owner.setdefault(tokens[0], split)
-    return owner
-
-
 def _images_dir(root: Path) -> Path:
     for name in ('JPEGImages', 'images'):
         if (root / name).is_dir():
@@ -121,20 +103,13 @@ def _voc_image(el: ET.Element, xml_path: Path, ctx: _Ctx) -> Path | None:
                 break
     if found is None:
         ctx.issues.add(
-            'image_file_missing', file=_rel(xml_path, ctx.root), detail={'filename': filename}
+            'image_file_missing', file=rel_path(xml_path, ctx.root), detail={'filename': filename}
         )
         return None
     if ctx.path_guard is not None and not ctx.path_guard(found):
-        ctx.issues.add('image_path_not_servable', file=_rel(xml_path, ctx.root))
+        ctx.issues.add('image_path_not_servable', file=rel_path(xml_path, ctx.root))
         return None
     return found
-
-
-def _rel(path: Path, root: Path) -> str:
-    try:
-        return str(path.resolve().relative_to(root.resolve()))
-    except ValueError:
-        return str(path)
 
 
 def _declared_size(el: ET.Element) -> tuple[int, int] | None:
@@ -253,7 +228,7 @@ def _parse_file(xml_path: Path, rel_xml: str, issues: IssueCollector) -> ET.Elem
 
 
 def _read_voc_file(xml_path: Path, ctx: _Ctx) -> ScanEntry | None:
-    rel_xml = _rel(xml_path, ctx.root)
+    rel_xml = rel_path(xml_path, ctx.root)
     root_el = _parse_file(xml_path, rel_xml, ctx.issues)
     if root_el is None:
         return None
@@ -265,19 +240,12 @@ def _read_voc_file(xml_path: Path, ctx: _Ctx) -> ScanEntry | None:
         return None
     size, declared = sized
     boxes, has_objects = _voc_objects(root_el, size, rel_xml, ctx)
-    label_state: LabelState
-    if not has_objects:
-        label_state = 'negative'
-    elif boxes:
-        label_state = 'labeled'
-    else:
-        label_state = 'unlabeled'
     return ScanEntry(
-        rel_path=_rel(image, ctx.root),
+        rel_path=rel_path(image, ctx.root),
         source_stem=image.stem,
         abs_image_path=image,
         split=ctx.splits.get(xml_path.stem),
-        label_state=label_state,
+        label_state=entry_state(has_objects, boxes),
         boxes=boxes,
         declared_size=declared,
     )
@@ -302,7 +270,7 @@ def scan_voc(root: Path, *, path_guard: PathGuard | None = None) -> DatasetScan:
         images_dir=images_dir,
         issues=issues,
         path_guard=path_guard,
-        splits=_read_splits(root, issues),
+        splits=read_split_lists(root / 'ImageSets' / 'Main', issues),
         size_checks_left=PREVIEW_SIZE_CHECKS,
     )
     entries = [e for e in (_read_voc_file(p, ctx) for p in xml_files) if e is not None]

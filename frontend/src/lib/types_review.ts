@@ -76,6 +76,10 @@ export interface ReviewItem extends Crop {
  */
 export interface SearchCrop extends Crop {
   similarity_score: number;
+  /** `target=box` searches: the box of this item that matched, and whether its vector predates a
+   *  move of the box. Null for a crop-target search. */
+  matched_box_id?: string | null;
+  matched_box_stale?: boolean | null;
 }
 
 /**

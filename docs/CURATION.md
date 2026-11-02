@@ -186,6 +186,18 @@ detector output, an `embedding.mode` (`all`, `selected`, `lazy` or `none`, the l
 being detection only with no vector at all) and a `clustering.automatic` switch. It
 affects future ingests only. [Ingest policy](../docs-site/docs/guides/ingest-policy.mdx).
 
+### Ingest profiles
+
+A project's ingest detector is its active **ingest profile**, a named, revisioned config
+document (`/curation/projects/{project}/ingest_profiles`) with a required `primary`
+detector and an optional `secondary` classifier, each with `model`, `version`,
+`input_size`, `labels_path`, `confidence_floor` and `batch_limit`. With none active, the
+deployment's `OP_INGEST_PRIMARY_*` / `OP_INGEST_SECONDARY_*` settings apply. Activating
+checks that Triton serves the models. The ingest policy no longer has a `detector` field:
+a stored one is reset with a logged message and the project falls back to the deployment
+detector until a profile is activated.
+[Ingest profiles](../docs-site/docs/guides/ingest-profiles.mdx).
+
 ### Items without an embedding
 
 An item stored without a vector has `embedding_state` `not_selected`, `deferred` or
@@ -211,27 +223,51 @@ watcher, a cron schedule or an S3 event webhook. Covers the allow-list
 
 ## Dataset import
 
-Bring a labeled YOLO, COCO, Pascal VOC or Open Images dataset, or an OpenProcessor
-export, into a project.
+Bring a labeled YOLO, COCO, Pascal VOC, Open Images, CVAT, Label Studio, KITTI,
+CreateML or LabelMe dataset, or an OpenProcessor export, into a project.
 Preview, decide each class by name (`map`, `create`, `skip`, `region`), import, undo.
 [Dataset import](../docs-site/docs/guides/dataset-import.mdx).
 
 ### Importing other formats
 
-The importer reads YOLO, COCO, Pascal VOC (XML per image), Open Images (boxes CSV plus
-class descriptions) and OpenProcessor exports. CVAT, LabelMe, Label Studio and
-segmentation, OBB or keypoint-specific formats are not read directly.
-Convert them to YOLO or COCO first, then check the result with
-`POST /curation/projects/{project}/datasets/preview`.
+The importer reads these layouts and detects them from the files in the dataset
+directory (first match wins; `source.format` forces one):
 
-- CVAT, LabelMe, Label Studio: convert with a general converter such as
-  `fiftyone` (export as `fo.types.YOLOv5Dataset`) or `supervision`
-  (`sv.DetectionDataset.from_pascal_voc(...)` then `.as_yolo(...)`). Keep one class
-  name per class: the import decides by name.
-- Polygon, OBB or keypoint labels: YOLO rows with more than five columns are imported
-  as their bounding box. The extra geometry is not kept.
-- A `format_undetected` error means no YOLO, COCO, Pascal VOC, Open Images or export layout was found at the
-  path.
+| Format | Layout | Classes come from |
+|---|---|---|
+| YOLO | `data.yaml` with `names`; or `classes.txt` / `obj.names` / `names.txt` beside `images/` and `labels/` (optionally `images/<split>/`) | the names, by line (or YAML index) |
+| COCO | `annotations/*.json` | category names |
+| Pascal VOC | `Annotations/*.xml`, `JPEGImages/`, optional `ImageSets/Main/*.txt` | `<name>` |
+| Open Images | `*annotations-bbox*.csv` plus `class-descriptions*.csv` | the display name |
+| CVAT for images 1.1 | `annotations.xml`, `images/` | the `label` attribute |
+| Label Studio | the full JSON export (a list of tasks) with `rectanglelabels` results | the rectangle label |
+| KITTI | `label_2/*.txt` and `image_2/` (or under `training/`), optional `ImageSets/*.txt` | the object type |
+| CreateML | `_annotations.createml.json` (or any CreateML JSON), at the root or in `train`/`valid`/`test` directories | `label` |
+| LabelMe | one JSON per image, beside the image, at the root or in split directories | `label` |
+
+Class identity is always the name. A YOLO dataset with no names (no `data.yaml`
+`names`, no names file) is refused as `format_undetected`; a names file with a blank
+or repeated name is a blocking `yolo_names_file_invalid`.
+
+How each format maps to boxes:
+
+- An image with no object at all is a reviewed negative (VOC, CVAT, KITTI, CreateML,
+  LabelMe). An image whose objects were all skipped is unlabeled. A Label Studio task
+  with no annotation is unlabeled; one annotation with no box is a negative; a task
+  with several annotations is skipped (`labelstudio_task_skipped`).
+- Only axis-aligned boxes are boxes. Rotated boxes, polygons, points, masks, `DontCare`
+  regions and (Label Studio) other result types are skipped with the info issue
+  `shape_not_box_skipped`. YOLO rows with more than five columns (segmentation, OBB)
+  are imported as their bounding box.
+- Pixel formats (CVAT, KITTI, CreateML, LabelMe) read the image size from the image;
+  a declared size that disagrees with the image skips the image
+  (`image_size_mismatch`). Label Studio coordinates are percentages.
+- An image reference that leaves the dataset (`..`, an absolute path, a link out) or
+  names a remote URL is never followed (`image_file_missing`).
+- Auto-detection of the JSON formats looks at the first 64 KiB of each file. The
+  Label Studio `JSON_MIN` export, CVAT video (track) exports and COCO
+  segmentation-only files are not read directly: convert them or export the full JSON.
+- A `format_undetected` error means none of these layouts was found at the path.
 
 ## Reprocess
 
@@ -253,7 +289,9 @@ Build a new project from 1 to 8 existing ones, with class mapping by name.
 
 Review queues, semantic search, item clustering, the auto-label job, the shared item
 filter and bulk actions on a selection. "More like this" ranks items by similarity to a crop's
-stored vector (`GET /search/similar`), no encoder needed.
+stored vector (`GET /search/similar`), no encoder needed; `POST /search/image` ranks them by an
+uploaded picture or a region of a project image. `target=box` on the three search routes ranks the
+per-box vectors and returns the item with the box that matched (`matched_box_id`).
 [Cropwright review](../docs-site/docs/cropwright/user-guide/review.md),
 [clusters](../docs-site/docs/cropwright/user-guide/clusters.md),
 [item filter](../docs-site/docs/cropwright/user-guide/item-filter.md). Which worker
@@ -274,8 +312,9 @@ Nothing here ships a pretrained region detector, VLM or trainer weights.
   tower `pe_text_encoder` is needed for semantic search. Build both with
   `make export-pe`. If it fails with `ModuleNotFoundError: No module named 'core'`,
   the `api` image predates the source tree: rebuild it first.
-- **An item detector for ingest**, named by `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
-  Ingest returns 503 until one is configured and loaded.
+- **An item detector for ingest**, named by `OP_INGEST_PRIMARY_DETECTOR_MODEL` or by a
+  project's active [ingest profile](#ingest-profiles). Ingest returns 503 until one is
+  configured and loaded.
 - **A segmenter and a region profile**, if you want regions (`OP_SEGMENTER_URL`).
 - **An OCR model**, if your region has readable text.
 - **A VLM**: see [Choosing a VLM](#choosing-a-vlm).

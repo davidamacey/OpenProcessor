@@ -1,7 +1,7 @@
 """Semantic search over the curation items index: by text and by a stored crop vector.
 
-``GET /curation/search/similar`` ranks items by similarity to the stored ``pe_embedding``
-of one crop (no encoder). ``GET /curation/search/text`` (``src.routers.curation.search``) encodes a
+``GET /curation/projects/{project}/search/similar`` ranks items by similarity to the stored ``pe_embedding``
+of one crop (no encoder). ``GET /curation/projects/{project}/search/text`` (``src.routers.curation.search``) encodes a
 free-text query through the PE-Core-L14-336 **text** tower
 (:class:`src.clients.pe_encoder.PEEncoder`), builds an OpenSearch ``knn``
 query against the item's PE-Core **image**-tower embedding
@@ -27,8 +27,17 @@ from src.config.project_context import project_api_base, run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.domain.embedding_state import not_embedded_clause
+from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import review_queries
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+from src.services.curation.region_box_embeddings import box_vector_source_includes
+from src.services.curation.semantic_search_box import (
+    attach_match,
+    box_k,
+    box_source_excludes,
+    build_box_knn_query,
+    no_box_vectors_clause,
+)
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.rejections import rejection
 
@@ -213,8 +222,13 @@ async def _knn_page(
     min_score: float | None,
     cfg: CurationConfig,
     fields: RegionFields,
+    target: SearchTarget = SearchTarget.ITEM,
+    skip_box: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Run one filtered kNN page for ``vector`` and hydrate it into the wire page."""
+    """Run one filtered kNN page for ``vector`` and hydrate it into the wire page.
+
+    ``target=box`` ranks the per-box vectors instead; the page is still one card per item, each
+    with the box that matched best. ``skip_box`` is the query's own ``(crop_id, box_id)``."""
     # `k` is the ANN candidate depth (how many nearest neighbors the
     # kNN plugin considers) — it must cover through the end of the
     # requested page, so it stays `page * page_size` (capped at _MAX_K).
@@ -224,14 +238,31 @@ async def _knn_page(
     # to one page in Python, paying the network/JSON cost for every
     # candidate on every page request. `from`/`size` let OpenSearch do
     # that slicing server-side; only `page_size` hits cross the wire.
-    k = min(_MAX_K, page * page_size)
-    knn_query = build_knn_query(vector, k=k, filter_clause=filter_clause)
+    excludes = _source_excludes(fields)
+    match target:
+        case SearchTarget.ITEM:
+            knn_query = build_knn_query(
+                vector, k=min(_MAX_K, page * page_size), filter_clause=filter_clause
+            )
+            unsearchable = not_embedded_clause()
+        case SearchTarget.BOX:
+            knn_query = build_box_knn_query(
+                vector,
+                k=box_k(page, page_size, max_k=_MAX_K),
+                filter_clause=filter_clause,
+                fields=fields,
+                inner_size=2 if skip_box else 1,
+            )
+            excludes = box_source_excludes(excludes, fields)
+            unsearchable = no_box_vectors_clause(fields)
+        case _:
+            raise ValueError(f'unknown search target: {target!r}')
 
     body: dict[str, Any] = {
         'size': page_size,
         'from': (page - 1) * page_size,
         'query': knn_query,
-        '_source': {'excludes': _source_excludes(fields)},
+        '_source': {'excludes': excludes},
     }
     if min_score is not None:
         # Top-level min_score is a generic post-scoring filter — applies
@@ -248,13 +279,19 @@ async def _knn_page(
         opensearch.search(index=cfg.items_index, body=body),
         opensearch.count(
             index=cfg.items_index,
-            body={'query': {'bool': {'filter': [*filter_clause, not_embedded_clause()]}}},
+            body={'query': {'bool': {'filter': [*filter_clause, unsearchable]}}},
         ),
     )
     hits = (resp.get('hits') or {}).get('hits') or []
     total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
 
-    items = [_hydrate_item(h, fields, project_api_base()) for h in hits]
+    items: list[dict[str, Any]] = []
+    for hit in hits:
+        item = _hydrate_item(hit, fields, project_api_base())
+        if target is SearchTarget.BOX and not attach_match(item, hit, fields, skip=skip_box):
+            total = max(0, total - 1)
+            continue
+        items.append(item)
 
     return {
         'items': items,
@@ -263,6 +300,24 @@ async def _knn_page(
         'page_size': page_size,
         'unembedded_in_scope': int((unembedded or {}).get('count', 0)),
     }
+
+
+def _stored_box_vector(
+    source: dict[str, Any], box_id: str, crop_id: str, fields: RegionFields
+) -> list[float]:
+    """The stored vector of box ``box_id`` of a crop; 404 ``box_not_found`` / 409
+    ``box_not_embedded`` when the crop has no such box / the box has no vector."""
+    known = {b.get('box_id') for b in source.get(fields.boxes) or [] if isinstance(b, dict)}
+    for entry in source.get(fields.box_embeddings) or []:
+        if entry.get('box_id') != box_id:
+            continue
+        vector = entry.get('embedding')
+        if isinstance(vector, list) and vector:
+            return vector
+        known.add(box_id)
+    if box_id in known:
+        raise rejection(409, 'box_not_embedded', f'box {box_id} of crop {crop_id} has no vector')
+    raise rejection(404, 'box_not_found', f"no box '{box_id}' on crop '{crop_id}'")
 
 
 async def semantic_text_search(
@@ -283,6 +338,7 @@ async def semantic_text_search(
     min_score: float | None = None,
     include_test: bool = False,
     item_filter: ItemFilter | None = None,
+    target: SearchTarget = SearchTarget.ITEM,
     config: CurationConfig | None = None,
     fields: RegionFields | None = None,
 ) -> dict[str, Any]:
@@ -331,6 +387,7 @@ async def semantic_text_search(
         min_score=min_score,
         cfg=cfg,
         fields=region_fields,
+        target=target,
     )
 
 
@@ -340,6 +397,8 @@ async def semantic_similar_search(
     crop_id: str,
     page: int,
     page_size: int,
+    box_id: str | None = None,
+    target: SearchTarget = SearchTarget.ITEM,
     exclude_self: bool = True,
     cluster_id: int | None = None,
     tab: str | None = None,
@@ -357,9 +416,13 @@ async def semantic_similar_search(
     """Rank items by similarity to the stored vector of ``crop_id`` (same page and filters
     as :func:`semantic_text_search`; nothing is encoded).
 
-    Refuses 404 ``not_found`` for a crop the bound project's items index lacks and 409
-    ``crop_not_embedded`` for one without a vector, so a missing source never reads as "no
-    neighbours".
+    With ``box_id`` the query vector is that box's stored vector instead of the crop's. Refuses
+    404 ``not_found`` for a crop the bound project's items index lacks (``box_not_found`` for
+    a box it lacks) and 409 ``crop_not_embedded`` (``box_not_embedded``) for one without a
+    vector, so a missing source never reads as "no neighbours".
+
+    ``exclude_self`` drops the source crop; with ``box_id`` on ``target=box`` it drops only the
+    source box, so the crop's other boxes can still match.
     """
     cfg = config or get_curation_config()
     region_fields = fields or get_region_fields()
@@ -369,17 +432,29 @@ async def semantic_similar_search(
         body={
             'size': 1,
             'query': {'ids': {'values': [crop_id]}},
-            '_source': {'includes': [ITEM_EMBEDDING_FIELD, 'embedding_state']},
+            '_source': {
+                'includes': [
+                    ITEM_EMBEDDING_FIELD,
+                    'embedding_state',
+                    f'{region_fields.boxes}.box_id',
+                    *box_vector_source_includes(region_fields),
+                ]
+            },
         },
     )
     hits = (resp.get('hits') or {}).get('hits') or []
     if not hits:
         raise rejection(404, 'not_found', f"no crop '{crop_id}' in this project")
     source = hits[0].get('_source') or {}
-    vector = source.get(ITEM_EMBEDDING_FIELD)
-    if not isinstance(vector, list) or not vector:
-        state = source.get('embedding_state') or 'unknown'
-        raise rejection(409, 'crop_not_embedded', f'crop {crop_id} has no vector ({state})')
+    if box_id is not None:
+        vector = _stored_box_vector(source, box_id, crop_id, region_fields)
+    else:
+        stored = source.get(ITEM_EMBEDDING_FIELD)
+        if not isinstance(stored, list) or not stored:
+            state = source.get('embedding_state') or 'unknown'
+            raise rejection(409, 'crop_not_embedded', f'crop {crop_id} has no vector ({state})')
+        vector = stored
+    skip_box = None
 
     filter_clause = _filter_for(
         item_filter=item_filter,
@@ -393,7 +468,10 @@ async def semantic_similar_search(
         include_test=include_test,
     )
     if exclude_self:
-        filter_clause.append({'bool': {'must_not': [{'ids': {'values': [crop_id]}}]}})
+        if box_id is not None and target is SearchTarget.BOX:
+            skip_box = (crop_id, box_id)
+        else:
+            filter_clause.append({'bool': {'must_not': [{'ids': {'values': [crop_id]}}]}})
     return await _knn_page(
         opensearch=opensearch,
         vector=vector,
@@ -403,6 +481,8 @@ async def semantic_similar_search(
         min_score=min_score,
         cfg=cfg,
         fields=region_fields,
+        target=target,
+        skip_box=skip_box,
     )
 
 
@@ -410,6 +490,7 @@ __all__ = [
     'DEFAULT_KNN_FIELD',
     'SemanticSearchDisabledError',
     'build_knn_query',
+    'no_box_vectors_clause',
     'semantic_similar_search',
     'semantic_text_search',
 ]

@@ -11,9 +11,11 @@ Model lifecycle routes: status, load, unload, delete and list.
 import logging
 import shutil
 from pathlib import Path
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from src.core.dependencies import get_curation_opensearch
 from src.routers.curation._api_error import api_error
 from src.schemas.model_admin import ModelStatusResponse
 from src.schemas.models import (
@@ -151,7 +153,9 @@ async def load_model(model_name: str) -> ModelLoadResponse:
 
 @router.post('/{model_name}/unload', response_model=ModelLoadResponse)
 async def unload_model(
-    model_name: str, force: bool = Query(False, description='Also unload a core pipeline model')
+    model_name: str,
+    opensearch: Annotated[Any, Depends(get_curation_opensearch)],
+    force: bool = Query(False, description='Also unload a core pipeline model'),
 ) -> ModelLoadResponse:
     """
     Unload a model from Triton (files stay in the repository, reloadable).
@@ -161,7 +165,7 @@ async def unload_model(
     (even with ``force``), 409 for core models without ``force``.
     """
     try:
-        check_unload(model_name, force=force)
+        await check_unload(model_name, force=force, client=opensearch)
     except UnloadRefusedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     triton = TritonControlService()
@@ -181,7 +185,9 @@ async def unload_model(
 
 @router.delete('/{model_name}', response_model=ModelDeleteResponse)
 async def delete_model(
-    model_name: str, force: bool = Query(False, description='Also delete a core pipeline model')
+    model_name: str,
+    opensearch: Annotated[Any, Depends(get_curation_opensearch)],
+    force: bool = Query(False, description='Also delete a core pipeline model'),
 ) -> ModelDeleteResponse:
     """
     Delete a model from the repository and unload from Triton.
@@ -211,7 +217,7 @@ async def delete_model(
             )
     try:
         for model_dir in model_dirs:
-            check_unload(model_dir.name, force=force)
+            await check_unload(model_dir.name, force=force, client=opensearch)
     except UnloadRefusedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 

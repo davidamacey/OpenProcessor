@@ -54,6 +54,17 @@ class ReviewLocateResponse(BaseModel):
 
 class SearchItemDoc(ItemDoc):
     semantic_score: float | None = Field(description='Raw kNN similarity of the item to the query.')
+    matched_box_id: str | None = Field(
+        default=None,
+        description='`target=box` only: the box of this item whose vector matched best.',
+    )
+    matched_box_stale: bool | None = Field(
+        default=None,
+        description=(
+            '`target=box` only: true when the matched vector was computed from geometry the '
+            'box no longer has (or the box is gone).'
+        ),
+    )
 
 
 class SearchTextResponse(BaseModel):
@@ -76,10 +87,16 @@ class SearchSimilarResponse(SearchTextResponse):
     kNN similarity to the source crop's stored vector."""
 
 
+class SearchImageResponse(SearchTextResponse):
+    """``POST /search/image``: the ``/search/text`` page; ``semantic_score`` is the kNN
+    similarity to the encoded picture (or to its ``box``)."""
+
+
 __all__ = [
     'ReviewItemDoc',
     'ReviewLocateResponse',
     'ReviewQueuePage',
+    'SearchImageResponse',
     'SearchSimilarResponse',
     'SearchTextResponse',
 ]

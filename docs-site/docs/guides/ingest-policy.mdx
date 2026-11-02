@@ -77,10 +77,10 @@ curl -s -X PUT $B -H 'content-type: application/json' \
   -d '{"expected_revision": 0, "embedding": {"mode": "none"}, "clustering": {"automatic": false}}'
 ```
 
-**`detector`** is an optional per-project detector (`model`, `version`, `input_size`,
-`labels_path`) that replaces the deployment's primary model for this project. It is
-checked against Triton when you save: a model that cannot be served is refused (422), and
-an unreachable Triton gives 503. Leave it `null` to use `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
+The policy does not choose the detector. A project's detector is its active
+[ingest profile](./ingest-profiles.mdx); the policy has no `detector` field, and a stored
+one from an older version is reset (logged as `retired_policy_field_reset`) the first time
+the policy is read. Pick a profile to restore a per-project detector.
 
 ## Cost of a choice
 

@@ -53,6 +53,7 @@ from src.services.training.yolo_triton_config import (
     render_config,
     render_labels_file,
 )
+from src.utils.uint8_input import add_uint8_input
 
 
 if TYPE_CHECKING:
@@ -233,7 +234,9 @@ class TritonPromoter(TritonHttpControl):
         # any) was simply never modified.
         onnx_dst = version_dir / 'model.onnx'
         try:
-            await asyncio.to_thread(shutil.copy2, onnx_src, onnx_dst)
+            # Serving copy only: uint8 input, /255 inside the graph (like the built-in
+            # engines). The trainer's best.onnx next to best.pt stays standard FP32.
+            await asyncio.to_thread(add_uint8_input, onnx_src, onnx_dst)
         except Exception:
             logger.error(
                 'train_promote_copy_failed_rolling_back',

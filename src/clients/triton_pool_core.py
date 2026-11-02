@@ -199,7 +199,7 @@ class AsyncTritonPool:
         self._lock: asyncio.Lock | None = None
         self._initialized = False
         self._stats = PoolStats()
-        self._input_datatypes: dict[str, tuple[float, str]] = {}
+        self._input_datatypes: dict[tuple[str, str], tuple[float, str]] = {}
 
     async def initialize(self) -> None:
         """
@@ -379,11 +379,14 @@ class AsyncTritonPool:
         """
         return await self._metadata_names(model_name, 'inputs', timeout)
 
-    async def get_model_input_datatype(self, model_name: str, timeout: float = 10.0) -> str:
-        """The datatype of the model's ``images`` input (``UINT8``, ``FP32``, ...), cached for
-        ``MODEL_INFO_TTL_S``. Raises when the model has no ``images`` input."""
+    async def get_model_input_datatype(
+        self, model_name: str, timeout: float = 10.0, *, input_name: str = 'images'
+    ) -> str:
+        """The datatype of the model's ``input_name`` input (``UINT8``, ``FP32``, ...), cached per
+        input for ``MODEL_INFO_TTL_S``. Raises when the model has no such input."""
         now = time.monotonic()
-        cached = self._input_datatypes.get(model_name)
+        key = (model_name, input_name)
+        cached = self._input_datatypes.get(key)
         if cached is not None and cached[0] > now:
             return cached[1]
         if not self._initialized:
@@ -392,11 +395,11 @@ class AsyncTritonPool:
         await ensure_loaded(client, model_name)
         metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
         for tensor in metadata.get('inputs', []):
-            if tensor.get('name') == 'images':
+            if tensor.get('name') == input_name:
                 datatype = str(tensor.get('datatype', ''))
-                self._input_datatypes[model_name] = (now + MODEL_INFO_TTL_S, datatype)
+                self._input_datatypes[key] = (now + MODEL_INFO_TTL_S, datatype)
                 return datatype
-        msg = f"model '{model_name}' declares no 'images' input"
+        msg = f"model '{model_name}' declares no '{input_name}' input"
         raise ValueError(msg)
 
     async def _metadata_names(self, model_name: str, key: str, timeout: float) -> list[str]:

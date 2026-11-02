@@ -114,6 +114,7 @@ def test_class_sources_endpoint(clean_env: pytest.MonkeyPatch) -> None:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
+    app.dependency_overrides[_common._raw_opensearch_dep] = lambda: None
     with TestClient(app) as client:
         r = client.get(f'{_common.config.api_prefix}/projects/default/class_sources')
     assert r.status_code == 200, r.text

@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
+
 ### Added
 
+- Search by image (#402): a "Search by image" control on `/clusters` takes a dropped or chosen picture, optionally with a region dragged on its preview, and lists the crops nearest to it through `POST /search/image`. A Crops / Regions switch next to the search box applies to text, "More like this" and picture search; with Regions each result names the region that matched (`region b2`, marked stale when its vector predates a move of the box).
 - "More like this": a crop card action (cluster and search grids) and a link in the review pane open `/clusters?similar_to=<crop id>`, which lists the crops nearest to that crop through `GET /search/similar`. A crop with no vector shows the served refusal; the control is absent when semantic search is not served. The axe check covers the results page, the cluster page action and the review link.
 - Label operations page (`/label-ops`): the project's recorded bulk labels and moves from `GET /label_ops` (newest first, Load older pages through the served `next_after` to the end of the kept history), a detail dialog with the served fields and last undo pass, and undo as a served dry run first (restored, kept, conflicts) with Confirm as a separate step. Served refusals show verbatim; empty and error states have Retry. nginx gives `label_ops` routes a 600 s read timeout.
 - Thumbnail tiles and the review crop pane show a "Source not mounted" or "Image file missing" state with the served source root alias and message when the backend answers `source_missing`, instead of only dimming the tile.

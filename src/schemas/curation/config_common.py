@@ -48,6 +48,11 @@ ErrorCode = Literal[
     'not_found',
     # GET /search/similar: the source crop exists but has no stored vector.
     'crop_not_embedded',
+    'box_not_found',
+    'box_not_embedded',
+    'image_unreadable',
+    'bad_box',
+    'image_encoder_unavailable',
     'unknown_revision',
     'active_conflict',
     'no_previous',
@@ -244,6 +249,10 @@ ValidationCode = Literal[
     'open_vocab_detector_class',
     'open_vocab_class_new',
     'open_vocab_vlm_not_configured',
+    # Ingest detector profiles
+    'ingest_profile_name_invalid',
+    'ingest_profile_name_reserved',
+    'ingest_profile_field_invalid',
     # P4: combine-projects preview / start validation.
     'unmapped_class',
     'mapping_target_invalid',
@@ -553,7 +562,7 @@ class ActiveConfigResponse(BaseModel):
     has ever applied anything, e.g. an API-only deployment.
     """
 
-    axis: Literal['prompt_pack', 'detection_profile', 'vlm', 'open_vocab']
+    axis: Literal['prompt_pack', 'detection_profile', 'vlm', 'open_vocab', 'ingest_profile']
     active: ActiveRef
     source: Literal['stored', 'env', 'off']
     activated_at: str | None = None
