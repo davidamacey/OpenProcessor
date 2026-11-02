@@ -48,6 +48,11 @@ ErrorCode = Literal[
     'not_found',
     # GET /search/similar: the source crop exists but has no stored vector.
     'crop_not_embedded',
+    'box_not_found',
+    'box_not_embedded',
+    'image_unreadable',
+    'bad_box',
+    'image_encoder_unavailable',
     'unknown_revision',
     'active_conflict',
     'no_previous',

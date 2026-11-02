@@ -263,8 +263,9 @@ See [Keymaps](../guides/keymaps.mdx).
 | GET | `/scores/status` | Status. `/scores/coverage` reports field coverage and `/scores/cancel` stops a run |
 | POST | `/select/diverse` | k-center-greedy diverse sampling (`OP_SELECT_DIVERSE_ENABLED`) |
 | GET | `/select/status` | Status of a backgrounded selection. `/select/cancel` stops it |
-| GET | `/search/text` | PE-Core text-to-image semantic search (`OP_SEMANTIC_SEARCH_ENABLED`) |
-| GET | `/search/similar` | Crops nearest to the stored vector of `crop_id` ("More like this"), no encoder needed |
+| GET | `/search/text` | PE-Core text-to-image semantic search (`OP_SEMANTIC_SEARCH_ENABLED`). `target=box` ranks per-box vectors and returns `matched_box_id` |
+| GET | `/search/similar` | Crops nearest to the stored vector of `crop_id` ("More like this"), no encoder needed. `box_id` uses one box's vector; `target=box` ranks per-box vectors |
+| POST | `/search/image` | Query by picture: multipart `image` or `image_id`, optional normalized `box`. Same filters and page as `/search/similar`; capped by `OP_SEARCH_IMAGE_MAX_BYTES` and `OP_SEARCH_IMAGE_MAX_PIXELS` |
 
 ## Review queues and holdout
 

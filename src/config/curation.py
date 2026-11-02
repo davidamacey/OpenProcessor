@@ -144,6 +144,12 @@ class CurationConfig:
     upload_accepted_extensions: tuple[str, ...] = ('.jpg', '.jpeg', '.png')
     batch_max_items_per_request: int = 512
 
+    # POST /search/image: the query picture is decoded and encoded per request, so it has its own
+    # byte cap (read before any decode) and a decoded-pixel cap (read from the header), far below
+    # the ingest limits.
+    search_image_max_bytes: int = 20 * 1024 * 1024  # 20 MiB
+    search_image_max_pixels: int = 50_000_000  # 50 MP
+
     api_prefix: str = '/curation'
     api_tag: str = 'Curation'
 
@@ -360,6 +366,10 @@ class CurationConfig:
             ),
             batch_max_items_per_request=_int(
                 'BATCH_MAX_ITEMS_PER_REQUEST', defaults.batch_max_items_per_request
+            ),
+            search_image_max_bytes=_int('SEARCH_IMAGE_MAX_BYTES', defaults.search_image_max_bytes),
+            search_image_max_pixels=_int(
+                'SEARCH_IMAGE_MAX_PIXELS', defaults.search_image_max_pixels
             ),
             api_prefix=_str('API_PREFIX', defaults.api_prefix),
             api_tag=_str('API_TAG', defaults.api_tag),

@@ -253,7 +253,9 @@ Build a new project from 1 to 8 existing ones, with class mapping by name.
 
 Review queues, semantic search, item clustering, the auto-label job, the shared item
 filter and bulk actions on a selection. "More like this" ranks items by similarity to a crop's
-stored vector (`GET /search/similar`), no encoder needed.
+stored vector (`GET /search/similar`), no encoder needed; `POST /search/image` ranks them by an
+uploaded picture or a region of a project image. `target=box` on the three search routes ranks the
+per-box vectors and returns the item with the box that matched (`matched_box_id`).
 [Cropwright review](../docs-site/docs/cropwright/user-guide/review.md),
 [clusters](../docs-site/docs/cropwright/user-guide/clusters.md),
 [item filter](../docs-site/docs/cropwright/user-guide/item-filter.md). Which worker

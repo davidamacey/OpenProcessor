@@ -313,3 +313,67 @@ def test_search_similar_503_hides_the_exception_text(app_client: TestClient):
 
 def test_search_similar_requires_crop_id(app_client: TestClient):
     assert app_client.get(SIMILAR).status_code == 422
+
+
+# =============================================================================
+# target=item|box (#402)
+# =============================================================================
+
+_BOX_HIT = {
+    '_id': 'crop_1',
+    '_score': 0.7,
+    '_source': {
+        'crop_id': 'crop_1',
+        'image_path': '/data/foo.jpg',
+        'region_boxes': [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.5, 0.5], 'state': 'accepted'}],
+        'region_box_embeddings': [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.5, 0.5]}],
+    },
+    'inner_hits': {'matched_box': {'hits': {'hits': [{'_nested': {'offset': 0}}]}}},
+}
+
+
+@pytest.mark.parametrize('target', ['frame', 'boxes', ''])
+def test_search_text_unknown_target_is_422(app_client: TestClient, target: str):
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'wheel', 'target': target}
+    )
+    assert resp.status_code == 422
+
+
+def test_search_text_box_target_returns_the_matched_box(app_client: TestClient):
+    app_client.fake_os.search = AsyncMock(
+        return_value={'hits': {'hits': [_BOX_HIT], 'total': {'value': 1}}}
+    )
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'wheel', 'target': 'box'}
+    )
+    assert resp.status_code == 200
+    item = resp.json()['items'][0]
+    assert item['matched_box_id'] == 'b1'
+    assert item['matched_box_stale'] is False
+
+
+def test_search_text_item_target_omits_the_matched_box(app_client: TestClient):
+    app_client.fake_os.search = AsyncMock(
+        return_value={'hits': {'hits': [_BOX_HIT], 'total': {'value': 1}}}
+    )
+    item = app_client.get('/curation/projects/default/search/text', params={'q': 'wheel'}).json()[
+        'items'
+    ][0]
+    assert 'matched_box_id' not in item
+
+
+def test_search_similar_unknown_box_404(app_client: TestClient):
+    _similar_os(app_client, source=[{'_id': 'src', '_source': {'region_boxes': []}}])
+    resp = app_client.get(SIMILAR, params={'crop_id': 'src', 'box_id': 'b9'})
+    assert resp.status_code == 404
+    assert resp.json()['detail']['error'] == 'box_not_found'
+
+
+def test_search_similar_box_without_vector_409(app_client: TestClient):
+    _similar_os(
+        app_client, source=[{'_id': 'src', '_source': {'region_boxes': [{'box_id': 'b1'}]}}]
+    )
+    resp = app_client.get(SIMILAR, params={'crop_id': 'src', 'box_id': 'b1', 'target': 'box'})
+    assert resp.status_code == 409
+    assert resp.json()['detail']['error'] == 'box_not_embedded'

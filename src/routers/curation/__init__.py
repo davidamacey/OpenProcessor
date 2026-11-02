@@ -81,6 +81,7 @@ import src.routers.curation.review_proposals
 import src.routers.curation.review_resolve
 import src.routers.curation.scores
 import src.routers.curation.search
+import src.routers.curation.search_image
 import src.routers.curation.select
 import src.routers.curation.settings
 import src.routers.curation.stats
