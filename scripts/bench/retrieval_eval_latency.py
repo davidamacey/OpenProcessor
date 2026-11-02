@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from scripts.bench.retrieval_eval_metrics import latency_summary
+from scripts.curation._project_worker_utils import curation_api_prefix
+from src.domain.embedding_state import embedded_clause
 
 
 if TYPE_CHECKING:
@@ -36,7 +38,6 @@ BAND_TARGETS: tuple[tuple[str, float], ...] = (
     ('about_45pct', 0.45),
 )
 CLASS_FIELD = 'detector_class_name'
-EMBEDDING_FIELD = 'pe_embedding'
 
 
 def parse_server_timing(header: str) -> dict[str, float]:
@@ -109,7 +110,7 @@ def opensearch_facts(os_url: str, index: str) -> dict[str, Any]:
             json={
                 'size': 0,
                 'track_total_hits': True,
-                'query': {'exists': {'field': EMBEDDING_FIELD}},
+                'query': embedded_clause(),
                 'aggs': {'c': {'terms': {'field': CLASS_FIELD, 'size': 200}}},
             },
         ).json()
@@ -143,7 +144,7 @@ def run_condition(
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
-    url = f'{a.api}/curation/projects/{a.project}/search/text'
+    url = f'{a.api}{curation_api_prefix()}/projects/{a.project}/search/text'
     facts = opensearch_facts(a.opensearch_url, a.index)
     bands = pick_bands(facts['class_counts'], facts['embedded_items'])
     need = (a.warmup + a.measured) * (1 + len(bands)) + a.repeat
