@@ -147,7 +147,44 @@ export async function searchSimilarCrops(
   return mapSearchPage(raw, page, pageSize);
 }
 
-type RawSearchItem = RawCrop & { semantic_score: number | null };
+/** A normalized `[x1, y1, x2, y2]` region of a picture. */
+export type ImageSearchBox = [number, number, number, number];
+
+/** The picture a query-by-image search ranks by: an upload, or an image already in the project. */
+export interface ImageSearchQuery {
+  file?: File;
+  imageId?: string;
+  box?: ImageSearchBox | null;
+}
+
+/**
+ * Search by a picture. Backend: `POST {API_PREFIX}/search/image` (multipart `image` or `image_id`,
+ * optional `box`); same gate, filters and page shape as `searchCrops`.
+ */
+export async function searchImageCrops(
+  query: ImageSearchQuery,
+  page = 1,
+  pageSize = 30,
+  filter: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<PaginatedResponse<SearchCrop>> {
+  const body = new FormData();
+  if (query.file) body.append('image', query.file, query.file.name);
+  if (query.imageId) body.append('image_id', query.imageId);
+  if (query.box) body.append('box', query.box.join(','));
+  const raw = await apiFetch<RawSearchPage>(
+    `${scoped()}/search/image${qs({ page, page_size: pageSize, ...filter })}`,
+    { method: 'POST', body },
+    signal,
+  );
+  return mapSearchPage(raw, page, pageSize);
+}
+
+type RawSearchItem = RawCrop & {
+  semantic_score: number | null;
+  matched_box_id?: string | null;
+  matched_box_stale?: boolean | null;
+};
 type RawSearchPage = {
   total: number;
   page: number;
@@ -176,6 +213,9 @@ function mapSearchPage(
       // The backend's `_hydrate_item` (OpenProcessor semantic_search.py) sends
       // the match score as `semantic_score`.
       similarity_score: it.semantic_score ?? 0,
+      // `target=box` only: the region of the item whose vector matched.
+      matched_box_id: it.matched_box_id ?? null,
+      matched_box_stale: it.matched_box_stale ?? null,
     };
   });
   return {
