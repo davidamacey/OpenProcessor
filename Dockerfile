@@ -138,8 +138,8 @@ RUN bash /usr/local/share/op-build/site_delta.sh snapshot /root/.local /tmp/pre.
         /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.13 \
     && bash /usr/local/share/op-build/site_delta.sh delta /root/.local /tmp/pre.sha /delta/export
 
-# Isolated YOLO11 EfficientNMS export toolchain (ultralytics pinned <8.4 for the vendored
-# end2end patch; CPU torch -- see requirements-export-y11.txt). export/export_models.py
+# Isolated YOLO11 EfficientNMS export toolchain (ultralytics pinned to the 8.3 release validated
+# with the vendored end2end patch; CPU torch -- see requirements-export-y11.txt). export/export_models.py
 # re-execs into this venv automatically. Entries byte-identical to the runtime site are
 # replaced with symlinks into the runtime path (they dangle here by design; the export image
 # has /home/appuser/.local). Not --system-site-packages: the user site would shadow the
