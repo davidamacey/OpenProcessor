@@ -118,5 +118,59 @@ async def test_opensearch_error_is_cached_as_error_payload(monkeypatch: pytest.M
     assert 'opensearch down' in payload['error']
 
 
+async def _tab(slug: str, os_client: Any) -> dict[str, Any]:
+    """One SSE connection of project ``slug``."""
+    with bind_project(new_project_record(slug, base_curation_config())):
+        return await pe._cached_stats_payload(os_client)
+
+
+@pytest.mark.asyncio
+async def test_a_slow_project_does_not_block_another(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The cache is a per-process, per-project optimisation, not a guard of shared state:
+    one project's slow aggregation must not hold up another project's tabs."""
+    release_a = asyncio.Event()
+
+    async def _stats(_opensearch: Any) -> dict[str, Any]:
+        from src.config.project_context import current_project
+
+        slug = current_project().record.slug
+        if slug == 'alpha':
+            await release_a.wait()
+        return {'project': slug}
+
+    monkeypatch.setattr('src.routers.curation.stats.stats_dataset', _stats)
+    os_client = AsyncMock()
+    slow = asyncio.create_task(_tab('alpha', os_client))
+    await asyncio.sleep(0)
+
+    got_b = await asyncio.wait_for(_tab('beta', os_client), timeout=1.0)
+
+    assert got_b == {'project': 'beta'}
+    assert not slow.done()
+    release_a.set()
+    assert await slow == {'project': 'alpha'}
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_tab_does_not_cancel_the_shared_aggregation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = asyncio.Event()
+
+    async def _stats(_opensearch: Any) -> dict[str, Any]:
+        await gate.wait()
+        return {'ok': True}
+
+    monkeypatch.setattr('src.routers.curation.stats.stats_dataset', _stats)
+    os_client = AsyncMock()
+    first = asyncio.create_task(_tab('alpha', os_client))
+    second = asyncio.create_task(_tab('alpha', os_client))
+    await asyncio.sleep(0)
+    first.cancel()
+    gate.set()
+
+    assert await second == {'ok': True}
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

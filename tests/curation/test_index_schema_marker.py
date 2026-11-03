@@ -15,6 +15,7 @@ transport would.
 
 from __future__ import annotations
 
+import asyncio
 import copy
 from typing import Any
 
@@ -53,10 +54,15 @@ class _Indices:
 
     async def exists(self, *, index: str) -> bool:
         self._c.request('HEAD', f'/{index}')
+        await asyncio.sleep(0)  # a real round trip: other workers run in between
         return index in self._c.indexes
 
     async def create(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self._c.request('PUT', f'/{index}', body=body)
+        await asyncio.sleep(0)
+        if index in self._c.indexes:
+            msg = 'resource_already_exists_exception'
+            raise RuntimeError(msg)
         self._c.indexes[index] = {
             'properties': copy.deepcopy(body.get('mappings', {}).get('properties', {})),
             'settings': {},
@@ -66,6 +72,7 @@ class _Indices:
 
     async def put_mapping(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self._c.request('PUT', f'/{index}/_mapping', body=body)
+        await asyncio.sleep(0)
         if index not in self._c.indexes:
             raise _NotFoundError(index)
         self._c.indexes[index]['properties'].update(copy.deepcopy(body.get('properties', {})))
@@ -276,3 +283,31 @@ def test_every_migration_field_is_in_the_index_bodies() -> None:
     for name, idx in cluster.indexes.items():
         for field, spec in idx['properties'].items():
             assert bodies[name].get(field) == spec, f'{name}.{field} is not in its body'
+
+
+@pytest.mark.asyncio
+async def test_workers_bootstrapping_one_project_at_once_converge() -> None:
+    """Every uvicorn worker bootstraps every project at startup, so N workers run the
+    sequence against one cluster at the same time. Nothing coordinates them but the
+    cluster: index creation treats ``resource_already_exists`` as success, the mapping
+    puts are additive and the marker write is idempotent. Run the sequence of four
+    workers concurrently (no in-process lock, as separate processes have none)."""
+    cluster = _Cluster()
+
+    await asyncio.gather(*(index_bootstrap._bootstrap_indexes(cluster) for _ in range(4)))
+
+    names = curation_index_names()
+    assert set(cluster.indexes) == set(names)
+    for name in names:
+        assert _marker(cluster, name) == index_bootstrap.schema_fingerprint()
+    assert _slug() in index_bootstrap._INDEXES_BOOTSTRAPPED
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_requests_in_one_process_all_succeed() -> None:
+    cluster = _Cluster()
+
+    results = await asyncio.gather(*(index_bootstrap.ensure_indexes(cluster) for _ in range(8)))
+
+    assert results == [True] * 8
+    assert set(cluster.indexes) == set(curation_index_names())
