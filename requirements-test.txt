@@ -34,7 +34,7 @@ pydantic-settings
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
 torch
 torchvision
-ultralytics>=8.4.82,<8.5
+ultralytics>=8.4.174,<8.5
 
 # transformers import site: src/utils/cache.py (CLIP tokenizer)
 transformers>=4.30.0
