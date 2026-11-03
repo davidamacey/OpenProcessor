@@ -51,3 +51,22 @@ def test_legitimate_yolo_checkpoint_still_validates(tmp_path: Path) -> None:
     assert info['task'] == 'detect'
     assert info['num_classes'] == 80
     assert info['end2end'] is False
+
+
+def test_upload_is_refused_when_restricted_loading_is_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # torch_safe_load silently drops safe_only on a torch that cannot restrict
+    # unpickling; validation must refuse rather than load without restriction.
+    from ultralytics.nn import tasks
+
+    monkeypatch.setattr(tasks._SafeLoad, 'SUPPORTED', False)
+    marker = tmp_path / 'marker.txt'
+    ckpt = tmp_path / 'bad.pt'
+    torch.save({'model': _NotWeights(marker), 'pad': torch.zeros(2000)}, ckpt)
+
+    ok, msg, _ = validate_pytorch_model(ckpt)
+
+    assert not ok
+    assert 'Restricted model loading is unavailable' in msg
+    assert not marker.exists()

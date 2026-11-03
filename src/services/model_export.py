@@ -128,7 +128,12 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
     """
     try:
         import torch
-        from ultralytics.nn.tasks import torch_safe_load
+        from ultralytics.nn.tasks import _SafeLoad, torch_safe_load
+
+        # torch_safe_load quietly drops safe_only when this torch cannot restrict
+        # unpickling; refuse instead of falling back to an unrestricted load.
+        if not _SafeLoad.SUPPORTED:
+            return False, 'Restricted model loading is unavailable in this build', {}
 
         # Check file size
         file_size = file_path.stat().st_size
