@@ -10,13 +10,46 @@
 
   let { ctl }: { ctl: IngestProfilePicker } = $props();
 
+  import { tick } from 'svelte';
+
   const refusal = $derived(ctl.refusal);
+
+  let section: HTMLElement | undefined = $state();
+  let heading: HTMLElement | undefined = $state();
+  let refusalEl: HTMLElement | undefined = $state();
+
+  // An outcome moves keyboard focus to where it is shown, so a screen-reader
+  // or keyboard user is never left on a control that has just unmounted.
+  $effect(() => {
+    if (refusal && refusalEl) refusalEl.focus();
+  });
+
+  $effect(() => {
+    const name = ctl.activatedName;
+    if (name === null) return;
+    void tick().then(() => {
+      const row = section?.querySelector<HTMLElement>(
+        `[data-testid="ingest-profile-row"][data-name="${CSS.escape(name)}"]`,
+      );
+      (row ?? heading)?.focus();
+    });
+  });
+
+  function activate(name: string, force = false): void {
+    // The "Activate anyway" button unmounts the moment the refusal clears.
+    if (force && ctl.activating === null) heading?.focus();
+    void ctl.activate(name, force);
+  }
 </script>
 
-<section class="surface space-y-3 p-4" data-testid="ingest-profile-picker">
-  <h2 class="text-sm font-semibold">Ingest profiles</h2>
+<section
+  class="surface space-y-3 p-4"
+  data-testid="ingest-profile-picker"
+  bind:this={section}
+>
+  <h2 class="text-sm font-semibold" tabindex="-1" bind:this={heading}>Ingest profiles</h2>
   {#if ctl.loadError}
-    <p class="text-xs text-red-300" data-testid="ingest-profiles-error">
+    <p class="text-xs text-red-300" role="alert" data-testid="ingest-profiles-error">
       {ctl.loadError}
     </p>
   {:else if ctl.list === null}
@@ -26,10 +59,15 @@
       No ingest profiles are stored for this project.
     </p>
   {:else}
-    <ul class="divide-y divide-zinc-800" data-testid="ingest-profile-list">
+    <ul
+      class="divide-y divide-zinc-800"
+      data-testid="ingest-profile-list"
+      aria-busy={ctl.activating !== null || ctl.loading}
+    >
       {#each ctl.list.profiles as p (p.name)}
         <li
           class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs"
+          tabindex="-1"
           data-testid="ingest-profile-row"
           data-name={p.name}
           data-active={p.active}
@@ -52,8 +90,11 @@
               type="button"
               class="btn btn-sm"
               data-testid="ingest-profile-activate"
-              disabled={ctl.activating !== null}
-              onclick={() => void ctl.activate(p.name)}
+              aria-label="{ctl.activating === p.name
+                ? 'Activating'
+                : 'Activate'} {p.name}"
+              aria-disabled={ctl.activating !== null}
+              onclick={() => activate(p.name)}
               >{ctl.activating === p.name ? 'Activating...' : 'Activate'}</button
             >
           {/if}
@@ -66,6 +107,9 @@
     <div
       class="space-y-2 rounded border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200"
       data-testid="ingest-profile-refusal"
+      role="alert"
+      tabindex="-1"
+      bind:this={refusalEl}
     >
       <p>
         <span class="font-mono">{refusal.name}</span> was not activated.
@@ -81,17 +125,32 @@
             type="button"
             class="btn btn-sm"
             data-testid="ingest-profile-force"
-            disabled={ctl.activating !== null}
-            onclick={() => void ctl.activate(refusal.name, true)}
+            aria-disabled={ctl.activating !== null}
+            onclick={() => activate(refusal.name, true)}
             >Activate anyway (the server allows overriding these errors)</button
           >
         {/if}
       {/if}
     </div>
-  {:else if ctl.lastValidation && ctl.lastValidation.warnings.length > 0}
-    <div class="space-y-1 text-xs" data-testid="ingest-profile-warnings">
-      <p class="text-amber-200">Activated, with warnings.</p>
-      <ConfigIssueList issues={ctl.lastValidation.warnings} showField />
-    </div>
   {/if}
+
+  {#if ctl.followUpError}
+    <p
+      class="text-xs text-red-300"
+      role="alert"
+      data-testid="ingest-profile-followup-error"
+    >
+      <span class="font-mono">{ctl.activatedName}</span> was activated, but refreshing the
+      page failed. {ctl.followUpError}
+    </p>
+  {/if}
+
+  <div role="status" data-testid="ingest-profile-status">
+    {#if !refusal && ctl.lastValidation && ctl.lastValidation.warnings.length > 0}
+      <div class="space-y-1 text-xs" data-testid="ingest-profile-warnings">
+        <p class="text-amber-200">Activated, with warnings.</p>
+        <ConfigIssueList issues={ctl.lastValidation.warnings} showField />
+      </div>
+    {/if}
+  </div>
 </section>

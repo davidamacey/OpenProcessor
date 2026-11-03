@@ -191,4 +191,97 @@ describe('IngestProfilePicker', () => {
     expect(activate).toHaveBeenCalledTimes(1);
     expect(picker.activating).toBeNull();
   });
+
+  it('reports a failing follow-up as a follow-up failure, not a refused activation', async () => {
+    const { picker, deps } = setup({
+      onactivated: vi.fn(async () => {
+        throw new Error('card read failed');
+      }),
+    });
+    await picker.load();
+    const ok = await picker.activate('yolo-large');
+    expect(ok).toBe(true);
+    expect(deps.activate).toHaveBeenCalledTimes(1);
+    expect(picker.refusal).toBeNull();
+    expect(picker.followUpError).toContain('card read failed');
+    expect(picker.activatedName).toBe('yolo-large');
+  });
+
+  it('reports a failing list re-read after an activation as a list error, not a refusal', async () => {
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce(structuredClone(LIST))
+      .mockRejectedValueOnce(new ApiError(500, '/x', { detail: 'list down' }));
+    const { picker } = setup({ list });
+    await picker.load();
+    const ok = await picker.activate('yolo-large');
+    expect(ok).toBe(true);
+    expect(picker.refusal).toBeNull();
+    expect(picker.loadError).toContain('list down');
+  });
+
+  it('lets the newest load win when an older one resolves last', async () => {
+    const resolvers: Array<(l: IngestProfileList) => void> = [];
+    const list = vi.fn(() => new Promise<IngestProfileList>((r) => resolvers.push(r)));
+    const { picker } = setup({ list });
+    const first = picker.load();
+    const second = picker.load();
+    const fresh = structuredClone(LIST);
+    fresh.active = { name: 'yolo-large', revision: 2 };
+    resolvers[1](fresh);
+    await second;
+    resolvers[0](structuredClone(LIST));
+    await first;
+    expect(picker.list?.active?.name).toBe('yolo-large');
+  });
+
+  it.each([
+    [404, { detail: 'Profile yolo-large not found' }],
+    [409, { detail: { error: 'revision_conflict', message: 'the revision moved' } }],
+  ])(
+    're-reads the list on a %s refusal and shows the served message',
+    async (status, body) => {
+      const { picker, deps } = setup({
+        activate: vi.fn(async () => {
+          throw new ApiError(status, '/x', body);
+        }),
+      });
+      await picker.load();
+      await picker.activate('yolo-large');
+      expect(deps.list).toHaveBeenCalledTimes(2);
+      expect(picker.refusal?.message).toMatch(/not found|revision moved/);
+    },
+  );
+
+  it('does not re-read the list on a 422 refusal', async () => {
+    const { picker, deps } = setup({
+      activate: vi.fn(async () => {
+        throw refusal('detector_model_not_ready', 'not ready', false);
+      }),
+    });
+    await picker.load();
+    await picker.activate('yolo-large');
+    expect(deps.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the previous list when a re-read is aborted', async () => {
+    const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce(structuredClone(LIST))
+      .mockRejectedValueOnce(abort);
+    const { picker } = setup({ list });
+    await picker.load();
+    await picker.load();
+    expect(picker.list?.profiles).toHaveLength(2);
+    expect(picker.loadError).toBeNull();
+  });
+
+  it('reaches a defined state when the only load is aborted', async () => {
+    const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    const { picker } = setup({ list: vi.fn().mockRejectedValue(abort) });
+    await picker.load();
+    expect(picker.list).toBeNull();
+    expect(picker.loadError).not.toBeNull();
+  });
 });
