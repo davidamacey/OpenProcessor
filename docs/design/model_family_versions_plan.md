@@ -96,7 +96,7 @@ patch releases per day (8.4.197 to 8.4.201 between 2026-11-01 and 2026-11-03).
 ### 3.1 How it was run
 
 All runs were one-at-a-time `docker run --rm` jobs, CPU only (`--cpus 8`, no GPU, no compose).
-Scratch area `/tmp/mfv` (not in the repo): `weights/` public weights, `scripts/` the probes,
+Scratch area `artifacts_local/model_versions` (not in the repo): `weights/` public weights, `scripts/` the probes,
 `out/` exported ONNX, `run_*.log` the raw logs (one `RESULT {json}` line per case).
 
 Weights (public, sha256 prefix): `yolo11n.pt` 0ebbc80d, `yolo26n.pt` 9b09cc8b, `yolov5nu.pt`
@@ -108,7 +108,7 @@ Environments and commands:
 
 | Tag | Ultralytics | torch | Where | Command |
 |---|---|---|---|---|
-| u8448trainer | 8.4.48 | 2.15.0+cu132 | `openprocessor-trainer:0.7.0-rc5` | `docker run --rm --network none --cpus 8 -w /tmp -v /tmp/mfv/weights:/w:ro -v /tmp/mfv/out:/out -v /tmp/mfv/scripts:/s:ro --entrypoint python openprocessor-local/openprocessor-trainer:0.7.0-rc5 /s/probe.py --tag u8448trainer` |
+| u8448trainer | 8.4.48 | 2.15.0+cu132 | `openprocessor-trainer:0.7.0-rc5` | `docker run --rm --network none --cpus 8 -w /tmp -v artifacts_local/model_versions/weights:/w:ro -v artifacts_local/model_versions/out:/out -v artifacts_local/model_versions/scripts:/s:ro --entrypoint python openprocessor-local/openprocessor-trainer:0.7.0-rc5 /s/probe.py --tag u8448trainer` |
 | u84174 | 8.4.174 | 2.15.0+cpu | throwaway venv in `python:3.13-slim` | `docker run --rm --cpus 8 -v ...:/w:ro -v ...:/out -v ...:/s:ro python:3.13-slim bash /s/latest_env.sh 'ultralytics==8.4.174' u84174` |
 | u84197 | 8.4.197 | 2.15.0+cu132 | `openprocessor-export:0.7.0-rc5` main env (= API image version) | same as u8448trainer with the export image and `--tag u84197` |
 | u84201 | 8.4.201 (latest) | 2.15.0+cpu | throwaway venv in `python:3.13-slim` | `bash /s/latest_env.sh 'ultralytics==8.4.201' u84201` |
@@ -174,8 +174,8 @@ Exported in a throwaway `python:3.13-slim` venv with `pip install -r requirement
 `ultralytics/yolov5` master (which itself pins `ultralytics>=8.4.192`; it resolved 8.4.201), from
 the original `yolov5n.pt` v7.0:
 `python export.py --weights yolov5n.pt --include onnx --imgsz {640,1280} --device cpu --simplify`
-and `--imgsz 640 --dynamic` (script `/tmp/mfv/scripts/y5_env.sh`). Then the repo's own code ran on
-them in the API image (`openprocessor:0.7.0-rc5`, script `/tmp/mfv/scripts/v5probe.py`):
+and `--imgsz 640 --dynamic` (script `artifacts_local/model_versions/scripts/y5_env.sh`). Then the repo's own code ran on
+them in the API image (`openprocessor:0.7.0-rc5`, script `artifacts_local/model_versions/scripts/v5probe.py`):
 `_build_predictor(path, 'yolov5_objectness')` on a crop of `bus.jpg`, and
 `apply_ensemble_nms(raw, conf_thres=0.25)` on the raw output.
 

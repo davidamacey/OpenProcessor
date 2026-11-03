@@ -24,6 +24,17 @@ the source plans. Task IDs below point into those plans:
 | `D-n` | this file, section 8 | owner decisions (renumbered in revision 2) |
 | `N-n` | this file, section 9 | GitHub issues to create (titles and briefs) |
 
+**Path legend (the public tree carries no machine paths).**
+- `<repo>` is the OpenProcessor checkout. `<repo>-wt-<name>` is a sibling git worktree.
+- `<scratch>` is the host's scratch directory for acceptance installs.
+- `artifacts_local/` is the gitignored evidence directory, on the owner's machine only. It holds the ledger, the audit
+  findings and verdicts (the security details stay there), the Ultralytics evidence (`artifacts_local/model_versions/`:
+  matrix, run logs and the probe scripts; regenerate the ONNX files with those scripts) and the R1/R2 reports.
+- `<scratch repro>` marks a throwaway script an audit or review used. It is not kept; each task's red test recreates the scenario.
+- **Line references** (`file:line`) in the three source plans are against `main` at `5b95591f`. The pinned audit tree
+  was removed, so recreate it with `git worktree add --detach .claude/worktrees/audit-r2 5b95591f`. Code that the
+  integration branch changed has moved; find it by the symbol name, not the line.
+
 **Where a source plan and this file disagree, this file wins.** This file replaces the Celery
 plan's Phase 1 locks (3a), the B1 split of the Ultralytics steps (D-10), the release train
 (section 4) and the lease and registry designs (section 6).
@@ -1192,7 +1203,7 @@ CHANGELOGs.
 
 ### 7.6 Side track: #42 small-GPU acceptance
 
-- **Worktree:** `<repo>-wt-fix42` (branch `perf/42-small-gpu-acceptance`, no
+- **Worktree:** create `<repo>-wt-fix42` from `main` when #42 runs (the earlier empty one was removed; branch `perf/42-small-gpu-acceptance`, no
   commits, at main).
 - **When:** run it when the transcribe-app session frees GPU 1 (3080 Ti, 12 GB). Rebase it on main
   first.
@@ -1480,8 +1491,8 @@ peer sessions first and run one at a time (section 13).
 | `b0/ocr-fixes`, `b0/data-ops-fixes` branches and their `.claude/worktrees/agent-*` worktrees (one is **locked**) | B0 fix branches | unlock, remove the worktrees, delete the branches once merged into the integration branch | after the B0 merge |
 | `.claude/worktrees/agent-a0103bac0b3dc70fe` (`fix/model-route-hardening`, **locked**), `agent-a2bacbb8a217a8320` (`review/backend`, **locked**), `agent-a11c580f104ff4b6a` (`review/installer`), `agent-a21206080a3c73a2c` (`review/loop`), `agent-aa442585ee8216ee1` (`review/frontend`) | all contained in `fix/411-r2-round` | `git worktree unlock` (locked ones), `git worktree remove`, delete the branches incl. `worktree-agent-a0103bac0b3dc70fe` (already in main). Re-list with `git worktree list` first; some may be gone | after the B0 merge |
 | `.claude/worktrees/audit-r2` (detached at `5b95591f`) | line references of the source plans | keep until B1 has re-found its sites, then remove | end of B1 |
-| `<repo>-wt-b7` (`chore/v080-batch7`) | merged into main | remove the worktree, delete the branch | now (low risk) |
-| `<repo>-wt-fix42` (`perf/42-small-gpu-acceptance`, no commits) | needed for #42 | keep until #42 runs | after #42 |
+| `<repo>-wt-b7` (`chore/v080-batch7`) | merged into main | DONE 2026-11-03: worktree and branch removed | done |
+| `<repo>-wt-fix42` (`perf/42-small-gpu-acceptance`, no commits) | DONE 2026-11-03: removed (no commits); recreate from `main` when #42 runs | done |
 | branch `perf/220-width-buckets` (1 commit, not merged) | evidence cited in #220 | keep until B5c decides | B5c |
 | `<scratch>/b8/deploy` (detached worktree at `04536b3c`) | old deploy | check for local changes, then remove | now, after a look |
 | `<scratch>/fixa`, `<scratch>/r1`, `<scratch>/r2` (incl. `r2/install`, `r2/release`) | acceptance scratch; evidence already in `artifacts_local/r1`, `r2` | list the contents, confirm the evidence is copied, then remove; keep `r2/release` until R3 has its own bundle | after R3 |
@@ -1489,7 +1500,7 @@ peer sessions first and run one at a time (section 13).
 | root-owned empty dirs (`secrets/vlm` remnants, `<scratch>/op-install-2`) | need sudo | ask the owner to run the removal | owner |
 | images `openprocessor-local/*:0.7.0-rc3`, `latest-rc3`, `:b8` | older builds | remove after R3's rc6 images exist | after R3 |
 | images `openprocessor-local/*:0.7.0-rc5` and `latest-rc5` | R2 build; source of the 8.4.197 / uvicorn 0.54.0 reading | keep until R3's rc6 images exist; then remove | after R3 |
-| `/tmp/mfv` (Ultralytics matrix scratch) | evidence copied to `artifacts_local/model_versions/` per the ledger | verify the copy, then remove | now, after the check |
+| `artifacts_local/model_versions` (Ultralytics matrix scratch) | evidence copied to `artifacts_local/model_versions/` per the ledger | verify the copy, then remove | now, after the check |
 | R-B1 and R-0.9 scratch (`<scratch>/r-b1`, `r-0.9`) and their `op-r-*` projects | future | same rule as R3 | after each tag |
 | bake-off outputs | some back the paper | never bulk-delete | n/a |
 
@@ -1777,3 +1788,4 @@ Never delete the archived repos (listed in the owner's private repo map).
 | 1 | 2026-11-03 | First master plan merging the task-queue, audit and model-family plans into B0..B5 with 30 decisions |
 | 2 | 2026-11-03 | Applied the fresh review in full (Appendix A). **Branch facts:** no hard-coded head or count; the B0 small fixes in progress on `b0/ocr-fixes` (merged) and `b0/data-ops-fixes`; the done CHANGELOG step removed; VERSION bumped at release prep. **Lease:** SETTINGS role through the project resources (folded configs index or legacy settings index), one top-level object key mapped on both bodies, thread heartbeat from B1, TTL 120 s, cooperative fencing, kind/scope table, crash busy window, mid-upgrade rule. **Trainer claims:** create-only generation takeover, Q-P1.6 wording "added". **B1 done-when** for `exclusive_file_lock` fixed. **Registry upgrade:** 409 `registry_not_migrated`, `openprocessor upgrade` hook, `.migrated` rename, downgrade note, installer and acceptance tests, size and retry bounds. **Release train:** early v0.8.0 after B1 (R-B1), v0.9.0 = B2-B4, v0.10.0 = B5, milestone renames. **Ultralytics:** B0 exact pin `8.4.197` (verified in the rc5 images), the trainer `nms` moved to B3, the B1-1E/B3 double rewrite removed, B3 pin freeze rule. **OPS-1:** uvicorn `>=0.41.0`. **CC-1:** red tests for the derived `interrupted` view without wedging starts or resume. **Coverage:** every open issue mapped (section 10), audit Appendix C/D carried (Appendix B), Q-D cross-reference, superseded tests, B4 retakes the 32-worker baseline on the B3 engine, the B4 Redis Streams spike with pass criteria, B5 thresholds, docs per batch. **New sections:** release strategy (4), GitHub issue actions (9), task list (11), docs per batch (16), Appendices A and B. The decision register is renumbered D-1..D-36 with "needed by" |
 | 3 | 2026-11-03 | B0 small fixes merged (status note in 5.1, with SHAs); open choices from those fixes assigned to batches; T-8 test-order pollution added to B1-1D |
+| 4 | 2026-11-03 | Plans committed to the public tree with neutral paths. Path legend in section 0. `/tmp` evidence references re-pointed to `artifacts_local/model_versions` or marked `<scratch repro>`. Line references pinned to `main` 5b95591f. Cleanup table updated (b7 and fix42 worktrees removed) |

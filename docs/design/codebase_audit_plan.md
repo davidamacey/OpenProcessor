@@ -234,7 +234,7 @@ The template for each task:
 - **Class · Severity · Size · Reachable by**
 - **Bug**
 - **Evidence**: the command and a summary of its output, from the audit or verdict run
-  at `5b95591f`. Scratch scripts under `/tmp/aud*` may be gone; the red test recreates
+  at `5b95591f`. Scratch scripts under `<scratch repro>*` may be gone; the red test recreates
   them.
 - **Root cause**
 - **Fix**: numbered steps, following the docs.
@@ -252,7 +252,7 @@ The template for each task:
   name for the life of the process. `invalidate_class_names()` runs only in the worker
   that handled the promote, so the other 31 serve the old vocabulary until they
   recycle. If the file was absent at first read, the cached `{}` sticks the same way.
-- **Evidence.** `.venv/bin/python -I /tmp/aud_api/classnames.py` (two real processes
+- **Evidence.** `.venv/bin/python -I <scratch repro>` (two real processes
   sharing a model repo). Worker B prints `{0:'cat',1:'dog'}` after worker A promoted
   `{0:'truck',1:'bus'}`. The verdict re-ran it with the same result.
 - **Root cause.** A process-local cache keyed only by model name, invalidated by a call
@@ -344,7 +344,7 @@ The template for each task:
 - **Bug.** `src/services/curation/eval_datasets.py` keys its cache on label-file and
   manifest mtimes, but the cached record also bakes in registry class names, the
   `data.yaml` names and image counts.
-- **Evidence.** `/tmp/aud_api/evalcache.py`: after renaming cat to feline in the
+- **Evidence.** `<scratch repro>`: after renaming cat to feline in the
   registry, adding one image and editing `data.yaml`, the output is still
   `[('cat',7,'cat')] n_images 1 same object True`. The verdict re-ran it.
 - **Fix.**
@@ -382,7 +382,7 @@ The template for each task:
 - **Bug.** `app.openapi()` lists 426 operations. 71 of them have an empty or free-form
   2xx JSON schema, and 62 of those are under `/curation`.
 - **Evidence.** Running the `.venv/bin/python` OpenAPI scan gives
-  `total ops 426, untyped 2xx json 71`. The list was in `/tmp/aud_api/untyped.txt`.
+  `total ops 426, untyped 2xx json 71`. The list was in `<scratch repro>`.
 - **Fix.**
   1. Scope the work to routes Cropwright consumes first.
   2. Per router, model today's exact shape in `src/schemas/curation/`, set
@@ -445,7 +445,7 @@ The template for each task:
 - **Docs.** OpenSearch index-document API: `op_type=create` and
   `if_seq_no`/`if_primary_term` give a 409 on conflict.
 - **Evidence.** A fake client whose `get` raises `NotFoundError`, then
-  `PYTHONPATH=. .venv/bin/python /tmp/occ_repro.py`, printed the index kwargs
+  `PYTHONPATH=. .venv/bin/python <scratch repro>`, printed the index kwargs
   `{'id': 'activation:vlm'}`, with no OCC kwarg.
 - **Fix.**
   1. In each absent-doc branch, set `index_kwargs['op_type'] = 'create'`.
@@ -1036,7 +1036,7 @@ The template for each task:
   - `tests/curation/test_crop_scores.py` (`test_scorer_metadata_writes_match_scorer_class_writes`)
   - `tests/curation/test_class_sources.py` (`test_every_catalog_entry_has_a_short_badge_label`)
   - `tests/curation/test_review_sorts.py` (two tests over `get_review_sorts()`)
-- **Evidence.** The mutation harness (`/tmp/aud/mut.py`) emptied each registry, and
+- **Evidence.** The mutation harness (`<scratch repro>`) emptied each registry, and
   the tests still passed. The control mutation (`["bogus"]`) failed.
 - **Fix.** Add one `assert <registry>` before each loop. No ratchet (Appendix D).
 - **Tests.**
@@ -1162,7 +1162,7 @@ The template for each task:
 - **Docs.** Python `os.replace` is atomic for one source file; each writer needs its
   own source. `tempfile.NamedTemporaryFile(dir=..., delete=False)` gives a unique name
   in the same directory.
-- **Evidence.** `/tmp/aud_api/fj_race.py`, 4 spawned processes x 3000 `FileJob.write`
+- **Evidence.** `<scratch repro>`, 4 spawned processes x 3000 `FileJob.write`
   calls, gave 1585-2053 `FileNotFoundError` per process.
 - **Root cause.** A shared temp name. With unique names, last-writer-wins on whole
   documents is the only remaining behaviour, and writes are atomic.
@@ -1200,7 +1200,7 @@ The template for each task:
   snapshot. There are two failure modes:
   - a lost class with a duplicated id, while the API still answers 201;
   - a 500 from the shared `.tmp` name.
-- **Evidence.** `/tmp/aud_api/reg_race.py` (16 spawned `add_class` calls on one file):
+- **Evidence.** `<scratch repro>` (16 spawned `add_class` calls on one file):
   1 of 3 runs persisted 15 of 16 with id 6 handed out twice. The verdict's re-run gave
   the `FileNotFoundError` mode.
 - **Root cause.** A shared document mutated with neither a version check nor
@@ -1319,7 +1319,7 @@ The template for each task:
   `residual_fetch.py`. This is worker and clustering code, not a request handler.
 - **Bug.** `gather` over the slice producers does not cancel the siblings when one
   raises. They keep searching a PIT that is being deleted, and block on a full queue.
-- **Evidence.** `/tmp/adv_pit.py` (fake client, slice 0 raises) showed "leaked tasks
+- **Evidence.** `<scratch repro>` (fake client, slice 0 raises) showed "leaked tasks
   after return: 3" and 10 searches issued after the failure.
 - **Docs.** Python asyncio "Task Groups": on a child failure, the remaining tasks are
   cancelled. Exceptions are raised as an `ExceptionGroup`.
@@ -1618,5 +1618,5 @@ Run these per PR. Do not run them all at once; the host is shared.
   - The SEC-1 positive control (a legitimate model validates) was not run by the
     reviewer; the branch added a test for it, which this plan did not run.
   - Further SEC-1/SEC-2 verification gaps are recorded in the private notes.
-- **Scratch evidence** under `/tmp/aud*`, `/tmp/adv_*` and `/tmp/occ_repro.py` may no
+- **Scratch evidence** under `<scratch repro>*`, `<scratch repro>*` and `<scratch repro>` may no
   longer exist. Each red test above re-creates its scenario.
