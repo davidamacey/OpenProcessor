@@ -272,6 +272,9 @@ class _DetectorPool:
     async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
         return 'UINT8'
 
+    async def get_model_output_shape(self, model_name: str, output_name: str) -> tuple[int, ...]:  # noqa: ARG002
+        return (-1, 5, -1)
+
     async def infer(
         self,
         model_name: str,

@@ -93,6 +93,7 @@ async def test_region_detector_uses_profile_model_name_and_floor() -> None:
     pool = MagicMock()
     pool.infer = AsyncMock(return_value=_FakeInferResult(raw))
     pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
+    pool.get_model_output_shape = AsyncMock(return_value=(-1, 5, -1))
     detector = RegionDetector(pool, BOX_PROFILE)
     assert detector.model_name == 'box_detector_v1'
     assert detector.confidence_floor == pytest.approx(0.6)
@@ -112,6 +113,7 @@ async def test_region_detector_uses_profile_model_name_and_floor() -> None:
     pool_low = MagicMock()
     pool_low.infer = AsyncMock(return_value=_FakeInferResult(raw_low))
     pool_low.get_model_input_datatype = AsyncMock(return_value='UINT8')
+    pool_low.get_model_output_shape = AsyncMock(return_value=(-1, 5, -1))
     detector_low = RegionDetector(pool_low, BOX_PROFILE)
     assert await detector_low.detect(_make_jpeg()) is None
 

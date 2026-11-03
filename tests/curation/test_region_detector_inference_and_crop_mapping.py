@@ -192,3 +192,29 @@ def test_reference_profile_secondary_shape_groups_empty_by_default() -> None:
     values -- a stale name would otherwise silently never match and route
     those crops down the wrong path."""
     assert REFERENCE_LICENSE_PLATE_PROFILE.secondary_shape_groups == frozenset()
+
+
+class TestDeclaredHeadSelectsDecoder:
+    @pytest.mark.asyncio
+    async def test_unrecognised_declared_output_yields_nothing(self) -> None:
+        raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.85)
+        pool = _make_mock_pool(raw)
+        pool.get_model_output_shape.return_value = (-1, 6, -1)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
+
+        assert await detector.detect(_make_jpeg()) is None
+        assert await detector.detect_multi(_make_jpeg()) == []
+        pool.infer.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_end2end_declared_output_decodes_xyxy_rows(self) -> None:
+        size = NEUTRAL_REGION_PROFILE.input_size
+        raw = np.zeros((1, 300, 6), dtype=np.float32)
+        raw[0, 0] = (0.25 * size, 0.25 * size, 0.75 * size, 0.75 * size, 0.9, 0)
+        pool = _make_mock_pool(raw)
+        pool.get_model_output_shape.return_value = (-1, 300, 6)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
+
+        got = await detector.detect_multi(_make_jpeg())
+        assert len(got) == 1
+        assert got[0].score == pytest.approx(0.9)
