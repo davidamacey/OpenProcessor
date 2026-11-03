@@ -14,6 +14,7 @@ import asyncio
 import functools
 import hashlib
 import json
+import weakref
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.assist_fields import ensure_assist_fields
@@ -129,8 +130,16 @@ async def warm_knn_indexes(opensearch: Any) -> None:
 # that all arrive before the first one records their project in
 # _INDEXES_BOOTSTRAPPED each independently race through it against OpenSearch
 # (redundant reads, `exists` and `put_mapping` calls, all discarded but the first
-# to finish).
-_ensure_indexes_lock = asyncio.Lock()
+# to finish). One lock per event loop: an asyncio.Lock binds to the first loop that
+# waits on it, and a process can bootstrap under several loops (a script calling
+# asyncio.run per pass).
+_ensure_indexes_locks: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _ensure_indexes_lock() -> asyncio.Lock:
+    return _ensure_indexes_locks.setdefault(asyncio.get_running_loop(), asyncio.Lock())
 
 
 async def ensure_indexes(opensearch: Any) -> bool:
@@ -144,7 +153,7 @@ async def ensure_indexes(opensearch: Any) -> bool:
     slug = get_curation_config().project_slug
     if slug in _INDEXES_BOOTSTRAPPED:
         return True
-    async with _ensure_indexes_lock:
+    async with _ensure_indexes_lock():
         # Re-check inside the lock: another request may have completed
         # the whole bootstrap sequence while we were waiting to acquire.
         if slug not in _INDEXES_BOOTSTRAPPED:
@@ -257,7 +266,7 @@ async def _stamp_schema(opensearch: Any, names: list[str]) -> None:
 
 async def _ensure_indexes_locked(opensearch: Any) -> None:
     """The actual bootstrap sequence — only ever called while holding
-    :data:`_ensure_indexes_lock`. A project is recorded as bootstrapped only
+    :func:`_ensure_indexes_lock`. A project is recorded as bootstrapped only
     when every step succeeded; otherwise the next request retries the whole
     sequence."""
     names = curation_index_names()
