@@ -230,21 +230,22 @@
                   {/if}
                 </div>
               </td>
-              <td
-                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Images']"
+              <td class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left"
+                ><span class="mr-1 text-xs text-zinc-500 md:hidden">Images&#32;</span
                 >{formatCount(p.counts.images)}</td
               >
-              <td
-                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Items']"
+              <td class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left"
+                ><span class="mr-1 text-xs text-zinc-500 md:hidden">Items&#32;</span
                 >{formatCount(p.counts.items)}</td
               >
-              <td
-                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Validated']"
+              <td class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left"
+                ><span class="mr-1 text-xs text-zinc-500 md:hidden">Validated&#32;</span
                 >{formatCount(p.counts.validated)}</td
               >
               <td
-                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Embedded']"
+                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left"
                 data-testid="project-embedded-{p.slug}"
+                ><span class="mr-1 text-xs text-zinc-500 md:hidden">Embedded&#32;</span
                 >{formatCount(p.counts.items_embedded)}</td
               >
               <td class="px-3 py-2 max-md:w-full">

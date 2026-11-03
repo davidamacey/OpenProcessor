@@ -205,3 +205,20 @@ def test_projects_table_needs_no_inner_scroll_at_430(stub, page, app_url):
     )
     assert m["scroll"] <= m["client"], f"projects table scrolls sideways at 430px: {m}"
     assert not m["out"], f"projects cells past the viewport at 430px: {m}"
+
+
+def test_projects_cards_expose_their_count_labels_once_at_430(stub, page, app_url):
+    """Below md the headers are hidden and the count labels are CSS content; the
+    accessibility tree must still carry each label next to its value, in DOM order."""
+    page.set_viewport_size(NARROW)
+    _stub_common(stub)
+    page.goto(f"{app_url}/projects")
+    row = page.locator('[data-testid^="project-row-"]').first
+    row.wait_for(timeout=ACTION_TIMEOUT_MS)
+    wait_for_paint(page)
+    tree = row.aria_snapshot()
+    # Each label is real text, separated from its value ("Images 0", not "Images0").
+    for label in ("Images 0", "Items 0", "Validated 0", "Embedded —"):
+        assert f'cell "{label}"' in tree, f"{label!r} not exposed as one cell name:\n{tree}"
+    cells = [tree.index(f'cell "{x}"') for x in ("Images 0", "Items 0", "Validated 0", "Embedded —")]
+    assert cells == sorted(cells), tree
