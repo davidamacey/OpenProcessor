@@ -241,16 +241,20 @@ async def save_config(
     if seq_no is not None:
         index_kwargs['if_seq_no'] = seq_no
         index_kwargs['if_primary_term'] = primary_term
+    else:
+        index_kwargs['op_type'] = 'create'
     try:
         await client.index(**index_kwargs)
+        # A revision id is never reused, so its immutable copy is create-only too.
+        await client.index(
+            index=index,
+            id=config_doc_id(kind, name, next_revision),
+            body={**doc, 'doc_type': 'revision'},
+            refresh=WRITE_REFRESH,
+            op_type='create',
+        )
     except ConflictError as exc:
         raise RevisionConflictError(None) from exc
-    await client.index(
-        index=index,
-        id=config_doc_id(kind, name, next_revision),
-        body={**doc, 'doc_type': 'revision'},
-        refresh=WRITE_REFRESH,
-    )
     await bump_config_revision(client, index)
     return doc
 
@@ -354,6 +358,8 @@ async def activate(
     if seq_no is not None:
         index_kwargs['if_seq_no'] = seq_no
         index_kwargs['if_primary_term'] = primary_term
+    else:
+        index_kwargs['op_type'] = 'create'
     try:
         await client.index(**index_kwargs)
     except ConflictError as exc:
@@ -371,6 +377,7 @@ async def activate(
             'activated_at': now,
         },
         refresh=WRITE_REFRESH,
+        op_type='create',
     )
     new_revision = await bump_config_revision(client, index)
     return {**doc, 'config_revision': new_revision}

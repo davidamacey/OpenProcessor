@@ -287,6 +287,8 @@ async def save_keymap_doc(
     if seq_no is not None:
         index_kwargs['if_seq_no'] = seq_no
         index_kwargs['if_primary_term'] = primary_term
+    else:
+        index_kwargs['op_type'] = 'create'
     try:
         await client.index(**index_kwargs)
     except ConflictError as exc:
