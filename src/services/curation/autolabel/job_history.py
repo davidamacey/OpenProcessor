@@ -12,6 +12,8 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
+from src.utils.atomic_write import atomic_write_json
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,9 +40,7 @@ def archive(state_dir: Path, state: dict[str, Any]) -> None:
         return
     hist = _history_dir(state_dir)
     hist.mkdir(parents=True, exist_ok=True)
-    tmp = hist / f'{job_id}.tmp'
-    tmp.write_text(json.dumps(state, default=str))
-    tmp.replace(hist / f'{job_id}.json')
+    atomic_write_json(hist / f'{job_id}.json', state)
     kept = sorted(hist.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
     for stale in kept[KEEP:]:
         stale.unlink(missing_ok=True)

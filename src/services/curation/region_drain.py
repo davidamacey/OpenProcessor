@@ -37,6 +37,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_float, env_int, env_path
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -90,9 +91,7 @@ def _read_state() -> _StreakState:
 
 def _atomic_write(state: _StreakState) -> None:
     _state_dir().mkdir(parents=True, exist_ok=True)
-    tmp = _state_file().with_suffix('.tmp')
-    tmp.write_text(json.dumps(state.to_dict()))
-    tmp.replace(_state_file())
+    atomic_write_json(_state_file(), state.to_dict(), default=None)
 
 
 @dataclass(frozen=True)

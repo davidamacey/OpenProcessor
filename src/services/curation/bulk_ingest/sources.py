@@ -34,6 +34,7 @@ from src.services.curation.bulk_ingest.object_queue import ObjectQueue
 from src.services.curation.bulk_ingest.schedule import Cron, InvalidCronError
 from src.services.curation.bulk_ingest.store import runs_root
 from src.services.curation.file_job import FileJob
+from src.utils.atomic_write import atomic_write_json
 from src.utils.timeutil import now_iso
 
 
@@ -171,9 +172,7 @@ def save_source(source: IngestSource) -> None:
     ensure_marked_dir(sources_root())
     directory.mkdir(parents=True, exist_ok=True)
     source.updated_at = now_iso()
-    tmp = directory / 'source.json.tmp'
-    tmp.write_text(json.dumps(source.to_dict()), encoding='utf-8')
-    tmp.replace(directory / 'source.json')
+    atomic_write_json(directory / 'source.json', source.to_dict(), default=None)
 
 
 def delete_source(source_id: str) -> None:

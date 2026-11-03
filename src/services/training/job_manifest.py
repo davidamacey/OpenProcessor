@@ -24,6 +24,7 @@ from src.services.training.job_wire import (
     _public_mlflow_url,
     _rewrite_eval_for_wire,
 )
+from src.utils.atomic_write import atomic_write_json
 
 
 logger = get_logger(__name__)
@@ -165,9 +166,7 @@ async def stamp_manifest_promotion(
             'force_used': force_used,
             'gate_report': gate_report,
         }
-        tmp = path.with_suffix('.json.tmp')
-        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding='utf-8')
-        tmp.replace(path)
+        atomic_write_json(path, payload, default=None, indent=2, sort_keys=True)
         return True
 
     return await asyncio.to_thread(_do)

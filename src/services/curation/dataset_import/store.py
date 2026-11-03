@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.project_context import mark_project_dir, project_jobs_dir
 from src.services.curation.dataset_import.limits import imports_base_dir
 from src.services.curation.file_job import FileJob
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -58,10 +59,7 @@ def new_import_id(import_key: str, *, now: datetime | None = None) -> str:
 
 
 def _atomic_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + '.tmp')
-    tmp.write_text(json.dumps(payload, default=str), encoding='utf-8')
-    tmp.replace(path)
+    atomic_write_json(path, payload)
 
 
 def _read_json(path: Path) -> Any:

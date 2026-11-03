@@ -34,6 +34,7 @@ from typing import Any
 
 from src.config.env import env_path
 from src.schemas.models import ExportStatus
+from src.utils.atomic_write import atomic_write_json
 
 
 logger = logging.getLogger(__name__)
@@ -81,9 +82,7 @@ def persist_task(task_id: str) -> None:
     if task is None:
         return
     _ensure_task_dir()
-    tmp = _task_file(task_id).with_suffix('.tmp')
-    tmp.write_text(json.dumps(task, default=str))
-    tmp.replace(_task_file(task_id))
+    atomic_write_json(_task_file(task_id), task)
 
 
 def _load_task_file(path: Path) -> dict[str, Any] | None:
@@ -320,9 +319,7 @@ def enqueue_export_job(
     queue = queue_dir()
     queue.mkdir(parents=True, exist_ok=True)
     final = queue / f'{task_id}.job.json'
-    tmp = final.with_suffix('.tmp')
-    tmp.write_text(json.dumps(job))
-    tmp.replace(final)
+    atomic_write_json(final, job, default=None)
 
 
 async def save_uploaded_file(
