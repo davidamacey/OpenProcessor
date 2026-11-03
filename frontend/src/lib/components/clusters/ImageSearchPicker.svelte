@@ -20,6 +20,20 @@
   let box = $state<ImageSearchBox | null>(null);
   let dragStart: { x: number; y: number } | null = null;
   let dragOver = $state(false);
+  let toggleEl = $state<HTMLButtonElement | null>(null);
+  // On a phone-width screen the 20rem panel would overflow the right edge from the button's
+  // x, so it is shifted left to span the viewport while staying anchored under the button.
+  let narrowStyle = $state('');
+
+  function toggle(): void {
+    open = !open;
+    narrowStyle = '';
+    if (!open || !toggleEl || typeof window === 'undefined') return;
+    if (!window.matchMedia?.('(max-width: 639px)').matches) return;
+    const margin = 8;
+    const left = toggleEl.getBoundingClientRect().left;
+    narrowStyle = `left:${margin - left}px;width:${window.innerWidth - 2 * margin}px`;
+  }
 
   function setFile(next: File | null): void {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -82,13 +96,15 @@
     class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
     aria-expanded={open}
     data-testid="image-search-toggle"
-    onclick={() => (open = !open)}
+    bind:this={toggleEl}
+    onclick={toggle}
   >
     Search by image
   </button>
   {#if open}
     <div
-      class="absolute left-0 top-full z-30 mt-1 w-80 max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:max-h-[calc(100dvh-4.5rem)] max-sm:w-auto max-sm:overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-lg"
+      class="absolute left-0 top-full z-30 mt-1 w-80 max-sm:max-h-[70dvh] max-sm:max-w-none max-sm:overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-lg"
+      style={narrowStyle}
       data-testid="image-search-panel"
     >
       {#if previewUrl}

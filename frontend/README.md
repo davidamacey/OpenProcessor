@@ -196,6 +196,13 @@ entirely unless that env var is set; structurally read-only (aborts any
 non-GET/HEAD request to the API and fails the test if one was even
 attempted).
 
+A stack made by the installer puts Cropwright behind basic auth. Give the tier the
+login with `OP_CROPWRIGHT_LIVE_USER` and `OP_CROPWRIGHT_LIVE_PASSWORD_FILE` (a path
+to a file holding the password, so it never appears on a command line or in the
+environment):
+`OP_CROPWRIGHT_LIVE_URL=http://host:5184 OP_CROPWRIGHT_LIVE_USER=admin OP_CROPWRIGHT_LIVE_PASSWORD_FILE=~/.cropwright.pw npm run test:live`.
+Setting only one of the two is an error.
+
 **Mutation testing** (`npm run test:mutation`, ~15-20 min) checks
 whether the test suite actually notices a deliberately broken line, not
 just that it passes.

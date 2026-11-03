@@ -5,9 +5,17 @@
 -->
 <script lang="ts">
   import type { ActiveConfigResponse } from '$lib/types_config';
+  import type { IngestDetectorInfo } from '$lib/types_detector';
 
-  let { profile, error }: { profile: ActiveConfigResponse | null; error: string | null } =
-    $props();
+  let {
+    profile,
+    error,
+    detector = null,
+  }: {
+    profile: ActiveConfigResponse | null;
+    error: string | null;
+    detector?: IngestDetectorInfo | null;
+  } = $props();
 
   const DOCS =
     'https://github.com/davidamacey/OpenProcessor/blob/main/docs/CURATION.md#ingest-profiles';
@@ -21,8 +29,10 @@
     <p class="text-xs text-zinc-400">Loading the active ingest profile.</p>
   {:else if profile.active.name === null}
     <p class="text-xs text-zinc-300" data-testid="active-ingest-profile-none">
-      No ingest profile is active (source {profile.source}); ingest is refused until one
-      is activated.
+      No ingest profile is active (source {profile.source}); ingest uses the deployment's
+      default detector{#if detector}:
+        <span class="font-mono text-zinc-100">{detector.model}</span>
+        (version {detector.version}){/if}.
     </p>
   {:else}
     <p class="text-xs text-zinc-300" data-testid="active-ingest-profile-name">

@@ -146,3 +146,12 @@ export VERIFY_COMPOSE_PROJECT=mine VERIFY_CONTAINER_PREFIX=mine-verify
 docker compose -p mine -f docker/test/compose.yml up -d --build --wait
 python -m pytest tests/live -q --no-cov -m live
 ```
+
+Without these variables the stack runs as compose project `op-live-verify` and builds
+the images `op-verify-api:latest` and `op-verify-fake-vlm:latest`. A `docker compose up
+--build` under the default names replaces those images for every checkout that shares
+them, so a second checkout or a parallel run sets both variables as above. `-p` must
+equal `VERIFY_COMPOSE_PROJECT`: `tests/live/conftest.py` uses it to find the stack's
+containers. If the host ports are remapped too (`VERIFY_API_PORT`,
+`VERIFY_OPENSEARCH_PORT`, `VERIFY_FAKE_VLM_PORT`), set the matching `VERIFY_API_URL`,
+`VERIFY_OPENSEARCH_URL` and `VERIFY_FAKE_VLM_URL` for the test process.
