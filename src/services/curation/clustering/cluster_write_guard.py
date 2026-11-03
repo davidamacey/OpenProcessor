@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.clients.opensearch.bulk import failed_bulk_items
 from src.core.logging import get_logger
 
 
@@ -124,14 +125,11 @@ def _log_bulk_write_errors(op: str, resp: dict[str, Any]) -> None:
     warning level instead of only a chunk-level 'errors: true' flag.
     Doesn't raise -- matches this module's existing partial-bulk-failure
     behavior of proceeding rather than aborting the whole run."""
-    for item in resp.get('items') or []:
-        action: dict[str, Any] = next(iter(item.values()), {})
-        status = action.get('status')
-        if status is not None and status >= 300:
-            logger.warning(
-                'clustering_bulk_write_item_failed',
-                op=op,
-                doc_id=action.get('_id'),
-                status=status,
-                error=action.get('error'),
-            )
+    for failure in failed_bulk_items(resp):
+        logger.warning(
+            'clustering_bulk_write_item_failed',
+            op=op,
+            doc_id=failure['id'],
+            status=failure['status'],
+            error=failure['error'],
+        )

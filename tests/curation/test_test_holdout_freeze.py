@@ -562,3 +562,47 @@ def test_freeze_refuses_when_the_existing_holdout_cannot_be_counted(
 
     assert r.status_code == 503, r.text
     fake_opensearch.search.assert_not_called()
+
+
+# =============================================================================
+# 7. Bulk item errors fail closed
+# =============================================================================
+
+
+def _freeze_with_bulk(
+    app_client: Any, fake_opensearch: AsyncMock, bulk_resp: dict[str, Any]
+) -> Any:
+    buckets = [_bucket(3, 'hdd:demo_hdd01', 6)]
+    fake_opensearch.search = AsyncMock(
+        side_effect=_make_search_dispatcher(
+            [(buckets, None)], {(3, 'hdd:demo_hdd01'): _crop_ids('a', 6)}
+        )
+    )
+    fake_opensearch.bulk = AsyncMock(return_value=bulk_resp)
+    return app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
+
+
+def test_freeze_bulk_item_error_persists_no_record(
+    app_client: Any, fake_opensearch: AsyncMock, tmp_path: Path
+) -> None:
+    """A bulk 200 with ``errors: true`` (item 404) must not persist a record."""
+    resp = {
+        'errors': True,
+        'items': [
+            {'update': {'_id': 'a_000', 'status': 200}},
+            {'update': {'_id': 'a_001', 'status': 404, 'error': {'type': 'document_missing'}}},
+        ],
+    }
+    r = _freeze_with_bulk(app_client, fake_opensearch, resp)
+    assert r.status_code >= 500, r.text
+    assert not (tmp_path / 'test_holdout').exists()
+
+
+def test_freeze_bulk_all_items_ok_persists_record(
+    app_client: Any, fake_opensearch: AsyncMock, tmp_path: Path
+) -> None:
+    """Control: every item 200 persists the record."""
+    resp = {'errors': False, 'items': [{'update': {'_id': 'a_000', 'status': 200}}]}
+    r = _freeze_with_bulk(app_client, fake_opensearch, resp)
+    assert r.status_code == 200, r.text
+    assert (tmp_path / 'test_holdout' / 'current.json').exists()

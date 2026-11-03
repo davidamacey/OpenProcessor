@@ -19,6 +19,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def failed_bulk_items(resp: dict[str, Any]) -> list[dict[str, Any]]:
+    """Per-item failures of a bulk response.
+
+    The bulk API answers 200 with ``errors: true`` and a per-item ``status``/``error``, so a
+    discarded response hides partial failure. Each entry has ``id``, ``status`` and ``error``.
+    """
+    failed: list[dict[str, Any]] = []
+    for item in resp.get('items') or []:
+        action: dict[str, Any] = next(iter(item.values()), {})
+        status = action.get('status')
+        if status is not None and status >= 300:
+            failed.append({'id': action.get('_id'), 'status': status, 'error': action.get('error')})
+    return failed
+
+
 def _listed(value: Any) -> Any:
     """Arrays serialise as lists; plain lists pass through."""
     return value.tolist() if hasattr(value, 'tolist') else value
