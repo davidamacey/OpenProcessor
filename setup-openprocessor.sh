@@ -743,6 +743,9 @@ _ingest_gpu_decode_for_profile() {
     esac
 }
 
+# _plan_refuse N MSG: the two lines every impossible plan prints; always returns 1.
+_plan_refuse() { echo "gpu_count=$1"; echo "refuse=$2"; return 1; }
+
 # recommend_plan GPUS TIERS [force=0|1] [vlm_id=ID] [gpu_plan=k=v,...]
 #                [profile=NAME] [remote=0|1]
 # GPUS: "index total_mib used_mib" lines. TIERS: requested closure
@@ -869,22 +872,16 @@ recommend_plan() {
             IFS='+' read -ra listed <<< "$val"
             for v in "${listed[@]}"; do
                 if [[ -z "${pos[$v]+x}" ]]; then
-                    echo "gpu_count=${n}"
-                    echo "refuse=--gpu-plan ${kv}: no GPU with index ${v}"
-                    return 1
+                    _plan_refuse "$n" "--gpu-plan ${kv}: no GPU with index ${v}" || return 1
                 fi
                 if [[ "$seen" == *" ${v} "* ]]; then
-                    echo "gpu_count=${n}"
-                    echo "refuse=--gpu-plan ${kv}: GPU ${v} listed twice"
-                    return 1
+                    _plan_refuse "$n" "--gpu-plan ${kv}: GPU ${v} listed twice" || return 1
                 fi
                 seen+="${v} "
                 if [[ -z "$lowest" ]] || (( v < lowest )); then lowest=$v; fi
             done
             if (( ${#listed[@]} > 1 )) && [[ "$key" != triton ]]; then
-                echo "gpu_count=${n}"
-                echo "refuse=--gpu-plan ${kv}: only triton takes several GPUs (triton=0+2)"
-                return 1
+                _plan_refuse "$n" "--gpu-plan ${kv}: only triton takes several GPUs (triton=0+2)" || return 1
             fi
             val=$lowest
             case "$key" in
@@ -899,9 +896,7 @@ recommend_plan() {
                 vlm) vlm=${pos[$val]} ;;
                 trainer|evaluator) trn=${pos[$val]} ;;
                 *)
-                    echo "gpu_count=${n}"
-                    echo "refuse=--gpu-plan: unknown key '${key}' (triton, segmenter, vlm, trainer)"
-                    return 1 ;;
+                    _plan_refuse "$n" "--gpu-plan: unknown key '${key}' (triton, segmenter, vlm, trainer)" || return 1 ;;
             esac
         done
         single=0
@@ -991,9 +986,7 @@ recommend_plan() {
         if [[ -n "$vlm_id" ]]; then
             local need st
             if ! need="$(vlm_catalog_field "$vlm_id" vram_gb)"; then
-                echo "gpu_count=${n}"
-                echo "refuse=--vlm-model-id '${vlm_id}' is not in the VLM catalog"
-                return 1
+                _plan_refuse "$n" "--vlm-model-id '${vlm_id}' is not in the VLM catalog" || return 1
             fi
             st="$(vlm_catalog_field "$vlm_id" status)"
             if (( need > vlm_avail )) && [[ "$force" != 1 ]]; then
@@ -1937,7 +1930,8 @@ run_health() {
         local tp
         tp="$(read_env_var "$ENV_FILE" TRITON_HTTP_PORT)"
         if wait_http "http://${h}:${tp}/v2/health/ready" 180; then
-            read -ra models <<< "$(model_setup_all_models "$SELECTED_TIERS")"
+            models=()
+            [[ "$OP_SKIP_MODELS" == 1 ]] || read -ra models <<< "$(model_setup_all_models "$SELECTED_TIERS")"
             for m in "${models[@]}"; do
                 curl -fsS --max-time 5 "http://${h}:${tp}/v2/models/${m}/ready" >/dev/null 2>&1 \
                     || fails+=("triton model ${m} not READY: ./openprocessor models install")
@@ -1959,10 +1953,10 @@ run_health() {
             fails+=("vlm not serving local-vlm (${vlm_repo}): ./openprocessor logs vlm")
         fi
     fi
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
-        # Without Triton /health is 503 by design; its body still shows OpenSearch is up.
+    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 || "$OP_SKIP_MODELS" == 1 ]]; then
+        # Without Triton (or its models, --skip-models) /health is 503 by design; its body still shows OpenSearch is up.
         wait_http "http://${h}:${p}/health" 240 '"opensearch":{"ok":true' -sS \
-            && log_warn "API is up but not ready (expected without Triton in control-plane-only mode)" \
+            && log_warn "API is up but not ready (expected without Triton models: control-plane-only or --skip-models)" \
             || fails+=("API /health not ready: ./openprocessor logs api")
     elif ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
         fails+=("API /health not ready: ./openprocessor logs api")
@@ -2699,14 +2693,14 @@ do_install() {
         fi
     fi
 
-    # Likewise the installed GPU placement: re-planning from free VRAM would move services on an unchanged re-run.
+    # Likewise the installed GPU placement (also for tiers now off: managed.env records what the plan set): re-planning from free VRAM would move services on an unchanged re-run.
     if (( existing )) && [[ -z "$OP_GPU_PLAN" && "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         local kept_plan="" kv_id spec
         for spec in triton:TRITON_GPU_ID segmenter:SEGMENTER_GPU_ID vlm:VLM_GPU_ID trainer:OP_TRAIN_GPU_ORDER; do
             kv_id="$(read_env_var "$ENV_FILE" "${spec#*:}" || true)"
             [[ "${spec%%:*}" == trainer ]] && kv_id="${kv_id%%,*}"
             [[ -z "$kv_id" || ( "${spec%%:*}" == vlm && -n "$OP_VLM_URL" ) ]] && continue
-            [[ "${spec%%:*}" == triton || ",${OP_TIERS}," == *",${spec%%:*},"* ]] && kept_plan+="${spec%%:*}=${kv_id//,/+},"
+            [[ "${spec%%:*}" == triton || ",${OP_TIERS}," == *",${spec%%:*},"* || -n "$(read_env_var "${OP_DIR}/.install/managed.env" "${spec#*:}" || true)" ]] && kept_plan+="${spec%%:*}=${kv_id//,/+},"
         done
         if [[ -n "$kept_plan" ]]; then
             OP_GPU_PLAN="${kept_plan%,}"
@@ -2807,7 +2801,7 @@ YAML
             val="$(plan_get "$plan" "$key")"
             # a re-run keeps installed values: free VRAM now includes this install's own services (#411)
             if [[ -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]] && { [[ "$KEPT_GPU_PLAN" == 1 && -z "$GPU_PROFILE_FLAG" ]] \
-                    || [[ "$key" == SEGMENTER_* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* ]]; }; then
+                    || [[ "$key" == SEGMENTER_* && "$OP_GPU_PLAN" != *segmenter=* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* ]]; }; then
                 continue
             fi
             if [[ -n "$OP_GPU_PLAN" || ( "$key" == GPU_PROFILE && -n "$GPU_PROFILE_FLAG" ) ]]; then
@@ -2988,7 +2982,8 @@ YAML
     # --- up + health ----------------------------------------------------------
     log_step "Start"
     if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-        dc up -d --remove-orphans || die "compose up failed"
+        local gate=(); [[ "$OP_SKIP_MODELS" == 1 ]] && gate=(--no-deps) # the API is 503 until models exist: do not gate dependents on it
+        dc up -d --remove-orphans "${gate[@]}" || die "compose up failed"
     fi
     local health_rc=0
     run_health || health_rc=1
@@ -3011,7 +3006,7 @@ YAML
         log_error "install finished with failures (see above); fix and run ./setup-openprocessor.sh --repair"
         exit "$EXIT_HEALTH"
     fi
-    log_success "OpenProcessor $(_short_ref "$INSTALL_REF") is installed and healthy"
+    log_success "OpenProcessor $(_short_ref "$INSTALL_REF") is installed and healthy$([[ "$OP_SKIP_MODELS" == 1 ]] && echo " (--skip-models: inference stays 503 until ./openprocessor models install)")"
 }
 
 # --- Main ---

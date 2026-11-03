@@ -652,3 +652,24 @@ def test_second_installer_run_in_the_same_dir_is_refused(shimmed: Shimmed) -> No
     assert 'another installer run' in result.stderr
     assert not shimmed.mutating_docker_calls()
     assert shimmed.run(['--repair', '--unattended', '--dir', 'inst']).returncode == 0
+
+
+def test_skip_models_is_not_a_failing_exit(shimmed: Shimmed) -> None:
+    # Without models the API answers 503 by design: a deliberate skip must still exit 0,
+    # start the stack without gating dependents on the API, and say so.
+    shimmed.flag('api_not_ready')
+    result = install(shimmed, '--skip-models')
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert '--skip-models' in result.stdout
+    assert 'installed and healthy (--skip-models' in result.stdout
+    ups = [ln for ln in shimmed.mutating_docker_calls() if ' up ' in f'{ln} ']
+    assert ups
+    assert all('--no-deps' in ln for ln in ups if 'triton-server' not in ln)
+
+
+def test_skip_models_still_fails_when_opensearch_is_down(shimmed: Shimmed) -> None:
+    shimmed.flag('api_not_ready')
+    (shimmed.state / 'os_down').touch()
+    result = install(shimmed, '--skip-models')
+    assert result.returncode == 8
+    assert 'API /health' in result.stderr

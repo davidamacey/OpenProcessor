@@ -75,16 +75,17 @@ _ms_onnx_sha256() {
     sha256sum "$f" | cut -d' ' -f1
 }
 
-# _ms_record_precision MODEL PRECISION REASON [ONNX_REL FLAGS]
-# With an ONNX path and flags the row is a full build stamp.
+# _ms_record_precision MODEL PRECISION REASON [ONNX_REL FLAGS [SHA]]
+# With an ONNX path and flags the row is a full build stamp. SHA overrides the hash read
+# from the ONNX file ("-" = the ONNX was not on this host when the engine was adopted).
 _ms_record_precision() {
     [[ "${OP_DRY_RUN:-0}" == "1" ]] && return 0
-    local model="$1" precision="$2" reason="${3//$'\t'/ }" onnx_rel="${4:-}" flags="${5:-}" f tmp
+    local model="$1" precision="$2" reason="${3//$'\t'/ }" onnx_rel="${4:-}" flags="${5:-}" sha_arg="${6:-}" f tmp
     local trt="" cc="" sha=""
     if [[ -n "$onnx_rel" ]]; then
         trt="$(_ms_trt_version)"
         cc="$(_ms_compute_cap "$model")"
-        sha="$(_ms_onnx_sha256 "$onnx_rel")"
+        sha="${sha_arg:-$(_ms_onnx_sha256 "$onnx_rel")}"
     fi
     f="$(_ms_precision_file)"
     ( umask 077; mkdir -p "$(dirname "$f")" )
@@ -167,7 +168,7 @@ model_setup_stamp_stale() {
         return 0
     fi
     now_sha="$(_ms_onnx_sha256 "$onnx_rel")"
-    if [[ -n "$now_sha" && "$sha" != "$now_sha" ]]; then echo "ONNX changed since the build"; return 0; fi
+    if [[ "$sha" != "-" && -n "$now_sha" && "$sha" != "$now_sha" ]]; then echo "ONNX changed since the build"; return 0; fi
     return 1
 }
 
@@ -175,8 +176,7 @@ model_setup_stamp_stale() {
 # that has none (every engine except the PE image encoder was built unstamped before
 # per-engine stamps existed), but only when the engine is provably valid for this
 # host; returns 1 otherwise and the caller rebuilds. Proof, all required:
-#   - the engine file exists and is non-empty, and the ONNX it is built from exists
-#     (its sha256 is what the stamp records);
+#   - the engine file exists and is non-empty;
 #   - the model is READY in Triton: the current TensorRT loaded the engine, which
 #     also proves the GPU architecture and the input datatype match config.pbtxt;
 #   - the config declares an input datatype (recorded as the input= flag);
@@ -184,13 +184,14 @@ model_setup_stamp_stale() {
 #     known and, when the PE image encoder has a stamp (same install, same Triton
 #     image built it), equal to that stamp's.
 # The precision recorded is the one the build is designed for; it cannot be read
-# back from an engine, hence the reason text.
+# back from an engine, hence the reason text. The ONNX is provenance, not proof: an
+# engine whose ONNX is not on this host (a fresh install seeded with engines) is
+# adopted with the hash "-", which no ONNX can contradict.
 _ms_adopt_unstamped() {
-    local model="$1" onnx_rel="$2" precision="$3" plan dtype cc trt pe pe_trt pe_cc
+    local model="$1" onnx_rel="$2" precision="$3" plan dtype cc trt pe pe_trt pe_cc have_onnx
     [[ "$model" == pe_image_encoder ]] && return 1
     plan="${OP_DIR:?OP_DIR not set}/models/${model}/1/model.plan"
     [[ -s "$plan" ]] || return 1
-    [[ -n "$(_ms_onnx_sha256 "$onnx_rel")" ]] || return 1
     dtype="$(_ms_config_input_dtype "$model")"
     [[ -n "$dtype" ]] || return 1
     # Pre-stamp engines were all built with the default target and workspaces: they can
@@ -209,8 +210,9 @@ _ms_adopt_unstamped() {
         [[ "$(_ms_build_gpu_id "$model")" != "$(_ms_build_gpu_id pe_image_encoder)" || "$pe_cc" == "$cc" ]] || return 1
     fi
     triton_model_ready "$model" || return 1
+    have_onnx="$(_ms_onnx_sha256 "$onnx_rel")"
     _ms_record_precision "$model" "$precision" "adopted: built before per-engine stamps" "$onnx_rel" \
-        "adopted input=${dtype,,} $(_ms_build_flags "$model")"
+        "adopted input=${dtype,,} $(_ms_build_flags "$model")" "${have_onnx:--}"
 }
 
 # _ms_group_stamp_stale GROUP: logs and returns 0 when any engine of the group

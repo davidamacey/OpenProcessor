@@ -84,7 +84,7 @@ Every flag also has an environment variable (the flag wins).
 | `--with-monitoring` | `OP_WITH_MONITORING` | add Prometheus, Grafana, Loki and Alloy (default-open dashboards) |
 | `--sample-data` | `OP_SAMPLE_DATA` | fetch the public COCO sample after the install |
 | `--no-faces` | `OP_FACES_ENABLED=false` | turn the face models off: no face detection or embedding, the `faces` model group is skipped (written to `.env`) |
-| `--skip-models` | | do not export or load models (run `./openprocessor models install` later) |
+| `--skip-models` | | do not export or load models (run `./openprocessor models install` later); the API answers 503 until then, the install still exits 0 and says so |
 | `--no-start` | | configure and pull only; start nothing |
 | `--unattended` | `OP_UNATTENDED` | never prompt (automatic when there is no terminal) |
 | `--dry-run` | `OP_DRY_RUN` | print every state-changing command and run none |
@@ -260,7 +260,7 @@ directory created. Run `./openprocessor help` for the list.
 | `status` | containers, then API, Triton, OpenSearch and Grafana health on this install's ports, then GPU memory |
 | `health` | print the API `/health` JSON |
 | `models [status]` | Triton model repository index and each model's state |
-| `models install [--only GROUP]` / `models repair` | export and load model groups (`preflight`, `base`, `yolo`, `mobileclip`, `faces`, `ocr`, `pe`); skips the `faces` group when `OP_FACES_ENABLED=false` and groups that are up to date (every engine stamp in `.install/precision.tsv` must match the GPU architecture and the exported ONNX) and re-runs failed ones |
+| `models install [--only GROUP]` / `models repair` | export and load model groups (`preflight`, `base`, `yolo`, `mobileclip`, `faces`, `ocr`, `pe`); skips the `faces` group when `OP_FACES_ENABLED=false` and groups that are up to date (every engine stamp in `.install/precision.tsv` must match the GPU architecture and the exported ONNX, when the ONNX is present) and re-runs failed ones; engines already in `models/` are loaded into Triton and adopted if it accepts them, and only a missing, stale or refused engine is rebuilt (a GPU profile change alone does not rebuild); accepts `--yes` |
 | `faces purge [--dry-run] [--yes]` | report or delete every stored face record, person id and name, and the face FAISS files; `--yes` requires `OP_FACES_ENABLED=false` first (see [SECURITY.md](SECURITY.md#privacy-face-data)) |
 | `export <model>` / `download <model>` | export to TensorRT / download weights. Targets include `all`, `essential`, `status`; `export` also takes `yolo`, `scrfd`, `arcface`, `clip-image`, `clip-text`, `ocr`; `download` also takes `ocr` |
 | `curation [up\|down\|logs\|status]` | start, stop, follow or list the curation workers (`status` is the default) |
