@@ -9,6 +9,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pyclipper
 
 
 logger = logging.getLogger(__name__)
@@ -145,41 +146,34 @@ class DBPostProcess:
         return np.array(boxes, dtype=np.float32), np.array(scores, dtype=np.float32)
 
     def _unclip(self, box: np.ndarray) -> np.ndarray | None:
-        """Expand box by unclip_ratio."""
-        try:
-            import pyclipper
+        """Expand box by unclip_ratio (PaddleOCR DBPostProcess.unclip: pyclipper offset)."""
+        poly = pyclipper.Pyclipper()
+        poly.AddPath(box.astype(np.int32).tolist(), pyclipper.PT_SUBJECT, True)
 
-            poly = pyclipper.Pyclipper()
-            poly.AddPath(box.astype(np.int32).tolist(), pyclipper.PT_SUBJECT, True)
+        # Calculate expansion distance
+        area = cv2.contourArea(box)
+        peri = cv2.arcLength(box, True)
+        if peri == 0:
+            return None
+        distance = area * self.unclip_ratio / peri
 
-            # Calculate expansion distance
-            area = cv2.contourArea(box)
-            peri = cv2.arcLength(box, True)
-            if peri == 0:
-                return None
-            distance = area * self.unclip_ratio / peri
+        expanded = poly.Execute(
+            pyclipper.CT_UNION,
+            pyclipper.PFT_EVENODD,
+            pyclipper.PFT_EVENODD,
+        )
 
-            expanded = poly.Execute(
-                pyclipper.CT_UNION,
-                pyclipper.PFT_EVENODD,
-                pyclipper.PFT_EVENODD,
-            )
+        if len(expanded) == 0:
+            return None
 
-            if len(expanded) == 0:
-                return None
+        offset = pyclipper.PyclipperOffset()
+        offset.AddPath(expanded[0], pyclipper.JT_ROUND, pyclipper.ET_CLOSEDPOLYGON)
+        result = offset.Execute(distance)
 
-            offset = pyclipper.PyclipperOffset()
-            offset.AddPath(expanded[0], pyclipper.JT_ROUND, pyclipper.ET_CLOSEDPOLYGON)
-            result = offset.Execute(distance)
+        if len(result) == 0:
+            return None
 
-            if len(result) == 0:
-                return None
-
-            return np.array(result[0], dtype=np.float32)
-        except ImportError:
-            # Fallback: simple box expansion
-            center = box.mean(axis=0)
-            return center + (box - center) * self.unclip_ratio
+        return np.array(result[0], dtype=np.float32)
 
     def _order_points(self, pts: np.ndarray) -> np.ndarray:
         """Order points: top-left, top-right, bottom-right, bottom-left."""

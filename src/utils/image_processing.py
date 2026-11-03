@@ -9,7 +9,7 @@ import logging
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 logger = logging.getLogger(__name__)
@@ -129,6 +129,34 @@ def decode_image(image_bytes: bytes, filename: str = 'unknown') -> np.ndarray:
             f"Ensure it's a valid image file (JPEG, PNG, WebP, BMP, TIFF, GIF). "
             f'Error details: {e!s}'
         ) from e
+
+
+def decode_ocr_image(image_bytes: bytes, filename: str = 'unknown') -> np.ndarray:
+    """Decode for OCR: EXIF-oriented BGR, with transparency composited onto white.
+
+    ``cv2.IMREAD_COLOR`` honours EXIF orientation but drops alpha (transparent pixels come out
+    black), and ``IMREAD_UNCHANGED`` keeps alpha but ignores EXIF. Images with transparency
+    therefore go through Pillow: ``ImageOps.exif_transpose`` then ``Image.alpha_composite`` onto
+    an opaque white canvas. Everything else is :func:`decode_image`.
+
+    Raises:
+        ValueError: the bytes are not a decodable image, or exceed the dimension bound.
+    """
+    if not image_bytes:
+        raise ValueError('Empty image data provided')
+    try:
+        pil = Image.open(io.BytesIO(image_bytes))
+        has_alpha = pil.mode in ('RGBA', 'LA', 'PA') or 'transparency' in pil.info
+    except OSError:  # not a Pillow-readable file (UnidentifiedImageError): decode_image reports it
+        return decode_image(image_bytes, filename)
+    if not has_alpha:
+        return decode_image(image_bytes, filename)
+
+    if max(pil.size) > MAX_IMAGE_DIMENSION:
+        raise ValueError(f"Image '{filename}' is {pil.size}, larger than {MAX_IMAGE_DIMENSION}")
+    rgba = ImageOps.exif_transpose(pil).convert('RGBA')
+    flat = Image.alpha_composite(Image.new('RGBA', rgba.size, (255, 255, 255, 255)), rgba)
+    return cv2.cvtColor(np.asarray(flat.convert('RGB')), cv2.COLOR_RGB2BGR)
 
 
 def validate_image(
