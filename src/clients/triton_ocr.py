@@ -91,7 +91,7 @@ def infer_ocr(
 
     orig_h, orig_w = img_array.shape[:2]
 
-    # PP-OCR approach: scale to fit within limit, pad to 32-boundary
+    # PP-OCR approach: scale to fit within the limit, then round each side to 32
     ocr_limit_side = 960
     ocr_min_side = 640
 
@@ -103,18 +103,13 @@ def infer_ocr(
     else:
         ratio = 1.0
 
-    resize_h = max(32, int(orig_h * ratio))
-    resize_w = max(32, int(orig_w * ratio))
+    # Each axis is stretched to its own multiple of 32 (PaddleOCR DetResizeForTest), never
+    # zero-padded: the BLS maps boxes back as ``orig / map size``, which only holds when the
+    # map covers the whole image.
+    resize_h = max(32, round(orig_h * ratio / 32) * 32)
+    resize_w = max(32, round(orig_w * ratio / 32) * 32)
 
     resized = cv2.resize(img_array, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR)
-
-    # Pad to 32-boundary
-    pad_h = (32 - resize_h % 32) % 32
-    pad_w = (32 - resize_w % 32) % 32
-    if pad_h > 0 or pad_w > 0:
-        padded = np.zeros((resize_h + pad_h, resize_w + pad_w, 3), dtype=np.uint8)
-        padded[:resize_h, :resize_w, :] = resized
-        resized = padded
 
     # The BLS normalizes ((x / 127.5) - 1 for the detector) and crops from the raw pixels.
     with stage_timer('triton_request', nbytes=resized.nbytes + img_array.nbytes):
