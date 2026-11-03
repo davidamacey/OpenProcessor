@@ -490,8 +490,14 @@ async def resolve_vlm_source(
     # By name the registry alone decides: usable with no project bound.
     from src.services.config_store import get_global_config_store
 
-    await get_global_config_store().ensure_fresh(client)
+    store = get_global_config_store()
+    await store.ensure_fresh(client)
     endpoint = get_vlm_endpoint(name)
+    if endpoint is None:
+        # A just-created endpoint (written through another API worker) can sit
+        # inside the freshness window; one forced read before answering unknown.
+        await store.refresh(client, force=True)
+        endpoint = get_vlm_endpoint(name)
     if endpoint is None:
         return None
     if revision is None:
