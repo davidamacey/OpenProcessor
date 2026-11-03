@@ -194,12 +194,14 @@ class _RecordingTransport:
         excluded: set[str] = set()
         for clause in (body.get('query') or {}).get('bool', {}).get('must_not', []):
             excluded |= set((clause.get('ids') or {}).get('values') or [])
-        hits = [
+        matched = [
             {'_index': index, '_id': doc_id, '_source': src}
             for doc_id, src in sorted(self.docs[index].items())
             if self.pending(src) and doc_id not in excluded
-        ][: body.get('size', 10)]
-        return {'hits': {'hits': hits}}
+        ]
+        # Like OpenSearch, hits.total counts every match regardless of `size`.
+        total = {'value': len(matched), 'relation': 'eq'}
+        return {'hits': {'total': total, 'hits': matched[: body.get('size', 10)]}}
 
     def _bulk(self, url_index: str, body: Any, touched: set[str]) -> dict[str, Any]:
         text = body.decode() if isinstance(body, bytes) else body
