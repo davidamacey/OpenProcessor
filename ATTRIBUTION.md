@@ -185,6 +185,7 @@ models exported to ONNX/TensorRT.
 - `export/export_paddleocr_det.py` / `export/export_paddleocr_rec.py`: TensorRT export of the detection/recognition ONNX models
 - `export/download_paddleocr.py`: fetches the ONNX source models
 - No PaddleOCR source code is vendored into this repository; only the exported model weights are used, served behind Triton's `ocr_pipeline` BLS
+- `pyclipper` 1.4.0 (installed in the Triton image and the offline test requirements): Python wrapper of Angus Johnson's Clipper library, MIT License (Clipper itself: Boost Software License 1.0). `models/ocr_pipeline/1/ocr_postprocess.py` uses it for the DB unclip polygon offset, as PaddleOCR's `DBPostProcess` does. Not redistributed in this repository.
 
 ---
 
