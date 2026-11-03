@@ -11,6 +11,7 @@ docs/design/v040-backend-deltas-ui-plan-2026-10-03.md §7.2).
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from harness.constants import ACTION_TIMEOUT_MS
@@ -220,3 +221,22 @@ def test_settings_card_links_to_the_page(stub, page, app_url):
     expect(card.get_by_role("link", name="Open ingest policy")).to_have_attribute(
         "href", "/p/default/settings/ingest-policy"
     )
+
+
+def test_no_active_profile_says_the_deployment_detector_is_used(stub, page, app_url):
+    _stub_policy(stub, lambda _req, _m: POLICY)
+    stub.on(
+        "GET",
+        r"/ingest_profiles/active(\?|$)",
+        {**ACTIVE_PROFILE, "active": {"name": None, "revision": None}, "source": "env"},
+    )
+    page.goto(f"{app_url}/p/default/settings/ingest-policy")
+    note = page.get_by_test_id("active-ingest-profile-none")
+    expect(note).to_contain_text("deployment", timeout=ACTION_TIMEOUT_MS)
+    expect(note).to_contain_text("widget_detector_v1")
+    expect(note).not_to_contain_text("refused")
+    shot_dir = os.environ.get("OP_E2E_SHOT_DIR")
+    if shot_dir:
+        for width in (1440, 430):
+            page.set_viewport_size({"width": width, "height": 900})
+            page.screenshot(path=f"{shot_dir}/ingest-profile-none-{width}.png", full_page=True)

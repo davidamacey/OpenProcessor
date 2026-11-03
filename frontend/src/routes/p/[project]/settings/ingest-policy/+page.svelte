@@ -68,7 +68,11 @@
   {:else if editor.loading}
     <p class="text-sm text-zinc-500">Loading...</p>
   {:else}
-    <ActiveIngestProfileCard profile={editor.activeProfile} error={editor.profileError} />
+    <ActiveIngestProfileCard
+      profile={editor.activeProfile}
+      error={editor.profileError}
+      detector={editor.detector}
+    />
     <IngestPolicyForm {editor} />
     <IngestPolicyPreviewPanel {editor} />
 
