@@ -33,6 +33,8 @@ import json
 import time
 from typing import TYPE_CHECKING
 
+from src.utils.atomic_write import atomic_write_json
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -91,9 +93,7 @@ def reconcile_stale_running(
     )
     raw['finished_at'] = raw.get('finished_at') or time.time()
 
-    tmp = state_file.with_suffix('.tmp')
-    tmp.write_text(json.dumps(raw, default=str))
-    tmp.replace(state_file)
+    atomic_write_json(state_file, raw)
     return True
 
 

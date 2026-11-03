@@ -38,6 +38,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.utils.atomic_write import atomic_write_json
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -73,9 +75,7 @@ def write_heartbeat(name: str, tasks: Mapping[str, bool], stall: str | None = No
 
     record_worker_heartbeat(name, tasks, now)
     path = _heartbeat_path(name)
-    tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(payload))
-    tmp.replace(path)
+    atomic_write_json(path, payload, default=None)
 
 
 def check_heartbeat(name: str, max_age_s: float) -> tuple[bool, str]:

@@ -34,6 +34,7 @@ from src.domain.label_ops import (
 from src.services.curation.file_job import FileJob
 from src.services.curation.job_lock import exclusive_start_lock
 from src.services.rejections import rejection
+from src.utils.atomic_write import atomic_write_json
 from src.utils.timeutil import now_iso
 
 
@@ -187,9 +188,7 @@ def iter_ops(*, after: str | None = None) -> Iterator[LabelOpRecord]:
 
 def write_members(op_id: str, ids: list[str]) -> None:
     path = op_dir(op_id) / _MEMBERS
-    tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps({'ids': ids}), encoding='utf-8')
-    tmp.replace(path)
+    atomic_write_json(path, {'ids': ids}, default=None)
 
 
 def read_members(op_id: str) -> list[str] | None:

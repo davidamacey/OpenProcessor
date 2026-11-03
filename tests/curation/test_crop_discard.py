@@ -181,3 +181,28 @@ async def test_batch_writes_return_updated_ids(crops, ids) -> None:  # noqa: F81
         CropMoveRequest(crop_ids=['b', 'gone'], cluster_id=ids['gadget']), fake
     )
     assert out['updated_ids'] == ['b']
+
+
+class _UpdateRaises(QueryFakeOpenSearch):
+    def __init__(self, exc: Exception) -> None:
+        super().__init__({ITEMS: {'c1': _proposal_doc('c1')}})
+        self._exc = exc
+
+    async def update(self, **_kw: Any) -> dict[str, Any]:
+        raise self._exc
+
+
+def test_review_dismiss_opensearch_outage_is_503(crops, registry, ids, client_for) -> None:  # noqa: F811
+    from opensearchpy.exceptions import ConnectionError as OsConnectionError
+
+    client = client_for(_UpdateRaises(OsConnectionError('N/A', 'refused', Exception('x'))))
+    r = client.post('/curation/projects/default/crops/c1/review_dismiss')
+    assert r.status_code == 503, r.text
+
+
+def test_review_dismiss_missing_crop_is_404(crops, registry, ids, client_for) -> None:  # noqa: F811
+    from opensearchpy.exceptions import NotFoundError
+
+    client = client_for(_UpdateRaises(NotFoundError(404, 'document_missing_exception', {})))
+    r = client.post('/curation/projects/default/crops/c1/review_dismiss')
+    assert r.status_code == 404, r.text

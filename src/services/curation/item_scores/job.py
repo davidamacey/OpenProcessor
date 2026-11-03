@@ -143,8 +143,9 @@ def reconcile_orphaned_jobs() -> bool:
 
 
 def get_state() -> dict[str, Any]:
-    """Read-only snapshot, with stale-heartbeat repair (mirrors
-    ``auto_label_job.get_state``'s liveness contract)."""
+    """Read-only snapshot. A stale heartbeat is reported as ``failed`` in the returned view
+    only: a status poll never writes state (persisting stays with the lease/startup
+    reconcile and ``FileJob.repair_if_stale``; mirrors ``auto_label_job.get_state``'s contract)."""
     state = _read_state()
     if state.status == 'running':
         age = _job().heartbeat_age()
@@ -152,7 +153,6 @@ def get_state() -> dict[str, Any]:
             state.status = 'failed'
             state.error = state.error or f'scoring job heartbeat stale ({age:.1f}s ago)'
             state.finished_at = state.finished_at or time.time()
-            _job().write(state.to_dict())
     return state.to_dict()
 
 

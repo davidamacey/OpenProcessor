@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.project_context import mark_project_dir, project_jobs_dir
 from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
 from src.services.curation.file_job import FileJob
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -88,9 +89,7 @@ class BulkStore:
 
     def write_request(self, payload: dict[str, Any]) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
-        tmp = self.directory / 'request.json.tmp'
-        tmp.write_text(json.dumps(payload), encoding='utf-8')
-        tmp.replace(self.directory / 'request.json')
+        atomic_write_json(self.directory / 'request.json', payload, default=None)
 
     def read_request(self) -> dict[str, Any]:
         try:

@@ -68,10 +68,13 @@ class FakeConfigOpenSearch:
         if_seq_no: int | None = None,
         if_primary_term: int | None = None,
         refresh: str | bool | None = None,
+        op_type: str | None = None,
     ) -> dict[str, Any]:
         del if_primary_term, refresh
         docs = self._docs.setdefault(index, {})
         entry = docs.get(id)
+        if op_type == 'create' and entry is not None:
+            raise ConflictError(409, 'version_conflict_engine_exception', {})
         if if_seq_no is not None and (entry is None or entry['_seq_no'] != if_seq_no):
             raise ConflictError(409, 'version_conflict_engine_exception', {})
         docs[id] = {'_source': dict(body), '_seq_no': self._next_seq()}

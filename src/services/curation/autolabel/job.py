@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import time
 import uuid
 from collections.abc import Callable, Coroutine
@@ -64,6 +63,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.curation.clustering.pool_coverage import PARTIAL
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -496,18 +496,16 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
 
     # Drop the trigger. The worker watches for this file every
     # POLL_INTERVAL_S and claims it atomically via unlink.
-    trigger_tmp = _trigger_file().with_suffix('.tmp')
-    trigger_tmp.write_text(
-        json.dumps(
-            {
-                'job_id': job_id,
-                'pipeline': pipeline_path,
-                'args': serializable_args,
-                'enqueued_at': time.time(),
-            }
-        )
+    atomic_write_json(
+        _trigger_file(),
+        {
+            'job_id': job_id,
+            'pipeline': pipeline_path,
+            'args': serializable_args,
+            'enqueued_at': time.time(),
+        },
+        default=None,
     )
-    trigger_tmp.replace(_trigger_file())
     return state.to_dict()
 
 

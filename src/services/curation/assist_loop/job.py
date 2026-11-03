@@ -27,6 +27,7 @@ from src.config.project_context import ensure_marked_dir, mark_project_dir, proj
 from src.services.curation.file_job import FileJob
 from src.services.curation.job_lock import exclusive_start_lock
 from src.services.rejections import rejection
+from src.utils.atomic_write import atomic_write_json
 from src.utils.timeutil import now_iso
 
 
@@ -126,9 +127,7 @@ def read_state(loop_id: str) -> dict[str, Any] | None:
 
 def _write_trigger(loop_id: str) -> None:
     target = jobs_root() / TRIGGER_FILE
-    tmp = target.with_suffix('.tmp')
-    tmp.write_text(json.dumps({'loop_id': loop_id}), encoding='utf-8')
-    tmp.replace(target)
+    atomic_write_json(target, {'loop_id': loop_id}, default=None)
 
 
 def pending_trigger_mtime() -> float | None:

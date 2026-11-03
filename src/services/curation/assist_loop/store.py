@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from src.domain.loop_tree import parse_path
 from src.services.curation.assist.proposal import ClassAnswer
 from src.services.curation.file_job import FileJob
+from src.utils.atomic_write import atomic_write_bytes
 from src.utils.timeutil import now_iso
 
 
@@ -51,12 +52,7 @@ def _fsync_dir(directory: Path) -> None:
 
 def _write_atomic(target: Path, text: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f'.{target.name}.tmp')
-    with tmp.open('w', encoding='utf-8') as fh:
-        fh.write(text)
-        fh.flush()
-        os.fsync(fh.fileno())
-    tmp.replace(target)
+    atomic_write_bytes(target, text.encode('utf-8'))
     _fsync_dir(target.parent)
 
 

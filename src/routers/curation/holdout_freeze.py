@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
+from src.clients.opensearch.bulk import failed_bulk_items
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, logger, router
 from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
@@ -103,9 +104,23 @@ async def freeze_test_holdout(
         bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
         bulk.append({'doc': {'test_holdout': True, 'updated_at': now}})
     try:
-        await opensearch.bulk(body=bulk, refresh=True)
+        bulk_resp = await opensearch.bulk(body=bulk, refresh=True)
     except Exception as exc:
         raise server_error(503, 'bulk failed', exc) from exc
+
+    # Fail closed: a record (and sha) must cover exactly the flagged ids. A rerun is
+    # idempotent, so refuse rather than persist a partial freeze.
+    failed = failed_bulk_items(bulk_resp or {})
+    if failed:
+        failed_ids = [f['id'] for f in failed]
+        logger.error('curation_test_holdout_freeze_partial', failed=failed)
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f'holdout freeze incomplete: {len(failed)} of {len(chosen_ids)} crops '
+                f'were not flagged (ids: {failed_ids[:20]}); no record persisted, retry'
+            ),
+        )
 
     digest = compute_holdout_sha(chosen_ids)
 

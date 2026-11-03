@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import HTTPException
+from opensearchpy.exceptions import NotFoundError
 
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
@@ -157,6 +158,8 @@ async def review_dismiss_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[s
             body=body,
             refresh='wait_for',
         )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
     except Exception as exc:
-        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
+        raise server_error(503, 'opensearch error', exc) from exc
     return {'crop_id': crop_id, 'dismissed': True}

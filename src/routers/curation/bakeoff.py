@@ -70,6 +70,7 @@ from src.schemas.bakeoff.run import (
 )
 from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
 from src.services.training.run_retention import bakeoff_out_dir
+from src.utils.atomic_write import atomic_write_json
 
 
 logger = get_logger(__name__)
@@ -119,10 +120,7 @@ def _read_result[M: BaseModel](path: Path, model: type[M], missing: str) -> M:
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f'.{path.name}.tmp')
-    tmp.write_text(json.dumps(payload, indent=2), encoding='utf-8')
-    tmp.replace(path)
+    atomic_write_json(path, payload, default=None, indent=2)
 
 
 @router.get('/bakeoff/eval_datasets', response_model=EvalDatasetList)

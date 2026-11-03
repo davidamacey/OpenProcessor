@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 from src.services.curation.job_reconcile import reconcile_stale_running
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -77,10 +78,7 @@ class FileJob:
         return None if isinstance(raw, dict) else 'the state is not a JSON object'
 
     def write(self, state: dict[str, Any]) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
-        tmp = self.state_file.with_suffix('.tmp')
-        tmp.write_text(json.dumps(state, default=str), encoding='utf-8')
-        tmp.replace(self.state_file)
+        atomic_write_json(self.state_file, state)
 
     @contextlib.contextmanager
     def _state_lock(self) -> Iterator[None]:

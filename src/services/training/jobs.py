@@ -56,6 +56,7 @@ from src.services.training.job_files import (
 )
 from src.services.training.job_models import TrainJobSpec, TrainJobStatus
 from src.services.training.job_wire import _prepare_status_for_wire
+from src.utils.atomic_write import atomic_write_bytes
 from src.utils.timeutil import now_iso
 
 
@@ -94,9 +95,7 @@ def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
     snapshot_path = _registry_snapshot_path(job_id)
     try:
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = snapshot_path.with_suffix(snapshot_path.suffix + '.tmp')
-        tmp.write_text(content, encoding='utf-8')
-        tmp.replace(snapshot_path)
+        atomic_write_bytes(snapshot_path, content.encode('utf-8'))
     except OSError as exc:
         logger.warning(
             'curation_train_registry_pin_write_failed',
