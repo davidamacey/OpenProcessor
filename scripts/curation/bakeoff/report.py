@@ -43,6 +43,7 @@ def build_report(
     latency_ms: dict[str, float],
     size_mb: float | None,
     frames: tuple[int, int, int],
+    warmup_frames: int,
 ) -> dict[str, Any]:
     """Assemble the per-model report v2 from the scoring blocks and run args."""
     test_frames, positive_frames, background_frames = frames
@@ -62,7 +63,8 @@ def build_report(
         'class_mapping': {'method': mapping.method, 'warnings': list(mapping.warnings)},
         'train_test_overlap': args.train_test_overlap,
         'latency_ms': latency_ms,
-        'fps': (1000.0 / latency_ms['mean']) if latency_ms['mean'] > 0 else 0.0,
+        'warmup_frames': warmup_frames,
+        'fps': 1000.0 / latency_ms['mean'],
         'size_mb': size_mb,
         'per_stratum': blocks['per_stratum'],
         'test_frames': test_frames,

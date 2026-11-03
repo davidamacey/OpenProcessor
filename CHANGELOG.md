@@ -13,6 +13,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **A bake-off on a holdout no larger than `--warmup` no longer reports 0 ms latency and 0 fps** (#411). The warmup is clamped so at least one frame is timed and the report records `warmup_frames`; a run with no timed frame is refused, and an empty latency sample raises instead of returning zeros.
+- Tests no longer depend on a developer's local `.env` or ignored `models/` directories, and `tests/test_full_system.py` fetches public COCO images and skips the directory ingest unless the API container mounts `test_images` (`OP_TEST_INGEST_DIR_MOUNTED=1`). `docker/test/README.md` documents running the live harness under another project name.
 - **The auto-label loop no longer burns its budget when the VLM is down** (#286). A node whose sampled crops all got a failed VLM call was read as failing the gate and split, so the loop spent the whole crop budget with zero answers and ended `completed`. It now stops `failed` with `stop_reason: vlm_failed` and the error, leaves the node open, writes nothing and spends no more; that `failed` loop can be resumed once the endpoint works. The same applies to a top-up whose calls all fail and to an audit batch whose calls all fail (previously recorded as `ok`). An answer with no usable class is unchanged.
 
 ### Added

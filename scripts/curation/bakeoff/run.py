@@ -54,8 +54,17 @@ def _str2bool(value: str) -> bool:
 
 def _run_inference(
     backend: Detector, ds: YoloTestSet, *, warmup: int
-) -> tuple[dict[int, list[Detection]], list[float]]:
-    """Run the backend over every test image, timing each detect call."""
+) -> tuple[dict[int, list[Detection]], list[float], int]:
+    """Run the backend over every test image, timing each detect call.
+
+    Returns the detections, the timed latencies and the warmup actually used.
+    The warmup is clamped so at least one frame is timed: a holdout no larger
+    than ``--warmup`` would otherwise drop every frame and report 0 ms. A run
+    with no readable timed frame is refused rather than reported as 0.
+    """
+    used = max(0, min(warmup, len(ds.images) - 1))
+    if used != warmup:
+        print(f'warmup reduced from {warmup} to {used}: only {len(ds.images)} test frames')
     dets_by_image: dict[int, list[Detection]] = {}
     latencies_ms: list[float] = []
     for idx, img in enumerate(ds.images):
@@ -68,9 +77,14 @@ def _run_inference(
         dets = backend.detect(frame_rgb)
         dt_ms = (time.perf_counter() - t0) * 1000.0
         dets_by_image[img.image_id] = dets
-        if idx >= warmup:  # drop warmup frames from latency stats
+        if idx >= used:  # drop warmup frames from latency stats
             latencies_ms.append(dt_ms)
-    return dets_by_image, latencies_ms
+    if not latencies_ms:
+        raise SystemExit(
+            'latency not measured: no readable test frame was timed '
+            f'({len(ds.images)} frames, warmup {used})'
+        )
+    return dets_by_image, latencies_ms, used
 
 
 # argparse dest -> BakeoffProfile field. These flags default to None so an
@@ -329,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f'backend: {backend.name} [{backend.runtime}] imgsz={args.imgsz}')
     mapping = resolve_mapping(args, backend, ds, scored)
 
-    dets_by_image, latencies = _run_inference(backend, ds, warmup=args.warmup)
+    dets_by_image, latencies, warmup_used = _run_inference(backend, ds, warmup=args.warmup)
     blocks = scoring.score(
         ds, dets_by_image, mapping, scored_class_ids=scored, conf=args.op_conf, iou=args.op_iou
     )
@@ -341,6 +355,7 @@ def main(argv: list[str] | None = None) -> int:
         latency_ms=percentiles(latencies),
         size_mb=weights_size_mb(args.weights),
         frames=(len(ds.images), ds.n_positive_frames, ds.n_background_frames),
+        warmup_frames=warmup_used,
     )
     write_report(args.out_dir, report_stem(args.model_key), report)
     if args.mlflow:
