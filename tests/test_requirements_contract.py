@@ -10,6 +10,7 @@ ResolutionImpossible.
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 
@@ -70,6 +71,29 @@ def test_runtime_requirements_carry_no_export_toolchain() -> None:
     leaked = sorted(n for n in names if n.startswith(_EXPORT_ONLY))
     assert leaked == []
     assert {'onnx', 'onnxruntime-gpu', 'cupy-cuda12x'} <= names
+
+
+def _ultralytics_specs() -> dict[str, str]:
+    specs = {}
+    for path in ('requirements.txt', 'requirements-test.txt'):
+        for ln in (ROOT / path).read_text(encoding='utf-8').splitlines():
+            spec = ln.split('#', 1)[0].strip()
+            if spec.startswith('ultralytics'):
+                specs[path] = spec
+    with (ROOT / 'pyproject.toml').open('rb') as f:
+        deps = tomllib.load(f)['project']['dependencies']
+    specs['pyproject.toml'] = next(d for d in deps if d.startswith('ultralytics'))
+    return specs
+
+
+def test_ultralytics_is_one_exact_version_everywhere() -> None:
+    """A range lets each image build resolve a different release, and the export head
+    changed inside 8.4.x without notice (#447). The isolated YOLO11 export venv
+    (requirements-export-y11.txt) has its own exact pin until the single-version move."""
+    specs = _ultralytics_specs()
+    assert set(specs) == {'requirements.txt', 'requirements-test.txt', 'pyproject.toml'}
+    assert all(re.fullmatch(r'ultralytics==\d+\.\d+\.\d+', s) for s in specs.values()), specs
+    assert len(set(specs.values())) == 1, specs
 
 
 def test_tensorrt_pin_matches_the_triton_image_everywhere() -> None:
