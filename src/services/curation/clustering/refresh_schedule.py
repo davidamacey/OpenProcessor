@@ -11,7 +11,8 @@ it is tested without a stack.
 * It never starts while an auto-label loop runs on the project (the loop works on a pinned
   partition; a retrain would move its members). The request is kept and runs after.
 * It starts when ingest is quiet: the item count did not change since the
-  previous poll and no region work is unfinished. While ingest runs, new
+  previous poll, no region work is unfinished and no image was ingested within
+  the settle window (a slow ingest batch leaves the count flat between polls). While ingest runs, new
   items are already assigned to the persisted centroids at ingest time.
 * ``max_deferral_s`` bounds the wait so a long ingest never starves
   clustering.
@@ -52,6 +53,7 @@ class Observation:
     tracked_status: str | None  # status of the job this daemon started, if any
     busy: bool  # any auto-label job (not only ours) is queued or running
     loop_live: bool  # an auto-label loop is running: nothing may retrain under it
+    recent_ingest: int = 0  # images ingested within the settle window
 
 
 @dataclass
@@ -114,7 +116,11 @@ class ScheduleBook:
 
 
 def step(s: ProjectSchedule, o: Observation, now: float, p: Policy) -> Action:
-    quiet = o.unfinished == 0 and (s.prev_count is None or o.count == s.prev_count)
+    quiet = (
+        o.unfinished == 0
+        and o.recent_ingest == 0
+        and (s.prev_count is None or o.count == s.prev_count)
+    )
     s.prev_count = o.count
 
     in_flight = False

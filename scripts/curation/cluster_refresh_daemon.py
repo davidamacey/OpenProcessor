@@ -5,8 +5,8 @@ Polls each project's items index and, once the count has grown by a
 configurable threshold since the last retrain, runs ``auto_promote`` and
 queues the full cluster retrain as the background ``auto_label`` job (it
 runs in the auto-label worker, never inside an API process). The retrain
-waits for ingest to go quiet (item count flat since the previous poll and
-no region work unfinished) for at most ``--max-deferral-seconds``; repeated
+waits for ingest to go quiet (item count flat since the previous poll, no
+region work unfinished and no image ingested in the last two poll intervals) for at most ``--max-deferral-seconds``; repeated
 requests coalesce into one, and a project never has two retrains in flight.
 Pausing a project cancels the job this daemon started for it. The schedule
 is ``src/services/curation/clustering/refresh_schedule.py``; the work is
@@ -181,6 +181,18 @@ async def _unfinished_region_count(opensearch: Any) -> int:
     return int(resp.get('count', 0))
 
 
+async def _recent_ingest_count(opensearch: Any, window_s: int) -> int:
+    """Images indexed within the last ``window_s`` seconds: an ingest batch that holds the
+    GPU for longer than one poll leaves the item count flat while ingest is still running."""
+    from src.config.curation_accessors import images_index
+
+    resp = await opensearch.count(
+        index=images_index(),
+        body={'query': {'range': {'indexed_at': {'gte': f'now-{window_s}s'}}}},
+    )
+    return int(resp.get('count', 0))
+
+
 async def _trigger_auto_promote(
     client: httpx.AsyncClient, api: str, api_prefix: str, slug: str
 ) -> dict[str, Any]:
@@ -324,6 +336,7 @@ async def _iteration(
     sched: ProjectSchedule,
     policy: Policy,
     auto_label: bool,
+    settle_s: int,
     now: float,
 ) -> None:
     """One poll + (maybe) refresh of ``record``."""
@@ -337,6 +350,7 @@ async def _iteration(
                 await _restore_state(opensearch, sched)
             count = await _crop_count(opensearch)
             unfinished = await _unfinished_region_count(opensearch)
+            recent_ingest = await _recent_ingest_count(opensearch, settle_s)
         loop_live = await _loop_live(client, api, api_prefix, slug)
         busy = False
         tracked = None
@@ -359,6 +373,7 @@ async def _iteration(
             tracked_status=tracked,
             busy=busy,
             loop_live=loop_live,
+            recent_ingest=recent_ingest,
         ),
         now,
         policy,
@@ -366,6 +381,7 @@ async def _iteration(
     await _persist_state(opensearch, record, sched)
     print(
         f'[cluster-refresh] project={slug} crops={count} unfinished_regions={unfinished} '
+        f'recent_ingest={recent_ingest} '
         f'trained_at={sched.last_trained_count} threshold={policy.threshold} action={action.value}',
         flush=True,
     )
@@ -468,6 +484,7 @@ async def run(args: argparse.Namespace) -> int:
                     sched=book.get(record.slug),
                     policy=policy,
                     auto_label=args.auto_label,
+                    settle_s=2 * args.interval_seconds,
                     now=time.monotonic(),
                 )
                 write_heartbeat('cluster_refresh', {'loop': True})

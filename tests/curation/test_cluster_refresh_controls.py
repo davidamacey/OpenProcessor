@@ -91,6 +91,7 @@ def test_a_project_with_automatic_clustering_off_is_not_refreshed() -> None:
                 sched=book.get('alpha'),
                 policy=Policy(threshold=200, max_deferral_s=1800, retry_backoff_s=600),
                 auto_label=True,
+                settle_s=240,
                 now=0.0,
             )
         return book

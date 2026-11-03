@@ -422,6 +422,8 @@ def _http_world(
         }
         for slug, rec in projects.items()
     }
+    # The cluster-refresh daemon counts recently ingested images per project.
+    docs |= {rec.resources.indexes[IndexRole.IMAGES]: {} for rec in projects.values()}
     transport = _RecordingTransport(docs, lambda src: not src.get('vlm_done'))
     registry = _Registry(list(projects.values()))
 

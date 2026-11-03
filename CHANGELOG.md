@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **Cluster refresh no longer starts a retrain while an ingest is still running** (#443). The daemon treated a flat item count and no pending region work as "quiet", which an ingest batch slower than one poll satisfies. It now also requires that no image was indexed within two poll intervals (logged as `recent_ingest`).
 - **Activating a VLM endpoint right after creating it no longer answers `not_found`** (#442). A by-name lookup that missed the registry snapshot (trusted for a second) now forces one registry read before answering unknown.
 - **An installer re-run no longer changes the GPU plan** (#411). `./openprocessor upgrade`, `repair` and `--rollback` re-planned from live free VRAM, which includes the install's own Triton and VLM, so a single-GPU `--profile standard` install flipped to `minimal` and the api and workers were recreated. A re-run now keeps every installed GPU value (ids, `GPU_PROFILE`, `SEGMENTER_INSTANCES`, ...) unless `--profile` or `--gpu-plan` is given. Fresh installs are unchanged.
 - **Re-running or repairing an install made with `--release-dir` no longer needs `--version`**: the installed release is reused. An upgrade still names its version with `--version`.
