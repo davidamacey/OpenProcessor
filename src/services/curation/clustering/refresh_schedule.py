@@ -12,8 +12,8 @@ it is tested without a stack.
   partition; a retrain would move its members). The request is kept and runs after.
 * It starts when ingest is quiet: the item count did not change since the
   previous poll, no region work is unfinished and no image was ingested within
-  the settle window (a slow ingest batch leaves the count flat between polls). While ingest runs, new
-  items are already assigned to the persisted centroids at ingest time.
+  the settle window (a slow ingest batch leaves the count flat between polls). While
+  ingest runs, new items are already assigned to the persisted centroids at ingest time.
 * ``max_deferral_s`` bounds the wait so a long ingest never starves
   clustering.
 * Requests coalesce: one pending flag per project, however many polls cross
@@ -53,7 +53,7 @@ class Observation:
     tracked_status: str | None  # status of the job this daemon started, if any
     busy: bool  # any auto-label job (not only ours) is queued or running
     loop_live: bool  # an auto-label loop is running: nothing may retrain under it
-    recent_ingest: int = 0  # images ingested within the settle window
+    recent_ingest: bool  # any image ingested within the settle window
 
 
 @dataclass
@@ -118,7 +118,7 @@ class ScheduleBook:
 def step(s: ProjectSchedule, o: Observation, now: float, p: Policy) -> Action:
     quiet = (
         o.unfinished == 0
-        and o.recent_ingest == 0
+        and not o.recent_ingest
         and (s.prev_count is None or o.count == s.prev_count)
     )
     s.prev_count = o.count
