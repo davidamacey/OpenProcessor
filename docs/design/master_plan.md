@@ -1,7 +1,7 @@
 # OpenProcessor master plan: finish 0.7.0, then correctness, jobs, models, speed
 
-Status: plan only, revision 2 (2026-11-03). Untracked; do not commit this file. No code was
-changed by this plan, no test or stack was run, nothing was pushed and no issue was edited.
+Status: plan only, revision 4 (2026-11-03). Committed with its three source plans on the owner's request. Nothing in
+it is implemented yet; batches start only on the owner's go. No test or stack was run for the plan itself and no issue was edited.
 Revision 2 applies the fresh review `artifacts_local/master_plan_review.md` in full. Appendix A
 records what happened to each review item, and section 18 is the revision log.
 
@@ -806,7 +806,7 @@ API's `training/jobs.py` `exists()`-then-write is live. Design:
   `model_family_versions_plan.md`) as the first commit of `int/b1-correctness`, after the
   naming-leak scan and the docs check pass on them, with the stale "at `4103656b`" header line of
   `model_family_versions_plan.md` corrected to "fix/411-r2-round after B0 small fixes" in the
-  same commit. This master plan stays untracked (D-14).
+  same commit. All four plans are committed (D-14, done).
 
 ### 7.1 B1: correctness foundation (v0.8.0)
 
@@ -1250,7 +1250,7 @@ CHANGELOGs.
 | **D-11** | U-J3 YOLOv5 scope | option b: bring-your-own original-YOLOv5 ONNX for the probe and secondary only, with real-ONNX tests; YOLOv5u for GPU serving. Option a (drop it) costs one PR deleting three modules | no `/detect` serving of original YOLOv5 | B1 |
 | **D-12** | U-J4 `nms` by capability | `nms=False` when the head has `one2one_cv2` (YOLO26, v10), `nms=True` otherwise; class-agnostic, as today | the export path in B1, the trainer in B3 | B1 (export), B3 (trainer) |
 | **D-13** | Q-J8 order | B1 leases and registry, B2 Celery, B3 Ultralytics, B4 stateless API, B5 speed | as planned | B1 |
-| **D-14** | Commit the three source plans at the start of B1 | yes, after the naming and docs checks; this master plan stays untracked | public plan docs | B1 |
+| **D-14** | Commit the plans | DONE 2026-11-03 at the owner's request: all four plans committed on `fix/411-r2-round`, after the naming check (neutral paths) | public plan docs | done |
 | **D-15** | Trainer claim (Q-P1.6) | create-only generation files (6.3) in B1; the API `training/jobs.py` `O_EXCL` create | the latent multi-replica bug closed with no file lock; S | B1 |
 | **D-16** | Tag v0.8.0 | after R-B1 PASS and your yes | per the rule | end of B1 |
 | **D-17** | Q-J1 Celery 5.6 | confirmed (already decided) | none | B2 |

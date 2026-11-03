@@ -2,7 +2,7 @@
 
 > **Execution order:** see `docs/design/master_plan.md`. The B0 fixes (GPU-1, GPU-3a/13, GPU-2, OS-2, OS-1, CC-1, OPS-1, BA-7) are DONE on `fix/411-r2-round`. The rest are scheduled in B1-B5 there. Security items stay neutral here; details are in the private notes.
 
-Status: plan only. Not committed. No code changed while writing it.
+Status: plan only, committed 2026-11-03. No code changed while writing it; B0 items are since done (see the header note).
 
 - **Audited tree:** `main` at `5b95591f` (pinned worktree `.claude/worktrees/audit-r2`).
 - **Status column checked against:** branch `fix/411-r2-round` at `4103656b`
