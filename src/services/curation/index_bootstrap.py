@@ -248,8 +248,9 @@ async def _stamp_schema(opensearch: Any, names: list[str]) -> None:
     the full bootstrap again."""
     marker = {'_meta': {SCHEMA_META_KEY: schema_fingerprint()}}
     try:
-        for name in names:
-            await opensearch.indices.put_mapping(index=name, body=marker)
+        await asyncio.gather(
+            *(opensearch.indices.put_mapping(index=name, body=marker) for name in names)
+        )
     except Exception as exc:
         logger.warning('curation_schema_marker_write_failed', error=str(exc), exc_info=True)
 

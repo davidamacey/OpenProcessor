@@ -270,6 +270,14 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 - **Synthetic geometry:** the `yolo_region/` and `yolo_region_only/` variants contain wheel
   boxes computed from COCO car boxes. They are not COCO annotations and not wheel ground truth.
 
+### COCO val2017 smoke-test images
+
+- **What:** two val2017 images (`000000001584.jpg`, `000000011051.jpg`) fetched on demand by
+  `make download-test-images` (`scripts/datasets/fetch_test_images.py`) for the demo targets,
+  the setup smoke test and `scripts/validation/validate_models.py`. Not committed.
+- **License:** COCO images carry per-image Flickr licenses (the `license` field of the COCO
+  annotations); annotations are CC BY 4.0 (COCO Consortium).
+
 ### Open Images V7
 
 - **Source:** https://storage.googleapis.com/openimages/web/factsfigures_v7.html
@@ -284,12 +292,6 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
   `data/samples/oi_plates/ATTRIBUTION.csv` (ImageID, OriginalURL,
   Author, License).
 - **Used for:** the "Vehicle registration plate" region sample set (`make sample-plates`).
-
-### Ultralytics test images (`bus.jpg`, `zidane.jpg`)
-
-- **Source:** https://github.com/ultralytics/assets (fetched by `make download-test-images`)
-- **License:** AGPL-3.0, same as the Ultralytics repository that publishes them as standard smoke-test assets.
-- **Credit:** Ultralytics.
 
 ---
 
@@ -399,7 +401,6 @@ propagates to the combined work.
 | COCO 2017 (images) | Per-image Flickr license, filtered to BY/BY-SA/no-known/US-Gov | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
 | Open Images V7 (annotations) | CC BY 4.0 (Google LLC) | ✓ Yes (this file) |
 | Open Images V7 (images) | Listed CC BY 2.0, verified per image | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
-| Ultralytics test images (`bus.jpg`, `zidane.jpg`) | AGPL-3.0 | ✓ Yes (this file) |
 
 ### Per-model weight-license summary (redistributable vs. user-fetched)
 

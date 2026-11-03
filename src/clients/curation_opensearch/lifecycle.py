@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.base import config, logger
@@ -89,10 +90,13 @@ async def create_curation_indexes(
     Returns:
         Dict of index name -> creation success.
     """
-    results: dict[str, bool] = {}
-    for name, body in _bodies_by_name(cfg or config).items():
-        results[name] = await _create_one(client, name, body, force_recreate)
-    return results
+    bodies = _bodies_by_name(cfg or config)
+    # Each create is a cluster-state update that can take a second on a loaded node;
+    # they are independent, so overlap them instead of paying for them one by one.
+    created = await asyncio.gather(
+        *(_create_one(client, name, body, force_recreate) for name, body in bodies.items())
+    )
+    return dict(zip(bodies, created, strict=True))
 
 
 def _bodies_by_name(cfg: CurationConfig) -> dict[str, dict[str, Any]]:

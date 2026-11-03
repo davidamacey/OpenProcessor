@@ -8,7 +8,10 @@ from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_L
 from PIL import Image
 
 from src.services.detection.cascade_detect.preprocess import _letterbox
-from src.services.detection.cascade_detect.region_detector import _decode_yolo_output
+from src.services.detection.cascade_detect.region_detector import (
+    _decode_yolo_output,
+    _decode_yolo_output_multi,
+)
 
 
 # =============================================================================
@@ -206,3 +209,53 @@ class TestConfidenceFloor:
         )
         assert result is not None
         assert result.score == pytest.approx(0.55)
+
+
+# =============================================================================
+# End2end head ([300, 6]: x1, y1, x2, y2, score, class), #437
+# =============================================================================
+
+
+def _end2end_raw(box_xyxy: tuple[float, float, float, float], score: float) -> np.ndarray:
+    raw = np.zeros((1, 300, 6), dtype=np.float32)
+    raw[0, 0, :4] = box_xyxy
+    raw[0, 0, 4] = score
+    raw[0, 0, 5] = 2  # class index is not used by the single-region decoder
+    return raw
+
+
+class TestEnd2EndHead:
+    def test_xyxy_box_is_not_read_as_cxcywh(self) -> None:
+        crop_w, crop_h = 200, 100
+        _, scale, pad = _letterbox(Image.new('RGB', (crop_w, crop_h)))
+        # Crop box (50, 25)-(150, 75) in network pixels.
+        net = (
+            50 * scale + pad[0],
+            25 * scale + pad[1],
+            150 * scale + pad[0],
+            75 * scale + pad[1],
+        )
+        result = _decode_yolo_output(
+            _end2end_raw(net, 0.9), scale=scale, pad=pad, crop_w=crop_w, crop_h=crop_h
+        )
+        assert result is not None
+        assert result.bbox_norm == pytest.approx((0.25, 0.25, 0.75, 0.75), abs=0.01)
+        assert result.score == pytest.approx(0.9)
+
+    def test_multi_keeps_every_row_above_floor(self) -> None:
+        crop_w, crop_h = 200, 100
+        _, scale, pad = _letterbox(Image.new('RGB', (crop_w, crop_h)))
+        raw = np.zeros((1, 300, 6), dtype=np.float32)
+        for i, score in enumerate((0.9, 0.7, 0.1)):
+            x = 20 * i * scale + pad[0]
+            raw[0, i] = (x, pad[1] + 10, x + 10 * scale, pad[1] + 20 * scale, score, 0)
+        got = _decode_yolo_output_multi(raw, scale=scale, pad=pad, crop_w=crop_w, crop_h=crop_h)
+        assert sorted(round(c.score, 2) for c in got) == [0.7, 0.9]
+        assert got[0].bbox_norm[2] - got[0].bbox_norm[0] == pytest.approx(0.05, abs=0.01)
+
+    def test_five_row_head_is_unchanged(self) -> None:
+        raw = np.zeros((1, 5, 8), dtype=np.float32)
+        raw[0, :, 3] = (320, 320, 64, 64, 0.8)
+        got = _decode_yolo_output_multi(raw, scale=1.0, pad=(0.0, 0.0), crop_w=640, crop_h=640)
+        assert len(got) == 1
+        assert got[0].bbox_norm == pytest.approx((0.45, 0.45, 0.55, 0.55))

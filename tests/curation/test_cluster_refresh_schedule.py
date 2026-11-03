@@ -179,3 +179,10 @@ def test_growth_past_the_threshold_from_empty_triggers_exactly_once() -> None:
     s.on_started(300, 'job-1', previous_trained=0)
     for cycle in range(3, 7):
         assert step(s, obs(300, tracked='completed'), cycle * 120.0, POLICY) is Action.NONE
+
+
+def test_recent_ingest_defers_even_when_count_is_flat_and_nothing_pending() -> None:
+    s = settled(1000)
+    step(s, Observation(1250, 0, None, False, False, recent_ingest=5), 0.0, POLICY)
+    flat = Observation(1250, 0, None, False, False, recent_ingest=5)
+    assert step(s, flat, 120.0, POLICY) is Action.DEFER

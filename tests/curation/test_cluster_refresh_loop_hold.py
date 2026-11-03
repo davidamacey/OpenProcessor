@@ -111,6 +111,7 @@ class _Api:
                     sched=sched,
                     policy=POLICY,
                     auto_label=auto_label,
+                    settle_s=240,
                     now=0.0,
                 )
 

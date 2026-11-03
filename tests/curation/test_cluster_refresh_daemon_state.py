@@ -49,8 +49,11 @@ class _Fake(SettingsFakeOpenSearch):
         super().__init__({})
         self.items = 0
         self.unfinished = 0
+        self.recent_ingest = 0
 
-    async def count(self, *, body: Any = None, **_: Any) -> dict[str, int]:
+    async def count(self, *, index: str = '', body: Any = None, **_: Any) -> dict[str, int]:
+        if 'images' in index:
+            return {'count': self.recent_ingest}
         return {'count': self.unfinished if body else self.items}
 
 
@@ -98,6 +101,7 @@ def _poll(
                 sched=sched,
                 policy=POLICY,
                 auto_label=True,
+                settle_s=240,
                 now=now,
             )
 
@@ -248,3 +252,24 @@ def test_a_failed_save_is_retried_on_the_next_poll() -> None:
         stored = asyncio.run(load_refresh_state(fake))
     assert stored.last_trained_count == 1000
     assert stored.trained_before is None  # the job completed by the second poll
+
+
+# ---- #443 -----------------------------------------------------------------
+
+
+def test_a_slow_ingest_batch_with_a_flat_count_does_not_start_the_retrain() -> None:
+    """Items did not change between two polls and nothing is pending, yet images were
+    ingested inside the settle window: ingest is still running."""
+    api, fake, sched = _Api(), _Fake(), ScheduleBook().get('alpha')
+    fake.items = 1000
+    fake.recent_ingest = 12
+
+    _poll(api, fake, sched, 0.0)
+    _poll(api, fake, sched, 120.0)
+
+    assert not api.started
+
+    fake.recent_ingest = 0
+    _poll(api, fake, sched, 240.0)
+
+    assert api.started

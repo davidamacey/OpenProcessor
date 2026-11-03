@@ -178,14 +178,16 @@ run_smoke_test() {
 
     local passed=0
     local failed=0
-    local test_image="$PROJECT_DIR/test_images/bus.jpg"
-    local face_image="$PROJECT_DIR/test_images/zidane.jpg"
+    local test_image="$PROJECT_DIR/test_images/coco/000000001584.jpg"
+    local face_image="$PROJECT_DIR/test_images/coco/000000011051.jpg"
 
-    # Check if test images exist
-    if [[ ! -f "$test_image" ]]; then
-        log_warn "Test image not found: $test_image"
-        log_info "Skipping image-based smoke tests"
-        return 0
+    # The images are public COCO val2017 files; a smoke test with no input must not pass.
+    if [[ ! -f "$test_image" || ! -f "$face_image" ]]; then
+        (cd "$PROJECT_DIR" && python3 scripts/datasets/fetch_test_images.py) || true
+    fi
+    if [[ ! -f "$test_image" || ! -f "$face_image" ]]; then
+        log_error "Smoke test images missing: $test_image, $face_image (run: make download-test-images)"
+        return 1
     fi
 
     # Test 1: Health endpoint
