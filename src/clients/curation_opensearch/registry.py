@@ -3,7 +3,6 @@ atomic writes, mirrored into the ``classes`` index."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 from datetime import UTC, datetime
@@ -310,7 +309,6 @@ class ClassRegistry:
 # ``class_registry.json``, so a class added in one project is invisible
 # in every other.
 _registries: dict[tuple[str, str], ClassRegistry] = {}
-_registry_lock = asyncio.Lock()
 
 
 def get_class_registry() -> ClassRegistry:

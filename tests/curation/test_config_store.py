@@ -551,7 +551,7 @@ async def test_startup_bootstrap_config_store_safe_retries_until_opensearch_reac
 
 
 @pytest.mark.asyncio
-async def test_forced_refresh_sees_write_made_through_another_worker() -> None:
+async def test_miss_refresh_sees_write_made_through_another_worker() -> None:
     from src.services.config_store import index as config_index
 
     writer = FakeConfigOpenSearch()
@@ -565,5 +565,5 @@ async def test_forced_refresh_sees_write_made_through_another_worker() -> None:
     )
     await store.refresh(reader)
     assert 'clone1' not in store.current.profiles  # the 404 window the issue saw
-    await store.refresh(reader, force=True)
+    await store.refresh_on_miss(reader)
     assert 'clone1' in store.current.profiles

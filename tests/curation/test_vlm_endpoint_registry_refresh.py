@@ -23,10 +23,12 @@ class _Store:
         self.refreshes: list[bool] = []
         self.known: set[str] = set()
 
-    async def refresh(self, _client: Any, *, force: bool = False) -> None:
-        self.refreshes.append(force)
-        if force:
-            self.known.add('late')
+    async def refresh(self, _client: Any) -> None:
+        self.refreshes.append(False)
+
+    async def refresh_on_miss(self, _client: Any) -> None:
+        self.refreshes.append(True)
+        self.known.add('late')
 
 
 @pytest.fixture

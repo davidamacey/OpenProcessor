@@ -48,6 +48,13 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Forced (by-name miss) reads are rate-limited to one per this many seconds per store.
+MISS_REFRESH_MIN_INTERVAL_S = 1.0
+
+
+class ConfigStoreUnavailableError(RuntimeError):
+    """The store could not be read; the snapshot is unchanged (not marked stale)."""
+
 
 class ConfigStore:
     """Per-project, per-process config-store cache. See module docstring."""
@@ -69,21 +76,65 @@ class ConfigStore:
         self.current: ConfigSnapshot = _EMPTY_SNAPSHOT
         self.pending_snapshot: ConfigSnapshot | None = None
         self._lock = asyncio.Lock()
+        self._miss_read_at = float('-inf')
+        self._miss_read_failed = False
 
-    async def refresh(self, client: Any, *, force: bool = False) -> ConfigSnapshot:
-        """``force`` skips the unchanged-revision shortcut and the absent-
-        revision-doc cache: a by-name lookup that missed uses it, because a
-        write made through another API worker bumps the counter in a doc this
-        process may have cached as absent for a whole poll interval.
-
-        Fetch the global revision counter; if it changed, reload every
+    async def refresh(self, client: Any) -> ConfigSnapshot:
+        """Fetch the global revision counter; if it changed, reload every
         config doc plus both activations and swap (``live``) or stage
         (``pinned``) the new snapshot. A no-op (returns ``current``) when
         the revision hasn't moved -- one cheap ``GET`` per call in the
         steady state."""
         async with self._lock:
             with self._read_scope():
-                return await self._refresh_locked(client, force=force)
+                return await self._refresh_locked(client)
+
+    async def refresh_on_miss(self, client: Any) -> ConfigSnapshot:
+        """Re-read after a by-name lookup missed. A write made through another
+        API worker bumps the counter in a doc this process may have cached as
+        absent for a whole poll interval, so the absent cache is dropped and the
+        (cheap) counter read again; the documents reload only if the counter
+        moved. Concurrent misses queue on the lock and the later ones reuse the
+        first one's outcome (reads are at least ``MISS_REFRESH_MIN_INTERVAL_S``
+        apart), so an unknown-name storm costs one counter read, not one reload
+        each. A failed read raises :class:`ConfigStoreUnavailableError` and leaves
+        the snapshot as it was: marking it stale would degrade every other reader
+        for one caller's failed lookup. In ``pinned`` mode the result is staged,
+        never published, like any refresh."""
+        async with self._lock:
+            if time.monotonic() - self._miss_read_at < MISS_REFRESH_MIN_INTERVAL_S:
+                if self._miss_read_failed:
+                    msg = f'config store {self.index} could not be read'
+                    raise ConfigStoreUnavailableError(msg)
+                return self.current
+            with self._read_scope():
+                try:
+                    await self._reload_if_moved(client)
+                except Exception as exc:
+                    logger.warning(
+                        'config_store_miss_refresh_failed', index=self.index, error=str(exc)
+                    )
+                    self._miss_read_failed = True
+                    msg = f'config store {self.index} could not be read'
+                    raise ConfigStoreUnavailableError(msg) from exc
+                finally:
+                    self._miss_read_at = time.monotonic()
+                self._miss_read_failed = False
+                return self.current
+
+    async def _reload_if_moved(self, client: Any) -> None:
+        forget_absent_revision(client, self.index)
+        revision = await get_config_revision(client, self.index)
+        known = self.pending_snapshot or self.current
+        if revision == known.config_revision and known.loaded_at and not known.stale:
+            return
+        self._publish(await self._load_snapshot(client, revision))
+
+    def _publish(self, snapshot: ConfigSnapshot) -> None:
+        if self.mode == 'live':
+            self.current = snapshot
+        else:
+            self.pending_snapshot = snapshot
 
     def _read_scope(self) -> contextlib.AbstractContextManager[None]:
         """The global store's reads are allowed while a project is bound
@@ -95,9 +146,7 @@ class ConfigStore:
 
         return global_configs_read()
 
-    async def _refresh_locked(self, client: Any, *, force: bool = False) -> ConfigSnapshot:
-        if force:
-            forget_absent_revision(client, self.index)
+    async def _refresh_locked(self, client: Any) -> ConfigSnapshot:
         try:
             revision = await get_config_revision(client, self.index)
         except Exception as exc:
@@ -108,7 +157,7 @@ class ConfigStore:
         # A stale snapshot is reloaded even at the same revision: nothing else clears
         # `stale`, so skipping here would leave a recovered store refusing forever.
         unchanged = revision == self.current.config_revision and self.current.loaded_at
-        if not force and unchanged and not self.current.stale:
+        if unchanged and not self.current.stale:
             return self.current
 
         try:
@@ -118,10 +167,7 @@ class ConfigStore:
             self.current = replace(self.current, stale=True)
             return self.current
 
-        if self.mode == 'live':
-            self.current = snapshot
-        else:
-            self.pending_snapshot = snapshot
+        self._publish(snapshot)
         return snapshot
 
     async def _load_snapshot(self, client: Any, revision: int) -> ConfigSnapshot:

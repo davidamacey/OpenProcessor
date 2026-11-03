@@ -181,16 +181,29 @@ async def _unfinished_region_count(opensearch: Any) -> int:
     return int(resp.get('count', 0))
 
 
-async def _recent_ingest_count(opensearch: Any, window_s: int) -> int:
-    """Images indexed within the last ``window_s`` seconds: an ingest batch that holds the
-    GPU for longer than one poll leaves the item count flat while ingest is still running."""
+async def _ingested_recently(opensearch: Any, window_s: int) -> bool:
+    """Whether any image was indexed within the last ``window_s`` seconds: an ingest batch
+    that holds the GPU for longer than one poll leaves the item count flat while ingest is
+    still running.
+
+    Only "any" matters, so the search returns no documents and stops at the first match.
+    ``indexed_at`` is written by the ingest host and ``now-`` is evaluated on the OpenSearch
+    node: the window assumes their clocks agree to well under ``window_s`` (two poll
+    intervals). A fast ingest-host clock reads as recent ingest for longer (deferral stays
+    bounded by ``max_deferral_s``); a slow one can miss a batch for up to the skew.
+    """
     from src.config.curation_accessors import images_index
 
-    resp = await opensearch.count(
+    resp = await opensearch.search(
         index=images_index(),
-        body={'query': {'range': {'indexed_at': {'gte': f'now-{window_s}s'}}}},
+        body={
+            'size': 0,
+            'terminate_after': 1,
+            'track_total_hits': 1,
+            'query': {'range': {'indexed_at': {'gte': f'now-{window_s}s'}}},
+        },
     )
-    return int(resp.get('count', 0))
+    return int(resp['hits']['total']['value']) > 0
 
 
 async def _trigger_auto_promote(
@@ -350,7 +363,7 @@ async def _iteration(
                 await _restore_state(opensearch, sched)
             count = await _crop_count(opensearch)
             unfinished = await _unfinished_region_count(opensearch)
-            recent_ingest = await _recent_ingest_count(opensearch, settle_s)
+            recent_ingest = await _ingested_recently(opensearch, settle_s)
         loop_live = await _loop_live(client, api, api_prefix, slug)
         busy = False
         tracked = None

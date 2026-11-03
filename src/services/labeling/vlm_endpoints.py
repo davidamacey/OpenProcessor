@@ -85,6 +85,11 @@ class VlmEndpointUnavailableError(RuntimeError):
     Fail closed: never fall back to another endpoint."""
 
 
+class VlmRegistryUnavailableError(VlmEndpointUnavailableError):
+    """The endpoint registry could not be read, so a name's absence is unproven:
+    answer "unavailable", never "unknown endpoint"."""
+
+
 class VlmKeyRefInvalidError(ValueError):
     """``api_key_ref`` is not a reference this deployment may resolve."""
 
@@ -481,7 +486,8 @@ async def resolve_vlm_source(
     revision) or ``name@revision`` (an immutable copy, fetched by id so it
     resolves in a cold process), or nothing = the bound project's active
     endpoint. ``None`` when the name (or that revision) is unknown, or the
-    project's VLM is off."""
+    project's VLM is off. Raises :class:`VlmRegistryUnavailableError` when a
+    miss could not be re-checked against the registry."""
     if draft is not None:
         return draft_endpoint(draft)
     if name is None:
@@ -489,14 +495,20 @@ async def resolve_vlm_source(
         return active_vlm_endpoint()
     # By name the registry alone decides: usable with no project bound.
     from src.services.config_store import get_global_config_store
+    from src.services.config_store.store import ConfigStoreUnavailableError
 
     store = get_global_config_store()
     await store.ensure_fresh(client)
     endpoint = get_vlm_endpoint(name)
     if endpoint is None:
         # A just-created endpoint (written through another API worker) can sit
-        # inside the freshness window; one forced read before answering unknown.
-        await store.refresh(client, force=True)
+        # inside the freshness window; one cheap, coalesced counter read before
+        # answering unknown. A failed read is "unavailable", not "unknown".
+        try:
+            await store.refresh_on_miss(client)
+        except ConfigStoreUnavailableError as exc:
+            msg = 'the VLM endpoint registry is unavailable; retry'
+            raise VlmRegistryUnavailableError(msg) from exc
         endpoint = get_vlm_endpoint(name)
     if endpoint is None:
         return None
@@ -530,6 +542,7 @@ __all__ = [
     'VlmEndpoint',
     'VlmEndpointUnavailableError',
     'VlmKeyRefInvalidError',
+    'VlmRegistryUnavailableError',
     'active_vlm_endpoint',
     'api_key_present',
     'available_vlm_endpoints',

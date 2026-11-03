@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
-from src.services.config_store.profile_issues import _issue
+from src.services.config_store.profile_issues import region_issue as _issue
 from src.services.detection.region_text import TEXT_READER_MODES
 from src.services.labeling.vlm_endpoints import vlm_configured
 
