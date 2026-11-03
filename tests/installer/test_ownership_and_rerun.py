@@ -505,3 +505,37 @@ def test_rerun_from_inside_the_install_dir_needs_no_dir_flag(shimmed: Shimmed) -
     )
     assert result.returncode == 0, result.stderr[-1500:]
     assert 'keeping the installed tiers' in result.stdout
+
+
+# --- #411: a re-run keeps the installed GPU plan, profile included ---------------------
+
+LOW_VRAM = '0, NVIDIA GeForce RTX 4090, 24564, 14000, 8.9\n'
+ROOMY = '0, NVIDIA GeForce RTX 4090, 24564, 0, 8.9\n'
+
+
+def test_rerun_keeps_the_installed_profile_when_the_plan_would_differ(shimmed: Shimmed) -> None:
+    # Free VRAM would plan "standard" today; the installed "small" must survive a re-run.
+    shimmed.gpus(ROOMY)
+    assert install(shimmed, '--no-start', '--profile', 'small').returncode == 0
+    inst = shimmed.root / 'inst'
+    before = (inst / '.env').read_text()
+    again = install(shimmed, '--no-start', tiers=None)
+    assert again.returncode == 0, again.stderr[-1500:]
+    assert env_value(inst / '.env', 'GPU_PROFILE') == 'small', again.stdout[-1500:]
+    assert (inst / '.env').read_text() == before
+    assert env_value(inst / '.install' / 'managed.env', 'GPU_PROFILE') == 'small'
+
+
+def test_rerun_with_profile_flag_still_overrides(shimmed: Shimmed) -> None:
+    shimmed.gpus(ROOMY)
+    assert install(shimmed, '--no-start', '--profile', 'small').returncode == 0
+    inst = shimmed.root / 'inst'
+    again = install(shimmed, '--no-start', '--profile', 'standard', tiers=None)
+    assert again.returncode == 0, again.stderr[-1500:]
+    assert env_value(inst / '.env', 'GPU_PROFILE') == 'standard'
+
+
+def test_fresh_install_still_plans_from_free_vram(shimmed: Shimmed) -> None:
+    shimmed.gpus(LOW_VRAM)
+    assert install(shimmed, '--no-start').returncode == 0
+    assert env_value(shimmed.root / 'inst' / '.env', 'GPU_PROFILE') == 'minimal'

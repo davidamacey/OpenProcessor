@@ -281,6 +281,7 @@ ph_bakeoff() {
     [[ "$(jq -r --arg j "$trainjob" '[.models[]? | select(.run_id == $j)] | length' "$BODY")" -gt 0 ]] \
         || skip "trained run ${trainjob} not offered for bake-off"
     # the run's own training export is always a valid eval dataset (run:<job_id>)
+    start_evaluator || skip "bake-off needs the curation-evaluator service (pass --install-dir or start it)"
     api_json POST "${PROJECT_API}/bakeoff/run" \
         "$(jq -nc --arg j "$trainjob" '{models:[{source:"run", run_id:$j}], datasets:[{id:("run:" + $j)}]}')"
     expect 200 202
@@ -295,6 +296,7 @@ ph_bakeoff() {
     poll "$PHASE_TIMEOUT" _bake || fail "bake-off ${job} did not finish"
     case "$(jqb '.state // .status')" in done|finished) ;; *) fail "bake-off ended $(jqb '.state // .status')" ;; esac
     ev "bake-off ${job} finished"
+    stop_evaluator
 }
 
 promote_once() { # promote_once FORCE(true|false): leaves final status in BODY/HTTP_CODE
@@ -491,7 +493,7 @@ ph_installer_repair() {
 ph_installer_upgrade() {
     need_install_dir
     [[ -n "$UPGRADE_VERSION" ]] || skip "pass --upgrade-version vX.Y.Z to enable upgrade/rollback"
-    op_cli upgrade --version "$UPGRADE_VERSION" --yes "${INSTALLER_ARGS_ARR[@]}" >> "$WORKDIR/installer.log" 2>&1 \
+    op_cli upgrade --yes "${INSTALLER_ARGS_ARR[@]}" --version "$UPGRADE_VERSION" >> "$WORKDIR/installer.log" 2>&1 \
         || fail "upgrade to ${UPGRADE_VERSION} failed: $(tail -c 300 "$WORKDIR/installer.log")"
     api GET /health; expect 200
     ev "upgraded to ${UPGRADE_VERSION}; API healthy"

@@ -175,7 +175,7 @@ ph_loop() {
     expect 200
     [[ "$(jqb '.loops | type')" == array ]] || fail "loop list has no loops array: $(snippet)"
     before="$(jqb '.loops | length')"
-    api_json POST "${PROJECT_API}/assist/loops" "$(jq -nc --argjson n "$LOOP_BUDGET_CROPS" '{budget:{max_vlm_crops:$n}}')"
+    api_json POST "${PROJECT_API}/assist/loops" "$(jq -nc --argjson n "$LOOP_BUDGET_CROPS" --argjson m "$LOOP_MIN_ROOT_SIZE" '{budget:{max_vlm_crops:$n}, scope:{min_root_size:$m}}')"
     case "$HTTP_CODE" in
         200) ;;
         409|422) skip "loop dry run refused (HTTP ${HTTP_CODE}): $(snippet)" ;;

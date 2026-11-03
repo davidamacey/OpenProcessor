@@ -8,6 +8,7 @@ Usage:
     python tests/validate_visual_results.py
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -20,8 +21,10 @@ import requests
 # Configuration
 # =============================================================================
 
-API_BASE = 'http://localhost:4603'
-TEST_IMAGE = Path('test_images/zidane.jpg')
+# Same convention as test_full_system.py: the port this deployment publishes.
+API_BASE = f'http://localhost:{os.environ.get("API_PORT", "4603")}'
+# Public COCO val2017 image fetched by tests/test_full_system.py.
+TEST_IMAGE = Path('test_images/coco/000000000139.jpg')
 OCR_IMAGE = Path('test_images/ocr-real/testocr_rgb.jpg')
 OUTPUT_DIR = Path('test_results')
 

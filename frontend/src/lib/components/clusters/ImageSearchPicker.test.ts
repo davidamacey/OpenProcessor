@@ -45,17 +45,31 @@ describe('ImageSearchPicker', () => {
     expect((q('image-search-run') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('stays inside a narrow viewport instead of hanging off the button', () => {
-    q('image-search-toggle').click();
+  it('on a narrow screen spans the viewport but stays anchored under its button', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    vi.stubGlobal('innerWidth', 430);
+    const toggle = q('image-search-toggle');
+    toggle.getBoundingClientRect = () => ({ left: 250 }) as DOMRect;
+    toggle.click();
     flushSync();
-    // Anchored to the button the 20rem panel runs past a 430px screen's right edge.
-    const classes = q('image-search-panel').className.split(/\s+/);
-    expect(classes).toContain('max-sm:fixed');
-    expect(classes).toContain('max-sm:inset-x-2');
-    // top-full on a fixed box would be a full viewport below the button, off screen.
-    expect(classes).toContain('max-sm:top-14');
+    const panel = q('image-search-panel');
+    // Shifted left so its left edge sits 8px from the screen edge; never fixed to the top.
+    expect(panel.style.left).toBe('-242px');
+    expect(panel.style.width).toBe('414px');
+    const classes = panel.className.split(/\s+/);
+    expect(classes).not.toContain('max-sm:fixed');
+    expect(classes).toContain('top-full');
     // A tall picture must scroll inside the panel, not push Search off the screen.
     expect(classes).toContain('max-sm:overflow-y-auto');
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the plain anchored position on a wide screen', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    q('image-search-toggle').click();
+    flushSync();
+    expect(q('image-search-panel').getAttribute('style') ?? '').toBe('');
+    vi.unstubAllGlobals();
   });
 
   it('searches by the whole picture when no region is drawn', () => {

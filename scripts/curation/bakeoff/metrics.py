@@ -311,7 +311,7 @@ def subset_scope(per_class: Iterable[Mapping[str, Any]], ids: Iterable[int]) -> 
 def percentiles(values: list[float]) -> dict[str, float]:
     """p50/p90/p99 + mean for a latency sample (ms)."""
     if not values:
-        return {'mean': 0.0, 'p50': 0.0, 'p90': 0.0, 'p99': 0.0}
+        raise ValueError('empty latency sample: refusing to report 0 ms as a measurement')
     arr = np.asarray(values, dtype=float)
     return {
         'mean': float(arr.mean()),

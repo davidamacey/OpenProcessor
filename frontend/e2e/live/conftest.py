@@ -37,6 +37,7 @@ conftest is layered under the plugins `e2e/conftest.py` loads, so no need to red
 
 from __future__ import annotations
 
+import base64
 import datetime
 import os
 import re
@@ -79,6 +80,39 @@ def _env_live_url() -> str | None:
     return url.rstrip("/") if url else None
 
 
+def basic_auth() -> tuple[str, str] | None:
+    """Basic-auth credentials for a deployment behind the installer's login.
+
+    `OP_CROPWRIGHT_LIVE_USER` plus `OP_CROPWRIGHT_LIVE_PASSWORD_FILE` (a path;
+    the password itself is never an env var or argument). Neither set means no
+    auth. Only one set, or an unreadable/empty file, is an error rather than a
+    silent unauthenticated run.
+    """
+    user = os.environ.get("OP_CROPWRIGHT_LIVE_USER")
+    pw_file = os.environ.get("OP_CROPWRIGHT_LIVE_PASSWORD_FILE")
+    if not user and not pw_file:
+        return None
+    if not user or not pw_file:
+        raise pytest.UsageError(
+            "set both OP_CROPWRIGHT_LIVE_USER and OP_CROPWRIGHT_LIVE_PASSWORD_FILE, or neither"
+        )
+    try:
+        password = Path(pw_file).read_text(encoding="utf-8").rstrip("\r\n")
+    except OSError as exc:
+        raise pytest.UsageError(f"cannot read OP_CROPWRIGHT_LIVE_PASSWORD_FILE: {exc}") from exc
+    if not password:
+        raise pytest.UsageError("OP_CROPWRIGHT_LIVE_PASSWORD_FILE is empty")
+    return user, password
+
+
+def _auth_headers() -> dict[str, str]:
+    creds = basic_auth()
+    if creds is None:
+        return {}
+    token = base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode("ascii")
+    return {"Authorization": f"Basic {token}"}
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _require_live_url() -> None:
     """Skip the entire tier, before any fixture that could touch a
@@ -113,7 +147,8 @@ def live_url(_require_live_url: None) -> str:
     assert url is not None  # guaranteed by _require_live_url not skipping
     health_url = f"{url}{API_PREFIX}/health"
     try:
-        with urllib.request.urlopen(health_url, timeout=10) as resp:
+        health_req = urllib.request.Request(health_url, headers=_auth_headers())
+        with urllib.request.urlopen(health_req, timeout=10) as resp:
             status = resp.status
     except (urllib.error.URLError, OSError) as exc:
         pytest.skip(f"live tier skipped: preflight GET {health_url} failed: {exc}")
@@ -148,9 +183,14 @@ def live_project(live_url: str) -> dict[str, Any]:
 
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args: dict[str, Any]) -> dict[str, Any]:
+    creds = basic_auth()
+    extra: dict[str, Any] = {}
+    if creds is not None:
+        extra["http_credentials"] = {"username": creds[0], "password": creds[1]}
     return {
         **browser_context_args,
         "viewport": {"width": 1280, "height": 720},
+        **extra,
     }
 
 
@@ -204,7 +244,7 @@ def require_region_profile(live_region_profile: dict[str, Any] | None) -> dict[s
 def _http_get(url: str) -> Any:
     import json
 
-    req = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, method="GET", headers=_auth_headers())
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
 

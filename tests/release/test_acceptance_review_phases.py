@@ -356,6 +356,20 @@ def test_loop_dry_run_passes_and_queues_nothing(fake, tmp_path):
     assert 'dry_run' not in body or body['dry_run'] is not False
 
 
+def _loop_min_root_size(f) -> int:
+    post = next(r for r in f.raw if r[0] == 'POST' and r[1].endswith('/assist/loops'))
+    return json.loads(post[2])['scope']['min_root_size']
+
+
+def test_loop_scope_min_root_size_defaults_small_and_is_an_option(fake, tmp_path):
+    f = fake(_loop_routes())
+    run(f, tmp_path, '--only', 'loop')
+    assert _loop_min_root_size(f) == 10
+    f = fake(_loop_routes())
+    run(f, tmp_path, '--only', 'loop', '--loop-min-root-size', '3')
+    assert _loop_min_root_size(f) == 3
+
+
 def test_loop_skips_when_routes_404_or_no_vlm(fake, tmp_path):
     _proc, data = run(fake(_loop_routes(loops_status=404)), tmp_path, '--only', 'loop')
     assert by_name(data)['loop']['status'] == 'skip'

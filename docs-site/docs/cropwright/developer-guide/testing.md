@@ -32,6 +32,10 @@ screenshots per route at two viewports; **a human must actually look at
 them** after a run — the assertions catch what's mechanically checkable,
 not a layout regression.
 
+Against a stack behind basic auth (the installer's default), set
+`OP_CROPWRIGHT_LIVE_USER` and `OP_CROPWRIGHT_LIVE_PASSWORD_FILE` (a path to a file
+holding the password; never put the password on a command line). Both or neither.
+
 ## Mutation testing (`npm run test:mutation`)
 
 Stryker, against the ~10 highest-value pure modules (wire mapping, undo

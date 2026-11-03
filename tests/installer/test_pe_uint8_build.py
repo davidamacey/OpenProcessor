@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
@@ -207,9 +208,24 @@ UINT8_BUILDERS = {
 }
 
 
+def _shipped_model_configs() -> list[Path]:
+    """The tracked ``models/*/config.pbtxt``. An ignored local model directory in a dev
+    checkout is not shipped, so it must not count; outside a checkout (a clean export)
+    every config on disk is shipped."""
+    tracked = subprocess.run(
+        ['git', '-C', str(REPO_ROOT), 'ls-files', '--', 'models/*/config.pbtxt'],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if tracked.returncode == 0 and tracked.stdout.strip():
+        return [REPO_ROOT / line for line in tracked.stdout.splitlines()]
+    return sorted((REPO_ROOT / 'models').glob('*/config.pbtxt'))
+
+
 def _uint8_tensorrt_configs() -> set[str]:
     found = set()
-    for cfg in (REPO_ROOT / 'models').glob('*/config.pbtxt'):
+    for cfg in _shipped_model_configs():
         text = cfg.read_text()
         block = re.search(r'^input\s*\[(.*?)^\]', text, re.DOTALL | re.MULTILINE)
         if 'tensorrt_plan' in text and block and 'TYPE_UINT8' in block.group(1):
