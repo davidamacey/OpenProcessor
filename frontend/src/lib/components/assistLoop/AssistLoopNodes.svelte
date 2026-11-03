@@ -25,6 +25,11 @@
     { id: 'unvisited', label: 'Not visited' },
   ];
   const LABEL = Object.fromEntries(DECISIONS.map((d) => [d.id, d.label]));
+  const UNVISITED_WHY: Record<string, string> = {
+    budget_crops: 'the crop budget could not cover it',
+    budget_requests: 'the request budget could not cover it',
+    budget_time: 'the time budget ran out',
+  };
   const THUMBS_SHOWN = 48;
 </script>
 
@@ -76,6 +81,11 @@
             <th scope="row" class="py-1 pr-3 text-left font-normal">{n.path}</th>
             <td class="pr-3 font-sans" title={n.reason ?? ''}>
               {n.decision ? LABEL[n.decision] : 'Open'}
+              {#if n.decision === 'unvisited' && n.reason}
+                <span class="block text-zinc-500" data-testid="loop-node-why"
+                  >{UNVISITED_WHY[n.reason] ?? n.reason}</span
+                >
+              {/if}
             </td>
             <td class="pr-3 font-sans">{n.class_name ?? '—'}</td>
             <td class="pr-3 text-right">{formatCount(n.n)}</td>

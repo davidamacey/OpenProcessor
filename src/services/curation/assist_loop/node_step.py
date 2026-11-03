@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from src.domain.loop_stats import required_sample
 from src.domain.loop_tree import child_path, parent_path, parse_path, path_level, root_path
 from src.services.curation.assist.scope import membership_digest
 from src.services.curation.assist_loop.evaluate import NodeInput, evaluate_node
@@ -105,15 +106,14 @@ def _open(run: LoopRun, path: str) -> NodeRecord:
     return run.tree.nodes[path]
 
 
-def _view(run: LoopRun, record: NodeRecord) -> NodeInput:
-    ids = run.members(record.path)
-    eligible = run.eligible(ids)
-    truth = [
-        name for i in ids if run.states[i].truth and (name := run.states[i].class_name) is not None
-    ]
+def _inherited(
+    run: LoopRun, path: str, eligible: list[str]
+) -> tuple[dict[str, ClassAnswer], set[str]]:
+    """Answers ancestors of ``path`` got for its eligible members, and the members they
+    asked without a usable answer."""
     reused: dict[str, ClassAnswer] = {}
     failed: set[str] = set()
-    ancestor = parent_path(record.path)
+    ancestor = parent_path(path)
     while ancestor is not None:
         upper = run.tree.nodes[ancestor]
         for crop_id in eligible:
@@ -121,6 +121,16 @@ def _view(run: LoopRun, record: NodeRecord) -> NodeInput:
                 reused[crop_id] = upper.answers[crop_id]
         failed |= upper.failed
         ancestor = parent_path(ancestor)
+    return reused, failed
+
+
+def _view(run: LoopRun, record: NodeRecord) -> NodeInput:
+    ids = run.members(record.path)
+    eligible = run.eligible(ids)
+    truth = [
+        name for i in ids if run.states[i].truth and (name := run.states[i].class_name) is not None
+    ]
+    reused, failed = _inherited(run, record.path, eligible)
     return NodeInput(
         record=record,
         eligible=eligible,
@@ -128,6 +138,30 @@ def _view(run: LoopRun, record: NodeRecord) -> NodeInput:
         reused=reused,
         known_failed=frozenset((failed & set(eligible)) - set(reused)),
     )
+
+
+def crops_needed(run: LoopRun, path: str, *, with_top_up: bool) -> int:
+    """New VLM crops node ``path`` still needs to reach a verdict: the first draw the gate
+    needs with no dissent, or (``with_top_up``) the larger one the allowed dissent needs.
+    What ancestors already answered and what the node already holds is not counted."""
+    eligible = run.eligible(run.members(path))
+    if not eligible:
+        return 0
+    gate = run.params.gate
+    dissent = gate.max_dissent if with_top_up else 0
+    need = required_sample(len(eligible), gate.theta, gate.alpha_stage, dissent)
+    record = run.tree.nodes.get(path)
+    held = set(record.answers) | record.failed if record is not None else set()
+    reused, _ = _inherited(run, path, eligible)
+    return max(0, need - len(held | set(reused)))
+
+
+def leave_unvisited(run: LoopRun, path: str, reason: str) -> None:
+    """Record that node ``path`` was not worked on because ``reason`` (a budget) cannot
+    cover it, before any crop was spent on it."""
+    record = run.tree.nodes.get(path) or _open(run, path)
+    run.stop_reason = run.stop_reason or reason
+    _decision(run, record, 'unvisited', reason=reason, sampled=0)
 
 
 def _verdict_fields(verdict: Verdict) -> dict[str, Any]:
@@ -293,4 +327,4 @@ async def advance(run: LoopRun, path: str) -> list[str]:
     return list(record.children or []) if (record.decision or {}).get('kind') == 'split' else []
 
 
-__all__ = ['LOOP_WRITER', 'LoopRun', 'advance', 'finished']
+__all__ = ['LOOP_WRITER', 'LoopRun', 'advance', 'crops_needed', 'finished', 'leave_unvisited']

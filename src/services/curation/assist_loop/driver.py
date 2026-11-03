@@ -31,8 +31,15 @@ from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.domain.loop_tree import best_first_key
 from src.services.curation.assist.scope import membership_digest
+from src.services.curation.assist_loop.budget import VLM
 from src.services.curation.assist_loop.evaluate import EvalContext, GateParams
-from src.services.curation.assist_loop.node_step import LoopRun, advance, finished
+from src.services.curation.assist_loop.node_step import (
+    LoopRun,
+    advance,
+    crops_needed,
+    finished,
+    leave_unvisited,
+)
 from src.services.curation.assist_loop.partition import read_snapshot, write_snapshot
 from src.services.curation.assist_loop.progress import level_rows, totals
 from src.services.curation.assist_loop.rollback import rollback_loop
@@ -220,20 +227,50 @@ async def _drain(running: dict[asyncio.Task[list[str]], str]) -> None:
     await asyncio.gather(*running, return_exceptions=True)
 
 
+def _admit(run: LoopRun, path: str, claims: dict[str, int]) -> str:
+    """Whether node ``path`` may start now: ``start``, ``wait`` (for a running node to free
+    crops) or ``refuse`` (nothing running and the crop budget cannot cover its first draw).
+
+    Nodes running together must not each take a slice of a budget none of them can finish
+    on, so a node starts only when the crops it may still need (the top-up the allowed
+    dissent calls for included) fit beside what the running nodes may still need. Alone, a
+    node needs only its first draw. ``claims`` maps each running node to its total claim."""
+    minimum = crops_needed(run, path, with_top_up=False)
+    full = crops_needed(run, path, with_top_up=True)
+    outstanding = sum(
+        max(0, total - run.budget.node_crops(VLM, other)) for other, total in claims.items()
+    )
+    room = run.budget.crops_left(VLM) - outstanding
+    need = full if claims else minimum
+    if room < need:
+        return 'wait' if claims else 'refuse'
+    claims[path] = run.budget.node_crops(VLM, path) + need
+    return 'start'
+
+
 async def schedule(run: LoopRun) -> LoopOutcome:
     """Work the queue until it is empty or a stop rule fires."""
     heap = _pending(run)
     running: dict[asyncio.Task[list[str]], str] = {}
+    claims: dict[str, int] = {}
     try:
         while True:
             while _halt_reason(run) is None and heap and len(running) < run.params.node_concurrency:
-                _, path = heapq.heappop(heap)
+                _, path = heap[0]
+                admission = _admit(run, path, claims)
+                if admission == 'wait':
+                    break
+                heapq.heappop(heap)
+                if admission == 'refuse':
+                    leave_unvisited(run, path, 'budget_crops')
+                    continue
                 running[asyncio.create_task(advance(run, path))] = path
             if not running:
                 break
             done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
             for task in sorted(done, key=lambda t: running[t]):
                 path = running.pop(task)
+                claims.pop(path, None)
                 children = task.result()
                 sizes = run.tree.nodes[path].child_n
                 for child in children:
