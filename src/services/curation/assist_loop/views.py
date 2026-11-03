@@ -40,6 +40,19 @@ def _order(path: str) -> tuple[int, int, tuple[int, ...]]:
     return (path_level(path), cluster, indices)
 
 
+REASON_MESSAGES = {
+    'budget_crops': 'the crop budget could not cover it',
+    'budget_requests': 'the request budget could not cover it',
+    'budget_time': 'the time budget ran out',
+    'no_eligible_members': 'it has no member the loop may label',
+    'no_split': 'it could not be split into parts the loop can label',
+    'class_not_in_registry': 'the class it agreed on is no longer in the class list',
+    'drift': 'its members changed after the loop pinned them',
+}
+"""What a node's ``reason`` code means, served so the client renders it instead of keeping
+its own wording."""
+
+
 def _node(record: NodeRecord) -> LoopNode:
     decision = record.decision or {}
     return LoopNode(
@@ -51,6 +64,7 @@ def _node(record: NodeRecord) -> LoopNode:
         answered=int(decision.get('answered', len(record.answers))),
         decision=decision.get('kind'),
         reason=decision.get('reason'),
+        reason_message=REASON_MESSAGES.get(str(decision.get('reason'))),
         class_name=decision.get('class_name'),
         agree=decision.get('agree'),
         bound=decision.get('bound'),
