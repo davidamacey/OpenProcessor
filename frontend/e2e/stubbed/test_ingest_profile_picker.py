@@ -4,6 +4,8 @@
   2. `test_activate_posts_expected_active_and_refreshes_the_active_card`
   3. `test_a_refusal_shows_the_served_issue_messages` -- one 422 per served
      refusal code; the override appears only when the report allows it.
+  4. `test_activate_buttons_are_named_and_focus_follows_the_outcome` -- the
+     accessible name, the alert role and where keyboard focus lands.
 """
 
 from __future__ import annotations
@@ -144,3 +146,30 @@ def test_a_refusal_shows_the_served_issue_messages(stub, page, app_url, code, me
     expect(box).to_contain_text(code)
     expect(page.get_by_test_id("ingest-profile-force")).to_have_count(0)
     expect(page.get_by_test_id("active-ingest-profile-name")).to_contain_text("yolo-primary")
+
+
+def test_activate_buttons_are_named_and_focus_follows_the_outcome(stub, page, app_url):
+    state = {"calls": 0}
+
+    def activate(_req, _m):
+        state["calls"] += 1
+        if state["calls"] == 1:
+            return _refusal("detector_model_not_ready", "not loaded", force_allowed=True)
+        return {**ACTIVE_PROFILE, "validation": OK_REPORT}
+
+    _stub(stub, activate)
+    _open(page, app_url)
+    button = page.get_by_role("button", name="Activate yolo-large", exact=True)
+    expect(button).to_be_visible()
+    button.focus()
+    page.keyboard.press("Enter")
+    box = page.get_by_role("alert").filter(has_text="not loaded")
+    expect(box).to_be_focused(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id("ingest-profile-force").focus()
+    page.keyboard.press("Enter")
+    # The focused button unmounts; focus must land inside the picker, not <body>.
+    page.wait_for_function(
+        "() => document.activeElement && document.activeElement !== document.body"
+        " && document.activeElement.closest('[data-testid=ingest-profile-picker]')",
+        timeout=ACTION_TIMEOUT_MS,
+    )

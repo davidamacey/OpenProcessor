@@ -43,13 +43,20 @@ export interface ActivationRefusal {
 export class IngestProfilePicker {
   list = $state<IngestProfileList | null>(null);
   loadError = $state<string | null>(null);
+  /** A list read is in flight. */
+  loading = $state(false);
   /** The profile whose activation is in flight. */
   activating = $state<string | null>(null);
   refusal = $state<ActivationRefusal | null>(null);
   /** The served report of the last successful activation (warnings). */
   lastValidation = $state<ValidationReport | null>(null);
+  /** The profile the last activation switched to; the view moves focus to its row. */
+  activatedName = $state<string | null>(null);
+  /** The activation succeeded but a follow-up read (the active card) failed. */
+  followUpError = $state<string | null>(null);
 
   #deps: IngestProfilePickerDeps;
+  #seq = 0;
 
   constructor(deps: IngestProfilePickerDeps) {
     this.#deps = deps;
@@ -59,14 +66,27 @@ export class IngestProfilePicker {
     return new IngestProfilePicker(DEFAULT_DEPS(onactivated));
   }
 
+  /** Only the newest read may write: an older one resolving late is dropped. */
   async load(signal?: AbortSignal): Promise<void> {
+    const seq = ++this.#seq;
+    this.loading = true;
     try {
-      this.list = await this.#deps.list(signal);
+      const list = await this.#deps.list(signal);
+      if (seq !== this.#seq) return;
+      this.list = list;
       this.loadError = null;
     } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
+      if (seq !== this.#seq) return;
+      if ((e as Error)?.name === 'AbortError') {
+        // Keep what is shown; with nothing shown, say so rather than load forever.
+        if (this.list === null)
+          this.loadError = 'Loading the ingest profiles was interrupted.';
+        return;
+      }
       this.list = null;
       this.loadError = apiErrorText(e);
+    } finally {
+      if (seq === this.#seq) this.loading = false;
     }
   }
 
@@ -78,25 +98,40 @@ export class IngestProfilePicker {
     this.activating = name;
     this.refusal = null;
     this.lastValidation = null;
+    this.activatedName = null;
+    this.followUpError = null;
     try {
-      const res = await this.#deps.activate(name, {
-        revision: target.revision,
-        expected_active: list.active,
-        force,
-      });
+      let res: ActivateResponse;
+      try {
+        res = await this.#deps.activate(name, {
+          revision: target.revision,
+          expected_active: list.active,
+          force,
+        });
+      } catch (e) {
+        const d = configErrorDetail(e);
+        this.refusal = {
+          name,
+          message: d?.message ?? apiErrorText(e),
+          report: d?.report ?? null,
+        };
+        // A moved active profile (409), a moved revision (409) or a deleted
+        // profile (404) all mean the list on screen is stale.
+        const status = (e as { status?: number })?.status;
+        if (status === 404 || status === 409) await this.load();
+        return false;
+      }
+      // Past this point the server activated the profile: nothing below may
+      // be reported as a refusal.
       this.lastValidation = res.validation;
       await this.load();
-      await this.#deps.onactivated();
+      try {
+        await this.#deps.onactivated();
+      } catch (e) {
+        this.followUpError = apiErrorText(e);
+      }
+      this.activatedName = name;
       return true;
-    } catch (e) {
-      const d = configErrorDetail(e);
-      this.refusal = {
-        name,
-        message: d?.message ?? apiErrorText(e),
-        report: d?.report ?? null,
-      };
-      if (d?.error === 'active_conflict') await this.load();
-      return false;
     } finally {
       this.activating = null;
     }
