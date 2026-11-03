@@ -144,6 +144,33 @@ describe('AssistLoopPanel', () => {
     expect(q('loop-audit')?.textContent).toContain('no second model re-checked');
   });
 
+  it('says why a cluster was not visited and what the budget stop means', async () => {
+    await render(
+      loopDeps({
+        list: async () => ({
+          loops: [loopState('completed', { stop_reason: 'budget_crops' })],
+        }),
+        nodes: async () => ({
+          nodes: [
+            loopNode({
+              decision: 'unvisited',
+              reason: 'budget_crops',
+              class_name: null,
+              agree: null,
+              bound: null,
+              answered: 0,
+              items_propagated: 0,
+            }),
+          ],
+          next_after: null,
+        }),
+      }),
+    );
+    await settle();
+    expect(q('loop-status')?.textContent).toContain('left not visited');
+    expect(q('loop-node-why')?.textContent).toContain('crop budget could not cover it');
+  });
+
   it('opens a node to its votes and member crops, announced with aria-expanded', async () => {
     await render(
       loopDeps({

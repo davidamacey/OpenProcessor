@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ingest policy page: with no active ingest profile the card now says ingest uses the deployment's default detector (naming it from `GET /ingest/config`) instead of claiming ingest is refused (#411).
 - Search by image popover on `/clusters` opens under its button at phone width instead of pinned to the top of the viewport over the header.
 - The live e2e tier (`npm run test:live`) accepts basic-auth credentials through `OP_CROPWRIGHT_LIVE_USER` and `OP_CROPWRIGHT_LIVE_PASSWORD_FILE`.
+- Auto-label loop: the budget stop now says clusters it could not cover were left not visited, and each not-visited cluster row states which budget could not cover it (#411).
 - Auto-label loop run view: a loop that stopped because every VLM call of a node failed shows the served `vlm_failed` reason and error, and offers Resume for that case only (other failed loops stay non-resumable) (#286).
 
 ### Changed
