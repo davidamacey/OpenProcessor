@@ -12,6 +12,7 @@ import numpy as np
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.config.settings import TritonModelConfig
+from src.utils.image_processing import decode_ocr_image
 from src.utils.stage_timing import stage_timer
 
 
@@ -41,32 +42,26 @@ def require_uint8_ocr_inputs(model_name: str, datatype_of: Callable[[str], str])
             raise ValueError(msg)
 
 
-def _uint8_bgr(img: np.ndarray) -> np.ndarray:
-    """A decoded image as 3-channel uint8 BGR (grey, RGBA and 16-bit inputs included)."""
+def _bgr_frame(img: np.ndarray) -> np.ndarray:
+    """A decoded OCR image as 3-channel uint8 BGR (a grey decode gains its channels)."""
     import cv2
 
-    if img.dtype != np.uint8:
-        img = cv2.convertScaleAbs(img, alpha=255.0 / 65535.0)
     if img.ndim == 2:
         return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    if img.shape[2] == 4:
-        alpha = img[:, :, 3:4] / 255.0
-        rgb = img[:, :, :3]
-        white_bg = np.ones_like(rgb) * 255
-        return (rgb * alpha + white_bg * (1 - alpha)).astype(np.uint8)
     return img
 
 
 def infer_ocr(
     infer: Callable[[str, list, list], Any],
-    image_bytes: bytes,
+    image: bytes | np.ndarray,
     datatype_of: Callable[[str], str],
 ) -> dict[str, Any]:
     """
     OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
 
     Args:
-        image_bytes: Raw JPEG/PNG bytes
+        image: an already decoded, EXIF-oriented BGR array (the frame the caller reports
+            sizes in), or raw image bytes, which are decoded here by ``decode_ocr_image``
         datatype_of: input name -> datatype the loaded ``ocr_pipeline`` declares
 
     Returns:
@@ -76,18 +71,22 @@ def infer_ocr(
     import cv2
 
     require_uint8_ocr_inputs(TritonModelConfig.OCR_PIPELINE_MODEL, datatype_of)
-    img_array = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
-    if img_array is None:
-        return {
-            'num_texts': 0,
-            'texts': [],
-            'text_boxes': np.array([]),
-            'text_boxes_normalized': np.array([]),
-            'text_scores': np.array([]),
-            'rec_scores': np.array([]),
-        }
+    if isinstance(image, np.ndarray):
+        img_array = image
+    else:
+        try:
+            img_array = decode_ocr_image(image)
+        except ValueError:
+            return {
+                'num_texts': 0,
+                'texts': [],
+                'text_boxes': np.array([]),
+                'text_boxes_normalized': np.array([]),
+                'text_scores': np.array([]),
+                'rec_scores': np.array([]),
+            }
 
-    img_array = _uint8_bgr(img_array)
+    img_array = _bgr_frame(img_array)
 
     orig_h, orig_w = img_array.shape[:2]
 
