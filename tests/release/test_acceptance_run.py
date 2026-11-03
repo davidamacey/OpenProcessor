@@ -167,7 +167,9 @@ class Fake:
         return sum(1 for r in self.requests if r == (method, path))
 
 
-def run(fake: Fake, tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess, dict]:
+def run(
+    fake: Fake, tmp_path: Path, *args: str, path_prefix: str = ''
+) -> tuple[subprocess.CompletedProcess, dict]:
     report = tmp_path / 'r.json'
     proc = subprocess.run(
         [
@@ -175,7 +177,7 @@ def run(fake: Fake, tmp_path: Path, *args: str) -> tuple[subprocess.CompletedPro
             '--report', str(report), '--workdir', str(tmp_path / 'work'), *args,
         ],
         capture_output=True, text=True, timeout=120, check=False,
-        env={'PATH': '/usr/bin:/bin:/usr/local/bin', 'ACC_POLL_S': '0.05', 'HOME': str(tmp_path)},
+        env={'PATH': f'{path_prefix}/usr/bin:/bin:/usr/local/bin', 'ACC_POLL_S': '0.05', 'HOME': str(tmp_path)},
     )  # fmt: skip
     data = json.loads(report.read_text()) if report.exists() else {}
     return proc, data
@@ -305,6 +307,79 @@ def test_installer_phases_pass_the_installer_args_through(fake, tmp_path):
         'upgrade --yes --release-dir /b --version v1.2.3 --image-tag t',
         'repair --yes --release-dir /b --version v1.2.3 --image-tag t',
     ]
+
+
+def _fake_stack(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """An install dir whose CLI starts the evaluator, and a docker that reports it."""
+    inst = tmp_path / 'inst'
+    inst.mkdir()
+    up = tmp_path / 'evaluator_up'
+    cli_log = tmp_path / 'cli.log'
+    docker_log = tmp_path / 'docker.log'
+    cli = inst / 'openprocessor'
+    cli.write_text(f'#!/bin/bash\necho "$@" >> {cli_log}\ntouch {up}\n')
+    cli.chmod(0o755)
+    bindir = tmp_path / 'bin'
+    bindir.mkdir()
+    docker = bindir / 'docker'
+    docker.write_text(
+        f'#!/bin/bash\necho "$@" >> {docker_log}\n'
+        f'case "$1" in ps) [[ -f {up} ]] && echo evaluator1 ;; stop) rm -f {up} ;; esac\n'
+    )
+    docker.chmod(0o755)
+    return inst, bindir, cli_log
+
+
+def _bakeoff_routes() -> dict:
+    routes = _happy_routes()
+    routes[('POST', f'{P}/train/preflight')] = (200, {'blocked': False, 'checks': []})
+    routes[('POST', f'{P}/train/start')] = (201, {'job_id': 'j'})
+    routes[('GET', f'{P}/train/status/j')] = (200, {'state': 'finished'})
+    routes[('GET', f'{P}/bakeoff/trained_models')] = (200, {'models': [{'run_id': 'j'}]})
+    routes[('POST', f'{P}/bakeoff/run')] = (202, {'job_id': 'b1'})
+    routes[('GET', f'{P}/bakeoff/status/b1')] = (200, {'state': 'done'})
+    return routes
+
+
+def test_bakeoff_starts_the_evaluator_and_stops_it_afterwards(fake, tmp_path):
+    inst, bindir, cli_log = _fake_stack(tmp_path)
+    proc, data = run(
+        fake(_bakeoff_routes()), tmp_path, '--only', 'train,bakeoff,teardown',
+        '--install-dir', str(inst), '--project-name', 'pn', path_prefix=f'{bindir}:',
+    )  # fmt: skip
+    assert by_name(data)['bakeoff']['status'] == 'pass', proc.stdout + proc.stderr
+    assert cli_log.read_text().splitlines() == ['curation up curation-evaluator']
+    assert not (tmp_path / 'evaluator_up').exists(), 'the evaluator this run started is stopped'
+
+
+def test_bakeoff_skips_without_a_way_to_start_the_evaluator(fake, tmp_path):
+    _inst, bindir, _log = _fake_stack(tmp_path)
+    proc, data = run(
+        fake(_bakeoff_routes()), tmp_path, '--only', 'train,bakeoff,teardown',
+        '--project-name', 'pn', path_prefix=f'{bindir}:',
+    )  # fmt: skip
+    assert by_name(data)['bakeoff']['status'] == 'skip', proc.stdout
+    assert 'curation-evaluator' in by_name(data)['bakeoff']['message']
+
+
+def test_cleanup_cancels_running_jobs_so_project_busy_does_not_block_teardown(fake, tmp_path):
+    routes = _happy_routes()
+    deletes = {'real': 0}
+
+    def delete(_payload, query):
+        if query.get('dry_run'):
+            return 200, {'running_jobs': [{'kind': 'train', 'id': 'tr1'}]}
+        deletes['real'] += 1
+        return (409, {'code': 'project_busy'}) if deletes['real'] == 1 else (200, {})
+
+    routes[('DELETE', P)] = (200, delete)
+    routes[('POST', f'{P}/train/cancel/tr1')] = (200, {})
+    f = fake(routes)
+    proc, _data = run(f, tmp_path, '--only', 'project_create,ingest')
+    assert proc.returncode == 1  # ingest has no route; cleanup is what is under test
+    assert f.count('POST', f'{P}/train/cancel/tr1') == 1, f.requests
+    assert deletes['real'] == 2
+    assert 'WARNING: cleanup' not in proc.stderr, proc.stderr
 
 
 def test_list_prints_every_phase():
@@ -522,7 +597,11 @@ def test_bakeoff_posts_run_and_dataset_refs(fake, tmp_path):
     routes[('POST', f'{P}/bakeoff/run')] = (202, {'job_id': 'b1'})
     routes[('GET', f'{P}/bakeoff/status/b1')] = (200, {'state': 'done'})
     f = fake(routes)
-    proc, data = run(f, tmp_path, '--only', 'train,bakeoff,teardown')
+    inst, bindir, _log = _fake_stack(tmp_path)
+    proc, data = run(
+        f, tmp_path, '--only', 'train,bakeoff,teardown', '--install-dir', str(inst),
+        '--project-name', 'pn', path_prefix=f'{bindir}:',
+    )  # fmt: skip
     assert by_name(data)['bakeoff']['status'] == 'pass', proc.stdout
     body = json.loads(next(r for r in f.raw if r[1].endswith('/bakeoff/run'))[2])
     assert body == {'models': [{'source': 'run', 'run_id': 'j'}], 'datasets': [{'id': 'run:j'}]}

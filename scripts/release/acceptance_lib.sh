@@ -61,8 +61,53 @@ is_selected() {
 is_skipped() { [[ ",${SKIP}," == *",$1,"* ]]; }
 
 # ---------------------------------------------------------------------------
+# curation-evaluator: on demand, never part of a plain `curation up`
+# ---------------------------------------------------------------------------
+evaluator_ids() {
+    [[ -n "$PROJECT_NAME" ]] || return 0
+    docker ps -q --filter "label=com.docker.compose.project=${PROJECT_NAME}" \
+        --filter "label=com.docker.compose.service=curation-evaluator"
+}
+# start_evaluator: succeeds when the evaluator runs; remembers that this run
+# started it so stop_evaluator (and cleanup) only stops what it started.
+start_evaluator() {
+    [[ -z "$(evaluator_ids)" ]] || return 0
+    [[ -n "$PROJECT_NAME" && -n "$INSTALL_DIR" && -x "${INSTALL_DIR}/openprocessor" ]] || return 1
+    "${INSTALL_DIR}/openprocessor" curation up curation-evaluator >> "$WORKDIR/evaluator.log" 2>&1 || return 1
+    st_set evaluator_started 1
+    [[ -n "$(evaluator_ids)" ]]
+}
+stop_evaluator() {
+    [[ "$(st_get evaluator_started)" == 1 ]] || return 0
+    local ids
+    ids="$(evaluator_ids | tr '\n' ' ')"
+    # shellcheck disable=SC2086
+    [[ -z "$ids" ]] || docker stop $ids >> "$WORKDIR/evaluator.log" 2>&1 || return 1
+    st_set evaluator_started 0
+}
+
+# ---------------------------------------------------------------------------
 # cleanup: always delete the throwaway project and the models this run promoted
 # ---------------------------------------------------------------------------
+# cancel_project_jobs: cancel what the project reports as running (the dry-run
+# delete lists it) so the delete is not refused with project_busy. A bake-off
+# has no cancel route: it needs the evaluator to drain, so make sure one runs.
+cancel_project_jobs() {
+    api DELETE "${PROJECT_API}?confirm=${SLUG}&dry_run=true"
+    [[ "$HTTP_CODE" == 200 ]] || return 0
+    local kind id jobs
+    jobs="$(jq -r '.running_jobs[]? | "\(.kind) \(.id)"' "$BODY" 2>/dev/null)"
+    while read -r kind id; do
+        [[ -n "$kind" ]] || continue
+        case "$kind" in
+            train) api POST "${PROJECT_API}/train/cancel/${id}" ;;
+            autolabel) api POST "${PROJECT_API}/pipeline/auto_label/cancel" ;;
+            bakeoff) start_evaluator || true ;;
+        esac
+        ev "cleanup: cancelled/drained ${kind} ${id}"
+    done <<< "$jobs"
+}
+
 cleanup_resources() {
     [[ "$(st_get cleaned)" == 1 ]] && return 0
     local rc=0 m
@@ -76,22 +121,23 @@ cleanup_resources() {
         done <<< "$models"
     fi
     if [[ "$(st_get project_created)" == 1 ]]; then
-        api DELETE "${PROJECT_API}?confirm=${SLUG}&force=true"
-        case "$HTTP_CODE" in
-            200|202|404) ;;
-            *)
-                # a project must be archived-or-idle to delete; one retry via archive
-                api POST "${PROJECT_API}/archive"
-                api DELETE "${PROJECT_API}?confirm=${SLUG}&force=true"
-                case "$HTTP_CODE" in 200|202|404) ;; *) rc=1 ;; esac
-                ;;
-        esac
+        # project_busy (409) while a job runs: cancel it and retry until it drains
+        _delete_project() {
+            api DELETE "${PROJECT_API}?confirm=${SLUG}&force=true"
+            case "$HTTP_CODE" in
+                200|202|404) return 0 ;;
+                409) cancel_project_jobs ;;
+            esac
+            return 1
+        }
+        poll "$PHASE_TIMEOUT" _delete_project || rc=1
     fi
     if [[ "$(st_get project_created)" == 1 && $rc == 0 ]]; then
         # project delete is asynchronous (status "deleting"): wait for 404
         _gone() { api GET "${PROJECT_API}"; [[ "$HTTP_CODE" == 404 ]]; }
         poll 120 _gone || rc=1
     fi
+    stop_evaluator || rc=1
     ((rc == 0)) && st_set cleaned 1
     return "$rc"
 }

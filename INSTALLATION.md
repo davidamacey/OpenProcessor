@@ -47,6 +47,10 @@ State lives in `<dir>/.install/` (`state.json`, `install.log`, mode 600).
   (tier sizes: [README](README.md#tiers)), plus 20 GB headroom.
 - For the `segmenter` tier: a HuggingFace token with access to SAM 3 (gated).
   Pass it with `HF_TOKEN_FILE=<path>` (or `HF_TOKEN`), or paste it at the prompt.
+  An unattended install (`--unattended`, or no terminal) without a token does not
+  fail: it drops the segmenter from the recommended tiers and logs a warning, and
+  an explicit `--tiers ...,segmenter` then stops at the missing token. For
+  scripted installs always set `HF_TOKEN_FILE` (a file with mode 600) and name the tier.
 
 ### Verifying the download
 
@@ -370,6 +374,9 @@ refused.
 assets locally; `--release-dir OUT --version vX.Y.Z` installs from them (still
 checksum-verified). Images still come from a registry
 unless they are already present locally (use `--image-tag` for local builds).
+A later re-run, `repair` or `./openprocessor upgrade` of that install needs only
+`--release-dir OUT`: the installed version is reused, and `--version` is for an
+upgrade to another release.
 
 ### Troubleshooting
 

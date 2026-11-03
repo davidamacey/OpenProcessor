@@ -73,6 +73,15 @@ Notes that apply across phases:
 - The segmenter and the VLM share a GPU with training: confirm that train mode stops them and
   frees enough memory (at least 16 GB for the default training profile) before phase G, and that
   they restart afterwards.
+- Scripted run (`scripts/release/acceptance_run.sh`): for an install made with `--release-dir`,
+  pass `--installer-args "--release-dir DIR [--image-tag TAG]"`. A re-run or repair reuses the
+  installed version (no `--version` needed); `installer_upgrade` adds its own `--version` from
+  `--upgrade-version`. The `bakeoff` phase starts and stops the on-demand `curation-evaluator`
+  (needs `--install-dir` and `--project-name`), and the `loop` phase passes
+  `--loop-min-root-size` (default 10) so a 100-image set has clusters big enough to plan.
+- The segmenter tier needs a HuggingFace token for the gated SAM 3 model. Export
+  `HF_TOKEN_FILE=<path>` before an unattended install; without it the installer drops the
+  segmenter tier, so a run that must cover it fails unattended.
 - Capture screenshots at the moment each UI step runs, then review them together in phase K.
 
 ## 4. Findings document

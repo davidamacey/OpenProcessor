@@ -13,6 +13,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **An installer re-run no longer changes the GPU plan** (#411). `./openprocessor upgrade`, `repair` and `--rollback` re-planned from live free VRAM, which includes the install's own Triton and VLM, so a single-GPU `--profile standard` install flipped to `minimal` and the api and workers were recreated. A re-run now keeps every installed GPU value (ids, `GPU_PROFILE`, `SEGMENTER_INSTANCES`, ...) unless `--profile` or `--gpu-plan` is given. Fresh installs are unchanged.
+- **Re-running or repairing an install made with `--release-dir` no longer needs `--version`**: the installed release is reused. An upgrade still names its version with `--version`.
+- **Release acceptance harness** (`scripts/release/acceptance_run.sh`): the `bakeoff` phase starts the on-demand `curation-evaluator` (it never did, so the job sat queued) and stops it afterwards if it started it; cleanup cancels the throwaway project's running jobs and retries the delete instead of stopping at `project_busy`; the `loop` phase passes `scope.min_root_size` (new `--loop-min-root-size`, default 10) so the dry run is exercised on a 100-image set instead of skipping with `no_roots`; `installer_upgrade` always passes its own `--version` last.
+
 - **The auto-label loop no longer burns its budget when the VLM is down** (#286). A node whose sampled crops all got a failed VLM call was read as failing the gate and split, so the loop spent the whole crop budget with zero answers and ended `completed`. It now stops `failed` with `stop_reason: vlm_failed` and the error, leaves the node open, writes nothing and spends no more; that `failed` loop can be resumed once the endpoint works. The same applies to a top-up whose calls all fail and to an audit batch whose calls all fail (previously recorded as `ok`). An answer with no usable class is unchanged.
 
 ### Added

@@ -23,6 +23,11 @@
 #   python3 scripts/datasets/fetch_coco_subset.py --out data/samples/coco_va
 # and pass --images-dir data/samples/coco_va (any directory of JPEG/PNG works).
 #
+# installer_rerun / installer_repair / installer_upgrade: --installer-args for a stack installed
+# with --release-dir need only "--release-dir DIR [--image-tag TAG]"; the installed version is
+# reused (installer_upgrade adds its own --version). The segmenter tier needs a HuggingFace token
+# for SAM 3 (gated): export HF_TOKEN_FILE=<path> or an unattended install drops the tier.
+#
 # Example (isolated install in ~/op-acc, compose project op-acc):
 #   scripts/release/acceptance_run.sh --base-url http://localhost:4703 \
 #     --project-name op-acc --install-dir ~/op-acc --models-dir ~/op-acc/models \
@@ -75,9 +80,10 @@ TRITON_METRICS_URL="${OP_TRITON_METRICS_URL:-}"
 DECODE_FALLBACK_MAX_PCT=0.5
 LABEL_OPS_CROPS=10
 LOOP_BUDGET_CROPS=100
+LOOP_MIN_ROOT_SIZE=10
 
 usage() {
-    sed -n '2,/^# =====.*$/p' "$0" | sed -n '2,32p' | sed 's/^# \{0,1\}//'
+    sed -n '2,/^# =====.*$/p' "$0" | sed -n '2,40p' | sed 's/^# \{0,1\}//'
     cat <<'EOF'
 
 Options:
@@ -99,8 +105,15 @@ Options:
   --only a,b             run only these phases (they are then all required)
   --skip a,b             skip these phases
   --installer-args "A.." extra arguments for the installer_rerun/repair/upgrade phases, e.g. for a stack
-                         installed from a local bundle: "--release-dir DIR --version vX.Y.Z --image-tag TAG"
-                         (without them the installer re-downloads the published release over the install)
+                         installed from a local bundle: "--release-dir DIR --image-tag TAG"
+                         (without them the installer re-downloads the published release over the install).
+                         A re-run or repair of a --release-dir install reuses the installed version; only
+                         installer_upgrade passes --version (its own --upgrade-version). A --version of
+                         your own in these args is overridden there. The segmenter tier needs a HuggingFace
+                         token (SAM 3 is gated): set HF_TOKEN_FILE=<path> in the environment, otherwise an
+                         unattended install silently drops the tier and `--all` runs cannot cover it.
+  --loop-min-root-size N scope.min_root_size of the loop dry run (default 10; the API default of 40
+                         finds no root on a 100-image set and the phase skips with 422 no_roots)
   --vlm-switch-id ID     enable vlm_switch: `./openprocessor vlm use ID --yes`
   --vlm-switch-force     add --force to vlm use
   --upgrade-version vX   enable installer_upgrade (upgrade to vX, then --rollback)
@@ -144,6 +157,7 @@ while (($#)); do
         --triton-metrics-url) TRITON_METRICS_URL="${2:?}"; shift 2 ;;
         --decode-fallback-max) DECODE_FALLBACK_MAX_PCT="${2:?}"; shift 2 ;;
         --label-ops-crops) LABEL_OPS_CROPS="${2:?}"; shift 2 ;;
+        --loop-min-root-size) LOOP_MIN_ROOT_SIZE="${2:?}"; shift 2 ;;
         --strict) STRICT=1; shift ;;
         --report) REPORT="${2:?}"; shift 2 ;;
         --workdir) WORKDIR="${2:?}"; shift 2 ;;
