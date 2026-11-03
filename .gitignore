@@ -427,3 +427,6 @@ benchmarks/ingest_benchmark_batch
 # Local, uncommitted working artifacts (exported engines, prototype scratch, gated weights)
 artifacts_local/
 .install/
+
+# Claude Code agent worktrees (nested git worktrees; never part of the tree)
+.claude/worktrees/
