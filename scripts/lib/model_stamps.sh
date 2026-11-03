@@ -186,7 +186,8 @@ model_setup_stamp_stale() {
 # The precision recorded is the one the build is designed for; it cannot be read
 # back from an engine, hence the reason text. The ONNX is provenance, not proof: an
 # engine whose ONNX is not on this host (a fresh install seeded with engines) is
-# adopted with the hash "-", which no ONNX can contradict.
+# adopted with the hash "-", which no ONNX can contradict until _ms_pin_adopted_sha
+# replaces it with the real hash the first time the ONNX is seen.
 _ms_adopt_unstamped() {
     local model="$1" onnx_rel="$2" precision="$3" plan dtype cc trt pe pe_trt pe_cc have_onnx
     [[ "$model" == pe_image_encoder ]] && return 1
@@ -215,6 +216,26 @@ _ms_adopt_unstamped() {
         "adopted input=${dtype,,} $(_ms_build_flags "$model")" "${have_onnx:--}"
 }
 
+# _ms_pin_adopted_sha MODEL ONNX_REL: replaces the placeholder hash "-" of an adopted
+# engine by the hash of its ONNX once that file is on the host. Trust on first sight: the
+# engine is the one Triton serves (READY, which proved it valid at adoption and still
+# does), and rebuilding it just because its ONNX arrived would be a needless multi-minute
+# build; what the pin buys is that every later change of the ONNX is detected. Left as
+# "-" while the model is not READY or the ONNX is still absent.
+_ms_pin_adopted_sha() {
+    local model="$1" now_sha f tmp
+    [[ "${OP_DRY_RUN:-0}" == "1" ]] && return 0
+    f="$(_ms_precision_file)"
+    [[ "$(awk -F'\t' -v m="$model" '$1 == m { s = $6 } END { print s }' "$f" 2>/dev/null)" == "-" ]] || return 0
+    now_sha="$(_ms_onnx_sha256 "$2")"
+    [[ -n "$now_sha" ]] && triton_model_ready "$model" || return 0
+    tmp="$(mktemp "${f}.XXXXXX")"
+    awk -F'\t' -v OFS='\t' -v m="$model" -v s="$now_sha" '$1 == m && $6 == "-" { $6 = s } 1' "$f" > "$tmp"
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$f"
+    log_info "pinned the ONNX hash of the adopted ${model} engine"
+}
+
 # _ms_group_stamp_stale GROUP: logs and returns 0 when any engine of the group
 # has a stamp that no longer matches, so the group is rebuilt instead of
 # skipped (a skipped group is what lets its models stay READY).
@@ -225,6 +246,7 @@ _ms_group_stamp_stale() {
         if [[ -z "$(awk -F'\t' -v m="$model" '$1 == m' "$(_ms_precision_file)" 2>/dev/null)" ]]; then
             _ms_adopt_unstamped "$model" "$onnx_rel" "$prec" && log_info "group $1: adopted the unstamped ${model} engine"
         fi
+        _ms_pin_adopted_sha "$model" "$onnx_rel"
         if why="$(model_setup_stamp_stale "$model" "$onnx_rel")"; then
             log_info "group $1: engine stamp is stale (${why}; ${model}), rebuilding"
             stale=0

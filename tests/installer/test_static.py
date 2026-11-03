@@ -289,3 +289,20 @@ def test_installation_documents_every_installer_flag() -> None:
     doc = (REPO_ROOT / 'INSTALLATION.md').read_text()
     missing = sorted(f for f in flags if f'`{f}' not in doc)
     assert not missing, missing
+
+
+# Arrays that are legitimately empty. The installer runs under `set -u`, and on bash < 4.4
+# (the scripts need only 4.0: `${x,,}`, mapfile) expanding an empty array as "${a[@]}" aborts
+# with "unbound variable"; `${a[@]+"${a[@]}"}` is safe everywhere.
+MAYBE_EMPTY_ARRAYS = {
+    'setup-openprocessor.sh': ['gate', 'models'],
+    'scripts/lib/model_setup.sh': ['out_list', 'model_list'],
+}
+
+
+@pytest.mark.parametrize(('rel', 'names'), MAYBE_EMPTY_ARRAYS.items())
+def test_possibly_empty_arrays_use_the_set_u_safe_expansion(rel: str, names: list[str]) -> None:
+    text = (REPO_ROOT / rel).read_text()
+    for name in names:
+        bare = re.findall(rf'(?<!\+)"\$\{{{name}\[@\]\}}"', text)
+        assert not bare, f'{rel}: "${{{name}[@]}}" aborts under set -u on bash < 4.4'
