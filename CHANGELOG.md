@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **Demo targets, the setup smoke test and the model validation use public COCO images** (#445). `make download-test-images` fetches two val2017 images (`scripts/datasets/fetch_test_images.py`) instead of the Ultralytics bus and footballer pictures; `tests/expected_results.json` is re-recorded against them, and `validate_models.py` reads `API_PORT`. The setup smoke test and `validate_models.py` fail when the images cannot be fetched instead of skipping.
 - **The region detector decodes a promoted YOLO26 model** (#437). It read every output as a YOLO11 `[5, N]` head (`cx, cy, w, h, score`), so the end2end `[300, 6]` head (`x1, y1, x2, y2, score, class`) produced wrong boxes. The decoder now picks the head from the output shape.
 - **Cluster refresh no longer starts a retrain while an ingest is still running** (#443). The daemon treated a flat item count and no pending region work as "quiet", which an ingest batch slower than one poll satisfies. It now also requires that no image was indexed within two poll intervals (logged as `recent_ingest`).
 - **Activating a VLM endpoint right after creating it no longer answers `not_found`** (#442). A by-name lookup that missed the registry snapshot (trusted for a second) now forces one registry read before answering unknown.

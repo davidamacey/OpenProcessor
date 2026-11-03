@@ -1,293 +1,316 @@
 {
   "_description": "Ground truth expected outputs for validating all model modalities.",
-  "_usage": "Tests compare live API outputs against these values with tolerances.",
+  "_usage": "Run: python scripts/validation/validate_models.py",
   "_images": {
-    "bus.jpg": "810x1080 Ultralytics standard test image (bus, people, text)",
-    "zidane.jpg": "1280x720 Ultralytics standard test image (2 people, 2 ties)"
+    "000000001584.jpg": "COCO val2017 street scene: a double-decker bus with readable text",
+    "000000011051.jpg": "COCO val2017: two frontal faces and a tie"
   },
   "_tolerances": {
-    "box_coords": 0.02,
-    "confidence": 0.05,
-    "embedding_norm": 0.1,
-    "embedding_cosine_sim": 0.99
+    "box_coords": 0.03,
+    "confidence": 0.08,
+    "embedding_norm": 0.15,
+    "embedding_cosine_sim": 0.98
   },
-  "detect_bus": {
-    "image": "bus.jpg",
+  "detect_street": {
+    "image": "000000001584.jpg",
     "image_size": {
-      "width": 810,
-      "height": 1080
+      "width": 612,
+      "height": 612
     },
-    "num_detections": 5,
+    "num_detections": 9,
     "expected_classes": [
+      "bird",
       "bus",
       "person"
     ],
     "class_counts": {
-      "bus": 1,
-      "person": 4
+      "bus": 3,
+      "person": 5,
+      "bird": 1
     },
     "detections": [
       {
         "class_name": "bus",
         "class_id": 5,
-        "confidence": 0.937,
+        "confidence": 0.959,
         "box": [
-          0.036,
-          0.21,
-          0.986,
-          0.683
+          0.211,
+          0.142,
+          0.851,
+          0.873
+        ]
+      },
+      {
+        "class_name": "bus",
+        "class_id": 5,
+        "confidence": 0.877,
+        "box": [
+          0.824,
+          0.517,
+          0.931,
+          0.628
         ]
       },
       {
         "class_name": "person",
         "class_id": 0,
-        "confidence": 0.898,
+        "confidence": 0.724,
         "box": [
-          0.275,
-          0.375,
-          0.425,
-          0.794
+          0.125,
+          0.613,
+          0.159,
+          0.704
         ]
       },
       {
-        "class_name": "person",
-        "class_id": 0,
-        "confidence": 0.897,
+        "class_name": "bus",
+        "class_id": 5,
+        "confidence": 0.696,
         "box": [
-          0.06,
-          0.372,
-          0.304,
-          0.837
-        ]
-      },
-      {
-        "class_name": "person",
-        "class_id": 0,
-        "confidence": 0.882,
-        "box": [
-          0.826,
-          0.361,
+          0.929,
+          0.517,
           0.999,
-          0.815
+          0.659
         ]
       },
       {
         "class_name": "person",
         "class_id": 0,
-        "confidence": 0.717,
+        "confidence": 0.603,
         "box": [
-          0.0,
-          0.505,
-          0.097,
-          0.81
+          0.187,
+          0.623,
+          0.211,
+          0.703
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.403,
+        "box": [
+          0.287,
+          0.276,
+          0.332,
+          0.315
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.372,
+        "box": [
+          0.316,
+          0.51,
+          0.412,
+          0.601
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.306,
+        "box": [
+          0.149,
+          0.617,
+          0.168,
+          0.703
+        ]
+      },
+      {
+        "class_name": "bird",
+        "class_id": 14,
+        "confidence": 0.257,
+        "box": [
+          0.342,
+          0.036,
+          0.369,
+          0.071
         ]
       }
     ]
   },
-  "detect_zidane": {
-    "image": "zidane.jpg",
+  "detect_pair": {
+    "image": "000000011051.jpg",
     "image_size": {
-      "width": 1280,
-      "height": 720
+      "width": 640,
+      "height": 536
     },
-    "num_detections": 4,
+    "num_detections": 3,
     "expected_classes": [
       "person",
       "tie"
     ],
     "class_counts": {
       "person": 2,
-      "tie": 2
+      "tie": 1
     },
     "detections": [
       {
         "class_name": "person",
         "class_id": 0,
-        "confidence": 0.917,
+        "confidence": 0.949,
         "box": [
-          0.095,
-          0.278,
-          0.87,
-          0.989
+          0.39,
+          0.148,
+          0.989,
+          0.987
         ]
       },
       {
         "class_name": "person",
         "class_id": 0,
-        "confidence": 0.851,
+        "confidence": 0.942,
         "box": [
-          0.576,
-          0.056,
-          0.891,
-          0.982
+          0.004,
+          0.021,
+          0.622,
+          0.986
         ]
       },
       {
         "class_name": "tie",
         "class_id": 27,
-        "confidence": 0.788,
+        "confidence": 0.804,
         "box": [
-          0.34,
-          0.606,
-          0.409,
-          0.995
-        ]
-      },
-      {
-        "class_name": "tie",
-        "class_id": 27,
-        "confidence": 0.296,
-        "box": [
-          0.772,
-          0.433,
-          0.891,
-          0.982
+          0.306,
+          0.374,
+          0.398,
+          0.797
         ]
       }
     ]
   },
-  "faces_zidane": {
-    "image": "zidane.jpg",
+  "faces_pair": {
+    "image": "000000011051.jpg",
     "num_faces": 2,
     "faces": [
       {
-        "score": 0.8705,
+        "score": 0.8823,
         "box": [
-          0.7135,
-          0.1343,
-          0.8258,
-          0.3829
+          0.7693,
+          0.2158,
+          0.9207,
+          0.475
         ],
         "num_landmarks": 10,
         "embedding_dim": 512,
         "embedding_norm": 1.0,
         "embedding_first_5": [
-          0.03187,
-          0.015901,
-          -0.023659,
-          -0.082694,
-          0.026668
+          0.05594,
+          0.029681,
+          0.000818,
+          -0.038634,
+          0.121388
         ]
       },
       {
-        "score": 0.6791,
+        "score": 0.8306,
         "box": [
-          0.4255,
-          0.3198,
-          0.5191,
-          0.6255
+          0.2719,
+          0.0979,
+          0.4216,
+          0.3394
         ],
         "num_landmarks": 10,
         "embedding_dim": 512,
         "embedding_norm": 1.0,
         "embedding_first_5": [
-          -0.040241,
-          0.018909,
-          0.1124,
-          0.060748,
-          -0.022008
+          -0.00249,
+          0.029125,
+          0.005567,
+          0.073226,
+          -0.029104
         ]
       }
     ]
   },
-  "embed_image_bus": {
-    "image": "bus.jpg",
+  "embed_image_street": {
+    "image": "000000001584.jpg",
     "dimensions": 512,
     "norm": 1.0,
     "first_5": [
-      -0.068009,
-      -0.04019,
-      -0.011971,
-      -0.000198,
-      0.003019
+      -0.188599,
+      0.007698,
+      0.016373,
+      0.03125,
+      0.050507
     ],
     "last_5": [
-      -0.070463,
-      0.056286,
-      -0.003684,
-      0.042436,
-      0.08024
+      0.062256,
+      -0.020279,
+      -0.012871,
+      -0.018341,
+      0.042053
     ]
   },
   "embed_text": {
-    "text": "a bus on the street",
+    "text": "a red double-decker bus on a street",
     "dimensions": 512,
-    "norm": 1.0002,
+    "norm": 1.0,
     "first_5": [
-      0.062927,
-      -0.012657,
-      0.020172,
-      -0.15625,
-      -0.025146
+      -0.054222,
+      -0.012385,
+      -0.015516,
+      -0.009016,
+      0.057406
     ],
     "last_5": [
-      0.045593,
-      0.04126,
-      0.041748,
-      -0.037445,
-      -0.001307
+      0.039143,
+      0.021152,
+      0.020186,
+      0.019632,
+      0.065664
     ]
   },
-  "ocr_bus": {
-    "image": "bus.jpg",
-    "num_texts": 3,
+  "ocr_street": {
+    "image": "000000001584.jpg",
+    "num_texts": 2,
     "texts": [
-      "MADRID",
-      "electnicamEM",
-      "emisiones"
+      "ALDWYCH",
+      "ALM89B"
     ],
-    "full_text": "MADRID electnicamEM emisiones",
+    "full_text": "ALDWYCH ALM89B",
     "regions": [
       {
-        "text": "MADRID",
-        "det_score": 0.9999,
-        "rec_score": 0.8753,
+        "text": "ALDWYCH",
+        "det_score": 0.9989,
+        "rec_score": 0.9904,
         "box_normalized": [
-          0.4918,
-          0.3029,
-          0.6141,
-          0.3232
+          0.3006,
+          0.3889,
+          0.4713,
+          0.4197
         ]
       },
       {
-        "text": "electnicamEM",
-        "det_score": 1.0,
-        "rec_score": 0.8699,
+        "text": "ALM89B",
+        "det_score": 0.9998,
+        "rec_score": 0.9295,
         "box_normalized": [
-          0.7568,
-          0.4034,
-          0.8954,
-          0.4206
-        ]
-      },
-      {
-        "text": "emisiones",
-        "det_score": 1.0,
-        "rec_score": 0.9762,
-        "box_normalized": [
-          0.6476,
-          0.5251,
-          0.8481,
-          0.5734
+          0.3395,
+          0.8004,
+          0.4402,
+          0.8168
         ]
       }
     ]
   },
-  "analyze_bus": {
-    "image": "bus.jpg",
+  "analyze_street": {
+    "image": "000000001584.jpg",
     "status": "success",
-    "num_detections": 5,
+    "num_detections": 9,
     "detection_classes": [
+      "bird",
       "bus",
       "person"
     ],
-    "num_faces": 2,
+    "num_faces": 0,
     "has_global_embedding": false,
-    "ocr_num_texts": 3,
+    "ocr_num_texts": 2,
     "ocr_texts": [
-      "MADRID",
-      "electnicamEM",
-      "emisiones"
+      "ALDWYCH",
+      "ALM89B"
     ]
   }
 }

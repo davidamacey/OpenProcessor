@@ -62,7 +62,7 @@ def test_no_file_is_tracked_inside_test_images() -> None:
 
 
 def test_test_images_is_fully_gitignored() -> None:
-    assert _git_check_ignore('test_images/bus.jpg')
+    assert _git_check_ignore('test_images/coco/000000001584.jpg')
     assert _git_check_ignore('test_images/anything.jpg')
 
 

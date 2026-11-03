@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 
 
@@ -10,7 +11,7 @@ from pathlib import Path
 # Configuration
 # =============================================================================
 
-API_BASE = 'http://localhost:4603'
+API_BASE = f'http://localhost:{os.environ.get("API_PORT", "4603")}'
 EXPECTED_FILE = Path(__file__).resolve().parents[2] / 'tests' / 'expected_results.json'
 
 # Tolerances — TensorRT rebuilds may shift values slightly

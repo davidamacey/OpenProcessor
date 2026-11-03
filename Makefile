@@ -223,33 +223,21 @@ ps: ## Show running containers
 # ==================================================================================
 
 .PHONY: download-test-images
-download-test-images: ## Download standard test images (bus.jpg, zidane.jpg from Ultralytics)
+download-test-images: ## Download the two public COCO val2017 sample images into test_images/coco/
 	@mkdir -p test_images
-	@if [ ! -f test_images/bus.jpg ]; then \
-		echo "Downloading bus.jpg..."; \
-		curl -sL https://ultralytics.com/images/bus.jpg -o test_images/bus.jpg; \
-	else \
-		echo "bus.jpg already exists"; \
-	fi
-	@if [ ! -f test_images/zidane.jpg ]; then \
-		echo "Downloading zidane.jpg..."; \
-		curl -sL https://ultralytics.com/images/zidane.jpg -o test_images/zidane.jpg; \
-	else \
-		echo "zidane.jpg already exists"; \
-	fi
-	@echo "Test images ready in test_images/"
+	@$(PYTHON) scripts/datasets/fetch_test_images.py
 
 .PHONY: test-detect
 test-detect: ## Test object detection endpoint
-	curl -X POST http://localhost:$(API_PORT)/detect -F "image=@test_images/bus.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/detect -F "image=@test_images/coco/000000001584.jpg" | jq
 
 .PHONY: test-faces-quick
 test-faces-quick: ## Quick face recognition test (single image)
-	curl -X POST http://localhost:$(API_PORT)/v1/faces/recognize -F "image=@test_images/zidane.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/v1/faces/recognize -F "image=@test_images/coco/000000011051.jpg" | jq
 
 .PHONY: test-embed
 test-embed: ## Test embedding endpoints
-	curl -X POST http://localhost:$(API_PORT)/embed/image -F "image=@test_images/bus.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/embed/image -F "image=@test_images/coco/000000001584.jpg" | jq
 
 .PHONY: test-ocr
 test-ocr: ## Test OCR endpoint
@@ -257,31 +245,31 @@ test-ocr: ## Test OCR endpoint
 
 .PHONY: test-analyze
 test-analyze: ## Test combined analysis
-	curl -X POST http://localhost:$(API_PORT)/analyze -F "image=@test_images/zidane.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/analyze -F "image=@test_images/coco/000000011051.jpg" | jq
 
 .PHONY: test-search
 test-search: ## Test image search
-	curl -X POST http://localhost:$(API_PORT)/search/image -F "image=@test_images/bus.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/search/image -F "image=@test_images/coco/000000001584.jpg" | jq
 
 .PHONY: test-ingest
 test-ingest: ## Test image ingestion
-	curl -X POST http://localhost:$(API_PORT)/ingest -F "image=@test_images/bus.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/ingest -F "image=@test_images/coco/000000001584.jpg" | jq
 
 .PHONY: test-verify
 test-verify: ## Test face verification (1:1 comparison)
-	curl -X POST http://localhost:$(API_PORT)/faces/verify -F "image1=@test_images/zidane.jpg" -F "image2=@test_images/zidane.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/faces/verify -F "image1=@test_images/coco/000000011051.jpg" -F "image2=@test_images/coco/000000011051.jpg" | jq
 
 .PHONY: test-embed-text
 test-embed-text: ## Test text embedding
-	curl -X POST http://localhost:$(API_PORT)/embed/text -H "Content-Type: application/json" -d '{"text": "a photo of a bus"}' | jq
+	curl -X POST http://localhost:$(API_PORT)/embed/text -H "Content-Type: application/json" -d '{"text": "a red double-decker bus"}' | jq
 
 .PHONY: test-embed-boxes
 test-embed-boxes: ## Test bounding box crop embeddings
-	curl -X POST http://localhost:$(API_PORT)/embed/boxes -F "image=@test_images/zidane.jpg" -F 'boxes=[[0.09,0.27,0.87,0.98],[0.57,0.05,0.89,0.98]]' | jq '{num_boxes: .num_boxes, status: .status, embedding_dims: (.boxes[0].embedding | length), total_time_ms: .total_time_ms}'
+	curl -X POST http://localhost:$(API_PORT)/embed/boxes -F "image=@test_images/coco/000000011051.jpg" -F 'boxes=[[0.09,0.27,0.87,0.98],[0.57,0.05,0.89,0.98]]' | jq '{num_boxes: .num_boxes, status: .status, embedding_dims: (.boxes[0].embedding | length), total_time_ms: .total_time_ms}'
 
 .PHONY: test-analyze-full
 test-analyze-full: ## Test combined analysis with all embeddings
-	curl -X POST "http://localhost:$(API_PORT)/analyze?include_embedding=true&include_face_embeddings=true" -F "image=@test_images/zidane.jpg" | jq '{status, image, num_detections, num_faces, global_embedding_dims: (.global_embedding | length), embedding_norm, detection_embeddings: [.detections[] | {class_name, confidence, embedding_dims: (.embedding | length)}], face_embeddings: [.faces[] | {score, embedding_dims: (.embedding | length)}], ocr_texts: .ocr.num_texts, total_time_ms}'
+	curl -X POST "http://localhost:$(API_PORT)/analyze?include_embedding=true&include_face_embeddings=true" -F "image=@test_images/coco/000000011051.jpg" | jq '{status, image, num_detections, num_faces, global_embedding_dims: (.global_embedding | length), embedding_norm, detection_embeddings: [.detections[] | {class_name, confidence, embedding_dims: (.embedding | length)}], face_embeddings: [.faces[] | {score, embedding_dims: (.embedding | length)}], ocr_texts: .ocr.num_texts, total_time_ms}'
 
 .PHONY: test-all
 test-all: ## Run all endpoint tests
@@ -341,7 +329,7 @@ release: ## Build + Trivy-scan + push every published image; writes images.lock
 BENCH_DURATION := 30s
 BENCH_CLIENTS := 32
 BENCH_REQUESTS := 1000
-TEST_IMAGE := test_images/bus.jpg
+TEST_IMAGE := test_images/coco/000000001584.jpg
 
 .PHONY: bench-detect
 bench-detect: ## Benchmark detection endpoint with wrk
