@@ -241,9 +241,9 @@ _ms_load_present_engines() {
     for m in $models; do
         triton_model_ready "$m" && continue
         if triton_load_and_wait "$m" 60 strict; then
-            log_info "group ${group}: loaded the existing ${m} engine"
+            log_info "group ${group}: loaded the existing ${m}"
         else
-            log_info "group ${group}: Triton could not load the existing ${m} engine (built for another GPU or TensorRT, or damaged); it will be rebuilt"
+            log_info "group ${group}: Triton could not load the existing ${m} (built for another GPU or TensorRT, or damaged); it will be rebuilt"
         fi
     done
 }
