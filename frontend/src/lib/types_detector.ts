@@ -3,6 +3,7 @@
 // and `DetectionsSummary` schemas of the vendored contract
 // (`contracts/openapi/curation.json`), pinned key for key by
 // `contract/detectorContract.test.ts`.
+import type { ActiveRef } from '$lib/types_config';
 import type { ReprocessRequest } from '$lib/types_import';
 
 /** `IngestDetectorLabel`: one class the deployment's detector can emit. */
@@ -166,4 +167,26 @@ export interface DetectionsSummary {
   labels_truncated: boolean;
   suggested_reprocess: ReprocessRequest | null;
   total: number;
+}
+
+/** `IngestProfileSummary`: one row of `GET /ingest_profiles`. */
+export interface IngestProfileSummary {
+  name: string;
+  source: 'stored' | 'template';
+  read_only: boolean;
+  revision: number | null;
+  etag: string;
+  primary_model: string;
+  secondary_model?: string | null;
+  active: boolean;
+  active_revision?: number | null;
+  updated_at?: string | null;
+}
+
+/** `IngestProfileList`: `GET /ingest_profiles` (the fields the picker reads). */
+export interface IngestProfileList {
+  profiles: IngestProfileSummary[];
+  active: ActiveRef;
+  config_revision: number;
+  stale?: boolean;
 }
