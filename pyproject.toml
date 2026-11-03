@@ -25,7 +25,7 @@ keywords = ["yolo", "triton", "tensorrt", "object-detection", "face-recognition"
 
 dependencies = [
     "fastapi",
-    "uvicorn[standard]",
+    "uvicorn[standard]>=0.41.0",
     "python-multipart",
     "orjson",
     "pydantic-settings",

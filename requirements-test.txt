@@ -26,7 +26,7 @@
 # `make contracts`.
 fastapi==0.143.3
 pydantic==2.14.1
-uvicorn[standard]
+uvicorn[standard]>=0.41.0
 python-multipart
 orjson
 pydantic-settings

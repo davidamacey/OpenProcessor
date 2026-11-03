@@ -32,6 +32,17 @@ def test_every_recycling_service_sets_jitter() -> None:
             assert _flag(args, '--limit-max-requests-jitter') is not None, name
 
 
+def test_uvicorn_floor_supports_the_jitter_flag() -> None:
+    """``--limit-max-requests-jitter`` exists from uvicorn 0.41.0; an older one rejects it."""
+    from compose._helpers import REPO_ROOT
+
+    for name in ('requirements.txt', 'requirements-test.txt', 'pyproject.toml'):
+        lines = (REPO_ROOT / name).read_text().splitlines()
+        spec = [ln for ln in lines if 'uvicorn[standard]' in ln]
+        assert spec, name
+        assert '>=0.41.0' in spec[0], f'{name}: {spec[0]!r}'
+
+
 def test_control_flag_parser_tells_present_from_absent() -> None:
     assert _flag(['--limit-max-requests=10', '--x'], '--limit-max-requests') == '10'
     assert _flag(['--limit-max-requests=10'], '--limit-max-requests-jitter') is None

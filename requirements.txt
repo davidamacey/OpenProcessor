@@ -1,6 +1,6 @@
 # Core Web Framework
 fastapi==0.143.3  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
-uvicorn[standard]
+uvicorn[standard]>=0.41.0
 python-multipart
 orjson  # 2-3x faster JSON encoding/decoding vs stdlib json
 pydantic-settings  # Pydantic v2 settings management
