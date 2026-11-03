@@ -263,6 +263,9 @@ class LoopNode(BaseModel):
     answered: int
     decision: LoopDecision | None = Field(default=None, description='null while the node is open.')
     reason: str | None = None
+    reason_message: str | None = Field(
+        default=None, description='A sentence for `reason`; null when it has no wording.'
+    )
     class_name: str | None = None
     agree: int | None = None
     bound: float | None = None

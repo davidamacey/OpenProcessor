@@ -1694,7 +1694,7 @@ writes a cluster field.
 
 `LoopNode`: `path` (`r<cluster_id>`, then `.<index>` per level), `level`, `parent`, `n`
 (free members at the snapshot), `sampled`, `answered`, `decision` (`pass`, `split`,
-`review_leaf`, `review_small`, `stale`, `unvisited`; null while open), `reason`, `class_name`
+`review_leaf`, `review_small`, `stale`, `unvisited`; null while open), `reason`, `reason_message` (a sentence for `reason`; null when it has none), `class_name`
 (the top voted class), `agree`, `bound` (the exact lower bound on homogeneity),
 `distribution` (`class_name`, `votes`), `new_class_proposals` (`name`, `votes`) and
 `items_propagated`. The nodes with `review_leaf`, `review_small`, `stale` or `unvisited` are

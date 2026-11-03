@@ -7,7 +7,7 @@ accuracy is known.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -18,6 +18,8 @@ from src.services.curation.assist_loop.partition import PartitionScope
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from src.services.curation.assist_loop.store import LoopStore
 
 pytestmark = pytest.mark.usefixtures('readable_crops')
 
@@ -280,3 +282,180 @@ def test_a_tight_budget_is_not_spent_on_nodes_it_cannot_finish(
     assert sum(1 for kind in final.values() if kind != 'unvisited') >= 4
     assert run.outcome.stop_reason == 'budget_crops'
     assert run.budget.snapshot()['vlm']['crops_spent'] <= cap
+
+
+def _dissenting_first_draw(world: World, tmp_path: Path, cluster: int, prefix: str) -> FakeVlm:
+    """A VLM that contradicts exactly one crop of the first draw of ``prefix``'s root, so the
+    node passes only after its dissent top-up. The draw is read off a probe run."""
+    pristine = world.snapshot()
+    probe = FakeVlm(world.truth)
+    asyncio.run(
+        drive(
+            world,
+            tmp_path / 'probe',
+            probe,
+            max_depth=0,
+            scope=PartitionScope(cluster_ids=[cluster], min_root_size=10),
+        )
+    )
+    world.restore(pristine)
+    wrong = next(c for c in probe.asked if c.startswith(prefix))
+    return FakeVlm(world.truth, answers={wrong: 'bus'})
+
+
+def _crops_spent_on_unvisited(run_store: LoopStore) -> dict[str, int]:
+    final = decisions(run_store)
+    spent: dict[str, int] = {}
+    for event in run_store.events():
+        if event['event'] == 'reserve':
+            spent[event['path']] = spent.get(event['path'], 0) + event['crops']
+    return {p: c for p, c in spent.items() if final.get(p, 'unvisited') == 'unvisited'}
+
+
+def test_a_node_that_needs_its_dissent_top_up_does_not_starve_the_next_one(
+    world: World, tmp_path: Path
+) -> None:
+    """The first node of a loop is admitted on its first draw alone, but it may still need
+    its top-up: the nodes admitted beside it must be counted against that full claim."""
+    world.add_cluster(10001, {'car': 22}, prefix='a')
+    world.add_cluster(10002, {'car': 20}, prefix='b')
+    first_draw = required_sample(22, 0.9, 0.025, 0)
+    first_full = required_sample(22, 0.9, 0.025, 1)
+    second_first_draw = required_sample(20, 0.9, 0.025, 0)
+    second_full = required_sample(20, 0.9, 0.025, 1)
+    cap = first_draw + second_full
+    assert cap < first_full + second_full
+    assert cap < first_full + second_first_draw
+    vlm = _dissenting_first_draw(world, tmp_path, 10001, 'a')
+
+    run = asyncio.run(
+        drive(
+            world,
+            tmp_path / 'loop',
+            vlm,
+            max_crops=cap,
+            node_concurrency=2,
+            max_depth=0,
+            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+        )
+    )
+
+    assert decisions(run.store)['r10001'] == 'pass'
+    assert _crops_spent_on_unvisited(run.store) == {}
+    assert run.budget.snapshot()['vlm']['crops_spent'] <= cap
+
+
+def test_a_request_limit_admits_nodes_like_the_crop_limit(world: World, tmp_path: Path) -> None:
+    """Requests are a budget too: a node is not started beside another when the requests
+    both may need are not there, and the reason recorded is the one that bound."""
+    world.add_cluster(10001, {'car': 22}, prefix='a')
+    world.add_cluster(10002, {'car': 20}, prefix='b')
+    size = 4
+    first_requests = -(-required_sample(22, 0.9, 0.025, 0) // size) + 2
+    second_first_draw = -(-required_sample(20, 0.9, 0.025, 0) // size)
+    max_requests = first_requests + second_first_draw - 1
+    vlm = _dissenting_first_draw(world, tmp_path, 10001, 'a')
+
+    run = asyncio.run(
+        drive(
+            world,
+            tmp_path / 'loop',
+            vlm,
+            max_requests=max_requests,
+            node_concurrency=2,
+            max_depth=0,
+            images_per_call=size,
+            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+        )
+    )
+
+    assert decisions(run.store) == {'r10001': 'pass', 'r10002': 'unvisited'}
+    assert _crops_spent_on_unvisited(run.store) == {}
+    (reason,) = [
+        e['reason']
+        for e in run.store.events()
+        if e['event'] == 'decision' and e['kind'] == 'unvisited'
+    ]
+    assert reason == 'budget_requests'
+    assert run.outcome.stop_reason == 'budget_requests'
+
+
+def test_a_resume_restarts_admitted_nodes_without_deciding_their_admission_again(
+    world: World, tmp_path: Path
+) -> None:
+    world.add_cluster(10001, {'car': 22}, prefix='a')
+    world.add_cluster(10002, {'car': 20}, prefix='b')
+    loop_dir = tmp_path / 'loop'
+    vlm = FakeVlm(world.truth)
+    scope = PartitionScope(cluster_ids=None, min_root_size=10)
+
+    def cancel(_ids: list[str]) -> None:
+        loop_dir.mkdir(parents=True, exist_ok=True)
+        (loop_dir / 'cancel.flag').touch()
+
+    vlm.before_answer = cancel
+    first = asyncio.run(drive(world, loop_dir, vlm, node_concurrency=2, max_depth=0, scope=scope))
+    admitted = [e for e in first.store.events() if e['event'] == 'admit']
+    (loop_dir / 'cancel.flag').unlink()
+    vlm.before_answer = None
+
+    second = asyncio.run(drive(world, loop_dir, vlm, node_concurrency=1, max_depth=0, scope=scope))
+
+    assert {e['path'] for e in admitted} == {'r10001', 'r10002'}
+    assert [e for e in second.store.events() if e['event'] == 'admit'] == admitted
+    assert set(decisions(second.store).values()) == {'pass'}
+
+
+class _OneRequestFails(FakeVlm):
+    """Its first request raises; every other request is slow and records that it finished."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.finished: list[list[str]] = []
+
+    async def label_or_propose_batch(self, crops: list[Any], *args: Any, **kwargs: Any) -> Any:
+        if self.requests == 0:
+            self.requests += 1
+            msg = 'endpoint refused the request'
+            raise RuntimeError(msg)
+        self.requests += 1
+        await asyncio.sleep(0.05)
+        self.finished.append([c.img_id for c in crops])
+        return await super().label_or_propose_batch(crops, *args, **kwargs)
+
+
+def test_a_failing_request_cancels_the_sibling_requests_of_its_node(
+    world: World, tmp_path: Path
+) -> None:
+    """The requests of one draw run together; when one raises, the rest are cancelled and
+    awaited rather than left to finish (and spend) after the loop has already failed."""
+    world.add_cluster(10001, {'car': 300}, prefix='a')
+    vlm = _OneRequestFails(world.truth)
+
+    async def scenario() -> Any:
+        run = await drive(world, tmp_path / 'loop', vlm, node_concurrency=1, max_depth=0)
+        await asyncio.sleep(0.3)
+        return run
+
+    run = asyncio.run(scenario())
+
+    assert run.outcome.status == 'failed'
+    assert vlm.finished == []
+
+
+def test_a_failing_node_cancels_and_awaits_the_nodes_running_beside_it(
+    world: World, tmp_path: Path
+) -> None:
+    world.add_cluster(10001, {'car': 300}, prefix='a')
+    world.add_cluster(10002, {'truck': 250}, prefix='b')
+    vlm = _OneRequestFails(world.truth)
+
+    async def scenario() -> Any:
+        run = await drive(world, tmp_path / 'loop', vlm, node_concurrency=2, max_depth=0)
+        await asyncio.sleep(0.3)
+        return run
+
+    run = asyncio.run(scenario())
+
+    assert run.outcome.status == 'failed'
+    assert vlm.finished == []

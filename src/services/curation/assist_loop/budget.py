@@ -168,13 +168,6 @@ class LoopBudget:
         with self._lock:
             return self._path_crops.get((pool, path), 0)
 
-    def crops_left(self, pool: str) -> int:
-        """Crops no reservation or spend has claimed yet."""
-        with self._lock:
-            counts = self._counts[pool]
-            left = self._limits.pools[pool].max_crops - counts.crops_spent - counts.crops_reserved
-            return max(0, left)
-
     def reserve(
         self, pool: str, path: str, ids: Sequence[str], *, requests: int = 1
     ) -> Reservation | None:

@@ -270,7 +270,13 @@ the stack.
 
 Best-first: a priority queue of open nodes keyed by `(-N, path)`, so the budget goes to the nodes
 that label the most items per call first; deterministic for a fixed tree. Up to
-`node_concurrency` nodes evaluate at once; all VLM requests share one semaphore of
+`node_concurrency` nodes evaluate at once, each admitted against the crops and requests it may
+still need (an `admit` event records its claim; a resume restarts admitted nodes on that claim
+and does not decide again). The queue is strict: a head that must wait holds the nodes behind it
+even if a smaller one would fit. Reproducibility: the same seed and VLM answers give the same
+samples and splits; the set of nodes a binding budget covers is the same in every run only at
+`node_concurrency` 1, because with more the admission of the head depends on which running nodes
+have finished; all VLM requests share one semaphore of
 `vlm_concurrency` in-flight requests (the per-run `CONCURRENCY = 4` of assist runs would cap a
 loop near 2 crops/s, section 9). Stop: queue empty (`done`), budget (5.8), cancel, audit pause,
 `max_wall_s`. Defaults: `max_depth 3`, `branching 4`, `min_node_size 40`, `theta 0.9`,

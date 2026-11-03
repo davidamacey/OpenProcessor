@@ -216,6 +216,9 @@ class NodeRecord:
     """Eligible members of each child, from the ``children`` event."""
     crops: int = 0
     """VLM crops reserved for this node."""
+    claim: int | None = None
+    """Crops the scheduler admitted the node against (spent plus still possible); ``None``
+    until it is admitted. A resume restarts an admitted node on this claim."""
     propagate_begun: bool = False
     propagated: dict[str, Any] | None = None
 
@@ -281,6 +284,8 @@ def _apply(tree: LoopTree, event: dict[str, Any]) -> None:
         node = tree.node(event['path'])
         node.children = [c['path'] for c in event['children']]
         node.child_n = {c['path']: int(c['n']) for c in event['children']}
+    elif kind == 'admit':
+        tree.node(event['path']).claim = int(event['claim'])
     elif kind == 'propagate_begin':
         tree.node(event['path']).propagate_begun = True
     elif kind == 'propagated':

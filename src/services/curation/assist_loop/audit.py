@@ -19,7 +19,6 @@ A remote audit endpoint goes through the same external-images consent as any run
 
 from __future__ import annotations
 
-import asyncio
 import json
 import math
 import random
@@ -29,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.clients.curation_opensearch.crops import mget_crops
 from src.domain.loop_stats import wilson_lower_bound
 from src.services.curation.assist_loop.budget import AUDIT
+from src.services.curation.assist_loop.concurrent import gather_all
 from src.services.curation.assist_loop.vlm_failure import VlmFailedError
 from src.services.curation.autolabel.run_vlm import resolve_run_vlm
 from src.services.curation.vlm_class_attempt import NEW_CLASS_SENTINEL
@@ -38,6 +38,7 @@ from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import Callable, Sequence
 
     from opensearchpy import AsyncOpenSearch
@@ -242,7 +243,7 @@ class Auditor:
             return got
 
         answers: dict[str, str | None] = {}
-        for part in await asyncio.gather(*[one(c) for c in chunks]):
+        for part in await gather_all([one(c) for c in chunks]):
             answers.update(part)
         return answers, refused
 

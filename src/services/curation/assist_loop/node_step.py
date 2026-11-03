@@ -156,6 +156,13 @@ def crops_needed(run: LoopRun, path: str, *, with_top_up: bool) -> int:
     return max(0, need - len(held | set(reused)))
 
 
+def admit(run: LoopRun, path: str, claim: int) -> None:
+    """Record that node ``path`` was admitted against ``claim`` crops in total."""
+    if path not in run.tree.nodes:
+        _open(run, path)
+    run.store.append('admit', path=path, claim=claim)
+
+
 def leave_unvisited(run: LoopRun, path: str, reason: str) -> None:
     """Record that node ``path`` was not worked on because ``reason`` (a budget) cannot
     cover it, before any crop was spent on it."""
@@ -327,4 +334,12 @@ async def advance(run: LoopRun, path: str) -> list[str]:
     return list(record.children or []) if (record.decision or {}).get('kind') == 'split' else []
 
 
-__all__ = ['LOOP_WRITER', 'LoopRun', 'advance', 'crops_needed', 'finished', 'leave_unvisited']
+__all__ = [
+    'LOOP_WRITER',
+    'LoopRun',
+    'admit',
+    'advance',
+    'crops_needed',
+    'finished',
+    'leave_unvisited',
+]

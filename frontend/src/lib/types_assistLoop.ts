@@ -142,6 +142,7 @@ export interface LoopNode {
   answered: number;
   decision: AssistLoopDecision | null;
   reason: string | null;
+  reason_message: string | null;
   class_name: string | null;
   agree: number | null;
   bound: number | null;
