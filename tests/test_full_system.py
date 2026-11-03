@@ -37,29 +37,35 @@ API_BASE = f'http://localhost:{os.environ.get("API_PORT", "4603")}'
 TRITON_BASE = f'http://localhost:{os.environ.get("TRITON_HTTP_PORT", "4600")}'
 OPENSEARCH_BASE = f'http://localhost:{os.environ.get("OPENSEARCH_PORT", "4607")}'
 
-TEST_IMAGE = Path('test_images/zidane.jpg')
-TEST_IMAGE_2 = Path('test_images/bus.jpg')
-INGEST_DIR = Path('test_images/ingest_test_50')
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-# Standard Ultralytics test images - auto-download if missing
-TEST_IMAGE_URLS = {
-    TEST_IMAGE: 'https://ultralytics.com/images/zidane.jpg',
-    TEST_IMAGE_2: 'https://ultralytics.com/images/bus.jpg',
-}
+# Public COCO val2017 images (people, so the face endpoints have something to find), fetched
+# through the repo's own dataset fetcher. Paths are relative to the working directory.
+COCO_VAL_IMAGES = ('000000000139.jpg', '000000000785.jpg')
+TEST_IMAGE = Path('test_images/coco') / COCO_VAL_IMAGES[0]
+TEST_IMAGE_2 = Path('test_images/coco') / COCO_VAL_IMAGES[1]
+INGEST_DIR = Path('test_images/ingest_test_50')
+# The API reads this directory inside its container, where only the dev compose overlay
+# mounts the checkout's test_images (the directory ingest asks the API for /app/<dir>).
+CONTAINER_TEST_IMAGES = Path('/app/test_images')
 
 
 def download_test_images() -> None:
-    """Download standard test images if not present."""
-    import urllib.request
+    """Fetch the public COCO test images if not present."""
+    from scripts.datasets._common import download
+    from scripts.datasets.bench_set import IMAGE_URL_TMPL
 
-    for path, url in TEST_IMAGE_URLS.items():
-        if not path.exists():
-            print(f'  Downloading {path.name} from {url}...')
-            path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                urllib.request.urlretrieve(url, path)
-            except Exception as e:
-                print(f'  WARNING: Failed to download {path.name}: {e}')
+    for path in (TEST_IMAGE, TEST_IMAGE_2):
+        if path.exists():
+            continue
+        url = IMAGE_URL_TMPL['val2017'].format(file_name=path.name)
+        print(f'  Downloading {path.name} from {url}...')
+        try:
+            download(url, path)
+        except Exception as e:
+            print(f'  WARNING: Failed to download {path.name}: {e}')
 
 
 # Results tracking
@@ -416,6 +422,15 @@ def test_ingest_directory(skip: bool = False) -> bool:
 
     if not INGEST_DIR.exists():
         print_test('Directory Ingest', 'SKIP', f'Directory not found: {INGEST_DIR}')
+        return True
+
+    if os.environ.get('OP_TEST_INGEST_DIR_MOUNTED') != '1':
+        print_test(
+            'Directory Ingest',
+            'SKIP',
+            f'the API container only sees {CONTAINER_TEST_IMAGES} with the dev compose mount; '
+            'set OP_TEST_INGEST_DIR_MOUNTED=1 when it is mounted',
+        )
         return True
 
     num_images = len(list(INGEST_DIR.glob('*.jpg')))

@@ -6,12 +6,16 @@ import json
 import re
 import shutil
 import subprocess
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import yaml
 
 from compose._helpers import REPO_ROOT, _services
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_vlm_service_is_opt_in_with_a_pinned_image() -> None:
@@ -194,9 +198,25 @@ def test_the_api_and_workers_get_the_local_endpoint_and_the_read_only_secrets_mo
 
 
 @pytest.mark.skipif(shutil.which('docker') is None, reason='no docker CLI')
-def test_docker_compose_renders_the_same_command() -> None:
+def test_docker_compose_renders_the_same_command(tmp_path: Path) -> None:
+    # An empty env file replaces the checkout's own .env, so a developer's VLM_*
+    # settings cannot change what the shipped defaults render to.
+    empty_env = tmp_path / 'empty.env'
+    empty_env.write_text('')
     result = subprocess.run(
-        ['docker', 'compose', '-f', str(COMPOSE), '--profile', 'vlm', 'config', '--format', 'json'],
+        [
+            'docker',
+            'compose',
+            '--env-file',
+            str(empty_env),
+            '-f',
+            str(COMPOSE),
+            '--profile',
+            'vlm',
+            'config',
+            '--format',
+            'json',
+        ],
         check=False,
         capture_output=True,
         text=True,
