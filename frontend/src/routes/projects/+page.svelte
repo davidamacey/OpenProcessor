@@ -171,8 +171,8 @@
     {/if}
 
     <div class="relative overflow-x-auto rounded border border-zinc-800">
-      <table class="w-full text-sm" data-testid="projects-table">
-        <thead class="bg-zinc-900 text-left text-xs text-zinc-400">
+      <table class="w-full text-sm max-md:block" data-testid="projects-table">
+        <thead class="bg-zinc-900 text-left text-xs text-zinc-400 max-md:hidden">
           <tr>
             <th class="px-3 py-2 font-normal">Project</th>
             <th class="px-3 py-2 font-normal">Status</th>
@@ -183,13 +183,13 @@
             <th class="px-3 py-2 font-normal"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="max-md:block">
           {#each admin.list as p (p.slug)}
             <tr
-              class="border-t border-zinc-800 align-top"
+              class="border-t border-zinc-800 align-top max-md:flex max-md:flex-wrap"
               data-testid="project-row-{p.slug}"
             >
-              <td class="px-3 py-2">
+              <td class="px-3 py-2 max-md:w-full">
                 <div class="text-zinc-100">
                   {p.display_name}
                   {#if p.is_default}
@@ -212,7 +212,7 @@
                   >
                 {/if}
               </td>
-              <td class="px-3 py-2">
+              <td class="px-3 py-2 max-md:w-full max-md:pt-0">
                 <div class="flex flex-wrap items-center gap-1">
                   <span
                     class="rounded px-1.5 py-0.5 text-xs {p.status === 'active'
@@ -230,22 +230,25 @@
                   {/if}
                 </div>
               </td>
-              <td class="px-3 py-2 text-right tabular-nums"
+              <td
+                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Images']"
                 >{formatCount(p.counts.images)}</td
               >
-              <td class="px-3 py-2 text-right tabular-nums"
+              <td
+                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Items']"
                 >{formatCount(p.counts.items)}</td
               >
-              <td class="px-3 py-2 text-right tabular-nums"
+              <td
+                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Validated']"
                 >{formatCount(p.counts.validated)}</td
               >
               <td
-                class="px-3 py-2 text-right tabular-nums"
+                class="px-3 py-2 text-right tabular-nums max-md:w-1/2 max-md:text-left max-md:before:mr-1 max-md:before:text-xs max-md:before:text-zinc-500 max-md:before:content-['Embedded']"
                 data-testid="project-embedded-{p.slug}"
                 >{formatCount(p.counts.items_embedded)}</td
               >
-              <td class="px-3 py-2">
-                <div class="flex flex-wrap justify-end gap-1.5">
+              <td class="px-3 py-2 max-md:w-full">
+                <div class="flex flex-wrap justify-end gap-1.5 max-md:justify-start">
                   {#if p.selectable}
                     <a
                       href={resolve(projectHref('/dashboard', p.slug))}
