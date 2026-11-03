@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from src.services.model_export import check_triton_name
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,18 +24,37 @@ EXPORT_SUFFIXES = ('_trt', '_trt_end2end', '_end2end')
 _LOAD_SUFFIXES = ('_trt_end2end', '_trt')
 
 
+def checked_model_name(name: str) -> str:
+    """``name`` if it is a model slug, else ``ValueError``. Allowlist first, so a
+    dot segment, separator or empty name never reaches a filesystem call."""
+    return check_triton_name(name)
+
+
+def inside_repository(base: Path, path: Path) -> bool:
+    """Whether ``path`` resolves strictly inside ``base`` (symlinks and ``..``
+    resolved; ``base`` itself does not count)."""
+    resolved = path.resolve()
+    return resolved != base.resolve() and resolved.is_relative_to(base.resolve())
+
+
 def resolve_model_dirs(models_dir: Path, name: str) -> list[Path]:
     """Every existing directory ``name`` addresses: its own, plus the export
     family of a bare name. Empty when nothing exists."""
     candidates = [name, *(f'{name}{s}' for s in EXPORT_SUFFIXES)]
-    return [models_dir / c for c in candidates if (models_dir / c).exists()]
+    return [
+        models_dir / c
+        for c in candidates
+        if (models_dir / c).exists() and inside_repository(models_dir, models_dir / c)
+    ]
 
 
 def resolve_load_dir(models_dir: Path, name: str) -> Path | None:
     """The one directory ``name`` loads: its own, else the End2End then the
     plain TRT export."""
     for candidate in (name, *(f'{name}{s}' for s in _LOAD_SUFFIXES)):
-        if (models_dir / candidate).exists():
+        if (models_dir / candidate).exists() and inside_repository(
+            models_dir, models_dir / candidate
+        ):
             return models_dir / candidate
     return None
 
