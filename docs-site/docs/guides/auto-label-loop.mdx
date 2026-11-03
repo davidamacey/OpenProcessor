@@ -35,7 +35,10 @@ unless a run produced the output.
 - **Stays inside a budget.** `max_vlm_crops` is required. Each request is reserved before it
   is sent; a crash can waste what was in flight, never exceed the cap. It also stops on
   `max_vlm_requests`, `max_wall_s`, cancel and a failing audit.
-- **Is reproducible and reversible.** The same seed draws the same samples. Everything it wrote
+- **Is reproducible and reversible.** The same seed draws the same samples and splits the same way. With
+  `node_concurrency` above 1 and a binding budget, the set of clusters visited can differ
+  between runs, because it depends on which running nodes have finished when the next one is
+  considered; at 1 it is the same. A resume restarts the nodes it had admitted. Everything it wrote
   can be rolled back, and a rollback keeps anything changed since.
 
 ## The recipe

@@ -18,7 +18,6 @@ item gets the VLM's class (never a locked one) and an ``assist`` slot whose run 
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -29,11 +28,13 @@ from src.domain.loop_tree import child_sample
 from src.services.curation.assist.proposal import ClassAnswer, compute_proposal
 from src.services.curation.assist.sample_eval import ask_sample
 from src.services.curation.assist_loop.budget import VLM
+from src.services.curation.assist_loop.concurrent import gather_all
 from src.services.curation.assist_loop.vlm_failure import VlmFailedError
 from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import Callable, Iterable, Sequence
 
     from opensearchpy import AsyncOpenSearch
@@ -360,7 +361,7 @@ class _Node:
         reason = self.ec.budget.would_refuse(VLM, crops=len(missing), requests=len(chunks))
         if reason is not None:
             raise _Stop(reason)
-        done = await asyncio.gather(*[self._chunk(c) for c in chunks])
+        done = await gather_all([self._chunk(c) for c in chunks])
         if not all(done):
             raise _Stop(None if self.ec.should_stop() else self.ec.budget.refused)
         self._check_outage(missing)
