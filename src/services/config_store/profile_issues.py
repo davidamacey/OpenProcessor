@@ -31,7 +31,10 @@ def _issue(
     *,
     field: str | None = None,
     detail: dict[str, Any] | None = None,
+    bypass_codes: frozenset[str] = BYPASSABLE_CODES,
 ) -> ValidationIssue:
+    """Build one issue; ``bypass_codes`` is the calling validator's own
+    ``BYPASSABLE_CODES`` so the per-issue flag matches its ``force_allowed``."""
     from src.schemas.curation.config_common import ValidationIssue
 
     return ValidationIssue(
@@ -40,5 +43,5 @@ def _issue(
         field=field,
         message=message,
         detail=detail or {},
-        bypassable=code in BYPASSABLE_CODES,
+        bypassable=code in bypass_codes,
     )

@@ -11,6 +11,7 @@ not ready or lacks the outputs is never bypassable.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -20,7 +21,7 @@ from src.clients.model_adapters import END2END_OUTPUTS
 from src.schemas.curation.config_common import ValidationReport
 from src.schemas.curation.ingest_profile import IngestProfileBody
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
-from src.services.config_store.profile_issues import _issue
+from src.services.config_store.profile_issues import _issue as _shared_issue
 
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 #: Errors ``force: true`` bypasses on activation.
 BYPASSABLE_CODES: frozenset[str] = frozenset({'triton_unreachable'})
+_issue = functools.partial(_shared_issue, bypass_codes=BYPASSABLE_CODES)
 
 
 def taken_message(name: str) -> str:
