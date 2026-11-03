@@ -205,7 +205,9 @@ the code:
 ```
 
 Docs may only name routes that exist in `contracts/openapi/curation.json` or
-the app, `OP_*` variables read by code, and links that resolve.
+the app, `OP_*` variables read by code, and links that resolve. Plans under
+`docs/design/` may name the routes and variables they will add; their links
+are still checked.
 
 ## Testing
 
