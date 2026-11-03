@@ -1932,7 +1932,7 @@ run_health() {
         if wait_http "http://${h}:${tp}/v2/health/ready" 180; then
             models=()
             [[ "$OP_SKIP_MODELS" == 1 ]] || read -ra models <<< "$(model_setup_all_models "$SELECTED_TIERS")"
-            for m in "${models[@]}"; do
+            for m in ${models[@]+"${models[@]}"}; do
                 curl -fsS --max-time 5 "http://${h}:${tp}/v2/models/${m}/ready" >/dev/null 2>&1 \
                     || fails+=("triton model ${m} not READY: ./openprocessor models install")
             done
@@ -2965,17 +2965,15 @@ YAML
         dc up -d --no-deps api || die "compose up api failed"
     elif [[ "$OP_SKIP_MODELS" == 1 ]]; then
         log_info "--skip-models: engines are not exported; run ./openprocessor models install later"
+        # The start below uses --no-deps (no depends_on), and the API creates its kNN indexes once at boot.
+        dc up -d --wait --no-deps --remove-orphans opensearch || die "OpenSearch did not become healthy: ./openprocessor logs opensearch" "$EXIT_HEALTH"
     else
         log_step "Model setup"
         dc up -d triton-server || die "could not start Triton"
         if [[ "$OP_DRY_RUN" != 1 ]] && ! wait_http "http://${OP_HEALTH_HOST}:${TRITON_HTTP_PORT}/v2/health/live" 180; then
             die "Triton did not come up: ./openprocessor logs triton-server" "$EXIT_HEALTH"
         fi
-        if model_setup_run_groups "$SELECTED_TIERS"; then
-            group_rc=0
-        else
-            group_rc=1
-        fi
+        model_setup_run_groups "$SELECTED_TIERS" || group_rc=1
         state_write
     fi
 
@@ -2983,7 +2981,7 @@ YAML
     log_step "Start"
     if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         local gate=(); [[ "$OP_SKIP_MODELS" == 1 ]] && gate=(--no-deps) # the API is 503 until models exist: do not gate dependents on it
-        dc up -d --remove-orphans "${gate[@]}" || die "compose up failed"
+        dc up -d --remove-orphans ${gate[@]+"${gate[@]}"} || die "compose up failed"
     fi
     local health_rc=0
     run_health || health_rc=1

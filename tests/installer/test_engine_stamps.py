@@ -417,6 +417,86 @@ def test_an_unstamped_engine_without_its_onnx_is_adopted(tmp_path: Path, bash, g
     assert not (tmp_path / 'rebuilt').exists()
     for model in ENGINES[group]:
         assert _rows(tmp_path)[model][5] == '-'
-    # an ONNX that appears later, whatever it contains, does not invalidate the adopted stamp
+    # the ONNX appearing later is pinned (trust on first sight): no rebuild, the real hash is
+    # recorded, so a later change of the ONNX is no longer masked by the "-" placeholder
     _put_onnx(tmp_path, group)
     assert 'up to date, skipped' in bash(prelude + f'model_setup_run_group {group}').stdout
+    for model in ENGINES[group]:
+        assert _rows(tmp_path)[model][5] == _sha(model)
+    assert not (tmp_path / 'rebuilt').exists()
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_a_pinned_stamp_catches_a_later_onnx_change(tmp_path: Path, bash, group: str) -> None:
+    prelude = _unstamped(tmp_path, group)
+    onnx = {model: tmp_path / rel for model, (rel, _) in ENGINES[group].items()}
+    for path in onnx.values():
+        path.unlink()
+    bash(prelude + f'model_setup_run_group {group}')  # adopted with "-"
+    _put_onnx(tmp_path, group)
+    bash(prelude + f'model_setup_run_group {group}')  # pinned
+    first = next(iter(onnx.values()))
+    first.write_bytes(b'a different export')
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'ONNX changed since the build' in out
+    assert (tmp_path / 'rebuilt').exists()
+
+
+def test_an_unready_engine_keeps_the_placeholder_hash(tmp_path: Path, bash) -> None:
+    # Only an engine Triton serves is pinned; the placeholder is never rewritten blind.
+    prelude = _unstamped(tmp_path, 'yolo')
+    model = next(iter(ENGINES['yolo']))
+    (tmp_path / ENGINES['yolo'][model][0]).unlink()
+    bash(prelude + 'model_setup_run_group yolo')
+    _put_onnx(tmp_path, 'yolo')
+    bash(prelude + 'triton_model_ready() { return 1; }; _ms_group_stamp_stale yolo')
+    assert _rows(tmp_path)[model][5] == '-'
+
+
+def _curl(rc: int, code: str) -> str:
+    """A curl double: the /load POST exits RC and prints CODE; anything else is not READY."""
+    return (
+        f'curl() {{ if [[ "$*" == */load* ]]; then printf %s {code}; return {rc}; fi; return 22; }}; '
+        'sleep() { :; }; '
+    )
+
+
+def test_strict_load_tells_triton_down_from_a_refused_load(bash) -> None:
+    base = f'source {LIB}; log_warn() {{ :; }}; '
+    down = bash(base + _curl(7, '000') + 'triton_load_and_wait m 4 strict; echo "rc=$?"')
+    assert 'rc=2' in down.stdout  # unreachable: not "engine invalid"
+    refused = bash(base + _curl(0, '400') + 'triton_load_and_wait m 4 strict; echo "rc=$?"')
+    assert 'rc=1' in refused.stdout
+    slow = bash(base + _curl(28, '000') + 'triton_load_and_wait m 4 strict; echo "rc=$?"')
+    assert 'rc=1' in slow.stdout  # a load still running past curl's timeout is waited for
+
+
+def test_a_slow_load_is_waited_for_not_called_unreachable(bash) -> None:
+    script = (
+        f'source {LIB}; log_warn() {{ :; }}; sleep() {{ :; }}; n=0; '
+        'curl() { if [[ "$*" == */load* ]]; then printf 000; return 28; fi; '
+        '(( ++n > 2 )) && return 0; return 22; }; '
+        'triton_load_and_wait m 20 strict; echo "rc=$?"'
+    )
+    assert 'rc=0' in bash(script).stdout
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_triton_down_fails_the_group_without_a_rebuild(tmp_path: Path, bash, group: str) -> None:
+    prelude = _unloaded(tmp_path, group, _good_stamps(group), loadable=False)
+    prelude += 'triton_load_and_wait() { return 2; }; '
+    out = bash(prelude + f'model_setup_run_group {group}; echo "rc=$?"')
+    assert 'rc=0' not in out.stdout
+    assert 'rc=' in out.stdout
+    assert 'not reachable' in out.stdout + out.stderr
+    assert 'will be rebuilt' not in out.stdout
+    assert not (tmp_path / 'rebuilt').exists()
+    assert 'failed' in (tmp_path / '.install' / 'groups.tsv').read_text()
+
+
+def test_a_failing_preload_stops_the_group_instead_of_rebuilding(tmp_path: Path, bash) -> None:
+    prelude = _installed(tmp_path, 'yolo', _good_stamps('yolo'))
+    prelude += '_ms_load_present_engines() { return 1; }; dc() { touch "$OP_DIR/rebuilt"; }; '
+    out = bash('set -e; ' + prelude + 'model_setup_run_group yolo; echo "rc=$?"')
+    assert 'rc=0' not in out.stdout
+    assert not (tmp_path / 'rebuilt').exists()
