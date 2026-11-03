@@ -29,6 +29,7 @@ from src.services.config_store.index import (
 from src.services.config_store.snapshot import AxisRef, ConfigSnapshot, StoredConfig
 from src.services.config_store.store import (
     ConfigStore,
+    ConfigStoreUnavailableError,
     activate_axis,
     get_config_store,
     reset_config_stores,
@@ -44,6 +45,7 @@ __all__ = [
     'AxisRef',
     'ConfigSnapshot',
     'ConfigStore',
+    'ConfigStoreUnavailableError',
     'RevisionConflictError',
     'StoredConfig',
     'activate',

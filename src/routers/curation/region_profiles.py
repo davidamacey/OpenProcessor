@@ -38,7 +38,12 @@ from src.routers.curation._region_profile_models import (
 )
 from src.routers.curation._region_profile_schema import build_region_profile_schema
 from src.schemas.curation.config_common import ActiveConfigResponse, ActiveRef
-from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
+from src.services.config_store import (
+    ActiveConflictError,
+    ConfigStoreUnavailableError,
+    RevisionConflictError,
+    get_config_store,
+)
 from src.services.config_store.activation_view import build_active_config_response
 from src.services.config_store.profile_validation import validate_profile
 from src.services.config_store.profiles import (
@@ -465,7 +470,10 @@ async def activate_region_profile_route(
     record = build_record(name, revision=body.revision)
     if record is None and body.revision is None:
         # Written through another API worker: this process may hold a stale snapshot.
-        await store.refresh(opensearch, force=True)
+        try:
+            await store.refresh_on_miss(opensearch)
+        except ConfigStoreUnavailableError as exc:
+            raise api_error(503, 'config_store_unavailable', str(exc)) from exc
         record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')

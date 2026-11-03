@@ -35,6 +35,7 @@ from src.services.config_store.vlm_snapshot import fetch_revision
 from src.services.labeling.vlm_endpoints import (
     ENV_ENDPOINT_NAME,
     VlmEndpoint,
+    VlmRegistryUnavailableError,
     get_vlm_endpoint,
     refresh_vlm_state,
     resolve_vlm_source,
@@ -130,7 +131,10 @@ async def write_vlm_activation(
 async def _target(client: Any, name: str, revision: int | None) -> VlmEndpoint:
     from src.services.rejections import rejection
 
-    endpoint = await resolve_vlm_source(client, name, revision)
+    try:
+        endpoint = await resolve_vlm_source(client, name, revision)
+    except VlmRegistryUnavailableError as exc:
+        raise rejection(503, 'config_store_unavailable', str(exc)) from exc
     if endpoint is None:
         if revision is not None and get_vlm_endpoint(name) is not None:
             raise rejection(404, 'unknown_revision', f'{name!r} has no revision {revision}')

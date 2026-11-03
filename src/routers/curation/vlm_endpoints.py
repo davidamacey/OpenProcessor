@@ -40,7 +40,7 @@ from src.routers.curation._vlm_endpoint_views import (
     summary_of,
 )
 from src.routers.curation.projects import global_router
-from src.services.config_store import get_global_config_store
+from src.services.config_store import ConfigStoreUnavailableError, get_global_config_store
 from src.services.config_store.index import RevisionConflictError
 from src.services.config_store.vlm_endpoints import (
     delete_endpoint,
@@ -98,7 +98,10 @@ async def _registry(client: Any, *, name: str | None = None) -> Any:
     store = get_global_config_store()
     await store.refresh(client)
     if name is not None and get_vlm_endpoint(name) is None:
-        await store.refresh(client, force=True)
+        try:
+            await store.refresh_on_miss(client)
+        except ConfigStoreUnavailableError as exc:
+            raise api_error(503, 'config_store_unavailable', str(exc)) from exc
     return store.current
 
 
