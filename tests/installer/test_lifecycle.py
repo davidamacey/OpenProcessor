@@ -536,6 +536,36 @@ def test_release_dir_needs_a_version(shimmed: Shimmed) -> None:
     assert result.returncode == 2
 
 
+def _rerun_args(shimmed: Shimmed, *extra: str) -> list[str]:
+    return ['--unattended', '--dir', 'inst', '--project', PROJECT, '--no-start', *extra]
+
+
+@pytest.mark.parametrize('action', [[], ['--repair']])
+def test_rerun_and_repair_of_a_release_dir_install_reuse_the_installed_version(
+    shimmed: Shimmed, action: list[str]
+) -> None:
+    assets = str(shimmed.release / 'assets' / RELEASE)
+    assert install(shimmed, '--release-dir', assets, '--no-start').returncode == 0
+    result = shimmed.run(
+        _rerun_args(shimmed, '--release-dir', assets, *action), OP_HEALTH_TIMEOUT='1'
+    )
+    assert result.returncode == 0, result.stderr[-1500:]
+    state = json.loads((shimmed.root / 'inst' / '.install' / 'state.json').read_text())
+    assert state['version'] == RELEASE
+
+
+def test_release_dir_with_an_explicit_version_still_wins(shimmed: Shimmed) -> None:
+    assets = str(shimmed.release / 'assets' / RELEASE)
+    assert install(shimmed, '--release-dir', assets, '--no-start').returncode == 0
+    result = shimmed.run(
+        _rerun_args(shimmed, '--release-dir', assets, '--version', 'v9.9.9'),
+        OP_HEALTH_TIMEOUT='1',
+    )
+    assert result.returncode == 0, result.stderr[-1500:]
+    state = json.loads((shimmed.root / 'inst' / '.install' / 'state.json').read_text())
+    assert state['version'] == 'v9.9.9'
+
+
 def test_install_refuses_a_project_flag_that_contradicts_the_install(shimmed: Shimmed) -> None:
     assert install(shimmed).returncode == 0
     reset_mutations(shimmed)

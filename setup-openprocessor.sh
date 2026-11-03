@@ -2437,6 +2437,9 @@ parse_args() {
         die "use either --version or --branch" "$EXIT_USAGE"
     fi
     if [[ -n "$OP_RELEASE_DIR" ]]; then
+        # a re-run or repair of a release-dir install reuses the installed release
+        [[ -n "$OP_VERSION$OP_BRANCH" || "$(STATE_FILE="${OP_INSTALL_DIR}/.install/state.json" state_get mode || true)" != release ]] \
+            || OP_VERSION="$(STATE_FILE="${OP_INSTALL_DIR}/.install/state.json" state_get version || true)"
         [[ -n "$OP_VERSION" && -z "$OP_BRANCH" ]] || die "--release-dir needs --version (the version the assets were built for)" "$EXIT_USAGE"
         OP_RELEASE_DIR="$(cd -P "$OP_RELEASE_DIR" 2>/dev/null && pwd)" || die "--release-dir not found" "$EXIT_USAGE"
         [[ -f "${OP_RELEASE_DIR}/SHA256SUMS" ]] || die "--release-dir has no SHA256SUMS (build it with scripts/release/build_deploy_bundle.sh)" "$EXIT_USAGE"
@@ -2564,7 +2567,7 @@ print_gpu_plan() {
 }
 
 do_install() {
-    local mode="$1" existing=0 plan rec tiers_arg=""
+    local mode="$1" existing=0 plan rec tiers_arg="" KEPT_GPU_PLAN=0
     if [[ -f "$STATE_FILE" ]]; then
         require_owned_install
         [[ -n "$(state_get version || true)" ]] && existing=1
@@ -2696,21 +2699,18 @@ do_install() {
         fi
     fi
 
-    # Likewise the installed GPU placement: re-planning from today's free VRAM
-    # would move services (and recreate their containers) on an unchanged re-run.
+    # Likewise the installed GPU placement: re-planning from free VRAM would move services on an unchanged re-run.
     if (( existing )) && [[ -z "$OP_GPU_PLAN" && "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-        local kept_plan="" kv_id
-        kv_id="$(read_env_var "$ENV_FILE" TRITON_GPU_ID || true)"
-        [[ -n "$kv_id" ]] && kept_plan+="triton=${kv_id//,/+},"
-        kv_id="$(read_env_var "$ENV_FILE" SEGMENTER_GPU_ID || true)"
-        [[ -n "$kv_id" && ",${OP_TIERS}," == *",segmenter,"* ]] && kept_plan+="segmenter=${kv_id},"
-        kv_id="$(read_env_var "$ENV_FILE" VLM_GPU_ID || true)"
-        [[ -n "$kv_id" && ",${OP_TIERS}," == *",vlm,"* && -z "$OP_VLM_URL" ]] && kept_plan+="vlm=${kv_id},"
-        kv_id="$(read_env_var "$ENV_FILE" OP_TRAIN_GPU_ORDER || true)"
-        kv_id="${kv_id%%,*}"
-        [[ -n "$kv_id" && ",${OP_TIERS}," == *",trainer,"* ]] && kept_plan+="trainer=${kv_id},"
+        local kept_plan="" kv_id spec
+        for spec in triton:TRITON_GPU_ID segmenter:SEGMENTER_GPU_ID vlm:VLM_GPU_ID trainer:OP_TRAIN_GPU_ORDER; do
+            kv_id="$(read_env_var "$ENV_FILE" "${spec#*:}" || true)"
+            [[ "${spec%%:*}" == trainer ]] && kv_id="${kv_id%%,*}"
+            [[ -z "$kv_id" || ( "${spec%%:*}" == vlm && -n "$OP_VLM_URL" ) ]] && continue
+            [[ "${spec%%:*}" == triton || ",${OP_TIERS}," == *",${spec%%:*},"* ]] && kept_plan+="${spec%%:*}=${kv_id//,/+},"
+        done
         if [[ -n "$kept_plan" ]]; then
             OP_GPU_PLAN="${kept_plan%,}"
+            KEPT_GPU_PLAN=1
             log_info "keeping the installed GPU placement: ${OP_GPU_PLAN} (pass --gpu-plan to change it)"
         fi
     fi
@@ -2771,8 +2771,8 @@ YAML
         fi
         local remote=0
         [[ -n "$OP_VLM_URL" ]] && remote=1
-        if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" \
-                "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")"; then
+        local -a plan_args=("force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")
+        if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "${plan_args[@]}")"; then
             print_gpu_plan "$plan"
             die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
         fi
@@ -2795,8 +2795,7 @@ YAML
                 chosen="$(select_tiers_interactive "$rec")"
             fi
             tiers_arg="$(tiers_close_dependencies "$chosen")"
-            if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" \
-                    "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")"; then
+            if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "${plan_args[@]}")"; then
                 die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
             fi
         fi
@@ -2806,8 +2805,9 @@ YAML
         for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID \
                 OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE OP_INGEST_GPU_DECODE SEGMENTER_INSTANCES; do
             val="$(plan_get "$plan" "$key")"
-            if [[ "$key" == SEGMENTER_* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* \
-                    && -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]]; then
+            # a re-run keeps installed values: free VRAM now includes this install's own services (#411)
+            if [[ -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]] && { [[ "$KEPT_GPU_PLAN" == 1 && -z "$GPU_PROFILE_FLAG" ]] \
+                    || [[ "$key" == SEGMENTER_* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* ]]; }; then
                 continue
             fi
             if [[ -n "$OP_GPU_PLAN" || ( "$key" == GPU_PROFILE && -n "$GPU_PROFILE_FLAG" ) ]]; then
