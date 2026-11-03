@@ -302,3 +302,13 @@ def test_check_gpu_memory_reports_free_not_total(monkeypatch: pytest.MonkeyPatch
     with caplog.at_level('WARNING'):
         assert yolo_formats.check_gpu_memory(4.0) is True
     assert any('Low GPU memory: 1.0GB free' in r.message for r in caplog.records)
+
+
+def test_models_install_accepts_yes_like_the_other_subcommands(bash) -> None:
+    out = bash(
+        f'source {CLI}; cmd_models_install() {{ echo "only=$1"; }}; '
+        'cmd_models install --yes --only faces; echo "rc=$?"; cmd_models repair -y; echo "rc=$?"'
+    ).stdout
+    assert 'only=faces' in out
+    assert 'rc=2' not in out
+    assert out.count('rc=0') == 2
