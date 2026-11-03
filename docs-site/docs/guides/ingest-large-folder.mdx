@@ -502,7 +502,7 @@ from the trial (`crops / images`), then run the policy preview from step 5: it r
 `estimated_vector_mb` for the stored items.
 
 **Memory.** Search keeps the vector graph in RAM. The sizing note in
-`docs/design/storage_sizing_and_ingest_baselines.md` gives about 4.6 KB per vector for
+`docs/research/storage_sizing_and_ingest_baselines.md` gives about 4.6 KB per vector for
 the HNSW graph and says to verify the formula against the OpenSearch documentation.
 The 100,000-vector runs used an 8 GB OpenSearch heap, and `docs/PERFORMANCE.md` advises
 keeping 8 GB for the build buffers and leaving the rest to the page cache. See also

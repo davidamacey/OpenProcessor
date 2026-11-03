@@ -1,7 +1,7 @@
 # GPU decode once and a GPU-resident ingest GPU decode (#217, WP-2.4)
 
-Status: built and on by default above 3 MP (section 13 records the build and the A/B; the settings are in `src/config/curation.py`). The text before section 13 is the plan as written, when nothing in `src/` had changed. Issue #217 (WP-2.4 of
-[v060_wave_plan.md](v060_wave_plan.md)), parent design Waves 6 and 7 of
+Status: implemented (follow-ups in `program/07b_b5_decode_once.md`, v0.7.0 B5b; remove after B5b). Built and on by default above 3 MP (section 13 records the build and the A/B; the settings are in `src/config/curation.py`). The text before section 13 is the plan as written, when nothing in `src/` had changed. Issue #217 (WP-2.4 of
+the retired 0.6.0 wave plan), parent design Waves 6 and 7 of
 [triton_pipeline_optimization_plan.md](triton_pipeline_optimization_plan.md), related #67
 (request-driven plans), #219 (work crops, WP-4.1), #220 (faces and OCR, WP-2.5). Written
 2026-10-12 against `origin/main` `54fcfc89`; measured with the PE plan of `ref-u8fp16`, before the

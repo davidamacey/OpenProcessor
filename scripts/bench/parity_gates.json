@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "docs/design/triton_pipeline_optimization_plan.md section 7; docs/design/v060_wave_plan.md sections 2 and 2.1",
+  "source": "docs/design/triton_pipeline_optimization_plan.md section 7; docs/PERFORMANCE.md \"Wave 0 parity and FP16 gates\"",
   "settings": {
     "knn_k": 10,
     "knn_queries": 1000,

@@ -1,7 +1,9 @@
 # Request-driven processing plans: run only the requested models and branches (#67)
 
-Status: design, P1 implemented (the pure domain module, the wire models and their tests; no route
-uses them yet). Owner decision 2026-10-31: v0.9.0 delivers this document; route work (P2 onward)
+Status: open (P1 done; P0 and P2 to P6 are `program/07d_b5_processing_plans.md`, v0.7.0 B5d; remove
+after B5d). P1 is the pure domain module, the wire models and their tests; no route uses them yet.
+Owner decision 2026-11-03: the single v0.7.0 release includes this document (it was v0.9.0 in the
+2026-10-31 text); route work (P2 onward)
 starts after #220 PR 1 (the uint8 OCR input contract) has landed, and GPU face alignment is part of
 P5 here, not of #220. The rest is not implemented. Issue: #67. Umbrella: #40. Depends on: #220 (and through it #40). Related: #219,
 #52 (selective embedding, shipped), #231.
@@ -392,7 +394,7 @@ plan execution, whatever C1 says.**
    embedding, 1.55x detection only (`gpu_decode_plan.md` section 13).
 5. **Known BLS risk.** Python BLS overhead is real. `ocr_pipeline` spends 42-46 ms per COCO image
    for about 9 ms of GPU (`docs/PERFORMANCE.md` Probe 3), and public reports put BLS behind ensembles
-   (`v060_serving_backend_trade_study.md` S10). The mitigation is the parent plan's rule: few,
+   (`docs/research/v060_serving_backend_trade_study.md` S10). The mitigation is the parent plan's rule: few,
    large BLS calls, batched per consumer, plus the 15 % stop rule against the API-orchestrated arm.
 
 Measurements that confirm it (section 5.4): M1 answers C1 and is recorded in the pipeline plan's

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-# Numbers from docs/design/storage_sizing_and_ingest_baselines.md section 1 and 3.
+# Numbers from docs/research/storage_sizing_and_ingest_baselines.md section 1 and 3.
 STORAGE_REFERENCE = {'bytes_per_vector': 8350.0, 'bytes_per_image': 22500.0}
 
 

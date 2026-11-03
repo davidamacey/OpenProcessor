@@ -9,7 +9,7 @@ object, so two batches can never each hold part of the capacity and wait for the
 rest. A batch larger than the whole capacity is clamped and runs alone.
 
 An object that is too large, gone, forbidden or unreachable is an outcome of its own
-(``error_kind`` per ``docs/design/ingest_surfaces_plan.md``), never a failed batch.
+(``error_kind`` per ``docs-site/docs/guides/ingest-sources.mdx``), never a failed batch.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # Model families and Ultralytics versions: one toolchain, tested
 
-> **Execution order:** see `docs/design/master_plan.md`. It splits this plan: the minimal live fixes go in B1-1E, and the single version, export module, trainer and full matrix go in B3 (decision D-10). It also pins `ultralytics==8.4.197` first (D-2). Evidence lives in `artifacts_local/model_versions/`.
+> **Execution order:** see `docs/design/program/00_index.md` (the program set replaced the former master plan, rev 4, in git history). It splits this plan: the minimal live fixes go in B1-1E, and the single version, export module, trainer and full matrix go in B3 (decision D-10). It also pins `ultralytics==8.4.197` first (D-2). Evidence lives in `artifacts_local/model_versions/`.
 
 Status: **plan** (no code changed). Branch read: `fix/411-r2-round` at `4103656b`
 (`<repo>-wt-r2round`). Related issues: #447 (YOLO26 raw head), #368

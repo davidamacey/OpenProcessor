@@ -22,6 +22,12 @@ on what it was measured, and every result that matters has a reproduce command.
 | [detector_quantization_results.md](detector_quantization_results.md) | Detector precision, runtime and hardware matrix. |
 | [triton_perf_crossvalidation.md](triton_perf_crossvalidation.md) | Batch size versus output payload on a live Triton. |
 | [curation_scores.md](curation_scores.md) | Validation of the uniqueness, mistakenness and diversity scores. |
+| [retrieval_baseline.md](retrieval_baseline.md) | First search-quality baseline on a test stack with public COCO images, captions and instance annotations. |
+| [ingest_write_path_investigation.md](ingest_write_path_investigation.md) | Why bulk ingest looked write- and queue-bound: OpenSearch write-path measurements on throwaway containers, the fixes that followed and the remaining follow-ups. |
+| [storage_sizing_and_ingest_baselines.md](storage_sizing_and_ingest_baselines.md) | Index size per item, memory and ingest baselines (faiss figures for old projects, Lucene for new ones), re-measured on the public set. |
+| [v060_vector_db_evaluation_plan.md](v060_vector_db_evaluation_plan.md) | Tuned OpenSearch against Milvus, Qdrant, pgvector and LanceDB at 2k, 10k and 100k real vectors; results in `docs/PERFORMANCE.md`. |
+| [v060_serving_backend_trade_study.md](v060_serving_backend_trade_study.md) | Serving backend study and experiment plan: rooflines, decision rules and the alternative-runtime head-to-head (#231) and MPS (#403) that still read them. |
+| [audits/phase_a1_audit.md](audits/phase_a1_audit.md) | Independent audit of PR #361 (release/0.7.0) and the #357 and #362 fix branches. |
 
 ## Clustering
 
@@ -40,7 +46,10 @@ on what it was measured, and every result that matters has a reproduce command.
 | [clustering_methods.md](clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF for the residual pool; the IVF-then-refine design. |
 | [gpu_clustering.md](gpu_clustering.md) | cuML UMAP backend detection and VRAM budget. |
 | [clustering_research_consolidated.md](clustering_research_consolidated.md) | Consolidated clustering reference for whole images, crops, faces and fine-grained groups: internal notes, apps (Immich, PhotoPrism), literature, real-data geometry and whitening diagnostics, recommended stack per kind, real-data experiment plan. |
+| [cross_domain_clustering_lessons.md](cross_domain_clustering_lessons.md) | What a sibling speaker-linking system learned and which techniques transfer to multi-view object and face clustering, with an ordered experiment plan for #342 to #345, #354, #372 and #286. |
 | [leiden_refinement_prototype.md](leiden_refinement_prototype.md) | Graph-based global refinement (kNN graph, Leiden, split/merge validation) against the current pipeline; CPU and GPU (added when the prototype lands, epic #346). |
+| [cluster_research_9oct.md](cluster_research_9oct.md) | Early survey of continuous, recursive, self-refining clustering research. |
+| [spatial_datasets.md](spatial_datasets.md) | Public multi-view datasets for the spatial-memory work (#348), research snapshot of 2026-10-29. |
 | [cluster_program_outcome.md](cluster_program_outcome.md) | Closing summary of the 0.7.0 cluster research program: what was tried, the decision per arm with numbers, what stays in production, the class-root lead (Z5), parked issues #342 to #346, data licences, reproduce pointers. |
 
 ## Serving, decode and models

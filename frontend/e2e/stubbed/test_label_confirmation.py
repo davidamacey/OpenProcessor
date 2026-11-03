@@ -1,4 +1,4 @@
-"""Label confirmation (#119, docs/design/label_confirmation_plan.md section 7):
+"""Label confirmation (#119, docs-site/docs/guides/vlm-selection.mdx):
 a VLM label is a suggestion until a human validates it, and the detector's own
 class is kept beside it.
 

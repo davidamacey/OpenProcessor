@@ -397,7 +397,7 @@ python scripts/bench/ingest_cost_probe.py --images 1000 --full-items 7
 
 ### Measured ingest speed
 
-One run, not averaged, from `docs/design/storage_sizing_and_ingest_baselines.md`
+One run, not averaged, from `docs/research/storage_sizing_and_ingest_baselines.md`
 section 6: `POST /ingest/batch`, 32 images per request, 4 client threads, one 48 GB
 GPU for the detection models, API with 32 workers. A 2,000-image public COCO subset
 ingested at **13.39 images/s** (0 failed, 1.37 crops per image, batch p50 10.0 s). A
@@ -645,7 +645,7 @@ alongside Triton, which does not fit the 33 GB GPU 0 leaves free.
 
 Measured in a separate run (2 repetitions per route) that merges until no deleted documents
 remain and the size repeats; the first run measured too early and saw up to 2x inflation from
-the cluster-refresh worker still rewriting documents. Reference: `docs/design/storage_sizing_and_ingest_baselines.md`.
+the cluster-refresh worker still rewriting documents. Reference: `docs/research/storage_sizing_and_ingest_baselines.md`.
 
 | Route | bytes/image | bytes/vector | vs 8.35 KB reference |
 |---|---:|---:|---:|
@@ -1005,8 +1005,52 @@ as in the gates section below.
 Every 0.6.0 change is gated by `scripts/bench/parity.py` (WP-0.1, #208): it captures the per-stage
 outputs of one ingest of the pinned set and compares two captures against the accuracy gates of
 `docs/design/triton_pipeline_optimization_plan.md` section 7 and the cluster-agreement metric of
-`docs/design/v060_wave_plan.md` section 2.1. This section describes the tool and records the gate run
-that accepts the FP16 PE engine of the section above.
+the cluster-agreement metric defined below. This section holds the benchmark protocol, the parity
+chain and the gate table, then describes the tool and records the gate run that accepts the FP16 PE
+engine of the section above.
+
+#### Benchmark protocol (every change that claims speed)
+
+Tooling: `scripts/bench/baseline_suite.py` and `suite_report.py` (PR #206). Fresh project per
+repetition, a 100-image warm-up project first, `/ingest/upload` and `/ingest/batch` interleaved,
+**3 repetitions, report the median (min-max)**, 32 images per request, 4 client threads, ingest
+policy `all` as the headline row (the "embed everything" case is the one that must be fast), plus
+`selected` and `lazy` as extra rows when the change touches embedding. Record the host load average
+before each repetition and discard runs above 8. The VLM worker stays stopped during ingest runs
+unless the change measures it. The compose project is never the default name (always
+`docker compose -p <bench-name>`), on GPU 0 only. The pinned public set is
+`scripts/datasets/manifests/coco_bench_2000.json` (2,000 COCO images, seed 20261009, manifest sha256
+`edde8ae3...`) plus larger pins from the same command; the private high-resolution archive is run by
+the owner only and public docs carry pass/fail and ratios for it, never paths or counts. Parity comes
+before speed: a change may alter the numerics of **one stage only**, and its gates are checked at that
+stage and at every downstream consumer in the order below. A transport-only change must be
+bit-identical (gate P-json).
+
+#### Downstream order and parity chain
+
+Data flows `decode -> detection (boxes, classes) -> crops -> embeddings (PE crop, PE whole frame;
+MobileCLIP on core routes) -> faces / OCR -> clustering -> VLM labeling and region stage -> review ->
+training / export`. A change upstream silently changes everything below it, so a change to stage S
+must show, on the pinned set, that every consumer below S is either unchanged or passes its gate on
+the new S outputs:
+
+| Stage changed | Gate at the stage | Downstream gates that must also pass |
+|---|---|---|
+| Detection input (decode, letterbox, uint8) | P-box, P-item (`docs/design/triton_pipeline_optimization_plan.md` section 7), class **names** identical per item | crop boxes identical (integer pixel rect per item) => crops and everything below unchanged; if any crop box differs, run all gates below |
+| PE precision or input (FP16, INT8, uint8, GPU resize) | P-pe (crop), P-pew (whole frame): cosine against the reference capture | kNN neighbour overlap@10 >= 0.95 on 1,000 query items; IVF agreement (below); near-duplicate decisions at 0.98 identical on >= 99.5 % of pairs; VLM label agreement only if the VLM consumes vectors (it does not today: skip) |
+| Clustering implementation | IVF agreement and objective (below) | auto-promote outcome per item (class, `class_validated`) identical on >= 99 %; review-queue membership per tab identical on >= 99 % |
+| Work crop size (VLM, segmenter, region) | P-vlm, P-sam, P-region, P-ocr (parent plan) | export manifest equality (class names, boxes within 1 px) |
+| Transport only (shared memory, batching, serializer) | P-json: outputs and stored documents identical, minus ids and timestamps | none (identity) |
+
+#### Cluster-agreement metric
+
+On the residual pool of the pinned set with a fixed seed: (a) adjusted Rand index between the
+reference and candidate assignment, (b) fraction of items whose nearest centroid is unchanged when the
+candidate vectors are assigned to the **reference** centroids, (c) k-means objective relative
+difference, (d) purity against COCO ground truth: for each item, the class of the best-IoU COCO
+annotation (IoU >= 0.5, else "none"); cluster purity = share of the modal class, weighted mean. Pass
+for a numerics change: (b) >= 0.98, (d) not lower by more than 0.5 points; (a) and (c) are recorded
+(k-means is chaotic: ARI alone is too strict a gate). Implemented in `scripts/bench/parity.py`.
 
 #### The tool
 
@@ -2201,7 +2245,7 @@ models follow the lowest listed host index on any mix of cards.
 ### Vector store evaluation: tuned OpenSearch against Milvus, Qdrant, pgvector and LanceDB (#221, #230)
 
 Question: is OpenSearch k-NN the right engine for the curation embedding index, or is a second
-store worth its cost? Protocol: [v060_vector_db_evaluation_plan.md](design/v060_vector_db_evaluation_plan.md).
+store worth its cost? Protocol: [v060_vector_db_evaluation_plan.md](research/v060_vector_db_evaluation_plan.md).
 Raw documents: `docs/benchmarks/vectordb/` (one JSON per size, arm and repetition, plus
 `environment.json` with versions, digests and the deviations from the plan). Harness:
 `scripts/bench/vectordb/`, compose file `docker/bench/vectordb/compose.yml`.
@@ -3490,8 +3534,31 @@ one shard, no replica, 1 s refresh). Medians of 2 repetitions on a loaded host.
 
 ### Ingest transports (#263)
 
-Question: would a gRPC ingest channel beat HTTP beyond noise? Decision protocol:
-`docs/design/ingest_surfaces_plan.md` section 8. **Decision: no. The rule says skip, nothing is built.**
+Question: would a gRPC ingest channel beat HTTP beyond noise? **Decision: no. The rule says skip,
+nothing is built.**
+
+Decision protocol (written before the numbers). Step 1, transport only (no pipeline, no GPU, no
+OpenSearch): `scripts/bench/ingest_transport_bench.py` sends the real bytes of set A (the pinned 2,000
+COCO images, 640 x 480, median 166 KB) and set B (the pinned Commons photo set, 12 to 24 MP) to a server
+that reads the bytes, computes the imohash and returns a fixed-size result shaped like a
+`BatchIngestResponse`. Contenders at equal client concurrency (4, 16, 32), 3 repetitions, median and
+range: (1) HTTP/1.1 multipart through the production stack, one connection per client; (2) HTTP/2
+multipart (hypercorn if installable, otherwise stated as not measured); (3) gRPC `grpc.aio` client
+streaming of image chunks with one response per batch, and unary with the whole batch as a second row.
+Recorded per row: images/s, request p50/p99, server and client CPU seconds per image (`psutil`), bytes on
+the wire per image, peak server memory. Step 2, Amdahl bound: `transport_share` = (server CPU per image
+of the HTTP row minus that of the gRPC row) / API CPU per image of the full pipeline, using the measured
+0.18 s (set A) and 1.10 s (set B) and the images/s plateaus of 21 (set A, GPU bound) and 15 (set B, CPU
+bound); on set A a transport change cannot raise images/s, only lower API CPU. Step 3, rule: **skip**
+(record the numbers, close #263, build nothing) unless the transport-only saving is at least 10 percent
+of the pipeline's API CPU per image on set A or set B with ranges that do not overlap across the 3
+repetitions. If it passes: prototype a `grpc.aio` servicer behind a flag calling the shared
+`stage_and_ingest` (one implementation, two transports), repeat through the full pipeline at equal
+concurrency (3 repetitions, policy `all`, fresh project per repetition, warm-up first), and ship only if
+images/s or API CPU per image improves by at least 10 percent with non-overlapping ranges and p99 not
+worse than 1.1x; otherwise delete the prototype. A gRPC service, if built, must use the same project
+binding (fail closed when unbound), the same lock rule and OCC (it calls `ingest_batch`), the decode
+routing, and a generated `.proto` checked by a contract hook.
 
 Measured by: `scripts/bench/ingest_transport_bench.py` (transport only, no pipeline, no GPU, no
 OpenSearch) and, for the pipeline side, `scripts/bench/baseline_suite.py --phases ingest --modes upload`,

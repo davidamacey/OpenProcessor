@@ -107,7 +107,7 @@ evaluator has its own `evaluator` profile).
 - **Cluster research outcome.** Nothing new ships from the clustering
   experiments; IVF and PE-Core-L stay
   ([outcome](docs/research/cluster_program_outcome.md)). What to do next:
-  [`docs/design/improvement_backlog.md`](docs/design/improvement_backlog.md).
+  [`docs/design/program/00_index.md`](docs/design/program/00_index.md).
 - Also: typed `GET /clusters`, detector filters in the item filter, content-hash
   image ids, per-project crop cache, semantic text search on by default.
   Full list and upgrade notes in [`CHANGELOG.md`](CHANGELOG.md).

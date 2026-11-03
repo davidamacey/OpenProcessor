@@ -1,5 +1,5 @@
-"""Transport-only comparison for the gRPC ingest decision (#263, section 8 of
-docs/design/ingest_surfaces_plan.md).
+"""Transport-only comparison for the gRPC ingest decision (#263; decision protocol in
+docs/PERFORMANCE.md, "Ingest transports").
 
 No pipeline, no GPU, no OpenSearch. A server process reads the bytes of each image, computes the
 imohash the real route computes first, and returns a fixed-shape result like a

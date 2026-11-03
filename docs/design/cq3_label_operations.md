@@ -1,8 +1,9 @@
 # CQ3: label operations with server-side undo (design review)
 
-Status: design, not implemented (2026-10-29). Branch `feat/v070-cluster-outputs`, on top of CQ1 and
-CQ2 (`7a87133d`). Plan: section 6 (CQ3) and section 8 (UI3, UI4) of
-`docs/design/ship_track_plan.md` on branch `docs/ship-track-plan` (not on this branch). Gate **G7**
+Status: implemented (reference; label-ops routes, store, undo and domain rules shipped; UI #404 and
+paging #419 closed). The text below is the design as reviewed on 2026-10-29. Branch
+`feat/v070-cluster-outputs`, on top of CQ1 and CQ2 (`7a87133d`). Plan: section 6 (CQ3) and section 8
+(UI3, UI4) of the retired ship-track plan (git history). Gate **G7**
 (label operation semantics) must be answered before any code; section 12 lists the other owner
 decisions.
 

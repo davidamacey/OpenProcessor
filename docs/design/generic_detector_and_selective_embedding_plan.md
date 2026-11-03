@@ -1,6 +1,6 @@
 # Generic detector, store-everything ingest and selective embedding: design and implementation plan
 
-Status: implemented (waves W0 to W9). Default embedding policy stays `all` (flip decision: keep). Deferred: arbitrary-filter clustering, a model-delete guard for a project's own detector, the optional `backfill_embedding_state.py`. Issues: #52 (default detector, store
+Status: implemented (waves W0 to W9). Default embedding policy stays `all` (flip decision: keep). Of the three deferred items the model-delete guard is done (409 `detector_in_use`, `project_owned_model`), the optional `backfill_embedding_state.py` is obsolete, and arbitrary-filter clustering is parked research (#346). Issues: #52 (default detector, store
 every detection, embedding policy), #45 (public COCO baseline set, used for the
 before/after numbers). Sibling plan: `docs/design/sam3_full_image_detection_plan.md`
 (#30; its section 12 assumes this plan: a hit is always stored, whether it is

@@ -1,7 +1,7 @@
 /**
  * Wording and field gating for the VLM scope panel (#119). The scope ids
  * are the contract enum; the sentences are the plan's semantics
- * (`docs/design/label_confirmation_plan.md` section 4). Which knob a scope
+ * (`docs-site/docs/guides/vlm-selection.mdx`, "Scope and budget"). Which knob a scope
  * reads is the plan's definition of that scope, not a client decision.
  */
 import type { RegionVerifyMode, VlmScope } from '$lib/types_labelConfirmation';

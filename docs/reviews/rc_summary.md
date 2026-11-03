@@ -13,7 +13,7 @@ delivered, what was checked, and what was not.
 | 2 | `perf/v070-ingest-speed` | 14, `1df27b53..db94c872` | Stage counters that work on Triton 2.70 (#390); device-memory budget in `gpu_image_prep` (#392); opt-in ingest load profile and on-demand model loading (#393); `/health` readiness (#391); `full` profile runs one instance; `run_baseline.py --clients` | [`sp0_review.md`](sp0_review.md), [`sp_fixes_review.md`](sp_fixes_review.md) |
 | 3 | `feat/v070-assist-loop` | 23, `1df27b53..70af3457` | Auto-label loop (#286): routes, worker, audit, rollback, retrain hold, `/clusters` panel, fake-VLM modes and a live test | [`../design/auto_label_loop_plan.md`](../design/auto_label_loop_plan.md) |
 | 4 | `chore/v070-acceptance-phases` | 2, `0bb5fed7..9debb1d8` | Acceptance phases for health, clusters, label operations, GPU route and loop | [`../design/release_acceptance_plan.md`](../design/release_acceptance_plan.md) |
-| 5 | `docs/v070-user-docs` | 3, `0bb5fed7..0f6b0ab2` | README "What is new", guides for label operations and cluster filters, stage timing page, improvement backlog | [`../design/improvement_backlog.md`](../design/improvement_backlog.md) |
+| 5 | `docs/v070-user-docs` | 3, `0bb5fed7..0f6b0ab2` | README "What is new", guides for label operations and cluster filters, stage timing page, improvement backlog | [`../research/cluster_program_outcome.md`](../research/cluster_program_outcome.md) |
 
 Conflicts were limited to `CHANGELOG.md` (kept both sides each time). Contracts needed no regeneration:
 `contracts/` from the loop branch already matches the merged code (`make contracts-check` passes).

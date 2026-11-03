@@ -1,7 +1,7 @@
 # Engineering standards and lessons learned
 
 Status: reference. Every number, snippet and failure below comes from the repo cleanup series
-(nine PRs plus follow-up fixes, planned in [repo_cleanup_plan.md](repo_cleanup_plan.md)). This file
+(nine cleanup PRs, #300 to #324, plus follow-up fixes). This file
 is written to be applied to a **sister repo** (a Python/FastAPI + Svelte application of similar
 shape). The sister repo is not touched by this series; section 4 is the ordered port checklist.
 
@@ -536,6 +536,37 @@ Splitting rules that worked:
     eagerly), so the retired-name refusal lives in the CLI, the installer and the container
     entrypoint, not in compose.
 
+Lessons from the cluster research and the 0.7.0 measurement work (moved here from the retired
+improvement backlog):
+
+19. **Synthetic data misleads.** Leiden recovered planted partitions and then barely beat the baseline
+    on 539 real crops; the k-means fit was 2.3 times slower on real vectors than on a synthetic mixture
+    of the same size. A quality or speed claim needs real photos. The scorecard refuses quality fields
+    on a synthetic dataset for this reason (`scripts/bench/scorecard.py`).
+20. **Weak labels mislead.** The encoder ranking from Commons set C (category-name labels) did not
+    survive the author-labelled benchmarks. Check labels before comparing models on them.
+21. **Test on standard benchmarks.** CARS196, CUB-200-2011 and SOP have published numbers and were the
+    only fair check of the encoder question. Even they were labelled exploratory here because the
+    registered sanity check failed.
+22. **Register the bar before the score.** Bars were committed before scoring in W0e, Z4, WB and WB2,
+    and none was moved. Z4's open-set bar was still unreadable: register a minimum sample size per bar
+    too.
+23. **CI-only float noise.** Tolerances that pass on one machine can fail on another (TensorRT kernels,
+    batching and concurrency change embeddings at the level of run-to-run noise even with the same
+    inputs). Pin the comparison to cosine and sorted outputs, not bit equality.
+24. **GPU sharing etiquette.** Several sessions share three GPUs. Check `nvidia-smi` first, give the
+    stack its own compose project name (`docker compose -p`), keep to the agreed cards, and never act
+    on the live stack. A measurement taken on a busy host is an upper bound: record the load average
+    and mark the row noisy (the harness does).
+25. **Wait-loop pitfalls.** Poll a health route with a timeout and a marker, never `pgrep -f` or
+    `pkill -f` on a string that is also in your own command line (it matches itself), and never a blind
+    `sleep` before a check. Time `/health` before a run: a slow health route is the first sign of a
+    loaded stack.
+26. **Counters can crash the server.** Custom Triton Python-backend metrics must be kept alive,
+    dropped in the right order and incremented from one thread (#390).
+27. **Fail closed beats a quiet empty result.** A partial cluster pass used to report success (#357);
+    undo re-decides each item inside the write so a person's edit wins.
+
 ## 6. Results
 
 Before is the first guards commit (`d4e44556`, the day the baselines were generated from the old
@@ -596,5 +627,5 @@ Decide before starting; each is an owner decision here (marked OC in the plan).
 - **Agents.** The Opus-plans/Sonnet-implements split and parallel worktrees assume cheap parallel CI;
   a repo with slow or scarce CI should batch more per PR and merge less often.
 
-Related: [CONTRIBUTING.md](../../CONTRIBUTING.md) (day-to-day rules and the guard table),
-[repo_cleanup_plan.md](repo_cleanup_plan.md) (the plan this series executed).
+Related: [CONTRIBUTING.md](../../CONTRIBUTING.md) (day-to-day rules and the guard table); the nine cleanup
+PRs (#300 to #324) are the record of this series.

@@ -1,6 +1,7 @@
 # Clustering and semantic search for faces, objects, images and items; fine-grained grouping (make/model) for set P
 
-Status: plan, nothing implemented. Written 2026-10-29 against `origin/main` at `5620f6f6`.
+Status: open (parked research; W0, W0b, W1, WB and W8 research ran; W2 (#353, #354), the W3 privacy part
+(#379) and W4 (#402 phases A and B) shipped; the rest is v0.8.0 platform breadth or parked under #346). Written 2026-10-29 against `origin/main` at `5620f6f6`.
 Audience: a fresh implementation agent with no conversation memory. Every wave in section 9 is
 self-contained: it names its inputs, exact files, tests, verification commands, GPU use, model
 tier and the issues it closes. Symbols are named instead of line numbers; re-find them with `rg`.
@@ -25,7 +26,7 @@ Unmerged inputs, read with `git show <branch>:<path>`:
 | 3,000-item evaluation baseline (#341) | branch `fix/v070-341-work`, `docs/research/cluster_eval_baseline.md` | Production IVF on 2,950 labelled crops: pair precision 0.696, false merge 0.304 (0.400 low-res), false split 0.978, permutation ARI 0.306 (#372) |
 | Auto-label loop (#286) | branch `feat/v070-assist-loop` (S0 to S6a committed) | Propagated machine label kind, exact sampled-agreement gate, splitter, budgets, rollback |
 | Retrieval baseline | uncommitted in worktree `OpenProcessor-wt-ret` (`scripts/bench/retrieval_eval*.py`, `docs/benchmarks/retrieval_baseline/`) | Text and image search quality and latency on 2,000 COCO val images (section 1.2) |
-| Program plan | branch `docs/program-plan`, `docs/design/program_plan.md` | Phase C (clustering) items C0 to C6, model tiers, DoD, measurement rules |
+| Program plan | the retired program plan (git history) | Phase C (clustering) items C0 to C6, model tiers, DoD, measurement rules |
 | Clustering research of 9 October | `docs/research/cluster_research_9oct.md` | The refinement-engine design that #346 to #345 were filed from |
 | **Consolidated clustering research** (primary method reference) | branch `docs/cluster-methods-review`, `docs/research/clustering_research_consolidated.md` | Real-data diagnosis (section 4), recommended stack per kind (section 7), experiments E0 to E10 on real data with a held-out split (section 8), missing evidence (section 9). Where this plan and that note differ, the note's real-data findings win |
 
