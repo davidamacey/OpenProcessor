@@ -12,13 +12,12 @@ operator may want SAM 3's boxes anyway.
 
 from __future__ import annotations
 
-import functools
 from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.config_store.profile_dependency_checks import check_segmenter_prompt_text
-from src.services.config_store.profile_issues import _issue as _shared_issue
+from src.services.config_store.profile_issues import issue_builder
 from src.services.detection.open_vocab_set import (
     MAX_ENABLED_TARGETS_CEILING,
     OpenVocabSet,
@@ -51,7 +50,7 @@ OPEN_VOCAB_FIELD_RANGES: dict[str, tuple[float, float]] = {
 #: Errors ``force: true`` bypasses on activation (an outage that may be
 #: stale or racy); everything else is never bypassable.
 BYPASSABLE_CODES: frozenset[str] = frozenset({'segmenter_unreachable', 'segmenter_not_configured'})
-_issue = functools.partial(_shared_issue, bypass_codes=BYPASSABLE_CODES)
+_issue = issue_builder(BYPASSABLE_CODES)
 
 _MAX_CLASS_NAME_LEN = 64
 
@@ -159,7 +158,11 @@ def _check_targets(
     seen: set[tuple[str, str]] = set()
     for i, t in enumerate(ov.targets):
         base = target_path(i)
-        issues.extend(check_segmenter_prompt_text(t.prompt, sole_leg=True, field=f'{base}.prompt'))
+        issues.extend(
+            check_segmenter_prompt_text(
+                t.prompt, sole_leg=True, issue=_issue, field=f'{base}.prompt'
+            )
+        )
         if t.class_name and (len(t.class_name) > _MAX_CLASS_NAME_LEN or not _norm(t.class_name)):
             issues.append(
                 _issue(

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
 from src.services.config_store.profile_field_checks import _needs_ocr_models
-from src.services.config_store.profile_issues import _issue
+from src.services.config_store.profile_issues import IssueBuilder, region_issue as _issue
 
 
 if TYPE_CHECKING:
@@ -188,22 +188,27 @@ async def _check_ocr_models(
 
 
 def check_segmenter_prompt_text(
-    text_prompt: str, *, sole_leg: bool, field: str = 'segmenter_text_prompt'
+    text_prompt: str,
+    *,
+    sole_leg: bool,
+    issue: IssueBuilder,
+    field: str = 'segmenter_text_prompt',
 ) -> list[ValidationIssue]:
     """The text-prompt-only checks: served alone by
     ``POST /region_profiles/validate_segmenter_prompt`` and applied to every
-    open-vocabulary target prompt (``field`` names where the prompt lives)."""
+    open-vocabulary target prompt (``field`` names where the prompt lives). Shared by
+    validators with different bypass sets, so the caller's ``issue`` builds every issue."""
     if not text_prompt:
         severity = 'error' if sole_leg else 'warning'
-        return [_issue('segmenter_prompt_empty', severity, f'{field} is empty', field=field)]
+        return [issue('segmenter_prompt_empty', severity, f'{field} is empty', field=field)]
     issues = []
     if len(text_prompt) > 200:
         issues.append(
-            _issue('segmenter_prompt_too_long', 'error', f'{field} exceeds 200 chars', field=field)
+            issue('segmenter_prompt_too_long', 'error', f'{field} exceeds 200 chars', field=field)
         )
     if len(text_prompt.split(',')) > 8:
         issues.append(
-            _issue(
+            issue(
                 'segmenter_prompt_too_many_phrases',
                 'error',
                 'more than 8 comma-separated phrases',
@@ -212,9 +217,7 @@ def check_segmenter_prompt_text(
         )
     if '\n' in text_prompt:
         issues.append(
-            _issue(
-                'segmenter_prompt_multiline', 'error', f'{field} has multiple lines', field=field
-            )
+            issue('segmenter_prompt_multiline', 'error', f'{field} has multiple lines', field=field)
         )
     return issues
 
@@ -225,9 +228,8 @@ async def _check_segmenter(
     for_activation: bool,
     segmenter_health: SegmenterHealthFn | None,
 ) -> list[ValidationIssue]:
-
     issues = check_segmenter_prompt_text(
-        profile.segmenter_text_prompt, sole_leg=not profile.detector_model
+        profile.segmenter_text_prompt, sole_leg=not profile.detector_model, issue=_issue
     )
     configured = bool(env_str('OP_SEGMENTER_URL'))
     if profile.segmenter_text_prompt and not configured:

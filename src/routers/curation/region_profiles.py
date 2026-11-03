@@ -177,8 +177,11 @@ async def validate_region_profile_route(
 async def validate_segmenter_prompt_route(body: SegmenterPromptValidateRequest) -> Any:
     from src.schemas.curation.config_common import ValidationReport
     from src.services.config_store.profile_dependency_checks import check_segmenter_prompt_text
+    from src.services.config_store.profile_issues import region_issue
 
-    issues = check_segmenter_prompt_text(body.text_prompt, sole_leg=body.sole_leg)
+    issues = check_segmenter_prompt_text(
+        body.text_prompt, sole_leg=body.sole_leg, issue=region_issue
+    )
     errors = [i for i in issues if i.severity == 'error']
     warnings = [i for i in issues if i.severity != 'error']
     return ValidationReport(
