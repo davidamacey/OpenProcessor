@@ -13,6 +13,7 @@ import pytest
 
 from curation.assist_loop_fakes import ITEMS, FakeVlm, World, decisions, drive, make_world
 from src.domain.loop_stats import required_sample
+from src.services.curation.assist_loop.partition import PartitionScope
 
 
 if TYPE_CHECKING:
@@ -110,7 +111,14 @@ def test_the_largest_node_is_scheduled_first_and_the_rest_go_unvisited(
     cap = required_sample(300, 0.9, 0.025, 0) + 4
 
     run = asyncio.run(
-        drive(world, tmp_path / 'loop', FakeVlm(world.truth), max_crops=cap, node_concurrency=1)
+        drive(
+            world,
+            tmp_path / 'loop',
+            FakeVlm(world.truth),
+            max_crops=cap,
+            node_concurrency=8,
+            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+        )
     )
 
     assert decisions(run.store) == {'r10002': 'pass', 'r10001': 'unvisited'}
@@ -161,7 +169,7 @@ def test_cancel_stops_new_work_and_a_resume_finishes_the_same_tree(
     world.add_cluster(10001, {'car': 60, 'truck': 60, 'bus': 60, 'van': 60}, prefix='a')
     pristine = world.snapshot()
     reference = asyncio.run(
-        drive(world, tmp_path / 'reference', FakeVlm(world.truth), node_concurrency=1)
+        drive(world, tmp_path / 'reference', FakeVlm(world.truth), node_concurrency=8)
     )
     expected = decisions(reference.store)
     world.restore(pristine)
@@ -238,3 +246,37 @@ def test_a_fake_vlm_of_known_accuracy_gives_precise_cheap_labels(
     assert coverage >= 0.6
     assert spent / (len(propagated) + len(direct)) <= 0.15
     assert not any(c.startswith('c-') for c in propagated), 'the VLM is bad at this root'
+
+
+def test_a_tight_budget_is_not_spent_on_nodes_it_cannot_finish(
+    world: World, tmp_path: Path
+) -> None:
+    """Concurrent nodes must not each take a slice of a budget none of them can finish on:
+    every crop spent belongs to a node that got a decision, the rest are left untouched."""
+    for index in range(12):
+        world.add_cluster(10001 + index, {'car': 20}, prefix=f'c{index}')
+    need = required_sample(20, 0.9, 0.025, 1)
+    cap = need * 4 + 3
+    vlm = FakeVlm(world.truth, accuracy=0.93, seed=3)
+
+    run = asyncio.run(
+        drive(
+            world,
+            tmp_path / 'loop',
+            vlm,
+            max_crops=cap,
+            node_concurrency=8,
+            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+        )
+    )
+
+    final = decisions(run.store)
+    spent_on: dict[str, int] = {}
+    for event in run.store.events():
+        if event['event'] == 'reserve':
+            spent_on[event['path']] = spent_on.get(event['path'], 0) + event['crops']
+    wasted = {p: c for p, c in spent_on.items() if final.get(p, 'unvisited') == 'unvisited'}
+    assert wasted == {}
+    assert sum(1 for kind in final.values() if kind != 'unvisited') >= 4
+    assert run.outcome.stop_reason == 'budget_crops'
+    assert run.budget.snapshot()['vlm']['crops_spent'] <= cap
