@@ -181,3 +181,27 @@ def test_no_horizontal_overflow_at_430(stub, page, app_url, path, ready):
     wait_for_paint(page)
     m = page.evaluate(PROBE)
     assert m["scrollWidth"] <= m["innerWidth"], f"{path} overflows at 430px: {m}"
+
+
+def test_projects_table_needs_no_inner_scroll_at_430(stub, page, app_url):
+    """The scroll-container exemption above would hide a clipped table, so check
+    the table itself: its wrapper scrolls nothing and every cell sits in view."""
+    page.set_viewport_size(NARROW)
+    _stub_common(stub)
+    page.goto(f"{app_url}/projects")
+    page.get_by_test_id("projects-table").wait_for(timeout=ACTION_TIMEOUT_MS)
+    wait_for_paint(page)
+    m = page.evaluate(
+        """() => {
+          const t = document.querySelector('[data-testid="projects-table"]');
+          const w = t.parentElement;
+          const vw = window.innerWidth;
+          const out = [...t.querySelectorAll('td, button, a')]
+            .filter((e) => e.getBoundingClientRect().width > 0)
+            .filter((e) => e.getBoundingClientRect().right > vw + 1)
+            .map((e) => e.tagName + '[' + (e.dataset.testid || '') + ']');
+          return {scroll: w.scrollWidth, client: w.clientWidth, out};
+        }"""
+    )
+    assert m["scroll"] <= m["client"], f"projects table scrolls sideways at 430px: {m}"
+    assert not m["out"], f"projects cells past the viewport at 430px: {m}"

@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ingest policy page (`/settings/ingest-policy`): an "Ingest profiles" list (`GET /ingest_profiles`) marks the active profile and activates another (`POST /ingest_profiles/{name}/activate`). A refused activation shows the served message and each served issue (`detector_model_not_ready`, `detector_model_unusable`, `triton_unreachable`) verbatim; "Activate anyway" appears only when the served report says `force_allowed`. A successful activation re-reads the active-profile card (#440).
+
 ### Fixed
+
+- `/projects` at phone width: the table becomes stacked rows (counts under the project, actions below) instead of needing sideways scrolling to reach Embedded and the Open/Edit/Archive buttons.
 
 - Ingest policy page: with no active ingest profile the card now says ingest uses the deployment's default detector (naming it from `GET /ingest/config`) instead of claiming ingest is refused (#411).
 - Search by image popover on `/clusters` opens under its button at phone width instead of pinned to the top of the viewport over the header.

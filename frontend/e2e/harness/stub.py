@@ -315,6 +315,7 @@ class Stub:
         self.on("GET", r"/detections/summary(\?|$)", (404, {"detail": "Not Found"}))
         self.on("GET", r"/ingest/policy(\?|$)", (404, {"detail": "Not Found"}))
         self.on("GET", r"/ingest_profiles/active(\?|$)", (404, {"detail": "Not Found"}))
+        self.on("GET", r"/ingest_profiles(\?|$)", (404, {"detail": "Not Found"}))
         # Label confirmation (#119): /settings reads the VLM scope policy on
         # mount and /audit its report and queue. Default 404s keep the zero-
         # unhandled guarantee; test_label_confirmation.py overrides them.

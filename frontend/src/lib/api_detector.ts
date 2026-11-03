@@ -11,13 +11,18 @@ import type {
   DetectionsSummary,
   IngestPolicy,
   IngestPolicyBody,
+  IngestProfileList,
   IngestPolicyPreview,
   IngestPolicyPutResponse,
   IngestPolicyUpdate,
   SeedFromDetectorRequest,
   SeedFromDetectorResponse,
 } from '$lib/types_detector';
-import type { ActiveConfigResponse } from '$lib/types_config';
+import type {
+  ActivateResponse,
+  ActiveConfigResponse,
+  ConfigActivateRequest,
+} from '$lib/types_config';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
 /** `POST /classes/seed_from_detector`. `dry_run` is always sent explicitly;
@@ -59,6 +64,24 @@ export function getActiveIngestProfile(
   signal?: AbortSignal,
 ): Promise<ActiveConfigResponse> {
   return apiFetch<ActiveConfigResponse>(`${scoped()}/ingest_profiles/active`, {}, signal);
+}
+
+/** `GET /ingest_profiles`: the project's stored ingest profiles, each with
+ *  its served `active` flag. */
+export function listIngestProfiles(signal?: AbortSignal): Promise<IngestProfileList> {
+  return apiFetch<IngestProfileList>(`${scoped()}/ingest_profiles`, {}, signal);
+}
+
+/** `POST /ingest_profiles/{name}/activate` (OCC on `expected_active`). A
+ *  refusal is a 422 `validation_failed` carrying the served report. */
+export function activateIngestProfile(
+  name: string,
+  body: ConfigActivateRequest,
+): Promise<ActivateResponse> {
+  return apiFetch<ActivateResponse>(
+    `${scoped()}/ingest_profiles/${encodeURIComponent(name)}/activate`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
 }
 
 /** `POST /ingest/policy/preview`: what the draft would embed among the

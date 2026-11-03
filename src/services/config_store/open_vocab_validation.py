@@ -12,12 +12,13 @@ operator may want SAM 3's boxes anyway.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.config_store.profile_dependency_checks import check_segmenter_prompt_text
-from src.services.config_store.profile_issues import _issue
+from src.services.config_store.profile_issues import _issue as _shared_issue
 from src.services.detection.open_vocab_set import (
     MAX_ENABLED_TARGETS_CEILING,
     OpenVocabSet,
@@ -50,6 +51,7 @@ OPEN_VOCAB_FIELD_RANGES: dict[str, tuple[float, float]] = {
 #: Errors ``force: true`` bypasses on activation (an outage that may be
 #: stale or racy); everything else is never bypassable.
 BYPASSABLE_CODES: frozenset[str] = frozenset({'segmenter_unreachable', 'segmenter_not_configured'})
+_issue = functools.partial(_shared_issue, bypass_codes=BYPASSABLE_CODES)
 
 _MAX_CLASS_NAME_LEN = 64
 
