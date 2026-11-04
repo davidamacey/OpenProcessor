@@ -906,3 +906,214 @@ as D-64 (Q-1), D-65 (Q-2), D-66 (Q-3) and D-67 (Q-4); Q-5 was answered with MQ-6
 | R-38 | fixed: the pool healthcheck sends `inspect stats` to its own hostname only | 03a 1B-6 |
 | section 3.4 note (`src/routers` imports no `src.db.repos`) | fixed: a layering contract and a planted red test | 02 section 6; 03a 1A-11 |
 | section 3.7 caveats (E15, the visibility-timeout sub-item) | fixed: both caveats added to the retired rows | 00b section 1.9 |
+
+## 6. Re-check (2026-11-04)
+
+Written by the independent reviewer on `plan/recheck` (from `plan/master` at `88b09f2df`), after the
+planner's fix pass (`357594495`, `88b09f2df`). Same rules as sections 1-3: every claim was checked
+against the plan text, the code and the docs, not against the response table in section 5.
+
+### 6.1 Verdict
+
+**Yes, with fixes.** Wave W2.0 can start now.
+
+All twelve blockers and highs (R-1 to R-12) are resolved in the plan text, not just mentioned. The
+fix pass did introduce three new high findings. Each is a contradiction between two fixes, or
+between a fix and an existing rule. Each is a short text change. Make the changes before the lanes
+they touch are cut: RC-2 before W2.1 (lane 1A-11 writes the contract), RC-1 before W2.2 (lane 2F),
+RC-3 before W2.4 (lane 6A).
+
+Counts of the new findings: **0 blockers, 3 high, 3 medium, 7 low.**
+
+### 6.2 Blockers and highs: resolved?
+
+| Finding | Resolved | Checked where |
+|---|---|---|
+| R-1 | yes. `Depends(get_db, scope="function")`, explicit commits in `project_tx`, SSE routes take no session, and the two red tests | 03a 1A-10; 02b sections 6.3 and 8 |
+| R-2 | yes for the GPU images (heartbeat, fenced writes, event row and wake-up live in `src/tasks/runtime/` and `src/db/repos/`; the OpenSearch factory is injected). **The fix creates RC-2** | 02 section 6; 03e 3A and 3B owned files |
+| R-3 | yes. `name_key`, the partial unique index over active classes, and the lookup rule matching `resolve_class_by_name` | 02a section 3, against `src/utils/class_names.py:157-214` |
+| R-4 | yes. `addopts` in lane 1-0; `ci.yml` (both commands and the PR #477 shard command), `CONTRIBUTING.md` and the `Makefile` in 1D; `CLAUDE.md` in 6D; 1D-3 asserts the default selection | 03a lanes 1-0 and 1D |
+| R-5 | yes. Savepoints in `start_job` and per reaper row, the busy-group `NOT EXISTS`, and `interrupted -> failed` in the transition table | 02b sections 1, 2.2 and 4 |
+| R-6 | yes. Valkey pub/sub wake-up (D-65), so no `LISTEN` and no `NOTIFY` lock; the pool is a total over workers and replicas; the budget test takes scale factors. **The implementation leaves RC-4** | 02b sections 6 and 8; 03e 3B |
+| R-7 | yes as specified: bootstrap and mapping migrations in the one-shot step, read-only check in the API. **It contradicts R-11: RC-1** | 02c section 1.2; 03d 2F-4 |
+| R-8 | yes. Liveness rows, release of the excess, a token bump on takeover only, and sequential start in sweep step 13 | 02b section 5 |
+| R-9 | yes (a-e). The `upgrade_state` gate, `--reset`, rollback order and the abandoned database, run logs moved into storage, RF-63 reworded | 02c sections 2.2 and 2.3 |
+| R-10 | yes. `kombu==5.6.2` and `redis==6.4.0` (on PyPI; 6.4.0 is the only 6.4.x release, uploaded 2025-08-07, not yanked); the 02b sentence corrected | 13 sections 1 and 4; 02b section 7.1 |
+| R-11 | yes. `api` depends on neither `db-migrate` nor `valkey`; "control plane down" mode; refuses to start only at the wrong head; `/health` and `/ready`. **See RC-1** | 02c section 1.2; 03a 1D-1; D-64 |
+| R-12 | yes, with the alternative mechanism (6.3) | 03c 6B |
+
+### 6.3 The two alternative mechanisms
+
+- **R-7, kNN warm-up once per deployment in the migrate step: accepted.**
+  - The OpenSearch k-NN warm-up loads the native graphs into the data nodes' memory on the server
+    side, so one call warms them for every client. The repo's own docstring says the same
+    (`src/services/curation/index_bootstrap.py:93-98`). One call per deployment is enough, and it
+    is better than one per replica.
+  - Caveat (RC-7, low): the warm state is lost when OpenSearch restarts, when the graph cache
+    expires or evicts, and for segments written after the warm-up. The migrate step does not run
+    again in those cases, so the first query after them pays the load.
+- **R-12, Prometheus `dns_sd_configs` (type A) instead of `docker_sd_configs`: accepted. It is
+  better than my suggestion.**
+  - Docker's embedded DNS answers a Compose service name with one A record per running replica.
+  - Prometheus' DNS discovery makes one target per record
+    ([dns_sd_config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#dns_sd_config)).
+  - It needs no Docker socket in Prometheus.
+  - Caveat (RC-8, low): `instance` is the container IP, which changes when a container is
+    recreated. Dashboards should aggregate by `job` or service, not by `instance`. Prometheus must
+    sit on the same Compose network as the targets.
+
+### 6.4 Mediums spot-checked
+
+| Finding | Resolved | Note |
+|---|---|---|
+| R-13 | yes: non-superuser `op_owner` with `BYPASSRLS`, the `after_begin` scope listener, `scope_not_set` raised, `FOR SELECT` consumer policies, restore with `--no-privileges` | see RC-9 |
+| R-14 | yes: one container shared by the xdist workers, `op_template_<worker>` | - |
+| R-15 | yes: a sequential exact-diff scenario plus a concurrent invariant scenario, in the three configurations of 05 | - |
+| R-19 | yes: Valkey `--maxmemory` with `noeviction`, a container limit above it, memory limits on the new services, `--max-memory-per-child` | - |
+| R-20 | yes: a dedicated `arbiter` queue and `gpu-arbiter-worker` | **creates RC-3 and RC-6** |
+
+### 6.5 New findings
+
+#### High
+
+**RC-1 The OpenSearch migrate step contradicts "inference stands alone" and misses the upgraded projects (02c section 1.2; 03d 2F-4; D-64).**
+- *What.* Five gaps:
+  1. Index creation for the **global** inference indexes (`/search`, `/ingest`) now happens only in
+     `db-migrate`. That service waits on `postgres`, connects as `op_super` and `op_owner`, and
+     fails when Postgres is down.
+  2. The API refuses to start on any mapping-fingerprint mismatch. So on a fresh install with
+     Postgres down, the inference API never starts, or starts with no visual-search indexes. D-64
+     says the opposite.
+  3. Because `api` no longer waits on `db-migrate` (R-11), it can start before the step has run.
+     It then refuses (`opensearch_mapping_not_current`) and loops on its restart policy.
+  4. On a 0.6.0 upgrade, the installer order is `db-migrate`, then the control-data step. The
+     OpenSearch step therefore runs while Postgres holds no projects. The 0.6.0 `images` and
+     `items` indexes are never migrated or stamped, and the API refuses after `up -d`.
+  5. Where the fingerprint is stored is unspecified. Projects created later by the
+     `project_create` job (B4 4D) are not covered by a check that runs once at start.
+- *Evidence.* 02c section 1.2 (the R-7 bullet and the "who waits on whom" bullet); 02c section 1.2
+  `openprocessor upgrade` order; `src/core/dependencies.py:140-152` (today's bootstrap also creates
+  the global indexes); 00_index D-64.
+- *Fix.*
+  - Make the OpenSearch step independent of Postgres. Either run it as its own one-shot service
+    that `api` *does* wait on, since it needs only OpenSearch, or let `db-migrate` run the
+    OpenSearch part even when the Postgres part fails.
+  - Store each fingerprint in the index mapping's `_meta`. That is the existing schema stamp the
+    bootstrap already reads ("Indexes already stamped with the current schema cost one read"), so
+    the check needs no Postgres.
+  - Refuse to start only on a **global** index mismatch. A project index mismatch makes that
+    project's curation routes answer 503 (fail closed per project), checked when the project is
+    first used.
+  - The installer runs the OpenSearch step again after the 0.6.0 control-data step.
+  - `project_create` stamps its two indexes.
+
+**RC-2 The layering contract forbids the imports the R-2 fix requires (02 section 6; 03a 1A-11; 03e 3B-1; 03f 5C).**
+- *What.* 02 section 6 says "nothing under `src/` except `src/tasks/` imports `src.tasks`", and
+  1A-11 keeps "nothing under `scripts/` imports `src.tasks`". But after the R-2 fix:
+  - `src/services/jobs/` imports the heartbeat class from `src/tasks/runtime/` for inline jobs (02
+    section 6 says so in the same table);
+  - `src/services/events/publish.py` calls `src/tasks/runtime/event_wakeup.py::wake` after commit
+    (03e 3B-1);
+  - the evaluator's handler `scripts/curation/bakeoff/celery_tasks.py` (5C) must call
+    `register_job` from `src/tasks/runtime/register.py`. This last one predates the fix; I missed
+    it in the first review.
+  Lane 1A-11 writes the contract in W2.1, so lanes 3A, 3B and 5C fail its pre-commit hook in W2.2
+  and W2.3.
+- *Evidence.* 02 section 6 (the `src/services/jobs/` row and the contract paragraph); 03a 1A-11;
+  03e 3B-1; 03f lane 5C.
+- *Fix.* Declare `src.tasks.runtime` a leaf layer in `check_layering.py`. It may be imported by
+  `src/services/`, `src/tasks/` and the GPU handler modules (`docker/trainer/`, `export/`,
+  `scripts/curation/bakeoff/`). Every other import of `src.tasks` stays forbidden. Add one planted
+  test per allowed and forbidden direction to 1A-11.
+
+**RC-3 The arbiter tick has no consumer on a default install and fills Valkey (02b sections 2.1, 7.3; 03c 6A-1; 02c section 4).**
+- *What.* Five problems:
+  1. `op.periodic.gpu_arbiter` is scheduled by beat every 15 s.
+  2. It now routes to the `arbiter` queue, whose only consumer exists with the opt-in GPU-arbiter
+     overlay.
+  3. Beat's `expires` option is checked by a worker when it *receives* the message. Undelivered
+     messages stay in the Valkey list, about 5,760 a day, forever.
+  4. With `maxmemory` and `noeviction` (R-19), Valkey eventually refuses every write. Every job
+     start then answers 503: an outage on the default install after weeks or months.
+  5. `tests/test_queue_consumers_from_compose.py` requires a consumer "in core or in the profile
+     `QUEUE_PROFILE` names", and the overlay is neither, so the test also fails.
+- *Evidence.* 03c 6A-1 (the `op.periodic.gpu_arbiter` row); 02b section 7.3 (the `arbiter` row,
+  "only with the GPU-arbiter overlay"); Celery periodic tasks, `expires`
+  (https://docs.celeryq.dev/en/stable/userguide/calling.html#expiration).
+- *Fix.*
+  - Beat adds the `gpu_arbiter` entry only when the overlay's setting is present (read at beat
+    start; the overlay sets it).
+  - The consumers test treats overlay queues as conditional on that setting.
+  - Note in 02b section 7.3 that a queue without a live consumer must never receive periodic
+    messages.
+
+#### Medium
+
+**RC-4 The R-6 pool works only as a configuration, not as a guarantee (02b section 8; 05 4B-2).**
+- *What.*
+  - Per API process the pool is now 2 connections (64 / 32) with no overflow. Request handlers,
+    the 1 s registry poll, the 5 s config poll and the SSE catch-up queries all share those 2.
+    Under load, requests wait for SQLAlchemy's default `pool_timeout` (30 s) instead of failing
+    fast.
+  - The `max(1, ...)` floor still exceeds the total once workers x replicas > total.
+  - `OP_API_REPLICAS` is declared separately from `docker compose --scale`. A user who scales with
+    compose directly leaves it stale, and the budget is silently exceeded.
+  - `openprocessor scale` (02b section 8) has no owner lane.
+- *Fix.*
+  - Make `deploy.replicas: ${OP_API_REPLICAS:-1}` on `api` the single source, and have the budget
+    test read it.
+  - Set a short `pool_timeout` that maps to 503 `database_busy`.
+  - Run the polls on a separate one-connection engine, counted in the budget.
+  - Have the 4B-5 benchmark record pool wait time.
+  - Give `openprocessor scale` to 6B, or drop it in favour of the `.env` value.
+
+**RC-5 Two W4 lanes now share the B4 kind modules (05 sections 3, 4A-3, 6; 03a 1B-2).**
+- *What.* 4A (the VLM batch kinds, 05 line 441) and 4D (`project_create`, added by R-21) are
+  parallel tracks. Both register kinds in `src/config/job_kinds/b4.py`, and so `task_routes/b4.py`
+  and `src/tasks/b4.py` too.
+- *Fix.* 1B creates `b4_fanout.py` and `b4_project.py` (each in the three registries), one per
+  track, or 4D is cut after 4A merges.
+
+**RC-6 Three files still put the Docker socket into `periodic-worker` (contradicts the R-20 fix).**
+- *What.* 03 section 9 step 17 ("the arbiter overlay on `periodic-worker`"), 08 section 4 (the
+  stage-6 row) and 03c 6D's CHANGELOG "Breaking" text and INSTALLATION note all say
+  `periodic-worker`. Lane 6D would publish the wrong upgrade note.
+- *Fix.* Change all three to `gpu-arbiter-worker`.
+
+#### Low
+
+- **RC-7** The kNN warm-up is lost on an OpenSearch restart or cache eviction (6.3). Accept, or add
+  a cheap beat task that re-warms after OpenSearch restarts.
+- **RC-8** The `dns_sd` `instance` label churns when containers are recreated (6.3). Dashboards
+  aggregate by service.
+- **RC-9** `op_scope_allows` is now plpgsql, which the planner cannot inline. It runs once per
+  row, and the policy can never use an index. Repository queries keep their explicit
+  `project_id = :p`, so this is cost, not correctness. Optional: express the policy as
+  `project_id = (SELECT op_scope_project())`, a scalar subquery evaluated once per statement as an
+  InitPlan, with the raising function inside.
+- **RC-10** The master plan W2.0 says the W2.1 lanes "may code from `main`" in parallel, while W2.1's
+  precondition says W2.0 is merged before `int/b2-control-plane` is cut. Pick one. Lane 0 edits the
+  same manifests as W2.0.
+- **RC-11** 05 K-20 still says "one `LISTEN` connection per API process" (D-65 replaced it).
+- **RC-12** Restoring a deprecated class whose `name_key` now matches an active class hits
+  `uq_project_classes_active_name`. It must answer 409 through a savepoint. Add the case to 2B-1's
+  tests.
+- **RC-13** Messages for jobs whose queue has no consumer (a profile never started) stay in Valkey
+  after the reaper fails the row (`queue_wait_exceeded`). The volume is small, but INSTALLATION
+  should say so. RC-3 is the unbounded case of the same rule.
+
+### 6.6 Cross-file consistency checked
+
+- The master plan's waves match the batch files for:
+  - W2.0 (pins part A as its own PR, D-67);
+  - W2.1 (merge order 0, 1A, 1E, 1B, 1C, 1D; 1D owns `src/tasks/app.py`'s start check and the
+    budget test after 1B and 1A merge);
+  - W2.2 (3A cut after 2A; merge 3B then 3A; 2F does not edit `lifespan.py`, which 3B owns).
+- The W2.4 sweep is cited by reference (R-23 holds).
+- File-disjointness holds in W2.1, W2.2 and W2.3 after the ownership moves:
+  - W2.1: `schema_check.py` (1A in W2.1, 2E in W2.2); `src/tasks/app.py` (1B, then 1D);
+  - W2.2: `src/core/dependencies.py` and `scripts/db/migrate.py` (2F after 2A-2E merge).
+  The exception is W4 (RC-5).
+- No remaining text gives redis-py `<8.0` for kombu 5.7. 13 and 02b agree.
+- No remaining `LISTEN` dependency in the B2 files: the direct host is kept only for the beat and
+  migration locks. The one stale mention is 05 K-20 (RC-11).
