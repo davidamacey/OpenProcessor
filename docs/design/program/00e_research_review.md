@@ -679,3 +679,204 @@ register; the plan changes are mapped in [00b](00b_traceability.md) section 5.6.
 | 3.6 capture reason | fixed | restated as the capture-date filter and the plate consensus basis: 05 section 6c |
 | 3.7 seven set-P copies; plate canaries | fixed | one shared seeded copy and manifest, removal recorded ([11](11_risks_cleanup_host.md) rule 10); canaries fail every plate format (03g, plate plan 6.8) |
 | 3.5 the prototype GPU time | superseded by the owner | RD-2 as answered: short tiered runs, about 10 GPU hours before the tag (was 31), post-tag windows only on the owner's OK: 00e_research_track sections 2-4 |
+
+## 7. Re-check (2026-11-04)
+
+Re-checked on `research/recheck`, cut from `research/master` at 77ee46823 (the merge a005ec037 and
+the fixes 2137d0ceb..77ee46823), with the same rules as sections 1-5: the plan text checked against
+the code and the docs, not against the planner responses.
+
+### 7.1 Verdict
+
+**Yes, with fixes.** RR-1 to RR-5 are resolved in the plan text. The W2.3a and W2.3b split is
+file-disjoint and sensibly sized. The 10-hour prototype track adds up and its windows are coherent.
+The bounded close and reopen step is sound in itself, but the plan puts it in the wrong place in the
+upgrade order.
+
+The fixes introduced **one new high finding (RN-1)**: the batched project delete of RR-7 runs into
+the immutability triggers. It must be fixed in 02a and 02d before W2.1 lane 1F writes the
+triggers. The rest are three mediums and four lows.
+
+**Counts:** blocker 0, high 1, medium 3, low 4.
+
+### 7.2 RR-1 to RR-5, checked
+
+| Finding | Resolved? | Evidence |
+|---|---|---|
+| RR-1 pause revokes, resume reuses the id | yes | 02b:20 and 02b:273 say "no revoke"; revoke stays only for cancel (02b:259). 03e 3A-13 matches. New red test `test_pause_resume_after_revoke_registry.py` (02b:294). The claim refuses a non-`queued` row, so a stale message is acked as `claim_skipped` (02b:293). Leftover: RN-5 |
+| RR-2 immutability trigger vs `SET NULL` | yes, for the `SET NULL` updates | 02d:139-141 lets `job_id` and `parent_partition_id` go to NULL; 03a 1F-1; 02d:434 adds the four test cases. The new batched delete still hits the triggers (RN-1) |
+| RR-3 NULL-project rows | mostly | 02a 1.4: a third scope `core`, `core_tx` with an allow-list naming files that exist (`src/routers/persons.py`, `src/routers/query_duplicates.py`, `src/services/face_identity/`, `src/services/duplicate_detection/`), the list of nullable tables, the read-only `p_cluster_calibrations_default` policy, and the RLS test cases. Gap: RN-2 |
+| RR-4 later lanes would edit `app.py` | yes | 03a lane 1B Owns pre-creates `clustering`, `embedding_reindex` / `b2_embedding`, `near_dup`, `near_dup_core`, `source_backfill`, `region_text`, `b4_fanout`, `b4_project`, each with its `include=` and aggregator entries. Every later lane's Owns uses the same names (03b:200, 231-232, 245-250; 05:152-153, 310, 529; 03g:53-54). New test `test_planned_modules_included.py` |
+| RR-5 PP-OCRv6 | yes | `pt:P1` runs PP-OCRv5 as the control, one PP-OCRv6 arm and one dedicated reader (00e_research_track section 3). 07c:241 makes the same run decide the B5c OCR model. 10:133 and 03g:85 agree. Leftover: the plate plan's own reader table (RN-5) |
+
+### 7.3 The bounded close and reopen step (RR-8), on its merits
+
+[02c](02c_migration_ops_tests.md) section 2.2 and 03d 2F-6.
+
+- **Safety: good.**
+  - One index at a time; a `try/finally` that always reopens; a bounded wait for yellow health; an
+    `_analyze` check.
+  - An idempotent re-run that skips indexes that already have the settings.
+  - A failure-path test.
+  - An added normalizer is inert until W5e gives a field to it, so a partly applied run is safe.
+- **Downtime: acceptable.** It falls inside the stop-the-world window; the dry run prints a
+  measured estimate per index; the plan notes that a faiss index reloads its graph on its first
+  search.
+- **Rollback: one contradiction (RN-3).**
+
+### 7.4 Lanes and waves
+
+- **W2.3a** (5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C) is file-disjoint. The pattern-defined sets (4D's VLM
+  call sites, 4A's routers) are listed by the coordinator at the cut, as before. It is 8 lanes, the
+  size the pre-research plan carried.
+- **W2.3b** (4F, ND-A and ES-B together, then ND-B, then 4E) is file-disjoint:
+  - Every file a W2.3b lane takes from a W2.3a lane is edited only after W2.3a has merged:
+    `autolabel/job.py` and `assist_loop/partition.py` (4F); `persons.py` and the face grouping
+    (4F-9); `item_scores/near_dup.py`; the reprocess, import, combine and ingest
+    `enqueue_pending` call sites (ND-A).
+  - Inside W2.3b, `wire.py`, `semantic_search.py` and `review_request.py` pass from 4F to ND-B in
+    sequence.
+  - `env.template`, `retired_env.py` and `contracts/` follow the documented append and regenerate
+    rule.
+- **W2.4 and W4:** W2.4 is unchanged; ES-C's file list is recomputed on the W2.3b head (03c). W4's
+  lanes run in sequence (05 section 3). The capture lane fills ND-A's `source_backfill` step list
+  and a hook in 2C's settings service, both after their owners merged. No overlap found.
+
+### 7.5 The 10-hour prototype track
+
+- **The hours add up:**
+  - PW-1 3.4 h, PW-2 2.9 h, PW-3 1.5 h, plus a 2.2 h reserve for confirmations only: 10.0 GPU hours
+    (00e_research_track section 4).
+  - At most three arms plus a control, early stop, and today's approach ships unless the tier-2
+    confirmation wins.
+- **Cut prototypes:** the program lanes take each decision of a cut prototype on today's behaviour.
+  07b 5b-G4 is "not opened"; 07_b5:284 matches; 03g and the master plan use the segmenter instead of
+  `pt:P6`.
+- **Datasets:** every set used before the tag is in the dataset register (section 4.1). Dropping
+  UFPR-ALPR, LPLC and RodoSol leaves no set that needs a signed request.
+- **Leftovers:** 00b still cites two cut prototypes as feeding v0.7.0 decisions (RN-6).
+
+### 7.6 Five mediums, spot-checked
+
+| Finding | Holds? | Note |
+|---|---|---|
+| RR-6 | yes | 02a 1.2 states deferrability as the documented difference and adds the catalog-enumerated test plus the `DEFERRABLE INITIALLY DEFERRED` fallback. Its first bullet still says the project row "removes all its control data in one statement" (RN-7) |
+| RR-7 | yes as text, but see RN-1 | 03b 4C-5: per table, in reverse foreign-key order read from `pg_constraint`, 10,000 rows per transaction, resumable; test with 200,000 rows under a 30 s timeout |
+| RR-9 | yes | `seen_at` refreshed on the worker heartbeat and by `serving_inventory`; the reservation upserts its card; retention uses `NOT EXISTS` (02a:621, 02a:905; 03a 1B-8 test). Wording nit: RN-8 |
+| RR-10 | yes | `source_backfill` with a content step (ND-A, 03b:250); the stored-bytes-equal-upload test; the upgrade report offers the job (02c, the `near_duplicates.py` row) |
+| RR-14 | yes | 03d:163-164: ES-A owns every `_knn_field` call site, and 2F cuts from that head |
+
+### 7.7 Remaining findings
+
+#### High
+
+**RN-1. The batched project delete (RR-7) deletes rows that the immutability triggers refuse to delete while their parent exists.**
+- *Where:* [03b](03b_b2_w2_job_families.md) 4C-5; [02d](02d_research_seam_schema.md):190-191
+  (`cluster_children_ready_immutable`: "UPDATE or DELETE raises while the parent partition is
+  'ready' (a DELETE by cascade passes: parent gone)"), 02d:86 (`cluster_calibrations_immutable`);
+  [02a](02a_postgres_schema.md):362 (`config_revisions_immutable`: "a DELETE only by cascade: the
+  trigger allows it when the parent row is gone").
+- *What:* 4C-5 deletes "per table in reverse foreign-key order ... the `projects` row last". In that
+  order the children go before their parents:
+  - `cluster_memberships` and `partition_clusters` of a `ready` partition before the partition;
+  - `config_revisions` before their `config_documents`;
+  - project `cluster_calibrations` before the project row.
+
+  Each of these trigger guards raises on exactly that delete. So every project that has run a
+  clustering job or holds a config document fails to delete.
+
+  The 02a section 9 partition retention ("10,000 rows per statement") has the same conflict if it
+  batches the children of a superseded `ready` partition. The RR-2 test case "deleting a project
+  that holds ready partitions passes" (02d:434) will be red against 4C-5.
+- *Fix:* one rule for every guarded parent and child pair, in 02a section 1.2 and 4C-5. Batched
+  deletes go top-down where a guard exists:
+  - Mark a partition `discarded` first (a status change, which the trigger already allows), then
+    batch-delete its children. Change the children trigger to allow DELETE when the parent is not
+    `ready`.
+  - Delete `config_documents` one document at a time, so the revisions go by the guarded cascade
+    (small per document).
+  - Delete project calibrations after their referencing partitions, through a trigger exception for
+    a project whose `status` is `deleting`.
+
+  Then add 4C-5 cases: a project with a ready partition, config revisions and a calibration deletes
+  in batches. Do the same for retention.
+
+#### Medium
+
+**RN-2. `core` scope does not reach the tables whose policy goes through `op_scope_allows`.**
+- *Where:* 02a:116 (`op_scope_allows(pid)` = `op_scope_is_deployment() OR pid = op_scope_project()`),
+  02a:630 (`job_attempts`, `job_items` and `gpu_reservations` use it through `jobs`), 02a:167 (the
+  `op_app` grants).
+- *What:*
+  - In `core` scope a NULL-project job's `job_attempts` and `job_items` evaluate
+    `NULL = NULL`, so a core handler running under `core_tx` (`persons_cluster`,
+    `near_dup_core_group`) cannot write its attempt or items. The same holds for the core rows of
+    any other `EXISTS`-policy child.
+  - `op_app` is granted `EXECUTE` on `op_scope_project`, `op_scope_is_deployment` and
+    `op_scope_allows`, but not on the new `op_scope_is_core`.
+- *Fix:* define
+  `op_scope_allows(pid) = op_scope_is_deployment() OR pid = op_scope_project() OR (pid IS NULL AND op_scope_is_core())`,
+  add `op_scope_is_core` to the grant, and add an RLS test case: a core job's attempt row written
+  under `core_tx`.
+
+**RN-3. The analysis-settings step runs after `delete_sources`, so its "stops before `delete_sources`" rollback cannot happen.**
+- *Where:* [02c](02c_migration_ops_tests.md) section 1 (`openprocessor upgrade` order: the
+  control-data step, then "`run --rm db-migrate` again, which now finds them and migrates and stamps
+  their indexes"); section 2.2 step 4 (`delete_sources` sets `upgrade_state = completed`); the RR-8
+  rollback row.
+- *What:* the close and reopen belongs to 2F's OpenSearch migrate (R-7), which runs in the second
+  `db-migrate`, after `upgrade_from_060` has already deleted the control indexes and written
+  `completed`. A failure there cannot "stop before `delete_sources`".
+  - It stays fail-closed: the missing `_meta` stamp makes every process refuse with
+    `opensearch_mapping_not_current`.
+  - The 0.6.0 rollback still works from the bundle.
+  - But the stated rollback and the `upgrade_state` gate are wrong for this step.
+- *Fix:* choose one of two ways.
+  - Run the analysis-settings step as a step of `upgrade_from_060` before step 4, so a failure
+    leaves the sources in place.
+  - Or keep it in `db-migrate`: state that a failure leaves `upgrade_state = completed` with the
+    index unstamped, fail closed, fixed by re-running `db-migrate`, and correct the rollback row.
+
+**RN-4. `location_policy = 'drop'` does not keep GPS out of exports.**
+- *Where:* 05 CM-4 ("the former export GPS strip is dropped (RD-54: exports keep the embedded GPS)");
+  02a:423; 00b:602.
+- *What:* the owner chose to store GPS now and to keep it in exports. Under a project that sets
+  `drop`, the purge clears the index values only. The stored originals and every export still carry
+  the embedded GPS, so the policy name suggests more privacy than it gives. This is the location
+  privacy text that `b4/privacy-hardening` writes in `SECURITY.md`.
+- *Fix:* either strip GPS on export only for `drop` projects (ExifTool or a lossless EXIF rewrite in
+  the export path), or state in `SECURITY.md`, the settings wire description and `docs/CURATION.md`
+  that `drop` covers the index and wire only, never the stored files or exports. Pick one and test it
+  (`test_location_policy.py`: an export under `drop` either has no GPS or the documented warning).
+
+#### Low
+
+**RN-5. Three research-plan sections still say the old thing.** The "Superseded parts" header covers
+only section 8, the lock and the GPU hours:
+- the auto-label plan sections 5.2 and 5.3 (lines 473 and 507) still revoke on a queued pause, and
+  02b section 3.3 links to section 5.3 "for the loop";
+- the spatial plan section 5.1 (line 272) still defaults `location_policy` to `drop`;
+- the plate plan's reader table (section 4.1) has no PP-OCRv6 row.
+
+*Fix:* correct the three lines, or widen the header to name them.
+
+**RN-6. 00b still cites cut prototypes as feeding v0.7.0 decisions.**
+- 00b:196 (#403 MPS "adopt only on the `gpu:PR-4` evidence")
+- 00b:198 and 00b:552 (#407 "reads ... `PR-4` (the C++ bar) first")
+- 00b:551 (#40 "reads `gpu:PR-1..PR-4`")
+- 00b:556 (#403 "W5b conditional on `gpu:PR-4`")
+
+*Fix:* use 07b's wording: MPS off, 5b-G4 not opened, the post-tag prototypes in RW-1.
+
+**RN-7. 02a section 1.2's first bullet** still says deleting the project row "removes all its
+control data in one statement". It should say that the cascade is the safety net behind 4C-5's
+batched delete.
+
+**RN-8. 02a:621 says GPU workers upsert `gpu_devices` "under `deployment_tx`"**, but `deployment_tx`
+is allow-listed to the reaper, beat, registry, upgrade and CLIs. `gpu_devices` has no RLS, so the
+upsert needs no scope. Say that, or add the GPU runtime module to the allow-list.
+
+### 7.8 Checks
+
+- `.venv/bin/python scripts/codegen/check_naming_leaks.py`: pass.
+- `.venv/bin/python scripts/docs/check_docs_vs_code.py`: pass.
