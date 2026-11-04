@@ -248,13 +248,15 @@ hypotheses); 07d Q1-Q9 (asked at W5d kick-off); the GPU-15 leftover, folded into
 
 Rules as in [09](09_github_actions.md) section 1: plain words, neutral security wording (no
 mechanism detail), no private names or paths, fewer issues is better, edit and close rather than
-delete. Post each text exactly as written below; create N19 and N20 first and replace those two
+delete. Post each text exactly as written below; create N19 (#479) and N20 (#480) first and replace those two
 placeholders in the other texts with their issue numbers; record the created numbers in the private
 ledger and then in this file.
 
 ### 4.1 New issues (2)
 
-**N19.** Title: `feat(control-plane): PostgreSQL for all control data, with migrations, row-level security and the one-step 0.6.0 upgrade`.
+**Done 2026-11-04:** N19 is #479 and N20 is #480; the 12 re-scope comments in 4.2 are posted (with #479/#480 in place of the placeholders); #469 and #471 are closed as decided; PR #449 is closed. Still to do at their points: the PR #474 close after W2.0, the 4.3 moves at W6, and the closes that ride with their PRs.
+
+**N19 (#479).** Title: `feat(control-plane): PostgreSQL for all control data, with migrations, row-level security and the one-step 0.6.0 upgrade`.
 Labels: enhancement, area:curation, effort:hard. Milestone: v0.7.0. Body:
 
 > Projects, classes, revisioned configs, settings, holdout freezes, label-operation records, ingest
@@ -273,7 +275,7 @@ Labels: enhancement, area:curation, effort:hard. Milestone: v0.7.0. Body:
 > Acceptance: the stage 1 and stage 2 exit criteria of the plan; the release checks RF-40, RF-41,
 > RF-56, RF-58, RF-59, RF-62 and RF-63.
 
-**N20.** Title: `build(deps): exact pins at the latest installable versions in every manifest and image`.
+**N20 (#480).** Title: `build(deps): exact pins at the latest installable versions in every manifest and image`.
 Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 
 > Every requirements file, `pyproject.toml` and inline Dockerfile pin becomes an exact `==` pin at
@@ -294,9 +296,9 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 
 | Issue | Comment to post (exact text) |
 |---|---|
-| #451 | "Scope update (owner decisions of 2026-11-04): background jobs now run on Celery with Valkey as the broker, and PostgreSQL holds every job and control record; training, model export and the bake-off evaluator move onto the queue too. Every service requires PostgreSQL, Valkey and OpenSearch: there is no degraded mode, and a missing dependency stops start-up with a clear message. Child issues: N19 (PostgreSQL control plane), N20 (exact pins), #453, #461, #462, #439, #473. Plan: `docs/design/program/00_master_plan.md`, waves W2.1-W2.4 and W4." |
+| #451 | "Scope update (owner decisions of 2026-11-04): background jobs now run on Celery with Valkey as the broker, and PostgreSQL holds every job and control record; training, model export and the bake-off evaluator move onto the queue too. Every service requires PostgreSQL, Valkey and OpenSearch: there is no degraded mode, and a missing dependency stops start-up with a clear message. Child issues: N19 (#479) (PostgreSQL control plane), N20 (#480) (exact pins), #453, #461, #462, #439, #473. Plan: `docs/design/program/00_master_plan.md`, waves W2.1-W2.4 and W4." |
 | #453 | "The per-project job leases landed with B1 (#467). The control-plane rewrite (#451) replaces them with job rows in PostgreSQL and deletes the lease code, so this issue closes with that PR." |
-| #458 | "The dependency bumps that can change model output (part B of N20) ride this issue's GPU gate, so one accuracy and speed run judges the Ultralytics version and those bumps together. The gate also runs the image smoke checks and a short GPU check of the new training, export and evaluator queues. Plan: `docs/design/program/04_b3_ultralytics_one_version.md`, wave W3." |
+| #458 | "The dependency bumps that can change model output (part B of N20 (#480)) ride this issue's GPU gate, so one accuracy and speed run judges the Ultralytics version and those bumps together. The gate also runs the image smoke checks and a short GPU check of the new training, export and evaluator queues. Plan: `docs/design/program/04_b3_ultralytics_one_version.md`, wave W3." |
 | #464 | "Placement: OPS-2 is measured in W2.1 and acted on in W2.4; CC-10 is measured in W4 before the fan-out change; GPU-19 is checked in W5c. As the body says, OS-8, FE-6 and T-6 move to a v0.8.0 follow-up." |
 | #465 | "Scheduled (owner decision of 2026-11-04): one CPU lane per wave during W5a-W5c types a group of routers that the speed work does not touch; the routers that W5d rewrites are typed inside W5d. This issue closes with the W5d PR." |
 | #466 | "The queue rewrite (#451) already delivers pause and resume through the job rows and the events as database rows. What remains here: the Cropwright pause control, token budgets read from the endpoint's usage reports, and the label-rate measurement. Milestone stays v0.8.0." |
