@@ -214,7 +214,7 @@ curl -X POST $API/projects/cars/classes -H 'Content-Type: application/json' \
   -d '{"name": "car"}'
 ```
 
-No dataset ships in this repo. Fetch a small, license-filtered public COCO 2017
+**Try it with a public sample.** No dataset ships in this repo. Fetch a small, license-filtered public COCO 2017
 subset (200 images, 20 per class, about 1-2 minutes):
 
 ```bash

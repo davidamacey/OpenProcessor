@@ -58,7 +58,7 @@ mkdir -p test_results
 .venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
 ```
 
-The production `api` image installs only `requirements.txt` (no `pytest`), so a bare
+**Docker-only path.** The production `api` image installs only `requirements.txt` (no `pytest`), so a bare
 `docker compose exec api pytest ...` fails. To run the suite in the container, install the test deps first
 (not persisted across a recreate):
 
