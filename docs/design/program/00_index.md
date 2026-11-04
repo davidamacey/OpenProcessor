@@ -11,6 +11,10 @@ plus the D-, N- and M- IDs this set owns (section 11).
 Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03 (and the pin commit `d1c6bab0`
 that landed the same day).
 Consolidated 2026-11-03 (owner decision D-37 = yes, the test and GPU budget, the deps lane).
+Updated 2026-11-04 (owner decisions of that day, D-39..D-45): PostgreSQL holds all control data,
+Valkey is the broker, every long job (training and model export included) runs on Celery, the
+processes are stateless for scale-out; B2 is re-planned in six stages on that foundation
+([02_control_plane_database.md](02_control_plane_database.md)).
 
 This set replaces the former master plan (rev 4, in git history; the file is deleted in the
 plan-set commit, [01_b0_close_out.md](01_b0_close_out.md) B0-1). Section 12 says where each of
@@ -27,7 +31,8 @@ task text that file cites by ID. Where a source plan and this set disagree, this
 | `00_index.md` (this) | mission, schedule (waves), decision register, branch/lane model, test tiers, the test and GPU budget (section 8.1), legends, section map, superseded plans |
 | [01_b0_close_out.md](01_b0_close_out.md) | B0: gate cycle, push, merge |
 | B1 (merged; plan files removed, the lasting facts are in the permanent docs and `CHANGELOG.md`) | B1 correctness: leases, class registry, inference and search, API/frontend/tests, Ultralytics live bugs. **Done.** |
-| [03_b2_overview.md](03_b2_overview.md), [03a](03a_b2_w1_queue_infra.md), [03b](03b_b2_w2_job_families.md), [03c](03c_b2_w3_beat_reaper_workers.md) | B2 jobs on Celery, three internal stages |
+| [02_control_plane_database.md](02_control_plane_database.md), [02a](02a_postgres_schema.md), [02b](02b_jobs_locking_events.md), [02c](02c_migration_ops_tests.md) | the control-plane design B2 builds: data ownership, the Postgres schema, jobs and events, migrations and the 0.6.0 upgrade |
+| [03_b2_overview.md](03_b2_overview.md), [03a](03a_b2_w1_queue_infra.md), [03d](03d_b2_s2_control_data.md), [03e](03e_b2_s3_job_runtime.md), [03b](03b_b2_w2_job_families.md), [03f](03f_b2_s5_gpu_queues.md), [03c](03c_b2_w3_beat_reaper_workers.md) | B2 the control plane on PostgreSQL, Valkey and Celery, six stages |
 | [04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md) | B3 one Ultralytics version, one detection contract |
 | [05_b4_stateless_api.md](05_b4_stateless_api.md) | B4 stateless API |
 | [06_release_acceptance.md](06_release_acceptance.md) | release prep, R-final, the tag and publish procedure |
@@ -69,9 +74,9 @@ Speed is measured once the stack it is measured on stops changing. See
 |---|---|---|---|---|---|---|---|
 | **B0** close-out | v0.7.0 | M | plan approval; host all-clear | CPU gate cycle, push, merge of the R2 round, the B0 small fixes and the exact Ultralytics pin (code done, `d1c6bab0`) | OCR boxes on the text and in the reported frame; real DB unclip; holdout freeze fails closed; create-only first config writes; status polls stop answering 500; outages stop reading as "not found"; Ultralytics stops floating | recycle jitter stops 32 workers restarting together | [01](01_b0_close_out.md) |
 | **B1** correctness (done, merged) | v0.7.0 | XL (L, L, M, M, S-M, deps S) | B0 merged; D-8..D-12, D-15 | 1A leases, 1B class registry and upgrade migration, 1C inference/search hygiene, 1D API/frontend/tests and SEC-3/SEC-6, 1E Ultralytics live bugs, the deps lane | duplicate class ids end; one start per singleton; a sibling's live job is never flipped; a blocked loop keeps its lease; stale per-worker caches end; YOLO26 uploads build the right engine; class by name on the secondary | GPU-5/GPU-9 drop multi-GB allocations; GPU-8 stops retrying deterministic errors; OS-6 filtered kNN returns k hits | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
-| **B2** jobs on Celery | v0.7.0 | XL (3 stages) | B1 merged; D-17..D-26 | Q-Phase 2-5: Redis and five core containers, every API-hosted job family (17, listed in [03](03_b2_overview.md)), beat, the periodic worker and the lease reaper, trigger workers; OPS-2; SEC-4, SEC-5 | jobs survive API recycling (CC-4); periodic side effects run once; claims hold with several workers | heavy work leaves the request processes | [03](03_b2_overview.md) |
+| **B2** control plane | v0.7.0 | XXL (6 stages) | B1 merged; D-17..D-26 (D-17, D-18, D-31 approved), D-39..D-63 | PostgreSQL for every control record (projects, classes, config, jobs, runs, models) with Alembic and row-level security; Valkey and Celery for every long job, training, model export and the bake-off included; the event feed in Postgres; the 0.6.0 upgrade that moves the OpenSearch control data; beat and the reaper; scale-out compose; OPS-2; SEC-4, SEC-5 | jobs survive API recycling (CC-4); periodic side effects run once; claims hold with any number of workers and replicas; one owner per value | heavy work leaves the request processes; 6 OpenSearch indexes per project become 2 | [02](02_control_plane_database.md), [03](03_b2_overview.md) |
 | **B3** one Ultralytics | v0.7.0 | L + about 1 GPU day | B1 merged; D-27, D-28 (D-38) | U-Step 4-9, trainer `nms` by capability, full U-6.1 matrix in CI, GPU-14 final, GPU-18 docs, U-C11, first #368 slice | one version, one fused `[b,300,6]` contract, no monkey-patched fork, no deprecated plugin | at least 95 % of today's detector throughput, or Stage A ships alone | [04](04_b3_ultralytics_one_version.md) |
-| **B4** stateless API | v0.7.0 | L | B2, B3 merged; D-29..D-33 | Q-Phase 6-7 (bulk OCC, `API_WORKERS`), Redis Streams events after a spike, #439, the last file lock deleted | same answers with 1 and 32 workers | worker count is a tuning knob, benchmarked on the B3 engine | [05](05_b4_stateless_api.md) |
+| **B4** stateless API | v0.7.0 | M-L | B2, B3 merged; D-29, D-29a, D-32, D-32a, D-33 | Q-Phase 6-7 (bulk OCC, `API_WORKERS`, pools sized from totals), #439 (events and the last file lock moved into B2) | same answers with 1 and N workers and replicas | worker count is a tuning knob, benchmarked on the B3 engine | [05](05_b4_stateless_api.md) |
 | **B5** speed | v0.7.0 (D-37) | XL, 4 PRs | B4 merged; D-35 | 5a #45 baseline, #268, GPU-6 recall; 5b GPU-3b then #40/#407 (+GPU-12); 5c #219, #220 (+GPU-7, GPU-19); 5d #67 | parity gates on every change | the GPU pipeline, crops at model size, OCR/faces on resident crops, processing plans | [07](07_b5_overview.md) |
 | **R-final** | v0.7.0 | M (1-2 days) | B5d merged; D-16 | release prep (VERSION and CHANGELOG), one acceptance run (old R3 + R-B1 + R-0.9), tag on the owner's word | the production-ready definition (section 5) | no regression against the retaken baseline and the B5 numbers | [06](06_release_acceptance.md) |
 | side #42 | v0.8.0 | S (GPU time) | GPU 1 free | 12 GB card acceptance; never blocks the tag | | | [07](07_b5_overview.md) section 11 |
@@ -86,26 +91,30 @@ it, for example "the lease reaper (Q-P3.2)".
 |---|---|---|---|
 | B0 | Close out the 0.6 audit round | Merge the audit fixes, the docs scrub and the plan set to `main` | done, merged |
 | B1 | Correctness under many workers | One owner per background job (job leases), one class list per project stored with conflict checks (class registry), plus inference, API and frontend bug fixes | done, merged |
-| B2 | Background jobs move to a job queue | Long jobs leave the API processes and run on Celery workers fed by a broker (Redis or Valkey), so restarting the API no longer kills them | next |
+| B2 | A real database for control data, and every long job on a queue | PostgreSQL becomes the record of projects, classes, configs, jobs, training runs and models; every long job (training and model export included) runs on Celery workers fed by Valkey; any process can run as several copies | next |
 | B3 | One Ultralytics version | Every image and the trainer use one pinned Ultralytics release and one detector output format | after B2's coding starts (runs alongside) |
-| B4 | Stateless API | The API's worker count becomes a plain tuning setting; the last file locks and per-process state go | after B2 and B3 |
+| B4 | Stateless API | The API's worker count becomes a plain tuning setting and request fan-out goes; the result is checked with 1 and many workers and replicas | after B2 and B3 |
 | B5 | Speed | Measure first, then decode each image once on the GPU, crop at model size, run OCR and faces on those crops, and add per-project processing plans | after B4 |
 | R-final | Release acceptance | One full acceptance run on the finished stack, then the v0.7.0 tag on the owner's word | last |
 
-B2 has three stages, each with its own plan file:
+B2 has six stages; [02_control_plane_database.md](02_control_plane_database.md) is the design they build:
 
 | Stage | Plain name | File |
 |---|---|---|
-| B2-W1 | The queue itself: broker service, Celery app, worker containers, settings | [03a](03a_b2_w1_queue_infra.md) |
-| B2-W2 | Move each job type (17 of them) from the API onto the queue | [03b](03b_b2_w2_job_families.md) |
-| B2-W3 | Timed jobs run once instead of once per API worker; a reaper restarts jobs whose worker died | [03c](03c_b2_w3_beat_reaper_workers.md) |
+| 1 | Foundation: the Postgres and Valkey services, the schema, the Celery app, the storage seam, the test database | [03a](03a_b2_w1_queue_infra.md) |
+| 2 | Projects, classes, configs and other records move into Postgres; the one-step 0.6.0 upgrade | [03d](03d_b2_s2_control_data.md) |
+| 3 | The job machinery (start, claim, heartbeat, cancel, the reaper) and the event feed to the browser | [03e](03e_b2_s3_job_runtime.md) |
+| 4 | Each job type that ran inside the API moves onto the queue | [03b](03b_b2_w2_job_families.md) |
+| 5 | Training, model export and the bake-off evaluator run as GPU queue workers; promotion and the model registry in Postgres | [03f](03f_b2_s5_gpu_queues.md) |
+| 6 | Timed jobs run once from one scheduler; the old file machinery is deleted; every service can scale; hardening; docs | [03c](03c_b2_w3_beat_reaper_workers.md) |
 
 The audit codes used most often in the table above:
 
 | Code | Plain meaning |
 |---|---|
 | CC-4 | A running job dies when its API worker restarts (B2 fixes it) |
-| CC-2 | Concurrent class-list edits lose classes or duplicate ids (B1 fixed it with the class registry document) |
+| RLS | Row-level security: Postgres itself refuses a row of another project |
+| CC-2 | Concurrent class-list edits lose classes or duplicate ids (B1 fixed it with the class registry document; B2 moves the registry into Postgres tables) |
 | OPS-2 | Metrics files left behind by dead API workers are never cleaned (measure first, then fix in B2) |
 | SEC-n | A security hardening item (details stay off the public tree) |
 | GPU-n | A GPU memory or throughput fix |
@@ -114,26 +123,49 @@ The audit codes used most often in the table above:
 | Q-Phase n | A phase of the job-queue move |
 | W0..W6 | The program's waves: one integration branch and one full test sweep each |
 
-The decisions waiting on the owner for B2 (section 6 has the recommendation and trade-off for
-each one):
+Approved by the owner on 2026-11-04: Celery 5.6 (D-17); Valkey as the broker (D-18); PostgreSQL
+for all control data (D-39); OpenSearch for search data (D-40); every long job on Celery, training
+and export included (D-41); stateless scale-out (D-42); the one-step upgrade that moves and then
+deletes the OpenSearch control data (D-43); exact pins (D-44); plain names first (D-45); the
+evaluator on a GPU queue (D-31).
+
+The decisions still waiting on the owner for B2 (section 6 has the recommendation for each):
 
 | Decision | Question in plain words |
 |---|---|
-| D-17 | Confirm Celery 5.6 as the job queue |
-| D-18 | Which broker: Redis 8 or Valkey |
-| D-19 | Do the five queue containers start by default (recommended), or only under a profile |
-| D-20 | Delivery rules: a job is acknowledged only after it finishes, retried at most 3 times, guarded by its lease |
-| D-21 | Job status, progress and cancel stay in the job files; the OpenSearch lease decides who runs it |
-| D-22 | Scope: all 17 API-hosted job types and the timed loops move; the detection/VLM workers, trainer and export worker stay as they are |
-| D-23 | How many jobs one worker runs at once (4, tunable) |
-| D-24 | Broker durability: append-only log, no backup |
-| D-25 | Which job types restart by themselves after a crash (reprocess, dataset import, bulk ingest, combine, assist loop) |
-| D-26 | Keep the API worker recycling with jitter that landed in B0 |
+| D-19 | Do the new queue containers start by default (recommended), or only under a profile? |
+| D-20 | A job is acknowledged only after it finishes and tried at most 3 times: agreed? |
+| D-20a | May long job types (ingest, import, combine, reprocess) run up to 24 h instead of 3 h? |
+| D-20b | Should `docker stop` interrupt and requeue a running job after 30 s? |
+| D-22a | Does the old directory-ingest route become a background job (202) rather than being deleted? |
+| D-22b | May the synchronous `wait=true` mode of promote be deleted (only tests use it)? |
+| D-23 | How many jobs one general worker runs at once (4, tunable)? |
+| D-24 | Is a broker that keeps about one second of data on a crash, with no backup, enough? |
+| D-25 | Which job types restart by themselves after a crash? |
+| D-26 | Keep the API worker recycling with jitter that landed in B0? |
+| D-46 | Multi-host files: a shared volume now and an S3-compatible store in v0.8.0? |
+| D-47 | Should items keep the class name next to the class id, kept correct by one job? |
+| D-48 | Do job progress and events reach the browser through Postgres (a table plus a wake-up signal)? |
+| D-49 | Should Celery keep no results of its own, the jobs table being the only record? |
+| D-50 | Leave the connection pooler (PgBouncer) out of the default install, as an opt-in for many hosts? |
+| D-51 | Jobs running during the 0.6.0 upgrade end as "interrupted" and are restarted by hand? |
+| D-52 | Move only the lasting 0.6.0 job history (training, promotions, imports, exports, label operations, combine) into Postgres? |
+| D-53 | Keep the detection and VLM workers as stream workers, with each copy claiming whole projects? |
+| D-54 | Remove the fixed container name from every service? |
+| D-55 | Should Postgres itself refuse another project's rows (row-level security)? |
+| D-56 | Delete the four per-project OpenSearch indexes that held control data (6 indexes per project become 2)? |
+| D-57 | Drop the 10,000-class limit? |
+| D-58 | Accept an optional `Idempotency-Key` header on job-start routes? |
+| D-59 | Store prompt packs, profiles and settings as validated JSON documents with relational keys? |
+| D-60 | Enforce a single scheduler with a database lock? |
+| D-61 | No scheduled database backup by default (a dump on every upgrade and on demand)? |
+| D-62 | Real Postgres in tests through testcontainers locally and a CI service container, kept out of the Docker-free command? |
+| D-63 | A quick database test run at each B2 stage merge, in addition to the one full sweep? |
 
 ## 3. Order and dependencies
 
 ```
-B0 --merge--> B1 --merge--> B2 ----------merge--> B4 --merge--> B5a -> B5b -> B5c -> B5d --> release prep --> R-final --tag v0.7.0-->
+B0 --merge--> B1 --merge--> B2 (stages 1 -> 2 -> 3 -> 4 + 5 -> 6) --merge--> B4 --merge--> B5a -> B5b -> B5c -> B5d --> release prep --> R-final --tag v0.7.0-->
                \                         /
                 +--> B3 (CPU lanes in parallel with B2; rebase on main after B2; GPU gate; merge second)
 side: #42 whenever GPU 1 frees (never blocks)
@@ -142,7 +174,9 @@ side: #42 whenever GPU 1 frees (never blocks)
 - Order (D-13, D-37): B0, B1, B2, B3, B4, B5, then release prep and R-final last.
 - B3 depends only on B1 in files, so its CPU work runs during B2 on its own integration branch;
   it merges after B2. Its GPU gate never overlaps B2's live harness.
-- B4 needs the jobs moved (B2) and the final engine (B3), so it is benchmarked once.
+- Inside B2, stage 3 codes alongside stage 2 and stages 4 and 5 run in parallel (disjoint files,
+  [03_b2_overview.md](03_b2_overview.md) section 3).
+- B4 needs the control plane (B2) and the final engine (B3), so it is benchmarked once.
 - B5 measures only the final stack (#45 baseline before any optimization code).
 - **Decided (D-37 = yes):** the owner said "not tagging until all of these plans are implemented
   and tested". B5 is inside the release, R-final runs last (after B5d), there is no separate
@@ -177,9 +211,9 @@ Common exit criteria, required by every wave ("PQ" gates):
 |---|---|---|---|---|---|
 | **W0** | B0 on `fix/411-r2-round` | none: the code is done; the coordinator commits the plan set (B0-1) | GH-0..GH-12 after the owner's D-36 go; W1 lanes may start coding from the frozen B0 head once the plan set is approved | B0 gate cycle: pre-commit `--all-files`, offline suite `-n 8`, contracts-check, docs check, frontend full set with e2e, changelog rules: CPU gates only, no GPU run (the OCR before/after comparison moved to GPU window 1, the B3 gate; [01](01_b0_close_out.md) B0-2, B0-3) | merge commit on `main`; `main` fast-forwarded; #437, #440, #442, #443, #445 and #366 closed; VERSION still 0.6.0; no tag |
 | **W1** | B1 on `int/b1-correctness` | `b1/deps` -> [09](09_github_actions.md) section 8; `b1/ultralytics` (merged); `b1/inference` (merged); `b1/api-frontend` (merged); `b1/leases` (merged); `b1/registry` (merged). Merge order: deps, 1E, 1C, 1D, 1A, 1B (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md))) | all six code in parallel; 1B rebases on 1A before its merge; during W1's sweep, B2 stage W1 (`b2/queue-infra`, spike S1 first) and the B3 CPU lanes start from the frozen `int/b1` head | B1 sweep: T1 + frontend full set + browser check of the export and diverse review pages + a short lease/registry smoke on the live harness (`-p op-b1-live`, cap 30 min; the full live run is the single B1+B2 run at the end of B2) + the `families` CI job; spawn races run 10x locally | file-lock ratchet lists only the B2/B4 sites and `job_lock.py`; no `class_registry.json` read outside export snapshots and the trainer; `registry_not_migrated` tested; lease p50/p99 acquire latency recorded; N2-N7, N9, N10, #447 closed on merge. PQ-7: no GPU gate in B1 by design; the lease round-trip cost is the recorded number |
-| **W2** | B2 on `int/b2-celery` | stage B2-W1: `b2/queue-infra` -> [03a](03a_b2_w1_queue_infra.md); stage B2-W2: `b2/families-a`, `b2/families-b`, `b2/families-c`, then `b2/frontend-queued` -> [03b](03b_b2_w2_job_families.md); stage B2-W3: `b2/beat-reaper`, `b2/trigger-workers`, `b2/hardening` -> [03c](03c_b2_w3_beat_reaper_workers.md) | stages run in order; the coordinator merges each stage and runs targeted tests and static checks on it (not a full sweep); B3 lanes code throughout W2 on `int/b3-ultralytics`; 4C's spike plan and 4D's timing script may be drafted | B2 sweep after stage W3: T1 + frontend full set + the one live run covering B1 and B2 together (`-p op-b2-live`: B1 lease/registry checks plus race, kill mid-job, cancel, API recycle, arbiter, two auto-label workers; about 3 h) + `acceptance_run.sh --only` the job phases + image audit and Trivy for changed images | no job family runs in an API worker; lifespan creates per-process resources only; file-lock ratchet lists only the event-hub site and `job_lock.py`; OPS-2 measured first; Redis licence row; N11, N12 closed. PQ-7: request latency of `/detect` and `/ingest` under a running job recorded against the B1 numbers |
+| **W2** | B2 on `int/b2-control-plane` | stage 1: `b2/db-core`, `b2/queue-core`, `b2/compose-installer`, `b2/storage-seam`, then `b2/health-ci` -> [03a](03a_b2_w1_queue_infra.md); stage 2: `b2/projects-pg`, `b2/classes-pg`, `b2/config-pg`, `b2/records-pg`, `b2/upgrade-060`, then `b2/opensearch-control-removal` -> [03d](03d_b2_s2_control_data.md); stage 3: `b2/job-runtime`, `b2/events-pg` -> [03e](03e_b2_s3_job_runtime.md); stage 4: `b2/families-a`, `-b`, `-c`, `b2/trigger-workers`, then `b2/frontend-queued` -> [03b](03b_b2_w2_job_families.md); stage 5: `b2/gpu-train`, `b2/gpu-export`, `b2/gpu-eval`, `b2/promote-models` -> [03f](03f_b2_s5_gpu_queues.md); stage 6: `b2/beat-periodic`, `b2/scale-out-compose`, then `b2/hardening`, then `b2/docs` -> [03c](03c_b2_w3_beat_reaper_workers.md) | stages merge in order (stage 3 codes alongside stage 2; stages 4 and 5 in parallel); each stage merge gets targeted tests, `make contracts-check` and the `db` tier (D-63), not a full sweep; B3 lanes code throughout W2 on `int/b3-ultralytics` | B2 sweep after stage 6: T1 (Docker-free suite, `-m db` tier, frontend full set) + the one live run covering B1 and B2 (`-p op-b2-live`, about 4 h: races, kill and cold-shutdown requeue, cancel, API recycle, broker loss, Postgres restart, two beats, SSE resume, GPU queues with fake handlers, detection-worker replicas, per-family smoke) + `acceptance_run.sh --only` the job phases + image audit and Trivy for changed images | the done-when of [03](03_b2_overview.md) section 1 (no `FileJob`, no job files, file-lock ratchet zero, OpenSearch with two roles per project, no `container_name`); OPS-2 measured first; N11, N12 closed. PQ-7: request latency of `/detect` and `/ingest` under a running job recorded against the B1 numbers |
 | **W3** | B3 on `int/b3-ultralytics` | `b3/stagea` first, then `b3/families`, `b3/frame`, `b3/export`, `b3/decoders`, `b3/docs` as [04](04_b3_ultralytics_one_version.md) orders them | codes during all of W2 (CPU only); rebases on `main` after B2 merges; during W3's sweep, B4's 4C spike (on the merged B2 stack) and 4D's measurement start | B3 sweep: T1 + U-6.1 matrix at the pin X + **GPU window 1**: the U-6.2 gate once for Stage A and Stage B plus the B0 OCR before/after comparison (`-p op-b3-gpu`, GPU 0, one GPU day; never overlapping a B2 live run) + `pip check`, image audit, Trivy | one Ultralytics version in every image and requirements file; pin test green in CI and in each image; N8 closed. PQ-7: |delta mAP50-95| <= 0.3, >= 99 % detection agreement, throughput >= 95 % at batch 1/8/32/64 with p99 within +10 %, embedding cosine >= 0.999, export image about -0.9 GB, all recorded |
-| **W4** | B4 on `int/b4-stateless` | `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/events` (4C, spike first, D-30 after it), `b4/project-create` (4D) -> [05](05_b4_stateless_api.md) | 4C spike and 4D timing during W3's sweep; release-prep drafting (release notes) may start during W4's sweep | B4 sweep: T1 + frontend full set + the third and last live run (1-vs-32 worker diff) (no GPU in B4: the installer default `API_WORKERS` is provisionally `min(nproc, 32)`; the T5 32-worker ingest and search benchmark on the B3 engine runs in GPU window 2, the B5 window, per 05 step 4B-5, and 5a retakes the same baseline) | `rg -n "fcntl" src` empty; file-lock ratchet baseline zero; the 1-vs-32 diff empty; no lifespan side effects; N1, #439 closed. PQ-7: the `API_WORKERS` default is confirmed or corrected by the GPU window 2 benchmark before R-final |
+| **W4** | B4 on `int/b4-stateless` | `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/project-create` (4D) -> [05](05_b4_stateless_api.md) (the events track moved into B2) | 4D timing during W3's sweep; release-prep drafting (release notes) may start during W4's sweep | B4 sweep: T1 + frontend full set + the third and last live run: the 1-vs-N diff with `API_WORKERS` 1 and 32 and with two `api` and two `jobs-worker` replicas (no GPU in B4: the installer default `API_WORKERS` is provisionally `min(nproc, 32)`; the T5 32-worker ingest and search benchmark on the B3 engine runs in GPU window 2, the B5 window, per 05 step 4B-5, and 5a retakes the same baseline) | the 1-vs-N diff empty; no lifespan side effects; N1, #439 closed. PQ-7: the `API_WORKERS` default is confirmed or corrected by the GPU window 2 benchmark before R-final |
 | **W5a** | B5 baseline ([07a](07a_b5_baseline.md)) on `int/b5a-baseline` | per 07a | no optimization code starts before the 5a reference numbers exist; the B5b/5c/5d lanes may code while earlier sub-batches are measured | 5a sweep: T1 + **GPU window 2** opens: the #45 baseline once (ladders, #268 sweeps, GPU-6 recall) | numbers recorded with host load; no default changes unless the gain beats 2x the run-to-run spread and parity passes; D-35 decided (N13) |
 | **W5b** | B5b decode once ([07b](07b_b5_decode_once.md)) | per 07b (GPU-3b first) | 5c lanes code during W5b's sweep | 5b sweep: T1 + the #40/#407 measurement and parity (boxes within 1 px at the original resolution, embedding cosine >= 0.999), in sequence inside GPU window 2 | #40/#407 acceptance met; numbers in `docs/PERFORMANCE.md` |
 | **W5c** | B5c crops, OCR, faces ([07c](07c_b5_crops_ocr_faces.md)) | per 07c | 5d lanes code during W5c's sweep | 5c sweep: T1 + P-vlm, P-sam, P-region, P-ocr gates, GPU window 2 | #219/#220 acceptance met |
@@ -206,7 +240,7 @@ Common exit criteria, required by every wave ("PQ" gates):
 | B1-0 | commit the source plans | - | done (D-14); the header pointers of the three source plans are repointed to this set in the plan-set commit |
 | B1-1A..1E, deps | B1 lanes | W1 | done (merged) |
 | R-B1 | 0.8.0 acceptance subset | - | dropped (owner decision 3); its checks are in R-final section 4.3 |
-| B2-W1..W3 | B2 stages | W2 | to do |
+| B2 stages 1-6 | B2 stages | W2 | to do |
 | B3 | B3 | W3 | to do |
 | B4-4A..4D, R-0.9 | B4; R-0.9 merged into R-final | W4, W6 | to do |
 | #17/#18 leftovers | #220 step 3 research (B5c), #67 phase 2+ (B5d) | W5c, W5d | to do |
@@ -220,21 +254,21 @@ section 4.
 
 | # | Production-ready means | Verified by |
 |---|---|---|
-| PR-01 | Cross-process state uses idempotency, OpenSearch OCC, leases or Celery, never a file or in-process lock: `rg -n "fcntl" src` is empty and the file-lock ratchet is at zero | release-prep precondition; B4 exit |
-| PR-02 | A singleton job starts once under concurrent requests; a dead holder blocks a restart for at most 120 s | RF-42 |
+| PR-01 | Cross-process control state is in PostgreSQL (transactions, constraints, fenced claims, advisory locks, idempotency keys), item state uses OpenSearch OCC, never a file or in-process lock: `rg -n "fcntl" src` is empty and the file-lock ratchet is at zero | release-prep precondition; B2 exit |
+| PR-02 | A singleton job starts once under concurrent requests; a dead holder blocks a restart for at most 150 s (lease TTL plus one reaper tick) | RF-42 |
 | PR-03 | Concurrent class writes never lose a class or duplicate an id | RF-43 |
 | PR-04 | Jobs run in workers: they survive an API restart, a killed worker's resumable job is re-enqueued, periodic tasks run once | RF-52, RF-53, RF-55 |
-| PR-05 | The API gives the same answers with 1 and 32 workers | the B4 sweep record |
+| PR-05 | The API gives the same answers with 1 and 32 workers and with several replicas of the API and the job workers | the B4 sweep record |
 | PR-06 | Class identity is the name across import, combine, export, train, promote and the secondary detector | B1 tests; RF-40, RF-43 |
-| PR-07 | Fail closed: OpenSearch down -> 503 on starts and `review_dismiss`; unmigrated registry -> 409; a raw-head engine -> refused; Redis down -> degraded health and 503 starts | RF-36, RF-41, RF-57, RF-61 |
+| PR-07 | Fail closed: Postgres down -> 503 on every control write and start, `database: down`; OpenSearch down -> 503 on data-plane writes and `review_dismiss`; a schema not at the code's head -> the process refuses to start; another project's rows -> refused by the database; a raw-head engine -> refused; Valkey down -> degraded health and 503 starts | RF-36, RF-41, RF-57, RF-61 |
 | PR-08 | One exact Ultralytics version in every image; one fused detection contract; the B3 parity and throughput gate passed | RF-20, RF-57, the B3 sweep record |
 | PR-09 | Fresh install, re-run, repair, `--skip-models`, engine adoption, uninstall work | RF-01, RF-02, RF-12, RF-23, RF-24, RF-25 |
-| PR-10 | The supported upgrade, 0.6.0 -> 0.7.0, keeps every class id, adds the queue and the new services, rebuilds the default engine once; rollback to 0.6.0 works with the documented downgrade step | RF-40, RF-41, RF-56, RF-58, RF-59, RF-62, RF-63 |
-| PR-11 | Security: SEC-1..SEC-6 fixed (neutral wording); the broker has no published port; Trivy fixable CRITICAL = 0; every image passes the image-vs-git audit; no secret in any log or report | RF-08, RF-09, RF-10, RF-34, RF-50 |
+| PR-10 | The supported upgrade, 0.6.0 -> 0.7.0, moves every project, class (ids kept), config and lasting job record into Postgres and deletes the OpenSearch copies after verifying them, adds the new services, rebuilds the default engine once; rollback to 0.6.0 recreates the 0.6.0 state from the upgrade bundle | RF-40, RF-41, RF-56, RF-58, RF-59, RF-62, RF-63 |
+| PR-11 | Security: SEC-1..SEC-6 fixed (neutral wording); the broker and the database have no published port and required passwords from files; Trivy fixable CRITICAL = 0; every image passes the image-vs-git audit; no secret in any log or report | RF-08, RF-09, RF-10, RF-34, RF-50 |
 | PR-12 | Quality: CI green; ratchet baselines smaller than or equal to their `5b95591f` values; no dead code or shims; contracts in sync; docs check clean | PQ-1..PQ-5 at every wave; the release commit's full gate |
 | PR-13 | Speed: no regression against the 32-worker baseline retaken on the B3 engine at the shipped `API_WORKERS` default; numbers in `docs/PERFORMANCE.md` | the GPU window 2 record (5a baseline) |
 | PR-14 | UI: every changed page checked at 1440 and 430 px with the screenshots viewed; the frontend live suite passes, region tests included | RF-04, RF-07, RF-33, RF-45, RF-54, RF-60 |
-| PR-15 | Docs and release: INSTALLATION (upgrade, downgrade), ARCHITECTURE (leases, registry, services, events, model families), CURATION (`job_busy` window, `registry_not_migrated`), SECURITY (broker) current; CHANGELOG consolidated with the breaking changes first; release notes; `/health` reports 0.7.0 | RP-1..RP-6, RF-26 |
+| PR-15 | Docs and release: INSTALLATION (services, secrets, backup and restore, upgrade, downgrade), ARCHITECTURE (the control plane, services, queues, events, model families), CURATION (job states, the `job_busy` window), SECURITY (broker and database preconditions) current; CHANGELOG consolidated with the breaking changes first; release notes; `/health` reports 0.7.0 | RP-1..RP-6, RF-26 |
 
 ## 6. Decision register
 
@@ -259,34 +293,221 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-14 | Commit the plans | done | committed on `fix/411-r2-round` | - | |
 | D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
-| D-17 | Q-J1 Celery 5.6 | open per decision 6 | the owner already chose Celery (task plan J1); confirm the 5.6 line at B2 kick-off | B2 | [03](03_b2_overview.md) |
+| D-17 | Q-J1 Celery 5.6 | approved 2026-11-04 | Celery 5.6 with kombu's `redis://` transport and redis-py; exact pins in `13_package_pins.md` | B2 | [02b](02b_jobs_locking_events.md) section 7 |
+| D-18 | Q-J2 broker | approved 2026-11-04: **Valkey** | Valkey 9 (BSD-3-Clause) by digest; kombu has no `valkey://` scheme (issue #2245), so the documented `redis://` transport and redis-py are used; no third-party transport | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
+| D-19 | Do the new queue containers start by default (recommended), or only under a profile? |
+| D-20 | A job is acknowledged only after it finishes and tried at most 3 times: agreed? |
+| D-20a | May long job types (ingest, import, combine, reprocess) run up to 24 h instead of 3 h? |
+| D-20b | Should `docker stop` interrupt and requeue a running job after 30 s? |
+| D-22a | Does the old directory-ingest route become a background job (202) rather than being deleted? |
+| D-22b | May the synchronous `wait=true` mode of promote be deleted (only tests use it)? |
+| D-23 | How many jobs one general worker runs at once (4, tunable)? |
+| D-24 | Is a broker that keeps about one second of data on a crash, with no backup, enough? |
+| D-25 | Which job types restart by themselves after a crash? |
+| D-26 | Keep the API worker recycling with jitter that landed in B0? |
+| D-46 | Multi-host files: a shared volume now and an S3-compatible store in v0.8.0? |
+| D-47 | Should items keep the class name next to the class id, kept correct by one job? |
+| D-48 | Do job progress and events reach the browser through Postgres (a table plus a wake-up signal)? |
+| D-49 | Should Celery keep no results of its own, the jobs table being the only record? |
+| D-50 | Leave the connection pooler (PgBouncer) out of the default install, as an opt-in for many hosts? |
+| D-51 | Jobs running during the 0.6.0 upgrade end as "interrupted" and are restarted by hand? |
+| D-52 | Move only the lasting 0.6.0 job history (training, promotions, imports, exports, label operations, combine) into Postgres? |
+| D-53 | Keep the detection and VLM workers as stream workers, with each copy claiming whole projects? |
+| D-54 | Remove the fixed container name from every service? |
+| D-55 | Should Postgres itself refuse another project's rows (row-level security)? |
+| D-56 | Delete the four per-project OpenSearch indexes that held control data (6 indexes per project become 2)? |
+| D-57 | Drop the 10,000-class limit? |
+| D-58 | Accept an optional `Idempotency-Key` header on job-start routes? |
+| D-59 | Store prompt packs, profiles and settings as validated JSON documents with relational keys? |
+| D-60 | Enforce a single scheduler with a database lock? |
+| D-61 | No scheduled database backup by default (a dump on every upgrade and on demand)? |
+| D-62 | Real Postgres in tests through testcontainers locally and a CI service container, kept out of the Docker-free command? |
+| D-63 | A quick database test run at each B2 stage merge, in addition to the one full sweep? |
+
+## 3. Order and dependencies
+
+```
+B0 --merge--> B1 --merge--> B2 (stages 1 -> 2 -> 3 -> 4 + 5 -> 6) --merge--> B4 --merge--> B5a -> B5b -> B5c -> B5d --> release prep --> R-final --tag v0.7.0-->
+               \                         /
+                +--> B3 (CPU lanes in parallel with B2; rebase on main after B2; GPU gate; merge second)
+side: #42 whenever GPU 1 frees (never blocks)
+```
+
+- Order (D-13, D-37): B0, B1, B2, B3, B4, B5, then release prep and R-final last.
+- B3 depends only on B1 in files, so its CPU work runs during B2 on its own integration branch;
+  it merges after B2. Its GPU gate never overlaps B2's live harness.
+- Inside B2, stage 3 codes alongside stage 2 and stages 4 and 5 run in parallel (disjoint files,
+  [03_b2_overview.md](03_b2_overview.md) section 3).
+- B4 needs the control plane (B2) and the final engine (B3), so it is benchmarked once.
+- B5 measures only the final stack (#45 baseline before any optimization code).
+- **Decided (D-37 = yes):** the owner said "not tagging until all of these plans are implemented
+  and tested". B5 is inside the release, R-final runs last (after B5d), there is no separate
+  v0.8.0 acceptance, and the B5 issues sit in milestone v0.7.0. Milestones: `v0.7.0` holds B0-B5
+  and R-final; `v0.8.0` is platform breadth ([09_github_actions.md](09_github_actions.md)
+  section 7); the old `v0.9.0` and `v0.10.0` are closed once empty, never deleted.
+
+## 4. Execution waves (whole program)
+
+A **wave** is the unit that one full sweep closes. Each lane is one agent in its own worktree
+`<repo>-wt-<lane>` on its own branch; the coordinator merges finished lanes into the integration
+branch with `--no-ff` and runs exactly one sweep per wave. **While one wave's sweep runs, the
+next wave's lanes are already coding** (they branch from the frozen head of the previous
+integration branch and merge into the next one without a rebase, because that head becomes an
+ancestor of `main`). Branch names below are the defaults; the owning file may refine them.
+
+Common exit criteria, required by every wave ("PQ" gates):
+
+| ID | Gate | Check |
+|---|---|---|
+| PQ-1 | CI green locally, then on the PR | every job of `.github/workflows/ci.yml` (and `frontend.yml` when `frontend/` changed) reproduced locally, the changelog rules included; then `gh pr checks <n>`; the push verified with `git ls-remote` |
+| PQ-2 | Ratchets only shrink | `git diff main...HEAD -- scripts/codegen/baselines/` shows only removed lines or lower counts; an oversize file is split by concern, never re-baselined |
+| PQ-3 | No dead code, no shims | the vulture and dead-code hooks green; a superseded route, field, module or env var deleted in the same change (retired env vars added to `src/config/retired_env.py`); no compatibility read path |
+| PQ-4 | Contracts regenerated | `make contracts` in each commit that changes a wire model; `make contracts-check` clean in the sweep |
+| PQ-5 | Docs check clean | `.venv/bin/python scripts/docs/check_docs_vs_code.py`; the docs listed for the batch (section 9) updated; CHANGELOG entries under `[Unreleased]` (root and frontend) |
+| PQ-6 | Red/green evidence | each task's red test seen failing on the base plus its paired control, with the red output in the PR description |
+| PQ-7 | Hot-path numbers | where the wave touches the hot path, the performance and parity numbers against the stated reference, recorded in `docs/PERFORMANCE.md` (and `docs/research/` for studies) |
+| PQ-8 | Image hygiene | when an image is built for a gate or a push: the image-vs-git audit and the Trivy gate |
+| PQ-9 | Owner rules | no new in-process or file lock for cross-process state (file-lock ratchet from B1), no asyncio fan-out in request handlers, class identity by name, fail closed ([10_standards_and_libraries.md](10_standards_and_libraries.md)) |
+
+| Wave | Batch | Lanes (branch -> brief in) | Codes in parallel / overlaps | Sweep that closes the wave | Exit criteria (in addition to PQ-1..PQ-9) |
+|---|---|---|---|---|---|
+| **W0** | B0 on `fix/411-r2-round` | none: the code is done; the coordinator commits the plan set (B0-1) | GH-0..GH-12 after the owner's D-36 go; W1 lanes may start coding from the frozen B0 head once the plan set is approved | B0 gate cycle: pre-commit `--all-files`, offline suite `-n 8`, contracts-check, docs check, frontend full set with e2e, changelog rules: CPU gates only, no GPU run (the OCR before/after comparison moved to GPU window 1, the B3 gate; [01](01_b0_close_out.md) B0-2, B0-3) | merge commit on `main`; `main` fast-forwarded; #437, #440, #442, #443, #445 and #366 closed; VERSION still 0.6.0; no tag |
+| **W1** | B1 on `int/b1-correctness` | `b1/deps` -> [09](09_github_actions.md) section 8; `b1/ultralytics` (merged); `b1/inference` (merged); `b1/api-frontend` (merged); `b1/leases` (merged); `b1/registry` (merged). Merge order: deps, 1E, 1C, 1D, 1A, 1B (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md))) | all six code in parallel; 1B rebases on 1A before its merge; during W1's sweep, B2 stage W1 (`b2/queue-infra`, spike S1 first) and the B3 CPU lanes start from the frozen `int/b1` head | B1 sweep: T1 + frontend full set + browser check of the export and diverse review pages + a short lease/registry smoke on the live harness (`-p op-b1-live`, cap 30 min; the full live run is the single B1+B2 run at the end of B2) + the `families` CI job; spawn races run 10x locally | file-lock ratchet lists only the B2/B4 sites and `job_lock.py`; no `class_registry.json` read outside export snapshots and the trainer; `registry_not_migrated` tested; lease p50/p99 acquire latency recorded; N2-N7, N9, N10, #447 closed on merge. PQ-7: no GPU gate in B1 by design; the lease round-trip cost is the recorded number |
+| **W2** | B2 on `int/b2-control-plane` | stage 1: `b2/db-core`, `b2/queue-core`, `b2/compose-installer`, `b2/storage-seam`, then `b2/health-ci` -> [03a](03a_b2_w1_queue_infra.md); stage 2: `b2/projects-pg`, `b2/classes-pg`, `b2/config-pg`, `b2/records-pg`, `b2/upgrade-060`, then `b2/opensearch-control-removal` -> [03d](03d_b2_s2_control_data.md); stage 3: `b2/job-runtime`, `b2/events-pg` -> [03e](03e_b2_s3_job_runtime.md); stage 4: `b2/families-a`, `-b`, `-c`, `b2/trigger-workers`, then `b2/frontend-queued` -> [03b](03b_b2_w2_job_families.md); stage 5: `b2/gpu-train`, `b2/gpu-export`, `b2/gpu-eval`, `b2/promote-models` -> [03f](03f_b2_s5_gpu_queues.md); stage 6: `b2/beat-periodic`, `b2/scale-out-compose`, then `b2/hardening`, then `b2/docs` -> [03c](03c_b2_w3_beat_reaper_workers.md) | stages merge in order (stage 3 codes alongside stage 2; stages 4 and 5 in parallel); each stage merge gets targeted tests, `make contracts-check` and the `db` tier (D-63), not a full sweep; B3 lanes code throughout W2 on `int/b3-ultralytics` | B2 sweep after stage 6: T1 (Docker-free suite, `-m db` tier, frontend full set) + the one live run covering B1 and B2 (`-p op-b2-live`, about 4 h: races, kill and cold-shutdown requeue, cancel, API recycle, broker loss, Postgres restart, two beats, SSE resume, GPU queues with fake handlers, detection-worker replicas, per-family smoke) + `acceptance_run.sh --only` the job phases + image audit and Trivy for changed images | the done-when of [03](03_b2_overview.md) section 1 (no `FileJob`, no job files, file-lock ratchet zero, OpenSearch with two roles per project, no `container_name`); OPS-2 measured first; N11, N12 closed. PQ-7: request latency of `/detect` and `/ingest` under a running job recorded against the B1 numbers |
+| **W3** | B3 on `int/b3-ultralytics` | `b3/stagea` first, then `b3/families`, `b3/frame`, `b3/export`, `b3/decoders`, `b3/docs` as [04](04_b3_ultralytics_one_version.md) orders them | codes during all of W2 (CPU only); rebases on `main` after B2 merges; during W3's sweep, B4's 4C spike (on the merged B2 stack) and 4D's measurement start | B3 sweep: T1 + U-6.1 matrix at the pin X + **GPU window 1**: the U-6.2 gate once for Stage A and Stage B plus the B0 OCR before/after comparison (`-p op-b3-gpu`, GPU 0, one GPU day; never overlapping a B2 live run) + `pip check`, image audit, Trivy | one Ultralytics version in every image and requirements file; pin test green in CI and in each image; N8 closed. PQ-7: |delta mAP50-95| <= 0.3, >= 99 % detection agreement, throughput >= 95 % at batch 1/8/32/64 with p99 within +10 %, embedding cosine >= 0.999, export image about -0.9 GB, all recorded |
+| **W4** | B4 on `int/b4-stateless` | `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/project-create` (4D) -> [05](05_b4_stateless_api.md) (the events track moved into B2) | 4D timing during W3's sweep; release-prep drafting (release notes) may start during W4's sweep | B4 sweep: T1 + frontend full set + the third and last live run: the 1-vs-N diff with `API_WORKERS` 1 and 32 and with two `api` and two `jobs-worker` replicas (no GPU in B4: the installer default `API_WORKERS` is provisionally `min(nproc, 32)`; the T5 32-worker ingest and search benchmark on the B3 engine runs in GPU window 2, the B5 window, per 05 step 4B-5, and 5a retakes the same baseline) | the 1-vs-N diff empty; no lifespan side effects; N1, #439 closed. PQ-7: the `API_WORKERS` default is confirmed or corrected by the GPU window 2 benchmark before R-final |
+| **W5a** | B5 baseline ([07a](07a_b5_baseline.md)) on `int/b5a-baseline` | per 07a | no optimization code starts before the 5a reference numbers exist; the B5b/5c/5d lanes may code while earlier sub-batches are measured | 5a sweep: T1 + **GPU window 2** opens: the #45 baseline once (ladders, #268 sweeps, GPU-6 recall) | numbers recorded with host load; no default changes unless the gain beats 2x the run-to-run spread and parity passes; D-35 decided (N13) |
+| **W5b** | B5b decode once ([07b](07b_b5_decode_once.md)) | per 07b (GPU-3b first) | 5c lanes code during W5b's sweep | 5b sweep: T1 + the #40/#407 measurement and parity (boxes within 1 px at the original resolution, embedding cosine >= 0.999), in sequence inside GPU window 2 | #40/#407 acceptance met; numbers in `docs/PERFORMANCE.md` |
+| **W5c** | B5c crops, OCR, faces ([07c](07c_b5_crops_ocr_faces.md)) | per 07c | 5d lanes code during W5c's sweep | 5c sweep: T1 + P-vlm, P-sam, P-region, P-ocr gates, GPU window 2 | #219/#220 acceptance met |
+| **W5d** | B5d processing plans ([07d](07d_b5_processing_plans.md)) | per 07d | release-prep drafting may start | 5d sweep: T1 + #67 acceptance with per-stage "not run" tests, GPU window 2 closes | #67 acceptance met |
+| **W6** | release prep + R-final ([06](06_release_acceptance.md)) | `chore/release-0.7.0-prep` (RP-1..RP-9: VERSION 0.6.0 -> 0.7.0 and CHANGELOG `[Unreleased]` -> `[0.7.0]` first); `fix/rfinal-findings` only if a row fails | nothing else merges to `main` | R-final itself (every RF row), **GPU window 3** | every RF row PASS; the production-ready definition (section 5) ticked; report to the owner; tag v0.7.0 only on the owner's word (D-16); #411 closed after the tag |
+| side | #42 ([07](07_b5_overview.md) section 11) | `perf/42-small-gpu-acceptance` | any time GPU 1 is free; never blocks | its own run on GPU 1 | the #42 pass list; results in `docs/PERFORMANCE.md` and #42 |
+
+### 4.1 Task list (carried from section 11 of the former master plan)
+
+| Task | What | Wave | Status |
+|---|---|---|---|
+| #28 / B0-a..c | GPU-1, GPU-3a+13, GPU-2; OS-2, OS-1, OPS-1; CC-1, BA-7 | W0 | merged into `fix/411-r2-round` |
+| B0-d | uvicorn `>=0.41.0` floor and test | W0 | done (`6a53673c`) |
+| B0-e | `ultralytics==8.4.197` exact pin and test | W0 | done (`d1c6bab0`) |
+| B0-f | release prep | W6 | moved (owner decision 3) |
+| B0-g | OCR before/after comparison | W3 (GPU window 1) | moved out of B0 (budget, section 8.1) |
+| B0-i | docs fixes `ad553ecd` (stale "patch breaks on 8.4" comments), `0cc2b3ac` (docs checker skips route/env checks in `docs/design/`) | W0 | done |
+| #28 rest | plan commit (with removal wave R-1), CPU gate cycle, push, PR, CI, merge, fast-forward | W0 | to do |
+| #25, #22 | R3 live acceptance with the segmenter tier | W6 | moved into R-final (D-3, D-4) |
+| B0-h | tag v0.7.0 and the GitHub release | W6 | after R-final, owner's word |
+| #27 | #42 small-GPU acceptance on GPU 1 | side | waiting for GPU 1 |
+| GH-1 (#38) | GitHub actions | before W1 | to do, on the owner's go (D-36) |
+| #31, #34 | audit plan, Ultralytics plan | - | done (committed, D-14) |
+| B1-0 | commit the source plans | - | done (D-14); the header pointers of the three source plans are repointed to this set in the plan-set commit |
+| B1-1A..1E, deps | B1 lanes | W1 | done (merged) |
+| R-B1 | 0.8.0 acceptance subset | - | dropped (owner decision 3); its checks are in R-final section 4.3 |
+| B2 stages 1-6 | B2 stages | W2 | to do |
+| B3 | B3 | W3 | to do |
+| B4-4A..4D, R-0.9 | B4; R-0.9 merged into R-final | W4, W6 | to do |
+| #17/#18 leftovers | #220 step 3 research (B5c), #67 phase 2+ (B5d) | W5c, W5d | to do |
+| B5a..d | B5 sub-batches | W5a..W5d | to do |
+| #40 (ledger) | leftover cleanup | per [11](11_risks_cleanup_host.md) section 5 | owner yes per row |
+
+## 5. Definition of production-ready for v0.7.0
+
+R-final verifies every line; the RF row ids are in [06_release_acceptance.md](06_release_acceptance.md)
+section 4.
+
+| # | Production-ready means | Verified by |
+|---|---|---|
+| PR-01 | Cross-process control state is in PostgreSQL (transactions, constraints, fenced claims, advisory locks, idempotency keys), item state uses OpenSearch OCC, never a file or in-process lock: `rg -n "fcntl" src` is empty and the file-lock ratchet is at zero | release-prep precondition; B2 exit |
+| PR-02 | A singleton job starts once under concurrent requests; a dead holder blocks a restart for at most 150 s (lease TTL plus one reaper tick) | RF-42 |
+| PR-03 | Concurrent class writes never lose a class or duplicate an id | RF-43 |
+| PR-04 | Jobs run in workers: they survive an API restart, a killed worker's resumable job is re-enqueued, periodic tasks run once | RF-52, RF-53, RF-55 |
+| PR-05 | The API gives the same answers with 1 and 32 workers and with several replicas of the API and the job workers | the B4 sweep record |
+| PR-06 | Class identity is the name across import, combine, export, train, promote and the secondary detector | B1 tests; RF-40, RF-43 |
+| PR-07 | Fail closed: Postgres down -> 503 on every control write and start, `database: down`; OpenSearch down -> 503 on data-plane writes and `review_dismiss`; a schema not at the code's head -> the process refuses to start; another project's rows -> refused by the database; a raw-head engine -> refused; Valkey down -> degraded health and 503 starts | RF-36, RF-41, RF-57, RF-61 |
+| PR-08 | One exact Ultralytics version in every image; one fused detection contract; the B3 parity and throughput gate passed | RF-20, RF-57, the B3 sweep record |
+| PR-09 | Fresh install, re-run, repair, `--skip-models`, engine adoption, uninstall work | RF-01, RF-02, RF-12, RF-23, RF-24, RF-25 |
+| PR-10 | The supported upgrade, 0.6.0 -> 0.7.0, moves every project, class (ids kept), config and lasting job record into Postgres and deletes the OpenSearch copies after verifying them, adds the new services, rebuilds the default engine once; rollback to 0.6.0 recreates the 0.6.0 state from the upgrade bundle | RF-40, RF-41, RF-56, RF-58, RF-59, RF-62, RF-63 |
+| PR-11 | Security: SEC-1..SEC-6 fixed (neutral wording); the broker and the database have no published port and required passwords from files; Trivy fixable CRITICAL = 0; every image passes the image-vs-git audit; no secret in any log or report | RF-08, RF-09, RF-10, RF-34, RF-50 |
+| PR-12 | Quality: CI green; ratchet baselines smaller than or equal to their `5b95591f` values; no dead code or shims; contracts in sync; docs check clean | PQ-1..PQ-5 at every wave; the release commit's full gate |
+| PR-13 | Speed: no regression against the 32-worker baseline retaken on the B3 engine at the shipped `API_WORKERS` default; numbers in `docs/PERFORMANCE.md` | the GPU window 2 record (5a baseline) |
+| PR-14 | UI: every changed page checked at 1440 and 430 px with the screenshots viewed; the frontend live suite passes, region tests included | RF-04, RF-07, RF-33, RF-45, RF-54, RF-60 |
+| PR-15 | Docs and release: INSTALLATION (services, secrets, backup and restore, upgrade, downgrade), ARCHITECTURE (the control plane, services, queues, events, model families), CURATION (job states, the `job_busy` window), SECURITY (broker and database preconditions) current; CHANGELOG consolidated with the breaking changes first; release notes; `/health` reports 0.7.0 | RP-1..RP-6, RF-26 |
+
+## 6. Decision register
+
+Statuses: **approved** (owner decision of 2026-11-03), **done**, **open** (with the plan's
+recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model-family plan.
+
+| ID | Decision | Status | Recommendation or note | Needed by | Detail |
+|---|---|---|---|---|---|
+| D-1 | B0 scope | approved, minus release prep | the B0 small fixes, the uvicorn floor and the pin on `fix/411-r2-round`, one gate cycle | B0 | [01](01_b0_close_out.md) |
+| D-2 | Ultralytics exact pin in B0 (U-J2) | approved, done (`d1c6bab0`) | `==8.4.197` in `requirements.txt`, `requirements-test.txt`, `pyproject.toml`; next move only in B3 | B0 | [01](01_b0_close_out.md) |
+| D-3 | Gates, push, CI, merge commit | approved; R3 deferred into R-final | | B0 | [01](01_b0_close_out.md), [06](06_release_acceptance.md) |
+| D-4 | Segmenter tier in acceptance | approved | HF token from the stack's `.env`, never printed; GPU 0 (GPU 2 if free and agreed) | R-final | [06](06_release_acceptance.md) RF-22 |
+| D-5 | #42 timing | approved | runs when GPU 1 frees; never a tag blocker; release notes say so if unrun | side | [07](07_b5_overview.md) section 11 |
+| D-6 | Known-issue lines for #447, CC-2, CC-4 | dropped | no release ships before B1-B4 fix them | - | |
+| D-7 | Release train (early v0.8.0 after B1) | replaced | by owner decisions 2-3 and D-37: one release v0.7.0 after B5 and R-final | - | [06](06_release_acceptance.md) |
+| D-8 | J-LEASE | approved | OpenSearch lease docs in the SETTINGS role, thread heartbeat 15 s, TTL 120 s, cooperative fencing | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| D-9 | J-REG and its upgrade path | approved | registry doc with OCC (5 attempts, 10,000 classes), 409 `registry_not_migrated`, `upgrade` hook, `.migrated` rename, downgrade note. Only 0.6.0 -> 0.7.0 is tested (no 0.7.0 install exists) | B1 | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| D-10 | B1-1E scope | approved | minimal in B1; trainer `nms`, export module and full matrix in B3 | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
+| D-11 | U-J3 YOLOv5 scope | approved, option b | bring-your-own original-YOLOv5 ONNX for probe and secondary; YOLOv5u for serving | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
+| D-12 | U-J4 `nms` by capability | approved | `nms=False` with `one2one_cv2`, else `nms=True`, class-agnostic | B1 (export), B3 (trainer) | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)), [04](04_b3_ultralytics_one_version.md) |
+| D-13 | Order (Q-J8) | approved; amended by D-37 | B0, B1, B2, B3, B4, B5, then R-final last | - | section 3 |
+| D-14 | Commit the plans | done | committed on `fix/411-r2-round` | - | |
+| D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
+| D-17 | Q-J1 Celery 5.6 | approved 2026-11-04 | Celery 5.6 with kombu's `redis://` transport and redis-py; exact pins in `13_package_pins.md` | B2 | [02b](02b_jobs_locking_events.md) section 7 |
 | D-18 | Q-J2 broker | open | Redis 8 (AGPLv3 option); Valkey only if a redistributor objects. Owner raised the licence question on 2026-11-04: Valkey 9 (BSD-3, Linux Foundation) runs the same `redis://` kombu transport and redis-py client, so only the image and the licence row change; the W1 spike S1 runs the Celery checks against whichever image is chosen | B2 | [03a](03a_b2_w1_queue_infra.md) |
-| D-19 | Q-J3 default install | open | five core containers: `redis`, `jobs-worker`, `open-vocab-worker`, a `periodic-worker` for the `periodic` queue (so the reaper and the dispatch tick never wait behind long jobs), `jobs-beat`; Flower under monitoring | B2 | [03a](03a_b2_w1_queue_infra.md) |
-| D-20 | Q-J4 delivery | open | `acks_late` + `reject_on_worker_lost` + lease + attempt cap 3 + soft shutdown 30 s | B2 | [03a](03a_b2_w1_queue_infra.md) |
-| D-20a | Time limits for long job kinds (new) | open | default 3 h / 3 h 15 m; 24 h / 24 h 15 m for the long kinds named in 03 | B2 | [03](03_b2_overview.md) |
-| D-20b | `REMAP_SIGTERM=SIGQUIT` on worker services (new) | open | yes, so `docker stop` gets the soft shutdown; `stop_grace_period` above the soft-shutdown timeout | B2 | [03](03_b2_overview.md) |
-| D-21 | Q-J5 job-state store | open | status/progress/cancel stay in `FileJob` files; exclusivity is the lease | B2 | [03](03_b2_overview.md) |
-| D-22 | Q-J6 scope | open | all 17 API-hosted job families (the dispatcher source poll and the cache prune included), the periodic loops, auto-label, assist loop; keep detection/VLM workers, trainer, export worker; evaluator per D-31 | B2 | [03](03_b2_overview.md) |
-| D-22a | Directory ingest is not project-bound (new) | open | a plain task with a deployment-level job record, no lease | B2 | [03](03_b2_overview.md) |
-| D-22b | Promote `wait=true` (new) | open | delete it (only tests use it); no shim | B2 | [03b](03b_b2_w2_job_families.md) |
+| D-19 | Q-J3 default install | open | core: `postgres`, `valkey`, `db-migrate` (one-shot), `jobs-worker`, `periodic-worker` (so the reaper and the dispatch tick never wait behind long jobs), `open-vocab-worker`, `jobs-beat`; Flower under `monitoring` | B2 | [02c](02c_migration_ops_tests.md) section 4 |
+| D-20 | Q-J4 delivery | open | `acks_late` + `reject_on_worker_lost` + the claim `UPDATE` with a fencing token + attempt cap 3 + soft shutdown 30 s | B2 | [02b](02b_jobs_locking_events.md) section 3 |
+| D-20a | Time limits for long job kinds | open | default 3 h / 3 h 15 m; 24 h for the long kinds, 72 h for training, as the kind table says | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
+| D-20b | `REMAP_SIGTERM=SIGQUIT` on worker services | open | yes, so `docker stop` gets the soft shutdown; `stop_grace_period` above the soft-shutdown timeout | B2 | [02b](02b_jobs_locking_events.md) section 7.1 |
+| D-21 | Q-J5 job-state store | replaced by D-39 (2026-11-04) | the `jobs` table in PostgreSQL is the store; `FileJob` and the leases are deleted | - | [02b](02b_jobs_locking_events.md) |
+| D-22 | Q-J6 scope | approved 2026-11-04 (owner decision 4, D-41): scope now includes training, model export and the evaluator | every API-hosted family, the periodic loops, auto-label, assist loop, the trainer (`gpu_train`), model export (`gpu_export`), the evaluator (`gpu_eval`); the detection and VLM stream workers stay (D-53) | B2 | [02](02_control_plane_database.md) section 4 |
+| D-22a | Directory ingest is not project-bound | open | a deployment-level job row (`project_id` NULL), 202 + job id | B2 | [03b](03b_b2_w2_job_families.md) 4C-6 |
+| D-22b | Promote `wait=true` | open | delete it (only tests use it); no shim | B2 | [03f](03f_b2_s5_gpu_queues.md) 5D-3 |
 | D-23 | Q-J9 `jobs` concurrency | open | 4, tunable | B2 | [03a](03a_b2_w1_queue_infra.md) |
-| D-24 | Q-J10 Redis durability | open | AOF everysec, no backup | B2 | [03a](03a_b2_w1_queue_infra.md) |
-| D-25 | Q-J11 auto-resume | open | reprocess, dataset import, bulk ingest, combine, assist loop | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
+| D-24 | Q-J10 broker durability | open | Valkey AOF everysec, no backup (the reaper rebuilds the queue from the `jobs` rows) | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
+| D-25 | Q-J11 auto-resume | open | reprocess, dataset import, bulk ingest, combine, assist loop, project delete, class projection sync | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
 | D-26 | Q-J12 recycling | open | keep `--limit-max-requests` with jitter (landed in B0) | B2 | [03](03_b2_overview.md) |
 | D-27 | U-J1 staging + U-J5..J8 | open | one version; U-6.2 once for Stage A and B; J5 keep `conf=0.25`; J6 keep the Triton name; J7 export batch = `max_batch_size`; J8 trainer on the same release | B3 | [04](04_b3_ultralytics_one_version.md) |
 | D-28 | B3 pin choice rule | open | newest 8.4.x passing U-6.1 at a freeze date set at B3 kick-off (at least 3 days old) | B3 | [04](04_b3_ultralytics_one_version.md) |
 | D-29 | Q-J7 request fan-out | open | bulk OCC; the ingest data plane a documented `TaskGroup` exemption | B4 | [05](05_b4_stateless_api.md) |
 | D-29a | VLM batch routes (`label_batch`, `verify_region_batch`) (new) | open | 202 + a Celery job; the bounded `TaskGroup` runs in the worker | B4 | [05](05_b4_stateless_api.md) |
-| D-30 | Q-J13 event transport | open | Redis Streams, decided after the 4C spike passes | B4 | [05](05_b4_stateless_api.md) |
-| D-31 | Q-J6 evaluator | open | `-Q gpu_eval -c 1` in B4 | B4 | [05](05_b4_stateless_api.md) |
+| D-30 | Q-J13 event transport | replaced by D-48 (2026-11-04) | events in Postgres, built in B2 stage 3 | - | [02b](02b_jobs_locking_events.md) section 6 |
+| D-31 | Q-J6 evaluator | approved 2026-11-04 (owner decision 4) | `-Q gpu_eval -c 1`, built in B2 stage 5 | B2 | [03f](03f_b2_s5_gpu_queues.md) |
 | D-32 | #439 approach | open | measure first; then a `project_create` job (202) | B4 | [05](05_b4_stateless_api.md) |
 | D-32a | Project status during creation (new) | open | reuse the existing `building` status (combine targets use it), not a new `creating` | B4 | [05](05_b4_stateless_api.md) |
-| D-33 | Q-J14 API workers | open | `API_WORKERS` (`WEB_CONCURRENCY`), default `min(nproc, 32)`, confirmed by the benchmark | B4 | [05](05_b4_stateless_api.md) |
+| D-33 | Q-J14 API workers | open | `API_WORKERS` (`WEB_CONCURRENCY`), default `min(nproc, 32)`, confirmed by the benchmark; replicas need nothing more after B2 | B4 | [05](05_b4_stateless_api.md) |
 | D-34 | Tag v0.9.0 | dropped | merged into D-16 | - | |
 | D-35 | GPU-6 `/detect` upscaling | open | keep `scaleup=False` until 5a measures recall | B5a | [07a](07a_b5_baseline.md) |
 | D-36 | GitHub actions | approved | executed only on the owner's go after this set is approved | before W1 | [09](09_github_actions.md) |
 | D-37 | B5 before the first tag? (new) | approved: YES | owner, 2026-11-03: "not tagging until all of these plans are implemented and tested". v0.7.0 = B0..B5 + R-final; R-final runs last; milestones re-cut (section 3, [09](09_github_actions.md) section 7) | - | section 3 |
 | D-38 | Dependabot #432 handling: Triton 26.09 and a newer Python base (new; the same question as Q-4 and ENV-10 in [08](08_environment_and_setup.md)) | open | close #432 and #422; do the move only inside B3 as optional task B3-A5, with the TensorRT pins and the `Dockerfile.triton` assertion moved together, behind the U-6.2 gate, if B3's GPU window allows; otherwise after the tag | B3 kick-off | [04](04_b3_ultralytics_one_version.md) B3-A5, [09](09_github_actions.md) section 8 |
+| D-39 | PostgreSQL holds all relational and control data (projects, settings, classes, revisioned config, jobs and their locking, training runs, models, promotions; later users and tokens) | approved 2026-11-04 (owner decision 1; replaces D-21) | the schema of [02a](02a_postgres_schema.md) | B2 | [02](02_control_plane_database.md) |
+| D-40 | OpenSearch keeps the search, text and vector data; each value has one owner | approved 2026-11-04 (owner decision 2) | the data-ownership table | B2 | [02](02_control_plane_database.md) section 3 |
+| D-41 | Every long job runs on Celery, training and model export included; `FileJob`, the file protocols, `/jobs` and every file lock are deleted | approved 2026-11-04 (owner decision 4) | GPU queues `gpu_train`, `gpu_export`, `gpu_eval` | B2 | [03f](03f_b2_s5_gpu_queues.md) |
+| D-42 | Cloud-ready scale-out: stateless API and workers, N replicas, no fixed `container_name` on scalable services, shared state only in Postgres, Valkey or OpenSearch | approved 2026-11-04 (owner decision 5) | the storage seam (D-46) for blobs | B2 | [02](02_control_plane_database.md) section 2 |
+| D-43 | 0.6.0 -> 0.7.0 in one step: the OpenSearch control data moves into Postgres by a tested upgrade step, then the OpenSearch copies are deleted (no dual read) | approved 2026-11-04 (owner decision 6) | bundle, load, verify, delete; rollback from the bundle | B2 | [02c](02c_migration_ops_tests.md) section 2 |
+| D-44 | Packages exact-pinned at the latest installable versions | approved 2026-11-04 (owner decision 7) | `13_package_pins.md` | B2 | - |
+| D-45 | Plain names first, codes after, in every plan text | approved 2026-11-04 (owner decision 8) | each decision has a one-line plain question (section 2.1) | - | - |
+| D-46 | Multi-host files: shared volume or object store? | open | the storage seam with a local backend in 0.7.0 (a shared POSIX volume for several hosts); an S3-compatible backend in v0.8.0 | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 5 |
+| D-47 | Do items keep the class name? | open | yes, as a projection owned by Postgres: one writer path, an outbox row in the same transaction, a sync job, a verifier | B2 stage 2 | [02](02_control_plane_database.md) section 3.3 |
+| D-48 | How do progress and events reach the browser? | open | a Postgres `events` table plus `NOTIFY`, the `(xid, id)` cursor as the SSE id (replaces D-30) | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 6 |
+| D-49 | Does Celery keep results? | open | no result backend; the `jobs` row is the only truth | B2 stage 1 | [02b](02b_jobs_locking_events.md) section 7.1 |
+| D-50 | A connection pooler in the default install? | open | no; an opt-in PgBouncer overlay for many replicas or hosts | B2 stage 6 | [02b](02b_jobs_locking_events.md) section 8.1 |
+| D-51 | Jobs in flight during the 0.6.0 upgrade? | open | recorded `interrupted`, no automatic resume | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2 |
+| D-52 | Which 0.6.0 job histories move? | open | training runs, promotions, models, imports, exports, label operations, combine provenance; the transient ones stay in the bundle | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2.1 |
+| D-53 | Detection and VLM workers on Celery? | open | no: stream workers that claim whole projects through Postgres | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 5 |
+| D-54 | Which services lose `container_name`? | open | all; lookups by Compose labels | B2 stage 6 | [03c](03c_b2_w3_beat_reaper_workers.md) 6B-2 |
+| D-55 | Row-level security in Postgres? | open | yes, `FORCE`d on every project-scoped table, with `project_tx` | B2 stage 1 | [02a](02a_postgres_schema.md) section 1.4 |
+| D-56 | Delete the per-project `configs`, `classes`, `umap_state`, `labels_confirmed` indexes? | open | yes (6 indexes per project become 2) | B2 stage 2 | [02](02_control_plane_database.md) section 4.7 |
+| D-57 | Keep the 10,000-class cap? | open | no; `registry_full` goes | B2 stage 2 | [02a](02a_postgres_schema.md) section 3 |
+| D-58 | `Idempotency-Key` on job starts? | open | yes, optional | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 2.3 |
+| D-59 | Config bodies as validated JSON documents? | open | yes, `jsonb` validated by pydantic, identity and relations as columns | B2 stage 1 | [02a](02a_postgres_schema.md) section 4 |
+| D-60 | One beat enforced how? | open | a Postgres session advisory lock at beat start | B2 stage 6 | [02b](02b_jobs_locking_events.md) section 4.1 |
+| D-61 | Scheduled database backups by default? | open | no: a dump on every upgrade and on demand; an opt-in beat task | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 6 |
+| D-62 | How do tests get a real Postgres? | open | testcontainers locally, a CI service container; the `db` marker outside the Docker-free command | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 7 |
+| D-63 | A database test run at each B2 stage merge? | open | yes (`-m db`, minutes, no GPU) | B2 | [03](03_b2_overview.md) section 4 |
 | OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [07](07_b5_overview.md) section 9 |
 | OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | OC-2 | pyclipper in the hardened Triton scan image (`docker/hardened/triton`) | open | decide with B2's image work (stage W3, hardening lane) | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
@@ -328,8 +549,8 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | Tier | B0 | B1 | B2 | B3 | B4 | R-final | B5 (each sub-batch) |
 |---|---|---|---|---|---|---|---|
 | T0 red/green + control per task | done on the branch | every lane | every lane | every lane | every lane | each `fix/rfinal-findings` fix | every lane |
-| T1 pre-commit `--all-files`, offline suite (`-n 8`, about 25-33 min), contracts-check, docs check, changelog rules; frontend full set when `frontend/` changed | once | once | once (after stage W3) | once | once | release-prep gate; the release commit's full gate | once |
-| T2 live harness (`docker/test/compose.yml`, own `-p`) | - | lease/registry smoke, cap 30 min | the single B1+B2 run (about 3 h) | - | 1-vs-32 diff | RF-03 | - |
+| T1 pre-commit `--all-files`, offline suite (`-n 8`, about 25-33 min), contracts-check, docs check, changelog rules; frontend full set when `frontend/` changed; from B2 also the `db` tier (`-m db`) | once | once | once (after stage 6; the `db` tier also at each stage merge, D-63) | once | once | release-prep gate; the release commit's full gate | once |
+| T2 live harness (`docker/test/compose.yml`, own `-p`) | - | lease/registry smoke, cap 30 min | the single B1+B2 run (about 4 h) | - | 1-vs-N diff (workers and replicas) | RF-03 | - |
 | T3 GPU gates | - (CPU gates only) | - | - | GPU window 1: U-6.2 once for Stage A and B (about 1 day) plus the B0 OCR before/after (about 2 h) | - | GPU window 3: inside the run (segmenter, OCR set) | GPU window 2: baseline once, then each sub-batch measurement in sequence |
 | T4 acceptance | - | - | `--only` job phases | - | - | full (section 4 of 06) | - |
 | T5 benchmarks | - | lease latency only | job vs request latency | throughput gate | 32-worker baseline retaken on the B3 engine, then the knob | - | 5a baseline once, then gains |
@@ -385,9 +606,9 @@ permanent docs.
 |---|---|---|---|---|---|---|---|---|
 | B0 | - | - | - | - | - | (jitter already) | the plan set, `docs/design/README.md` | entries present; frontend #440 present |
 | B1 | leases, registry | `job_busy` window, `registry_not_migrated`, migrate command | lease and registry docs, mapping | upgrade, downgrade note | BA-2, BA-5, new error codes | - | `CLAUDE.md` lock rule; ATTRIBUTION (cachetools) | root (breaking), frontend |
-| B2 | services, queues | job states, `queued` | - | Redis, new services | `queued`, directory-ingest 202 | - | `CLAUDE.md`, `SECURITY.md`, docs-site, ATTRIBUTION (Celery, Redis) | root (breaking), frontend |
+| B2 | the control plane (data ownership, Postgres, jobs, events), services, queues | job states, `queued`, `cancelling`, `paused` | two roles per project; the removed indexes | Postgres, Valkey, secrets, backup and restore, upgrade and downgrade | `queued`, 202 routes, job listing routes, removed error codes | live-run numbers | `CLAUDE.md`, `SECURITY.md`, `CONTRIBUTING.md` (test tiers), docs-site, ATTRIBUTION (SQLAlchemy, Alembic, psycopg, Celery, kombu, billiard, redis-py, Flower, Valkey, PostgreSQL) | root (breaking), frontend |
 | B3 | supported model families | - | - | engine rebuild | export formats | U-6.2 results | README, MIGRATION_TRITON_26, image_size_audit, export/README, docs-site | root (breaking) |
-| B4 | events, workers | - | - | `API_WORKERS` | `conflicts`, `building` on create, VLM batch 202 | retaken baseline, knob | engineering_standards (J7 exemption) | root, frontend |
+| B4 | workers | - | - | `API_WORKERS` | `conflicts`, `building` on create, VLM batch 202 | retaken baseline, knob | engineering_standards (J7 exemption) | root, frontend |
 | R-final | - | - | - | release upgrade notes | - | - | `docs/releases/v0.7.0.md`, `RELEASE_CHECKLIST.md`, `docs/design/README.md` | consolidated, then `[0.7.0]` |
 | B5 | GPU pipeline | - | - | - | per sub-batch | all gates | `docs/research/` | root |
 
@@ -573,8 +794,13 @@ lives now:
 | master rev 4 | 2026-11-03 | plans committed with neutral paths; path legend; line references pinned to `main` `5b95591f` |
 | program set 1 | 2026-11-03 | the master plan split into this set; owner decisions 1-9 applied (one release v0.7.0 after B4 and R-final, B5 = v0.8.0, milestones re-cut, D-6 dropped, D-7/D-16/D-34 replaced, D-37 and D-38 added, the pin marked done); execution waves W0-W10 and the production-ready definition added |
 | program set 2 (consolidation) | 2026-11-03 | owner decision D-37 = yes (B5 inside v0.7.0, R-final last; waves renumbered W0-W6 with W5a-W5d; the v0.8.0 acceptance removed; milestones re-cut); section 8.1 test and GPU budget (live harness three times, GPU windows three); section 8.2 plan lifecycle; the `b1/deps` lane; B0 facts (`d1c6bab0`, `ad553ecd`, `0cc2b3ac`); file 12 added; the master plan deleted; older-plan removal wave R-1 |
+| program set 3 (control plane) | 2026-11-04 | owner decisions of 2026-11-04 applied (D-39..D-45; D-17, D-18, D-31 approved; D-21, D-30 replaced; D-22 widened); files 02, 02a, 02b, 02c added; B2 re-planned in six stages (03, 03a-03f); B4's events track moved into B2; 05, 08, 10, 11 updated; open decisions D-46..D-63 |
 
 ## 16. Corrections found while splitting
+
+- 2026-11-04: the old B2 premise "`FileJob` files and the OpenSearch lease stay the truth" and the B4
+  Redis Streams plan are replaced; the premises found wrong are listed in
+  [02_control_plane_database.md](02_control_plane_database.md) section 5.
 
 - `docs/design/README.md` lists none of the four plans of 2026-11-03; the plan-set commit adds a
   "Program plan (current)" section and the missing rows.

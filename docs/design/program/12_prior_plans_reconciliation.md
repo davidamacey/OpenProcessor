@@ -624,7 +624,7 @@ token budgets for the assist loop`.
   has `pause_reason`). Remote VLM endpoints have no token budget because the client does not read
   the `usage` object. The label rate that sizes the budgets was never measured (S0).
 - Scope: measure the label rate first (S0 design in `auto_label_loop_plan.md` section 13);
-  a pause route on the B2 consumer; events from the B4 Redis stream; `usage` tokens read from the
+  a pause route on the B2 consumer; events from the Postgres event feed (B2 stage 3); `usage` tokens read from the
   OpenAI-compatible response; Cropwright pause button and event log.
 - Depends on: B2 2E-2, B4 4C.
 
