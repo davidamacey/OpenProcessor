@@ -35,6 +35,7 @@ task text that file cites by ID. Where a source plan and this set disagree, this
 |---|---|
 | [00_master_plan.md](00_master_plan.md) | **the execution order**: every wave to the tag, lanes and file ownership, folded-in decided items, sweeps and exit gates, the GPU-window budget, the wave procedure, the owner questions |
 | [00b_traceability.md](00b_traceability.md) | every task, ID and issue of the original plans mapped to its wave and lane or retired with a reason; every open issue mapped; the fold-in record; the proposed GitHub actions |
+| [00c_plan_review.md](00c_plan_review.md) | the independent review of the plan set (R-1..R-38) and, in its section 5, the planner's response to every finding |
 | `00_index.md` (this) | mission, decision register, wave exit gates, production-ready definition, branch/lane model, test tiers, the test and GPU budget rules (section 8.1), legends, section map, superseded plans |
 | [01_b0_close_out.md](01_b0_close_out.md) | B0: gate cycle, push, merge |
 | B1 (merged; plan files removed, the lasting facts are in the permanent docs and `CHANGELOG.md`) | B1 correctness: leases, class registry, inference and search, API/frontend/tests, Ultralytics live bugs. **Done.** |
@@ -137,9 +138,9 @@ and export included (D-41); stateless scale-out (D-42); the one-step upgrade tha
 deletes the OpenSearch control data (D-43); exact pins (D-44); plain names first (D-45); the
 evaluator on a GPU queue (D-31).
 
-The decisions still waiting on the owner for B2 (section 6 has the recommendation for each; the
-master plan's owner question list, [00_master_plan.md](00_master_plan.md) section 9, says when each
-is needed):
+The B2 decisions below were **approved by the owner on 2026-11-04 as a block** (section 6 records
+each; D-48 and D-50 as amended after the review in [00c_plan_review.md](00c_plan_review.md), with
+D-64..D-67 added). The questions still open are in [00_master_plan.md](00_master_plan.md) section 9:
 
 | Decision | Question in plain words |
 |---|---|
@@ -210,7 +211,7 @@ section 4.
 | PR-04 | Jobs run in workers: they survive an API restart, a killed worker's resumable job is re-enqueued, periodic tasks run once | RF-52, RF-53, RF-55 |
 | PR-05 | The API gives the same answers with 1 and 32 workers and with several replicas of the API and the job workers | the B4 sweep record |
 | PR-06 | Class identity is the name across import, combine, export, train, promote and the secondary detector | B1 tests; RF-40, RF-43 |
-| PR-07 | Fail closed: Postgres down -> 503 on every control write and start, `database: down`; OpenSearch down -> 503 on data-plane writes and `review_dismiss`; a schema not at the code's head -> the process refuses to start; another project's rows -> refused by the database; a raw-head engine -> refused; Valkey down -> degraded health and 503 starts | RF-36, RF-41, RF-57, RF-61 |
+| PR-07 | Fail closed: Postgres down -> 503 on every curation write and job start while the inference routes keep serving (D-64), `database: down` in `/health` and `/ready`; OpenSearch down -> 503 on data-plane writes and `review_dismiss`; a schema not at the code's head -> the process refuses to start; another project's rows -> refused by the database; a raw-head engine -> refused; Valkey down -> degraded health and 503 starts | RF-36, RF-41, RF-57, RF-61 |
 | PR-08 | One exact Ultralytics version in every image; one fused detection contract; the B3 parity and throughput gate passed | RF-20, RF-57, the B3 sweep record |
 | PR-09 | Fresh install, re-run, repair, `--skip-models`, engine adoption, uninstall work | RF-01, RF-02, RF-12, RF-23, RF-24, RF-25 |
 | PR-10 | The supported upgrade, 0.6.0 -> 0.7.0, moves every project, class (ids kept), config and lasting job record into Postgres and deletes the OpenSearch copies after verifying them, adds the new services, rebuilds the default engine once; rollback to 0.6.0 recreates the 0.6.0 state from the upgrade bundle | RF-40, RF-41, RF-56, RF-58, RF-59, RF-62, RF-63 |
@@ -222,7 +223,7 @@ section 4.
 
 ## 6. Decision register
 
-Statuses: **approved** (owner decision of 2026-11-03), **done**, **open** (with the plan's
+Statuses: **approved** (owner decision of 2026-11-03, or of 2026-11-04 where the row says so), **done**, **open** (with the plan's
 recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model-family plan.
 
 | ID | Decision | Status | Recommendation or note | Needed by | Detail |
@@ -245,18 +246,18 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
 | D-17 | Q-J1 Celery 5.6 | approved 2026-11-04 | Celery 5.6 with kombu's `redis://` transport and redis-py; exact pins in `13_package_pins.md` | B2 | [02b](02b_jobs_locking_events.md) section 7 |
 | D-18 | Q-J2 broker | approved 2026-11-04: **Valkey** | Valkey 9 (BSD-3-Clause) by digest; kombu has no `valkey://` scheme (issue #2245), so the documented `redis://` transport and redis-py are used; no third-party transport | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
-| D-19 | Q-J3 default install | open | core: `postgres`, `valkey`, `db-migrate` (one-shot), `jobs-worker`, `periodic-worker` (so the reaper and the dispatch tick never wait behind long jobs), `open-vocab-worker`, `jobs-beat`; Flower under `monitoring` | B2 | [02c](02c_migration_ops_tests.md) section 4 |
-| D-20 | Q-J4 delivery | open | `acks_late` + `reject_on_worker_lost` + the claim `UPDATE` with a fencing token + attempt cap 3 + soft shutdown 30 s | B2 | [02b](02b_jobs_locking_events.md) section 3 |
-| D-20a | Time limits for long job kinds | open | default 3 h / 3 h 15 m; 24 h for the long kinds, 72 h for training, as the kind table says | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
-| D-20b | `REMAP_SIGTERM=SIGQUIT` on worker services | open | yes, so `docker stop` gets the soft shutdown; `stop_grace_period` above the soft-shutdown timeout | B2 | [02b](02b_jobs_locking_events.md) section 7.1 |
+| D-19 | Q-J3 default install | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | core: `postgres`, `valkey`, `db-migrate` (one-shot), `jobs-worker`, `periodic-worker` (so the reaper and the dispatch tick never wait behind long jobs), `open-vocab-worker`, `jobs-beat`; Flower under `monitoring` | B2 | [02c](02c_migration_ops_tests.md) section 4 |
+| D-20 | Q-J4 delivery | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | `acks_late` + `reject_on_worker_lost` + the claim `UPDATE` with a fencing token + attempt cap 3 + soft shutdown 30 s | B2 | [02b](02b_jobs_locking_events.md) section 3 |
+| D-20a | Time limits for long job kinds | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | default 3 h / 3 h 15 m; 24 h for the long kinds, 72 h for training, as the kind table says | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
+| D-20b | `REMAP_SIGTERM=SIGQUIT` on worker services | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, so `docker stop` gets the soft shutdown; `stop_grace_period` above the soft-shutdown timeout | B2 | [02b](02b_jobs_locking_events.md) section 7.1 |
 | D-21 | Q-J5 job-state store | replaced by D-39 (2026-11-04) | the `jobs` table in PostgreSQL is the store; `FileJob` and the leases are deleted | - | [02b](02b_jobs_locking_events.md) |
 | D-22 | Q-J6 scope | approved 2026-11-04 (owner decision 4, D-41): scope now includes training, model export and the evaluator | every API-hosted family, the periodic loops, auto-label, assist loop, the trainer (`gpu_train`), model export (`gpu_export`), the evaluator (`gpu_eval`); the detection and VLM stream workers stay (D-53) | B2 | [02](02_control_plane_database.md) section 4 |
-| D-22a | Directory ingest is not project-bound | open | a deployment-level job row (`project_id` NULL), 202 + job id | B2 | [03b](03b_b2_w2_job_families.md) 4C-6 |
-| D-22b | Promote `wait=true` | open | delete it (only tests use it); no shim | B2 | [03f](03f_b2_s5_gpu_queues.md) 5D-3 |
-| D-23 | Q-J9 `jobs` concurrency | open | 4, tunable | B2 | [03a](03a_b2_w1_queue_infra.md) |
-| D-24 | Q-J10 broker durability | open | Valkey AOF everysec, no backup (the reaper rebuilds the queue from the `jobs` rows) | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
-| D-25 | Q-J11 auto-resume | open | reprocess, dataset import, bulk ingest, combine, assist loop, project delete, class projection sync | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
-| D-26 | Q-J12 recycling | open | keep `--limit-max-requests` with jitter (landed in B0) | B2 | [03](03_b2_overview.md) |
+| D-22a | Directory ingest is not project-bound | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | a deployment-level job row (`project_id` NULL), 202 + job id | B2 | [03b](03b_b2_w2_job_families.md) 4C-6 |
+| D-22b | Promote `wait=true` | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | delete it (only tests use it); no shim | B2 | [03f](03f_b2_s5_gpu_queues.md) 5D-3 |
+| D-23 | Q-J9 `jobs` concurrency | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | 4, tunable | B2 | [03a](03a_b2_w1_queue_infra.md) |
+| D-24 | Q-J10 broker durability | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | Valkey AOF everysec, no backup (the reaper rebuilds the queue from the `jobs` rows) | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
+| D-25 | Q-J11 auto-resume | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | reprocess, dataset import, bulk ingest, combine, assist loop, project delete, class projection sync | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
+| D-26 | Q-J12 recycling | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | keep `--limit-max-requests` with jitter (landed in B0) | B2 | [03](03_b2_overview.md) |
 | D-27 | U-J1 staging + U-J5..J8 | open | one version; U-6.2 once for Stage A and B; J5 keep `conf=0.25`; J6 keep the Triton name; J7 export batch = `max_batch_size`; J8 trainer on the same release | B3 | [04](04_b3_ultralytics_one_version.md) |
 | D-28 | B3 pin choice rule | open | newest 8.4.x passing U-6.1 at a freeze date set at B3 kick-off (at least 3 days old) | B3 | [04](04_b3_ultralytics_one_version.md) |
 | D-29 | Q-J7 request fan-out | open | bulk OCC; the ingest data plane a documented `TaskGroup` exemption | B4 | [05](05_b4_stateless_api.md) |
@@ -278,34 +279,41 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-43 | 0.6.0 -> 0.7.0 in one step: the OpenSearch control data moves into Postgres by a tested upgrade step, then the OpenSearch copies are deleted (no dual read) | approved 2026-11-04 (owner decision 6) | bundle, load, verify, delete; rollback from the bundle | B2 | [02c](02c_migration_ops_tests.md) section 2 |
 | D-44 | Packages exact-pinned at the latest installable versions | approved 2026-11-04 (owner decision 7) | `13_package_pins.md` | B2 | - |
 | D-45 | Plain names first, codes after, in every plan text | approved 2026-11-04 (owner decision 8) | each decision has a one-line plain question (section 2.1) | - | - |
-| D-46 | Multi-host files: shared volume or object store? | open | the storage seam with a local backend in 0.7.0 (a shared POSIX volume for several hosts); an S3-compatible backend in v0.8.0 | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 5 |
-| D-47 | Do items keep the class name? | open | yes, as a projection owned by Postgres: one writer path, an outbox row in the same transaction, a sync job, a verifier | B2 stage 2 | [02](02_control_plane_database.md) section 3.3 |
-| D-48 | How do progress and events reach the browser? | open | a Postgres `events` table plus `NOTIFY`, the `(xid, id)` cursor as the SSE id (replaces D-30) | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 6 |
-| D-49 | Does Celery keep results? | open | no result backend; the `jobs` row is the only truth | B2 stage 1 | [02b](02b_jobs_locking_events.md) section 7.1 |
-| D-50 | A connection pooler in the default install? | open | no; an opt-in PgBouncer overlay for many replicas or hosts | B2 stage 6 | [02b](02b_jobs_locking_events.md) section 8.1 |
-| D-51 | Jobs in flight during the 0.6.0 upgrade? | open | recorded `interrupted`, no automatic resume | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2 |
-| D-52 | Which 0.6.0 job histories move? | open | training runs, promotions, models, imports, exports, label operations, combine provenance; the transient ones stay in the bundle | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2.1 |
-| D-53 | Detection and VLM workers on Celery? | open | no: stream workers that claim whole projects through Postgres | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 5 |
-| D-54 | Which services lose `container_name`? | open | all; lookups by Compose labels | B2 stage 6 | [03c](03c_b2_w3_beat_reaper_workers.md) 6B-2 |
-| D-55 | Row-level security in Postgres? | open | yes, `FORCE`d on every project-scoped table, with `project_tx` | B2 stage 1 | [02a](02a_postgres_schema.md) section 1.4 |
-| D-56 | Delete the per-project `configs`, `classes`, `umap_state`, `labels_confirmed` indexes? | open | yes (6 indexes per project become 2) | B2 stage 2 | [02](02_control_plane_database.md) section 4.7 |
-| D-57 | Keep the 10,000-class cap? | open | no; `registry_full` goes | B2 stage 2 | [02a](02a_postgres_schema.md) section 3 |
-| D-58 | `Idempotency-Key` on job starts? | open | yes, optional | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 2.3 |
-| D-59 | Config bodies as validated JSON documents? | open | yes, `jsonb` validated by pydantic, identity and relations as columns | B2 stage 1 | [02a](02a_postgres_schema.md) section 4 |
-| D-60 | One beat enforced how? | open | a Postgres session advisory lock at beat start | B2 stage 6 | [02b](02b_jobs_locking_events.md) section 4.1 |
-| D-61 | Scheduled database backups by default? | open | no: a dump on every upgrade and on demand; an opt-in beat task | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 6 |
-| D-62 | How do tests get a real Postgres? | open | testcontainers locally, a CI service container; the `db` marker outside the Docker-free command | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 7 |
-| D-63 | A database test run at each B2 stage merge? | open | yes (`-m db`, minutes, no GPU) | B2 | [03](03_b2_overview.md) section 4 |
-| MQ-1 | Accept every open B2 recommendation as written, naming only the exceptions? | open | yes | before W2.1 | [00_master_plan.md](00_master_plan.md) section 9.1 |
-| MQ-2 | Postgres image: `postgres:18.6-trixie` (file 13) or `18-alpine` (the B2 files)? | open | trixie by digest (glibc text sort order) | before W2.1 | [13](13_package_pins.md) section 4 |
+| D-46 | Multi-host files: shared volume or object store? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | the storage seam with a local backend in 0.7.0 (a shared POSIX volume for several hosts); an S3-compatible backend in v0.8.0 | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 5 |
+| D-47 | Do items keep the class name? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, as a projection owned by Postgres: one writer path, an outbox row in the same transaction, a sync job, a verifier | B2 stage 2 | [02](02_control_plane_database.md) section 3.3 |
+| D-48 | How do progress and events reach the browser? | approved 2026-11-04 (owner), as amended after the review (00c R-6) | a Postgres `events` table is the durable record and the `(xid, id)` cursor is the SSE id; the wake-up goes through Valkey pub/sub (`op:events:<project>`), not a per-process Postgres `LISTEN` (replaces D-30) | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 6 |
+| D-49 | Does Celery keep results? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | no result backend; the `jobs` row is the only truth | B2 stage 1 | [02b](02b_jobs_locking_events.md) section 7.1 |
+| D-50 | A connection pooler in the default install? | approved 2026-11-04 (owner), as amended after the review (00c R-6) | no pooler by default; the opt-in PgBouncer overlay becomes required when the connection formula of 02b section 8, with the planned replicas, exceeds `max_connections` | B2 stage 6 | [02b](02b_jobs_locking_events.md) section 8.1 |
+| D-51 | Jobs in flight during the 0.6.0 upgrade? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | recorded `interrupted`, no automatic resume | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2 |
+| D-52 | Which 0.6.0 job histories move? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | training runs, promotions, models, imports, exports, label operations, combine provenance; the transient ones stay in the bundle | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2.1 |
+| D-53 | Detection and VLM workers on Celery? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | no: stream workers that claim whole projects through Postgres | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 5 |
+| D-54 | Which services lose `container_name`? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | all; lookups by Compose labels | B2 stage 6 | [03c](03c_b2_w3_beat_reaper_workers.md) 6B-2 |
+| D-55 | Row-level security in Postgres? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, `FORCE`d on every project-scoped table, with `project_tx` | B2 stage 1 | [02a](02a_postgres_schema.md) section 1.4 |
+| D-56 | Delete the per-project `configs`, `classes`, `umap_state`, `labels_confirmed` indexes? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes (6 indexes per project become 2) | B2 stage 2 | [02](02_control_plane_database.md) section 4.7 |
+| D-57 | Keep the 10,000-class cap? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | no; `registry_full` goes | B2 stage 2 | [02a](02a_postgres_schema.md) section 3 |
+| D-58 | `Idempotency-Key` on job starts? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, optional | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 2.3 |
+| D-59 | Config bodies as validated JSON documents? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, `jsonb` validated by pydantic, identity and relations as columns | B2 stage 1 | [02a](02a_postgres_schema.md) section 4 |
+| D-60 | One beat enforced how? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | a Postgres session advisory lock at beat start | B2 stage 6 | [02b](02b_jobs_locking_events.md) section 4.1 |
+| D-61 | Scheduled database backups by default? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | no: a dump on every upgrade and on demand; an opt-in beat task | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 6 |
+| D-62 | How do tests get a real Postgres? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | testcontainers locally, a CI service container; the `db` marker outside the Docker-free command | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 7 |
+| D-63 | A database test run at each B2 stage merge? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes (`-m db`, minutes, no GPU) | B2 | [03](03_b2_overview.md) section 4 |
+| D-64 | Does inference keep serving when the control plane is down? | approved 2026-11-04 (owner decision 1, after review 00c R-11) | yes: `/detect`, `/faces`, `/embed`, `/ocr`, `/search` and `/health` keep serving when PostgreSQL or Valkey is down; only the curation and job routes need them and answer 503; `/health` and `/ready` say which dependency is down; workers and beat keep the hard dependency | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 1.2 |
+| D-65 | How are browser events woken up? | approved 2026-11-04 (owner decision 2, after 00c R-6; amends D-48) | Valkey pub/sub (`op:events:<project>`), not a per-process Postgres `LISTEN`; the Postgres `events` table stays the durable record and the resume cursor | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 6 |
+| D-66 | Which kombu and redis-py? | approved 2026-11-04 (owner decision 3, after 00c R-10) | hold `kombu==5.6.2` and `redis==6.4.0` until a Celery release declares support for kombu 5.7 | B2 stage 1 | [13](13_package_pins.md) sections 1 and 4 |
+| D-67 | Where does pins part A land? | approved 2026-11-04 (owner decision 4, after 00c R-16) | its own PR to `main` before W2.1 (wave W2.0); part B stays with the B3 GPU gate | W2.0 | [13](13_package_pins.md) section 7.1 |
+| D-68 | The GitHub actions of the master-plan pass | approved 2026-11-04 (owner decision 11) | run by the coordinator after the review fix pass, with the exact text of [00b](00b_traceability.md) section 4 | after this pass | [00b](00b_traceability.md) section 4 |
+| OI-1 | #469: which region kinds may reach external model endpoints? | open (owner decision text needed) | the plan holds no recommendation in public text; the W4 privacy lane implements the owner's answer | before W4 | [00_master_plan.md](00_master_plan.md) section 9 |
+| OI-2 | #471: on what basis does the research judge refuse a hosted call? | open (owner decision text needed) | as OI-1 | before W4 | [00_master_plan.md](00_master_plan.md) section 9 |
+| MQ-1 | Accept every open B2 recommendation as written, naming only the exceptions? | approved 2026-11-04 (owner decision 5) | yes | before W2.1 | [00_master_plan.md](00_master_plan.md) section 9.1 |
+| MQ-2 | Which Postgres image base? | approved 2026-11-04 (owner decision 6) | `postgres:18.6-trixie` by digest everywhere | before W2.1 | [13](13_package_pins.md) section 4 |
 | MQ-3 | Also run the Docker-free offline suite (4 shards) at each B2 part check? | open | yes (about 10 min since PR #477) | before W2.1 | [00_master_plan.md](00_master_plan.md) section 8 |
 | MQ-4 | Pillow and simplejpeg ride the W3 GPU gate with OpenCV; the Hugging Face stack and MLflow ride there by the bisect order | open | yes | before W2.1 | [13](13_package_pins.md) section 7 |
-| MQ-5 | #473: what happens to near-duplicates of held-out items at a holdout freeze? | open | the whole near-duplicate group goes into the holdout; the freeze report counts the moved items | W2.2 (2D-4) | [03d](03d_b2_s2_control_data.md) 2D-4 |
-| MQ-6 | #468-#472 (five neutral security items, in no plan yet): one W4 lane scoped from the private notes; #469 and #471 need the owner's decision text | open | yes, lane `b4/privacy-hardening` | before W4 | [00_master_plan.md](00_master_plan.md) W4 |
-| MQ-7 | #465 typed response models (BA-6): CPU lanes during W5a-W5c, merged into the B5 sub-batch PRs | open | yes | before W5a | [05](05_b4_stateless_api.md) section 13 |
+| MQ-5 | #473: what happens to near-duplicates of held-out items at a holdout freeze? | approved 2026-11-04 (owner decision 8) | the whole near-duplicate group goes into the holdout together | W2.2 (2D-4) | [03d](03d_b2_s2_control_data.md) 2D-4 |
+| MQ-6 | #468-#472 (five neutral security items, in no plan yet): one W4 lane scoped from the private notes; #469 and #471 need the owner's decision text | approved 2026-11-04 (owner decision 7); #469 and #471 still need the owner's decision text (OI-1, OI-2) | a W4 lane `b4/privacy-hardening` | before W4 | [00_master_plan.md](00_master_plan.md) W4 |
+| MQ-7 | #465 typed response models (BA-6): CPU lanes during W5a-W5c, merged into the B5 sub-batch PRs | approved 2026-11-04 (owner decision 7) | CPU lanes during W5a-W5c | before W5a | [05](05_b4_stateless_api.md) section 13 |
 | MQ-8 | Fold the GPU-15 leftover (refuse an undeclared region head at profile validation) into B3-D3 | open | yes | before W3 | [04](04_b3_ultralytics_one_version.md) B3-D3 |
-| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | open | yes | before W5a | [00_master_plan.md](00_master_plan.md) section 10 |
-| MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | open | yes | W6 | [07](07_b5_overview.md) section 11 |
+| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | approved 2026-11-04 (owner decision 9) | after the tag; their already-decided items stay folded into the rewrite | before W5a | [00_master_plan.md](00_master_plan.md) section 10 |
+| MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | approved 2026-11-04 (owner decision 10) | yes | W6 | [07](07_b5_overview.md) section 11 |
 | OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [07](07_b5_overview.md) section 9 |
 | OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | OC-2 | pyclipper in the hardened Triton scan image (`docker/hardened/triton`) | open | decide with B2's image work (stage 6, lane 6C) | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
@@ -595,6 +603,7 @@ lives now:
 | program set 2 (consolidation) | 2026-11-03 | owner decision D-37 = yes (B5 inside v0.7.0, R-final last; waves renumbered W0-W6 with W5a-W5d; the v0.8.0 acceptance removed; milestones re-cut); section 8.1 test and GPU budget (live harness three times, GPU windows three); section 8.2 plan lifecycle; the `b1/deps` lane; B0 facts (`d1c6bab0`, `ad553ecd`, `0cc2b3ac`); file 12 added; the master plan deleted; older-plan removal wave R-1 |
 | program set 3 (control plane) | 2026-11-04 | owner decisions of 2026-11-04 applied (D-39..D-45; D-17, D-18, D-31 approved; D-21, D-30 replaced; D-22 widened); files 02, 02a, 02b, 02c added; B2 re-planned in six stages (03, 03a-03f); B4's events track moved into B2; 05, 08, 10, 11 updated; open decisions D-46..D-63 |
 | program set 4 (master plan) | 2026-11-04 | `00_master_plan.md` (execution order, waves W2.1-W6, GPU-window budget, wave procedure, owner questions) and `00b_traceability.md` added; this file became the register and legends (sections 3-4 point to the master plan, the duplicated sections 3-6 and the stale D-18 row removed); MQ-1..MQ-10 added; decided items folded into their lanes (00b section 3) |
+| program set 5 (review fixes) | 2026-11-04 | the independent review [00c_plan_review.md](00c_plan_review.md) applied (R-1..R-38; planner responses in its section 5); the owner's answers of 2026-11-04 recorded (D-64..D-68, the open B2 recommendations as a block, MQ-1, 2, 5, 6, 7, 9, 10); OI-1, OI-2 opened; pins part A became its own wave W2.0 |
 
 ## 16. Corrections found while splitting
 

@@ -841,3 +841,68 @@ are placed only conditionally (R-22).
 | Q-3 | Hold kombu at 5.6.2 (and redis-py at 6.4.x) until a Celery release declares support for kombu 5.7? (R-10) | Yes. It is the one pin where "newest" means "untested by its own framework" |
 | Q-4 | Land pins part A as its own small PR before W2.1 instead of inside the B2 PR? (R-16) | Yes. A dependency regression then never blocks or muddies the control-plane PR |
 | Q-5 | Answer MQ-6 and MQ-7 (#465, #468-#472) before W2.1 rather than before W2.2 and W4? (R-22) | Yes. #472 is an isolation item, and its lane is best known before the projects code is rewritten |
+
+## 5. Planner responses
+
+Written by the planner on 2026-11-04, after re-checking the key findings against the code and the
+official docs. Every finding is **fixed** in the plan text (where named below). None is rejected.
+Two are fixed with a different mechanism than the one suggested, with the evidence. The owner's
+answers to section 4 (all "yes", 2026-11-04) are recorded in [00_index.md](00_index.md) section 6
+as D-64 (Q-1), D-65 (Q-2), D-66 (Q-3) and D-67 (Q-4); Q-5 was answered with MQ-6 and MQ-7.
+
+**Verified first.**
+- R-1: `inspect.signature(fastapi.Depends)` in the repository venv (FastAPI 0.143.3) has
+  `scope: Literal['function', 'request']`, documented as "`function`: ... end the dependency after
+  the path operation function ends, but **before** the response is sent back to the client"; the pin
+  is 0.162.0 (`requirements.txt:2`). FastAPI docs:
+  https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#early-exit-and-scope.
+- R-3: `src/utils/class_names.py::normalize_class_name` lowercases and collapses every run outside
+  `[a-z0-9]` to one `_`; `resolve_class_by_name` lets an active class win over a deprecated one with
+  the same name; `src/clients/curation_opensearch/registry.py::_add` refuses a duplicate only against
+  an active class. The finding holds.
+- R-4: `pyproject.toml` `addopts` uses `-m "not live and not families"`; so do
+  `.github/workflows/ci.yml:69` and `:102`, `CONTRIBUTING.md:39` and `:42`, and `CLAUDE.md:32` and
+  `:226`. The `Makefile` `test` target relies on `addopts`.
+
+| Finding | Response | Where |
+|---|---|---|
+| R-1 | fixed: `Depends(get_db, scope="function")`, explicit commits in `project_tx`, no session on SSE routes, red tests "commit failure is a 5xx" and "SSE holds no pooled connection" | [02b](02b_jobs_locking_events.md) section 8; [03a](03a_b2_w1_queue_infra.md) 1A-10; [03e](03e_b2_s3_job_runtime.md) 3B-4 |
+| R-2 | fixed: the heartbeat, fenced writes, event row and Valkey wake-up live in `src/tasks/runtime/` and `src/db/repos/`; the OpenSearch factory is injected by the handler module; a planted-import red test | [02](02_control_plane_database.md) section 6; 02b section 3.1; 03e 3A, 3B; 03a 1A-11; [03b](03b_b2_w2_job_families.md) recipe step 3; [03f](03f_b2_s5_gpu_queues.md) |
+| R-3 | fixed: `name_key` with the partial unique index over active classes; the `ensure_class` rule of today; fixture and test cases | [02a](02a_postgres_schema.md) section 3; [03d](03d_b2_s2_control_data.md) 2B-1; [02c](02c_migration_ops_tests.md) section 2.4 |
+| R-4 | fixed: lane 1-0 changes `addopts`; 1D changes both `ci.yml` commands, PR #477's shard command, `CONTRIBUTING.md` and the `Makefile`; 6D changes `CLAUDE.md`; 1D-3 asserts the default selection | 03a 1-0, 1D; 02c section 7 |
+| R-5 | fixed: savepoints in `start_job` and per reaper row, the busy-group exclusion, `interrupted -> failed` in the transition table, the red test | 02b sections 1, 2.2, 4; 03e 3A-3, 3A-7 |
+| R-6 | fixed with option (a), owner decision D-65: Valkey pub/sub wake-up, no `LISTEN`, no `NOTIFY` commit lock; the API pool is a deployment total over workers and replicas; the budget test takes scale factors; PgBouncer by formula | 02b sections 6, 8, 8.1; 03e 3B-1, 3B-3, 3B-5; 03a 1D-6; [05](05_b4_stateless_api.md) 4B-2 |
+| R-7 | fixed, with one difference: index creation and mapping migrations move into the one-shot `db-migrate` (OpenSearch step) and the API checks fingerprints read-only. The kNN warm-up also moves there, once per deployment, rather than "one process per replica": the warm-up loads graphs on the OpenSearch side, so one call per deployment warms them for every API process; 5a's cold-query numbers confirm it | 02c section 1.2; 03d 2F-4 |
+| R-8 | fixed: liveness rows, release of the excess, the token bumps only on takeover, sweep step 13 starts the replicas one after the other | 02b section 5; 03e 3A-10; [03](03_b2_overview.md) section 9 step 13 |
+| R-9 | fixed (a-e): the `upgrade_state` gate, `--reset`, rollback abandons the Postgres data, the rollback order, run logs into storage keys; RF-63 reworded | 02c sections 2.2, 2.3, 2.4; 03d 2E-2, 2E-3, 2E-4, 2E-7; [06](06_release_acceptance.md) RF-63 |
+| R-10 | fixed, owner decision D-66: `kombu==5.6.2`, `redis==6.4.0`; the 02b sentence corrected; S1 checks `pip check` | [13](13_package_pins.md) sections 1, 4; 02b section 7.1; 03a 1-0, 1B-1; 02c T-17 |
+| R-11 | fixed, owner decision D-64: `api` depends on neither `db-migrate` nor `valkey`; "control plane down" mode; refuse only on a reachable database at the wrong head; `/health` and `/ready` name the dependency; "every Python service except `api`" | 02 rule 7; 02c section 1.2; 03a 1A-9, 1C-2, 1D-1; 03 section 9 steps 8-9, R2-13 |
+| R-12 | fixed with a different discovery mechanism: Prometheus `dns_sd_configs` (type A) on each service name instead of `docker_sd_configs`. Docker's embedded DNS answers a Compose service name with the address of every replica, and Prometheus' DNS discovery makes one target per record ([dns_sd_config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#dns_sd_config)), so each replica is its own `instance` without mounting the Docker socket into Prometheus. Alloy keeps by the `service` label; dashboards select by `service`; 6B owns Alloy and the dashboards; a render test | [03c](03c_b2_w3_beat_reaper_workers.md) 6B owned files, 6B-6 |
+| R-13 | fixed: `op_super` for bootstrap only, a non-superuser `op_owner` with `BYPASSRLS`, the `after_begin` scope listener, `op_scope_allows` raises when unset, `FOR SELECT` consumer policies on `model_shares` and `models`, restore with `--no-privileges` | 02a sections 1.4, 1.5, 7; 02c sections 4, 6; 03a 1A-6, 1A-7, 1A-8, 1C-4 |
+| R-14 | fixed: one container shared by the xdist workers, a template per worker, fakes only where no SQL behaviour is checked, each stage lists the fake-based modules it rewrites | 02c section 7; 03a 1A-12; 03d 2A, 2B; 03b recipe step 6 |
+| R-15 | fixed: a sequential scenario with an exact diff and a concurrent one judged by invariants, in the three configurations of 05 | 05 section 7 and done-when; 02c section 7 |
+| R-16 | fixed, owner decision D-67: pins part A is wave W2.0, its own PR before W2.1 | 13 section 7.1; [00_master_plan.md](00_master_plan.md) W2.0; 03a header |
+| R-17 | fixed: the CPU parts of G11 move into the W3 sweep, a written cap of plus one day, fallback pins first, `cv2.dnn.blobFromImage` in the parity set | [04](04_b3_ultralytics_one_version.md) sections 6 and 7; master plan section 5 |
+| R-18 | fixed: the worker-start schema check and the budget test move to 1D; 3A is cut after 2A merges; 2F-5 switches 2E's load to the repositories; 2B owns the three registry scripts; 04 section 4 corrected and every B3 track re-verifies on the post-B2 head | 03a header, 1B-3, 1D-5, 1D-6; 03e header; 03d 2B, 2F-5; 04 section 4 |
+| R-19 | fixed: Valkey `maxmemory` with `noeviction` and an alert, memory limits on the new services, `--max-memory-per-child` on `jobs-worker`, a render test | 02b sections 7.1, 7.2; 02c section 4; 03a 1C-2, 1C-5; 03c 6B-6 |
+| R-20 | fixed: a dedicated `arbiter` queue and a one-process `gpu-arbiter-worker` that alone mounts the socket | 02b sections 2.1, 7.3; 02c section 4; 03a 1B-2; 03c 6A-1, 6B-4; 03 section 5 |
+| R-21 | fixed: `project_create` is a `jobs` kind (deployment-level, exclusive per slug, auto-resume) in `job_kinds/b4.py` and the kind table | 05 section 6; 02b section 2.1 |
+| R-22 | fixed, owner decision of 2026-11-04 (MQ-6, MQ-7): the W4 privacy lane and the W5a-W5c typed-response lanes; #469 and #471 listed as open owner items OI-1, OI-2 | master plan W4, W5a-W5c, section 9; [00b](00b_traceability.md) section 2 |
+| R-23 | fixed: RF-42 rewritten, the 06 risk rows re-pointed to 2E, 10's FastAPI pin corrected, the master plan cites 03's budget by reference, 02c's command and the kombu range corrected | 06; [10](10_standards_and_libraries.md) section 3; master plan W2.4; 02b section 4; 00b section 1.8 |
+| R-24 | fixed: spike S1 item 7, and the wrapper's cooperative soft-limit fallback | 02b section 3.1; 03a 1B-1 |
+| R-25 | fixed: the load is the one sanctioned large transaction, `COPY` for the ledgers, a 1,000,000-row test | 02c sections 2.2, 2.4; 03d 2E-3 |
+| R-26 | fixed: INSTALLATION states stop-the-world upgrades, the single-host arbiter, expand-then-contract from v0.8.0 | 02c section 1.2; 03c 6D |
+| R-27 | fixed with the first option: `psycopg[c,pool]` and `libpq5` in the trainer, export and evaluator images too (one build kind in every image) | 03f header; 13 section 4 |
+| R-28 | fixed: links moved to the SQLAlchemy 2.1 docs; 1A reads the 2.1 migration notes first | 02b section 8; 03a 1A-6; 02a, 02c, 10 |
+| R-29 | fixed: the sync `env.py` on the runner's shared connection | 02c section 1.1; 03a 1A-3 |
+| R-30 | fixed: Flower reads the auth file from its `--conf` Python file, never argv or the environment; S1 checks it | 02c section 4; 03a 1B-1 |
+| R-31 | fixed: the bundle is gzip | 02c section 2.2; 03d 2E-2 |
+| R-32 | fixed: TCP keepalives and `tcp_user_timeout` on the beat lock connection | 02b section 4.1; 03c 6A-2 |
+| R-33 | fixed: one `broker_transport_options()` for every app factory, with a test | 02b section 7.1; 03a 1B-2, 1B-3; 03f |
+| R-34 | fixed: a `reset` event for a cursor older than retention | 02b section 6.3; 03e 3B-4; 03 step 11 |
+| R-35 | fixed: the inline-job heartbeat connection is a row of the budget table | 02b section 8 |
+| R-36 | fixed: PostgreSQL majors move only with a release, through `db backup` and `db restore` | 03c 6D |
+| R-37 | fixed: the stream-claim token does not fence OpenSearch writes; per-item OCC does, said explicitly | 02b section 5 |
+| R-38 | fixed: the pool healthcheck sends `inspect stats` to its own hostname only | 03a 1B-6 |
+| section 3.4 note (`src/routers` imports no `src.db.repos`) | fixed: a layering contract and a planted red test | 02 section 6; 03a 1A-11 |
+| section 3.7 caveats (E15, the visibility-timeout sub-item) | fixed: both caveats added to the retired rows | 00b section 1.9 |

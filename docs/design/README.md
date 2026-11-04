@@ -20,6 +20,7 @@ the master plan; execute one wave at a time from the batch files it links.
 |---|---|
 | [program/00_master_plan.md](program/00_master_plan.md) | **Read first**: the execution order from now to the v0.7.0 tag: waves W2.1-W6, lanes and file ownership, folded-in decided items, sweeps and exit gates, the GPU-window budget, how a session runs one wave, the owner questions |
 | [program/00b_traceability.md](program/00b_traceability.md) | Every task and ID of the original program plans and every open issue mapped to its wave and lane (or retired with a reason); the fold-in record; the proposed GitHub actions |
+| [program/00c_plan_review.md](program/00c_plan_review.md) | The independent review of the plan set (3 blockers, 9 high, 15 medium, 11 low) and the planner's response to each finding |
 | [program/00_index.md](program/00_index.md) | The decision register, the plain-words map, wave exit gates, the production-ready definition, branch and lane model, test and GPU budget rules, legends, superseded plans |
 | [program/01_b0_close_out.md](program/01_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
 | [program/02_control_plane_database.md](program/02_control_plane_database.md) | The control plane on PostgreSQL: why, the data-ownership table, the inventory with a destination for every item, the open decisions |

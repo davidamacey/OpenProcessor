@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | plan, written 2026-11-04 with [00_master_plan.md](00_master_plan.md) |
-| What it maps | (1) every task, ID and issue of the **original** program plans (the files under `docs/design/program/` on `origin/main` at `4f3f4813`, read with `git show origin/main:<file>`) to where it lives now, or "retired: reason"; (2) every open GitHub issue (44 on 2026-11-04) to a wave and lane, or to v0.8.0 or parked with a reason; (3) the decided items folded into lanes in this pass; (4) the GitHub actions proposed for the owner (none executed) |
+| What it maps | (1) every task, ID and issue of the **original** program plans (the files under `docs/design/program/` on `origin/main` at `4f3f4813`, read with `git show origin/main:<file>`) to where it lives now, or "retired: reason"; (2) every open GitHub issue (44 on 2026-11-04) to a wave and lane, or to v0.8.0 or parked with a reason; (3) the decided items folded into lanes in this pass; (4) the GitHub actions, approved by the owner on 2026-11-04 (D-68) and run by the coordinator |
 | Method | old and new text of every file compared; files unchanged since `origin/main` (01, 04 before this pass, 07, 07a-07d) are mapped by ID range; the rewritten B2 files (03-03c) and 05 item by item. Counts are table lines, not unique IDs |
 | Old-to-new ID table for B2 | [03_b2_overview.md](03_b2_overview.md) section 14 (W1-n, 2A-2G, 2D-2F, B4 4C, B4 4A-6). Warning: the old 2A..2F (job families, beat) and the new 03d lanes 2A..2F (stage 2) share letters and are unrelated |
 
@@ -134,12 +134,14 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | the B4 batch kinds module was not created in stage 1 | 1B-2 creates `job_kinds/b4.py`, `task_routes/b4.py`, `src/tasks/b4.py` empty |
 | two different Postgres and Valkey image tags (13 section 4 vs 02c, 03, 03a, 08) | every B2 file now points at 13 section 4; the base (trixie or alpine) is MQ-2 |
 | `00_index.md` held sections 3-6 twice, a malformed second register, and a stale D-18 | de-duplicated; this file and the master plan took the wave and task-list content |
+| RF-42 (R-final): 02b section 4 said it was "updated" to the 150 s busy window, but it still said 120 s and "kill the API container", which no longer kills a job once jobs run in `jobs-worker` (review 00c R-23, section 3.7: "does not hold") | rewritten in [06](06_release_acceptance.md): kill the `jobs-worker` replica, `interrupted` within 150 s, then resume or restart; 02b section 4 now points at the rewritten row |
+| the review [00c](00c_plan_review.md) (R-1..R-38) | every finding applied in the plan files or answered in 00c section 5 "Planner responses" |
 
 ### 1.9 Retired, with the reason
 
 | Item (original file) | Reason |
 |---|---|
-| E15 `flock` on non-local volumes (03) | no file locks remain after B2; multi-host files are D-46 |
+| E15 `flock` on non-local volumes (03) | no file locks remain after B2 (true once 6A-3 empties the file-lock baseline, review 00c section 3.7); multi-host files are D-46 |
 | E16 class-registry lock blocks the loop (03) | the registry is rows in Postgres (2B) |
 | E22 runner and status poll write one record (03) | writes are fenced SQL statements (02b section 3) |
 | D-21 job state in files (00, 03) | replaced by D-39 (owner, 2026-11-04) |
@@ -155,7 +157,7 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | 2D-2 job-family registry, combine-directory scan, mid-upgrade rule (03c) | one indexed query over `jobs` replaces directory scans (02 section 5) |
 | RF-62's "Q-1B-1" reference (06) | B1's registry migration never shipped; the 0.6.0 file moves straight to Postgres |
 | sub-item: `tests/tasks/test_job_families_registry.py` (03c) | the registry it tested is gone |
-| sub-item: "same `visibility_timeout` in both places" (03a W1-4) | there is no result backend (D-49), so there is one place |
+| sub-item: "same `visibility_timeout` in both places" (03a W1-4) | there is no result backend (D-49), so that pair is gone; the different "several places" the review found (the worker, producer and GPU app factories) is now enforced by 1B-3 (R-33) |
 
 ## 2. Every open GitHub issue (44, read 2026-11-04)
 
@@ -197,17 +199,18 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | #462 build input pin and hardening (N12) | v0.7.0 | W2.4 lane 6C |
 | #463 `/detect` upscaling (N13) | v0.7.0 | W5a `recall`, D-35 |
 | #464 evidence tasks (N14) | v0.7.0 | OPS-2 in W2.1 (1B-0) and W2.4 (6A-4); CC-10 in W4 (4A-0); GPU-19 in W5c (`ocrnorm`); OS-8, FE-6, T-6 to a v0.8.0 follow-up per the issue body |
-| #465 typed response models (N15) | v0.7.0 | **no wave yet**: MQ-7 proposes CPU lanes in W5a-W5c |
+| #465 typed response models (N15) | v0.7.0 | CPU lanes `api/typed-responses-<n>` in W5a-W5c, the 5d routers inside 5d (owner decision 2026-11-04); closes with the 5d PR |
 | #466 assist-loop pause, events, budgets (N16) | v0.8.0 | v0.8.0 F3; B2 4D-2 already delivers pause and resume through the jobs table and events as rows, so its scope shrinks (section 4) |
-| #468 labeler log contents | v0.7.0 | **no plan home**: MQ-6 proposes a W4 lane |
-| #469 region kinds to external endpoints | v0.7.0 | **no plan home**: MQ-6 (needs an owner decision) |
-| #470 stored recognized text access | v0.7.0 | **no plan home**: MQ-6 |
-| #471 research judge refusal by provenance | v0.7.0 | **no plan home**: MQ-6 (needs an owner decision) |
-| #472 core text index isolation and purge | v0.7.0 | **no plan home**: MQ-6 |
-| #473 near-duplicate data quality | v0.7.0 | folded in: part a W2.3 4A-7, part b W4 4A-4b, part c W2.2 2D-4 (MQ-5) |
+| #468 labeler log contents | v0.7.0 | W4 lane `b4/privacy-hardening` (owner decision 2026-11-04) |
+| #469 region kinds to external endpoints | v0.7.0 | W4 lane `b4/privacy-hardening`, after the owner's decision text (OI-1) |
+| #470 stored recognized text access | v0.7.0 | W4 lane `b4/privacy-hardening` |
+| #471 research judge refusal by provenance | v0.7.0 | W4 lane `b4/privacy-hardening`, after the owner's decision text (OI-2) |
+| #472 core text index isolation and purge | v0.7.0 | W4 lane `b4/privacy-hardening` |
+| #473 near-duplicate data quality | v0.7.0 | folded in: part a W2.3 4A-7, part b W4 4A-4b, part c W2.2 2D-4 (the group goes into the holdout together, owner decision 2026-11-04) |
 
-Open issues without a plan home before this pass: #465, #468, #469, #470, #471, #472, #473. After
-it: #473 is placed; #465 and #468-#472 wait on MQ-7 and MQ-6.
+Open issues without a plan home before the master-plan pass: #465, #468, #469, #470, #471, #472,
+#473. After the owner's answers of 2026-11-04 every one has a wave and lane; #469 and #471 also need
+the owner's decision text (OI-1, OI-2) before their part of the W4 lane runs.
 
 ## 3. Fold-in record (decided items moved into the lane that rewrites their code)
 
@@ -220,10 +223,10 @@ shipped (#441). No research-plan hypothesis, experiment or v0.8.0 feature is rec
 | # | Item | Decision recorded in | Moved into | Edit made |
 |---|---|---|---|---|
 | F-1 | the pin series split: part A in W2.1, part B (the bumps that can change model output) with the B3 GPU gate | owner direction 3 of 2026-11-04; D-44 (approved 2026-11-04) | [13](13_package_pins.md) section 7.1; [03a](03a_b2_w1_queue_infra.md) header; [04](04_b3_ultralytics_one_version.md) track `deps` and brief | the series order kept inside each part; torch-pair CI commands moved from commit 2 to 9; a shrink-only allowlist in commit 1 |
-| F-2 | Pillow and simplejpeg join part B (commit 7) | the owner's own rule ("bumps that can change model output") applied to two image decoders; confirm with MQ-4 | 13 section 7.1 | `simplejpeg` was missing from the bisect list; added to commit 7 |
-| F-3 | the Postgres and Valkey images and the test extras of 13 section 4 | D-44; [02](02_control_plane_database.md) says 13 owns every pin | [03](03_b2_overview.md) header, 03a 1-0, 1C-1, 1D-2, [02c](02c_migration_ops_tests.md) section 4, [08](08_environment_and_setup.md) section 4 | the files now cite 13 section 4; the base image (trixie or alpine) is MQ-2 |
+| F-2 | Pillow and simplejpeg join part B (commit 7) | the owner's own rule ("bumps that can change model output") applied to two image decoders; D-67 (2026-11-04) placed part B with the gate; MQ-4 confirms the exact members | 13 section 7.1 | `simplejpeg` was missing from the bisect list; added to commit 7 |
+| F-3 | the Postgres and Valkey images and the test extras of 13 section 4 | D-44; [02](02_control_plane_database.md) says 13 owns every pin; `postgres:18.6-trixie` approved 2026-11-04 (MQ-2) | [03](03_b2_overview.md) header, 03a 1-0, 1C-1, 1D-2, [02c](02c_migration_ops_tests.md) section 4, [08](08_environment_and_setup.md) section 4 | the files now cite 13 section 4; the base image (trixie or alpine) is MQ-2 |
 | F-4 | the image smokes of 13 section 6 and the B2 stage-5 real-GPU smoke in GPU window 1 | D-44 (13 section 6: "GPU and image work is batched into one window"); [03f](03f_b2_s5_gpu_queues.md) "GPU check" | 04 gate steps G11, G12 | budget about 1.5 GPU days |
-| F-5 | #473 part c: the holdout freeze checks near-duplicates | a v0.7.0-milestone bug ("Each needs a red test first. The fix belongs with the curation correctness work (v0.7.0)"); placement only, behaviour is MQ-5 | [03d](03d_b2_s2_control_data.md) 2D-4 (lane 2D rewrites the freeze) | new task |
+| F-5 | #473 part c: the holdout freeze checks near-duplicates | a v0.7.0-milestone bug ("Each needs a red test first. The fix belongs with the curation correctness work (v0.7.0)"); the behaviour approved by the owner on 2026-11-04 (the whole near-duplicate group goes into the holdout together) | [03d](03d_b2_s2_control_data.md) 2D-4 (lane 2D rewrites the freeze) | new task |
 | F-6 | #473 part a: a re-score refreshes the crop `dup_*` fields | as F-5 | [03b](03b_b2_w2_job_families.md) 4A-7 (lane 4A rewrites `item_scores/`) | new task; `near_dup.py` and its fail-closed task (was 4C-8, now 4A-6) moved to 4A so one lane owns the file |
 | F-7 | #473 part b: the core batch grouping race | as F-5 | [05](05_b4_stateless_api.md) 4A-4b (4A-4 rewrites `visual_search/ingest_batch.py`) | new task |
 | F-8 | the fail-closed near-duplicate threshold (clustering plan N-8) | already a program task (03b 4C-8) | 4A-6 | moved with its file |
@@ -241,66 +244,81 @@ v0.8.0 auth (Q-1..Q-4 of the v0.8.0 plan open; the `jobs` rows already record `r
 uint8 faces with in-graph decode and CUDA graphs for the other models (unmeasured research
 hypotheses); 07d Q1-Q9 (asked at W5d kick-off); the GPU-15 leftover (MQ-8).
 
-## 4. Proposed GitHub actions (for the owner; nothing executed)
+## 4. GitHub actions (approved by the owner on 2026-11-04, D-68; the coordinator runs them after the review fix pass)
 
-Rules as in [09](09_github_actions.md) section 1: neutral security wording, no private names or
-paths, fewer issues is better, edit and close rather than delete.
+Rules as in [09](09_github_actions.md) section 1: plain words, neutral security wording (no
+mechanism detail), no private names or paths, fewer issues is better, edit and close rather than
+delete. Post each text exactly as written below; create N19 and N20 first and replace those two
+placeholders in the other texts with their issue numbers; record the created numbers in the private
+ledger and then in this file.
 
 ### 4.1 New issues (2)
 
-**N19 `feat(control-plane): PostgreSQL for all control data, with Alembic, row-level security and the one-step 0.6.0 upgrade`**
-(labels: enhancement, area:curation, effort:hard; milestone v0.7.0; child of #451). Body:
-"Projects, slugs, classes, revisioned configs, settings, holdout freezes, label-operation records,
-ingest sources, dataset imports, combine runs, training runs, models and promotions move from
-OpenSearch documents and job files into PostgreSQL (SQLAlchemy 2, Alembic with one head, psycopg 3,
-row-level security per project). OpenSearch keeps only the search data (two indexes per project
-instead of six). The 0.6.0 -> 0.7.0 upgrade moves the control data once, verifies it and deletes
-the OpenSearch copies, with a rollback from the upgrade bundle; `openprocessor db backup`, `restore`
-and `verify` are added; tests get a real database (testcontainers locally, a service container in
-CI). Plan: docs/design/program/02_control_plane_database.md and 03a, 03d (waves W2.1-W2.2 of
-00_master_plan.md). Acceptance: the stage 1 and 2 exit criteria; RF-40, RF-41, RF-56, RF-58, RF-59,
-RF-62, RF-63 in R-final."
+**N19.** Title: `feat(control-plane): PostgreSQL for all control data, with migrations, row-level security and the one-step 0.6.0 upgrade`.
+Labels: enhancement, area:curation, effort:hard. Milestone: v0.7.0. Body:
 
-**N20 `build(deps): exact pins at the latest installable versions in every manifest and image`**
-(labels: chore, effort:moderate; milestone v0.7.0). Body: "Every requirements file, `pyproject.toml`
-and inline Dockerfile pin becomes an exact `==` pin at the newest version that installs and works,
-identical across manifests, with the held-back exceptions and their reasons. Part A (tooling,
-pure-Python libraries, web layer, clients) lands with the B2 foundation; part B (the bumps that can
-change model output: numpy and pandas with the numeric stack, OpenCV 5, Pillow, simplejpeg, the
-Hugging Face stack, torch, the onnx, onnxruntime, modelopt and TensorRT set, CuPy 14, the image
-pins, then MLflow and the Dependabot rules) lands with the B3 GPU gate, so the parity check runs
-once. Inline image pins move into requirements files Dependabot can read. Plan:
-docs/design/program/13_package_pins.md. Acceptance: the generalized pin test with an empty
-allowlist; `pip check` and the smoke imports in every image (gate step G11); Trivy."
+> Projects, classes, revisioned configs, settings, holdout freezes, label-operation records, ingest
+> sources, dataset imports, combine runs, training runs, models and promotions move from OpenSearch
+> documents and job files into PostgreSQL, with one migration history and per-project row-level
+> security. OpenSearch keeps only the search data: two indexes per project instead of six. The
+> upgrade from 0.6.0 moves the control data once, verifies it, then deletes the old copies, and can be
+> rolled back from its bundle. New commands: `openprocessor db backup`, `db restore`, `db verify`. The
+> inference API keeps serving when the database is down; only the curation and job routes need it.
+> Tests use a real database (a container locally, a service container in CI).
+>
+> Part of #451. Plan: `docs/design/program/02_control_plane_database.md`, `03a`, `03d` (waves W2.1
+> and W2.2 of `00_master_plan.md`).
+>
+> Acceptance: the stage 1 and stage 2 exit criteria of the plan; the release checks RF-40, RF-41,
+> RF-56, RF-58, RF-59, RF-62 and RF-63.
+
+**N20.** Title: `build(deps): exact pins at the latest installable versions in every manifest and image`.
+Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
+
+> Every requirements file, `pyproject.toml` and inline Dockerfile pin becomes an exact `==` pin at
+> the newest version that installs and works, the same in every manifest that shares a package. The
+> few held-back pins are listed with their reasons. Part A (tooling, pure-Python libraries, the web
+> layer, the clients) ships first as its own PR. Part B (the bumps that can change model output:
+> numpy and pandas with the numeric stack, OpenCV 5, Pillow, simplejpeg, the Hugging Face stack,
+> torch, the ONNX, ONNX Runtime, ModelOpt and TensorRT set, CuPy, the image pins, then MLflow and the
+> Dependabot rules) ships with the Ultralytics GPU gate (#458), so the accuracy and speed check runs
+> once for both. Inline image pins move into requirements files that Dependabot can read.
+>
+> Plan: `docs/design/program/13_package_pins.md`.
+>
+> Acceptance: the pin test passes with an empty allowlist; `pip check` and the smoke imports pass in
+> every image; the image scans pass.
 
 ### 4.2 Re-scope comments (9)
 
-| Issue | Comment (summary) |
+| Issue | Comment to post (exact text) |
 |---|---|
-| #451 | the epic now runs on PostgreSQL, Valkey and Celery (D-39..D-43), training, model export and the evaluator included; children: N19, N20, #453, #461, #462, #439, #473; waves W2.1-W2.4 and W4 of `00_master_plan.md` |
-| #453 | B1 delivered the per-project leases (#467); B2 replaces them with the PostgreSQL jobs table (claim with a fencing token) and deletes the lease code; this issue closes with the B2 PR |
-| #458 | the bumps that can change model output ride this GPU gate (pins part B, N20): one parity and throughput run judges the Ultralytics pin and the dependency bumps together; the gate adds the image smokes (G11) and the B2 GPU-queue smoke (G12) |
-| #464 | box placement: OPS-2 (W2.1 1B-0, act in 6A-4), CC-10 (W4 4A-0), GPU-19 (W5c); OS-8, FE-6, T-6 move to a v0.8.0 follow-up as the body says |
-| #465 | placement per MQ-7 (CPU lanes during W5a-W5c), or v0.8.0 if the owner prefers |
-| #466 | the queue rewrite (B2 4D-2) already delivers pause and resume through the jobs table and the events as rows; remaining scope: the Cropwright pause control, token budgets from the endpoint `usage`, the S0 label-rate measurement |
-| #468-#472 | one shared comment after MQ-6: "scheduled in W4 lane `b4/privacy-hardening`" (neutral wording only) |
-| #473 | placement: part a W2.3 (4A-7), part b W4 (4A-4b), part c W2.2 (2D-4) with the MQ-5 behaviour |
-| #42 | the remaining 12 GB acceptance run stays a side track; moves to v0.8.0 at the tag if unrun (MQ-10) |
+| #451 | "Scope update (owner decisions of 2026-11-04): background jobs now run on Celery with Valkey as the broker, and PostgreSQL holds every job and control record; training, model export and the bake-off evaluator move onto the queue too. The inference API keeps serving when the control plane is down. Child issues: N19 (PostgreSQL control plane), N20 (exact pins), #453, #461, #462, #439, #473. Plan: `docs/design/program/00_master_plan.md`, waves W2.1-W2.4 and W4." |
+| #453 | "The per-project job leases landed with B1 (#467). The control-plane rewrite (#451) replaces them with job rows in PostgreSQL and deletes the lease code, so this issue closes with that PR." |
+| #458 | "The dependency bumps that can change model output (part B of N20) ride this issue's GPU gate, so one accuracy and speed run judges the Ultralytics version and those bumps together. The gate also runs the image smoke checks and a short GPU check of the new training, export and evaluator queues. Plan: `docs/design/program/04_b3_ultralytics_one_version.md`, wave W3." |
+| #464 | "Placement: OPS-2 is measured in W2.1 and acted on in W2.4; CC-10 is measured in W4 before the fan-out change; GPU-19 is checked in W5c. As the body says, OS-8, FE-6 and T-6 move to a v0.8.0 follow-up." |
+| #465 | "Scheduled (owner decision of 2026-11-04): one CPU lane per wave during W5a-W5c types a group of routers that the speed work does not touch; the routers that W5d rewrites are typed inside W5d. This issue closes with the W5d PR." |
+| #466 | "The queue rewrite (#451) already delivers pause and resume through the job rows and the events as database rows. What remains here: the Cropwright pause control, token budgets read from the endpoint's usage reports, and the label-rate measurement. Milestone stays v0.8.0." |
+| #468, #470, #472 | (the same text on each) "Scheduled in wave W4 (owner decision of 2026-11-04). Details stay in the maintainers' private notes." |
+| #469, #471 | (the same text on each) "Scheduled in wave W4 (owner decision of 2026-11-04), after the owner records the decision this issue asks for. Details stay in the maintainers' private notes." |
+| #473 | "Placement: the stale near-duplicate fields after a re-score are fixed in W2.3; the batch grouping race in W4; the holdout check in W2.2. Owner decision of 2026-11-04: when a holdout is frozen, a held-out item's whole near-duplicate group goes into the holdout together. Each fix gets a red test first." |
 
-### 4.3 Milestone moves (conditional, at W6)
+### 4.3 Milestone moves (at W6)
 
 | Issue | Move |
 |---|---|
-| #42 | v0.7.0 -> v0.8.0 if the 12 GB run has not happened by the tag (MQ-10, D-5) |
-| #403 | close as not adopted, or v0.8.0, if W5b gave it no trigger |
-| #231 | closed with its recorded result, or v0.8.0, if window 2 had no room |
+| #42 | v0.7.0 -> v0.8.0 if the 12 GB run has not happened by the tag (owner decision of 2026-11-04, D-5), with the comment "Moved to v0.8.0: the 12 GB card run did not happen before the v0.7.0 tag; the release notes say the small profile is not yet verified on a 12 GB card." |
+| #403 | if W5b gave it no trigger: close as not planned with "Not adopted: the measured gap that would justify it did not appear (see docs/PERFORMANCE.md)", or move to v0.8.0 if the measurement was not taken |
+| #231 | if GPU window 2 had no room: move to v0.8.0 with "Moved: GPU window 2 had no room for this comparison"; otherwise close with a link to its recorded result |
 
 ### 4.4 Closes
 
-| Item | When and how |
-|---|---|
-| PR #474 (frontend dev dependencies) | after pins part A re-applies it in W2.1: close with "Re-applied in `<commit>` on the B2 integration branch" ([09](09_github_actions.md) section 8 rule) |
-| PR #449 (Triton base 26.10) | now, per D-38's recommendation: close with "the Triton and Python base moves are an owner decision (D-38); if taken, inside the B3 engine rebuild with the TensorRT pins moved together"; keep open only if the owner places B3-A5 in W3 |
-| #453 | with the B2 PR (closing keyword) |
-| #461, #462 | with the B2 PR (as planned) |
-| #451, #439, #473 | with the B4 PR |
+| Item | When | Comment |
+|---|---|---|
+| PR #474 (frontend dev dependencies) | after W2.0 merges | "Re-applied by hand in `<commit>` (pins part A, W2.0), following the rule that dependency bumps land through a reviewed deps lane during the program." |
+| PR #449 (Triton base 26.10) | now, unless the owner places B3-A5 in W3 (D-38) | "The Triton and Python base moves are an owner decision (D-38 in `docs/design/program/00_index.md`): if taken, inside the B3 engine rebuild with the TensorRT pins moved together. Closing; Dependabot opens a fresh PR when due." |
+| #453 | with the B2 PR (closing keyword) | - |
+| #461, #462 | with the B2 PR (closing keywords) | - |
+| #451, #439, #473, #468, #470, #472 | with the B4 PR (closing keywords) | - |
+| #469, #471 | with the B4 PR once their owner decision is implemented | - |
+| #465 | with the W5d PR | - |
