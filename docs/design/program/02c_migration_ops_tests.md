@@ -165,6 +165,25 @@ The 0.7.0 code has no reader for any deleted source (no dual read). A project wh
 indexes are missing at verify is moved with status `failed` and reported, as a 0.6.0 `failed`
 project is.
 
+**Research-seam steps (pending owner question RD-1; [02d](02d_research_seam_schema.md)).** The load
+is a registry of step modules, `src/services/upgrade/from_060/steps/<name>.py`, each with an
+`ORDER` integer and `run(ctx)`, discovered with `pkgutil.iter_modules` (lane 2E, task 2E-8), so the
+W2.3 lanes add their steps as new files without editing 2E's code:
+
+| Step module | Lane | Writes | Verify adds |
+|---|---|---|---|
+| `serving_profile.py` | 2E | the deployment `serving_profile` document, revision 1, generated from the installed `config_templates/profiles/*.json` and the `config.pbtxt` instance counts, and `deployment_settings('active_serving_profile')` (research GPU S-5) | the generated body equals today's values (one server, load lists, instance counts) |
+| `embedding_spaces.py` | 2E | the catalog rows (if `db-migrate` has not) and three `pe_core_l14_336_v1` spaces per loaded project, `created_by = 'upgrade'`, `knn_method` read from each live index mapping (faiss for old projects, Lucene for new); the 0.6.0 physical names kept (pending RD-30) | a space per (project, target); the recorded engine equals the live mapping |
+| `clustering.py` | 4F (W2.3) | per project, one `ready` partition (`method = 'ivf'`, activation reason `upgrade`) built from the items' existing assignment so the served view does not change at the upgrade; `last_clustering.json` and the region-cluster marker files deleted with the other state files | the partition's member count equals the items with a cluster id |
+| `near_duplicates.py` | ND-A (W2.3) | one `update_by_query` per 0.6.0 index clearing the `dup_*` and `duplicate_*` values (mappings cannot be dropped without a reindex); the `near_dup_profile` revision 1 per project from the code defaults; the levels marked `rebuild_required`, so a full build runs after the upgrade | no document keeps a non-empty `dup_*` value |
+
+The OpenSearch migrate step (2F, R-7) also adds the registration-plate analysis settings to the
+`items` index of every **upgraded** project: analysis settings are static, so they are added with
+`_close`, `PUT _settings`, `_open` on each index, inside the stop-the-world upgrade window
+([update settings: static settings need a closed index](https://docs.opensearch.org/latest/api-reference/index-apis/update-settings/));
+new projects get them in the creation body. A test on the 0.6.0 fixture asserts `_analyze` with
+`op_text_compact` works on an upgraded index.
+
 ### 2.3 Rollback to 0.6.0
 
 `openprocessor upgrade --rollback` (the existing `backup_install` restore) gains these steps, in
@@ -237,6 +256,8 @@ without capabilities (stage 6 verifies each), `restart: unless-stopped` (except 
 | `open-vocab-worker` | api image | `-Q open_vocab -c 1 --max-tasks-per-child=50` | pool healthcheck | as `api` | |
 | `jobs-beat` | api image | `celery -A src.tasks.app beat -s /run/beat/celerybeat-schedule` (tmpfs); memory limit `${OP_BEAT_MEM_LIMIT:-512m}` (R-19) | newest mtime of `/run/beat/celerybeat-schedule*` under 300 s, failing on an empty glob | tmpfs only | single-beat lock (D-60); `deploy.replicas: 1` |
 | `curation-auto-label-worker`, `curation-assist-loop-worker` (`curation`) | api image | `-Q autolabel -c 1 --max-tasks-per-child=20`, `-Q assist_loop -c 1 --max-tasks-per-child=20` | pool healthcheck | as today minus `/jobs` | |
+| `cluster-worker` (`curation`; research clustering plan 5.2, pending RD-25) | api image | `-Q cluster -c 1 --max-tasks-per-child=1` (a fresh child per run releases memory); CPU only in 0.7.0 (`CLUSTER_GPU_ID` only after a passing `cluster_backend_validations` row and the owner's yes on a RAPIDS layer) | pool healthcheck | storage roots as `api` | added by lane 1C; its first task arrives with lane 4F (W2.3) |
+| `text-read-worker` (`curation`; W5e, research plate plan 5.3) | api image | `-Q text_read -c 1 --prefetch-multiplier=20`; no GPU device (the reader is a Triton model) | pool healthcheck | as `api`; the `identity_text` secret read-only | added by `w5e/region-text-jobs`, not in B2 |
 | `curation-trainer` (`training`) | trainer image | `celery -A src.tasks.runtime.gpu_app worker -Q gpu_train -c 1 --max-tasks-per-child=1` | pool healthcheck | storage roots, `/jobs` removed | |
 | `model-export-worker` (`export`) | export image | `celery -A src.tasks.runtime.gpu_app worker -Q gpu_export -c 1 --max-tasks-per-child=1` | pool healthcheck | models, storage roots | |
 | `curation-evaluator` (`evaluator`) | evaluator image | `-Q gpu_eval -c 1 --max-tasks-per-child=5` | pool healthcheck | storage roots | |
@@ -287,6 +308,17 @@ under its own project name; because no service has a `container_name`, the harne
   and Immich keeps originals and regenerable derivatives apart, which this root list mirrors.
 - A ratchet (`tests/test_no_absolute_paths_in_db.py`) asserts every `*_storage_key`, `*_prefix` and
   `*_key` column is written through `src/clients/storage/keys.py` (relative, no `..`, no leading `/`).
+- Research seams (lane 1E): crop cache keys carry the size variant,
+  `projects/<slug>/crops/<item>/<box>/<max_side>.jpg` with `0` for the source size, so a cached
+  source-size crop is never served as a capped one (GPU S-10, used by #219's `crop_sizing` in W5c);
+  `delete_prefix` removes every area under `projects/<slug>/`, including an area no code lists yet
+  (the spatial plan's later `spatial/` area: door test
+  `tests/clients/storage/test_delete_prefix_unknown_area.py`). Loop node member snapshots
+  (`projects/<slug>/assist_loop/<run>/<path>.json`) and cluster audit blobs use the same seam.
+- For the v0.8.0 S3-compatible backend (feature F10 of
+  [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md)): `local_path(key)` must
+  materialise the object to job-local scratch and write back with `write_atomic`; research scratch
+  databases (COLMAP's SQLite in the spatial plan) are always job-local and never shared.
 
 ## 6. Backup and restore (D-61)
 
@@ -339,6 +371,13 @@ Required `db` tests (each red first where it guards a behaviour):
   ids, `next_class_id = 50`; rename writes the outbox row in the same transaction.
 - `tests/config/test_db_connection_budget.py` (pure, no database; the name 02b, 10 and 11 use): section 8 of
   [02b](02b_jobs_locking_events.md), with the scale factors (R-6).
+- Research seams ([02d](02d_research_seam_schema.md) section 6): the schema test of 02d, the
+  partition immutability and NULL-project foreign-key tests, the registry and loop schema tests,
+  `tests/db/test_profile_fk_cascade.py`; the job-control tests of 02b section 3.4 (three pause and
+  resume cycles then a fourth claim; a yielded slice keeps its retry budget; the reaper's
+  system-pause resume); `tests/db/test_near_dup_current_flip.py` (two `current` runs impossible) with
+  ND-A; `tests/upgrade/test_research_steps.py`: each step module of section 2.2 is discovered, runs
+  in `ORDER`, and is idempotent on the 0.6.0 fixture.
 
 Each stage file lists the fake-based test modules it deletes or rewrites (review fix R-14):
 `tests/_fake_project_registry.py` (2A), `tests/_registry_doc_fake.py` (2B),

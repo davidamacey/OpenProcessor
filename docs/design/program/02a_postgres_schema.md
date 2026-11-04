@@ -5,11 +5,12 @@
 | Status | plan, not started |
 | Part of | [02_control_plane_database.md](02_control_plane_database.md) (read its sections 2 and 3 first) |
 | Built by | B2 stage 1 (all tables, one initial Alembic revision), used by stages 2-6 ([03_b2_overview.md](03_b2_overview.md)) |
+| Research seams | the tables the seven research plans need are in [02d_research_seam_schema.md](02d_research_seam_schema.md) (revisions `0002`-`0004`); the changes they make to tables of this file are edited in place below and listed in 02d section 1 (pending owner question RD-1 of [00d](00d_owner_questions.md)) |
 | Server | PostgreSQL 18 (latest stable major on 2026-11-04; 19 is a release candidate). The schema needs at least 15 (`NULLS NOT DISTINCT`) and 18 (`uuidv7()`); the exact image tag is in `13_package_pins.md` (written on its own branch) |
 
 The DDL below is the contract. Stage 1 writes it as SQLAlchemy models in `src/db/models/` and one
-Alembic revision `0001_control_plane`, drafted with autogenerate and corrected by hand against this
-file (Alembic does not detect everything:
+Alembic revision `0001_control_plane` (followed by the fixed chain of 02d section 0), drafted with
+autogenerate and corrected by hand against this file (Alembic does not detect everything:
 [what autogenerate detects](https://alembic.sqlalchemy.org/en/latest/autogenerate.html)). A test
 (`tests/db/test_schema_matches_plan.py`) introspects the migrated database and asserts every table,
 unique constraint, partial index and row-level-security policy named here.
@@ -52,7 +53,15 @@ unique constraint, partial index and row-level-security policy named here.
   removes all its control data in one statement
   ([constraints](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK)).
 - A reference to a job from a domain row is `ON DELETE SET NULL` (history survives job pruning).
-- A reference that must not dangle while in use is `ON DELETE RESTRICT` (an activation's revision, a
+- A reference that must not dangle while in use keeps the default `NO ACTION`, not `RESTRICT`
+  (research integration, 02d X-1): both refuse a delete of a row still referenced, but `RESTRICT`
+  is checked at once while `NO ACTION` is checked at the end of the statement
+  ([foreign keys](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK)),
+  and a project delete cascades to the referencing row and the referenced row in one statement
+  (`config_activations` and `config_revisions`; `promotions` and `models`; `training_runs` and
+  `jobs`), so only `NO ACTION` lets the cascade pass whatever order the cascade triggers fire in.
+  `tests/db/test_profile_fk_cascade.py` (02d section 6) deletes a project holding every such pair.
+  Examples: an activation's revision, a
   promotion's model).
 
 ### 1.3 Concurrency
@@ -185,7 +194,8 @@ CREATE TABLE deployment_counters (        -- 'projects_revision', 'global_config
 );
 
 CREATE TABLE deployment_settings (        -- 'local_vlm_desired', 'vlm_paused_for_training', ...
-  key         text PRIMARY KEY CHECK (key IN ('local_vlm_desired','vlm_paused_for_training')),
+  key         text PRIMARY KEY CHECK (key IN ('local_vlm_desired','vlm_paused_for_training',
+              'active_serving_profile')),      -- research X-2: {config_id, revision} of the deployment serving profile
   value       jsonb NOT NULL,
   revision    bigint NOT NULL DEFAULT 1,
   updated_at  timestamptz NOT NULL DEFAULT now(),
@@ -251,8 +261,9 @@ CREATE INDEX ix_project_classes_name_key ON project_classes (project_id, name_ke
 CREATE TABLE search_projection_tasks (       -- outbox for the class-name projection (D-47)
   id          uuid PRIMARY KEY DEFAULT uuidv7(),
   project_id  uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  kind        text NOT NULL CHECK (kind IN ('class_rename','class_merge')),
-  payload     jsonb NOT NULL,                -- {class_id, new_name} or {source_ids, target_id}
+  kind        text NOT NULL CHECK (kind IN ('class_rename','class_merge','cluster_partition')),
+  payload     jsonb NOT NULL,                -- {class_id, new_name}, {source_ids, target_id} or
+                                             -- {target, level, embedding_field, partition_id} (02d section 1)
   job_id      uuid NULL REFERENCES jobs(id) ON DELETE SET NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
   done_at     timestamptz NULL
@@ -299,7 +310,8 @@ CREATE TABLE config_documents (
   id               uuid PRIMARY KEY DEFAULT uuidv7(),
   project_id       uuid NULL REFERENCES projects(id) ON DELETE CASCADE,   -- NULL: deployment-wide
   kind             text NOT NULL CHECK (kind IN
-                   ('prompt_pack','region_profile','open_vocab_set','ingest_profile','vlm_endpoint')),
+                   ('prompt_pack','region_profile','open_vocab_set','ingest_profile','vlm_endpoint',
+                    'serving_profile','cluster_profile','assist_loop_preset')),   -- 02d section 1
   name             text NOT NULL CHECK (name ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'),
   current_revision integer NOT NULL CHECK (current_revision >= 1),
   description      text NOT NULL DEFAULT '',
@@ -310,7 +322,7 @@ CREATE TABLE config_documents (
   updated_by_user_id uuid NULL,
   UNIQUE NULLS NOT DISTINCT (project_id, kind, name),
   UNIQUE (id, kind),                                   -- target of the activation's composite FK
-  CHECK ((kind = 'vlm_endpoint') = (project_id IS NULL))
+  CHECK ((kind IN ('vlm_endpoint','serving_profile')) = (project_id IS NULL))
 );
 
 CREATE TABLE config_revisions (
@@ -328,7 +340,8 @@ CREATE TABLE config_revisions (
 CREATE TABLE config_activations (
   project_id    uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   axis          text NOT NULL CHECK (axis IN
-                ('prompt_pack','detection_profile','vlm','open_vocab','ingest_profile')),
+                ('prompt_pack','detection_profile','vlm','open_vocab','ingest_profile',
+                 'clustering_item','clustering_region_box','assist_loop_preset')),
   kind          text NOT NULL,
   config_id     uuid NOT NULL,
   revision      integer NOT NULL,
@@ -336,10 +349,12 @@ CREATE TABLE config_activations (
   activated_by  text NOT NULL,
   PRIMARY KEY (project_id, axis),
   FOREIGN KEY (config_id, kind)     REFERENCES config_documents(id, kind),
-  FOREIGN KEY (config_id, revision) REFERENCES config_revisions(config_id, revision) ON DELETE RESTRICT,
+  FOREIGN KEY (config_id, revision) REFERENCES config_revisions(config_id, revision),   -- NO ACTION (1.2)
   CHECK ((axis, kind) IN (('prompt_pack','prompt_pack'), ('detection_profile','region_profile'),
                           ('vlm','vlm_endpoint'), ('open_vocab','open_vocab_set'),
-                          ('ingest_profile','ingest_profile')))
+                          ('ingest_profile','ingest_profile'), ('clustering_item','cluster_profile'),
+                          ('clustering_region_box','cluster_profile'),
+                          ('assist_loop_preset','assist_loop_preset')))
 );
 
 CREATE TABLE config_activation_events (
@@ -379,6 +394,7 @@ CREATE TABLE project_settings (
   ingest_policy   jsonb NULL,
   vlm_policy      jsonb NULL,
   vlm_scope_reps  jsonb NULL,
+  search          jsonb NULL,                  -- SearchSettings (embeddings plan 5.6; 02d section 1)
   revision        bigint NOT NULL DEFAULT 1,
   updated_at      timestamptz NOT NULL DEFAULT now(),
   updated_by      text NOT NULL
@@ -394,8 +410,9 @@ CREATE TABLE project_keymaps (
 
 CREATE TABLE project_state (                -- small internal markers, one pydantic model per key
   project_id  uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  key         text NOT NULL CHECK (key IN ('cluster_refresh','region_cluster_refine_marker',
-              'region_cluster_partition_marker','last_clustering','region_drain','region_dependency_health')),
+  key         text NOT NULL CHECK (key IN ('cluster_refresh','region_drain','region_dependency_health')),
+              -- research X-11: the region-cluster markers and last_clustering are replaced by
+              -- cluster_partitions (02d section 2.2); cluster_refresh is the beat's scheduling clock
   value       jsonb NOT NULL,
   revision    bigint NOT NULL DEFAULT 1,
   updated_at  timestamptz NOT NULL DEFAULT now(),
@@ -458,7 +475,8 @@ CREATE TABLE jobs (
   result               jsonb NULL,
   error_code           text NULL,
   error_message        text NULL,
-  attempt              integer NOT NULL DEFAULT 0,
+  attempt              integer NOT NULL DEFAULT 0,             -- numbers job_attempts rows only
+  retry_count          integer NOT NULL DEFAULT 0,             -- failed deliveries only (research G-1; 02b section 3.1)
   max_attempts         integer NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 10),
   auto_resume          boolean NOT NULL DEFAULT false,
   fencing_token        bigint NOT NULL DEFAULT 0,
@@ -471,6 +489,7 @@ CREATE TABLE jobs (
   cancel_requested_at  timestamptz NULL,
   cancel_requested_by  text NULL,
   pause_requested_at   timestamptz NULL,
+  pause_reason         text NULL CHECK (pause_reason IN ('user','audit','budget','project_paused','vlm_unavailable')),
   idempotency_key      text NULL CHECK (length(idempotency_key) BETWEEN 8 AND 200),
   parent_job_id        uuid NULL REFERENCES jobs(id) ON DELETE SET NULL,
   requested_by         text NOT NULL,
@@ -481,7 +500,8 @@ CREATE TABLE jobs (
   finished_at          timestamptz NULL,
   updated_at           timestamptz NOT NULL DEFAULT now(),
   CHECK ((status IN ('completed','completed_with_errors','failed','cancelled')) = (finished_at IS NOT NULL)),
-  CHECK (status NOT IN ('running','cancelling') OR (owner IS NOT NULL AND lease_expires_at IS NOT NULL))
+  CHECK (status NOT IN ('running','cancelling') OR (owner IS NOT NULL AND lease_expires_at IS NOT NULL)),
+  CHECK (status <> 'paused' OR pause_reason IS NOT NULL)
 );
 CREATE UNIQUE INDEX uq_jobs_one_active
   ON jobs (project_id, exclusive_group, scope) NULLS NOT DISTINCT
@@ -504,7 +524,7 @@ CREATE TABLE job_attempts (
   started_at     timestamptz NOT NULL DEFAULT now(),
   ended_at       timestamptz NULL,
   outcome        text NULL CHECK (outcome IN ('completed','completed_with_errors','failed',
-                   'cancelled','paused','interrupted','lost','time_limit')),
+                   'cancelled','paused','interrupted','lost','time_limit','yielded')),
   error_code     text NULL,
   error_message  text NULL,
   PRIMARY KEY (job_id, attempt)
@@ -547,14 +567,33 @@ CREATE TABLE worker_capabilities (          -- written by a worker at start; rep
   seen_at      timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE gpu_devices (                  -- research GPU S-6: inventory by UUID; deployment data, no RLS
+  gpu_uuid           text PRIMARY KEY,          -- NVML UUID; CUDA numbers cards fastest first, so an index is ambiguous
+  host               text NOT NULL,
+  nvml_index         integer NOT NULL,
+  cuda_index         integer NULL,
+  name               text NOT NULL,
+  compute_capability text NOT NULL,
+  memory_total_mib   integer NOT NULL,
+  numa_node          integer NULL,
+  pcie_gen           integer NULL,
+  pcie_width         integer NULL,
+  hw_jpeg_decoder    boolean NOT NULL,
+  driver_version     text NOT NULL,
+  cuda_version       text NOT NULL,
+  seen_at            timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE gpu_reservations (             -- replaces training_gpus.lock (the arbiter is single-host)
-  host           text NOT NULL,
-  gpu_index      integer NOT NULL CHECK (gpu_index >= 0),
+  gpu_uuid       text PRIMARY KEY REFERENCES gpu_devices(gpu_uuid) ON DELETE RESTRICT,  -- research S-7
   holder_job_id  uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-  reserved_at    timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (host, gpu_index)
+  reserved_at    timestamptz NOT NULL DEFAULT now()
 );
 ```
+
+`gpu_devices` is deployment data (no RLS; written under `deployment_tx` by the GPU workers at
+`worker_ready` through NVML and by `openprocessor gpu plan`). Research S-12: a GPU worker's
+`worker_capabilities` row names the card's `gpu_uuid`.
 
 `job_attempts`, `job_items` and `gpu_reservations` reach the project through `jobs`; their RLS
 policy is `USING (EXISTS (SELECT 1 FROM jobs j WHERE j.id = job_id AND op_scope_allows(j.project_id)))`.
@@ -703,7 +742,7 @@ CREATE TABLE dataset_exports (
 CREATE TABLE training_runs (
   id                    uuid PRIMARY KEY DEFAULT uuidv7(),
   project_id            uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  job_id                uuid NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE RESTRICT,  -- status lives on the job
+  job_id                uuid NOT NULL UNIQUE REFERENCES jobs(id),  -- NO ACTION (1.2); status lives on the job
   dataset_export_id     uuid NULL REFERENCES dataset_exports(id) ON DELETE SET NULL,
   spec                  jsonb NOT NULL,
   class_names           text[] NOT NULL,      -- the training pin, in output order
@@ -712,7 +751,7 @@ CREATE TABLE training_runs (
   artifact_prefix       text NOT NULL,        -- checkpoints, run.log, manifest file
   manifest              jsonb NULL,           -- lineage: dataset hash, code versions, evaluation
   mlflow_run_id         text NULL,
-  gpu_ids               integer[] NOT NULL DEFAULT '{}',
+  gpu_uuids             text[] NOT NULL DEFAULT '{}',   -- research X-6: by identity, not CUDA index
   created_at            timestamptz NOT NULL DEFAULT now(),
   finished_at           timestamptz NULL
 );
@@ -733,25 +772,39 @@ CREATE TABLE models (
   UNIQUE NULLS NOT DISTINCT (project_id, name, version)
 );
 
-CREATE TABLE model_engines (
-  id                 uuid PRIMARY KEY DEFAULT uuidv7(),
-  model_id           uuid NOT NULL REFERENCES models(id) ON DELETE CASCADE,
-  triton_model_name  text NOT NULL,
-  precision          text NOT NULL,
-  input_size         integer NOT NULL,
-  trt_version        text NOT NULL,
-  gpu_arch           text NOT NULL,
-  engine_storage_key text NULL,
-  build_job_id       uuid NULL REFERENCES jobs(id) ON DELETE SET NULL,
-  status             text NOT NULL CHECK (status IN ('building','ready','failed')),
-  built_at           timestamptz NULL,
-  UNIQUE (triton_model_name, trt_version, gpu_arch)
+CREATE TABLE model_engines (                -- research GPU S-1..S-4 (one row per built engine)
+  id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+  model_id            uuid NOT NULL REFERENCES models(id) ON DELETE CASCADE,
+  triton_model_name   text NOT NULL,
+  precision           text NOT NULL CHECK (precision IN ('fp32','fp16','int8')),
+  input_size          integer NOT NULL,
+  input_contract      jsonb NOT NULL,   -- EngineInputContract (src/schemas/models.py): dtype, layout, size, color,
+                                        -- normalize, resize, interpolation, fill, pad_split, max_side
+  output_contract     jsonb NOT NULL,   -- EngineOutputContract: kind, shapes, dtypes
+  build_profile       text NOT NULL DEFAULT 'default' CHECK (build_profile IN ('default','small')),
+  build_settings      jsonb NOT NULL,   -- workspace MiB, opt/max batch, builder level, precision recipe
+  build_stamp         text NOT NULL,
+  onnx_sha256         text NULL,
+  engine_sha256       text NULL,
+  device_mib_measured integer NULL,     -- measured by loading the engine once (lane 5B)
+  max_batch           integer NOT NULL,
+  opt_batch           integer NULL,
+  cuda_graphs         boolean NOT NULL DEFAULT false,
+  parity_ref          text NULL,        -- the capture tag that approved the engine
+  parity_report_key   text NULL,        -- storage key
+  trt_version         text NOT NULL,
+  gpu_arch            text NOT NULL,
+  engine_storage_key  text NULL,
+  build_job_id        uuid NULL REFERENCES jobs(id) ON DELETE SET NULL,
+  status              text NOT NULL CHECK (status IN ('building','ready','failed')),
+  built_at            timestamptz NULL,
+  UNIQUE (triton_model_name, trt_version, gpu_arch, build_profile)   -- an opt-in INT8 or small build is a new row
 );
 
 CREATE TABLE promotions (
   id                 uuid PRIMARY KEY DEFAULT uuidv7(),
   project_id         uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  model_id           uuid NOT NULL REFERENCES models(id) ON DELETE RESTRICT,
+  model_id           uuid NOT NULL REFERENCES models(id),    -- NO ACTION (1.2)
   triton_model_name  text NOT NULL,           -- '<slug>__<name>'
   triton_version     integer NOT NULL,
   class_remap        jsonb NULL,              -- by name, for a class-subset run
@@ -779,6 +832,11 @@ CREATE TABLE bakeoff_runs (
   created_at          timestamptz NOT NULL DEFAULT now()
 );
 ```
+
+Research seam rule (GPU S-1, S-13; 02d X-5): an engine row without `input_contract` is refused (the
+column is `NOT NULL`), the export job refuses an ONNX input that differs from the declared contract
+(`contract_mismatch`), and an embedding model version's `input_spec.image` must equal the
+`input_contract` of the ready engine of its Triton image model.
 
 Rules: a model shared into another project maps classes by name (`models.labels` against the
 consumer's `project_classes.name_key`), never by position, as today. Review fix R-13: the consumer
@@ -810,9 +868,15 @@ CREATE UNIQUE INDEX uq_upgrade_step_done ON upgrade_runs (from_version, step) WH
 | Table | Growth | Retention (the reaper, [02b](02b_jobs_locking_events.md) section 4) |
 |---|---|---|
 | `events` | progress at most 1 row per second per running job, plus lifecycle events | rows older than 24 h deleted in batches of 10,000 |
-| `jobs`, `job_attempts` | one row per start | terminal rows older than 90 days deleted, except kinds referenced by `training_runs`, `dataset_imports`, `combine_runs`, `bakeoff_runs`, `promotions`, `dataset_exports` (those keep their job) |
+| `jobs`, `job_attempts` | one row per start | terminal rows older than 90 days deleted, except kinds referenced by `training_runs`, `dataset_imports`, `combine_runs`, `bakeoff_runs`, `promotions`, `dataset_exports`, `assist_loop_runs`, `embedding_reindex_runs` (those keep their job: each references it without `ON DELETE SET NULL`) |
 | `ingest_source_files` | one row per discovered file | `done` rows older than 30 days deleted |
-| `config_runtime_reports`, `worker_capabilities` | one row per process and host | rows not seen for 1 day deleted |
+| `config_runtime_reports`, `worker_capabilities`, `serving_reports` | one row per process and host, or per server and model | rows not seen for 1 day deleted |
+| `gpu_devices` | one row per card | rows not seen for 1 day deleted, except a card that `gpu_reservations` still names (the foreign key refuses it) |
+| `cluster_partitions` and their clusters and memberships ([02d](02d_research_seam_schema.md) 2.2) | about 150 B per membership row, about 150 MB per 1M-item partition | keep the serving, the previous serving and at most 2 `ready` candidates per key; older `discarded` or superseded partitions deleted after 30 days, 10,000 rows per statement |
+| `assist_loop_proposals`, `assist_loop_selections` (02d 2.4) | one row per asked item | rows of runs finished more than 90 days ago deleted (the node rows keep the counts); a run and its children stay while one of its label operations can be undone |
+| `vlm_usage_hourly` | one row per project, endpoint, source and hour | 400 days |
+| `near_dup_runs` and their groups and members (02d section 3) | one members row per image and item per run | the current run and the two newest superseded runs per project and level; older runs deleted by beat |
+| `near_dup_pending` | one row per changed member | deleted when its rescore drains it |
 | `dataset_uploads` | one per upload | `expires_at` passed: blob and row removed |
 | `dataset_import_images`, `label_operation_members` | one per image or item | kept with their parent (undo needs them) |
 
