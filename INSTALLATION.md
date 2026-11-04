@@ -146,12 +146,15 @@ Other variables: `OP_GH_REPO` (the GitHub `org/repo` to install from),
 
 ### Network access
 
-Cropwright is reachable on your LAN by default behind a shared basic-auth login (user `cropwright`, password
-in `secrets/cropwright/password`); the API stays on 127.0.0.1. `--local-only` keeps everything on loopback,
+Cropwright is reachable on your LAN by default, for homelab or
+small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
+installer puts a shared HTTP basic-auth login in front of Cropwright (user `cropwright`, password
+in `secrets/cropwright/password`). Pass `--local-only` to opt out and keep
+everything on 127.0.0.1.
 `--bind <ip>` publishes the backend ports after a typed `expose` (unattended: `OP_ALLOW_PUBLIC_BIND=1`).
 The login, the bind rules, `OP_UI_BIND_ADDRESS` and `OP_GATEWAY_SUBPATHS` are in
 [Security and network exposure](docs-site/docs/deployment/security.mdx#lan-access-from-the-one-line-installer);
-the policy is [SECURITY.md](SECURITY.md). Do not port-forward any of these ports to the public internet.
+the policy is [SECURITY.md](SECURITY.md). Do not port-forward any of these ports to the public internet; use a reverse proxy with authentication for remote access.
 
 ### Control-plane-only mode (optional, not the default)
 

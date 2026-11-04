@@ -137,10 +137,12 @@ releases are follow-up work.
 
 ### Network access
 
-The API stays bound to 127.0.0.1. Cropwright is reachable on your LAN by
-default (homelab or small-business use), behind a shared HTTP basic-auth login;
-`--local-only` keeps everything on loopback. Never port-forward any
-OpenProcessor port to the public internet. Policy: [SECURITY.md](SECURITY.md);
+Cropwright is reachable on your LAN by default, for homelab or
+small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
+installer puts a shared HTTP basic-auth login in front of Cropwright. Pass
+`--local-only` to opt out and keep everything on 127.0.0.1. Never port-forward
+any OpenProcessor port to the public internet; use a reverse proxy with
+authentication if you need remote access. Policy: [SECURITY.md](SECURITY.md);
 how-to: [Security and network exposure](docs-site/docs/deployment/security.mdx).
 
 ### After the install
