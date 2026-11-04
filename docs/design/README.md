@@ -14,18 +14,28 @@ after the lasting knowledge moves to the reference docs ([`program/00_index.md`]
 
 One release, v0.7.0 (B0 to B5, then R-final last), and v0.8.0 for platform breadth. The `program/` files
 are removed as their batches close, and the whole folder after R-final and the v0.7.0 tag. Start at
-the index; execute one file per batch, lane or procedure.
+the master plan; execute one wave at a time from the batch files it links.
 
 | Doc | What it is |
 |---|---|
-| [program/00_index.md](program/00_index.md) | Read first: mission, waves, decision register, branch and lane model, test and GPU budget, legends, superseded plans |
+| [program/00_master_plan.md](program/00_master_plan.md) | **Read first**: the execution order from now to the v0.7.0 tag: waves W2.1-W6, lanes and file ownership, folded-in decided items, sweeps and exit gates, the GPU-window budget, how a session runs one wave, the owner questions |
+| [program/00b_traceability.md](program/00b_traceability.md) | Every task and ID of the original program plans and every open issue mapped to its wave and lane (or retired with a reason); the fold-in record; the proposed GitHub actions |
+| [program/00c_plan_review.md](program/00c_plan_review.md) | The independent review of the plan set (3 blockers, 9 high, 15 medium, 11 low) and the planner's response to each finding |
+| [program/00_index.md](program/00_index.md) | The decision register, the plain-words map, wave exit gates, the production-ready definition, branch and lane model, test and GPU budget rules, legends, superseded plans |
 | [program/01_b0_close_out.md](program/01_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
-| [program/03_b2_overview.md](program/03_b2_overview.md) | B2: jobs off the API on Celery, three stages |
-| [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | B2 stage 1: queue infrastructure |
-| [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | B2 stage 2: move the request-started job families |
-| [program/03c_b2_w3_beat_reaper_workers.md](program/03c_b2_w3_beat_reaper_workers.md) | B2 stage 3: beat, the lease reaper, trigger workers, hardening |
+| [program/02_control_plane_database.md](program/02_control_plane_database.md) | The control plane on PostgreSQL: why, the data-ownership table, the inventory with a destination for every item, the open decisions |
+| [program/02a_postgres_schema.md](program/02a_postgres_schema.md) | The PostgreSQL schema: every table, key, constraint, index and row-level-security policy |
+| [program/02b_jobs_locking_events.md](program/02b_jobs_locking_events.md) | Jobs: state machine, start, claim and fencing, cancel, the reaper, events to the browser, Celery and Valkey settings, connection pools |
+| [program/02c_migration_ops_tests.md](program/02c_migration_ops_tests.md) | Alembic, the 0.6.0 upgrade and rollback, compose services, the storage seam, backup and restore, tests, the trap register |
+| [program/03_b2_overview.md](program/03_b2_overview.md) | B2: the control plane on PostgreSQL, Valkey and Celery, six stages, lanes, the sweep |
+| [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | B2 stage 1: foundation (Postgres, Valkey, the Celery app, the schema, the storage seam, the test database) |
+| [program/03d_b2_s2_control_data.md](program/03d_b2_s2_control_data.md) | B2 stage 2: control data moves to Postgres; the 0.6.0 upgrade step |
+| [program/03e_b2_s3_job_runtime.md](program/03e_b2_s3_job_runtime.md) | B2 stage 3: the job runtime, the reaper and the event feed |
+| [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | B2 stage 4: the API-hosted job families move to Celery |
+| [program/03f_b2_s5_gpu_queues.md](program/03f_b2_s5_gpu_queues.md) | B2 stage 5: training, model export and the evaluator on GPU queues; promotion and the model registry |
+| [program/03c_b2_w3_beat_reaper_workers.md](program/03c_b2_w3_beat_reaper_workers.md) | B2 stage 6: beat and the periodic tasks, the deletions, scale-out compose, hardening, docs |
 | [program/04_b3_ultralytics_one_version.md](program/04_b3_ultralytics_one_version.md) | B3: one Ultralytics version and one detection contract |
-| [program/05_b4_stateless_api.md](program/05_b4_stateless_api.md) | B4: stateless API, the worker count becomes a tuning knob |
+| [program/05_b4_stateless_api.md](program/05_b4_stateless_api.md) | B4: stateless API, the worker count becomes a tuning knob; the 1-vs-N workers and replicas check |
 | [program/07_b5_overview.md](program/07_b5_overview.md) | B5 speed on the final stack: overview, shared measurement protocol, #42 side track |
 | [program/07a_b5_baseline.md](program/07a_b5_baseline.md) | B5a: the public baseline, the Triton sweeps and the `/detect` recall question |
 | [program/07b_b5_decode_once.md](program/07b_b5_decode_once.md) | B5b: decode once (GPU-3b, the rest of #40, #407, GPU-12) |
@@ -37,6 +47,7 @@ the index; execute one file per batch, lane or procedure.
 | [program/10_standards_and_libraries.md](program/10_standards_and_libraries.md) | Cross-cutting: code standards and the "no hand-rolling" library register |
 | [program/11_risks_cleanup_host.md](program/11_risks_cleanup_host.md) | Risk register, cleanup, host, GPU and peer rules |
 | [program/12_prior_plans_reconciliation.md](program/12_prior_plans_reconciliation.md) | What was unfinished in the older plans and where it went; the removal waves |
+| [program/13_package_pins.md](program/13_package_pins.md) | Cross-cutting: exact pins for every Python dependency, new control-plane packages and images, bump order |
 
 ## Plans after v0.7.0 (research and the next release)
 
@@ -76,7 +87,7 @@ closes.
 
 | Doc | Status | What it is |
 |---|---|---|
-| [task_queue_plan.md](task_queue_plan.md) | plan (task detail by ID for `program/`) | Background and concurrent work across processes (Q- IDs) |
+| [task_queue_plan.md](task_queue_plan.md) | plan (task detail by ID for `program/`; its job-state store and lease design are superseded by `program/02_control_plane_database.md`) | Background and concurrent work across processes (Q- IDs) |
 | [codebase_audit_plan.md](codebase_audit_plan.md) | plan (task detail by ID for `program/`) | Codebase audit fix plan (BA-, OS-, GPU-, FE-, T-, OPS-, CC-, SEC- IDs) |
 | [model_family_versions_plan.md](model_family_versions_plan.md) | plan (task detail by ID for `program/`) | Model families and Ultralytics versions: one toolchain, tested (U- IDs) |
 

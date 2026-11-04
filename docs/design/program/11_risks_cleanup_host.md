@@ -13,7 +13,8 @@ are in the register at [00_index.md](00_index.md) section 6 and are not restated
 Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03 (`git worktree list`, `git branch
 -a`, `git branch -r --merged origin/main`; Docker state is taken from the ledger and must be
 re-checked before any removal).
-Consolidated 2026-11-03.
+Consolidated 2026-11-03. Updated 2026-11-04: risks M34-M46 for the PostgreSQL control plane
+([02_control_plane_database.md](02_control_plane_database.md)); M4, M5, M9, M11, M16 and M25-M27 revised.
 
 What to keep after merge: the host rules (section 1) go to `docs/CONTRIBUTING.md`-level
 maintainer notes (the repo's `CONTRIBUTING.md` "Working on a shared host"), the risks that stay
@@ -80,19 +81,19 @@ tag the release notes say the `small` profile is not yet verified on a 12 GB car
 | M1 | Host load from peer sessions delays the gates and the acceptance run | wait for the all-clear; announce heavy runs; one at a time (section 1) | this file |
 | M2 | The acceptance run finds a regression in a large merged tree | `fix/rfinal-findings`, targeted tests, re-run only the failed rows (was `fix/r3-findings`) | [06](06_release_acceptance.md) |
 | M3 | OCR changes (GPU-1, GPU-2, GPU-3a) alter downstream text consumers | before/after evidence on public images; CHANGELOG behaviour change; revert the three OCR commits alone if rejected | [01](01_b0_close_out.md) |
-| M4 | A lease holder pauses longer than the TTL and a reaper takes over | thread heartbeat; TTL 120 s; `fence()` before every write; residual one-write window documented; records carry `lease_generation` | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| M5 | An OpenSearch outage blocks every job start | fail closed with 503; `/health` reports OpenSearch | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| M4 | A job holder pauses longer than the TTL and the reaper takes over | thread heartbeat with its own connection; TTL 120 s; every job-state write fenced by `fencing_token` in SQL (no residual window for job state); `may_write()` self-fence for OpenSearch writes | [02b](02b_jobs_locking_events.md) section 3 |
+| M5 | A Postgres outage blocks every job start and every control write; an OpenSearch outage blocks the data plane | fail closed with 503; `/health` reports `database` and OpenSearch; live step 9 of the B2 run | [02](02_control_plane_database.md) section 2 rule 7 |
 | M6 | A lease doc is deleted with its project while a job runs | the next renew is `Lost` and the job stops; delete already waits for or cancels jobs | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M7 | Registry migration of real projects | idempotent CLI, dry run saved, file renamed not deleted, ids preserved, fail-closed 409 until migrated, downgrade note | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M8 | A reader still reads `class_registry.json` after B1 | the B1 done-when greps for it outside export snapshots and the trainer; dead-code and layering ratchets | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| M9 | Celery redelivery storms, cold-shutdown ack loss, a queue nothing drains, wedged pools | Q-E1, E25, E18, E23 mitigations: lease, reaper from the records, soft shutdown, compose consumer test, pool healthcheck | [03](03_b2_overview.md) |
-| M10 | The `queued` status breaks Cropwright | contracts, the 2G lane, a browser check | [03b](03b_b2_w2_job_families.md) |
-| M11 | An upgraded install lacks the Redis secret | `upgrade` and `repair` create it; R-final RF-56 | [03a](03a_b2_w1_queue_infra.md), [06](06_release_acceptance.md) |
+| M9 | Celery redelivery storms, cold-shutdown ack loss, a queue nothing drains, wedged pools | the claim `UPDATE`, attempt cap 3, the reaper from the `jobs` rows, soft shutdown, the compose consumer test, the pool healthcheck | [02b](02b_jobs_locking_events.md), [03](03_b2_overview.md) |
+| M10 | The `queued` status breaks Cropwright | contracts, lane 4E (B2 stage 4), a browser check | [03b](03b_b2_w2_job_families.md) |
+| M11 | An upgraded install lacks a Postgres, Valkey or Flower secret | `upgrade` and `repair` create missing ones, never rotate; R-final RF-56 | [03a](03a_b2_w1_queue_infra.md) lane 1C, [06](06_release_acceptance.md) |
 | M12 | Ultralytics ships a breaking patch between the CPU matrix and the image build | exact pin (done in B0); the pin test in CI and in each image; the D-28 freeze rule | [04](04_b3_ultralytics_one_version.md) |
 | M13 | Stage B misses throughput (unrolled NMS at batch 64) | ship Stage A; the owner sees the measurement | [04](04_b3_ultralytics_one_version.md) |
 | M14 | The deployed default detector engine is incompatible after B3 | the adapter fails closed; the engine stamp forces a rebuild on `repair`/`upgrade`; CHANGELOG "Breaking" | [04](04_b3_ultralytics_one_version.md) |
 | M15 | The `API_WORKERS` default lowers throughput | benchmark against the 32-worker baseline retaken on the B3 engine | [05](05_b4_stateless_api.md) |
-| M16 | Redis Streams change SSE ordering or resume | the 4C spike gates it; event ids give ordered resume per stream; browser check of every live page | [05](05_b4_stateless_api.md) |
+| M16 | The Postgres event feed changes SSE ordering or resume | the `(xid, id)` cursor and its out-of-order commit test; live SSE step; browser check of every live page | [02b](02b_jobs_locking_events.md) section 6 |
 | M17 | A security detail leaks into a public file or issue | neutral titles and bodies; the naming-leak scan; a manual read of every diff and issue that touches SEC | [09](09_github_actions.md) |
 | M18 | An image ships untracked files | image-vs-git audit before every image push and in every acceptance | [06](06_release_acceptance.md) |
 | M19 | Contract drift between the lanes of one batch | `make contracts` in each commit that changes a wire model; `make contracts-check` once in the batch sweep; wire-changing lanes merge last in their wave | [00](00_index.md) |
@@ -101,15 +102,28 @@ tag the release notes say the `small` profile is not yet verified on a 12 GB car
 | M22 | A project with more than 10,000 classes | 409 `registry_full`; per-class documents would be a separate design (not planned) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M23 | Users stay on 0.6.0 for the whole of B0-B5 and R-final (no intermediate release, owner decision 2; D-37 = yes: nothing is tagged until every plan is implemented and tested); the registry race and the audit fixes reach them only at v0.7.0 | accepted by the owner; keep batches moving; merged work sits on `main` untagged | [00](00_index.md) |
 | M24 | Cropwright is touched in B1, B2 and B4 | all ship in one release; one frontend release note; R-final browser checks of every changed page | [06](06_release_acceptance.md) |
-| M25 | The one supported upgrade (0.6.0 -> 0.7.0) carries every change at once: registry migration, Redis and new services, an engine rebuild, `API_WORKERS` | R-final install B upgrades a real 0.6.0 install with real class registries and an in-flight job, then rolls back and re-upgrades (RF-40 to RF-63) | [06](06_release_acceptance.md) |
-| M26 | Rollback to 0.6.0 after the registry migration leaves 0.6.0 without its class file, or with 0.7.0-only services running, or refuses the configs index holding lease and registry docs | RF-62; B1-1B owns the rollback behaviour and its test | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), [06](06_release_acceptance.md) |
-| M27 | `openprocessor upgrade` run from a 0.6.0 install uses the 0.6.0 CLI, so the new migration hook might not run | B1-1B tests the hand-off; RF-40 proves it live | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| M25 | The one supported upgrade (0.6.0 -> 0.7.0) carries every change at once: the control-data move to Postgres, Postgres and Valkey and the new services, an engine rebuild, `API_WORKERS` | R-final install B upgrades a real 0.6.0 install with real class registries and an in-flight job, then rolls back and re-upgrades (RF-40 to RF-63) | [06](06_release_acceptance.md) |
+| M26 | Rollback to 0.6.0 after the control-data move finds its OpenSearch control indexes and job files gone | `rollback_to_060.py` recreates them from the upgrade bundle and renames `class_registry.json.migrated-0.7.0` back; RF-62 | [02c](02c_migration_ops_tests.md) section 2.3, [06](06_release_acceptance.md) |
+| M27 | `openprocessor upgrade` run from a 0.6.0 install uses the 0.6.0 CLI, so the new migration hook might not run | the hand-off to the new installer is tested (`tests/installer/test_upgrade_060_hook.py`); RF-40 proves it live | [03d](03d_b2_s2_control_data.md) lane 2E |
 | M28 | Integration branches drift from `main`, or a dependabot merge moves `main` under them | no direct dependabot merges during the program; the separate `b1/deps` lane (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) section 4.1) takes the open PRs; each batch cuts its integration branch from `main` after the previous batch merged | [09](09_github_actions.md) |
 | M29 | A base-image bump (Triton 26.09, Python 3.14) breaks the TensorRT pin and every engine | not taken as-is; D-38 places it in B3 behind the GPU gate, or after the tag | [09](09_github_actions.md), [04](04_b3_ultralytics_one_version.md) |
 | M30 | `CHANGELOG.md` `[Unreleased]` grows over five batches with repeated subsections and scattered "Breaking" lines | each batch adds entries under the existing headings; release prep consolidates once (RP-2) | [06](06_release_acceptance.md) |
 | M31 | The pre-existing T-8 test-order pollution is taken for a regression in a sweep | documented in B0's gate; fixed in B1-1D with an ordered no-xdist red test | [01](01_b0_close_out.md), B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | M32 | The plan set drifts from the code as batches land | every file carries its "Verified against" line; each batch's first task re-verifies its own file's references with `rg` and adds a Corrections entry | every file |
 | M33 | Several lanes write to one worktree, or a lane runs a full suite and loads the host | one agent per worktree and branch; lanes run T0 targeted tests only; the coordinator runs one sweep per wave on the merged branch (the [Test and GPU budget](00_index.md)) | [00](00_index.md) |
+| M34 | The control-data move loses or corrupts a project's classes, configs or job history | bundle first, one-transaction load, verify (counts, ids, checksums) before any delete, rollback from the bundle, the fixture tests, R-final on a real install | [02c](02c_migration_ops_tests.md) section 2 |
+| M35 | A query reads or writes another project's control rows | row-level security with `FORCE`, `project_tx` only, the RLS test over every table, the scope-helper ratchet; the OpenSearch guard unchanged for the data plane | [02a](02a_postgres_schema.md) section 1.4 |
+| M36 | Connection exhaustion (32 API processes, Celery children, listeners) | the budget table and `tests/config/test_db_connection_budget.py`; `OP_PG_MAX_CONNECTIONS`; the PgBouncer overlay for more replicas | [02b](02b_jobs_locking_events.md) section 8 |
+| M37 | A long write transaction stalls the event feed or holds row locks during a network call | rule 4 (no network call inside a transaction), batched inserts, trap T-13/T-14 ratchets | [02c](02c_migration_ops_tests.md) section 8 |
+| M38 | Celery, kombu and redis-py versions drift (kombu 5.7.0 appeared on 2026-11-03 under Celery 5.6.3's open range) | exact pins in file 13, `pip check` per image, spike S1 on the pins | [02b](02b_jobs_locking_events.md) section 7.1 |
+| M39 | The Postgres 18 image's new data path or a secret ownership mismatch breaks the first start or the upgrade | spike S0; compose render tests; installer tests | [03a](03a_b2_w1_queue_infra.md) lane 1C |
+| M40 | Two beats on two hosts double every periodic side effect | the session advisory lock at `beat_init`; transaction locks in each periodic body; live step 10 | [02b](02b_jobs_locking_events.md) section 4.1 |
+| M41 | The class-name projection on items drifts from the registry | one writer path (`resolve`), the outbox row in the same transaction, the sync job, the verifier (D-47) | [02](02_control_plane_database.md) section 3.3 |
+| M42 | Two detection or VLM worker replicas process one project | project claims in `stream_worker_claims` (D-53); live step 13 | [02b](02b_jobs_locking_events.md) section 5 |
+| M43 | A backup of Postgres and the OpenSearch data taken at different times disagree after a restore | `openprocessor db verify` reports the drift; INSTALLATION says to restore both from one time | [02c](02c_migration_ops_tests.md) section 6 |
+| M44 | B2 is large (six stages) and blocks B4 | stage merges with the `db` tier each; stage 3 codes alongside stage 2, stages 4 and 5 in parallel; B3 codes throughout | [03](03_b2_overview.md) section 3 |
+| M45 | B3 and B2 lane 5A both edit `docker/trainer/` | disjoint file lists; B3 rebases on `main` after B2 merges | [03f](03f_b2_s5_gpu_queues.md) |
+| M46 | The GPU arbiter stays single-host (it drives the local Docker socket) while everything else scales out | documented limitation; `gpu_reservations` keyed by host; a multi-host arbiter is out of scope | [03c](03c_b2_w3_beat_reaper_workers.md) lane 6A |
 
 ### 3.1 Unverified (be honest)
 
@@ -120,15 +134,19 @@ tag the release notes say the `small` profile is not yet verified on a 12 GB car
 - R2's loop-accounting oddity is believed fixed by "admit nodes on their full claim and every
   budget limit"; R-final RF-30 verifies it.
 - R2 fix (e), cleanup cancels jobs, was verified by reading code only; R-final RF-29 verifies it.
-- The Redis Streams event log (D-30) has no spike yet; B4-4C starts with one.
+- The PostgreSQL control plane is a design: the event cursor, the claim statements, row-level
+  security under load and the connection budget are argued from the PostgreSQL docs, not measured;
+  the `db` tests and the B2 live run measure them. Spikes S0 (Postgres image) and S1 (Celery on
+  Valkey with the exact pins) run first in stage 1.
 - U-6.2 was never run: TensorRT builds, Triton serving, embedded-NMS throughput at batch 64, and
   checkpoints from the 8.4.48 trainer.
 - The YOLO26 `end2end=True` discrepancy is explained only by the maintainer's "`end2end`
   deprecated, mapped to `nms`" comment; checking the head after every export stays the safeguard.
 - #439's cause is not attributed.
 - GPU 2's allocation is a standing decision with an open request from another session.
-- The OpenTranscribe patterns were not re-read for this plan set; the alignment rests on
-  `task_queue_plan.md` section 4d, and B2's first stage re-reads them read-only.
+- The OpenTranscribe patterns were re-read from its public repository on 2026-11-04
+  ([02](02_control_plane_database.md) section 8); the Valkey image's runtime user and whether
+  `valkey-cli` honours `REDISCLI_AUTH` are not confirmed by the docs (spike S1 checks).
 - COCO-Text v2's current download location and licence were not re-checked (B0-3 has a fallback
   rule).
 - 8.4.197 is what the earlier rc images resolved; the exact pin makes later builds resolve the

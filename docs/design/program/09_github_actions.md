@@ -150,12 +150,12 @@ Every body ends with the same footer: "Plan: `docs/design/program/<file>`. Task 
 | N8 | `build(ultralytics): one exact Ultralytics version and one fused [batch,300,6] detection contract` | chore, area:gpu-serving, area:training, effort:hard | v0.7.0 | B3 | B3 merges |
 | N9 | `security: harden persisted clustering state` | security, effort:quick | v0.7.0 | B1-1D (SEC-3) | B1 merges |
 | N10 | `security: widen the CLI secret redaction key list` | security, effort:quick | v0.7.0 | B1-1D (SEC-6) | B1 merges |
-| N11 | `security: reduce the privileges of an opt-in monitoring service` | security, effort:quick | v0.7.0 | B2-W3 (SEC-4) | B2 merges |
-| N12 | `security: pin a build input and review per-service container hardening` | security, effort:moderate | v0.7.0 | B2-W3 (SEC-5) | B2 merges |
+| N11 | `security: reduce the privileges of an opt-in monitoring service` | security, effort:quick | v0.7.0 | B2 stage 6, lane 6C (SEC-4) | B2 merges |
+| N12 | `security: pin a build input and review per-service container hardening` | security, effort:moderate | v0.7.0 | B2 stage 6, lane 6C (SEC-5) | B2 merges |
 | N13 | `question(detect): should /detect upscale small images like ingest does` | question, area:gpu-serving | v0.7.0 | B5a (D-35) | B5a decides |
 | N14 | `chore(audit): evidence tasks before acting` | chore, effort:moderate | v0.7.0 | B2, B4, B5c, backlog | every item checked |
 | N15 | `chore(api): typed response models, one router per PR` | chore, effort:hard | v0.7.0 | backlog after B4 | every router typed (a long tail; an open remainder moves to a v0.8.0 issue at the tag) |
-| N16 | `feat(loop): pause control, event stream and token budgets for the assist loop` | enhancement, area:curation, effort:moderate | v0.8.0 | after B2 2E-2 and B4 4C | pause route, event stream and `usage` budgets work |
+| N16 | `feat(loop): pause control, event stream and token budgets for the assist loop` | enhancement, area:curation, effort:moderate | v0.8.0 | after B2 stage 4 lane 4D-2 (the assist loop on Celery, pause and resume through the jobs table) and stage 3 lane 3B (events in Postgres) | pause route, event stream and `usage` budgets work |
 
 Dropped earlier and not to be filed: the separate ratchet issue (folded into N3), a separate
 #447 follow-up (folded into the #447 re-scope), a separate decode issue (folded into the #40
@@ -174,18 +174,18 @@ mid-run, and the periodic loops (dispatcher, sweeper, cache prune, cluster refre
 run once per API worker instead of once.
 
 ## Scope
-- Celery 5.6 on Redis 8. The job record and the OpenSearch job lease (N3) are the truth; the
-  broker is transport. `task_id = job_id`; the task wrapper takes over the lease the API acquired.
-- Redis with no published port, a generated password file, AOF everysec, `noeviction`.
-- Five core containers (D-19): Redis plus the services `jobs-worker`, `open-vocab-worker` (single consumer), `periodic-worker` (the
-  `periodic` queue, so the reaper and the dispatch tick never wait behind long jobs), `jobs-beat`
-  (one scheduler); Flower under the monitoring profile.
-- Every family moves off the API; the periodic loops move to beat; a lease reaper re-enqueues
-  resumable jobs; the startup reconcile and lifespan loops are deleted.
-- Auto-label and assist loop become single-consumer queue workers.
-- Then the API is stateless: request fan-out becomes one read plus one bulk write with
-  per-item optimistic concurrency, the worker count is one `API_WORKERS` knob, events move to
-  Redis Streams, the last file lock is deleted.
+- PostgreSQL holds every control record (projects, classes, configs, jobs, training runs, models);
+  the `jobs` row is the truth and Celery 5.6 on Valkey 9 is the transport; `task_id = job_id`; a
+  claim `UPDATE` with a fencing token admits one delivery ([02](02_control_plane_database.md)).
+- Postgres and Valkey with no published port, generated password files, Valkey AOF everysec and
+  `noeviction`; one-shot `db-migrate`; core workers `jobs-worker`, `periodic-worker`,
+  `open-vocab-worker`, `jobs-beat` (one scheduler, enforced by a database lock); Flower under the
+  monitoring profile.
+- Every family moves off the API, training, model export and the bake-off on GPU queues; the
+  periodic loops move to beat; the reaper re-queues resumable jobs; the job files, the file
+  protocols and every file lock are deleted; events reach the browser from Postgres.
+- Then the API is stateless (B4): request fan-out becomes one read plus one bulk write with
+  per-item optimistic concurrency, and the worker count is one `API_WORKERS` knob.
 - Children: N3 (leases), N11, N12, #439.
 
 ## Acceptance
@@ -421,12 +421,12 @@ the `usage` object. The label rate that sizes the budgets was never measured (S0
 
 ## Scope
 - Measure the label rate first (S0 design in `docs/design/auto_label_loop_plan.md` section 13).
-- A pause route on the B2 consumer (`03c` 2E-2).
-- Events from the B4 Redis stream (`05` 4C).
+- A pause route on the B2 consumer (`03b` 4D-2).
+- Events from the Postgres event feed (B2 stage 3, `03e`).
 - `usage` tokens read from the OpenAI-compatible response.
 - Cropwright pause button and event log.
 
-Depends on: B2 2E-2, B4 4C.
+Depends on: B2 stage 4 lane 4D-2 and stage 3 lane 3B (the former 2E-2 and B4 4C).
 Plan: docs/design/program/03c_b2_w3_beat_reaper_workers.md and 05_b4_stateless_api.md.
 ```
 

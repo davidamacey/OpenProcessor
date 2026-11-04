@@ -34,6 +34,11 @@ and 6.
 
 ## 0. How to read this file
 
+**Old B2 and B4 task IDs.** This file was written before B2 was re-planned on PostgreSQL. Its
+references to `03b` 2A-2C, `03c` 2D-2F and 2E-n, the `2G` lane and B4 `4C` are the former IDs; their
+current lanes are in the table of [03_b2_overview.md](03_b2_overview.md) section 14 and, task by
+task, in [00b_traceability.md](00b_traceability.md) section 1.
+
 **Dispositions** (one per unfinished item):
 
 | Word | Meaning |
@@ -624,7 +629,7 @@ token budgets for the assist loop`.
   has `pause_reason`). Remote VLM endpoints have no token budget because the client does not read
   the `usage` object. The label rate that sizes the budgets was never measured (S0).
 - Scope: measure the label rate first (S0 design in `auto_label_loop_plan.md` section 13);
-  a pause route on the B2 consumer; events from the B4 Redis stream; `usage` tokens read from the
+  a pause route on the B2 consumer; events from the Postgres event feed (B2 stage 3); `usage` tokens read from the
   OpenAI-compatible response; Cropwright pause button and event log.
 - Depends on: B2 2E-2, B4 4C.
 

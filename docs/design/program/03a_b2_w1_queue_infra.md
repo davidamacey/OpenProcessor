@@ -1,353 +1,172 @@
-# B2 wave 1: queue infrastructure (track `b2/queue-infra`)
+# B2 stage 1: foundation (Postgres, Valkey, the Celery app, the schema, the storage seam, the test database)
 
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Depends on | `03_b2_overview.md` section 2 preconditions (B1 merged; `int/b2-celery` cut from main) |
-| Decisions applied | D-8 (wrapper transfers the API lease, reuses B1's heartbeat thread), D-17 Celery 5.6; recommendations of D-18, D-19, D-20, D-20a, D-20b, D-21, D-23, D-24 (stop if the owner answered otherwise) |
-| Source IDs | `task_queue_plan.md` Phase 2 (S1, dependencies, new files, compose, installer, docs, tests), section 4d, section 5 rules 1-9; Q-E1-E3, E5-E11, E15, E17, E18, E21, E23-E25; audit OPS-2 (evidence part) |
-| Branch / worktree | `b2/queue-infra` in `<repo>-wt-b2-queue-infra`, cut from `int/b2-celery` |
-| Compose project | `-p op-b2-s1` (spike only), CPU only, no GPU |
-| Size | L |
+| Depends on | [03_b2_overview.md](03_b2_overview.md) section 2; pins part A merged to `main` as its own PR (wave W2.0, owner decision 2026-11-04); `int/b2-control-plane` cut from `main` after it |
+| Design | [02a](02a_postgres_schema.md) (the whole schema), [02b](02b_jobs_locking_events.md) sections 7-8 (Celery, Valkey, queues, pools), [02c](02c_migration_ops_tests.md) sections 1, 4-7 (Alembic, services, storage, backup, tests) |
+| Lanes | 1-0 (coordinator), then 1A, 1B, 1C, 1E in parallel, then 1D |
+| Merge order | 1-0, 1A, 1E, 1B, 1C, 1D ([00_master_plan.md](00_master_plan.md) W2.1). Review fix R-18: the calls that need 1A's code while 1A is still coding (the worker-start schema check, the connection-budget test) are 1D tasks, cut after 1A and 1B merged |
+| Compose projects | `-p op-b2-s0` (spike S0, lane 1C), `-p op-b2-s1` (spike S1, lane 1B); CPU only; `down -v` after each |
 
-Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03.
-Consolidated 2026-11-03. The S1 spike (CPU only, `-p op-b2-s1`) is a spike, not one of the three
-live-harness runs of [00_index.md](00_index.md) section 8.1. The shared contract (states,
-lease, marker, wrapper, reaper rules) is `03_b2_overview.md` section 9; this file builds it. No job
-family moves in W1.
+No job family moves in stage 1. At the end of it the stack starts with Postgres at head, Valkey, idle
+workers and beat, and the API checks the schema head at startup.
 
 ---
 
-## Task order
+## Lane 1-0: dependency pins (coordinator, one commit, first)
 
-| ID | Task | Size | Depends on |
+- **Files:** `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (the new packages; the `db`
+  marker in `[tool.pytest.ini_options] markers`; and, review fix R-4, the `addopts` marker expression
+  changed from `not live and not families` to `not live and not families and not db`, so the default
+  `pytest`, the `Makefile` `test` target and every command that relies on `addopts` deselect the
+  database tests from the moment 1A merges). The explicit `-m` commands are lane 1D's (`ci.yml`,
+  `CONTRIBUTING.md`) and 6D's (`CLAUDE.md`).
+- **Adds** the packages named in the overview header at the exact versions of file 13 (runtime:
+  SQLAlchemy with the `asyncio` extra, Alembic, `psycopg[c,pool]` in images and `psycopg[binary,pool]`
+  in the test set (13 section 4), Celery, **kombu 5.6.2**, billiard, **redis-py 6.4.0** (the owner's hold
+  of 2026-11-04 until Celery releases against kombu 5.7, review R-10);
+  test: the same plus `testcontainers[postgres,redis]` (the extras of 13 section 4); Flower only where
+  its service runs). Images: `postgres:18.6-trixie` (owner decision 2026-11-04) and
+  the Valkey image (tag `9.1.3-alpine3.24`), by the digests of 13 section 4.
+- **Red test:** `tests/test_control_plane_pins.py` asserts each package is `==`-pinned and identical
+  in the three manifests where it appears, `billiard >= 4.3.1`, and that the redis-py pin satisfies
+  the kombu pin's declared range (read from `importlib.metadata.requires('kombu')`). Red before the
+  edit. **Control:** `test_ultralytics_is_one_exact_version_everywhere` passes.
+- **Done when:** both green; `.venv/bin/pip install -r requirements-test.txt` then `.venv/bin/pip check` clean.
+
+## Lane 1A `b2/db-core`: the schema and the database layer
+
+**Owns:** `src/db/**` (except `src/db/repos/*.py` other than `__init__.py`), `alembic.ini`,
+`scripts/db/__init__.py`, `scripts/db/migrate.py`, `src/config/database.py`,
+`src/domain/job_states.py`, `src/core/db_session.py`, `src/app/lifespan.py` (schema check and engine
+disposal only), `scripts/codegen/check_layering.py`, `tests/conftest.py` (plugin registration),
+`tests/fixtures/postgres.py`, `tests/db/**` (the `db` marker itself is added by lane 1-0).
+
+| ID | Task | Docs | Red test (fails on the base) | Control |
+|---|---|---|---|---|
+| 1A-1 | `src/config/database.py`: `DatabaseSettings` from `OP_DB_HOST`, `OP_DB_PORT`, `OP_DB_NAME`, `OP_DB_APP_USER`, `OP_DB_APP_PASSWORD_FILE`, `OP_DB_OWNER_USER`, `OP_DB_OWNER_PASSWORD_FILE`, `OP_DB_SUPER_PASSWORD_FILE` (R-13), `OP_API_REPLICAS` (R-6), `OP_DB_DIRECT_HOST`, `OP_DB_SSLMODE`, `OP_DB_POOLER`, `OP_DB_API_CONNECTIONS_TOTAL`, read through `src/config/env.py`; a missing or empty password file, a URL-shaped host, or an unknown `OP_DB_POOLER` fails closed with a named error | pydantic settings; env rules of CONTRIBUTING | `tests/config/test_database_settings.py`: each bad input raises with the variable's name | valid files and values load |
+| 1A-2 | `src/db/base.py` (naming convention, `DeclarativeBase`), `src/db/types.py`, `src/db/models/{projects,classes,config,jobs,datasets,training,ops}.py`: every table of [02a](02a_postgres_schema.md), `lazy="raise"` on relationships | [naming](https://alembic.sqlalchemy.org/en/latest/naming.html), [ORM declarative](https://docs.sqlalchemy.org/en/21/orm/declarative_tables.html) | `tests/db/test_models_import_light.py`: importing `src.db.models` in a fresh interpreter does not import `fastapi`, `opensearchpy`, `torch`, `celery` | `src.db.models` imports |
+| 1A-3 | `src/db/migrations/` (the sync template on the runner's shared connection, review R-29), `0001_control_plane` (autogenerate draft, then by hand: RLS function and policies, triggers `config_revisions_immutable` and `jobs_status_transition_guard` generated from `src/domain/job_states.py`, partial unique indexes, `NULLS NOT DISTINCT`), `alembic.ini` | [autogenerate limits](https://alembic.sqlalchemy.org/en/latest/autogenerate.html), [cookbook](https://alembic.sqlalchemy.org/en/latest/cookbook.html) | `tests/db/test_migrations.py`: upgrade head on an empty database; `alembic check` clean; downgrade base and upgrade head; exactly one head | - |
+| 1A-4 | `tests/db/test_schema_matches_plan.py`: introspects every table, unique constraint, partial index, policy and trigger named in 02a | - | red before 1A-3 | - |
+| 1A-5 | `src/domain/job_states.py` (`TRANSITIONS`, `TERMINAL`, `ACTIVE`, pure) and `tests/db/test_job_transitions.py` (every listed transition passes; every other pair raises in the trigger) | [02b](02b_jobs_locking_events.md) section 1 | the trigger test | a listed transition succeeds |
+| 1A-6 | `src/db/engine.py`: lazy engines keyed by `os.getpid()` (`get_async_engine()`, `get_sync_engine()`, `new_task_async_engine()` with `NullPool`, `direct_connect()`), `pool_pre_ping`, `pool_recycle=1800`, `pool_use_lifo`, sizes from [02b](02b_jobs_locking_events.md) section 8 (re-check RC-4: the API pool has `max_overflow=0` and `pool_timeout=5`, and a pool timeout maps to 503 `database_busy` with `Retry-After`; the 1 s and 5 s polls use their own one-connection sync engine, `get_poll_engine()`, so they never queue behind requests), `prepare_threshold=None` when `OP_DB_POOLER=pgbouncer`; `src/db/session.py`: `async_sessionmaker(expire_on_commit=False)`, `project_tx`, `deployment_tx` with the allowlist; the scope is a context variable re-applied by an `after_begin` session event, so it survives commit and auto-begin (R-13). Read the SQLAlchemy 2.1 migration notes first (R-28) | [migration_21](https://docs.sqlalchemy.org/en/21/changelog/migration_21.html), [asyncio extension](https://docs.sqlalchemy.org/en/21/orm/extensions/asyncio.html), [pooling and fork](https://docs.sqlalchemy.org/en/21/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork), [session events](https://docs.sqlalchemy.org/en/21/orm/events.html#sqlalchemy.orm.SessionEvents.after_begin), [psycopg prepare](https://www.psycopg.org/psycopg3/docs/advanced/prepare.html) | `tests/db/test_engine_per_process.py`: an engine is not shared after `os.fork()` (child gets a new one); importing `src.db` opens no socket; `tests/db/test_scope_helpers.py`: `deployment_tx` from a module outside the allowlist raises; `tests/db/test_pool_timeout_maps_503.py`: an exhausted API pool answers 503 `database_busy` within the timeout | `project_tx` on a migrated database runs a query |
+| 1A-7 | RLS behaviour: `tests/db/test_row_level_security.py` ([02a](02a_postgres_schema.md) section 1.4): a project-scoped transaction cannot see, update or insert another project's rows in every RLS table; an unscoped statement raises `scope_not_set` (R-13); a scoped session that commits and auto-begins keeps its scope; the app role cannot bypass; `op_owner` is not a superuser; a consumer project cannot insert into `model_shares` and can read a model shared with it; `set_config` is transaction-local on a reused pooled connection (trap T-8) | [row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) | red before 1A-3's policies | the owning project sees its rows |
+| 1A-8 | `scripts/db/migrate.py` (`upgrade`: as `op_super`, create the non-superuser `op_owner` (`BYPASSRLS`) and `op_app` idempotently (R-13); then the owner connection on the direct host, `pg_advisory_lock(2, 0)`, `command.upgrade`, ensure role `op_app` and grants idempotently, unlock; `current`; `check`) | OpenTranscribe `backend/app/db/migrations.py` (advisory-locked runner) | `tests/db/test_migrate_runner.py`: two runners at once both exit 0 and the schema is at head once; the app role exists with no DDL right (`CREATE TABLE` as `op_app` fails) | a re-run is a no-op |
+| 1A-9 | schema-head check: `src/db/schema_check.py::check_control_plane()` called from the API lifespan (worker and beat init call it in 1D-5): first waits for each required dependency (database, Valkey, OpenSearch and, for the API, Triton; `src/db/schema_check.py::wait_for_dependencies()`, one function the lifespan and the worker and beat init share) with the bounded retries of [02c](02c_migration_ops_tests.md) section 1.2 and refuses to start with `dependency_unavailable: <name>` when one stays unreachable (owner decision D-69, which replaced D-64 on 2026-11-04: no degraded mode); then a database at another revision exits with `schema_not_current` naming both revisions | - | `tests/db/test_schema_check.py`: a database at an older revision refuses; an unreachable database refuses after the retry budget with the error naming `database` (fake clock); `tests/core/test_startup_requires_dependencies.py`: Valkey, OpenSearch or Triton unreachable each refuse the start naming it | head passes |
+| 1A-10 | `src/core/db_session.py`: `DbSessionDep = Annotated[AsyncSession, Depends(get_db, scope="function")]` (review fix R-1: the default `"request"` scope runs the exit code after the response is sent; `scope` is in `fastapi.Depends` of the pinned FastAPI). The dependency only opens and closes the session; writes commit explicitly in `project_tx` / `deployment_tx` (`async with session.begin()`) before the handler returns; SSE and streaming routes never declare it | [dependencies with yield: early exit and scope](https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#early-exit-and-scope) | `tests/core/test_db_session_dep.py`: a commit failure (a forced serialization error) turns into a 5xx, not a 2xx; an exception in a handler rolls back and re-raises; two concurrent requests get two sessions; `tests/core/test_sse_holds_no_pool_connection.py`: an open SSE stream holds no pooled connection between reads | a normal request commits |
+| 1A-11 | layering contracts ([02](02_control_plane_database.md) section 6) in `check_layering.py`, plus the two clauses of the original W1-12: nothing under `scripts/` imports `src.tasks`, and `src/tasks` imports no `src.routers`, `fastapi` or `starlette` | CONTRIBUTING (ratchets) | a planted `src/db` module importing `src.services` fails; a planted `src/domain` module importing `src.db` fails; a planted `scripts/` module importing `src.tasks` fails; a planted `src/tasks` module importing `fastapi` fails; a planted `src/tasks/runtime` module importing `src.services` (even inside a function) fails (R-2); re-check RC-2: `src.tasks.runtime` is a leaf layer, so a planted module in `src/services/jobs/`, `docker/trainer/`, `export/` or `scripts/curation/bakeoff/` importing `src.tasks.runtime` passes while the same module importing `src.tasks.families_a` (or any other `src.tasks` module outside `runtime`) fails; a planted `src/routers` module importing `src.db.repos` fails (review section 3.4) | the real tree passes |
+| 1A-12 | test fixtures: `tests/fixtures/postgres.py` (one testcontainers container per session, started by the xdist controller and shared by every worker, or `OP_TEST_DATABASE_URL`; each worker migrates its own `op_template_<worker>` once (review fix R-14); a fresh database per module; `two_sessions`; fails, never skips, when `-m db` is selected and no database is reachable), registered in `tests/conftest.py`; the `db` marker | [testcontainers Postgres](https://testcontainers-python.readthedocs.io/en/latest/modules/postgres/README.html) | `tests/db/test_fixture_policy.py`: with `OP_TEST_DATABASE_URL` pointing at a closed port the fixture raises `DatabaseUnavailable` (not skip) | the fixture yields a migrated database |
+
+**Done when:** every 1A test green with `-m db`; the Docker-free command still collects and passes
+without Docker (`-m 'not live and not families and not db'`).
+
+## Lane 1B `b2/queue-core`: the Celery app, queues, the producer
+
+**Owns:** `src/config/queue.py`, `src/config/job_kinds/**`, `src/config/task_routes/**`,
+`src/config/advisory_locks.py`, `src/tasks/__init__.py`, `src/tasks/app.py`, `src/tasks/infra.py`,
+the empty modules `src/tasks/{reaper,jobs_a,jobs_b,jobs_c,trigger,promote,periodic,b4,beat_schedule}.py`
+(every later task module already in `include=`, so no later lane edits `app.py`; `b4` is for the B4
+batch kinds of [05](05_b4_stateless_api.md) 4A, which also get empty `src/config/job_kinds/b4.py` and
+`src/config/task_routes/b4.py` here), `tests/live/test_queue_infra.py` (the live check the B2 sweep step 2 runs),
+`src/tasks/runtime/__init__.py`,
+`src/tasks/runtime/gpu_app.py`, `src/clients/task_queue.py`,
+`scripts/healthcheck/celery_pool_healthcheck.py`, `tests/tasks/**`, `tests/clients/test_task_queue.py`,
+`tests/clients/test_queued_marker.py`, `tests/config/test_queue_settings.py`,
+`tests/healthcheck/test_celery_pool_healthcheck.py`, `tests/test_no_revoke_terminate.py`.
+
+| ID | Task | Docs | Red test | Control |
+|---|---|---|---|---|
+| 1B-0 | OPS-2 evidence (no code): time `/metrics` with 0, 100 and 1,000 dead-process files in a temporary `PROMETHEUS_MULTIPROC_DIR` using the project's metric definitions; 5 runs each; verdict "act" if 1,000 costs more than 2x the spread over 0, else "no action"; numbers and `uptime` in the PR notes | [prometheus multiprocess](https://prometheus.github.io/client_python/multiprocess/) | - | - |
+| 1B-1 | **Spike S1** (throwaway, not committed; `-p op-b2-s1`): the Valkey image (tag `9.1.3-alpine3.24`) by the digest of 13 section 4 with `requirepass` from a mounted file, AOF, `noeviction`; one worker from the api image on the file-13 pins. Prove and record: (1) the worker connects with `redis://valkey:6379/0` and the password from a file; (2) an `acks_late` task killed with SIGKILL of the container is redelivered only after a lowered test visibility timeout; (3) a cold shutdown (`REMAP_SIGTERM=SIGQUIT`, soft shutdown 10 s) requeues a running `acks_late` task, and with billiard 4.3.0 it is acked instead; (4) a plain SIGTERM without the remap ignores the soft timeout; (5) `revoke(task_id)` of a queued task skips it; (6) `valkey-cli` honours `REDISCLI_AUTH` (else use `redis-cli`) and a uid-1000 client and the Valkey process both read the secret file: record the ownership rule; (7) review R-24: a task whose handler runs in `asyncio.run` and awaits `asyncio.sleep`, and one awaiting `asyncio.to_thread`, both end through the wrapper's terminal write (`failed (time_limit)`) with the engine disposed when the soft limit fires (else the wrapper uses its own cooperative soft-limit timer, 02b section 3.1); (8) review R-10: `pip check` passes in the api image with `celery[redis]`, `kombu==5.6.2`, `redis==6.4.0`; (9) review R-30: Flower starts with `--conf` reading the auth file, and refuses a request without it | [Redis broker](https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/redis.html), [workers](https://docs.celeryq.dev/en/stable/userguide/workers.html), [kombu Redis transport](https://docs.celeryq.dev/projects/kombu/en/stable/reference/kombu.transport.redis.html) | - | - |
+| 1B-2 | `src/config/queue.py`: `TaskQueues` (`jobs`, `periodic`, `arbiter` (R-20), `open_vocab`, `autolabel`, `assist_loop`, `gpu_train`, `gpu_export`, `gpu_eval`; `ALL`), one `broker_transport_options()` function every app factory uses (R-33), `QUEUE_PROFILE`, `QueueSettings` (`OP_QUEUE_URL`, `OP_QUEUE_PASSWORD_FILE`; only `redis` and `rediss` schemes; no password in the URL); `src/config/job_kinds/` (`JobKind` dataclass and the aggregating `__init__`, `infra.py` with `noop`, the empty modules `families_a`, `families_b`, `families_c`, `trigger`, `gpu_train`, `gpu_export`, `gpu_eval`, `promote`, `b4_fanout`, `b4_project`: two B4 modules so the B4 tracks 4A and 4D own one each, re-check RC-5); `src/config/task_routes/` the same plus an empty `periodic.py`, and empty `src/tasks/b4_fanout.py` and `src/tasks/b4_project.py`; `src/config/advisory_locks.py` | [routing](https://docs.celeryq.dev/en/stable/userguide/routing.html) | `tests/config/test_queue_settings.py`: a `valkey://` URL, a URL with userinfo, a missing password file each raise; `ALL` equals the routed queues plus the declared ones | valid settings load |
+| 1B-3 | `src/tasks/app.py`: the configuration of [02b](02b_jobs_locking_events.md) section 7.1 exactly; `include=` every `src/tasks/*` module; `worker_ready` refuses an unrouted or kind-less task; `worker_process_init` disposes inherited engines (`close=False`) and nothing else; `worker_init` calls `reject_retired_env()` (ENV-6) (the schema check call is added by 1D-5 once 1A merged, R-18); `src/tasks/runtime/gpu_app.py::make_app(include)` builds the same configuration for the GPU images | [configuration](https://docs.celeryq.dev/en/stable/userguide/configuration.html), [signals](https://docs.celeryq.dev/en/stable/userguide/signals.html) | `tests/tasks/test_celery_config.py` (the ordering `visibility_timeout > task_time_limit > task_soft_time_limit`, prefetch 1, JSON only, no missing queues, acks late, reject on lost, ignore result, **no `result_backend`**, soft shutdown 30 s on idle too, no cancel on connection loss, unlimited broker retries; the worker app, the producer app and `gpu_app.make_app` carry equal `broker_transport_options`, R-33); `tests/tasks/test_no_cuda_import.py` (importing `src.tasks.app` leaves `torch`, `cuml`, `tritonclient` out of `sys.modules` and creates no engine) | `src.tasks.app` imports |
+| 1B-4 | `src/clients/task_queue.py`: `enqueue(task_name, *, job_id)` (queue from the routes only, `task_id = job_id`, `send_task` by name), `revoke(job_id)` (no `terminate`), `ping()` (bounded), `mark_queued`, `clear_queued`, `queued_state -> Present / Absent / Unknown` (connection errors give `Unknown`); a minimal producer app from `src/config/queue.py` (never an import of `src.tasks.app`) | [Redis `SET` with `EX`](https://valkey.io/commands/set/) | `tests/clients/test_task_queue.py` (one message, `task_id == job_id`, routed queue; unknown name raises before sending; broker error raises `QueueUnavailable`); `tests/clients/test_queued_marker.py` | two job ids are independent |
+| 1B-5 | `src/tasks/infra.py`: `op.infra.noop` (a plain task, for the live check); routes in `task_routes/infra.py`; `tests/live/test_queue_infra.py` (starts `op.infra.noop` and waits for `completed`; `live` marker, run only in the B2 sweep) | - | `tests/tasks/test_task_routes_complete.py`: every registered task has a route and a kind; no decorator passes `queue=` (OpenTranscribe `tests/unit/test_task_routes_complete.py`) | - |
+| 1B-6 | `scripts/healthcheck/celery_pool_healthcheck.py`, ported from OpenTranscribe `backend/scripts/celery_pool_healthcheck.py` with an attribution header (AGPL to AGPL, public project): dead pool; respawn storm (pid set replaced while the task counter is frozen); pool type from `pool.implementation`; `inspect stats` is sent with `destination=[<own hostname>]`, so a probe never fans out to every replica (R-38) | - | `tests/healthcheck/test_celery_pool_healthcheck.py` (fake `inspect stats` replies) | a steady pool is healthy |
+| 1B-7 | `tests/test_no_revoke_terminate.py`: AST scan of `src/` and `scripts/` for a `terminate=` keyword in any `revoke` call | [revoking](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks) | a planted fixture fails | the real tree passes |
+
+**Done when:** all 1B tests green; S1 items 1-6 recorded in the PR notes (a failure of 2, 3 or 6 stops
+the lane and goes to the coordinator).
+
+## Lane 1C `b2/compose-installer`: services, secrets, installer, CLI
+
+**Owns:** `docker-compose.yml`, `docker-compose.dev.yml`, `docker/test/compose.yml`, `env.template`,
+`setup-openprocessor.sh`, `scripts/setup.sh`, `openprocessor`, `scripts/lib/config.sh`,
+`scripts/lib/bind_dirs.sh`, `scripts/lib/cli_core.sh`, new `scripts/lib/secrets_control_plane.sh`,
+new `scripts/lib/cli_db.sh`, `tests/compose/test_control_plane_services.py`,
+`tests/compose/test_beat_single_instance.py`, `tests/installer/test_control_plane_secrets.py`,
+`tests/installer/test_env_generator.py`, `tests/installer/test_cli_db.py`,
+`tests/installer/test_cli_status_lists_new_services.py`, `tests/compose/test_beat_healthcheck.py`,
+`tests/compose/test_resource_limits.py` (R-19).
+
+| ID | Task | Docs | Red test | Control |
+|---|---|---|---|---|
+| 1C-0 | **ENV-4 first:** one `.env` generator in `scripts/lib/` used by the installer and `scripts/setup.sh` (copy the template with `umask 077`, `install -m 600`, upsert computed keys, never overwrite a user value) | the installer's `env_create_or_merge` | `tests/installer/test_env_generator.py`: the checkout generator writes mode 600 and every active template key | an existing value is kept |
+| 1C-1 | **Spike S0** (throwaway; `-p op-b2-s0`): `postgres:18.6-trixie` by the digest of 13 section 4 (owner decision 2026-11-04); record: the volume path (`/var/lib/postgresql`, `PGDATA` under `18/docker`); that `POSTGRES_PASSWORD_FILE` works when the file is owned per the rule you choose (the entrypoint drops to `postgres`); whether `pg_isready -h 127.0.0.1` stays false during first init; that the container runs with `no-new-privileges` and which capabilities it needs; the `pg_dump -Fc` and `pg_restore` round trip through `docker compose exec -T` | [postgres image](https://hub.docker.com/_/postgres), [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html) | - | - |
+| 1C-2 | compose services of [02c](02c_migration_ops_tests.md) section 4 (`postgres`, `valkey`, `db-migrate`, `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat`, `flower` under `monitoring`); `api` and the existing curation services gain `depends_on` on `db-migrate` (completed) and `valkey` (healthy); new services have no `container_name` (the existing ones lose theirs in stage 6); named volumes `openprocessor-pg`, `openprocessor-queue`; the Docker secrets directories mounted read-only | [compose services](https://docs.docker.com/reference/compose-file/services/), [secrets](https://docs.docker.com/compose/how-tos/use-secrets/) | `tests/compose/test_control_plane_services.py` (offline render): Postgres mounts `/var/lib/postgresql`, has `max_connections` and a TCP `pg_isready`; Valkey has `appendonly yes`, `noeviction`, no `ports`; no new service publishes a port except Flower on loopback; every Celery worker has `REMAP_SIGTERM=SIGQUIT` and `stop_grace_period` at least 30 s above the soft timeout; no worker shares the API's `PROMETHEUS_MULTIPROC_DIR`; every Python service except `db-migrate` waits on `db-migrate` (completed), `api` included, and on `service_healthy` of `postgres`, `valkey`, `opensearch` and `triton-server` (owner decision D-69, which replaced D-64), and `db-migrate` waits on `postgres` and `opensearch` healthy; `api` has `deploy.replicas: ${OP_API_REPLICAS:-1}`, the single source of its replica count (RC-4); Valkey has `maxmemory ${OP_VALKEY_MAXMEMORY:-1gb}`; `postgres`, `valkey`, `jobs-worker`, `periodic-worker` and `jobs-beat` have `deploy.resources.limits.memory` from `.env`; `jobs-worker` has `--max-memory-per-child` (R-19); `tests/compose/test_beat_single_instance.py` (`jobs-beat` has `deploy.replicas: 1` and no fixed `container_name`, D-54; the old container-name assertion is gone); `tests/compose/test_beat_healthcheck.py` (the beat healthcheck globs `celerybeat-schedule*` and handles an empty glob, original W1-9). The compose files carry the comment "nothing acts on `unhealthy`; `restart:` fires only when the main process exits" (original W1-9) | `tests/compose/test_overlay_render.py` |
+| 1C-3 | dev overlay (source mounts for the new Python services; the "Celery does not hot-reload" comment) and the live harness services ([02c](02c_migration_ops_tests.md) section 4, last paragraph) | - | render tests for both files | existing harness services unchanged |
+| 1C-4 | secrets: `scripts/lib/secrets_control_plane.sh` creates `secrets/postgres/{super_password,owner_password,app_password}` (R-13), `secrets/valkey/{password,valkey.conf}`, `secrets/flower/auth` with `umask 077` before compose runs, on fresh install, `upgrade` and `repair`, never rotating; the S0 and S1 ownership rule applied; `config show` redacts them | the existing `secrets/vlm` and Cropwright patterns | `tests/installer/test_control_plane_secrets.py`: created with mode 600 when missing on upgrade; a re-run keeps the values; `repair` recreates a deleted one; no value appears in argv or the log | the Cropwright secret test passes |
+| 1C-5 | env keys in `env.template` (advanced tier): the `OP_DB_*` set of 1A-1, `OP_PG_MAX_CONNECTIONS`, `OP_PG_SHARED_BUFFERS`, `OP_QUEUE_URL`, `OP_QUEUE_PASSWORD_FILE`, `OP_JOBS_CONCURRENCY`, `OP_JOBS_MAX_MEMORY_PER_CHILD_KB`, `OP_VALKEY_MAXMEMORY`, `OP_PG_MEM_LIMIT`, `OP_JOBS_MEM_LIMIT`, `OP_PERIODIC_MEM_LIMIT`, `OP_BEAT_MEM_LIMIT` (compose-only, R-19), `OP_API_REPLICAS` (R-6), `OP_STOP_GRACE_JOBS` (compose-only), `OP_DB_BACKUP_KEEP`, `OP_DB_BACKUP_INTERVAL_H` | `tests/test_env_surface.py` | the env-surface test fails until the template lines exist | - |
+| 1C-6 | CLI: `openprocessor status/health` list the new services; `openprocessor db backup [--out]`, `db restore <file> [--yes]` (`scripts/lib/cli_db.sh`, [02c](02c_migration_ops_tests.md) section 6); `upgrade` takes a backup first when Postgres exists; `uninstall` removes the new volumes with the others (existing confirmation rules) | - | `tests/installer/test_cli_db.py` (a fake `docker compose exec` records the `pg_dump -Fc` and `pg_restore --clean --if-exists` argv and the keep-7 pruning); `tests/installer/test_cli_status_lists_new_services.py` | the existing CLI tests |
+| 1C-7 | (moved to 1D-6, review R-18: the test reads 1A's `DatabaseSettings`) | - | - | - |
+
+**Done when:** all 1C tests green; S0 recorded; `docker compose config` renders for the default, dev
+and arbiter overlays (offline render only in the lane).
+
+## Lane 1E `b2/storage-seam`
+
+**Owns:** `src/clients/storage/{__init__,base,local,keys,roots}.py`, `src/config/storage.py`,
+`tests/clients/storage/**`, `tests/test_no_absolute_paths_in_db.py`.
+
+| ID | Task | Red test | Control |
 |---|---|---|---|
-| W1-0 | OPS-2 evidence (offline measurement) | S | - |
-| W1-1 | Spike S1 | S (1 h) | - |
-| W1-2 | Dependencies, pins, licences | S | W1-1 |
-| W1-3 | `src/config/queue.py` | S | W1-2 |
-| W1-4 | `src/tasks/app.py` | M | W1-3 |
-| W1-5 | `src/clients/task_queue.py` | S | W1-3 |
-| W1-6 | `src/tasks/job_task.py` wrapper + lease extension | M | W1-4, W1-5 |
-| W1-7 | queued marker helpers | S | W1-5 |
-| W1-8 | compose services, dev overlay, live harness | M | W1-4 |
-| W1-9 | pool and beat healthchecks | S | W1-8 |
-| W1-10 | installer, CLI, secret | M | W1-8 |
-| W1-11 | `/health` queue status | S | W1-5 |
-| W1-12 | layering ratchet and guard tests | S | W1-4 |
-| W1-13 | the Phase 2 tests | M | all above |
-| W1-14 | docs | S | all above |
+| 1E-1 | `BlobStore` protocol and `LocalFsStore` over `src/utils/atomic_write.py`; roots of [02c](02c_migration_ops_tests.md) section 5 mapped from the existing settings (`OP_SOURCE_ROOT`, `OP_PROJECTS_DATA_ROOT`, `OP_STATE_DIR`, the models path, the crop cache) | `tests/clients/storage/test_local_store.py`: atomic write (a crash mid-write leaves the old file), `list_prefix`, `delete_prefix`, `local_path` | read after write |
+| 1E-2 | `keys.py`: `make_key(root, *parts)` and `parse_key`; refuses `..`, a leading `/`, a backslash, an empty part | `tests/clients/storage/test_keys.py` | round trip |
+| 1E-3 | `tests/test_no_absolute_paths_in_db.py`: AST scan of `src/db/repos/` for an assignment to a column whose name ends in `_storage_key`, `_prefix` or `_key` that is not the result of `make_key` | a planted fixture fails | the real tree passes |
 
----
+## Lane 1D `b2/health-ci` (starts after 1A and 1B are merged)
 
-### W1-0 OPS-2 evidence (before any B2 coding acts on it)
+**Owns:** `src/routers/health.py`, `.github/workflows/ci.yml`, `CONTRIBUTING.md`, `Makefile` (the
+`test` target and a new `test-db` target), the worker-start call of the schema check in
+`src/tasks/app.py` (1B has merged), `tests/test_health_database_queue.py`,
+`tests/test_db_marker_policy.py`, `tests/config/test_db_connection_budget.py`.
 
-- **Source:** audit OPS-2 (API-14), task plan D15/E19.
-- **Doc:** prometheus_client multiprocess mode [P1] (`mark_process_dead`, `livemostrecent`).
-- **Steps:** in a temporary `PROMETHEUS_MULTIPROC_DIR` (a `tmp_path`, no stack), simulate 1,000
-  recycled processes by writing their `.db` files with the project's own metric definitions
-  (`src/services/curation/ops_metrics.py`), then time `/metrics` generation
-  (`prometheus_client.multiprocess.MultiProcessCollector`) at 0, 100 and 1,000 dead pids; 5 runs each.
-- **Output:** the numbers and the host load (`uptime`) in the W1 PR description, plus a one-line
-  verdict: "act" if generation time at 1,000 grows more than 2x the spread over the 0 baseline,
-  else "no action". 2D (`03c`) reads the verdict.
-- **Done when:** the verdict is in the PR. No code change in W1.
+| ID | Task | Red test | Control |
+|---|---|---|---|
+| 1D-1 | `/ready` (and `/health`, its existing alias) adds `database` and `queue` to its probes and answers 503 naming every dependency that is down; `/live` probes nothing (owner decision D-69; the startup wait and refusal are 1A-9); each probe sequential with a short timeout, no new `gather` (B4-4A owns the existing fan-out) | `tests/test_health_database_queue.py` with fake engine and broker: the database down gives `/ready` 503 naming `database` while `/live` answers 200 | both up gives `ready` |
+| 1D-2 | CI: a `db` job with a Postgres service container (the image and digest of compose, 13 section 4), `OP_TEST_DATABASE_URL` set, running `pytest -m db`, gated by the existing `changes` path filter (code paths only, so docs-only PRs skip it); both existing `pytest` commands of `ci.yml` (and the shard command of PR #477) change to `-m 'not live and not families and not db'` (review fix R-4) | `act`-free check: `tests/test_ci_db_job.py` parses the workflow and asserts the service image equals the compose image and the job runs `-m db` | the existing workflow tests |
+| 1D-3 | marker policy: a test under `tests/db/` or using the `pg` fixture without the `db` marker fails collection; the default selection (`pytest --collect-only` with the `addopts` expression) contains no `db` test (R-4) | `tests/test_db_marker_policy.py` (a planted unmarked test) | the real tree passes |
+| 1D-4 | `CONTRIBUTING.md`: the test tiers (Docker-free, `db`, live), the two offline commands changed to `-m 'not live and not families and not db'` (R-4), how to run `-m db` locally (Docker needed, no GPU; `make test-db`), the one-head Alembic rule, the lane rules for generated `contracts/` | `scripts/docs/check_docs_vs_code.py --only CONTRIBUTING.md` | - |
+| 1D-5 | worker and beat start: `worker_init` and `beat_init` call 1A's `check_control_plane()` and, unlike the API, exit when the database is unreachable or at another head (moved from 1B-3, review R-18) | `tests/tasks/test_worker_init_schema_check.py`: a stale head exits the worker | a current head starts |
+| 1D-6 | `tests/config/test_db_connection_budget.py` ([02b](02b_jobs_locking_events.md) section 8; moved from 1C-7, R-18): computes the connection table from the compose file, the settings and the scale factors (`deploy.replicas` of each service, `${OP_API_REPLICAS:-1}` for `api`; review R-6, re-check RC-4), counts the API poll engine (one connection per API process), and fails when the sum exceeds `OP_PG_MAX_CONNECTIONS - 13` or when `API_WORKERS * OP_API_REPLICAS` exceeds `OP_DB_API_CONNECTIONS_TOTAL` (the per-process floor of 1 would break the total) | red with `OP_API_REPLICAS=4` whose sum exceeds the limit | the default compose at 1 replica fits |
 
-### W1-1 Spike S1 (1 h, throwaway, not committed)
+## Stage 1 exit criteria
 
-- **Docs:** [C1] Redis transport, [C3] workers (shutdown sections), [C2] `acks_late`.
-- **Setup:** a scratch compose under the lane's own directory with the pinned `redis:8.2.x-alpine`
-  digest (`requirepass`, `appendonly yes`) and one worker built from the api image plus
-  `celery[redis]==5.6.*` and `billiard>=4.3.1`; `docker compose -p op-b2-s1`.
-- **Prove, and record versions and outputs in the PR:**
-  1. the worker connects with the password read from a mounted file (not argv, not env);
-  2. an `acks_late` task killed with SIGKILL of the **whole** container stays unacked and is
-     redelivered only after a lowered test `visibility_timeout` (for example 30 s);
-  3. a cold shutdown (`REMAP_SIGTERM=SIGQUIT`, `docker stop`, soft shutdown 10 s) during an
-     `acks_late` task requeues the message (billiard >= 4.3.1) rather than acking it; also run it
-     with billiard 4.3.0 to see the old ack (proves the pin matters);
-  4. a plain SIGTERM without `REMAP_SIGTERM` is a warm shutdown that ignores the soft timeout;
-  5. `revoke(task_id)` of a queued task skips it;
-  6. secret ownership: the Redis start script (root) and a uid-1000 client can both read the
-     password file the installer would write; record the working ownership/mode rule.
-- **Done when:** all six recorded. A failure of 2, 3 or 6 stops W1 and goes to the coordinator.
-- **Teardown:** `docker compose -p op-b2-s1 down -v`. Never touch another project.
+- every lane's tests green on the merged integration branch; `-m db` green; `make contracts-check`
+  green (1D may change the health model: `make contracts` in that commit);
+- `docker compose -p op-b2-s1check config` renders; a short CPU bring-up on the merged branch
+  (coordinator, `-p op-b2-s1check`, 15 min cap): `db-migrate` exits 0, the API starts and reports
+  `database: ok`, `queue: ok`; `op.infra.noop` runs; `down -v`;
+- S0 and S1 results and the OPS-2 verdict recorded in the stage-1 merge notes (private ledger, and
+  the facts for lane 6D).
 
-### W1-2 Dependencies, pins, licences
-
-- **Files:** `requirements.txt`, `requirements-test.txt`, the monitoring image or a Flower image
-  pin, `ATTRIBUTION.md`.
-- **Steps:** add `celery[redis]==<5.6.x exact>`, `billiard==<4.3.1 or newer, exact>`,
-  `redis==<exact>` (match OpenTranscribe's pins where they still resolve; record the S1 versions).
-  `requirements-test.txt` gets the same pins so the offline suite imports Celery. Do not add
-  `requirements.txt` to the venv instructions (CLAUDE.md). ATTRIBUTION rows: Celery, kombu,
-  billiard (BSD-3), redis-py (MIT), Flower (BSD), Redis 8 (AGPLv3 option) [V1].
-- **Red test:** `tests/test_celery_pins.py` asserts the exact pins in both requirements files and
-  `billiard>=4.3.1`; red before the edit. **Control:** the existing Ultralytics pin test passes.
-- **Done when:** both green; `pip check` in the api image is part of the sweep.
-
-### W1-3 `src/config/queue.py` (pure data and settings)
-
-- **Why here:** the layering rule forbids the client importing `src.tasks` (K-8). Config may import
-  only `config` and `utils`.
-- **Contents:** `TaskQueues` constants (`JOBS='jobs'`, `PERIODIC='periodic'`,
-  `OPEN_VOCAB='open_vocab'`, `AUTOLABEL='autolabel'`, `ASSIST_LOOP='assist_loop'`, and `ALL`);
-  `TASK_ROUTES: dict[str, str]` (task name -> queue), filled in W1 for the W1 tasks only
-  (`op.infra.noop`); `QUEUE_PROFILE` (queue -> compose profile or `None` for core);
-  `MAX_QUEUE_WAIT_S` (overview section 6); `AUTO_RESUME` (D-25); `QueueSettings` reading
-  `OP_QUEUE_URL`, `OP_QUEUE_PASSWORD_FILE` (validated at startup; a malformed URL or a missing or
-  empty file fails closed with a named error).
-- **Red test:** `tests/config/test_queue_settings.py`: a missing password file raises; a URL with
-  userinfo is refused (the password must come from the file); `ALL` equals the set of
-  `TASK_ROUTES` values plus declared-but-unrouted queues. **Control:** a valid file and URL load.
-- **Done when:** green; `mypy` clean on the file.
-
-### W1-4 `src/tasks/app.py` (the Celery app)
-
-- **Docs:** [C10] configuration reference for every key; [C5] routing; [C6] security; [C7]
-  prefetch; [C8]/[C3] shutdown; [C11] signals.
-- **Steps:** build `celery_app = Celery('openprocessor', broker=<from QueueSettings>)` with the
-  overview section 7 table exactly; `task_queues` from `TaskQueues.ALL`; `task_routes` from
-  `TASK_ROUTES`; the socket keepalive dict built only from the `socket` attributes the platform
-  has (copy OpenTranscribe's rationale comment, attributed); a `worker_ready` hook that refuses to
-  start if a registered task has no route (mirror OpenTranscribe `_validate_task_routes`);
-  `include=` lists the task modules (W1: `src.tasks.infra` with `op.infra.noop`).
-- **Rules:** nothing at module scope opens a socket, imports torch, cuML, Triton or the PE
-  encoder (Q-E10); `worker_process_init` does no I/O (OpenTranscribe #631).
-- **Red tests:** `tests/tasks/test_celery_config.py` asserts `visibility_timeout >
-  task_time_limit > task_soft_time_limit`, `worker_prefetch_multiplier == 1`, `accept_content ==
-  ['json']`, `task_create_missing_queues is False`, `task_acks_late`, `task_reject_on_worker_lost`,
-  `task_ignore_result`, `worker_soft_shutdown_timeout == 30`,
-  `worker_enable_soft_shutdown_on_idle is True`,
-  `worker_cancel_long_running_tasks_on_connection_loss is False`,
-  `broker_connection_max_retries is None`, the same `visibility_timeout` in both places.
-  `tests/tasks/test_no_cuda_import.py`: importing `src.tasks.app` in a fresh interpreter leaves
-  `torch`, `cuml`, `tritonclient` out of `sys.modules`. **Control:** `src.tasks.app` imports.
-- **Done when:** green.
-
-### W1-5 `src/clients/task_queue.py`
-
-- **API:** `enqueue(task_name, *, project, job_id) -> None` (queue from `TASK_ROUTES` only; no
-  queue argument; `task_id=job_id`; `send_task` by name, so services never import task modules);
-  `revoke(job_id) -> None` (no `terminate`); `ping() -> bool` (bounded timeout). Raises
-  `QueueUnavailable` on broker errors.
-- **Producer app:** a minimal `Celery` instance built from `src/config/queue.py` (same broker
-  options), not an import of `src.tasks.app` (K-8).
-- **Red test:** `tests/clients/test_task_queue.py` with a fake producer: `enqueue` sends exactly one
-  message with `task_id == job_id` and the routed queue; an unknown task name raises before any
-  send; a broker error raises `QueueUnavailable`. **Control:** `ping` on a reachable fake.
-- **Done when:** green.
-
-### W1-6 Task wrapper `src/tasks/job_task.py` and the lease extension
-
-- **Contract:** overview section 9.1-9.3 and 9.6. Implement exactly those steps.
-- **Files:** `src/tasks/job_task.py` (`JobTask` base and a `register_job(kind, handler, *,
-  resumable, soft_time_limit=None, time_limit=None)` helper used by W2), `src/clients/job_lease.py`
-  and `src/domain/job_lease.py` (B1's signatures per B1 1A (merged; see ARCHITECTURE.md):
-  `acquire(client, kind, scope, job_id, owner, ttl_s=LEASE_TTL_S)` already takes `ttl_s`; add a
-  keyword `state='running'` that the start path passes as `'queued'`;
-  `transfer(client, lease, new_owner)` gains keywords `state` and `ttl_s`),
-  `src/services/curation/lease_heartbeat.py` (`LeaseHeartbeat`, with its `FENCE_MARGIN_S`
-  self-fence) **unchanged**.
-- **Steps:**
-  1. bind the project (fail closed), build clients inside `asyncio.run`;
-  2. terminal or not-resumable `interrupted` -> ack, no-op;
-  3. `transfer` to `running`; a live lease held by another owner -> log `lease_busy`, ack;
-     `attempt >= 3` -> `failed`;
-  4. write `running`, `attempt += 1`, delete the queued marker (W1-7);
-  5. start the B1 heartbeat thread; `asyncio.run(handler)`;
-  6. `fence` before the terminal write; map outcomes (overview 9.3 step 8);
-  7. on `SystemExit` (soft-shutdown cancel): `fence`, write `interrupted` with
-     `auto_resume = kind in AUTO_RESUME`, release, re-raise;
-  8. `finally`: stop the heartbeat thread.
-- **Per-kind time limits:** `register_job` passes `soft_time_limit`/`time_limit` to the task
-  options; W2 sets 24 h / 24 h 15 m for the D-20a kinds.
-- **Traps:** the heartbeat thread must not share the task loop's client (B1 rule); a prefork child
-  must not inherit a running thread (start it in the task, never in `worker_process_init`); never
-  read the lease with `search` (realtime `get` only).
-- **Red tests:** `tests/tasks/test_job_task_wrapper.py` (unit, mocks, as [C9] advises; never
-  `task_always_eager`):
-  - claims and runs once; a live lease -> no-op ack; a terminal record -> no-op;
-  - `attempt` reaching 3 -> `failed`; an exception -> `failed` with the message; cancel flag ->
-    `cancelled`; `SoftTimeLimitExceeded` -> `failed` (`time_limit`);
-  - the heartbeat thread keeps renewing while the handler blocks the loop past `LEASE_TTL_S`
-    (monkeypatched to 2 s);
-  - a redelivery while the first delivery holds a live lease is a no-op (Q-E1, with a lowered
-    visibility timeout simulated by two deliveries);
-  - `SystemExit` during the handler writes `interrupted` with the right `auto_resume` and
-    re-raises;
-  - a `Lost` fence writes nothing.
-  `tests/test_job_lease_queued_state.py`: `acquire(state='queued', ttl_s=X)` then
-  `transfer(state='running', ttl_s=120)` gives one doc with the new owner and TTL; a second
-  `acquire` while queued is `Busy`; an expired queued lease is acquirable.
-  **Control:** B1's sequential acquire, release, acquire still gives generations 1 and 2.
-- **Done when:** green; red output recorded in the PR.
-
-### W1-7 Queued marker helpers
-
-- **Doc:** Redis `SET` with `EX` [V5]; OpenTranscribe `task_liveness.py` (queued marker, fail-safe
-  reads).
-- **Files:** `src/clients/task_queue.py` (`mark_queued(job_id, ttl_s)`, `clear_queued(job_id)`,
-  `queued_state(job_id) -> Present | Absent | Unknown`).
-- **Rule:** Redis unreachable -> `Unknown`; callers never act on `Unknown`.
-- **Red test:** `tests/clients/test_queued_marker.py`: set, read `Present`, TTL honoured, clear,
-  `Absent`; a connection error gives `Unknown`. **Control:** two job ids are independent.
-- **Done when:** green.
-
-### W1-8 Compose services, dev overlay, live harness
-
-- **Docs:** [C3] (shutdown, `--max-tasks-per-child`), [C4] (one beat, `-s` file), [C1] (eviction),
-  [V3], [V4], [DH], [DC]; OpenTranscribe `docker-compose.yml` worker, beat and redis blocks.
-- **`docker-compose.yml` (deploy-safe: no `build:`, no source mounts):**
-  - `redis`: overview section 8; start through a small wrapper that writes `requirepass` into a
-    tmpfs config from the secret file, then execs the image entrypoint; no `ports:`;
-    `restart: unless-stopped` (match the file's convention); volume `openprocessor-queue`.
-  - `jobs-worker`: api image; `celery -A src.tasks.app worker -Q jobs
-    --concurrency=${OP_JOBS_CONCURRENCY:-4} --max-tasks-per-child=50 --hostname jobs@%h -E`;
-    the same volumes and env as `api` (copy the block, minus ports), plus
-    `OP_API_LOOPBACK_URL=http://api:8000`, `REMAP_SIGTERM=SIGQUIT`; the `API_GPU_ID` reservation;
-    `stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s`; its own `PROMETHEUS_MULTIPROC_DIR` tmpfs
-    (never the API's, Q-E19).
-  - `periodic-worker`: api image; `-Q periodic -c 2 --max-tasks-per-child=200 --hostname
-    periodic@%h -E`; no GPU; `stop_grace_period: 30s`.
-  - `open-vocab-worker`: api image; `-Q open_vocab -c 1 --max-tasks-per-child=50 --hostname
-    open-vocab@%h -E`.
-  - `jobs-beat`: api image; `celery -A src.tasks.app beat -s /var/lib/openprocessor/celerybeat-schedule`;
-    a fixed `container_name`; no `deploy.replicas`.
-  - `flower`: `monitoring` profile; basic auth from the secret; port per D-19.
-  - `depends_on: redis: condition: service_healthy` for `api`, every worker and `jobs-beat`.
-  - **No job is routed in W1** except `op.infra.noop`; the services start and idle.
-- **`docker-compose.dev.yml`:** source mounts for the new services; a comment that Celery does not
-  hot-reload (`docker compose -p <name> restart jobs-worker` after task edits, Q-E21).
-- **`docker/test/compose.yml` (live harness):** add `redis`, `jobs-worker-a`, `jobs-worker-b`
-  (two containers: `container_name` blocks `--scale`), `periodic-worker`, `open-vocab-worker`,
-  `jobs-beat`; the harness keeps its own project name.
-- **Red tests (`tests/compose/`, offline render):**
-  - `test_queue_services.py`: `redis` has no `ports`, has `noeviction` and `appendonly`, reads a
-    password file; every worker has `REMAP_SIGTERM=SIGQUIT` and a `stop_grace_period` at least 30 s
-    above the soft timeout; no worker shares the API's `PROMETHEUS_MULTIPROC_DIR`;
-  - `test_beat_single_instance.py`: `jobs-beat` has a `container_name` and no `deploy.replicas`
-    (Q-E5).
-  **Control:** `tests/compose/test_overlay_render.py` still passes.
-- **Done when:** green; `docker compose config` renders for the default, dev and arbiter overlays
-  (offline render only in the lane).
-
-### W1-9 Pool and beat healthchecks
-
-- **Source:** OpenTranscribe `backend/scripts/celery_pool_healthcheck.py` (dead pool; respawn
-  storm = pid set replaced while `stats["total"]` is frozen; one prior sample persisted; pool type
-  read from `pool.implementation`). Port it to `scripts/healthcheck/celery_pool_healthcheck.py`
-  with an attribution header (AGPL to AGPL; public sibling project).
-- **Compose:** each worker's healthcheck runs it against `<role>@$$HOSTNAME`; `jobs-beat`'s
-  healthcheck takes the newest mtime across `celerybeat-schedule*` under 300 s and fails on an
-  empty glob (K-12).
-- **Note in the compose comment:** nothing acts on `unhealthy`; `restart:` fires only when the
-  main process exits (OpenTranscribe lesson).
-- **Red tests:** `tests/healthcheck/test_celery_pool_healthcheck.py` (fake `inspect stats`
-  replies): empty `processes` -> unhealthy; pid set replaced with a frozen counter on two probes ->
-  unhealthy; churn with an advancing counter -> healthy; a threads pool -> healthy on a reply.
-  `tests/compose/test_beat_healthcheck.py`: the command globs `celerybeat-schedule*` and handles an
-  empty glob. **Control:** a steady pool is healthy.
-- **Done when:** green.
-
-### W1-10 Installer, CLI, secret
-
-- **Files:** `setup-openprocessor.sh`, `scripts/setup.sh`, `openprocessor`, `scripts/lib/cli_*.sh`,
-  `scripts/lib/bind_dirs.sh`, `env.template` (08 owns the table; this task adds the keys).
-- **Steps:** create `secrets/queue/redis_password` once (umask 077, random 32 bytes, the S1
-  ownership rule) on fresh install **and** on `upgrade` and `repair` when missing (M11); the same
-  for the Flower auth file if D-19 publishes Flower; `openprocessor status/health` list `redis`,
-  `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat`; `openprocessor uninstall`
-  removes the queue volume with the others (respecting the existing secrets confirmation);
-  `config show` redacts the password file contents (never print it).
-- **Red tests:** `tests/installer/test_queue_secret.py`: upgrade on a dir without the secret creates
-  it with mode 600; a rerun keeps the existing value; `repair` recreates a deleted one.
-  `tests/installer/test_cli_status_lists_queue_services.py`. **Control:** the existing installer
-  rerun test passes.
-- **Done when:** green.
-
-### W1-11 `/health` queue status
-
-- **Files:** `src/routers/health.py` (and the curation health/status routes that list services, if
-  they list them: `rg -n "resource_links|services" src/routers/curation/health.py`).
-- **Rule:** `queue: ok | down`, degraded but not fatal for inference routes; the probe is
-  `task_queue.ping()` with a short timeout. B4-4A owns the existing two-probe fan-out in
-  `health.py`; W1 adds one probe without adding a new `gather`.
-- **Red test:** `tests/test_health_queue.py`: a down fake broker gives `queue: down` and HTTP 200
-  with a degraded status. **Control:** an up broker gives `ok`.
-- **Done when:** green; `make contracts` if the health model changed.
-
-### W1-12 Layering ratchet and guard tests
-
-- **Files:** `scripts/codegen/check_layering.py` (add contracts: nothing under `src/` except
-  `src/tasks/` itself, and nothing under `scripts/`, may import `src.tasks`; `src/tasks` must not
-  import `src.routers`, `fastapi` or `starlette`); `tests/test_no_revoke_terminate.py`
-  (AST scan of `src/` and `scripts/`: no `terminate=` keyword in any `revoke` call, Q-E7).
-- **Red test:** a temp module under `src/services/` importing `src.tasks` makes the layering check
-  fail; a `revoke(..., terminate=True)` fixture fails the guard. **Control:** the real tree passes.
-- **Done when:** green.
-
-### W1-13 Phase 2 tests
-
-- `tests/tasks/test_task_routes_complete.py`: every registered task has a `TASK_ROUTES` entry; no
-  task decorator passes `queue=` (mirrors OpenTranscribe `tests/unit/test_task_routes_complete.py`).
-- `tests/test_queue_consumers_from_compose.py`: parse `docker-compose.yml`; for every queue a route
-  targets, a `-Q` consumer exists in the core services or in the profile `QUEUE_PROFILE` names
-  (mirrors OpenTranscribe `tests/unit/test_lite_mode_queue_consumers.py`, Q-E18). Red: a route to
-  a queue with no consumer fails.
-- `tests/live/test_queue_infra.py` (live harness only, runs in the sweep): enqueue
-  `op.infra.noop` and see it run on `jobs-worker-a` or `-b`.
-
-### W1-14 Docs
-
-- `docs/ARCHITECTURE.md` (services table, a queues table, "Workers, jobs and events"), `CLAUDE.md`
-  (services table rows, the Celery conventions block), `INSTALLATION.md` (Redis, secret ownership,
-  single host / local volumes only, Q-E15), `SECURITY.md` (broker preconditions: internal network,
-  required password, JSON only, whoever reaches the broker can enqueue work [C6]), `docs-site`
-  (same pages), `CHANGELOG.md` `[Unreleased]` "Added" lines.
-- Run `.venv/bin/python scripts/docs/check_docs_vs_code.py --only <the touched docs>` in the lane.
-
----
-
-## Gate (lane level)
-
-Only the targeted red/green tests above and static checks on touched files:
-`.venv/bin/python -m pytest <the W1 test files> -q --no-cov` and
-`.venv/bin/pre-commit run --files <touched files>`. The full suite, `--all-files` and the live
-harness run once in the B2 sweep (`03_b2_overview.md` section 14); that single live run covers B1
-and B2 together. What to keep after merge and the deletion of this file: `03_b2_overview.md`
-section 17.1.
-
-## Upgrade impact, rollback, risks
-
-- Upgrade: W1 adds the services and the secret; no job moves, so nothing is interrupted by W1 alone.
-- Rollback: revert the W1 merge commit on `int/b2-celery` (W2 and W3 depend on it, so they revert
-  first).
-- Risks: secret ownership (S1 item 6); Python 3.13 `shelve` WAL (K-12); a platform without
-  `TCP_USER_TIMEOUT` (built only from present attributes).
-
-## Ready-to-paste lane brief (W1)
+## Lane brief (common block; add the lane's section)
 
 ```
-You are the B2 wave-1 lane agent (Sonnet). Repo worktree: <repo>-wt-b2-queue-infra, branch b2/queue-infra,
-cut from int/b2-celery. Read, in order: docs/design/program/03_b2_overview.md (sections 2, 6-9,
-18), docs/design/program/03a_b2_w1_queue_infra.md (this task list), CLAUDE.md, CONTRIBUTING.md,
-docs/design/engineering_standards.md. Execute W1-0 to W1-14 in order.
-
-Rules:
-- Read the cited Celery, Redis and Docker docs before each task; cite them in commit bodies.
-- One commit per task (conventional commits); run each task's red test on the unchanged base
-  first and paste the failure in the commit body or PR notes; then the fix and the control.
-- Lane checks only: the task's test files with `.venv/bin/python -m pytest <files> -q --no-cov`
-  and `.venv/bin/pre-commit run --files <touched files>`. No full suite, no --all-files.
-- Never --no-verify, never push, never merge, never check out another branch.
-- Docker: only `docker compose -p op-b2-s1` for the spike, CPU only, no GPU; `down -v` after.
-  Never touch another compose project, container, volume or network.
-- Waiting: healthchecks or the Monitor tool only. Do NOT use `pgrep -f`, `pkill -f`, or
-  sleep/until loops.
-- Do not read .env or any secret file contents. Do not edit B1's lease_heartbeat.py.
-- Stop and report if S1 items 2, 3 or 6 fail, or if a B1 precondition in overview section 2 is
-  missing.
-Deadline: <set by the coordinator at kick-off>. Final report: commits, red outputs, S1 versions
-and results, the W1-0 OPS-2 verdict, anything you could not do.
+You are a B2 stage-1 lane agent (Sonnet). Worktree <repo>-wt-b2-<lane>, branch b2/<lane>, cut from
+int/b2-control-plane after lane 1-0. Read: docs/design/program/03_b2_overview.md (sections 3-4),
+docs/design/program/03a_b2_w1_queue_infra.md (your lane), the 02/02a/02b/02c sections it cites,
+CLAUDE.md, CONTRIBUTING.md, docs/design/engineering_standards.md. Edit only the files your lane owns.
+Read each cited doc before the task and cite it in the commit body. One commit per task; run the red
+test on the unchanged base first and paste the failure in the commit body; then the fix and the
+control. Lane checks only: `.venv/bin/python -m pytest <your test files> -q --no-cov` (add `-m db`
+for database tests; testcontainers needs Docker, no GPU) and `.venv/bin/pre-commit run --files
+<touched files>`. No full suite, no --all-files, no live harness. Never --no-verify, never push,
+merge, check out another branch or use git stash. Docker only for your spike, with your -p name,
+CPU only, `down -v` after; never touch another compose project. Do NOT use pgrep -f, pkill -f or
+sleep/until loops; wait with healthchecks or the Monitor tool. Never read .env or secret file
+contents. Stop and report if a precondition is missing or a spike item fails.
+GPU: none. Deadline: <set by the coordinator>.
+Final report: commits, red outputs, spike results, anything not done.
 ```
