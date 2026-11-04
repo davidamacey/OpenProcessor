@@ -21,7 +21,7 @@ Get everything on `fix/411-r2-round` onto `main` in one push, behind one CPU gat
 run: [00_index.md](00_index.md) section 8.1), with a merge commit. **No VERSION bump, no tag, no
 release images, no GitHub release** (owner decisions 2 and 3, D-37: the tag comes only after
 every plan is implemented and tested). B0 ends when `main` holds the branch and the worktree is
-cleaned up. The next step is B1 ([02_b1_overview.md](02_b1_overview.md)).
+cleaned up. The next step is B1 (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md))).
 
 Done on the branch (not repeated in the task list): `d1c6bab0` (exact pin `ultralytics==8.4.197`
 in `requirements.txt`, `requirements-test.txt` and `pyproject.toml`, plus a test in
@@ -43,7 +43,7 @@ What moved out of B0 compared with section 5 of the former master plan (rev 4, i
 | R3 live acceptance and its extra checks | merged into R-final, [06_release_acceptance.md](06_release_acceptance.md) |
 | Tag decision point | one tag decision after R-final, which runs after B5 (D-16, D-37), [06_release_acceptance.md](06_release_acceptance.md) |
 | B0 rows of the issue close table | [09_github_actions.md](09_github_actions.md) |
-| Dependabot PRs | not in B0; the separate `b1/deps` lane in B1 ([02_b1_overview.md](02_b1_overview.md) "Lane b1/deps"; per-PR data in [09_github_actions.md](09_github_actions.md) section 8) |
+| Dependabot PRs | not in B0; the separate `b1/deps` lane in B1 (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) "Lane b1/deps"; per-PR data in [09_github_actions.md](09_github_actions.md) section 8) |
 
 ## 2. Preconditions
 
@@ -174,7 +174,7 @@ Run in this order and keep every log under `artifacts_local/b0/gate/`:
      `tests/projects/test_clone_activations.py` in one process. xdist usually hides it. If it
      shows, it is not a B0 regression: record it and confirm it also fails on `main` with
      `.venv/bin/python -m pytest -p no:xdist tests/projects/test_clone_settings.py tests/projects/test_clone_activations.py tests/curation/cross_project_leak/test_keymap_and_ingest_policy_isolation.py -q --no-cov`.
-     The fix is B1-1D ([02d_b1_api_frontend_tests.md](02d_b1_api_frontend_tests.md)). Any other
+     The fix is B1-1D (B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md))). Any other
      failure is root-caused and fixed on this branch before the push.
 3. `make contracts-check`. The B0 commits add no wire change; the `reason_message` contracts are
    already committed.
@@ -360,7 +360,7 @@ only writer in it. Do not push, merge or tag; report back.
   families is resumable). The planned "dead holder does not block `selection.start_job`" and
   "stale dataset import still resumes" tests were not added; the resume path is covered by the
   existing `tests/curation/dataset_import/test_stale_and_undo_gate.py`. B1-1A replaces this path
-  with leases and its tests cover the dead-holder start ([02a_b1_job_leases.md](02a_b1_job_leases.md)),
+  with leases and its tests cover the dead-holder start (B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md))),
   so no B0 test is added.
 - The former master plan (5.2 step 7) ran the OCR comparison on the live harness; the harness
   has no Triton (B0-3 above uses a real stack, in GPU window 1).

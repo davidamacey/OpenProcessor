@@ -519,7 +519,7 @@ time; it never overlaps B3's GPU window (`11_risks_cleanup_host.md`). Budget rul
 
 **T2 live harness: the one run that covers B1 and B2 together, `-p op-b2-live`, budget 3 h.**
 Because B1 had only a 30-minute lease/registry smoke check, this run first executes the full
-`tests/live` set plus the B1 live scenarios of `02_b1_overview.md` section 7.1 (lease race,
+`tests/live` set plus the B1 live scenarios of B1 (merged; see CHANGELOG.md) section 7.1 (lease race,
 registry race and HTTP sequence, OS-6 hit count, blocked-loop check), then the B2 steps below; it
 is the only live run between the B1 smoke check and B4's 1-vs-32 run. The harness needs no GPU
 (the arbiter step uses the overlay, not a model). `docker/test/compose.yml` gains

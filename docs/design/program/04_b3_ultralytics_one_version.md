@@ -4,7 +4,7 @@
 |---|---|
 | Status | plan, not started |
 | Release | part of the single **v0.7.0** release (B0-B5 plus R-final; D-37 approved in [00_index.md](00_index.md) section 6). No tag at the end of B3. R-final (`06_release_acceptance.md`) validates it last, after B5 |
-| Depends on | B2 merged into main (decision D-13 order: B0, B1, B2, B3, B4, B5, R-final); B1-1E done (`02e_b1_ultralytics_live_bugs.md`); B0 exact pin `ultralytics==8.4.197` in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (commit `d1c6bab0`) and `tests/test_requirements_contract.py` (`01_b0_close_out.md`); GPU window 1 ([00_index.md](00_index.md) section 8.1; `11_risks_cleanup_host.md`) |
+| Depends on | B2 merged into main (decision D-13 order: B0, B1, B2, B3, B4, B5, R-final); B1-1E done (B1 1E (merged; see CHANGELOG.md)); B0 exact pin `ultralytics==8.4.197` in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (commit `d1c6bab0`) and `tests/test_requirements_contract.py` (`01_b0_close_out.md`); GPU window 1 ([00_index.md](00_index.md) section 8.1; `11_risks_cleanup_host.md`) |
 | Blocks | B4 (`05_b4_stateless_api.md`) retakes its 32-worker baseline on the B3 engine; B5 (`07_b5_overview.md`) measures the stack as it stands after B4 |
 | Decisions applied | D-2 (B0 pin 8.4.197 is the starting point), D-10 (B1-1E minimal; trainer `nms`, export module, full matrix are here), D-11 option b (original YOLOv5 = bring-your-own ONNX for probe and secondary only), D-12 (`nms` by capability), D-13 (order), owner decisions of 2026-11-03 items 2, 5, 6, 7 |
 | Open decisions | **D-27** (U-J1 staging and U-J5..J8), **D-28** (pin choice rule and freeze date); status in [00_index.md](00_index.md) section 6, needed at B3 kick-off; section 3 holds the detail |
@@ -511,7 +511,7 @@ v0.7.0 release.
   4.3, "Not scheduled"): backlog, low; the decode path already fails closed.
 - #84 wheel example: deferred until training is stable after B3; v0.8.0 (platform breadth).
 - B1-1E work (#447 `nms=False`, head check, routing, class by name, YOLOv5 probe input): done in
-  `02e_b1_ultralytics_live_bugs.md`; B3 moves it, does not redo it.
+  B1 1E (merged; see CHANGELOG.md); B3 moves it, does not redo it.
 - Refuted or cut, do not redo (master Appendix B): an EfficientNMS CI check (GPU-18 is docs only);
   a region unit-guess removal before a box-format parameter.
 - After B3: if Stage B shipped, close any request for EfficientNMS-specific work as obsolete

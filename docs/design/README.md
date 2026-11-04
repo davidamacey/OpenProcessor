@@ -20,12 +20,6 @@ the index; execute one file per batch, lane or procedure.
 |---|---|
 | [program/00_index.md](program/00_index.md) | Read first: mission, waves, decision register, branch and lane model, test and GPU budget, legends, superseded plans |
 | [program/01_b0_close_out.md](program/01_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
-| [program/02_b1_overview.md](program/02_b1_overview.md) | B1 correctness: overview of the five tracks plus the deps lane, merge order and sweep |
-| [program/02a_b1_job_leases.md](program/02a_b1_job_leases.md) | B1 track 1A: OpenSearch job leases replace every start lock |
-| [program/02b_b1_class_registry.md](program/02b_b1_class_registry.md) | B1 track 1B: class registry document with OCC and the upgrade migration |
-| [program/02c_b1_inference_search.md](program/02c_b1_inference_search.md) | B1 track 1C: inference and search hygiene |
-| [program/02d_b1_api_frontend_tests.md](program/02d_b1_api_frontend_tests.md) | B1 track 1D: API correctness, frontend, test integrity, two security items |
-| [program/02e_b1_ultralytics_live_bugs.md](program/02e_b1_ultralytics_live_bugs.md) | B1 track 1E: minimal Ultralytics live-bug fixes on the pinned version |
 | [program/03_b2_overview.md](program/03_b2_overview.md) | B2: jobs off the API on Celery, three stages |
 | [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | B2 stage 1: queue infrastructure |
 | [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | B2 stage 2: move the request-started job families |

@@ -119,17 +119,17 @@ rollback 138/138, lock rule held). `scripts/bench/vlm_rate.py` does not exist.
 | Q9: capture `usage` tokens for remote-endpoint budgets (15) | defer v0.9.0, N16 (needed before any remote primary-VLM loop run; `rg usage src/services/labeling` finds only the endpoint probe) |
 | S11: acceptance numbers into `docs/PERFORMANCE.md` (13, S11 row) | ADD `06` RP-8 (copy the #286 closing evidence; docs only) |
 | Cost ratio 1 crop per 20 items unproven (#286: about 1 per item at 2,500 images) | parked research with Z5 (#398, v0.9.0) |
-| D4 trigger-file worker, `start.lock`, claim by `unlink` (3.1, 8) | conflict C1, resolved by `02a` 1A-6 and `03c` 2E-2; ADD a doc sync in 2E-2 (section 3.3) |
+| D4 trigger-file worker, `start.lock`, claim by `unlink` (3.1, 8) | conflict C1, resolved by B1 1A 1A-6 and `03c` 2E-2; ADD a doc sync in 2E-2 (section 3.3) |
 | `threading.Lock` in `assist_loop/budget.py` and `store.py` | no conflict: it guards in-memory counters of one loop inside its single owner; the lease (1A) makes the owner unique |
 
 ### 2.2 `cluster_search_makemodel_plan.md` (#341-#346, #353, #354, #356, #372, #379, #402)
 
 | Item (section) | Disposition |
 |---|---|
-| W4 bug "object search runs Triton on the event loop and queries crops against the whole-image index" (10, never filed) | ADD `02c` 1C-15 (section 3.1). Verified: `SearchMixin.search_by_object` in `src/services/visual_search/search.py` calls the sync `infer_yolo_clip_cpu` inside `async def`, and sends a box vector to `visual_search_global` for every class that is not a vehicle or a person |
+| W4 bug "object search runs Triton on the event loop and queries crops against the whole-image index" (10, never filed) | ADD B1 1C 1C-15 (section 3.1). Verified: `SearchMixin.search_by_object` in `src/services/visual_search/search.py` calls the sync `infer_yolo_clip_cpu` inside `async def`, and sends a box vector to `visual_search_global` for every class that is not a vehicle or a person |
 | W3 rest: incremental face assignment with abstention, merge and split suggestions (3.2, W3) | defer v0.9.0 (faces feature); tracked under #346 until its wave starts |
 | W5, W7, W9, W10 research (fine-grained measurement, fine groups, adapter, set P pilot) | parked research (#346) |
-| W6 taxonomy as data and a classification-crop export | defer v0.9.0; must use the B1 registry document by name (`02b`) |
+| W6 taxonomy as data and a classification-crop export | defer v0.9.0; must use the B1 registry document by name (B1 1B) |
 | W8 visual judge | #406 (v0.9.0) |
 | W-UI review screens | defer v0.9.0, with each feature |
 | W12 identity text (plates) | #401 (parked; needs the privacy design) |
@@ -150,7 +150,7 @@ Evidence: `src/routers/curation/label_ops.py`, `src/services/curation/label_ops/
 
 | Item (section) | Disposition |
 |---|---|
-| `write.lock` and `undo.lock` through `exclusive_start_lock` (3, 6.4, 9) | conflict C2, resolved by `02a` 1A-8 (leases `label_op`, `label_undo`); ADD a doc sync in 1A-8 (section 3.1) |
+| `write.lock` and `undo.lock` through `exclusive_start_lock` (3, 6.4, 9) | conflict C2, resolved by B1 1A 1A-8 (leases `label_op`, `label_undo`); ADD a doc sync in 1A-8 (section 3.1) |
 | Region undo bounded by `Semaphore(32)` around a `gather` (6.4; `src/routers/curation/edit_undo.py`) | covered by `05` 4A-2 (bulk merger, one bulk) |
 | Header "design, not implemented" | stale; fix with the README update (section 5) |
 
@@ -165,7 +165,7 @@ Reference. It will be wrong after B1 and B2 unless updated:
 
 | Item (section) | Disposition |
 |---|---|
-| 2.1 says the class registry lives on disk; 12 describes class identity over the file | ADD doc sync to `02b` 1B-14 (section 3.1) |
+| 2.1 says the class registry lives on disk; 12 describes class identity over the file | ADD doc sync to B1 1B 1B-14 (section 3.1) |
 | 6 "Known gaps" lists the workers and says "experimental for v0.4.0" | ADD doc sync to `03_b2_overview.md` section 17 (section 3.3) |
 
 ### 2.7 `dataset_import_more_formats.md` (#370 part 2)
@@ -244,7 +244,7 @@ Reference. `05` 4A adds the request-scoped `TaskGroup` exemption (Q-J7). It rece
 
 | Item | Disposition |
 |---|---|
-| Per-project trigger loop "with a lock, like the open-vocabulary sweeper", `dispatch.lock`, bulk-ingest start lock (overview, 9) | conflict C5, resolved by `02a` 1A-6 (bulk ingest leases) and `03c` 2D-1 (beat tick plus a per-project lease) |
+| Per-project trigger loop "with a lock, like the open-vocabulary sweeper", `dispatch.lock`, bulk-ingest start lock (overview, 9) | conflict C5, resolved by B1 1A 1A-6 (bulk ingest leases) and `03c` 2D-1 (beat tick plus a per-project lease) |
 | 8 gRPC decision rule | still needed (cited by `docs/PERFORMANCE.md` "Ingest transports"): move (section 6) |
 | `error_kind` vocabulary (cited by `src/services/curation/bulk_ingest/object_fetch.py`) | still needed: move to `docs-site/docs/guides/ingest-sources.mdx` (section 6) |
 
@@ -300,8 +300,8 @@ RF-63 add the procedure and the batch checks. Not covered by either:
 | Phase of the old plan | Disposition |
 |---|---|
 | D: two projects, nothing of one visible in the API, event stream, logs and metrics of the other | ADD `06` RF-72 |
-| E: YOLO and COCO dataset imports, re-import is a no-op | ADD `02b` 1B-12b (script) and `06` RF-70 (run) |
-| H: combine preview and combine; sources unchanged | ADD `02b` 1B-12b and `06` RF-71 |
+| E: YOLO and COCO dataset imports, re-import is a no-op | ADD B1 1B 1B-12b (script) and `06` RF-70 (run) |
+| H: combine preview and combine; sources unchanged | ADD B1 1B 1B-12b and `06` RF-71 |
 | I: reprocess skips locked items; import undo keeps human edits, a second undo dry run is zero; archive and delete guards; dashboards, log search and experiment tracking show live data | ADD `06` RF-73 (import undo is in 1B-12b) |
 | Notes: train mode frees the GPU before training and restarts the tiers | ADD `06` RF-74 |
 | Notes: the shipped default monitoring credential | ADD `06` RF-75 (record as a neutral security finding unless the installer prompts) |
@@ -335,7 +335,7 @@ section is the as-built record.
 
 | Item | Disposition |
 |---|---|
-| Assist runs as in-API asyncio tasks with a start lock and `reconcile_orphaned_jobs` | conflict C3, resolved by `02a` 1A-6 and `03b` 2A (`assist_run` family); ADD a doc sync in 2A (section 3.3) |
+| Assist runs as in-API asyncio tasks with a start lock and `reconcile_orphaned_jobs` | conflict C3, resolved by B1 1A 1A-6 and `03b` 2A (`assist_run` family); ADD a doc sync in 2A (section 3.3) |
 | Header "plan, not implemented" | stale; fix with the README update |
 
 ### 2.24 `ship_track_plan.md`
@@ -462,10 +462,10 @@ name must have no hit under `docs` after B0-1. Today nine program files cite tha
 "no hit outside `docs/design/program/`" or reword those citations to "the retired master plan
 (rev 4)".
 
-### 3.1 B1 (`02_b1_overview.md` wave)
+### 3.1 B1 (B1 (merged; see CHANGELOG.md) wave)
 
-**`02c_b1_inference_search.md`: 1C-15 Legacy visual search: Triton off the event loop, no box
-vector against the whole-image index (S).** *Folded into [02c](02c_b1_inference_search.md) 1C-15.* Run after 1C-9 in the same lane (both touch legacy
+**B1 1C (merged; see CHANGELOG.md): 1C-15 Legacy visual search: Triton off the event loop, no box
+vector against the whole-image index (S).** *Folded into B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) 1C-15.* Run after 1C-9 in the same lane (both touch legacy
 visual search).
 - Evidence: `src/services/visual_search/search.py` (`SearchMixin`): `search_by_object` builds a
   sync client (`get_sync_triton_client`) and calls `infer_yolo_clip_cpu(image_bytes)` inside
@@ -489,9 +489,9 @@ visual search).
   (fails today). Control: a vehicle query returns the same hits before and after.
 - Origin: `cluster_search_makemodel_plan.md` section 10 (planned, never filed).
 
-**`02b_b1_class_registry.md`: 1B-12b Acceptance phases `dataset_import` and `combine` (S).** The
+**B1 1B (merged; see ARCHITECTURE.md): 1B-12b Acceptance phases `dataset_import` and `combine` (S).** The
 registry migration touches import and combine (`dataset_import/prepare.py`, `combine/execute.py`),
-and no scripted phase covers either today. *Folded into [02b](02b_b1_class_registry.md) 1B-12b.*
+and no scripted phase covers either today. *Folded into B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) 1B-12b.*
 - File: `scripts/release/acceptance_phases.sh` (two new `ph_` functions, registered for `--list`).
 - `dataset_import`: build a YOLO dataset from the run's own `export` phase output and a COCO
   dataset from the license-filtered COCO subset (`scripts/datasets/fetch_coco_subset.py` already
@@ -508,11 +508,11 @@ and no scripted phase covers either today. *Folded into [02b](02b_b1_class_regis
   the live run is R-final RF-70 and RF-71.
 - Origin: `release_acceptance_plan.md` phases E, H and the import-undo part of I.
 
-**`02b_b1_class_registry.md` 1B-14 Docs: add** `docs/design/curation_design_rationale.md` sections
+**B1 1B (merged; see ARCHITECTURE.md) 1B-14 Docs: add** `docs/design/curation_design_rationale.md` sections
 2.1 and 12 (the registry is an OpenSearch document; the file is an export snapshot). *Folded into
-[02b](02b_b1_class_registry.md) 1B-14.*
+B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) 1B-14.*
 
-**`02a_b1_job_leases.md` 1A-8 Label operations: add** *(folded into [02a](02a_b1_job_leases.md) 1A-8)* "update
+**B1 1A (merged; see ARCHITECTURE.md) 1A-8 Label operations: add** *(folded into B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) 1A-8)* "update
 `docs/design/cq3_label_operations.md` sections 3 (the locks row), 6.4 and 9 (crash during undo) to
 name the leases `label_op` and `label_undo` instead of `write.lock`, `undo.lock` and `flock`".
 
@@ -652,7 +652,7 @@ cites a moved or deleted doc, giving the new path (from the scan of open-issue b
 | Target | Items |
 |---|---|
 | B0 (`01`) | 1 (B0-1b) |
-| B1 (`02a`, `02b`, `02c`) | 4 (1C-15, 1B-12b, two doc syncs in 1B-14 and 1A-8) |
+| B1 (B1 1A, B1 1B, B1 1C) | 4 (1C-15, 1B-12b, two doc syncs in 1B-14 and 1A-8) |
 | B2 (`03`, `03b`, `03c`) | 4 doc syncs |
 | B4 (`05`) | 0 |
 | R-final (`06`) | 10 (RF-70 to RF-76, RP-7 to RP-9) |
@@ -663,11 +663,11 @@ cites a moved or deleted doc, giving the new path (from the scan of open-issue b
 
 | ID | Old doc (section) | Conflict | Resolution in the program |
 |---|---|---|---|
-| C1 | `auto_label_loop_plan.md` (0 D4, 3.1, 8) | start by `exclusive_start_lock` (`start.lock`), worker claims a `trigger.json` by `unlink` (file locks; at-most-once claim) | `02a` 1A-6 lease `assist_loop`; `03c` 2E-2 makes the worker a `-Q assist_loop -c 1` Celery consumer and deletes the trigger files; doc sync ADD in 2E-2 |
-| C2 | `cq3_label_operations.md` (3, 6.4) | `write.lock`, `undo.lock` through `fcntl.flock` | `02a` 1A-8 leases `label_op`, `label_undo`; doc sync ADD in 1A-8 |
-| C3 | `selectable_assist_plan.md` (Deviations) | assist runs as in-API asyncio tasks with a start lock and startup reconcile | `02a` 1A-6 lease; `03b` 2A moves the family to Celery; the reaper replaces the reconcile |
+| C1 | `auto_label_loop_plan.md` (0 D4, 3.1, 8) | start by `exclusive_start_lock` (`start.lock`), worker claims a `trigger.json` by `unlink` (file locks; at-most-once claim) | B1 1A 1A-6 lease `assist_loop`; `03c` 2E-2 makes the worker a `-Q assist_loop -c 1` Celery consumer and deletes the trigger files; doc sync ADD in 2E-2 |
+| C2 | `cq3_label_operations.md` (3, 6.4) | `write.lock`, `undo.lock` through `fcntl.flock` | B1 1A 1A-8 leases `label_op`, `label_undo`; doc sync ADD in 1A-8 |
+| C3 | `selectable_assist_plan.md` (Deviations) | assist runs as in-API asyncio tasks with a start lock and startup reconcile | B1 1A 1A-6 lease; `03b` 2A moves the family to Celery; the reaper replaces the reconcile |
 | C4 | `sam3_full_image_detection_plan.md` (16, Wave 5) | in-API background pass serialized by a per-process lock; sweeper in every worker | `03b` 2C `open_vocab_drain` on `-c 1` (deletes `_PASS_LOCK`); `03c` 2D-1 sweeper on beat |
-| C5 | `ingest_surfaces_plan.md` (overview, 9) | trigger loop in every API worker, `dispatch.lock`, bulk-ingest start lock | `02a` 1A-6; `03c` 2D-1 (beat tick plus a per-project lease) |
+| C5 | `ingest_surfaces_plan.md` (overview, 9) | trigger loop in every API worker, `dispatch.lock`, bulk-ingest start lock | B1 1A 1A-6; `03c` 2D-1 (beat tick plus a per-project lease) |
 | C6 | `cq3_label_operations.md` (6.4), `selectable_assist_plan.md` | per-item `gather` in request handlers (bounded by a semaphore) | `05` 4A-2 (one `mget` plus one bulk with per-item OCC) |
 | C7 | `release_acceptance_plan.md` (5, implied cadence) | a full acceptance run per release (R3, R-B1, R-0.9) | owner decisions 2-3 of 2026-11-03: one R-final before the single v0.7.0 tag (`06`) |
 | C8 | `program_plan.md`, `ship_track_plan.md`, `v070_wave_plan.md`, `processing_plans_plan.md` | release mapping: v0.7.0 winter pipeline, v0.8.0 Triton and clustering, v0.9.0 spatial; processing plans in v0.9.0 | `00_index.md` (D-37 = yes): v0.7.0 = B0-B5 with R-final last, v0.8.0 = platform breadth; milestone moves in `09` |
@@ -797,7 +797,7 @@ the lasting knowledge and deletes the plan file in the same PR).
 | `storage_sizing_and_ingest_baselines.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/storage_sizing_and_ingest_baselines.md` | `scripts/bench/suite_report.py` line 31 (cited-paths guard), `docs/PERFORMANCE.md` lines 400, 648, `docs-site/docs/guides/ingest-large-folder.mdx` line 505, `docs/design/program/07a_b5_baseline.md` line 11: re-point; `docs/releases/v0.4.0.md` line 118: re-point (moved file); README row: move to the research table; issue comment #45 |
 | `v060_vector_db_evaluation_plan.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/v060_vector_db_evaluation_plan.md` | `docs/PERFORMANCE.md` line 2204 (link): re-point to `research/v060_vector_db_evaluation_plan.md`; `docker/bench/vectordb/compose.yml` line 1 comment: re-point; the moved note's own links (`v060_wave_plan.md`, `storage_sizing...`): fix with the moves; README row: move; issue comments #40, #67 |
 | `v060_serving_backend_trade_study.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/v060_serving_backend_trade_study.md` (#231 and #403 still read its rooflines and decision rules) | `docs/design/processing_plans_plan.md` line 395 (plain): re-point; `program_plan.md`, `improvement_backlog.md`, `v060_wave_plan.md` (deleted); README row: move; issue comments #40, #67, #231 |
-| `release_acceptance_plan.md` | DELETE-AFTER-MOVE | R-2 (RP-9) | 1 run rules and 5 go/no-go -> `docs-site/docs/operations/release-acceptance.mdx`; phases D, E, H, I, K -> `06` RF-70 to RF-76 and `02b` 1B-12b (section 3) | `scripts/release/acceptance_run.sh` line 6 (cited-paths guard): re-point to `docs-site/docs/operations/release-acceptance.mdx`; `docs/design/program/00_index.md` line 411, `01_b0_close_out.md` line 178, `06_release_acceptance.md` lines 11, 148: re-point to `06` and the docs-site page; `docs/reviews/rc_summary.md` line 15 (link): re-point to the docs-site page; README row: drop |
+| `release_acceptance_plan.md` | DELETE-AFTER-MOVE | R-2 (RP-9) | 1 run rules and 5 go/no-go -> `docs-site/docs/operations/release-acceptance.mdx`; phases D, E, H, I, K -> `06` RF-70 to RF-76 and B1 1B 1B-12b (section 3) | `scripts/release/acceptance_run.sh` line 6 (cited-paths guard): re-point to `docs-site/docs/operations/release-acceptance.mdx`; `docs/design/program/00_index.md` line 411, `01_b0_close_out.md` line 178, `06_release_acceptance.md` lines 11, 148: re-point to `06` and the docs-site page; `docs/reviews/rc_summary.md` line 15 (link): re-point to the docs-site page; README row: drop |
 | `gpu_decode_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5b | 13 build record and 6.1 decoder notes -> `docs/PERFORMANCE.md` "Decode once and the GPU decode" and `docs/ARCHITECTURE.md` (GPU pipeline) | at that time: `scripts/bench/gpu_decode_bench.py` line 2 (guard), `docs/PERFORMANCE.md` lines 2976, 3215, 3316, `07b`, `07`, `00_index.md`, `10`, `processing_plans_plan.md`, `faces_ocr_resident_crops_plan.md`, `CHANGELOG.md` line 409 (0.6.0, may stay); issue comments #40, #220 |
 | `sp_gpu_prep_concurrency.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5b | 2-4 diagnosis -> `docs/research/` (new note) or `docs/research/v070_measurement_log.md` | at that time: `docs/benchmarks/v070/sp0/gpu_prep_concurrency_matrix.md`, `docs/reviews/sp_fixes_review.md`, `docs/WHITEPAPER.md`, `07`, `07b`, `00_index.md`, `processing_plans_plan.md`; issue comments #403, #407 |
 | `faces_ocr_resident_crops_plan.md` | KEEP-OPEN, then DELETE | R-3 after 5c | none (07c and 07d hold the steps) | at that time: `07`, `07c`, `07d`, `processing_plans_plan.md`; issue comment #220 |
