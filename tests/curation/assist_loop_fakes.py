@@ -249,7 +249,7 @@ async def drive(
         audit_max_crops=audit_max_crops,
     )
     budget = LoopBudget(store, limits, **({'clock': clock} if clock else {}))
-    ctx = class_context(vlm, ClassWriteGuard('assist_run'), revision=None)
+    ctx = await class_context(vlm, ClassWriteGuard('assist_run'), revision=None)
     meta = RunMeta(
         run_id=store.loop_id,
         created_at=CREATED_AT,
@@ -275,7 +275,7 @@ async def drive(
             budget,
             AuditJudge(
                 world.os,  # type: ignore[arg-type]
-                class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None),
+                await class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None),
                 images_per_call=lp.images_per_call,
                 semaphore=asyncio.Semaphore(vlm_concurrency),
             ),

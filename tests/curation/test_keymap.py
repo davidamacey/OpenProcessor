@@ -366,8 +366,9 @@ def test_put_keymap_class_conflict_409_then_unbind(
     client: TestClient, registry: InMemoryRegistry
 ) -> None:
     class_id = registry.load().classes[0].class_id
-    registry.load().classes[0].hotkey_letter = 'i'
-    registry._atomic_write(registry.load())
+    doc = registry.load()
+    doc.classes[0].hotkey_letter = 'i'
+    registry.store(doc)
 
     conflict = client.put(
         f'{PREFIX}/keymap',
@@ -452,7 +453,7 @@ def test_class_put_rejects_taken_hotkey_as_config_error_detail(
     for c in reg.classes:
         if c.class_id == 0:
             c.hotkey_letter = 's'
-    registry._atomic_write(reg)
+    registry.store(reg)
 
     r = client.put(f'{PREFIX}/classes/{second_id}', json={'hotkey_letter': 's'})
     assert r.status_code == 409, r.text
@@ -494,8 +495,9 @@ def test_keymap_save_failure_is_a_500_and_the_class_hotkey_survives(
     """An unbind runs before the save; a non-conflict failure of the save
     must roll the unbind back instead of leaving the hotkey cleared."""
     class_id = registry.load().classes[0].class_id
-    registry.load().classes[0].hotkey_letter = 'i'
-    registry._atomic_write(registry.load())
+    doc = registry.load()
+    doc.classes[0].hotkey_letter = 'i'
+    registry.store(doc)
 
     async def _boom(*_a: Any, **_kw: Any) -> None:
         raise ConnectionError('opensearch down')

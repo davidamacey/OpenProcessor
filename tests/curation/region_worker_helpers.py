@@ -9,7 +9,13 @@ from unittest.mock import AsyncMock, MagicMock
 from _fake_project_registry import install_static_project_registry
 
 import scripts.curation.worker.state as worker_state
-from curation.region_cascade_helpers import _capture_signal_handler, _FakeOpenSearch, _item, _jpeg
+from curation.region_cascade_helpers import (
+    _capture_signal_handler,
+    _FakeOpenSearch,
+    _item,
+    _jpeg,
+    class_group_answer,
+)
 from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from scripts.curation.worker.__main__ import parse_args
@@ -143,11 +149,7 @@ async def _drive_text_hint_rescue(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
     monkeypatch.setattr(runner_mod, 'build_vlm_labeler', MagicMock(return_value=vlm))
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.ClassRegistry',
-        MagicMock(side_effect=RuntimeError('no registry in test')),
-    )
-    monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
+    monkeypatch.setattr('scripts.curation.worker.state._class_group', class_group_answer())
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
     project_opts_in_to_env_vlm(monkeypatch)

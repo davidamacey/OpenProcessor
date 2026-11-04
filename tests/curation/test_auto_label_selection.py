@@ -21,7 +21,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation.test_pipeline import _FakeClassEntry, _FakeOpenSearch, _FakeRegistry
+from curation.test_pipeline import _FakeOpenSearch, install_registry
 from src.config.curation import CurationConfig
 from src.services.curation.item_filter import ItemFilter
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, GENERIC_REGION_PACK
@@ -201,10 +201,7 @@ def labeler_spy(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
         return inst
 
     monkeypatch.setattr(vlm_stage, 'get_vlm_labeler', _spy)
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry',
-        lambda: _FakeRegistry([_FakeClassEntry(3, 'wooden_pallet')]),
-    )
+    install_registry((3, 'wooden_pallet'))
     return got
 
 

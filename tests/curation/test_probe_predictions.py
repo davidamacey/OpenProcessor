@@ -10,10 +10,10 @@ the query construction, not just a trusted assertion.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry, use_registry
 from PIL import Image
 
 
@@ -434,22 +434,17 @@ async def test_probe_pred_class_id_is_the_registry_id_not_the_model_dense_id(
     from src.config import get_curation_config
     from src.services.curation import probe_predictions as pp
 
-    registry_path = tmp_path / 'class_registry.json'
-    registry_path.write_text(
-        json.dumps(
-            {
-                'version': 1,
-                'classes': [
-                    {'class_id': 0, 'class_name': 'sedan'},
-                    {'class_id': 1, 'class_name': 'suv'},
-                    # gap at 2 (deprecated/removed) -- registry ids are
-                    # append-only and never renumbered.
-                    {'class_id': 3, 'class_name': 'motorcycle'},
-                    {'class_id': 7, 'class_name': 'truck'},
-                ],
-            }
-        )
+    registry = InMemoryRegistry()
+    registry.seed_rows(
+        [
+            {'class_id': 0, 'class_name': 'sedan'},
+            {'class_id': 1, 'class_name': 'suv'},
+            # gap at 2 (deprecated/removed) -- registry ids are append-only and never renumbered.
+            {'class_id': 3, 'class_name': 'motorcycle'},
+            {'class_id': 7, 'class_name': 'truck'},
+        ]
     )
+    use_registry(registry)
 
     def predict(_crop: Any) -> tuple[str, float, float, float]:
         # The model's own dense output index for 'truck' would be 3 (its
@@ -471,24 +466,13 @@ async def test_probe_pred_class_id_is_the_registry_id_not_the_model_dense_id(
     ]
     fake_os = _FakeOpenSearch(docs)
 
-    import dataclasses
-
-    from src.config.curation_accessors import base_curation_config as _base
-    from src.config.project_context import bind_project
-    from src.config.projects import new_project_record
-
-    record = new_project_record('default', _base())
-    record = dataclasses.replace(
-        record, resources=dataclasses.replace(record.resources, class_registry_path=registry_path)
+    await pp.run_probe_inference(
+        tmp_path / 'ckpt.pt',
+        fake_os,  # type: ignore[arg-type]
+        config=get_curation_config(),
+        model_version=None,
+        architecture='yolo11',
     )
-    with bind_project(record):
-        await pp.run_probe_inference(
-            tmp_path / 'ckpt.pt',
-            fake_os,  # type: ignore[arg-type]
-            config=get_curation_config(),
-            model_version=None,
-            architecture='yolo11',
-        )
 
     [update] = fake_os.updates
     assert update['doc']['probe_pred_class'] == 'truck'

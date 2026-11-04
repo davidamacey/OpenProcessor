@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import random
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +26,7 @@ from src.config import IndexRole, index_name
 from src.core.exceptions import RequestRejectedError
 from src.schemas.curation.config_common import ErrorCode, error_body
 from src.utils.class_names import resolve_class_by_name
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -57,10 +57,6 @@ class RegistryDoc(ClassRegistryFile):
 
 def registry_rejection(code: ErrorCode, message: str, **fields: Any) -> RequestRejectedError:
     return RequestRejectedError(409, error_body(code, message, **fields))
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _next_free_id(doc: RegistryDoc) -> int:
@@ -119,7 +115,7 @@ class ClassRegistry:
         )
 
     async def _create_empty(self, client: AsyncOpenSearch) -> None:
-        doc = RegistryDoc(updated_at=_now())
+        doc = RegistryDoc(updated_at=now_iso())
         try:
             await client.index(
                 index=self.index,
@@ -170,7 +166,7 @@ class ClassRegistry:
             work = doc.model_copy(deep=True)
             result = fn(work)
             work.registry_revision = doc.registry_revision + 1
-            work.updated_at = _now()
+            work.updated_at = now_iso()
             try:
                 await client.index(
                     index=self.index,

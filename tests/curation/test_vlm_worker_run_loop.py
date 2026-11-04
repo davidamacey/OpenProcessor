@@ -50,7 +50,7 @@ class Fakes:
         m.setattr(vlm_worker, 'fetch_pending_ids', self._fetch)
         m.setattr(vlm_worker, 'label_batch', self._label)
         m.setattr(vlm_worker, 'heartbeat_loop', self._heartbeat)
-        m.setattr(vlm_worker, 'project_has_item_classes', lambda r: r.slug not in self.classless)
+        m.setattr(vlm_worker, 'project_has_item_classes', self._has_classes)
         m.setattr(vlm_worker, 'bind_project', self._bind)
         real_sleep = asyncio.sleep
 
@@ -88,6 +88,9 @@ class Fakes:
         if self.label_script is None:
             return {'predicted': len(crop_ids), 'updated': len(crop_ids) - 1}
         return self.label_script(slug, crop_ids)
+
+    async def _has_classes(self, _opensearch: Any, record: Any) -> bool:
+        return record.slug not in self.classless
 
     async def _heartbeat(self, name: str, status: Any, _stop: Any, **_kw: Any) -> None:
         self.heartbeats.append((name, status()))

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from _registry_doc_fake import InMemoryRegistry
+
 from curation.bakeoff_router._helpers import LIVE_REMAP, _live_export, make_export, make_run
 from scripts.curation.bakeoff.freeze import test_sha as freeze_test_sha
 from src.services.curation.export_support import frozen_test_sha_of
@@ -234,20 +236,9 @@ def test_eval_datasets_listing_follows_registry_and_dataset_edits(
     """A registry rename, a new test image and an edited data.yaml all show on
     the next listing: the cache key covers every input, and registry names are
     resolved when the wire row is built, not baked into the cached record."""
-    from src.services.curation import eval_datasets
-
-    class _Cls:
-        def __init__(self, class_id: int, class_name: str) -> None:
-            self.class_id = class_id
-            self.class_name = class_name
-
-    names = {'cat': 'cat'}
-
-    class _FakeRegistry:
-        def load(self) -> object:
-            return type('L', (), {'classes': [_Cls(1, names['cat'])]})()
-
-    monkeypatch.setattr(eval_datasets, 'get_class_registry', _FakeRegistry)
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': 1, 'class_name': 'cat'}])
+    monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', lambda: registry)
     d = make_export(
         env['exports'], 'e1', nc=1, test_labels={'a': [0]}, export_id_map={1: 0}, names=['cat']
     )
@@ -259,7 +250,7 @@ def test_eval_datasets_listing_follows_registry_and_dataset_edits(
     first = row()
     assert (first['classes'][0]['registry_class_name'], first['n_images']) == ('cat', 1)
 
-    names['cat'] = 'feline'
+    registry.rename_class(1, 'feline')
     (d / 'images' / 'test' / 'extra.jpg').write_bytes(b'img')
     _bump(d / 'images' / 'test', 5)
     (d / 'data.yaml').write_text('nc: 1\nnames:\n  0: tabby\n')
@@ -279,3 +270,22 @@ def test_eval_datasets_unchanged_inputs_return_the_same_record(env: dict[str, Pa
     [b] = eval_datasets.list_eval_datasets()
 
     assert a is b
+
+
+def test_eval_datasets_listing_is_503_when_the_registry_cannot_be_read(
+    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An outage must not read as "no class names": the listing refuses."""
+    from opensearchpy.exceptions import ConnectionError as OsConnectionError
+
+    class _Down(InMemoryRegistry):
+        async def snapshot(self, _client: object = None, **_kw: object) -> object:
+            raise OsConnectionError('N/A', 'opensearch down', Exception('down'))
+
+    down = _Down()
+    monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', lambda: down)
+    make_export(env['exports'], 'e1', nc=1, test_labels={'a': [0]}, names=['cat'])
+
+    r = client.get('/curation/projects/default/bakeoff/eval_datasets')
+
+    assert r.status_code == 503, r.text

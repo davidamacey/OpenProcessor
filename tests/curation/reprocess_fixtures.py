@@ -197,16 +197,13 @@ class _Entry:
         self.group = None
 
 
-class _RegFile:
+class FakeRegistry:
+    """The registry snapshot the ingest service is handed: ``classes`` and ``get``."""
+
     classes = [_Entry(0, 'gadget'), _Entry(1, 'widget')]
 
-
-class FakeRegistry:
-    def load(self) -> _RegFile:
-        return _RegFile()
-
     def get(self, class_id: int) -> _Entry | None:
-        return next((c for c in _RegFile.classes if c.class_id == class_id), None)
+        return next((c for c in self.classes if c.class_id == class_id), None)
 
 
 def make_service(

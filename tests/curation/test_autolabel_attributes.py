@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry, use_registry
 
 from curation.conftest import SCOPED
 from curation.query_fakes import QueryFakeOpenSearch
@@ -58,7 +59,6 @@ class _Labeler:
 
 
 async def _run(monkeypatch: pytest.MonkeyPatch, *, vlm_attributes: bool) -> Any:
-    from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
     from src.routers.curation.pipeline_public import pipeline_auto_label
     from src.services.curation import auto_label_run, image_serving
     from src.services.curation.autolabel import selection, vlm_stage
@@ -72,10 +72,9 @@ async def _run(monkeypatch: pytest.MonkeyPatch, *, vlm_attributes: bool) -> Any:
         auto_label_run, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None))
     )
     monkeypatch.setattr(auto_label_run, 'pipeline_health_snapshot', AsyncMock(return_value={}))
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry',
-        lambda: _FakeRegistry([_FakeClassEntry(7, 'sportscar')]),
-    )
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': 7, 'class_name': 'sportscar'}])
+    use_registry(registry)
     monkeypatch.setattr(
         'src.services.labeling.vlm_class_names.format_class_catalog', lambda *_a, **_k: ''
     )

@@ -51,7 +51,7 @@ def test_build_export_id_map_is_contiguous_and_skips_deprecated(tmp_path):
     for c in loaded.classes:
         if c.class_id == 1:
             c.deprecated = True
-    reg._atomic_write(loaded)
+    reg.store(loaded)
 
     id_map = _build_export_id_map(reg.load().classes)
 
@@ -99,7 +99,7 @@ async def test_label_files_on_disk_use_dense_ids_not_registry_ids(tmp_path):
     for c in loaded.classes:
         if c.class_id == 0:
             c.deprecated = True
-    reg._atomic_write(loaded)
+    reg.store(loaded)
 
     docs = [
         {

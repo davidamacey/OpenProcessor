@@ -142,7 +142,7 @@ class _Env:
         m.setattr(vlm_worker, 'fetch_pending_ids', self._fetch)
         m.setattr(vlm_worker, 'label_batch', self._label)
         m.setattr(vlm_worker, 'heartbeat_loop', self._heartbeat)
-        m.setattr(vlm_worker, 'project_has_item_classes', lambda _r: True)
+        m.setattr(vlm_worker, 'project_has_item_classes', self._has_classes)
         m.setattr(vlm_worker, 'bind_project', lambda _r: __import__('contextlib').nullcontext())
         real_sleep = asyncio.sleep
 
@@ -157,6 +157,9 @@ class _Env:
 
     async def close(self) -> None:
         return None
+
+    async def _has_classes(self, _os: Any, _record: Any) -> bool:
+        return True
 
     async def _projects(self, *_a: Any) -> list[Any]:
         return [SimpleNamespace(slug='alpha')]

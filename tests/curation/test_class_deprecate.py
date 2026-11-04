@@ -73,7 +73,7 @@ def test_set_deprecated_true_clears_hotkey(registry: InMemoryRegistry) -> None:
     for c in reg.classes:
         if c.class_id == 0:
             c.hotkey_letter = 'v'
-    registry._atomic_write(reg)
+    registry.store(reg)
     assert _entry(registry, 0).hotkey_letter == 'v'
 
     entry = registry.deprecate(0, True)

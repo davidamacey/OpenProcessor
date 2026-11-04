@@ -15,7 +15,10 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 import structlog.testing
+from _registry_doc_fake import InMemoryRegistry
 
+from src.clients.curation_opensearch import RegistryClassEntry
+from src.clients.curation_opensearch.registry import RegistryDoc
 from src.config import DetectionProfile
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.services.curation.ingest_detect import WholeImageDetector
@@ -108,7 +111,7 @@ async def test_ingest_service_receives_the_secondary_profile(
     clean_env.setattr(resources_module, 'get_async_triton_pool', object)
     clean_env.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
 
-    service = await get_ingest_service(_NoSettingsDoc(), object())
+    service = await get_ingest_service(_NoSettingsDoc(), InMemoryRegistry())
     assert service.profile.detector_model == 'item_proposer'
     assert service.secondary_profile is not None
     assert service.secondary_profile.detector_model == 'ensemble_classifier'
@@ -180,21 +183,9 @@ class _DomainRegistry:
         return self._Entry(f'domain_class_{class_id}')
 
 
-class _NamedRegistry:
-    """Registry classes ``(name, id)``, read the way ``ClassRegistry.load()`` exposes them."""
-
-    def __init__(self, *classes: tuple[str, int]) -> None:
-        from types import SimpleNamespace
-
-        self._file = SimpleNamespace(
-            classes=[
-                SimpleNamespace(class_id=i, class_name=n, deprecated=False, group=None)
-                for n, i in classes
-            ]
-        )
-
-    def load(self) -> Any:
-        return self._file
+def _named_registry(*classes: tuple[str, int]) -> RegistryDoc:
+    """A registry document snapshot holding the classes ``(name, id)``."""
+    return RegistryDoc(classes=[RegistryClassEntry(class_id=i, class_name=n) for n, i in classes])
 
 
 def test_default_primary_does_not_assign_class(tmp_path: Any) -> None:
@@ -227,7 +218,7 @@ def test_assigning_primary_labels_with_the_registry_class_of_the_same_name(
     labels.write_text('person\nbicycle\ncar\n')
     profile = DetectionProfile(name='item', assigns_class=True, labels_path=str(labels))
     detector = WholeImageDetector(
-        triton_pool=None, registry=_NamedRegistry(('car', 7)), profile=profile
+        triton_pool=None, registry=_named_registry(('car', 7)), profile=profile
     )
     items = detector.decode_primary_row(
         np.array([1]),

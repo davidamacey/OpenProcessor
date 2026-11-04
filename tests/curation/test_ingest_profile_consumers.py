@@ -47,6 +47,9 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any, labels: str) -> Any:
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     monkeypatch.setattr('src.routers.curation.class_seed.get_class_registry', lambda: registry)
     monkeypatch.setattr('src.routers.curation.ingest_policy.get_class_registry', lambda: registry)
+    monkeypatch.setattr(
+        'src.services.curation.registry_access.get_class_registry', lambda: registry
+    )
     pool = Pool()
     monkeypatch.setattr('src.app.resources.get_async_triton_pool', lambda: pool)
     from _curation_app import mount_curation_routers
@@ -205,14 +208,14 @@ async def test_the_ingest_service_runs_the_active_profile_and_the_policy(
     from src.services.curation.ingest_policy import DetectFilter, IngestPolicyBody
     from src.services.curation.ingest_policy_store import put_ingest_policy
 
-    client, fake, pool, _ = world
+    client, fake, pool, registry = world
     _activate(client, 'mine', 'birds')
     active = client.get(f'{PROFILES}/active').json()['active']
     client.post(f'{PROFILES}/deactivate', json={'expected_active': active})
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', object)
     monkeypatch.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
 
-    plain = await ingest_router.get_ingest_service(fake, object())
+    plain = await ingest_router.get_ingest_service(fake, registry)
     assert plain.profile.detector_model == 'env_model'
 
     await put_ingest_policy(
@@ -223,7 +226,7 @@ async def test_the_ingest_service_runs_the_active_profile_and_the_policy(
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', lambda: pool)
     assert client.post(f'{PROFILES}/mine/activate', json={}).status_code == 200
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', object)
-    mine = await ingest_router.get_ingest_service(fake, object())
+    mine = await ingest_router.get_ingest_service(fake, registry)
     assert mine.profile.detector_model == 'birds'
     assert mine.detector.profile is mine.profile
     assert mine.policy.detect.class_resolution == 'by_name'
@@ -241,7 +244,7 @@ async def test_the_ingest_service_refuses_when_the_active_profile_is_unreadable(
     from src.routers.curation import ingest as ingest_router
     from src.services.config_store import get_config_store
 
-    client, fake, *_ = world
+    client, fake, _, registry = world
     _activate(client, 'mine', 'birds')
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', object)
     monkeypatch.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
@@ -250,11 +253,12 @@ async def test_the_ingest_service_refuses_when_the_active_profile_is_unreadable(
         store.current, active_ingest_profile_body=None, loaded_at=store.current.loaded_at + 1e9
     )
     with pytest.raises(RequestRejectedError) as info:
-        await ingest_router.get_ingest_service(fake, object())
+        await ingest_router.get_ingest_service(fake, registry)
     assert info.value.status_code == 503
 
 
-def test_open_vocab_validation_checks_against_the_project_detector(world: Any) -> None:
+@pytest.mark.asyncio
+async def test_open_vocab_validation_checks_against_the_project_detector(world: Any) -> None:
     from src.services.config_store.open_vocab_inputs import validation_inputs
 
     client, *_ = world
@@ -270,7 +274,7 @@ def test_open_vocab_validation_checks_against_the_project_detector(world: Any) -
     original = class_names.get_class_names
     class_names.get_class_names = _names  # type: ignore[assignment]
     try:
-        inputs = validation_inputs()
+        inputs = await validation_inputs()
     finally:
         class_names.get_class_names = original
     assert seen == ['birds']

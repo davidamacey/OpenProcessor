@@ -89,9 +89,6 @@ CLUSTER = 10000
 
 @pytest.fixture
 def world(stack: Any, readable_crops: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry', lambda: stack.registry
-    )
     monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
     return stack
 

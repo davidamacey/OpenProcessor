@@ -100,7 +100,7 @@ def _registry(base_dir: Path) -> InMemoryRegistry:
     for c in loaded.classes:
         if c.class_id == 0:
             c.deprecated = True
-    reg._atomic_write(loaded)
+    reg.store(loaded)
     return reg
 
 

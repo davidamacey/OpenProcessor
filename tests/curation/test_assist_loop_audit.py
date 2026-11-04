@@ -77,7 +77,7 @@ def _auditor(store: LoopStore, judge: FakeVlm, world: World, **params: Any) -> A
         LoopBudget(store, limits),
         AuditJudge(
             world.os,  # type: ignore[arg-type]
-            class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None),
+            asyncio.run(class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None)),
             images_per_call=4,
             semaphore=asyncio.Semaphore(4),
         ),

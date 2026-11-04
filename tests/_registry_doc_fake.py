@@ -161,6 +161,15 @@ class InMemoryRegistry:
         self.fake.seqs[key] = self.fake.seqs.get(key, 0) + 1
         self._real._cache = None
 
+    def store(self, doc: Any) -> None:
+        """Replace the registry document with ``doc`` (test setup for states the store API cannot reach)."""
+        from src.clients.curation_opensearch.registry import DOC_KEY, REGISTRY_DOC_ID
+
+        key = f'{self._real.index}/{REGISTRY_DOC_ID}'
+        self.fake.docs[key] = {DOC_KEY: doc.model_dump()}
+        self.fake.seqs[key] = self.fake.seqs.get(key, 0) + 1
+        self._real._cache = None
+
     # ---- sync facades over the real store logic (test setup and inspection)
 
     def add(self, name: str, **kw: Any) -> int:

@@ -93,30 +93,39 @@ def test_an_output_whose_width_does_not_match_the_names_is_refused(tmp_path: Pat
         pm._build_yolov5_objectness_predictor(path)
 
 
+@pytest.fixture
+def street_image(tmp_path: Path) -> Image.Image:
+    """The public COCO street scene (a bus, readable text) the demo targets use."""
+    from scripts.datasets.fetch_test_images import STREET_IMAGE, fetch
+
+    fetch(tmp_path)
+    return Image.open(tmp_path / STREET_IMAGE).convert('RGB')
+
+
 @pytest.mark.families
 @pytest.mark.parametrize('export', ['yolov5n_640.onnx', 'yolov5n_dynamic.onnx'])
-def test_official_yolov5_exports_predict_a_named_class(op_weights, export: str) -> None:
-    from ultralytics.utils import ASSETS
-
+def test_official_yolov5_exports_predict_a_named_class(
+    op_weights, street_image: Image.Image, export: str
+) -> None:
     predict, _ = pm._build_yolov5_objectness_predictor(op_weights(export))
-    bus = Image.open(ASSETS / 'bus.jpg').convert('RGB')
 
-    name, conf, _, _ = predict(bus)
+    name, conf, _, _ = predict(street_image)
 
     assert name in predict.class_names  # type: ignore[attr-defined]
     assert conf > 0
 
 
 @pytest.mark.families
-def test_ensemble_nms_returns_detections_on_the_bus_image(op_weights) -> None:
+def test_ensemble_nms_returns_detections_on_the_street_image(
+    op_weights, street_image: Image.Image
+) -> None:
     import onnxruntime as ort
-    from ultralytics.utils import ASSETS
 
     from src.services.detection.ensemble_nms import apply_ensemble_nms
 
     path = op_weights('yolov5n_640.onnx')
     session = ort.InferenceSession(str(path), providers=['CPUExecutionProvider'])
-    chw = pm._letterbox_yolov5_objectness(Image.open(ASSETS / 'bus.jpg').convert('RGB'), 640)
+    chw = pm._letterbox_yolov5_objectness(street_image, 640)
     raw = session.run(None, {session.get_inputs()[0].name: chw})[0]
 
     detections = apply_ensemble_nms(raw, conf_thres=0.25)

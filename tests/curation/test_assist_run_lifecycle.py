@@ -16,9 +16,6 @@ pytestmark = pytest.mark.usefixtures('readable_crops')
 
 @pytest.fixture(autouse=True)
 def _env(stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry', lambda: stack.registry
-    )
     monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
 
 

@@ -4,6 +4,7 @@ this fix existed)."""
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,13 @@ def registry(tmp_path: Any) -> InMemoryRegistry:
     return reg
 
 
+def _run(repair: Any, registry: InMemoryRegistry, **kw: Any) -> int:
+    # run() takes the process-wide store; the in-memory registry stands in for it and for the client.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(repair, 'get_class_registry', lambda: registry)
+        return asyncio.run(repair.run(registry, **kw))
+
+
 def _entry(registry: InMemoryRegistry, class_id: int) -> Any:
     entry = registry.get(class_id)
     assert entry is not None
@@ -55,7 +63,7 @@ def _break_registry(registry: InMemoryRegistry, class_id: int, merged_into: int)
         if c.class_id == class_id:
             c.merged_into = merged_into
             c.deprecated = False
-    registry._atomic_write(reg)
+    registry.store(reg)
 
 
 class TestFindBroken:
@@ -92,7 +100,7 @@ class TestRun:
         self, repair: Any, registry: InMemoryRegistry
     ) -> None:
         _break_registry(registry, 0, merged_into=1)
-        rc = repair.run(registry, apply=False, verbose=True)
+        rc = _run(repair, registry, apply=False, verbose=True)
         assert rc == 0
         assert _entry(registry, 0).deprecated is False  # untouched
 
@@ -101,7 +109,7 @@ class TestRun:
     ) -> None:
         _break_registry(registry, 0, merged_into=1)
         _break_registry(registry, 2, merged_into=1)
-        rc = repair.run(registry, apply=True, verbose=False)
+        rc = _run(repair, registry, apply=True, verbose=False)
         assert rc == 0
         assert _entry(registry, 0).deprecated is True
         assert _entry(registry, 0).merged_into == 1
@@ -110,15 +118,15 @@ class TestRun:
 
     def test_apply_is_idempotent(self, repair: Any, registry: InMemoryRegistry) -> None:
         _break_registry(registry, 0, merged_into=1)
-        assert repair.run(registry, apply=True, verbose=False) == 0
+        assert _run(repair, registry, apply=True, verbose=False) == 0
         # Second pass finds nothing left broken.
         assert repair.find_broken(registry) == []
-        assert repair.run(registry, apply=True, verbose=False) == 0
+        assert _run(repair, registry, apply=True, verbose=False) == 0
 
     def test_apply_with_no_broken_classes_is_a_noop(
         self, repair: Any, registry: InMemoryRegistry
     ) -> None:
-        assert repair.run(registry, apply=True, verbose=False) == 0
+        assert _run(repair, registry, apply=True, verbose=False) == 0
         assert _entry(registry, 0).deprecated is False
         assert _entry(registry, 1).deprecated is False
         assert _entry(registry, 2).deprecated is False
