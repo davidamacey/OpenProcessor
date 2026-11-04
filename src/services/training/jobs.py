@@ -67,35 +67,29 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
+async def _pin_registry_snapshot(job_id: str) -> tuple[str | None, str | None]:
     """Snapshot the live class registry to a job-scoped file; return (sha, path).
 
     ``labels.txt`` is rebuilt from the *live* registry at promote time
     unless pinned, so a class rename between export and promote could
     silently relabel the served model. Pinning a copy + sha256 at submit
     time lets promote use the registry as it was when the run was
-    launched. Runs entirely in a thread (sync file I/O) -- see
-    :func:`write_job`.
+    launched.
 
-    Best-effort: any failure (missing registry file, unwritable jobs dir)
-    returns ``(None, None)`` rather than raising -- a registry hiccup must
-    never block ``/curation/train/start``.
+    The read is fail closed: a project whose registry is not migrated
+    refuses the train start (409), and an OpenSearch error propagates. Only
+    an unwritable jobs dir leaves the pin file out (the sha is still kept).
     """
     import hashlib
 
-    from src.clients.curation_opensearch.registry import get_class_registry
+    from src.services.curation.registry_access import current_registry
 
-    try:
-        registry = get_class_registry().load()
-        content = registry.model_dump_json(indent=2)
-    except Exception as exc:
-        logger.warning('curation_train_registry_pin_read_failed', job_id=job_id, error=str(exc))
-        return None, None
+    registry = await current_registry()
+    content = registry.model_dump_json(indent=2)
     sha = hashlib.sha256(content.encode('utf-8')).hexdigest()
     snapshot_path = _registry_snapshot_path(job_id)
     try:
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_bytes(snapshot_path, content.encode('utf-8'))
+        await asyncio.to_thread(_write_pin, snapshot_path, content)
     except OSError as exc:
         logger.warning(
             'curation_train_registry_pin_write_failed',
@@ -105,6 +99,11 @@ def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
         )
         return sha, None
     return sha, str(snapshot_path)
+
+
+def _write_pin(snapshot_path: Path, content: str) -> None:
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_bytes(snapshot_path, content.encode('utf-8'))
 
 
 # =============================================================================
@@ -175,9 +174,7 @@ async def write_job(job: TrainJobSpec) -> str:
         if spec.trainer_image_revision is None:
             spec.trainer_image_revision = code_versions['trainer_image_revision']
     if spec.registry_sha is None:
-        spec.registry_sha, spec.registry_snapshot_path = await asyncio.to_thread(
-            _pin_registry_snapshot_sync, spec.job_id
-        )
+        spec.registry_sha, spec.registry_snapshot_path = await _pin_registry_snapshot(spec.job_id)
 
     payload = spec.model_dump(mode='json', exclude_none=False)
     # The trainer calls back into the API (campaign auto-promote, the

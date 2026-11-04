@@ -6,6 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from _registry_doc_fake import registry_of
 
 from src.config.project_context import bind_project
 from src.services.projects import lifecycle
@@ -74,7 +75,6 @@ class _TermAwareClient(FakeLifecycleOpenSearch):
 
 
 def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, monkeypatch) -> None:
-    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config.curation_accessors import items_index
 
     models = tmp_path / 'models'
@@ -96,9 +96,7 @@ def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, mo
     asyncio.run(registry.ensure_fresh())
     record = registry.get('cars')
     assert record is not None
-    reg = ClassRegistry(path=record.resources.class_registry_path)
-    for name in ('car', 'truck', 'van'):
-        reg.add_class(name)
+    registry_of(record).seed(['car', 'truck', 'van'])
 
     with bind_project(record):
         client.indexes[items_index()] = [

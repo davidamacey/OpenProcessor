@@ -9,7 +9,6 @@ and :func:`clone_settings_into` so every existing caller
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -54,15 +53,14 @@ async def _apply_clone(
         await clone_settings_document(client, source=source, target_record=target_record)
 
     if 'classes' in axes:
-        src_path = source.resources.class_registry_path
-        dst_path = target_record.resources.class_registry_path
-        if src_path.exists():
-            dst_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src_path, dst_path)
-        with bind_project(target_record):
-            from src.clients.curation_opensearch.registry import ClassRegistry
+        from src.clients.curation_opensearch.registry import get_class_registry
+        from src.clients.curation_opensearch.registry_transfer import copy_into
 
-            registry = ClassRegistry(dst_path)
+        with bind_project(source, read_only=True):
+            source_doc = await get_class_registry().snapshot(client)
+        with bind_project(target_record):
+            registry = get_class_registry()
+            await copy_into(client, registry, source_doc)
             await registry.sync_to_opensearch(client)
     else:
         # No class registry was copied -- the target's registry is empty
@@ -72,7 +70,7 @@ async def _apply_clone(
         from src.services.curation.region_class import ensure_region_class
 
         with bind_project(target_record):
-            ensure_region_class()
+            await ensure_region_class(client)
 
     if 'keymap' in axes:
         from src.config import get_curation_config
@@ -98,7 +96,7 @@ async def _apply_clone(
                     'hotkey_letter': c.hotkey_letter,
                     'deprecated': c.deprecated,
                 }
-                for c in get_class_registry().load().classes
+                for c in (await get_class_registry().snapshot(client)).classes
             ]
             report, class_conflicts, _resolved, _issues = validate_keymap(
                 source_keymap.overrides,

@@ -137,7 +137,7 @@ async def vlm_label_batch(
     # endpoint is a 422 up front, never after the crops were read.
     labeler = await request_labeler(opensearch, vlm, acknowledge_external)
 
-    reg = get_class_registry().load()
+    reg = await get_class_registry().snapshot(opensearch)
     from src.services.curation.region_class import item_classes
 
     labelable = item_classes(reg.classes)

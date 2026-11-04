@@ -67,7 +67,7 @@ async def review_new_class_summary(
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
-    rules = load_term_rules(get_class_registry())
+    rules = load_term_rules(await get_class_registry().snapshot(opensearch))
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     aggs = resp.get('aggregations') or {}
     top_terms: list[dict[str, Any]] = []

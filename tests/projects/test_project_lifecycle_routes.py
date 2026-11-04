@@ -163,13 +163,7 @@ def test_clone_settings_route_serves_keymap_conflicts_structured(
     with bind_project(target_record):
         from src.routers.curation import get_class_registry
 
-        reg = get_class_registry()
-        reg.add_class('ice_cream_truck', group='vehicle')
-        loaded = reg.load()
-        for c in loaded.classes:
-            if c.class_name == 'ice_cream_truck':
-                c.hotkey_letter = 'i'
-        reg._atomic_write(loaded)
+        get_class_registry().seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')
 
     response = asyncio.run(
         projects_router.clone_settings_route(
@@ -216,13 +210,7 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
     with bind_project(source_record):
         from src.routers.curation import get_class_registry
 
-        reg = get_class_registry()
-        reg.add_class('ice_cream_truck', group='vehicle')
-        loaded = reg.load()
-        for c in loaded.classes:
-            if c.class_name == 'ice_cream_truck':
-                c.hotkey_letter = 'i'
-        reg._atomic_write(loaded)
+        get_class_registry().seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')
 
     # Fakes the keymap store directly (as the sibling clone_settings test
     # above does) rather than round-tripping a real PUT /keymap, which

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed or validate ``class_registry.json`` against a detector's class order.
+"""Seed or validate the class registry document against a detector's class order.
 
 Every YOLO ``.txt`` label, every detector output and every item document
 stores a bare integer class id; the registry is the only place that id
@@ -41,12 +41,12 @@ Drift findings:
 
 Usage::
 
-    # First-time seed from a detector export (the bound project's registry path)
+    # First-time seed from a detector export (the bound project's registry)
     python3 scripts/curation/seed_class_registry.py --model detector.onnx
 
     # Seed from a dataset's data.yaml and append one post-model class
     python3 scripts/curation/seed_class_registry.py --model data.yaml \\
-        --registry data/class_registry.json --extra-class background_clutter:special
+        --extra-class background_clutter:special
 
     # CI / pre-import drift gate
     python3 scripts/curation/seed_class_registry.py --model detector.onnx --check
@@ -56,8 +56,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+import asyncio
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -70,8 +72,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
-from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation_accessors import get_curation_config
+from src.clients.curation_opensearch.registry import get_class_registry
+from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
@@ -298,8 +300,7 @@ def load_group_map(path: Path | None) -> dict[str, str]:
 # =============================================================================
 
 
-def run(args: argparse.Namespace) -> int:
-    registry_path: Path = args.registry or get_curation_config().class_registry_path
+async def run(args: argparse.Namespace) -> int:
     try:
         model_names = read_class_names(args.model)
     except (ClassNamesError, OSError) as exc:
@@ -307,8 +308,16 @@ def run(args: argparse.Namespace) -> int:
         return 2
     logger.info('read %d class names from %s', len(model_names), args.model)
 
-    store = ClassRegistry(registry_path)
-    existing = store.load() if registry_path.exists() else None
+    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=60)
+    try:
+        return await _run(args, client, model_names)
+    finally:
+        await client.close()
+
+
+async def _run(args: argparse.Namespace, client: Any, model_names: list[str]) -> int:
+    store = get_class_registry()
+    existing = await store.snapshot(client)
     result = reconcile(
         model_names,
         existing,
@@ -327,30 +336,36 @@ def run(args: argparse.Namespace) -> int:
     if args.check:
         drift = result.has_fatal or strict_fail or bool(result.appended)
         if drift:
-            logger.error('registry %s is NOT in sync with %s', registry_path, args.model)
+            logger.error('the class registry is NOT in sync with %s', args.model)
             return 1
-        logger.info('registry %s is in sync with %s', registry_path, args.model)
+        logger.info('the class registry is in sync with %s', args.model)
         return 0
 
     if result.has_fatal or strict_fail:
-        logger.error('refusing to write %s: fix the drift above first', registry_path)
+        logger.error('refusing to write: fix the drift above first')
         return 1
     if not result.appended:
-        logger.info('registry %s already covers every model class; nothing to write', registry_path)
+        logger.info('the registry already covers every model class; nothing to write')
         return 0
     for e in result.appended:
         logger.info('append id=%d %r (group=%s)', e.class_id, e.class_name, e.group)
     if args.dry_run:
-        logger.info(
-            'dry-run: would write %d new class(es) to %s', len(result.appended), registry_path
-        )
+        logger.info('dry-run: would write %d new class(es)', len(result.appended))
         return 0
 
-    assert result.registry is not None
-    # ClassRegistry's writer snapshots the previous file and does the
-    # tmp+fsync+rename dance, same as every registry mutation in the API.
-    store._atomic_write(result.registry)
-    logger.info('wrote %s (%d classes)', registry_path, len(result.registry.classes))
+    for e in result.appended:
+        # ensure_class is idempotent by name, so a rerun or a concurrent seed adds nothing twice;
+        # the id it hands out must be the one the model expects.
+        class_id, _created = await store.ensure_class(client, e.class_name, group=e.group)
+        if class_id != e.class_id:
+            logger.error(
+                'class %r got id %d, the model expects %d: the registry changed during the seed',
+                e.class_name,
+                class_id,
+                e.class_id,
+            )
+            return 1
+    logger.info('wrote %d class(es)', len(result.appended))
     return 0
 
 
@@ -365,10 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
         help='Detector ONNX (reads "names" metadata) or a YOLO data.yaml',
     )
     p.add_argument(
-        '--registry',
-        type=Path,
-        default=None,
-        help='class_registry.json path (default: the --project registry path)',
+        '--opensearch-url', default=os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
     )
     p.add_argument(
         '--group-map',
@@ -398,8 +410,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
     args = build_parser().parse_args(argv)
-    bind_script_project(args.project)
-    return run(args)
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    return asyncio.run(run(args))
 
 
 if __name__ == '__main__':

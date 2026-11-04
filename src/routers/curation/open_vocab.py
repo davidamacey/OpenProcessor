@@ -119,7 +119,7 @@ async def validate_open_vocab_route(
         body.body.model_dump(),
         existing_names=all_known_names(),
         for_activation=for_activation,
-        **validation_inputs(),
+        **await validation_inputs(),
     )
 
 
@@ -208,7 +208,7 @@ async def create_open_vocab(
         body.name,
         body.body.model_dump(),
         existing_names=existing - {body.name},
-        **validation_inputs(),
+        **await validation_inputs(),
     )
     if any(
         e.code in ('open_vocab_name_invalid', 'open_vocab_name_reserved') for e in report.errors
@@ -282,7 +282,7 @@ async def save_open_vocab(
         raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
     if existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
-    report = await validate_open_vocab(name, body.body.model_dump(), **validation_inputs())
+    report = await validate_open_vocab(name, body.body.model_dump(), **await validation_inputs())
     if not report.ok:
         raise api_error(
             422, 'validation_failed', f'the set has {len(report.errors)} error(s)', report=report

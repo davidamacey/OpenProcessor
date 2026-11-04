@@ -47,7 +47,7 @@ from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, C
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.services.labeling.vlm_prompts import PromptPack
 
 
@@ -111,10 +111,10 @@ class ReclassifyResult:
         }
 
 
-def active_name_to_id(registry: ClassRegistry) -> dict[str, int]:
+def active_name_to_id(registry: ClassRegistryFile) -> dict[str, int]:
     """``{class_name: class_id}`` for non-deprecated registry classes only —
     a deprecated id must never be assigned."""
-    return {c.class_name: c.class_id for c in registry.load().classes if not c.deprecated}
+    return {c.class_name: c.class_id for c in registry.classes if not c.deprecated}
 
 
 def unmatched_query(source: UnmatchedLabelSource) -> dict[str, Any]:
@@ -137,7 +137,7 @@ async def reclassify_unmatched(
     opensearch: AsyncOpenSearch,
     *,
     source: UnmatchedLabelSource,
-    registry: ClassRegistry,
+    registry: ClassRegistryFile,
     pack: PromptPack | None = None,
     config: CurationConfig | None = None,
     page_size: int = 1000,

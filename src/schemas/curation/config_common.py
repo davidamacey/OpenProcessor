@@ -75,6 +75,11 @@ ErrorCode = Literal[
     'class_hotkey_conflict',
     'hotkey_reserved',
     'hotkey_taken',
+    # Class registry document: a 0.6.0 file not yet migrated, the 10,000-class bound, and
+    # five lost optimistic-concurrency races in a row.
+    'registry_not_migrated',
+    'registry_full',
+    'registry_conflict',
     # P3F m1: a delete-path directory guard refused because the persisted
     # record's own path pointed outside its expected root -- distinct
     # from internal_isolation_error (an OpenSearch-guard refusal).

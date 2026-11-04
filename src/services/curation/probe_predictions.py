@@ -98,12 +98,12 @@ logger = get_logger(__name__)
 # =============================================================================
 
 
-def _registry_class_ids(cfg: CurationConfig) -> dict[str, int]:
-    """Active class name -> id from the configured registry ({} when absent; an
-    unreadable registry raises, so a probe never runs with no class names)."""
-    from src.clients.curation_opensearch.registry import ClassRegistry
+async def _registry_class_ids(opensearch: AsyncOpenSearch) -> dict[str, int]:
+    """Active class name -> id from the bound project's registry (an unreadable registry
+    raises, so a probe never runs with no class names)."""
+    from src.clients.curation_opensearch.registry import get_class_registry
 
-    reg = ClassRegistry(path=cfg.class_registry_path).load()
+    reg = await get_class_registry().snapshot(opensearch)
     from src.services.curation.region_class import item_classes
 
     return {c.class_name: c.class_id for c in item_classes(reg.classes)}
@@ -199,7 +199,7 @@ async def run_probe_inference(
 
     cfg = config or get_curation_config()
     if class_ids is None:
-        class_ids = _registry_class_ids(cfg)
+        class_ids = await _registry_class_ids(opensearch)
 
     logger.info('probe_init', model=str(model_path), architecture=architecture)
     predict_fn, default_version = _build_predictor(model_path, architecture)

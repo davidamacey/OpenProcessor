@@ -129,7 +129,7 @@ async def test_active_region_class_is_registered_after_the_snapshot_loads(
 
     monkeypatch.setattr('src.services.config_store.get_config_store', _Store)
 
-    def _ensure() -> int:
+    async def _ensure(_client: Any) -> int:
         order.append('ensure')
         return 7
 

@@ -184,7 +184,7 @@ async def active_vlm_pairing_issues(
     if endpoint is None:
         return []
     return vlm_pairing_issues(
-        endpoint, pack, profile, mode='activate', class_names=sorted(registry_class_names())
+        endpoint, pack, profile, mode='activate', class_names=sorted(await registry_class_names())
     )
 
 
@@ -242,7 +242,9 @@ async def enforce_vlm_gate(
             pack,
             profile,
             mode='activate' if activation else 'run',
-            class_names=class_names if class_names is not None else sorted(registry_class_names()),
+            class_names=class_names
+            if class_names is not None
+            else sorted(await registry_class_names()),
         )
     )
     # The probe's image-cap error is raised by both the validator (activation)

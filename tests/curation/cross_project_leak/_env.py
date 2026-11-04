@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import numpy as np
 import pytest
+from _registry_doc_fake import registry_doc_source
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from opensearchpy import AsyncOpenSearch
 
+from curation.cross_project_leak._constants import CLASS_NAMES
 from curation.cross_project_leak._seeded_files import _docs, _seed_files, _vec
 from curation.cross_project_leak._seeders import _seed_vlm
 from curation.cross_project_leak._transport import (
@@ -163,6 +165,10 @@ def leak_env(
     for slug, record in records.items():
         for role_value, docs in _docs(slug).items():
             store[record.resources.indexes[IndexRole(role_value)]] = docs
+    for slug, record in records.items():
+        store.setdefault(record.resources.indexes[IndexRole.SETTINGS], {})['class_registry'] = (
+            registry_doc_source([CLASS_NAMES[slug], f'{slug}_second'], ids=[1, 2])
+        )
     own_dirs = {slug: _seed_files(record, tmp_path) for slug, record in records.items()}
 
     # M6: seed the shared op_projects registry doc for every project, so

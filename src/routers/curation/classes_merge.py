@@ -21,7 +21,7 @@ from src.utils.timeutil import now_iso
 
 
 async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[str, Any]:
-    reg = get_class_registry()
+    reg = await get_class_registry().snapshot(opensearch)
     for cid in (payload.source_id, payload.target_id):
         if reg.get(cid) is None:
             raise HTTPException(status_code=400, detail=f'class_id {cid} not found')
@@ -105,11 +105,10 @@ async def merge_class(
         )
     reg = get_class_registry()
     try:
-        result = reg.merge_class(payload.source_id, payload.target_id)
+        result = await reg.merge_class(opensearch, payload.source_id, payload.target_id)
     except ClassRegistryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    target = reg.get(payload.target_id)
-    target_name = target.class_name if target is not None else ''
+    target_name = result['target_name']
     now = now_iso()
     relabel_doc = {
         'class_id': payload.target_id,

@@ -6,7 +6,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.core.logging import get_logger
 from src.services.training import job_manifest
 
@@ -189,7 +188,9 @@ async def resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
                 'this model.'
             ),
         )
-    registry_snapshot = get_class_registry().load()
+    from src.services.curation.registry_access import current_registry
+
+    registry_snapshot = await current_registry()
     return {c.class_id: c.class_name for c in registry_snapshot.classes if not c.deprecated}
 
 

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
+from _registry_doc_fake import registry_of
 from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 from opensearchpy.serializer import JSONSerializer
@@ -32,7 +33,6 @@ from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.fairness import FairnessScheduler, fetch_pending_multi_project
 from scripts.curation.worker.state import _ItemTask, bind_task_project, bound_class_catalog
 from scripts.curation.worker.verify import TaskBoxInput, _combined_class_update, verdicts_to_boxes
-from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
 from src.config import get_region_fields
 from src.config.curation_accessors import base_curation_config
 from src.config.curation_roles import IndexRole
@@ -60,14 +60,6 @@ def _record(tmp_path: Any, slug: str) -> ProjectRecord:
     root = tmp_path / slug
     root.mkdir(parents=True, exist_ok=True)
     registry_path = root / 'class_registry.json'
-    registry_path.write_text(
-        ClassRegistryFile(
-            classes=[
-                RegistryClassEntry(class_id=10 * i + len(slug), class_name=name)
-                for i, name in enumerate(CLASSES[slug])
-            ]
-        ).model_dump_json()
-    )
     resources = resources.__class__(
         **{
             **resources.__dict__,
@@ -75,7 +67,7 @@ def _record(tmp_path: Any, slug: str) -> ProjectRecord:
             'class_registry_path': registry_path,
         }
     )
-    return ProjectRecord(
+    record = ProjectRecord(
         slug=slug,
         display_name=slug,
         description='',
@@ -86,6 +78,8 @@ def _record(tmp_path: Any, slug: str) -> ProjectRecord:
         origin=None,
         resources=resources,
     )
+    registry_of(record).seed(CLASSES[slug])
+    return record
 
 
 def _items_index(record: ProjectRecord) -> str:
@@ -304,7 +298,7 @@ async def test_detection_worker_keeps_every_read_and_write_in_its_project(
         # the combined class+region call on it (box-list path).
         bind_task_project(task)
         task.crop_jpeg = b'jpeg'
-        class_names, name_to_id = bound_class_catalog()
+        class_names, name_to_id = await bound_class_catalog(None)
         reply = await vlm.label_combined(
             img_id=task.crop_id,
             jpeg_bytes=task.crop_jpeg,

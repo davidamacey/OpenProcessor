@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from _registry_doc_fake import FakeDocOpenSearch
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.worker_hot_reload._helpers import _fake_args, _fake_ctors, _record, _swap_kw
@@ -106,6 +107,7 @@ async def test_quiesce_and_swap_drains_queues_before_building() -> None:
 
         asyncio.get_event_loop().create_task(_drain_soon())
         rt = await quiesce_and_swap(
+            opensearch=FakeDocOpenSearch(),
             queues=[q],
             holder=holder,
             slug='alpha',
@@ -161,6 +163,7 @@ async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
 
         holder = RuntimeHolder()
         await quiesce_and_swap(
+            opensearch=FakeDocOpenSearch(),
             queues=[],
             holder=holder,
             slug='alpha',

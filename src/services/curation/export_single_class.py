@@ -52,7 +52,7 @@ import random
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.registry import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
@@ -98,6 +98,10 @@ from src.services.curation.export_writers import (
 from src.services.detection.frame_dedup import dedup_rows_by_embedding
 
 
+if TYPE_CHECKING:
+    from src.clients.curation_opensearch import ClassRegistryFile
+
+
 logger = get_logger(__name__)
 
 
@@ -124,7 +128,6 @@ class SingleClassExportService:
             profile=profile,
             config=self.config,
             region_fields=region_fields or get_region_fields(),
-            class_names=self._resolve_class_names(),
         )
 
     # ----------------------------------------------------------------- public
@@ -181,7 +184,9 @@ class SingleClassExportService:
         started = datetime.now(UTC)
 
         generation = await items_index_generation(self.opensearch, self.config.items_index)
-        names = self._resolve_class_names()
+        registry_doc = await self.registry.snapshot(self.opensearch)
+        names = self._resolve_class_names(registry_doc)
+        self.collector.class_names = frozenset(names)
         rows = await self.collector.collect(image_mode=image_mode, empty_bg_ratio=empty_bg_ratio)
         if not rows:
             raise NothingToExportError(
@@ -240,7 +245,7 @@ class SingleClassExportService:
         )
         data_yaml_path = resolved_dir / DATA_YAML_FILENAME
         data_yaml_path.write_text(render_data_yaml(resolved_dir, names))
-        write_class_registry(resolved_dir, names, profile=self.profile, registry=self.registry)
+        write_class_registry(resolved_dir, names, profile=self.profile, registry=registry_doc)
         write_label_stats_from_disk(resolved_dir, names)
 
         dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir, names)
@@ -338,11 +343,11 @@ class SingleClassExportService:
     def _output_root(self) -> Path:
         return self.profile.output_root or (self.config.export_root / self.profile.name)
 
-    def _resolve_class_names(self) -> list[str]:
+    def _resolve_class_names(self, registry: ClassRegistryFile) -> list[str]:
         """Dataset class names, ordered to match the dense label ids."""
         if self.profile.box_source == 'region':
             return [self.profile.region_class_name]
-        by_id = {c.class_id: c.class_name for c in self.registry.load().classes}
+        by_id = {c.class_id: c.class_name for c in registry.classes}
         return [by_id.get(cid, str(cid)) for cid in self.profile.class_ids]
 
     # ---------------------------------------------------------------- select

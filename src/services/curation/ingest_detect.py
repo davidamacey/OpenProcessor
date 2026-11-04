@@ -48,7 +48,7 @@ from src.utils.cpu_pool import run_cpu
 if TYPE_CHECKING:
     from PIL import Image
 
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import DetectionProfile
 
@@ -85,7 +85,7 @@ class WholeImageDetector:
         self,
         *,
         triton_pool: AsyncTritonPool | Any,
-        registry: ClassRegistry | Any,
+        registry: ClassRegistryFile,
         profile: DetectionProfile,
         secondary_profile: DetectionProfile | None = None,
     ) -> None:

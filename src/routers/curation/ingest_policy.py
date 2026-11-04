@@ -56,10 +56,10 @@ _PREVIEW_FIELDS = [
 ]
 
 
-def _known_slugs() -> set[str]:
+async def _known_slugs(opensearch: OpenSearchDep) -> set[str]:
     """Names a policy can sensibly mention: registry classes and the labels of the
     detector the project will run."""
-    known = {c.class_name for c in get_class_registry().load().classes}
+    known = {c.class_name for c in (await get_class_registry().snapshot(opensearch)).classes}
     # An unresolvable profile propagates (503): an unknown-names answer built from
     # the wrong detector would be silently wrong.
     profile = project_ingest_profiles().primary
@@ -95,7 +95,9 @@ async def put_policy(
         embedding=body.embedding,
         clustering=body.clustering,
     )
-    known = _known_slugs()  # before the write: a refused answer must not follow a stored policy
+    known = await _known_slugs(
+        opensearch
+    )  # before the write: a refused answer must not follow a stored policy
     try:
         stored = await put_ingest_policy(
             opensearch, policy_body, expected_revision=body.expected_revision

@@ -117,7 +117,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
                     t.item_ocr_lines, min_confidence=rt.item_text_min_conf
                 )
 
-            is_secondary = _is_secondary_shape(t)
+            is_secondary = await _is_secondary_shape(t, ctx.opensearch)
 
             # Path 1: pending_verification — already has a candidate awaiting
             # VLM verification; straight to the combined call (no

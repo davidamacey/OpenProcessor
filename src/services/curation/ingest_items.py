@@ -26,7 +26,7 @@ from src.utils.stage_timing import stage_timer
 if TYPE_CHECKING:
     from PIL import Image
 
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.config import CurationConfig, DetectionProfile
     from src.services.curation.ingest_detect import SecondaryOutput, WholeImageDetector
     from src.services.curation.item_doc import DetectedItem
@@ -50,7 +50,7 @@ class IngestItemsMixin:
     """Detection and bulk-write steps of :class:`~src.services.curation.ingest.CurationIngestService`."""
 
     opensearch: Any
-    registry: ClassRegistry | Any
+    registry: ClassRegistryFile
     profile: DetectionProfile
     secondary_profile: DetectionProfile | None
     config: CurationConfig

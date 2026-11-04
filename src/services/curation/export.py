@@ -250,7 +250,7 @@ class GenericYoloExportService:
         started_at = datetime.now(UTC).isoformat()
         generation = await items_index_generation(self.opensearch, self.config.items_index)
         rows, skipped_items = await self._load_rows(validated_export_query(item_filter))
-        registry_file = self.registry.load()
+        registry_file = await self.registry.snapshot(self.opensearch)
         rows, id_map, dropped_unregistered = to_dense_ids(rows, registry_file)
 
         images, unlabeled, selection = await select_export_images(

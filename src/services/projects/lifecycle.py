@@ -386,10 +386,13 @@ async def create_project(
         # Idempotent: a clone that copied 'classes' (or _apply_clone's own
         # no-classes-copied branch) may already have seeded it, but every
         # new project gets one guaranteed call under its own binding.
+        from src.clients.curation_opensearch.registry import get_class_registry
         from src.services.curation.region_class import ensure_region_class
 
         with bind_project(record):
-            ensure_region_class()
+            # The registry document exists from the first moment (new project, empty).
+            await get_class_registry().snapshot(client)
+            await ensure_region_class(client)
 
         # B2(a) residual: ensure_indexes is itself fail-open (every
         # create/migration failure inside it is logged and swallowed, so

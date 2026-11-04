@@ -17,11 +17,13 @@ fact, identical for every project and served on the global ``/health``.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any, Literal
+
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
+from src.core.exceptions import RequestRejectedError
 from src.routers.curation._common import (
     OpenSearchDep,
     classes_index,
@@ -34,6 +36,23 @@ from src.routers.curation._common import (
 from src.routers.curation._common_models import HealthResponse
 from src.services.labeling.run_labeler import get_vlm_labeler
 from src.services.resource_links import service_url
+
+
+async def _registry_status(raw_os: Any) -> dict[str, Any]:
+    """The class registry document's state: ``exists`` is true once it is readable."""
+    try:
+        doc = await get_class_registry().snapshot(raw_os)
+    except RequestRejectedError as exc:
+        return {'exists': False, 'detail': exc.detail.get('error', str(exc.detail))}
+    except OpenSearchException as exc:
+        return {'exists': False, 'detail': str(exc)}
+    return {
+        'exists': True,
+        'classes': len(doc.classes),
+        'registry_revision': doc.registry_revision,
+        'updated_at': doc.updated_at,
+        'migrated_from_file_at': doc.migrated_from_file_at,
+    }
 
 
 async def triton_status(triton: Any) -> dict[str, Any]:
@@ -130,18 +149,7 @@ async def curation_health(
 
     vlm = await vlm_status(raw_os)
 
-    reg_path = get_class_registry().path
-    registry_status: dict[str, Any] = {
-        'path': str(reg_path),
-        'exists': reg_path.exists(),
-    }
-    if reg_path.exists():
-        try:
-            registry_status['mtime'] = datetime.fromtimestamp(
-                reg_path.stat().st_mtime, tz=UTC
-            ).isoformat()
-        except OSError as exc:
-            registry_status['detail'] = str(exc)
+    registry_status = await _registry_status(raw_os)
 
     overall: Literal['ok', 'degraded', 'down']
     if triton['reachable'] and os_status['reachable'] and registry_status.get('exists'):

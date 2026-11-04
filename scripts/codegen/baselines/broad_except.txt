@@ -51,7 +51,6 @@ scripts/curation/worker/runtime.py	1	ratchet: may only go down
 scripts/curation/worker/stage_a.py	2	ratchet: may only go down
 scripts/curation/worker/stage_b.py	1	ratchet: may only go down
 scripts/curation/worker/stage_sam.py	2	ratchet: may only go down
-scripts/curation/worker/state.py	1	ratchet: may only go down
 scripts/download_ocr_test_images.py	1	ratchet: may only go down
 scripts/resize_images.py	1	ratchet: may only go down
 src/clients/curation_opensearch/ensure_fields.py	12	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -139,7 +138,6 @@ src/services/curation/dataset_import/scan.py	1	triage every return-empty handler
 src/services/curation/embedding_viz.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/embedding_viz_read.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/empty_vlm_answer_repair.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/eval_datasets.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/export.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/export_readiness.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/export_support.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -209,7 +207,7 @@ src/services/projects/mlflow_cleanup.py	1	triage every return-empty handler in P
 src/services/projects/registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/stats.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/gpu_arbiter_docker.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/training/jobs.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/jobs.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/lineage.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/preflight_checks.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/promote_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

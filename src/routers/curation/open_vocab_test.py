@@ -45,7 +45,7 @@ async def test_open_vocab_target(
         'dedup_iou': body.dedup_iou,
         'gating': body.gating.model_dump(),
     }
-    report = await validate_open_vocab(None, draft, **validation_inputs())
+    report = await validate_open_vocab(None, draft, **await validation_inputs())
     if not report.ok:
         raise api_error(422, 'validation_failed', 'the target has errors', report=report)
 

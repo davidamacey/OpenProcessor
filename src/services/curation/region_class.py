@@ -15,25 +15,29 @@ from src.services.detection.profile_registry import get_active_region_profile
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from opensearchpy import AsyncOpenSearch
+
     from src.clients.curation_opensearch import RegistryClassEntry
 
 
 REGION_CLASS_GROUP = 'region'
 
 
-def ensure_region_class() -> int | None:
+async def ensure_region_class(client: AsyncOpenSearch) -> int | None:
     """The region class's id, adding it first if the registry lacks it.
     ``None`` when no region profile names a region class."""
     profile = get_active_region_profile()
     name = (profile.region_class_name if profile else '').strip()
     if not name:
         return None
-    return ensure_class_by_name(
+    resolved = await ensure_class_by_name(
         get_class_registry(),
+        client,
         name,
         group=REGION_CLASS_GROUP,
         notes='seeded from the active region profile',
-    ).class_id
+    )
+    return resolved.class_id
 
 
 def is_region_class(entry: RegistryClassEntry) -> bool:

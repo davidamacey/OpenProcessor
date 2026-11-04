@@ -198,7 +198,7 @@ _PROMPT_PACK_CALL_LABELS: dict[str, str] = {
 }
 
 
-async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntry]:
+async def _build_detectors(opensearch: Any, *, include_other_projects: bool) -> list[DetectorEntry]:
     from src.routers.curation._models_class_mapping import (
         bound_registry,
         discover_foreign_shared_models,
@@ -207,7 +207,7 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
     from src.services.training.promoted_models import discover_promoted_models
     from src.services.triton_control import TritonControlService
 
-    registry = bound_registry()
+    registry = await bound_registry(opensearch)
     try:
         repo = await TritonControlService().get_repository_index()
     except Exception:
@@ -385,8 +385,8 @@ def _build_text_reader_modes() -> list[TextReaderModeEntry]:
     ]
 
 
-def _build_registry_classes() -> list[RegistryClassEntry]:
-    reg = get_class_registry().load()
+async def _build_registry_classes(opensearch: Any) -> list[RegistryClassEntry]:
+    reg = await get_class_registry().snapshot(opensearch)
     return [
         RegistryClassEntry(
             class_id=c.class_id,
@@ -424,7 +424,7 @@ def _build_model_choices(detectors: list[DetectorEntry], ocr: OcrBlock) -> list[
 async def get_config_vocabulary(
     opensearch: OpenSearchDep, include_other_projects: bool = False
 ) -> ConfigVocabularyResponse:
-    detectors = await _build_detectors(include_other_projects=include_other_projects)
+    detectors = await _build_detectors(opensearch, include_other_projects=include_other_projects)
     ocr = await _build_ocr()
     return ConfigVocabularyResponse(
         detectors=detectors,
@@ -433,7 +433,7 @@ async def get_config_vocabulary(
         ocr=ocr,
         model_choices=_build_model_choices(detectors, ocr),
         text_reader_modes=_build_text_reader_modes(),
-        registry_classes=_build_registry_classes(),
+        registry_classes=await _build_registry_classes(opensearch),
         prompt_pack_calls=_build_prompt_pack_calls(),
         reprocess=ReprocessVocabulary(
             scopes=scope_vocabulary(),

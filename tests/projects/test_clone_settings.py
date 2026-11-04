@@ -201,12 +201,7 @@ def test_clone_keymap_axis_all_or_nothing_reports_class_conflicts(
         from src.routers.curation import get_class_registry
 
         reg = get_class_registry()
-        reg.add_class('ice_cream_truck', group='vehicle')
-        loaded = reg.load()
-        for c in loaded.classes:
-            if c.class_name == 'ice_cream_truck':
-                c.hotkey_letter = 'i'
-        reg._atomic_write(loaded)
+        reg.seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')
 
     conflicts = asyncio.run(
         lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])

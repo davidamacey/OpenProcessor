@@ -40,5 +40,5 @@ async def class_crops(
 
 @router.post('/classes/sync_to_opensearch')
 async def sync_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Rebuild the classes index from the on-disk registry."""
+    """Rebuild the classes index from the registry document."""
     return await get_class_registry().sync_to_opensearch(opensearch)

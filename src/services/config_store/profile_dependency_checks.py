@@ -78,10 +78,10 @@ async def _check_detector(
                     )
                 )
                 try:
-                    from src.clients.curation_opensearch.registry import get_class_registry
+                    from src.services.curation.registry_access import current_registry
 
                     mapping = model_class_mapping(
-                        name, get_class_registry().load(), project=project_slug
+                        name, await current_registry(), project=project_slug
                     )
                     if mapping.unmapped:
                         issues.append(

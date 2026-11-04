@@ -435,7 +435,7 @@ async def _multi_class_data_checks(
             ),
         ]
     counts, test_counts = await count_validated_and_test_per_class(opensearch, target_classes)
-    registry = get_class_registry()
+    registry = await get_class_registry().snapshot(opensearch)
     return [
         _class_balance_check(target_classes, counts, registry),
         _test_holdout_check(target_classes, test_counts, registry),
@@ -534,7 +534,7 @@ async def _data_checks(
     is_single_class: bool,
 ) -> None:
     """Data sufficiency (single-class-aware), then the label scan."""
-    target_classes = [] if is_single_class else resolve_target_classes(spec)
+    target_classes = [] if is_single_class else await resolve_target_classes(spec, opensearch)
     if not is_single_class and spec.include_classes:
         checks.append(_include_classes_check(spec, spec.include_classes))
     if is_single_class:

@@ -27,11 +27,15 @@ thing (``sports_car`` under a generic ``car``) stays a proposal.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
 from src.services.curation.class_sources import VLM_NEW_CLASS_PENDING_CLASS_SOURCE
 from src.services.curation.review_queries import build_tab_query
+
+
+if TYPE_CHECKING:
+    from src.clients.curation_opensearch import ClassRegistryFile
 
 
 PROPOSAL_TAB = 'new_class_proposals'
@@ -112,11 +116,11 @@ class ProposalTermRules:
         }
 
 
-def load_term_rules(registry: Any) -> ProposalTermRules:
+def load_term_rules(registry: ClassRegistryFile) -> ProposalTermRules:
     """Rules from the env (read per call) and the live class registry."""
     groups: set[str] = set()
     existing: dict[str, int] = {}
-    for entry in registry.load().classes:
+    for entry in registry.classes:
         group = str(getattr(entry, 'group', '') or '')
         if group:
             groups.add(normalize_term(group))

@@ -99,7 +99,7 @@ async def _process_chunk(ctx: PipelineContext, consumer_id: int, chunk: list[_It
         )
         await _release(ctx, chunk)
         return
-    class_names, name_to_id = bound_class_catalog()
+    class_names, name_to_id = await bound_class_catalog(ctx.opensearch)
     registry_loaded = bool(class_names)
 
     combined_crops, bad_indices = _combined_crops(chunk, registry_loaded=registry_loaded)

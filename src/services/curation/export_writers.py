@@ -38,7 +38,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from src.clients.curation_opensearch import ClassRegistryFile
-    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config import CurationConfig
     from src.services.curation.export_images import _ExportImage
 
@@ -110,7 +109,7 @@ def write_class_registry(
     names: list[str],
     *,
     profile: SingleClassExportProfile,
-    registry: ClassRegistry,
+    registry: ClassRegistryFile,
 ) -> None:
     """Freeze the vocabulary + dense-id map next to the dataset.
 
@@ -134,7 +133,7 @@ def write_class_registry(
 
 
 def class_entries(
-    profile: SingleClassExportProfile, registry: ClassRegistry, names: list[str]
+    profile: SingleClassExportProfile, registry: ClassRegistryFile, names: list[str]
 ) -> list[dict[str, Any]]:
     """``class_registry.json``'s ``classes``: the dataset's classes, or --
     in region mode, where the one dataset class is the region itself -- the
@@ -145,7 +144,7 @@ def class_entries(
             {'class_id': cid, 'class_name': name}
             for cid, name in zip(profile.class_ids, names, strict=False)
         ]
-    by_id = {c.class_id: c.class_name for c in registry.load().classes}
+    by_id = {c.class_id: c.class_name for c in registry.classes}
     return [{'class_id': cid, 'class_name': by_id.get(cid, str(cid))} for cid in profile.class_ids]
 
 

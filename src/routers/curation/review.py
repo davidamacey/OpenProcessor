@@ -198,7 +198,7 @@ async def review_queue(
 
         registry_names = frozenset(
             normalize_term(c.class_name)
-            for c in get_class_registry().load().classes
+            for c in (await get_class_registry().snapshot(opensearch)).classes
             if not c.deprecated
         )
     items: list[dict[str, Any]] = []

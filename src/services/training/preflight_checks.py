@@ -186,7 +186,7 @@ def ingest_idle_check(pending: int | None, stopped: Sequence[str]) -> PreflightC
     )
 
 
-def resolve_target_classes(spec: TrainJobSpec) -> list[int]:
+async def resolve_target_classes(spec: TrainJobSpec, opensearch: Any) -> list[int]:
     """Resolve the effective class list for a spec.
 
     ``include_classes=None`` → every non-deprecated item class in the registry
@@ -197,7 +197,8 @@ def resolve_target_classes(spec: TrainJobSpec) -> list[int]:
         return list(spec.include_classes)
     from src.services.curation.region_class import item_classes
 
-    return [c.class_id for c in item_classes(get_class_registry().load().classes)]
+    registry = await get_class_registry().snapshot(opensearch)
+    return [c.class_id for c in item_classes(registry.classes)]
 
 
 def augmentation_preset_error(augmentation: AugmentationSpec | None) -> str | None:

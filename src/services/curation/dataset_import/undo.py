@@ -475,12 +475,13 @@ async def _deprecate_classes(
         } - deleting
         if users:
             continue
-        entry = next((c for c in ctx.registry.load().classes if c.class_id == class_id), None)
+        registry_doc = await ctx.registry.snapshot(ctx.opensearch)
+        entry = registry_doc.get(class_id)
         if entry is None or entry.deprecated:
             continue
         report.classes_deprecated.append(entry.class_name)
         if not dry_run:
-            ctx.registry.set_deprecated(class_id, True)
+            await ctx.registry.set_deprecated(ctx.opensearch, class_id, True)
 
 
 __all__ = [
