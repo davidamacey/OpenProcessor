@@ -169,7 +169,11 @@ async def _run_probe(
             body, api_key=resolve_api_key(body.api_key_ref, is_env_builtin=is_env), is_env=is_env
         )
     except ProbeBusyError as exc:
-        raise api_error(429, 'probe_busy', 'too many probes are running; retry shortly') from exc
+        raise api_error(
+            429,
+            'probe_busy',
+            'too many probes are running on this API worker process; retry shortly',
+        ) from exc
     except VlmKeyRefInvalidError as exc:
         raise api_error(422, 'validation_failed', str(exc)) from exc
     if record_for is not None:
