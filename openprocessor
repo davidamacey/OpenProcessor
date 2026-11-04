@@ -417,10 +417,6 @@ main() {
             load_cli_core_lib
             cmd_faces "$@"
             ;;
-        bench)
-            load_cli_dev_lib
-            require_checkout "bench" && cmd_bench "$@"
-            ;;
         clean)
             load_cli_dev_lib
             cmd_clean "$@"

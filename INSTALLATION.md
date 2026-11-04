@@ -248,7 +248,6 @@ directory created. Run `./openprocessor help` for the list.
 | `update` | in a checkout: pull images and rebuild; in an install directory: same as `upgrade` |
 | `profile [minimal\|small\|standard\|full] [gpu_id]` | show the Triton instance profile in `.env`, or switch to one: rewrites `models/*/config.pbtxt` and sets `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` in `.env` (checkout only; restart `triton-server` after; see [GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx#switching-profile-later)) |
 | `test [quick\|full\|visual]` | smoke test, `tests/test_full_system.py`, or visual validation (checkout only; `full` and `visual` need `.venv`) |
-| `bench [quick\|full]` | not available yet: it needs `benchmarks/triton_bench` and `benchmarks/build.sh`, which are not in the repository (tracked in `docs/design/program/02d_b1_api_frontend_tests.md`). Use the `make bench-*` targets in [benchmarks/README.md](benchmarks/README.md), or Triton's `perf_analyzer` in the `triton-sdk` container (`docker compose --profile benchmark up -d triton-sdk`) |
 | `clean [cache\|models\|exports\|all]` | remove caches, downloaded weights, or TensorRT plans (asks first) |
 | `setup [flags]` | run `scripts/setup.sh` (checkout only) |
 | `version` | print the CLI version |

@@ -347,8 +347,6 @@ Configuration:
 Testing:
   test [type]         Run tests
                       Options: quick (default), full, visual
-  bench [mode]        Run benchmarks
-                      Options: quick (default), full
 
 Face data (OP_FACES_ENABLED):
   faces purge [--dry-run] [--yes]

@@ -125,8 +125,8 @@ The management CLI works in a checkout (`./openprocessor`, or the shim
 `clean`, `update`, `sample coco [--full]`, `config show`, `cropwright password`, `gpu plan`,
 `vlm list|status|use <id>|apply|probe|key set <slug>`, `train-mode on|off`,
 `upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`
-and `setup` need a checkout. `bench` exists in the CLI but is broken (its tool is not in the repo; task 1D-21 in
-`docs/design/program/02d_b1_api_frontend_tests.md`). Details:
+and `setup` need a checkout. Benchmarks run through the `make bench-*`
+targets and Triton's `perf_analyzer`. Details:
 [INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli).
 
 Python source is mounted into `api` in a checkout, so most edits are live;
