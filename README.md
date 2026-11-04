@@ -436,7 +436,7 @@ Every setting is in `.env` (template: [`env.template`](env.template), with a
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: components, data model, runtime topology
 - **[docs/CURATION.md](docs/CURATION.md)**: curation user guide
 - **[docs/PERFORMANCE.md](docs/PERFORMANCE.md)**: measurement log and benchmarking
-- **[docs/design/program/00_index.md](docs/design/program/00_index.md)**: what to do next (clustering research outcome and plans)
+- **[docs/design/v070_rebuild/00_master_plan.md](docs/design/v070_rebuild/00_master_plan.md)**: what to do next (the backend rebuild plans for the next release, in order)
 - **[docs/design/curation_api_contract.md](docs/design/curation_api_contract.md)**: route and wire-model reference
 - **[docs/VISION_AND_GOALS.md](docs/VISION_AND_GOALS.md)**: scope and standards
 - **[docs/opensearch_schema_design.md](docs/opensearch_schema_design.md)**, **[docs/OCR.md](docs/OCR.md)**, **[docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md)**: index schemas, OCR and face details

@@ -3,12 +3,12 @@
 Status: open (parked research; W0, W0b, W1, WB and W8 research ran; W2 (#353, #354), the W3 privacy part
 (#379) and W4 (#402 phases A and B) shipped; the rest is v0.8.0 platform breadth or parked under #346).
 Superseded in part on 2026-11-04 by the research plans: sections 2 (principles) and 7 (judge) stay as
-background; its record shapes and judge waves by [research_clustering_plan.md](research_clustering_plan.md)
+background; its record shapes and judge waves by [09b_research_clustering.md](v070_rebuild/09b_research_clustering.md)
 and its protocol file; section 6.8 and W12 (plate identity) by
-[research_plate_text_plan.md](research_plate_text_plan.md); the attribute signals by
-[research_spatial_attributes_plan.md](research_spatial_attributes_plan.md); in the signals table the
+[09h_research_plate_text.md](v070_rebuild/09h_research_plate_text.md); the attribute signals by
+[09f_research_spatial_attributes.md](v070_rebuild/09f_research_spatial_attributes.md); in the signals table the
 near-duplicate group fields become `near_dup_group_id` and `near_dup_is_representative`
-([research_near_duplicates_plan.md](research_near_duplicates_plan.md)), and capture time is the
+([09d_research_near_duplicates.md](v070_rebuild/09d_research_near_duplicates.md)), and capture time is the
 `capture.*` object of the spatial plan (no separate `capture_time` or `burst_key` signal). Written 2026-10-29 against `origin/main` at `5620f6f6`.
 Audience: a fresh implementation agent with no conversation memory. Every wave in section 9 is
 self-contained: it names its inputs, exact files, tests, verification commands, GPU use, model

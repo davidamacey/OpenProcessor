@@ -111,7 +111,7 @@ v0.6.0 is the latest published release (`VERSION` is 0.6.0). Work since then is 
 program is implemented and tested: correctness (B0, B1), jobs off the API on Celery (B2), one
 Ultralytics version (B3), a stateless API (B4) and speed on the final stack (B5), then one
 acceptance run. Platform breadth comes in the release after that. The plan, with the issue map, is in
-[`design/program/00_index.md`](design/program/00_index.md).
+[`design/v070_rebuild/reference/decision_register.md`](design/v070_rebuild/reference/decision_register.md).
 
 Not in v0.6.0, and still not shipped:
 

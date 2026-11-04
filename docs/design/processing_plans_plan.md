@@ -1,6 +1,6 @@
 # Request-driven processing plans: run only the requested models and branches (#67)
 
-Status: open (P1 done; P0 and P2 to P6 are `program/07d_b5_processing_plans.md`, v0.7.0 B5d; remove
+Status: open (P1 done; P0 and P2 to P6 are `v070_rebuild/06d_b5_processing_plans.md`, v0.7.0 B5d; remove
 after B5d). P1 is the pure domain module, the wire models and their tests; no route uses them yet.
 Owner decision 2026-11-03: the single v0.7.0 release includes this document (it was v0.9.0 in the
 2026-10-31 text); route work (P2 onward)

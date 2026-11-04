@@ -38,7 +38,7 @@ registered bar and the limits. Nothing in this program changed product code.
 
 The contract for how each wave was run was the retired ship-track plan (git history: state of the
 product lanes, measurement protocol, Z5 definition in its section 7); the measurement rules now live in
-[07_b5_overview.md](../design/program/07_b5_overview.md) section 5 and Z5 is issue #398. Bars were committed before scores in W0e, Z4, WB and WB2; the notes say
+[06_b5_overview.md](../design/v070_rebuild/06_b5_overview.md) section 5 and Z5 is issue #398. Bars were committed before scores in W0e, Z4, WB and WB2; the notes say
 where a bar was missed and by how much, and none was moved afterwards.
 
 ## 3. Decision per arm
