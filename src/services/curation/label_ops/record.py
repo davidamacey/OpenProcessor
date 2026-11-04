@@ -2,7 +2,7 @@
 
 The record exists before the first item is written; the ids written are saved
 after the bulk returns. A crash in between leaves the record ``writing`` with
-its lock free (served ``interrupted``), and the items it did write are still
+its lease expired (served ``interrupted``), and the items it did write are still
 found through their ``label_op_id`` tag.
 """
 
@@ -11,14 +11,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.services.curation.crop_bulk import occ_bulk_human_relabel
-from src.services.curation.label_ops.store import (
-    NewLabelOp,
-    create_op,
-    save_op,
-    write_lock,
-    write_members,
-)
+from src.services.curation.label_ops.store import NewLabelOp, create_op, save_op, write_members
+from src.services.curation.lease_heartbeat import leased
 from src.utils.timeutil import now_iso
 
 
@@ -40,9 +36,13 @@ async def recorded_relabel(
     """The batch relabel response plus ``op_id``. ``merger_for(op_id)`` builds the
     merge body that tags each item with the operation."""
     record = create_op(op)
-    with write_lock(record.op_id) as got:
-        if not got:  # a fresh dir: someone else cannot hold its lock
-            raise RuntimeError(f'label operation {record.op_id} is already writing')
+    async with leased(
+        opensearch,
+        LeaseKind.LABEL_OP,
+        record.op_id,
+        record.op_id,
+        busy=lambda _holder: RuntimeError(f'label operation {record.op_id} is already writing'),
+    ):
         result = await occ_bulk_human_relabel(
             opensearch, ids, merger_for(record.op_id), writer_id=op.writer
         )

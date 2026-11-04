@@ -2,27 +2,26 @@
 bound project's state dir (``<project_state_dir>/label_ops/<op_id>/``).
 
 ``state.json`` (atomic temp+rename through :class:`FileJob`) holds the record;
-``members.json`` the ids the operation wrote; ``write.lock`` is held while the
-operation writes and ``label_ops/undo.lock`` while any undo of the project runs.
+``members.json`` the ids the operation wrote. Liveness is the ``label_op:<op_id>`` lease while
+the operation writes and the ``label_undo`` lease while any undo of the project runs.
 The project's dir is the only place read or written: the id is matched against
 :data:`LABEL_OP_ID_RE` before any path is built.
 """
 
 from __future__ import annotations
 
-import contextlib
-import fcntl
 import json
-import os
 import shutil
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
+from src.clients.job_lease import is_live
 from src.config import get_curation_config
 from src.config.project_context import current_project, ensure_marked_dir
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.domain.label_ops import (
     LABEL_OP_ID_RE,
     LabelOpKind,
@@ -32,7 +31,6 @@ from src.domain.label_ops import (
     new_label_op_id,
 )
 from src.services.curation.file_job import FileJob
-from src.services.curation.job_lock import exclusive_start_lock
 from src.services.rejections import rejection
 from src.utils.atomic_write import atomic_write_json
 from src.utils.timeutil import now_iso
@@ -53,8 +51,6 @@ StoredStatus = Literal['writing', 'written', 'undoing', 'undone']
 ServedStatus = Literal['writing', 'interrupted', 'written', 'undoing', 'undo_interrupted', 'undone']
 
 _MEMBERS = 'members.json'
-_WRITE_LOCK = 'write.lock'
-_UNDO_LOCK = 'undo.lock'
 
 
 class LabelOpRecord(BaseModel):
@@ -201,42 +197,15 @@ def read_members(op_id: str) -> list[str] | None:
     return [str(i) for i in ids] if isinstance(ids, list) else None
 
 
-@contextlib.contextmanager
-def write_lock(op_id: str) -> Iterator[bool]:
-    """Held while the operation writes; yields ``False`` when someone else holds it."""
-    with exclusive_start_lock(op_dir(op_id) / _WRITE_LOCK) as got:
-        yield got
-
-
-@contextlib.contextmanager
-def undo_lock() -> Iterator[bool]:
-    """Held while any undo of the project runs (one at a time across workers)."""
-    with exclusive_start_lock(label_ops_root() / _UNDO_LOCK) as got:
-        yield got
-
-
-def _lock_is_held(path: Path) -> bool:
-    try:
-        fd = os.open(str(path), os.O_RDWR)
-    except FileNotFoundError:
-        return False
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            return True
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        return False
-    finally:
-        os.close(fd)
-
-
-def served_status(record: LabelOpRecord) -> ServedStatus:
+async def served_status(opensearch: Any, record: LabelOpRecord) -> ServedStatus:
     """The stored status, with a dead writer or undoer shown as ``interrupted`` /
-    ``undo_interrupted`` (its lock is free while the record still says it is working)."""
-    if record.status == 'writing' and not _lock_is_held(op_dir(record.op_id) / _WRITE_LOCK):
+    ``undo_interrupted``: the record still says it is working but the lease that guards the
+    work is gone (a dead holder shows up once its lease expires, up to the lease TTL)."""
+    if record.status == 'writing' and not await is_live(
+        opensearch, LeaseKind.LABEL_OP, record.op_id
+    ):
         return 'interrupted'
-    if record.status == 'undoing' and not _lock_is_held(label_ops_root() / _UNDO_LOCK):
+    if record.status == 'undoing' and not await is_live(opensearch, LeaseKind.LABEL_UNDO):
         return 'undo_interrupted'
     return record.status
 
@@ -249,7 +218,7 @@ def _prune(*, keep: int) -> None:
     )
     for name in names[keep:]:
         record = _read_file(root / name)
-        if record is not None and served_status(record) in ('writing', 'undoing'):
+        if record is not None and record.status in ('writing', 'undoing'):
             continue
         shutil.rmtree(root / name, ignore_errors=True)
 
@@ -269,7 +238,5 @@ __all__ = [
     'read_op',
     'save_op',
     'served_status',
-    'undo_lock',
-    'write_lock',
     'write_members',
 ]

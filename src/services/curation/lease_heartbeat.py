@@ -18,6 +18,7 @@ stops at its next progress write before anyone can see the lease as expired.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import contextvars
 import threading
 import time
@@ -42,7 +43,7 @@ from src.services.curation.file_job import clear_fence, register_fence
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from src.services.curation.file_job import FileJob
 
@@ -189,5 +190,24 @@ async def run_leased(beat: LeaseHeartbeat, client: Any, run: Awaitable[None]) ->
     """Await ``run``, then release the lease (also when it fails or is cancelled)."""
     try:
         await run
+    finally:
+        await beat.release(client)
+
+
+@contextlib.asynccontextmanager
+async def leased(
+    client: Any,
+    kind: LeaseKind,
+    scope: str | None,
+    job_id: str,
+    *,
+    busy: Callable[[str | None], Exception],
+) -> AsyncIterator[LeaseHeartbeat]:
+    """Hold a lease, with its heartbeat thread, for the body of an ``async with`` (a short
+    write that finishes inside one request); released on exit, also on an error."""
+    beat = await acquire_heartbeat(client, kind, scope, job_id, job=None, busy=busy)
+    beat.start()
+    try:
+        yield beat
     finally:
         await beat.release(client)

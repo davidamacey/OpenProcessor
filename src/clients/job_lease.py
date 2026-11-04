@@ -231,3 +231,12 @@ async def release(client: AsyncOpenSearch, lease: HeldLease) -> bool:
     if done is None:
         logger.warning('job_lease_release_lost', lease=lease.doc_id, generation=lease.generation)
     return done is not None
+
+
+async def is_live(client: AsyncOpenSearch, kind: LeaseKind | str, scope: str | None = None) -> bool:
+    """Whether a live holder has the lease right now: a held, unexpired document. An
+    absent, released or expired lease means whoever wrote the record it guards is gone."""
+    found = await _get(client, doc_id(kind, scope))
+    if found is None:
+        return False
+    return not is_takeable(found[0], time.time())
