@@ -38,6 +38,7 @@ from ultralytics.data.augment import LetterBox
 from src.clients.model_adapters import DetectionAdapter, resolve_adapter
 from src.clients.model_residency import ensure_loaded_sync
 from src.clients.triton_client_manager import TritonClientManager
+from src.clients.triton_deadline import infer_with_deadline
 from src.clients.triton_ocr import infer_ocr
 from src.clients.triton_pool_core import MODEL_INFO_TTL_S, images_input
 from src.clients.triton_preprocess import (
@@ -92,10 +93,11 @@ class TritonClient:
         """Execute Triton inference with automatic retry on transient failures."""
         ensure_loaded_sync(self.client, model_name)
         return retry_sync(
-            self.client.infer,
-            model_name=model_name,
-            inputs=inputs,
-            outputs=outputs,
+            infer_with_deadline,
+            self.client,
+            model_name,
+            inputs,
+            outputs,
             max_retries=self.max_retries,
             base_delay=self.retry_base_delay,
             max_delay=self.retry_max_delay,

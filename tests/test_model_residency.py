@@ -217,7 +217,7 @@ def test_the_face_client_loads_both_face_models(monkeypatch: pytest.MonkeyPatch)
         def as_numpy(self, _name: str) -> np.ndarray:
             return np.ones((1, 4), np.float32)
 
-    ff.client.infer = lambda model_name, **_k: (  # type: ignore[method-assign]
+    ff.client.infer = lambda model_name, *_a, **_k: (  # type: ignore[method-assign]
         ff.client.calls.append(f'infer {model_name}'),  # type: ignore[attr-defined]
         _Out(),
     )[1]

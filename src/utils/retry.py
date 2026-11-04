@@ -39,6 +39,13 @@ class RetryExhaustedError(Exception):
         self.last_error = last_error
 
 
+class TritonDeadlineError(RetryExhaustedError):
+    """A Triton call missed its ``client_timeout``. Never retried; the API answers 504.
+
+    A ``RetryExhaustedError`` so the route handlers that already re-raise it pass it through.
+    """
+
+
 def is_retryable_error(error: BaseException) -> bool:
     """Whether a Triton client error is transient: its ``status()`` is in ``RETRYABLE_STATUSES``."""
     return isinstance(error, InferenceServerException) and error.status() in RETRYABLE_STATUSES

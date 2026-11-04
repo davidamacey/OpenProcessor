@@ -13,6 +13,7 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.clients.model_residency import ensure_loaded
 from src.clients.triton_client_manager import TritonClientManager
+from src.clients.triton_deadline import ainfer_with_deadline
 from src.clients.triton_preprocess import preprocess_for_mobileclip
 from src.config import get_settings
 from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
@@ -85,10 +86,8 @@ class EmbeddingService:
         output = InferRequestedOutput('image_embeddings')
 
         await ensure_loaded(client, self.settings.models.CLIP_IMAGE_MODEL)
-        response = await client.infer(
-            model_name=self.settings.models.CLIP_IMAGE_MODEL,
-            inputs=[input_tensor],
-            outputs=[output],
+        response = await ainfer_with_deadline(
+            client, self.settings.models.CLIP_IMAGE_MODEL, [input_tensor], [output]
         )
 
         embedding = response.as_numpy('image_embeddings')[0]
@@ -134,10 +133,8 @@ class EmbeddingService:
         output = InferRequestedOutput('text_embeddings')
 
         await ensure_loaded(client, self.settings.models.CLIP_TEXT_MODEL)
-        response = await client.infer(
-            model_name=self.settings.models.CLIP_TEXT_MODEL,
-            inputs=[input_tensor],
-            outputs=[output],
+        response = await ainfer_with_deadline(
+            client, self.settings.models.CLIP_TEXT_MODEL, [input_tensor], [output]
         )
 
         embedding = response.as_numpy('text_embeddings')[0]
