@@ -44,6 +44,7 @@ the index; execute one file per batch, lane or procedure.
 | [program/10_standards_and_libraries.md](program/10_standards_and_libraries.md) | Cross-cutting: code standards and the "no hand-rolling" library register |
 | [program/11_risks_cleanup_host.md](program/11_risks_cleanup_host.md) | Risk register, cleanup, host, GPU and peer rules |
 | [program/12_prior_plans_reconciliation.md](program/12_prior_plans_reconciliation.md) | What was unfinished in the older plans and where it went; the removal waves |
+| [program/13_package_pins.md](program/13_package_pins.md) | Cross-cutting: exact pins for every Python dependency, new control-plane packages and images, bump order |
 
 ## Plans after v0.7.0 (research and the next release)
 
