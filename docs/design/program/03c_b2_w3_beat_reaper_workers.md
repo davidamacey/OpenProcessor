@@ -1,254 +1,152 @@
-# B2 wave 3: beat, the lease reaper, the trigger workers, hardening (tracks 2D, 2E, 2F)
+# B2 stage 6: beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs
 
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Depends on | W1 and W2 merged into `int/b2-celery` (`03a`, `03b`) |
-| Decisions applied | D-8, D-17; recommendations of D-19, D-20b, D-24, D-25 |
-| Source IDs | `task_queue_plan.md` Phase 4 (beat table, deletes, keeps, tests), Phase 5 (auto-label, assist loop, liveness, tests); Q-D4, D5, D7, D8, D15; Q-E4, E5, E12, E19, E25; audit OPS-2 (act part), SEC-4, SEC-5; former master plan 3b (dispatcher, sweeper, cache-prune rows), 7.2 W3 rows |
-| Branches / worktrees | `b2/beat-reaper` in `<repo>-wt-b2-beat-reaper` (2D); `b2/trigger-workers` in `<repo>-wt-b2-trigger-workers` (2E); `b2/hardening` in `<repo>-wt-b2-hardening` (2F) |
-| Compose project | none in the lanes (offline renders and unit tests); live checks in the single B2 live run (`-p op-b2-live`; no GPU needed; [00_index.md](00_index.md) section 8.1) |
-| Merge order | 2D, 2E, 2F (2F last: it edits every service block) |
-| Size | 2D M, 2E M, 2F S |
-
-Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03.
-Consolidated 2026-11-03. The reaper rules are
-authoritative in `03_b2_overview.md` section 9.5; 2D implements them.
+| Depends on | stages 4 and 5 merged ([03b](03b_b2_w2_job_families.md), [03f](03f_b2_s5_gpu_queues.md)) |
+| Design | [02b](02b_jobs_locking_events.md) section 4.1 (advisory locks, single beat), [02c](02c_migration_ops_tests.md) section 4 (services) |
+| Lanes | 6A and 6B in parallel; then 6C; then 6D |
+| Merge order | 6A, 6B, 6C, 6D |
+| Compose project | none in the lanes (offline renders); the B2 sweep follows this stage |
+| Decisions | D-19, D-20b, D-24, D-50, D-54, D-60, D-61; SEC-4, SEC-5 (neutral) |
 
 ---
 
-## 1. Track 2D (`b2/beat-reaper`): periodic work to beat, the reaper, OPS-2
+## Lane 6A `b2/beat-periodic`: periodic work to beat, and the old infrastructure deleted
 
-### 2D-1 `src/tasks/periodic.py` and the schedule
+**Owns:** `src/tasks/periodic.py`, `src/tasks/beat_schedule.py`, `src/config/task_routes/periodic.py`;
+`src/services/curation/bulk_ingest/dispatcher.py` (the tick loop), `src/services/curation/open_vocab_sweeper.py`,
+`src/services/curation/source_image_cache.py`, `src/services/curation/ingest_index.py` (the inline
+prune call), `scripts/curation/cluster_refresh_daemon.py` (deleted), `src/services/curation/clustering/refresh_schedule.py`,
+`src/services/training/{gpu_arbiter_policy,pause_sentinel}.py`, `src/app/lifespan.py`,
+`src/app/resources.py`, `src/services/curation/{background_jobs,startup_reconcile,job_reconcile,file_job,lease_heartbeat,job_lock}.py`
+(deleted), `src/clients/job_lease.py` and `src/domain/job_lease.py` (deleted),
+`scripts/codegen/check_file_locks.py` and `scripts/codegen/baselines/file_locks.txt`,
+`src/services/curation/ops_metrics*.py` (OPS-2 act part only), tests under `tests/periodic/`,
+`tests/test_lifespan_has_no_side_effects.py`.
 
-- **Docs:** [C4] periodic tasks (one scheduler; entry `options` accept any `apply_async`
-  argument, such as `expires`); [C5] routing.
-- Every periodic task is a plain task (overview 9.4) on queue `periodic`, idempotent, with
-  `soft_time_limit=120`, `time_limit=150`, and its beat entry has `options={'expires': <interval>}`
-  so a backlog behind a stalled consumer is dropped, not replayed.
-- Route every name in `TASK_ROUTES` (`periodic` block).
+### 6A-1 The beat schedule
 
-| Task | Every | Replaces (delete in the same commit) | Exclusion |
+Every periodic task is a plain task on queue `periodic`, idempotent, `soft_time_limit=120`,
+`time_limit=150`, its beat entry with `options={'expires': <interval>}` (a backlog behind a stalled
+consumer is dropped, not replayed: [periodic tasks](https://docs.celeryq.dev/en/stable/userguide/periodic-tasks.html)),
+and the advisory lock of [02b](02b_jobs_locking_events.md) section 4.1.
+
+| Task | Every | Replaces (deleted in the same commit) | Lock |
 |---|---|---|---|
-| `op.periodic.ingest_dispatch` | `OP_INGEST_DISPATCH_S` (5 s) | `bulk_ingest/dispatcher.py` `_loop`, `start_ingest_dispatcher`, `run_tick`'s `_loops` use | the `dispatch.lock` flock is replaced by a per-project B1 lease `ingest_dispatch` (TTL 60 s) acquired and released per tick; `Busy` -> skip the project this tick (former master plan 3b) |
-| `op.periodic.open_vocab_sweep` | `OP_OPEN_VOCAB_SWEEP_S` | `open_vocab_sweeper.py` `_loop`, `start_open_vocab_sweeper`, the `open_vocab_sweep.lock` flock | none needed: the sweep only finds stale `pending` and enqueues `op.jobs.open_vocab_drain` (single consumer `-c 1`) |
-| `op.periodic.cache_prune` | the prune interval the cache already uses (`rg -n "prune" src/services/curation/source_image_cache.py`) | the `.prune.lock` flock and the in-process prune trigger | none: the prune is idempotent; `unlink` tolerates a missing file |
-| `op.periodic.gpu_arbiter` | 15 s | `lifespan._arbiter_reconcile_loop`, `_start_gpu_arbiter` (the startup reconcile also becomes this task's first run) | one beat, one message per tick |
-| `op.periodic.reload_promoted` | 15 s | the reload inside the arbiter loop and `lifespan._reload_promoted_models`; keep the on-demand `reload_promoted` route | idempotent |
-| `op.periodic.lease_reaper` | 30 s | `startup_reconcile.py`, every remaining `reconcile_orphaned_jobs`, `lifespan._reconcile_orphaned_state`, and `job_reconcile.reconcile_stale_running` if the dead-code ratchet agrees | rules a-d of overview 9.5 |
-| `op.periodic.cluster_refresh` | `OP_CLUSTER_REFRESH_INTERVAL_S` | `scripts/curation/cluster_refresh_daemon.py` main loop and the `curation-cluster-refresh` service; the schedule logic stays in `clustering/refresh_schedule.py` and `refresh_state_store.py` | the task calls the auto-label service function directly (not the API over HTTP); B1's `autolabel` lease makes a busy project a skip |
-| `op.periodic.ivf_retrain_check` | `AUTO_RETRAIN_CHECK_INTERVAL_S` | `auto_label_worker.py` `_next_retrain`, `_maybe_auto_retrain`, the in-memory `last_check` dict | the policy's existing cooldown (`should_retrain_centroids`); starts the IVF pipeline through `autolabel.start_job` (lease) |
+| `op.periodic.reaper` | 30 s | (3A, already present) | `REAPER, 0` |
+| `op.periodic.ingest_dispatch` | `OP_INGEST_DISPATCH_S` (5 s) | `dispatcher.py` `_loop`, `start_ingest_dispatcher`, the `dispatch.lock` flock | `INGEST_DISPATCH, <project lock_key>`; busy -> skip the project |
+| `op.periodic.open_vocab_sweep` | `OP_OPEN_VOCAB_SWEEP_S` (120 s) | `open_vocab_sweeper.py` `_loop`, the `open_vocab_sweep.lock` flock | `OPEN_VOCAB_SWEEP, <project>`; starts `open_vocab_drain` (coalesced by the unique index) |
+| `op.periodic.cache_prune` | the cache's interval | the `.prune.lock` flock and the inline prune from ingest | `CACHE_PRUNE, 0` |
+| `op.periodic.gpu_arbiter` | 15 s | `lifespan._arbiter_reconcile_loop`, `_start_gpu_arbiter`; `training_gpus.lock` and `pause.sentinel` become `gpu_reservations` and `deployment_settings('vlm_paused_for_training')` | `GPU_ARBITER, 0`; intent and outcome in two transactions around the Docker calls |
+| `op.periodic.reload_promoted` | 15 s | the reload in the arbiter loop and `lifespan._reload_promoted_models` (the on-demand route stays) | none (idempotent) |
+| `op.periodic.cluster_refresh` | `OP_CLUSTER_REFRESH_INTERVAL_S` | `cluster_refresh_daemon.py` and its service; the schedule logic stays in `refresh_schedule.py` over `project_state` | `CLUSTER_REFRESH, <project>`; starts `autolabel` through `start_job` only when an `autolabel` consumer is live (`inspect(timeout=1).active_queues()`), else skips |
+| `op.periodic.ivf_retrain_check` | `OP_IVF_RETRAIN_CHECK_S` | the auto-label worker's `_next_retrain` and `last_check` (deleted with the worker in 4D) | `IVF_RETRAIN, <project>`; same consumer gate |
+| `op.periodic.db_backup` | `OP_DB_BACKUP_INTERVAL_H` if set | - | `pg_try_advisory_xact_lock` on a backup class; off by default (D-61) |
 
-**Consumer gate for the two auto-label starters.** `cluster_refresh` and `ivf_retrain_check` used to
-run only with the `curation` profile up. In beat they run in the core install, so each first checks
-that an `autolabel` consumer is live with `celery_app.control.inspect(timeout=1).active_queues()`
-([C3] "Inspecting workers"); no consumer -> skip with a debug log. This keeps today's behaviour
-(nothing auto-starts without the curation workers) and never queues work nothing drains (Q-E18).
+The two auto-label starters ran only with the `curation` profile up; the consumer gate keeps that
+behaviour and never queues work nothing drains.
 
-### 2D-2 The lease reaper
+### 6A-2 Single beat (D-60)
 
-- **Contract:** overview 9.5 rules (a) expired `running` -> takeover -> `interrupted` (+
-  `auto_resume`); (b) resumable `interrupted` with no marker, older than 120 s -> re-enqueue;
-  (c) `queued` with no marker, older than 120 s -> re-enqueue; (d) `queued` past its queue-wait
-  TTL -> `failed` (`queue_wait_exceeded`). Redis `Unknown` -> do nothing. OpenSearch down for a
-  project -> skip it.
-- **Scope of the scan:** every project from `for_each_project()`, every FileJob family directory
-  (use one registry of family roots, `src/services/curation/job_families.py`, built from the
-  `register_job` kinds, so a new family cannot be forgotten), and the global combine directory.
-- **Traps:** take over with `takeover_expired` (OCC), never by writing the record first; the
-  reaper is the only writer of a record whose holder is gone; a fresh lease is never touched.
-- **Red tests:** `tests/tasks/test_lease_reaper.py` (fakes): each rule a-d acts; a fresh `running`
-  lease is untouched; Redis `Unknown` changes nothing; a `running` record with no lease doc and a
-  fresh heartbeat is left alone (B1 mid-upgrade rule); the reaper scans the combine directory.
-  `tests/tasks/test_job_families_registry.py`: every `register_job` kind has a family root.
-  **Control:** a clean project with only terminal records gives no writes.
+`beat_init` handler: the session advisory lock on a direct connection; exit 3 when held; exit when
+the connection drops. Red: `tests/periodic/test_single_beat_lock.py` (`db`): a second beat process
+exits with `beat_already_running`; killing the first lets a restarted second one take the lock.
 
-### 2D-3 Deletes and keeps
+### 6A-3 Deletions (the old job infrastructure, now without callers)
 
-- **Delete:** `src/services/curation/background_jobs.py`; `AppResources.curation_background_jobs`
-  and `arbiter_task`; `lifespan._stop_curation_jobs`, `_stop_arbiter`, `_reconcile_orphaned_state`,
-  `_start_gpu_arbiter`, `_reload_promoted_models` and their shutdown steps;
-  `src/services/curation/startup_reconcile.py`; the remaining `reconcile_orphaned_jobs`
-  functions (`rg -n "def reconcile_orphaned_jobs" src`); the three B2 flock sites
-  (`dispatcher.py`, `open_vocab_sweeper.py`, `source_image_cache.py`).
-- **Keep (correction K-16):** `AppResources.ops_metrics_task` and the ops-metrics refresh in the
-  API. The task plan's Phase 4 "Delete ... `ops_metrics_task`" contradicts its own "Keep: ... the
-  ops-metrics refresh in the API"; the keep wins (it writes only the API's own Prometheus files).
-- **Keep:** the project registry poll, the config store poll, the event tail, index bootstrap and
-  warm-up (overview 5.5).
-- **File-lock ratchet:** the baseline in `scripts/codegen/baselines/` shrinks to `event_hub.py` and
-  `job_lock.py` only.
-- **Arbiter overlay:** `docker-compose.gpu-arbiter.yml` mounts the Docker socket into
-  `periodic-worker` instead of `api`; rewrite its header (the security trade-off text stays, now
-  naming the worker).
-- **Red tests:** `tests/test_lifespan_has_no_side_effects.py` (AST over `src/app/lifespan.py`: no
-  call to the deleted functions, no `reconcile`, no arbiter); `tests/compose/test_arbiter_overlay.py`
-  (the socket is mounted only into `periodic-worker`); `tests/tasks/test_beat_schedule.py` (the
-  schedule has exactly the eight names, each routed to `periodic`, each with `expires`).
-  **Control:** `tests/compose/test_overlay_render.py`.
+`file_job.py`, `lease_heartbeat.py`, `job_lock.py`, `startup_reconcile.py`, `background_jobs.py`,
+`job_reconcile.py` (if the dead-code ratchet agrees), `src/clients/job_lease.py`,
+`src/domain/job_lease.py`, the lifespan steps `_stop_curation_jobs`, `_stop_arbiter`,
+`_reconcile_orphaned_state`, `_start_gpu_arbiter`, `_reload_promoted_models`, the `AppResources`
+fields `curation_background_jobs` and `arbiter_task`. The ops-metrics refresh stays (it writes only
+its own Prometheus files). The file-lock baseline becomes empty and `check_file_locks.py` asserts
+zero (the baseline file is deleted).
 
-### 2D-4 OPS-2 (act only on the W1-0 verdict) and worker metrics (Q-E19, D15)
+Red tests: `tests/test_lifespan_has_no_side_effects.py` (AST over `src/app/lifespan.py`: none of the
+deleted calls, no `reconcile`, no arbiter); `tests/periodic/test_beat_schedule.py` (exactly the names
+above, each routed to `periodic`, each with `expires`); `tests/codegen/test_file_locks_zero.py`
+(a planted `fcntl.flock` fails); the done-when `rg` of [03_b2_overview.md](03_b2_overview.md)
+section 1.
 
-- **If W1-0 said "act":** call `prometheus_client.multiprocess.mark_process_dead(os.getpid())` in
-  the API lifespan shutdown (uvicorn has no parent hook) [P1]. Red test: a fake multiproc dir with
-  a dead pid's live gauge files is cleaned after the shutdown step.
-- **In every case, for Celery workers:** each worker service has its own `PROMETHEUS_MULTIPROC_DIR`
-  tmpfs (W1-8), and a `worker_process_shutdown` handler [C11] calls `mark_process_dead` for the
-  child that exits under `--max-tasks-per-child`. Metrics that a dashboard reads from job code:
-  list them with `rg -n "OP_[A-Z_]+\.(labels|inc|set|observe)" src/services/curation | rg -v ingest`
-  and the dashboards under the monitoring config; if one is job-only (it moved out of the API with
-  the job), expose the worker's registry with `prometheus_client.start_http_server` from a
-  `worker_init` handler on an internal port and add a scrape job; otherwise no endpoint.
-- **Done when:** the verdict is applied and recorded in the PR.
+### 6A-4 OPS-2 and worker metrics
 
-**2D done when:** the schedule test, the reaper tests, the lifespan test and the overlay test are
-green; `rg -n "exclusive_(file|start)_lock\(|fcntl\.flock" src | rg -v "job_lock.py|event_hub.py"`
-is empty; `rg -n "reconcile_orphaned_jobs|startup_reconcile|background_jobs" src` is empty.
+If 1B-0 said "act": `mark_process_dead(os.getpid())` in the API lifespan shutdown. In every case:
+each Celery service has its own `PROMETHEUS_MULTIPROC_DIR` (6B), and a `worker_process_shutdown`
+handler calls `mark_process_dead` for a child leaving under `--max-tasks-per-child`
+([multiprocess mode](https://prometheus.github.io/client_python/multiprocess/)). A job-only metric
+a dashboard reads is exposed with `start_http_server` from `worker_init` on an internal port, with a
+scrape target (6B).
 
----
+## Lane 6B `b2/scale-out-compose`
 
-## 2. Track 2E (`b2/trigger-workers`): auto-label and assist loop become queue consumers
+**Owns:** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.gpu-arbiter.yml`, new
+`docker-compose.pgbouncer.yml`, `docker/test/compose.yml`, `monitoring/prometheus.yml`, the shell
+helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|triton|trainer|vlm|opensearch)" scripts/lib openprocessor`),
+`src/services/labeling/vlm_url_policy.py` (own-container recognition), `tests/compose/**`
+(new tests), `tests/installer/test_container_lookup_by_label.py`.
 
-### 2E-1 Auto-label
+| ID | Task | Red test | Control |
+|---|---|---|---|
+| 6B-1 | the stage-4 and stage-5 service changes from the PR notes: `curation-auto-label-worker`, `curation-assist-loop-worker`, `curation-trainer`, `model-export-worker`, `curation-evaluator` run their Celery consumers with the pool healthcheck, `REMAP_SIGTERM=SIGQUIT` and a `stop_grace_period` above the soft timeout; `curation-cluster-refresh` deleted; every `/jobs` mount and the `openprocessor-jobs` volume deleted; `OP_API_LOOPBACK_URL=http://api:8000` on `jobs-worker` | `tests/compose/test_consumers_after_b2.py`: each queue of `TaskQueues.ALL` has exactly the service of [02b](02b_jobs_locking_events.md) section 7.3; no service mounts `/jobs`; `tests/test_queue_consumers_from_compose.py` | `tests/compose/test_overlay_render.py` |
+| 6B-2 | D-54: no service has a `container_name`; scripts and the CLI find containers through Compose (`docker compose -p <p> ps -q <service>`) or the labels `com.docker.compose.project` and `com.docker.compose.service` ([compose labels](https://docs.docker.com/reference/compose-file/services/#labels)); the GPU arbiter's `OP_GPU_ARBITER_CONTAINERS` names services, resolved by label | `tests/compose/test_no_container_name.py`; `tests/installer/test_container_lookup_by_label.py` (fake docker output) | the CLI status test |
+| 6B-3 | scale: `docker compose up --scale api=2 --scale jobs-worker=2` renders; `jobs-beat` stays one replica (`deploy.replicas: 1`); the live harness scales `jobs-worker` instead of declaring two services | `tests/compose/test_scale_render.py` (offline `docker compose config` with the scale flags) | - |
+| 6B-4 | the GPU-arbiter overlay mounts the Docker socket into `periodic-worker` only; its header rewritten (the trade-off text stays, naming the worker) | `tests/compose/test_arbiter_overlay.py` | - |
+| 6B-5 | `docker-compose.pgbouncer.yml` (D-50, opt-in): PgBouncer in transaction mode for the pooled DSN, `OP_DB_POOLER=pgbouncer`, `OP_DB_DIRECT_HOST=postgres` kept for `LISTEN` and the locks; header explains when to use it | `tests/compose/test_pgbouncer_overlay.py`: the API's pooled host is the pooler and its direct host is Postgres | - |
+| 6B-6 | `monitoring/prometheus.yml` scrape targets for the renamed workers (6A-4) | render test | - |
 
-- **Files:** `src/services/curation/autolabel/job.py` (`start_job`, `_trigger_file`,
-  `QUEUE_MAX_AGE_S`, the trigger-aware busy and repair code), `scripts/curation/auto_label_worker.py`
-  (`_run_one`, `_claim_trigger_for`, `_oldest_pending_trigger`, `_running_lock`, `_main_loop`,
-  `_heartbeat_loop`), compose service `curation-auto-label-worker`, a new `src/tasks/autolabel.py`.
-- **Steps:**
-  1. `start_job` acquires B1's `autolabel` lease as `queued` (TTL `MAX_QUEUE_WAIT_S['autolabel']`),
-     writes `queued`, enqueues `op.autolabel.run` with `task_id=job_id`, sets the marker. No
-     `trigger.json`.
-  2. Move `_run_one`'s body into the task handler (through `JobTask`; not resumable, D-25).
-  3. The service command becomes `celery -A src.tasks.app worker -Q autolabel -c 1
-     --max-tasks-per-child=20 --hostname auto-label@%h -E` (profile `curation` unchanged,
-     `REMAP_SIGTERM=SIGQUIT`, the pool healthcheck).
-  4. Delete the poll loop, `_claim_trigger_for`, `_oldest_pending_trigger`, `running.lock` (and its
-     "backward-compat" comment), the trigger file handling and `QUEUE_MAX_AGE_S` (the reaper's
-     rule d with `MAX_QUEUE_WAIT_S` covers it).
-  5. **CC-9:** `autolabel/vlm_stage.py` `gather` over chunks -> TaskGroup + Semaphore.
-  6. **Upgrade:** a leftover `trigger.json` or `running.lock` from 0.6.0 is deleted by the reaper
-     when it re-enqueues that project's `queued` record (overview section 15); a unit test covers it.
-- **Red tests:** `tests/curation/test_autolabel_enqueue.py` (start enqueues once, writes no trigger
-  file; a second start is 409 `job_busy`); `tests/tasks/test_autolabel_task.py` (two deliveries of
-  one job -> one run; a cancel flag at a stage boundary -> `cancelled`); a leftover trigger file is
-  removed on re-enqueue. **Control:** the auto-label status route test.
+## Lane 6C `b2/hardening` (after 6B merged; it edits every service block)
 
-### 2E-2 Assist loop
+- **SEC-4:** reduce the privileges of an opt-in monitoring service. **SEC-5:** pin a build input and
+  review per-service container hardening. The lane reads the maintainers' notes in the owner's
+  gitignored evidence directory (`artifacts_local/audit/`) and applies the right-sized option
+  recorded there; commit messages, PR text, CHANGELOG and docs use only these two neutral lines.
+- **Public scope:** `security_opt: [no-new-privileges:true]` on every service B2 added or changed,
+  `cap_drop: [ALL]` where the service starts without capabilities (the S0 and S1 records say which
+  need some), no new published port. No blanket change to the GPU, Triton or OpenSearch services in
+  this batch.
+- **Red tests:** `tests/compose/test_new_service_hardening.py`; the private-note fixes carry their own
+  neutral-named tests. **Control:** the overlay render test.
+- The naming-leak scan and a manual read of the diff before every commit.
 
-- **Files:** `src/services/curation/assist_loop/job.py` (`claim_trigger`, start and resume),
-  `scripts/curation/assist_loop_worker.py` (`repair_orphans`, `_oldest_pending`, `run_next`,
-  `_main_loop`), compose `curation-assist-loop-worker`, `src/tasks/assist_loop.py`.
-- **Steps:** the same as 2E-1 with `op.assist_loop.run`, queue `assist_loop`, lease `assist_loop`;
-  resumable (D-25); resume enqueues again; delete `claim_trigger`, the trigger file, the poll loop
-  and `repair_orphans` (the reaper owns repair).
-- **Doc sync (same commit as the auto-label and assist-loop worker changes):** update
-  `docs/design/auto_label_loop_plan.md` sections 0 (D4), 1 (worker pattern), 3.1 (`start.lock`,
-  `trigger.json`) and 8 (one loop per project) to the lease and the `-Q assist_loop -c 1` consumer
-  (trigger files, `claim_trigger` and the poll loop no longer exist).
-- **Red tests:** `tests/curation/test_assist_loop_enqueue.py`, `tests/tasks/test_assist_loop_task.py`
-  (two deliveries -> one run; resume after `interrupted` re-enqueues). **Control:** the existing
-  assist-loop status test.
+## Lane 6D `b2/docs` (last)
 
-### 2E-3 One liveness mechanism
+**Owns:** `docs/ARCHITECTURE.md`, `INSTALLATION.md`, `docs/CURATION.md`, `SECURITY.md`, `CLAUDE.md`,
+`README.md`, root `CHANGELOG.md`, `ATTRIBUTION.md`, `docs-site/**`, `docs/opensearch_schema_design.md`,
+`docs/design/curation_api_contract.md`, `docs/design/curation_design_rationale.md` section 6, the
+doc-sync notes of stage 4 (`selectable_assist_plan.md`, `sam3_full_image_detection_plan.md`,
+`auto_label_loop_plan.md`), `docs/PERFORMANCE.md` (the table skeleton for the live-run numbers).
 
-- **Recommendation:** the compose healthcheck of both services is the pool healthcheck (W1-9);
-  delete their `worker_liveness.py check ... --max-age 120` healthchecks and the asyncio heartbeat
-  loops. The `auto_label_worker` heartbeat also feeds an ops gauge (`ops_metrics.WORKER_LABELS`);
-  if a dashboard or alert reads it (`rg -n "auto_label_worker|worker=\"curation\"" ` over the
-  monitoring config), write that heartbeat from Celery's `heartbeat_sent` worker signal [C11]
-  instead of a loop; if nothing reads it, delete the label too.
-- **Done when:** each service has exactly one healthcheck and at most one heartbeat writer.
+Content: the keep-list of [03_b2_overview.md](03_b2_overview.md) section 11; the services table and
+the Celery conventions block in `CLAUDE.md` (routes in `src/config/task_routes/`, no decorator
+`queue=`, no I/O in `worker_process_init`, no `terminate=True`, restart the worker after task edits,
+one Alembic head, `project_tx` for every project query); INSTALLATION (services, secrets and their
+ownership rule, `max_connections`, backup and restore, PgBouncer overlay, multi-host with a shared
+volume, the 0.6.0 upgrade, the downgrade note); SECURITY (neutral preconditions: the broker and the
+database are internal-only with required passwords, JSON-only messages, whoever reaches the broker
+can enqueue work); ATTRIBUTION rows (SQLAlchemy MIT, Alembic MIT, psycopg LGPL-3.0, Celery, kombu,
+billiard BSD-3, redis-py MIT, Flower BSD-3, testcontainers Apache-2.0 (test only), Valkey BSD-3,
+PostgreSQL licence; each confirmed from the installed wheel's metadata and Trivy's licence scanner
+at pin time, [08](08_environment_and_setup.md) section 7.3); CHANGELOG `[Unreleased]`: Added
+(Postgres, Valkey, Celery workers, beat, job listing routes, `Idempotency-Key`), Changed (jobs
+survive API recycling; events over SSE with resumable ids), Removed (file protocols, the
+cluster-refresh service, four index roles, `op_projects`, `op_global_configs`, the registry
+migration CLI), Breaking (new core services and secrets, `queued` status, 202 for upload extraction,
+directory ingest and person grouping, settings writes need `expected_revision`, promote `wait=true`
+gone, removed error codes and the sync route), Security (the two neutral lines).
 
-**2E done when:** `rg -n "trigger\.json|claim_trigger|_claim_trigger_for|running\.lock|QUEUE_MAX_AGE_S" src scripts` is empty; both services run Celery commands; Q-D7 and Q-D8 are closed.
+Red test: `.venv/bin/python scripts/docs/check_docs_vs_code.py` over every touched doc;
+`tests/test_doc_links.py`.
 
----
+## Stage 6 exit criteria
 
-## 3. Track 2F (`b2/hardening`): SEC-4 and SEC-5 (neutral)
+- every lane's tests green on the merged branch; the done-when list of
+  [03_b2_overview.md](03_b2_overview.md) section 1 holds by `rg`;
+- then the B2 sweep ([03_b2_overview.md](03_b2_overview.md) section 9).
 
-- **SEC-4:** reduce the privileges of an opt-in monitoring service.
-- **SEC-5:** pin a build input and review per-service container hardening.
-- Done here because B2 already edits compose and adds images.
-- **Details stay private.** The lane reads the maintainers' notes in the owner's gitignored
-  evidence directory (`artifacts_local/audit/security.md` and `security.verdicts.md` in the main
-  checkout) and applies the right-sized option recorded there. Commit messages, PR text, CHANGELOG
-  and docs use only the two neutral lines above.
-- **In scope publicly:** `security_opt: no-new-privileges:true` on every service B2 added
-  (`redis`, `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat`, `flower`), and
-  `cap_drop: ALL` where the service needs no capability (verify each starts in the sweep). No
-  blanket change to the GPU, Triton or OpenSearch services in this batch.
-- **Red tests:** `tests/compose/test_new_service_hardening.py` (each B2 service sets
-  `no-new-privileges`); the private-note fixes carry their own neutral-named test
-  (`tests/compose/test_build_input_pinned.py` style). **Control:** the overlay render test.
-- **Docs:** `SECURITY.md` neutral lines; `CHANGELOG.md` `[Unreleased]` "Security" with the two
-  neutral lines. The naming-leak scan and a manual read of the diff before commit (M17).
-- **Done when:** the tests are green and the diff carries no security detail.
+## Lane briefs
 
----
-
-## 4. W3 gate, docs, upgrade, rollback, risks
-
-- **Lane gate:** only the targeted tests above and `pre-commit run --files <touched>` (T0); then the
-  coordinator runs the one B2 sweep (`03_b2_overview.md` section 14), whose live steps 4, 5, 8, 9
-  and 10 exercise this wave.
-- **Keep after merge, then delete:** the beat table and reaper rules go to `docs/ARCHITECTURE.md`,
-  the trigger-worker description to `docs/CURATION.md`; the closing B2 PR deletes the B2 plan files
-  (`03_b2_overview.md` section 17.1).
-- **Docs:** `docs/ARCHITECTURE.md` (beat and the reaper), `docs/CURATION.md` (auto-resume, the
-  busy window after a crash is `LEASE_TTL_S` plus one reaper tick), `CLAUDE.md` (services table: the
-  cluster-refresh service removed), `docker-compose.gpu-arbiter.yml` header, `INSTALLATION.md`
-  (the arbiter overlay now targets `periodic-worker`), `SECURITY.md` (2F), `CHANGELOG.md`
-  `[Unreleased]` ("Removed": the cluster-refresh service and the trigger files; "Changed": the
-  arbiter overlay target).
-- **Upgrade impact:** the `curation-cluster-refresh` container is removed by `docker compose up
-  --remove-orphans` in `openprocessor upgrade` (08 checks the installer does this); leftover trigger
-  files are cleaned by the reaper; the arbiter overlay users must re-apply the overlay (it now
-  targets a different service): a CHANGELOG "Breaking" line.
-- **Rollback:** revert a track's merge commit on `int/b2-celery` (2F alone; 2E alone; 2D needs 2E
-  and 2F reverted first because the compose blocks overlap).
-- **Risks:** a periodic task overruns its interval (`expires` drops the backlog; the per-project
-  dispatch lease prevents overlap); the arbiter flaps because two ticks overlap (one beat, `-c 2`
-  on `periodic`: the arbiter task takes a deployment lease `gpu_arbiter` in the default project's
-  settings index with TTL 30 s, or runs `-c 1` on its own queue if the 2D agent finds overlap in
-  the unit test; record the choice); a dashboard loses the curation worker gauge (2E-3 check).
-
-## 5. Ready-to-paste lane briefs
-
-### Track 2D
-
-```
-You are the B2 wave-3 lane agent for track 2D (Sonnet). Worktree <repo>-wt-b2-beat-reaper,
-branch b2/beat-reaper, cut from int/b2-celery after W2 merged. Read docs/design/program/03_b2_overview.md
-(sections 5.2, 5.5, 9.5, 21), docs/design/program/03c_b2_w3_beat_reaper_workers.md section 1, the
-W1 PR's OPS-2 verdict, CLAUDE.md, CONTRIBUTING.md (ratchets only shrink). Do 2D-1..2D-4, one
-concern per commit. Red test on the unchanged base first, then fix and control. Lane checks only
-(`pytest <files> -q --no-cov`, `pre-commit run --files <touched>`); no full suite, no --all-files;
-never --no-verify, push, merge or another checkout. No Docker run, no GPU (compose project: none;
-offline renders only). Do NOT use `pgrep -f`, `pkill -f`, or sleep/until loops. Deadline:
-<set by the coordinator>. Report: commits, red outputs, the OPS-2 action taken, the arbiter
-exclusion choice, the shrunk file-lock baseline.
-```
-
-### Track 2E
-
-```
-You are the B2 wave-3 lane agent for track 2E (Sonnet). Worktree <repo>-wt-b2-trigger-workers,
-branch b2/trigger-workers, cut from int/b2-celery after W2 merged. Read docs/design/program/03_b2_overview.md
-(sections 6, 9, 15), 03c section 2, CLAUDE.md. Do 2E-1..2E-3. Same rules as 2D (red first, lane
-checks only, no --no-verify/push/merge/checkout, no Docker, no GPU, compose project: none, no
-`pgrep -f`/`pkill -f`/sleep loops). Deadline: <set by the coordinator>. Report: commits, red
-outputs, the liveness choice and what reads the heartbeat.
-```
-
-### Track 2F
-
-```
-You are the B2 wave-3 lane agent for track 2F (Sonnet). Worktree <repo>-wt-b2-hardening, branch
-b2/hardening, cut from int/b2-celery after W2 merged. Read 03c section 3, then the private notes
-artifacts_local/audit/security.md and security.verdicts.md in the main checkout (SEC-4, SEC-5
-only). Apply the right-sized options recorded there and the public scope in 03c section 3. Never
-write a security detail into any tracked file, commit message or PR text: use only the two
-neutral lines. Run the naming-leak scan via `pre-commit run --files <touched>`. Same lane rules
-(red first, lane checks only, no --no-verify/push/merge/checkout, no Docker, no GPU, compose
-project: none, no `pgrep -f`/`pkill -f`/sleep loops). Deadline: <set by the coordinator>.
-```
+Use the common block of [03a](03a_b2_w1_queue_infra.md), with: "B2 stage-6 lane <6A..6D>", "cut
+from int/b2-control-plane after stages 4 and 5 merged" (6C after 6B, 6D after 6C), this file (your
+lane). 6C adds: "Read the private notes only for SEC-4 and SEC-5; never write a security detail
+into a tracked file, a commit message or PR text." Compose project: none. GPU: none.

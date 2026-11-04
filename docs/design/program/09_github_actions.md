@@ -174,18 +174,18 @@ mid-run, and the periodic loops (dispatcher, sweeper, cache prune, cluster refre
 run once per API worker instead of once.
 
 ## Scope
-- Celery 5.6 on Redis 8. The job record and the OpenSearch job lease (N3) are the truth; the
-  broker is transport. `task_id = job_id`; the task wrapper takes over the lease the API acquired.
-- Redis with no published port, a generated password file, AOF everysec, `noeviction`.
-- Five core containers (D-19): Redis plus the services `jobs-worker`, `open-vocab-worker` (single consumer), `periodic-worker` (the
-  `periodic` queue, so the reaper and the dispatch tick never wait behind long jobs), `jobs-beat`
-  (one scheduler); Flower under the monitoring profile.
-- Every family moves off the API; the periodic loops move to beat; a lease reaper re-enqueues
-  resumable jobs; the startup reconcile and lifespan loops are deleted.
-- Auto-label and assist loop become single-consumer queue workers.
-- Then the API is stateless: request fan-out becomes one read plus one bulk write with
-  per-item optimistic concurrency, the worker count is one `API_WORKERS` knob, events move to
-  Redis Streams, the last file lock is deleted.
+- PostgreSQL holds every control record (projects, classes, configs, jobs, training runs, models);
+  the `jobs` row is the truth and Celery 5.6 on Valkey 9 is the transport; `task_id = job_id`; a
+  claim `UPDATE` with a fencing token admits one delivery ([02](02_control_plane_database.md)).
+- Postgres and Valkey with no published port, generated password files, Valkey AOF everysec and
+  `noeviction`; one-shot `db-migrate`; core workers `jobs-worker`, `periodic-worker`,
+  `open-vocab-worker`, `jobs-beat` (one scheduler, enforced by a database lock); Flower under the
+  monitoring profile.
+- Every family moves off the API, training, model export and the bake-off on GPU queues; the
+  periodic loops move to beat; the reaper re-queues resumable jobs; the job files, the file
+  protocols and every file lock are deleted; events reach the browser from Postgres.
+- Then the API is stateless (B4): request fan-out becomes one read plus one bulk write with
+  per-item optimistic concurrency, and the worker count is one `API_WORKERS` knob.
 - Children: N3 (leases), N11, N12, #439.
 
 ## Acceptance
@@ -421,8 +421,8 @@ the `usage` object. The label rate that sizes the budgets was never measured (S0
 
 ## Scope
 - Measure the label rate first (S0 design in `docs/design/auto_label_loop_plan.md` section 13).
-- A pause route on the B2 consumer (`03c` 2E-2).
-- Events from the B4 Redis stream (`05` 4C).
+- A pause route on the B2 consumer (`03b` 4D-2).
+- Events from the Postgres event feed (B2 stage 3, `03e`).
 - `usage` tokens read from the OpenAI-compatible response.
 - Cropwright pause button and event log.
 
