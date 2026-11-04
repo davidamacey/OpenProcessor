@@ -350,7 +350,7 @@ in the same commit as any wire change; lane checks only (section 9).
   keep the per-profile cap).
 - Fail closed: a region profile whose model declares a raw head gets a clear error naming the
   export command. GPU-15 already decides pixel versus normalised per tensor; keep that.
-- If owner question MQ-8 is answered yes, the GPU-15 leftover joins this task: the region-profile
+- The GPU-15 leftover is part of this task (owner decision MQ-8, 2026-11-04): the region-profile
   validator (`src/services/config_store/profile_field_checks.py` or the profile schema) refuses a model
   with an undeclared region head at save time, not only at decode time (audit 4.3 GPU-15 "Left
   over"). Red: saving such a profile is a 422 naming the head; control: a declared fused head saves.

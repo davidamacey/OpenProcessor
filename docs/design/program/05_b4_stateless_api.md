@@ -280,7 +280,10 @@ numbers are its first rows).
   index in the handler; the task creates them; a duplicate slug is 409 before enqueue.
   **Control:** project list and get routes unchanged.
 - **Docs and contracts:** the 202 + `building` in contracts, `docs/CURATION.md`, Cropwright
-  (projects page), both CHANGELOGs ("Breaking": create returns 202).
+  (projects page), both CHANGELOGs ("Breaking": create returns 202). 4D also adds one sentence to
+  the external-endpoint part of `docs/CURATION.md` (owner decisions OI-1 and OI-2 of 2026-11-04):
+  when external use is enabled, external VLM endpoints and the hosted research judge may receive
+  any region kind and contact-sheet image; the privacy lane writes the matching SECURITY.md text.
 
 ## 6b. Events (moved)
 

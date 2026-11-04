@@ -24,7 +24,7 @@ Ultralytics version), B4 (stateless API), B5 (speed), R-final (release acceptanc
 | The plan set | `plan/integration` (this branch's base): the PostgreSQL design (files 02-02c), B2 re-planned in six stages (03-03f), exact pins (13). Not on `main` yet: it lands with this plan in one docs PR |
 | CI | path-scoped checks merged (PR #476); the 4-shard offline suite is PR #477, **open**: merge it before wave W2.0 (section 8) |
 | Open dependabot PRs | #474 (frontend dev group), #449 (Triton base 26.10). Handling in [00b_traceability.md](00b_traceability.md) section 4 |
-| Decisions | the B2 set is approved (2026-11-04, as a block); still open: section 9 (MQ-3, MQ-4, MQ-8, the Flower port, OI-1 and OI-2 for #469 and #471, and the B3, B4, B5 and release questions at their kick-offs) |
+| Decisions | the B2 set is approved (2026-11-04, as a block); MQ-3, MQ-4, MQ-8, the Flower port and OI-1 / OI-2 (#469, #471 kept as they are) answered 2026-11-04; still open: section 9.2, only the B3, B4, B5 and release questions at their kick-offs |
 
 ## 2. The waves in one table
 
@@ -143,7 +143,7 @@ or broker refuses the start naming it, and `/ready` answers 503 naming `database
 
 **Part check.** 03a "Stage 1 exit criteria": the lanes' tests on the merged head, `-m db`,
 `make contracts-check`, the 15-minute CPU bring-up (`-p op-b2-s1check`); plus the Docker-free
-suite in 4 shards if MQ-3 is approved.
+suite in 4 shards (MQ-3, approved).
 
 **GPU window.** None. Spikes S0 and S1 are CPU-only with their own `-p` names.
 
@@ -185,7 +185,7 @@ R-8 (claims rebalance), R-9 (the upgrade gate, `--reset`, rollback order), R-13 
 policies), R-25 (`COPY` load), R-34 (`reset` event), and D-65 (the Valkey wake-up).
 
 **Part check.** 03d and 03e exit criteria: `-m db`, `make contracts-check`, the 20-minute CPU
-bring-up (`-p op-b2-s3check`); the Docker-free suite in 4 shards if MQ-3 is approved.
+bring-up (`-p op-b2-s3check`); the Docker-free suite in 4 shards (MQ-3).
 
 **Codes in parallel.** The W2.3 lanes, cut from the merged W2.2 head.
 
@@ -216,7 +216,7 @@ handlers (R-2); the fake-based family tests rewritten (R-14); `psycopg` C builds
 images (R-27).
 
 **Part check.** 03b section 7 and 03f exit criteria: `-m db` and `make contracts-check` after each
-merge; the Docker-free suite in 4 shards if MQ-3.
+merge; the Docker-free suite in 4 shards (MQ-3).
 
 **GPU window.** None in the lanes; stage 5's real-GPU smoke runs in GPU window 1 (W3).
 
@@ -273,8 +273,8 @@ GPU gate, `docs`. `requirements-export-y11.txt` is not bumped by pins part B: B3
 **Folded in.** The pin-series bumps that can change model output (owner direction 3, D-67); the
 real-GPU smoke of B2 stage 5 (03f "GPU check", gate step G12); the GPU part of the image smokes of
 13 section 6 (G11), with `cv2.dnn.blobFromImage` in the OpenCV 5 parity set (R-17). Every B3 track
-re-verifies its files and symbols on the post-B2 head first (R-18). Question MQ-8 asks whether the
-GPU-15 leftover joins B3-D3.
+re-verifies its files and symbols on the post-B2 head first (R-18). The GPU-15 leftover (refuse an
+undeclared region head when a profile is saved) is part of B3-D3 (MQ-8, approved 2026-11-04).
 
 **Sweep.** [04](04_b3_ultralytics_one_version.md) section 7: T1 offline, the CI `families` matrix
 at the pin, the CPU part of G11 (image builds, `pip check`, imports, weight downloads: R-17), image
@@ -305,7 +305,7 @@ workers and replicas.
 | 1 | Request fan-out becomes bulk writes; the ingest data plane as task groups | `b4/bulk-occ` | [05](05_b4_stateless_api.md) track 4A | 05 section 4 | #451, #464 (CC-10 box), #473 (part b) |
 | 2 | Project creation (#439) | `b4/project-create` | 05 track 4D | 05 section 6 | #439 |
 | 3 | The worker knob and the statelessness ratchet | `b4/worker-knob` | 05 track 4B | 05 section 5 | #451 |
-| 1 | Privacy and security items (owner decision 7 of 2026-11-04) | `b4/privacy-hardening` | the files named in the maintainers' private notes; the coordinator checks they are disjoint from 4A, 4B and 4D before the cut and moves any shared file's task into the owning track | the private notes; public text stays neutral (one line per issue) | #468, #470, #472; #469 and #471 only after the owner's decision text (OI-1, OI-2) |
+| 1 | Privacy and security items (owner decision 7 of 2026-11-04) | `b4/privacy-hardening` | the files named in the maintainers' private notes; the coordinator checks they are disjoint from 4A, 4B and 4D before the cut and moves any shared file's task into the owning track | the private notes; public text stays neutral (one line per issue); plus one docs task, `SECURITY.md`: a plain statement that, when external use is enabled, external VLM endpoints and the hosted research judge may receive any region kind and contact-sheet image (OI-1, OI-2; the matching `docs/CURATION.md` sentence is in track 4D, which owns that file in W4) | #468, #470, #472 (#469 and #471 close with no code change, 00b section 4) |
 
 Merge order: 4A, 4D, privacy lane, 4B (its ratchet allowlist must see the others' final code).
 
@@ -440,7 +440,7 @@ Lanes never run a full suite, `--all-files`, the live harness or a GPU.
 ## 8. CI and test speed
 
 - **Merge PR #477 first.** The offline suite then runs in 4 balanced shards (about 10 minutes
-  instead of 35), which is what makes the optional per-part offline suite (MQ-3) affordable. Its
+  instead of 35), which is what makes the per-part offline suite (MQ-3, approved) affordable. Its
   shard command gains `and not db` in lane 1D (R-4).
 - **The `db` marker is deselected by default** from W2.1 on: `pyproject.toml` `addopts` (lane 1-0),
   both `ci.yml` commands and `CONTRIBUTING.md` (1D), `CLAUDE.md` (6D); a test asserts the default
@@ -478,14 +478,11 @@ in the privacy lane (OI-1, OI-2).
 
 ### 9.2 Still open, with the plan's recommendation
 
+Only the kick-off questions of B3, B4, B5 and the tag remain; each is asked at its wave's
+kick-off, not before.
+
 | ID | Question in plain words | Needed before | Recommendation |
 |---|---|---|---|
-| OI-1 | #469: which region kinds may reach external model endpoints? (an owner decision text; the plan keeps no detail in public) | W4 | the owner writes the rule; the privacy lane implements it |
-| OI-2 | #471: what decides the research judge's refusal of a hosted call? (an owner decision text, as OI-1) | W4 | as OI-1 |
-| MQ-3 | Also run the Docker-free offline suite (4 shards, about 10 min) at each B2 part check, besides the database tier? | W2.1 | yes, cheap since PR #477 |
-| MQ-4 | Pillow and simplejpeg decode images, so by your own rule they ride the W3 GPU gate with OpenCV; the Hugging Face stack and MLflow sit inside and after that run of the bisect order, so they ride there too. Agreed? (D-67 placed "part B" with the gate; this names its exact members) | W2.0 | yes |
-| ENV-18 / Q-3 | Flower: loopback port 4613, the gateway subpath, or both? | W2.1 | both, and only when `monitoring` runs |
-| MQ-8 | Fold the GPU-15 leftover (refuse an undeclared region head when a profile is saved) into B3-D3, which rewrites that path? | W3 | yes |
 | D-27, D-28 | Ultralytics staging and the pin rule | W3 | as in [04](04_b3_ultralytics_one_version.md) section 3 |
 | D-38 / Q-4, PR #449 | Triton 26.09 or 26.10 and a newer Python base inside B3? | W3 | only if window 1 has room (B3-A5); otherwise after the tag, and close PR #449 now |
 | D-29, D-29a, D-32, D-32a, D-33, ENV-17 | B4 fan-out, VLM batch routes, project creation, the worker default, pool names | W4 | as in [05](05_b4_stateless_api.md) section 9 |

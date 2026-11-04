@@ -109,7 +109,8 @@ the order.)
   never push, never merge, never another checkout, never `git stash`.
 - The coordinator merges lanes `--no-ff`, one merge commit per lane, in the stage's order (a failing
   lane reverts alone with `git revert -m 1 <merge>`). After each stage merge: the touched lanes'
-  tests, `make contracts-check`, and the `db` tier (`-m db`, minutes, no GPU; D-63). One full sweep
+  tests, `make contracts-check`, the `db` tier (`-m db`, minutes, no GPU; D-63) and the Docker-free
+  offline suite in its 4 shards (owner decision 2026-11-04, MQ-3). One full sweep
   for the batch (section 9).
 - Opus plans; Sonnet implements and reviews. Every brief forbids `pgrep -f`, `pkill -f` and
   sleep/until loops, and names its compose project (`-p`), its GPU (none for every B2 lane), its

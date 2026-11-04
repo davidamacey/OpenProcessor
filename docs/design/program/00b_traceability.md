@@ -116,10 +116,10 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | File | IDs | Status |
 |---|---|---|
 | [01](01_b0_close_out.md) | B0-1..B0-5, B0-1b | kept (B0 merged) |
-| [04](04_b3_ultralytics_one_version.md) | U-Step 4-9, B3-A1..A5, B3-F1..F3, B3-G1, B3-E1..E7, B3-D1..D3, B3-W1, G0-G10, RF-B3-1..8, U-R1..R8 | kept; this pass adds track `deps` (pins part B), gate steps G11 and G12, and the MQ-8 note in B3-D3 |
+| [04](04_b3_ultralytics_one_version.md) | U-Step 4-9, B3-A1..A5, B3-F1..F3, B3-G1, B3-E1..E7, B3-D1..D3, B3-W1, G0-G10, RF-B3-1..8, U-R1..R8 | kept; this pass adds track `deps` (pins part B), gate steps G11 and G12, and the GPU-15 leftover in B3-D3 (MQ-8, approved) |
 | [07](07_b5_overview.md), [07a](07a_b5_baseline.md)-[07d](07d_b5_processing_plans.md) | M-1..M-10, the parity gates, 5a-S1..S8, 5b-D1, 5b-P1, 5b-G1..G4, 5b-W1, 5b-C1, 5c-K1..K4, 5c-O1..O3, 5c-N1, 5d P0-P6, Q1-Q9, OQ-B5-1..3 | kept |
 | [06](06_release_acceptance.md) | RF-01..RF-76, RP-1..RP-9 | kept (RF-40, 41, 56, 62 and RP-4, RP-5 re-worded for the control-data move) |
-| [08](08_environment_and_setup.md) | ENV-1..ENV-20, Q-1..Q-4 | kept (ENV-4 = 1C-0, ENV-6 = 1B-3, ENV-14 = 1C-4, ENV-16 = 3B-5, ENV-18 = MQ list, ENV-20 = 4D-3 and 5A-5C) |
+| [08](08_environment_and_setup.md) | ENV-1..ENV-20, Q-1..Q-4 | kept (ENV-4 = 1C-0, ENV-6 = 1B-3, ENV-14 = 1C-4, ENV-16 = 3B-5, ENV-18 = Q-3, decided 2026-11-04, ENV-20 = 4D-3 and 5A-5C) |
 | [09](09_github_actions.md) | GH-0..GH-12, N1-N16, C-n | kept; N11, N12, N16 rows re-pointed to the new stage lanes in this pass |
 | [10](10_standards_and_libraries.md), [11](11_risks_cleanup_host.md), [12](12_prior_plans_reconciliation.md) | STD-n, LIB-1..LIB-3; M-1..M-46; the ADD lists | kept; stale old B2 IDs re-pointed (10, 11) or explained by a note (12 section 0) |
 
@@ -202,15 +202,15 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | #465 typed response models (N15) | v0.7.0 | CPU lanes `api/typed-responses-<n>` in W5a-W5c, the 5d routers inside 5d (owner decision 2026-11-04); closes with the 5d PR |
 | #466 assist-loop pause, events, budgets (N16) | v0.8.0 | v0.8.0 F3; B2 4D-2 already delivers pause and resume through the jobs table and events as rows, so its scope shrinks (section 4) |
 | #468 labeler log contents | v0.7.0 | W4 lane `b4/privacy-hardening` (owner decision 2026-11-04) |
-| #469 region kinds to external endpoints | v0.7.0 | W4 lane `b4/privacy-hardening`, after the owner's decision text (OI-1) |
+| #469 region kinds to external endpoints | v0.7.0 | decided 2026-11-04: keep current behaviour (OI-1); closes with no code change; the SECURITY.md statement is a task of W4 lane `b4/privacy-hardening` |
 | #470 stored recognized text access | v0.7.0 | W4 lane `b4/privacy-hardening` |
-| #471 research judge refusal by provenance | v0.7.0 | W4 lane `b4/privacy-hardening`, after the owner's decision text (OI-2) |
+| #471 research judge refusal by provenance | v0.7.0 | decided 2026-11-04: keep current behaviour (OI-2); closes with no code change; covered by the same SECURITY.md statement |
 | #472 core text index isolation and purge | v0.7.0 | W4 lane `b4/privacy-hardening` |
 | #473 near-duplicate data quality | v0.7.0 | folded in: part a W2.3 4A-7, part b W4 4A-4b, part c W2.2 2D-4 (the group goes into the holdout together, owner decision 2026-11-04) |
 
 Open issues without a plan home before the master-plan pass: #465, #468, #469, #470, #471, #472,
-#473. After the owner's answers of 2026-11-04 every one has a wave and lane; #469 and #471 also need
-the owner's decision text (OI-1, OI-2) before their part of the W4 lane runs.
+#473. After the owner's answers of 2026-11-04 every one has a wave and lane, except #469 and #471,
+which the owner decided as "keep current behaviour" (OI-1, OI-2): they close with no code change.
 
 ## 3. Fold-in record (decided items moved into the lane that rewrites their code)
 
@@ -223,7 +223,7 @@ shipped (#441). No research-plan hypothesis, experiment or v0.8.0 feature is rec
 | # | Item | Decision recorded in | Moved into | Edit made |
 |---|---|---|---|---|
 | F-1 | the pin series split: part A in W2.1, part B (the bumps that can change model output) with the B3 GPU gate | owner direction 3 of 2026-11-04; D-44 (approved 2026-11-04) | [13](13_package_pins.md) section 7.1; [03a](03a_b2_w1_queue_infra.md) header; [04](04_b3_ultralytics_one_version.md) track `deps` and brief | the series order kept inside each part; torch-pair CI commands moved from commit 2 to 9; a shrink-only allowlist in commit 1 |
-| F-2 | Pillow and simplejpeg join part B (commit 7) | the owner's own rule ("bumps that can change model output") applied to two image decoders; D-67 (2026-11-04) placed part B with the gate; MQ-4 confirms the exact members | 13 section 7.1 | `simplejpeg` was missing from the bisect list; added to commit 7 |
+| F-2 | Pillow and simplejpeg join part B (commit 7) | the owner's own rule ("bumps that can change model output") applied to two image decoders; D-67 (2026-11-04) placed part B with the gate; MQ-4 (approved 2026-11-04) confirms the exact members | 13 section 7.1 | `simplejpeg` was missing from the bisect list; added to commit 7 |
 | F-3 | the Postgres and Valkey images and the test extras of 13 section 4 | D-44; [02](02_control_plane_database.md) says 13 owns every pin; `postgres:18.6-trixie` approved 2026-11-04 (MQ-2) | [03](03_b2_overview.md) header, 03a 1-0, 1C-1, 1D-2, [02c](02c_migration_ops_tests.md) section 4, [08](08_environment_and_setup.md) section 4 | the files now cite 13 section 4; the base image (trixie or alpine) is MQ-2 |
 | F-4 | the image smokes of 13 section 6 and the B2 stage-5 real-GPU smoke in GPU window 1 | D-44 (13 section 6: "GPU and image work is batched into one window"); [03f](03f_b2_s5_gpu_queues.md) "GPU check" | 04 gate steps G11, G12 | budget about 1.5 GPU days |
 | F-5 | #473 part c: the holdout freeze checks near-duplicates | a v0.7.0-milestone bug ("Each needs a red test first. The fix belongs with the curation correctness work (v0.7.0)"); the behaviour approved by the owner on 2026-11-04 (the whole near-duplicate group goes into the holdout together) | [03d](03d_b2_s2_control_data.md) 2D-4 (lane 2D rewrites the freeze) | new task |
@@ -242,7 +242,7 @@ approved); #416 threshold change (needs its measurement); #466 token budgets and
 control (v0.8.0 F3, no owner go); #401 privacy baseline (design not approved); an `actor` column for
 v0.8.0 auth (Q-1..Q-4 of the v0.8.0 plan open; the `jobs` rows already record `requested_by`);
 uint8 faces with in-graph decode and CUDA graphs for the other models (unmeasured research
-hypotheses); 07d Q1-Q9 (asked at W5d kick-off); the GPU-15 leftover (MQ-8).
+hypotheses); 07d Q1-Q9 (asked at W5d kick-off); the GPU-15 leftover, folded into B3-D3 (MQ-8, approved 2026-11-04).
 
 ## 4. GitHub actions (approved by the owner on 2026-11-04, D-68; the coordinator runs them after the review fix pass)
 
@@ -301,7 +301,7 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 | #465 | "Scheduled (owner decision of 2026-11-04): one CPU lane per wave during W5a-W5c types a group of routers that the speed work does not touch; the routers that W5d rewrites are typed inside W5d. This issue closes with the W5d PR." |
 | #466 | "The queue rewrite (#451) already delivers pause and resume through the job rows and the events as database rows. What remains here: the Cropwright pause control, token budgets read from the endpoint's usage reports, and the label-rate measurement. Milestone stays v0.8.0." |
 | #468, #470, #472 | (the same text on each) "Scheduled in wave W4 (owner decision of 2026-11-04). Details stay in the maintainers' private notes." |
-| #469, #471 | (the same text on each) "Scheduled in wave W4 (owner decision of 2026-11-04), after the owner records the decision this issue asks for. Details stay in the maintainers' private notes." |
+| #469, #471 | (the same text on each, posted with the close) "Decided by the owner on 2026-11-04: keep the current behaviour. When external use is enabled, this data may be sent as it is today, and the existing opt-out stays. No code change; the security policy will say this plainly in 0.7.0." |
 | #473 | "Placement: the stale near-duplicate fields after a re-score are fixed in W2.3; the batch grouping race in W4; the holdout check in W2.2. Owner decision of 2026-11-04: when a holdout is frozen, a held-out item's whole near-duplicate group goes into the holdout together. Each fix gets a red test first." |
 
 ### 4.3 Milestone moves (at W6)
@@ -321,5 +321,5 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 | #453 | with the B2 PR (closing keyword) | - |
 | #461, #462 | with the B2 PR (closing keywords) | - |
 | #451, #439, #473, #468, #470, #472 | with the B4 PR (closing keywords) | - |
-| #469, #471 | with the B4 PR once their owner decision is implemented | - |
+| #469, #471 | now, as "decided: keep current behaviour", with the comment above (owner decision 2026-11-04, OI-1 and OI-2) | - |
 | #465 | with the W5d PR | - |
