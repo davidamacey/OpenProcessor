@@ -55,6 +55,7 @@ the master plan; execute one wave at a time from the batch files it links.
 |---|---|---|
 | [research_gpu_pipeline_plan.md](research_gpu_pipeline_plan.md) | plan (research; after B5) | Where image-processing time goes per stage, a hypothesis register (batched GPU decode, per-card replicas, native resident-frame backend, faces in-graph, a last INT8 round), experiments in three GPU windows, the target architecture and stop rules |
 | [research_clustering_plan.md](research_clustering_plan.md) | plan (research; after B2/B5) | Clustering for curation on real data: detector-class roots, near-duplicate thresholds, judge calibration, crop preprocessing and encoders, global graph refinement, face grouping; libraries, evaluation protocol, pass bars and stop rules |
+| [research_near_duplicates_plan.md](research_near_duplicates_plan.md) | plan (research and v0.7.0 seams; #416, #473) | Near-duplicate detection for the clean rebuild: literature (Immich, PDQ, DISC21, SSCD, DINOv2, FiftyOne), candidate designs, the PostgreSQL runs and groups, Celery jobs, OpenSearch fields, the holdout rule, per-project profiles, the prototype protocol and stop rules; absorbs the former #416 issue plan |
 | [v080_platform_breadth_plan.md](v080_platform_breadth_plan.md) | plan (v0.8.0, not started) | Platform breadth after v0.7.0: COCO segmentation import, search by image, model-family training, API authentication, a second segmenter, video files as a source, the wheel example and the embedding swap, in waves with a test and GPU budget |
 
 ## Per-issue plans (published as gists on the issues)
@@ -73,7 +74,6 @@ closes.
 | [issue-400-plan.md](issue_plans/issue-400-plan.md) | #400 | Attribute-signal layer for clustering |
 | [issue-401-plan.md](issue_plans/issue-401-plan.md) | #401 | Registration-plate text as a per-box attribute, with privacy modes |
 | [issue-406-plan.md](issue_plans/issue-406-plan.md) | #406 | Finish the visual-judge calibration, the blind 5 % human re-judge and the label check |
-| [issue-416-plan.md](issue_plans/issue-416-plan.md) | #416 | Evaluate the near-duplicate grouping threshold (default 0.99) |
 
 ## Reference docs
 
