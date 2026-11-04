@@ -165,6 +165,23 @@ reference; a gate that regressed is a FAIL), and the ingest and search figures o
 `API_WORKERS` default (no regression against the B5 result). These rows use GPU window 3 and no
 new tooling.
 
+### 4.7 Research-seam rows (pending owner question RD-1 of [00d](00d_owner_questions.md))
+
+Public data only (COCO, Open Images, constructed copy sets). Each row reads the record in
+PostgreSQL, not a log.
+
+| ID | Check | How | Pass |
+|---|---|---|---|
+| RF-80 | The assist loop as a controllable assistant | on install A, a loop on a public COCO project: pause, resume three times, lower the budget, cancel; a second project's loop on the one consumer | each pause lands within one request timeout plus 1 s; the fourth resume runs; the budget stop is `paused` with reason `budget`; project B starts within one slice; `vlm_usage_hourly` holds the crops |
+| RF-81 | Clustering partitions | a `cluster_run`, its activation and projection; the 0.6.0 upgrade's `upgrade` partition on install B | the served view equals the upgraded assignment; ids survive a re-run on permuted input |
+| RF-82 | Near-duplicates and the holdout | a full build on a constructed public copy set, then a freeze | every leak-group member of a held-out item is held out and counted in `holdout_near_dup_moves`; a freeze with pending rows answers 409 `near_dup_stale` |
+| RF-83 | Embedding registry | a new project has three primary ready spaces; an upgraded project records the live `knn_method`; a search with a wrong `space` refuses | as stated |
+| RF-84 | Capture metadata (W4) | ingest the EXIF fixture set (orientations 1-8, offsets, a GPS fixture) | `capture.*` correct; `has_location` true and no coordinate anywhere in any response or export; an exported copy of the GPS fixture carries no GPS block (pending RD-54); a resized export of an orientation-6 fixture lands its boxes on the object (W5b) |
+| RF-85 | Registration-plate text (W5e) | read a public plate sample, run consensus on a public burst set, search exact, fuzzy and fragment, switch to keyed mode, purge | readings and tiers written; keyed mode shows no text; the purge leaves 0 values in every sink |
+| RF-86 | Serving profile and engine contracts | `openprocessor gpu plan` and the active serving profile on install A | every ready engine row has a contract and a measured device memory; `serving_reports` lists every loaded model |
+
+Run RF-80 to RF-86 with the install A phases (RF-81's upgrade half on install B), in GPU window 3.
+
 ## 5. Procedure
 
 Evidence root: `artifacts_local/rfinal/`. Report: `artifacts_local/rfinal/REPORT.md`, written

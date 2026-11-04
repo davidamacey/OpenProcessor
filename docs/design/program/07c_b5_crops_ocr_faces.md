@@ -230,3 +230,12 @@ op-b5c-bench`. GPU 0; GPU 2 only if the coordinator says the peer agreed. Never 
 - **`ocr`**: "Do 5c-O1 (red call-count test first). Then 5c-O2 only if the coordinator says
   recognition still binds; then 5c-O3 as research with an offline parity test first."
 - **`ocrnorm`**: "Do 5c-N1 as evidence only; propose a fix only if the gap is measured."
+
+## Research amendments (2026-11-04, the research integration pass)
+
+| Where | Change |
+|---|---|
+| 5c-K1 | `crop_sizing` uses the storage seam's size-variant crop key (GPU S-10, lane 1E-4), so a source-size crop is never served as a capped one |
+| 5c-K4 | reduced decode on the GPU route is impossible on the A6000 (nvJPEG scaled decode is hardware-backend only); the task is the CPU-route measurement only |
+| 5c-O2, 5c-O3 | read `gpu:PR-6`'s record first (argmax in the recognition graph, padding-aware CTC on bucketed widths) |
+| track `ocr` | **research plate 5.7: a new output tensor `rec_char_min`** (FP32, `[128]`) in `ocr_pipeline`: the minimum per-character max probability over the decoded characters of each line, computed in `CTCLabelDecode` beside the mean; padded slots 0.0; threaded through `src/clients/triton_ocr.py` and the cascade OCR recognizer (`OcrLine.char_min`); `MODEL_VERSION` bumped; one more output in the decode loop 5c-O2 already rewrites. Red: `tests/ocr/test_rec_char_min.py`: the output exists and equals the per-line minimum on a fixture. Control (parity): `rec_scores` and `texts` byte-identical on the fixed fixture. Its first reader is the W5e confident tier ([03g](03g_w5e_plate_text.md)) |

@@ -254,3 +254,11 @@ agreed). Announce heavy runs through the coordinator. Project slugs start with `
   GPU 1 owner session."
 - **`recall`**: "Do 5a-C1 (red test first), then 5a-C2. Do not change `src/clients/triton_client.py`.
   Report the D-35 table."
+
+## Research amendments (2026-11-04, the research integration pass)
+
+| Where | Change |
+|---|---|
+| 5a-R0 | read the `gpu:PR-0` and `gpu:PR-1` records first (honest GPU number, decoder matrix); the 5a rows carry SM active and tensor active from DCGM |
+| 5a-S4 | the nvJPEG check at 20 MP is `gpu:PR-1`'s set-B row when the prototype window ran; otherwise run as written |
+| 5a sweeps | the Triton router of B4 4B-6 and `serving_reports` are in place; a two-server row is research wave RW-1 (`gpu:PR-7`), not 5a |
