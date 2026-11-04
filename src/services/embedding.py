@@ -5,16 +5,15 @@ Handles image and text embedding generation with caching.
 """
 
 import hashlib
-import io
 import logging
 
 import numpy as np
 import tritonclient.grpc.aio as grpcclient_aio
-from PIL import Image
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.clients.model_residency import ensure_loaded
 from src.clients.triton_client_manager import TritonClientManager
+from src.clients.triton_preprocess import preprocess_for_mobileclip
 from src.config import get_settings
 from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
 
@@ -51,46 +50,6 @@ class EmbeddingService:
         return self._triton_client
 
     # =========================================================================
-    # Image Preprocessing
-    # =========================================================================
-    @staticmethod
-    def preprocess_image(image_bytes: bytes) -> np.ndarray:
-        """
-        Preprocess image for MobileCLIP encoder.
-
-        Applies Apple MobileCLIP preprocessing (per OpenCLIP _mccfg config):
-        - Resize shortest edge to 256 (BILINEAR interpolation)
-        - Center crop to 256x256
-        - Normalize to [0, 1] (mean=0, std=1)
-        - Transpose to CHW format
-
-        Args:
-            image_bytes: JPEG/PNG bytes
-
-        Returns:
-            Preprocessed array [1, 3, 256, 256] FP32
-        """
-        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-
-        # Resize shortest edge to 256 (BILINEAR per Apple MobileCLIP config)
-        width, height = img.size
-        scale = 256 / min(width, height)
-        new_width = int(width * scale)
-        new_height = int(height * scale)
-        img = img.resize((new_width, new_height), Image.Resampling.BILINEAR)
-
-        # Center crop to 256x256
-        left = (new_width - 256) // 2
-        top = (new_height - 256) // 2
-        img = img.crop((left, top, left + 256, top + 256))
-
-        # Normalize and transpose
-        img_array = np.array(img).astype(np.float32) / 255.0
-        img_array = np.transpose(img_array, (2, 0, 1))
-
-        return img_array[np.newaxis, ...]
-
-    # =========================================================================
     # Embedding Generation
     # =========================================================================
     async def encode_image(self, image_bytes: bytes, use_cache: bool = True) -> np.ndarray:
@@ -118,7 +77,7 @@ class EmbeddingService:
 
         # Compute embedding
         client = await self._get_client()
-        img_array = self.preprocess_image(image_bytes)
+        img_array = preprocess_for_mobileclip(image_bytes)
 
         input_tensor = InferInput('images', [1, 3, 256, 256], 'FP32')
         input_tensor.set_data_from_numpy(img_array)
