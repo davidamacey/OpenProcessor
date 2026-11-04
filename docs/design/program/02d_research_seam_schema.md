@@ -5,7 +5,7 @@
 | Status | plan, not started; written 2026-11-04 by the research integration pass on `research/master` |
 | Part of | [02a_postgres_schema.md](02a_postgres_schema.md) (its section 1 conventions apply to every table here: `uuidv7()` keys, `timestamptz`, closed sets as `text` + `CHECK` with one Python source, `jsonb` only for pydantic-validated bodies, row-level security on every `project_id` table, `*_by` actor columns) |
 | Sources | the section 5 seams of the seven research plans: [GPU pipeline](../research_gpu_pipeline_plan.md), [clustering](../research_clustering_plan.md), [embeddings and search](../research_embeddings_search_plan.md), [near-duplicates](../research_near_duplicates_plan.md), [spatial and attributes](../research_spatial_attributes_plan.md), [registration-plate text](../research_plate_text_plan.md), [auto-label assistant](../research_auto_label_assist_plan.md). Each table names its plan; the plan holds the reasoning, this file holds the contract |
-| Pending | the whole file is the recommended answer to owner question RD-1 ("seams into v0.7.0 now", [00d](00d_owner_questions.md)); section 5 also depends on RD-4 (plate tables in their own revision). A "no" removes the named revision and its lane, nothing else |
+| Decided | approved by the owner 2026-11-04: every seam goes in now (RD-1 and review Q-A: the review's deferrals are rejected), the plate tables get their own revision in W5e (RD-4), cluster memberships live in PostgreSQL (RD-23), GPS coordinates are stored behind a per-project policy (RD-51 reversed). The review's correctness findings RR-2, RR-3, RR-17, RR-18 are applied below ([00e_research_review.md](00e_research_review.md)) |
 | Cross-topic rules | [00b_traceability.md](00b_traceability.md) section 5.1 (X-1..X-20): why these are separate tables with shared patterns |
 
 Why a separate file: 02a describes the control plane that B2 moves; this file describes the tables
@@ -25,8 +25,8 @@ with `--rev-id`, so two lanes never guess the chain:
 |---|---|---|---|
 | `0001_control_plane` | 1A `b2/db-core`, W2.1 | every table of 02a, **including the in-place research changes listed in section 1** (columns and `CHECK` values on 02a tables, the `gpu_devices` table) | a change to a table 0001 creates is made in 0001 |
 | `0002_research_seams` | 1F `b2/db-research-seams`, W2.1 (cut after 1A merged; [03a](03a_b2_w1_queue_infra.md) lane 1F) | section 2: serving reports, clustering S-core, the embedding registry, the auto-label loop record | only new tables; `down_revision = '0001_control_plane'` |
-| `0003_near_duplicates` | ND-A `b2/near-duplicates`, W2.3 ([03b](03b_b2_w2_job_families.md) lane ND-A) | section 3: the near-duplicate tables, three `holdout_freezes` columns, the `near_dup_profile` kind and `near_dup` axis, the `near_dup_run` projection kind | the only revision-writing lane of W2.3 |
-| `0004_region_text` | `w5e/region-text-store`, W5e ([03g](03g_w5e_plate_text.md)) | section 4: the registration-plate text tables and the `region_text_consensus_marker` state key | pending RD-4; with RD-4 = "in 0001 now" the tables move into 0002 instead and this revision does not exist |
+| `0003_near_duplicates` | ND-A `b2/near-duplicates`, W2.3b ([03b](03b_b2_w2_job_families.md) lane ND-A) | section 3: the near-duplicate tables, three `holdout_freezes` columns, the `near_dup_profile` kind and `near_dup` axis, the `near_dup_run` projection kind | the only revision-writing lane of W2.3b (W2.3a writes none) |
+| `0004_region_text` | `w5e/region-text-store`, W5e ([03g](03g_w5e_plate_text.md)) | section 4: the registration-plate text tables and the `region_text_consensus_marker` state key | approved (RD-4) |
 
 A wave that needs a schema change has exactly one revision-writing lane. Downgrade is tested to base
 and back (1A-3), so every revision has a real `downgrade()`.
@@ -43,15 +43,18 @@ and back (1A-3), so every revision has a real `downgrade()`.
 | `search_projection_tasks` | kind `cluster_partition` (payload `{target, level, embedding_field, partition_id}`) | clustering 5.1 (activation) | 4F's activation transaction; consumed by `cluster_projection_sync` |
 | `jobs` | `retry_count integer NOT NULL DEFAULT 0`; `pause_reason text NULL CHECK (pause_reason IN ('user','audit','budget','project_paused','vlm_unavailable'))`; `CHECK (status <> 'paused' OR pause_reason IS NOT NULL)` | auto-label 5.2 (G-1) | 3A (claim, pause, resume, reaper) |
 | `job_attempts` | outcome gains `yielded` | auto-label 5.2 (G-2) | 3A wrapper |
-| `gpu_devices` (new, in 0001 because `gpu_reservations` references it) | see 02a section 5 | GPU S-6 | GPU workers at `worker_ready`; `openprocessor gpu plan`; read by reservations and the serving planner |
+| `gpu_devices` (new, in 0001 because `gpu_reservations` references it) | see 02a section 5 | GPU S-6 | GPU workers (start and heartbeat), `op.periodic.serving_inventory` and the reservation insert (review RR-9); read by `openprocessor gpu plan`, reservations and the serving planner |
 | `gpu_reservations` | primary key `(gpu_uuid)` referencing `gpu_devices` | GPU S-7, resolution X-6 | 6A (arbiter), 5A (training) |
 | `training_runs` | `gpu_ids integer[]` becomes `gpu_uuids text[]` | resolution X-6 | 5A |
 | `model_engines` | input and output contracts, build profile, settings, stamp, hashes, measured device memory, batch limits, CUDA graphs, precision `CHECK`, parity reference; unique key `(triton_model_name, trt_version, gpu_arch, build_profile)` | GPU S-1..S-4 | 5B and 5D write; read by the CPU-route contract test, `gpu plan`, ES-A's input-spec check |
+| `project_settings` | `location_policy text NOT NULL DEFAULT 'store' CHECK (location_policy IN ('drop','store_coarse','store'))` (owner 2026-11-04, RD-51 reversed: store GPS coordinates now, default keep); the 0.6.0 upgrade writes `store` for every project | spatial 5.1 | 2C (settings model and route, with `expected_revision`); read by the W4 capture lane's writer and by the one visibility helper |
 
-`project_settings.location_policy` (spatial 5.1) is **not** added: RD-51 recommends no coordinates in
-v0.7.0. If the owner answers "opt-in now", it joins this table as
-`location_policy text NOT NULL DEFAULT 'drop' CHECK (location_policy IN ('drop','store_coarse','store'))`,
-with the 0.6.0 upgrade writing `drop` (lanes 2C and 2E).
+The coordinates themselves are image search data, so they live where every image field lives, in
+the OpenSearch images index (`capture.location` `geo_point`, `capture.altitude_m`,
+`capture.location_accuracy_m`, `capture.heading_deg`, `capture.location_precision`), written by the
+W4 capture lane under this policy (`store_coarse` rounds to about 1 km); PostgreSQL has no per-image
+table to hold them (D-40). They are never copied to items, labels, manifests, training files or a VLM
+call; switching a project to `drop` purges them (a step of `source_backfill`, counts-only audit).
 
 ## 2. Revision `0002_research_seams` (lane 1F, W2.1)
 
@@ -133,12 +136,15 @@ CREATE TABLE cluster_partitions (             -- one clustering run's output; im
   CHECK ((profile_config_id IS NULL) = (profile_revision IS NULL))
 );
 CREATE INDEX ix_cluster_partitions_recent ON cluster_partitions (project_id, target, level, created_at DESC);
--- trigger cluster_partitions_ready_immutable: once status = 'ready', only status may change
+-- trigger cluster_partitions_ready_immutable: once status = 'ready', only status may change, and
+-- job_id and parent_partition_id may change to NULL (review RR-2: the ON DELETE SET NULL writes of
+-- job pruning and of partition retention are UPDATEs that the trigger must let through)
 
 CREATE TABLE cluster_identities (             -- stable identity of a cluster across partitions
   cluster_uid        uuid PRIMARY KEY DEFAULT uuidv7(),
   project_id         uuid NULL REFERENCES projects(id) ON DELETE CASCADE,
-  target text NOT NULL, level text NOT NULL,
+  target text NOT NULL CHECK (target IN ('item','region_box','face','image')),   -- review RR-17
+  level  text NOT NULL CHECK (level IN ('class','identity','scene')),
   name               text NULL,
   name_source        text NULL CHECK (name_source IN ('human','import','vlm')),
   anchored_at        timestamptz NULL,
@@ -183,11 +189,15 @@ CREATE TABLE cluster_memberships (            -- bulk-written with COPY by the r
 CREATE INDEX ix_cluster_memberships_cluster ON cluster_memberships (partition_id, cluster_uid);
 -- trigger cluster_children_ready_immutable on partition_clusters and cluster_memberships:
 -- UPDATE or DELETE raises while the parent partition is 'ready' (a DELETE by cascade passes: parent gone)
+-- trigger cluster_children_project_from_parent (review RR-18): BEFORE INSERT copies project_id from
+-- the partition, so a project partition can never get a NULL-project membership (the composite key
+-- is MATCH SIMPLE and skips NULLs); one lookup per COPY batch
 
 CREATE TABLE cluster_activations (            -- the served partition per (project, target, level, field); OCC on revision
+  id                   uuid PRIMARY KEY DEFAULT uuidv7(),   -- review RR-17: the ORM needs a key; project_id is nullable
   project_id           uuid NULL REFERENCES projects(id) ON DELETE CASCADE,
-  target               text NOT NULL,
-  level                text NOT NULL,
+  target               text NOT NULL CHECK (target IN ('item','region_box','face','image')),
+  level                text NOT NULL CHECK (level IN ('class','identity','scene')),
   embedding_field      text NOT NULL,
   serving_partition_id uuid NOT NULL REFERENCES cluster_partitions(id),   -- NO ACTION (02a 1.2)
   pending_partition_id uuid NULL REFERENCES cluster_partitions(id),
@@ -357,11 +367,12 @@ the per-row `EXISTS` is acceptable; contrast X-1's rule for unbounded membership
 `pinned.partition` value names a `cluster_partitions` row (X-1: the loop reads
 `(partition_id, cluster_uid)`, never an integer `cluster_id`).
 
-## 3. Revision `0003_near_duplicates` (lane ND-A, W2.3)
+## 3. Revision `0003_near_duplicates` (lane ND-A, W2.3b)
 
 The DDL is the near-duplicate plan's section 5.1, with three changes (X-1, X-5):
 
-1. `near_dup_runs` gains `UNIQUE (id, project_id)`; `near_dup_groups` and `near_dup_members` gain a
+1. (and review RR-18: the same `BEFORE INSERT` trigger copies `project_id` from the run into groups and
+   members) `near_dup_runs` gains `UNIQUE (id, project_id)`; `near_dup_groups` and `near_dup_members` gain a
    denormalized `project_id uuid NULL` with `FOREIGN KEY (run_id, project_id) REFERENCES
    near_dup_runs(id, project_id) ON DELETE CASCADE` (the single-column `run_id` foreign key stays,
    because a composite key is not checked for the NULL-project `core` level). Their RLS policy is
@@ -390,7 +401,7 @@ the insert is the duplicate check, replacing the `imohash` lookup, pending RD-43
 `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending`,
 `holdout_near_dup_moves`.
 
-## 4. Revision `0004_region_text` (lane `w5e/region-text-store`, W5e; pending RD-4)
+## 4. Revision `0004_region_text` (lane `w5e/region-text-store`, W5e; approved, RD-4)
 
 The DDL is the registration-plate plan's section 5.2, with one change: `region_text_runs` refers to
 its profile by `(profile_config_id, profile_revision) REFERENCES config_revisions(config_id,
@@ -413,17 +424,18 @@ listed codes).
 | research `method` values (`graph_hac`, `leiden_cpm`, `core_point`, `hdbscan`) | clustering 5.1 | the method's landing lane (L3, L5) | one `ALTER ... CHECK` per method |
 | `attribute_signals`, `attribute_signal_versions`, `project_attribute_calibrations`; kind `attribute_profile`, axis `attributes` | spatial 5.3 | research wave RW-5 lane L-A1, after a P-2 or P-3 PASS | none |
 | `scenes`, `scene_versions`, `scene_members`, `scene_corrections`, `place_pair_evidence`, `reconstruction_runs`, `reconstruction_artifacts`, `camera_poses`; kind `spatial_profile`, axis `spatial`; projection kind `scene_membership`; queue `gpu_spatial` | spatial 5.4 | the spatial design doc an S1 GO triggers (L-SP1) | `scene_versions.manifest_sha256` hashes member image ids plus `content_sha256` (X-4), not `imohash` |
-| `project_settings.location_policy`, the location purge | spatial 5.1, L-T1 | v0.8.0 timeline lane, or 0001 if RD-51 says opt-in now | see section 1 |
+| (no longer reserved) `project_settings.location_policy`, the coordinates and the location purge | spatial 5.1, L-T1 | now in 0001 (section 1) and the W4 capture lane (owner, RD-51 reversed); only the timeline view stays a v0.8.0 lane | see section 1 |
 
 ## 6. Tests (lane 1F unless named)
 
 | Test | Asserts |
 |---|---|
 | `tests/db/test_research_schema_matches_plan.py` | every table, unique constraint, partial index, foreign key, trigger and policy of sections 2-4 present after `upgrade head` (sections 3 and 4 entries are added by ND-A and the W5e store lane) |
-| `tests/db/test_cluster_partition_immutable.py` | updating a `ready` partition's memberships or clusters raises; a cascade delete of a discarded partition passes |
+| `tests/db/test_cluster_partition_immutable.py` | updating a `ready` partition's memberships or clusters raises; a cascade delete of a discarded partition passes; review RR-2: pruning a `cluster_run` job that a ready partition references passes (the `SET NULL` update is allowed); deleting a ready parent of a ready child passes; deleting a superseded `ready` partition through retention passes (the children trigger); deleting a project that holds ready partitions passes |
+| `tests/db/test_children_project_from_parent.py` (review RR-18) | a membership or near-duplicate member inserted with `project_id` NULL into a project partition or run gets the parent's project |
 | `tests/db/test_cluster_memberships_fk_null_project.py` | a membership of a NULL-project partition that does not exist is refused (the single-column foreign key, X-1) |
 | `tests/db/test_embedding_registry_schema.py` | a second primary for one target is a unique violation; the model-version trigger refuses an `input_spec` update and allows `engine_parity_min_cos` once |
 | `tests/db/test_assist_loop_schema.py` | the auto-label plan's checks: `CHECK`s, cascades, RLS through `run_id`, the budget `CHECK` refuses an over-reserve, the blind-audit row refuses a shown class |
-| `tests/db/test_profile_fk_cascade.py` | deleting a project that holds an activation, a cluster partition and a loop run pinned to profile revisions succeeds in one statement (the NO ACTION rule of X-1); deleting a referenced profile document alone is refused |
+| `tests/db/test_profile_fk_cascade.py` | review RR-6: the referencing pairs are **enumerated from the catalog** (every foreign key between two tables one project delete reaches, so a new pair cannot be missed); with every pair populated, the `project_delete` job's batched delete (RR-7) and a direct `DELETE FROM projects` both pass; a pair that fails is declared `DEFERRABLE INITIALLY DEFERRED` in its revision; deleting a referenced profile document alone is refused |
 | `tests/db/test_row_level_security.py` (1A) | iterates **every** table with a `project_id` column found by introspection, so the tables of this file are covered without a second list |
 | `tests/domain/test_clustering_vocab_matches_check.py` | each closed list equals its `CHECK` |

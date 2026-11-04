@@ -292,7 +292,7 @@ Dependabot reads them and the consistency test in section 5 can compare them. Th
 | `scripts/research/fine_grained_requirements.txt` | torch, torchvision, timm, open_clip_torch, transformers, safetensors, numpy, scipy, scikit-learn, pillow, pytest, ultralytics | none | as above; safetensors 0.8.0 | same pins as 3.1 / 3.2; ultralytics `==8.4.197` | plus python-igraph `==1.0.0` (GPL), leidenalg `==0.12.0` |
 | the one example requirements file under `examples/bakeoff/` | open-image-models | `>=0.5` | 0.6.0 | `==0.6.0` | MIT |
 
-**Research venvs (added by the research integration pass, pending RD-7).** Each research topic owns
+**Research venvs (added by the research integration pass, approved, RD-7).** Each research topic owns
 its exact pins in its own tracked file, never in a product manifest, with a committed `pip freeze`
 lock beside it: `scripts/research/gpu_pipeline/requirements-gpu-research.txt` (its `tensorrt-cu13`
 and `cupy-cuda13x` move with the Triton image), `scripts/research/clustering/requirements-cpu.txt`

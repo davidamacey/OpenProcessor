@@ -8,9 +8,9 @@
 | Decisions | D-41 (owner decision 4: training and model export run on Celery; the file protocols are deleted), D-31 (the evaluator on `gpu_eval`, approved), D-22b (promote `wait=true` deleted) |
 | Lanes | 5A, 5B, 5C, 5D in parallel |
 | Merge order | 5D, 5A, 5B, 5C |
-| Runs alongside | stage 4, disjoint files |
+| Runs alongside | stage 4 part W2.3a, disjoint files (merge order 5D first, then 4D, 4A, 4B, 4C, then 5A, 5B, 5C) |
 | Compose project | none in the lanes; no GPU in any lane (handlers are tested with fakes; the GPU smoke runs in a budgeted GPU window, below) |
-| Research seams | folded 2026-11-04, pending owner question RD-1 ([00d](00d_owner_questions.md)): 5A-6 (reservations by card UUID), 5B-4 (the export writes the engine contracts and refuses a mismatch, GPU S-13), 5D-5 (registry rows carry the contracts); the GPU worker shape is 1B-8's `make_app(include, device_uuid)` |
+| Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [00d](00d_owner_questions.md)): 5A-6 (reservations by card UUID), 5B-4 (the export writes the engine contracts and refuses a mismatch, GPU S-13), 5D-5 (registry rows carry the contracts); the GPU worker shape is 1B-8's `make_app(include, device_uuid)` |
 
 The three GPU images (trainer, export, evaluator) import only `src/tasks/runtime/` and the database
 layer (the heartbeat, the fenced job writes, the event row and the Valkey wake-up all live there,
@@ -43,7 +43,7 @@ tests under `tests/training/` and `tests/trainer/`.
 | 5A-3 | delete the file protocol: `job_protocol.py`, `job_claim.py` (the `O_EXCL` generations), `job_status.py` status files, the 2 s poll in `trainer.py`, `job_files.py`, the claim-file cleanup in `run_retention.py` | `tests/trainer/test_no_file_protocol.py`: `rg`-equivalent scan of `docker/trainer` and `src/services/training` for `.job.json`, `.status.json`, `claim.g`, `.cancel` is empty | - |
 | 5A-4 | trainer reachability and capabilities: at worker start the trainer writes `worker_capabilities` (GPUs, families); `/train/preflight` reports "trainer available" when `inspect().active_queues()` shows a `gpu_train` consumer (timeout 1 s) and its capabilities row is fresh; `.trainer_capabilities.json` and the container-name probe (`trainer_reachability.py`, `lineage.py`'s `containers.get`) deleted; `OP_GPU_ARBITER_TRAINER_CONTAINER` retired | `tests/training/test_trainer_reachability_celery.py` (fake inspect): no consumer -> "not running"; consumer + fresh row -> available | - |
 | 5A-5 | the training image imports: a fresh interpreter in the trainer environment imports `docker/trainer/celery_tasks.py` without FastAPI or OpenSearch (`tests/trainer/test_runtime_import_minimal.py`, run with the trainer requirements in CI's existing trainer job if present, else in the sweep's image check) | the test | - |
-| 5A-6 | research GPU S-7, X-6: training reserves cards by `gpu_uuid` (`gpu_reservations` keyed by UUID, `training_runs.gpu_uuids`); `OP_TRAIN_GPU_ORDER` names cards that are resolved to UUIDs through `gpu_devices` at the start | `tests/training/test_reserve_by_uuid.py` (`db`): two cards with swapped CUDA order still reserve the named physical card | one card behaves as today |
+| 5A-6 | research GPU S-7, X-6: training reserves cards by `gpu_uuid` (`gpu_reservations` keyed by UUID, `training_runs.gpu_uuids`); `OP_TRAIN_GPU_ORDER` names cards that are resolved to UUIDs through `gpu_devices` at the start; every `gpu_reservations` insert upserts its card's `gpu_devices` row in the same transaction (review RR-9) | `tests/training/test_reserve_by_uuid.py` (`db`): two cards with swapped CUDA order still reserve the named physical card; `tests/training/test_reserve_card_without_worker.py` (`db`): a reservation for a card with no GPU worker succeeds | one card behaves as today |
 
 ## Lane 5B `b2/gpu-export`: model upload and export become `gpu_export` jobs
 

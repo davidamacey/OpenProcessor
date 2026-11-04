@@ -165,24 +165,34 @@ The 0.7.0 code has no reader for any deleted source (no dual read). A project wh
 indexes are missing at verify is moved with status `failed` and reported, as a 0.6.0 `failed`
 project is.
 
-**Research-seam steps (pending owner question RD-1; [02d](02d_research_seam_schema.md)).** The load
+**Research-seam steps (approved by the owner 2026-11-04, RD-1; [02d](02d_research_seam_schema.md)).** The load
 is a registry of step modules, `src/services/upgrade/from_060/steps/<name>.py`, each with an
 `ORDER` integer and `run(ctx)`, discovered with `pkgutil.iter_modules` (lane 2E, task 2E-8), so the
-W2.3 lanes add their steps as new files without editing 2E's code:
+W2.3b lanes add their steps as new files without editing 2E's code:
 
 | Step module | Lane | Writes | Verify adds |
 |---|---|---|---|
 | `serving_profile.py` | 2E | the deployment `serving_profile` document, revision 1, generated from the installed `config_templates/profiles/*.json` and the `config.pbtxt` instance counts, and `deployment_settings('active_serving_profile')` (research GPU S-5) | the generated body equals today's values (one server, load lists, instance counts) |
 | `embedding_spaces.py` | 2E | the catalog rows (if `db-migrate` has not) and three `pe_core_l14_336_v1` spaces per loaded project, `created_by = 'upgrade'`, `knn_method` read from each live index mapping (faiss for old projects, Lucene for new); the 0.6.0 physical names kept (pending RD-30) | a space per (project, target); the recorded engine equals the live mapping |
-| `clustering.py` | 4F (W2.3) | per project, one `ready` partition (`method = 'ivf'`, activation reason `upgrade`) built from the items' existing assignment so the served view does not change at the upgrade; `last_clustering.json` and the region-cluster marker files deleted with the other state files | the partition's member count equals the items with a cluster id |
-| `near_duplicates.py` | ND-A (W2.3) | one `update_by_query` per 0.6.0 index clearing the `dup_*` and `duplicate_*` values (mappings cannot be dropped without a reindex); the `near_dup_profile` revision 1 per project from the code defaults; the levels marked `rebuild_required`, so a full build runs after the upgrade | no document keeps a non-empty `dup_*` value |
+| `clustering.py` | 4F (W2.3b) | per project, one `ready` partition (`method = 'ivf'`, activation reason `upgrade`) built from the items' existing assignment so the served view does not change at the upgrade; `last_clustering.json` and the region-cluster marker files deleted with the other state files | the partition's member count equals the items with a cluster id |
+| `near_duplicates.py` | ND-A (W2.3b) | one `update_by_query` per 0.6.0 index clearing the `dup_*` and `duplicate_*` values (mappings cannot be dropped without a reindex); the `near_dup_profile` revision 1 per project from the code defaults; the levels marked `rebuild_required`, so a full build runs after the upgrade; the upgrade report offers the pausable `source_backfill` job, whose content step writes `content_sha256` for every carried-over image (review RR-10; the W4 capture step joins the same pass) | no document keeps a non-empty `dup_*` value; after the backfill a re-ingest of an upgraded image is refused as an exact duplicate |
 
 The OpenSearch migrate step (2F, R-7) also adds the registration-plate analysis settings to the
-`items` index of every **upgraded** project: analysis settings are static, so they are added with
-`_close`, `PUT _settings`, `_open` on each index, inside the stop-the-world upgrade window
-([update settings: static settings need a closed index](https://docs.opensearch.org/latest/api-reference/index-apis/update-settings/));
-new projects get them in the creation body. A test on the 0.6.0 fixture asserts `_analyze` with
-`op_text_compact` works on an upgraded index.
+`items` index of every **upgraded** project (kept by the owner, Q-A of 2026-11-04): analysis
+settings are static, so they need `_close`, `PUT _settings`, `_open`
+([update settings](https://docs.opensearch.org/latest/api-reference/index-apis/update-settings/)).
+New projects get them in the creation body. The step is safe and bounded (review RR-8, task 2F-6):
+
+| Property | Rule |
+|---|---|
+| per index | one items index at a time, in slug order; each is closed only while its own settings call runs |
+| dry run | `scripts/opensearch/migrate.py --step analysis-settings --dry-run` lists every index, its doc count and shard size, and the measured downtime estimate, and changes nothing; the upgrade report prints it before the real run |
+| progress | one line and one `upgrade_runs.report` entry per index: `n/N <index> closed <seconds> s, reopened, health <colour>` |
+| always reopen | close, settings, open in `try/finally`; the `finally` reopens and waits for at least yellow health (bounded wait, 120 s per index) |
+| verify | `_analyze` with `op_text_compact` on the reopened index; a mismatch stops the upgrade |
+| rollback | on any failure the index is reopened unchanged (the settings call is atomic per index), the upgrade stops before `delete_sources` with the report, and the 0.6.0 rollback (section 2.3) still recreates every index from the bundle; an added but unused normalizer is inert (no field uses it until W5e), so a partly applied run is safe to re-run (idempotent: an index that already has it is skipped) |
+| stated downtime | inside the stop-the-world window only (no API serves during the upgrade); per index from close to yellow, measured on the 0.6.0 fixture and printed by the dry run (seconds per index on one node; a faiss-engine index also reloads its native graph on its first search after reopen) |
+| failure-path test | `tests/opensearch/test_analysis_settings_failure.py`: a refused settings call leaves the index open and the upgrade stopped with the index named |
 
 ### 2.3 Rollback to 0.6.0
 
@@ -256,7 +266,7 @@ without capabilities (stage 6 verifies each), `restart: unless-stopped` (except 
 | `open-vocab-worker` | api image | `-Q open_vocab -c 1 --max-tasks-per-child=50` | pool healthcheck | as `api` | |
 | `jobs-beat` | api image | `celery -A src.tasks.app beat -s /run/beat/celerybeat-schedule` (tmpfs); memory limit `${OP_BEAT_MEM_LIMIT:-512m}` (R-19) | newest mtime of `/run/beat/celerybeat-schedule*` under 300 s, failing on an empty glob | tmpfs only | single-beat lock (D-60); `deploy.replicas: 1` |
 | `curation-auto-label-worker`, `curation-assist-loop-worker` (`curation`) | api image | `-Q autolabel -c 1 --max-tasks-per-child=20`, `-Q assist_loop -c 1 --max-tasks-per-child=20` | pool healthcheck | as today minus `/jobs` | |
-| `cluster-worker` (`curation`; research clustering plan 5.2, pending RD-25) | api image | `-Q cluster -c 1 --max-tasks-per-child=1` (a fresh child per run releases memory); CPU only in 0.7.0 (`CLUSTER_GPU_ID` only after a passing `cluster_backend_validations` row and the owner's yes on a RAPIDS layer) | pool healthcheck | storage roots as `api` | added by lane 1C; its first task arrives with lane 4F (W2.3) |
+| `cluster-worker` (`curation`; research clustering plan 5.2, decided, RD-25) | api image | `-Q cluster -c 1 --max-tasks-per-child=1` (a fresh child per run releases memory); CPU only in 0.7.0 (`CLUSTER_GPU_ID` only after a passing `cluster_backend_validations` row and the owner's yes on a RAPIDS layer) | pool healthcheck | storage roots as `api` | added by lane 1C; its first task arrives with lane 4F (W2.3b) |
 | `text-read-worker` (`curation`; W5e, research plate plan 5.3) | api image | `-Q text_read -c 1 --prefetch-multiplier=20`; no GPU device (the reader is a Triton model) | pool healthcheck | as `api`; the `identity_text` secret read-only | added by `w5e/region-text-jobs`, not in B2 |
 | `curation-trainer` (`training`) | trainer image | `celery -A src.tasks.runtime.gpu_app worker -Q gpu_train -c 1 --max-tasks-per-child=1` | pool healthcheck | storage roots, `/jobs` removed | |
 | `model-export-worker` (`export`) | export image | `celery -A src.tasks.runtime.gpu_app worker -Q gpu_export -c 1 --max-tasks-per-child=1` | pool healthcheck | models, storage roots | |
@@ -402,7 +412,7 @@ of distinct names), because which racer wins legitimately differs between runs.
 | T-3 | `expire_on_commit=True` makes an attribute read after commit do implicit I/O (`MissingGreenlet`) | `async_sessionmaker(expire_on_commit=False)`; relationships `lazy="raise"` |
 | T-4 | Select-then-insert under READ COMMITTED races | unique constraints and `INSERT ... ON CONFLICT`; ratchet: no `exists()` check before an insert in `src/db/repos` |
 | T-5 | A status added in Python but not to the `CHECK`, the trigger or the active-set index | all three generated from `src/domain/job_states.py`; `tests/db/test_job_transitions.py` |
-| T-6 | A query on a project table without the scope helper | RLS returns zero rows (fail closed) and `tests/db/test_row_level_security.py`; a ratchet on `src/db/repos` for direct `session.execute` outside `project_tx`/`deployment_tx` |
+| T-6 | A query on a project table without the scope helper | RLS raises `scope_not_set` (fail closed and loud, R-13; review RR-23) and `tests/db/test_row_level_security.py`; a ratchet on `src/db/repos` for direct `session.execute` outside `project_tx`/`deployment_tx` |
 | T-7 | The table owner bypasses RLS | the app connects as `op_app`; `FORCE ROW LEVEL SECURITY`; a test connects as `op_app` |
 | T-8 | `set_config(..., false)` (session level) leaks a project binding to the next request on a pooled connection | only `is_local = true`; a test reuses one pooled connection for two projects |
 | T-9 | The message is sent before the commit, and the worker cannot see the row | `start_job` commits first; a test with a fake producer asserts the order |

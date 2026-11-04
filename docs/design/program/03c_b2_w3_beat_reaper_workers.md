@@ -7,7 +7,7 @@
 | Design | [02b](02b_jobs_locking_events.md) section 4.1 (advisory locks, single beat), [02c](02c_migration_ops_tests.md) section 4 (services) |
 | Lanes | 6A, 6B and ES-C in parallel; then `b2/frontend-spaces` (after ES-C); then 6C; then 6D |
 | Merge order | 6A, 6B, ES-C, `b2/frontend-spaces`, 6C, 6D |
-| Research seams | folded 2026-11-04, pending owner question RD-1 ([00d](00d_owner_questions.md)): 6A gains the serving inventory, the cluster-run refresh and the near-duplicate ticks and loses the IVF retrain check; 6B the per-card Triton shape and the DCGM profiling fields; 6D the research docs; new lanes ES-C (readers to the embedding registry) and `b2/frontend-spaces`; the five stale Cropwright screenshots are recaptured in the B2 sweep ([03](03_b2_overview.md) section 9, step 23) |
+| Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [00d](00d_owner_questions.md)): 6A gains the serving inventory, the cluster-run refresh and the near-duplicate ticks and loses the IVF retrain check; 6B the per-card Triton shape and the DCGM profiling fields; 6D the research docs; new lanes ES-C (readers to the embedding registry) and `b2/frontend-spaces`; the five stale Cropwright screenshots are recaptured in the B2 sweep ([03](03_b2_overview.md) section 9, step 23) |
 | Compose project | none in the lanes (offline renders); the B2 sweep follows this stage |
 | Decisions | D-19, D-20b, D-24, D-50, D-54, D-60, D-61; SEC-4, SEC-5 (neutral) |
 
@@ -45,10 +45,10 @@ and the advisory lock of [02b](02b_jobs_locking_events.md) section 4.1.
 | `op.periodic.cache_prune` | the cache's interval | the `.prune.lock` flock and the inline prune from ingest | `CACHE_PRUNE, 0` |
 | `op.periodic.gpu_arbiter` | 15 s, scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set (the overlay sets it; RC-3) | `lifespan._arbiter_reconcile_loop`, `_start_gpu_arbiter`; `training_gpus.lock` and `pause.sentinel` become `gpu_reservations` and `deployment_settings('vlm_paused_for_training')` | `GPU_ARBITER, 0`; intent and outcome in two transactions around the Docker calls; routed to the dedicated `arbiter` queue, consumed only by `gpu-arbiter-worker` (review fix R-20), so no other periodic task runs in a process that holds the Docker socket |
 | `op.periodic.reload_promoted` | 15 s | the reload in the arbiter loop and `lifespan._reload_promoted_models` (the on-demand route stays) | none (idempotent) |
-| `op.periodic.cluster_refresh` | `OP_CLUSTER_REFRESH_INTERVAL_S` | `cluster_refresh_daemon.py` and its service; the schedule logic stays in `refresh_schedule.py` over `project_state('cluster_refresh')` (the beat's clock) and the serving partition's `n_items` | `CLUSTER_REFRESH, <project>`; research clustering 5.2: starts `cluster_run` (not `autolabel`) through `start_job` when the profile's growth rule fires and ingest is quiet, only when a `cluster` consumer is live (`inspect(timeout=1).active_queues()`), else skips |
+| `op.periodic.cluster_refresh` | `OP_CLUSTER_REFRESH_INTERVAL_S` | `cluster_refresh_daemon.py` and its service; the schedule logic stays in `refresh_schedule.py` over `project_state('cluster_refresh')` (the beat's clock) and the serving partition's `n_items` | `CLUSTER_REFRESH, <project>`; research clustering 5.2: starts `cluster_run` (not `autolabel`) through `start_job` when the profile's growth rule fires and ingest is quiet, only when a `cluster` consumer is live (a fresh `worker_capabilities` row naming the `cluster` queue, never a broadcast `inspect()`; review RR-21), else skips |
 | (deleted) `op.periodic.ivf_retrain_check` | - | the auto-label worker's `_next_retrain` and `last_check` are deleted with the worker in 4D; the IVF retrain is a `cluster_run` (research clustering 5.2), so this tick and the `IVF_RETRAIN` advisory lock do not exist | - |
-| `op.periodic.serving_inventory` (research GPU S-14) | 60 s | the hand-copied serving facts | none (idempotent upsert); reads each server of the active serving profile (`/v2/repository/index`, model readiness, metrics) and upserts `serving_reports` |
-| `op.periodic.near_dup_rescore` (research near-duplicates 5.2) | 30 s | the request-time grouping | `INGEST_DISPATCH`-style per project; starts `near_dup_rescore` per (project, level) with pending rows, idempotency key `near_dup_rescore:<project>:<level>:<slot>` |
+| `op.periodic.serving_inventory` (research GPU S-14) | 60 s | the hand-copied serving facts | none (idempotent upsert); reads each server of the active serving profile (`/v2/repository/index`, model readiness, metrics) and upserts `serving_reports`, and upserts a `gpu_devices` row with a fresh `seen_at` for every card the server's metrics name (`gpu_uuid` label; review RR-9) |
+| `op.periodic.near_dup_rescore` (research near-duplicates 5.2) | 30 s | the request-time grouping | `NEAR_DUP_RESCORE, <project lock_key>` (its own advisory-lock class, 02b; review RR-21); starts `near_dup_rescore` per (project, level) with pending rows, idempotency key `near_dup_rescore:<project>:<level>:<slot>` |
 | `op.periodic.near_dup_full_build` | weekly | - | per project; a full `image` build (cheap at image level) to bound incremental drift (risk R4) |
 | `op.periodic.near_dup_prune` | daily | - | deletes near-duplicate runs beyond the current and two superseded per project and level (02a section 9) |
 | `op.periodic.db_backup` | `OP_DB_BACKUP_INTERVAL_H` if set | - | `pg_try_advisory_xact_lock` on a backup class; off by default (D-61) |
@@ -110,10 +110,11 @@ helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|tr
 | 6B-7 | research GPU S-16: the `triton-server` service reads its card and NUMA node from the env the installer generates from the active serving profile (`TRITON_GPU_ID` today); a second card is a second generated service `triton-server-<slot>`, never a hand edit; the `cluster-worker` consumer of 1C-8 joins the consumers test | `tests/compose/test_triton_service_shape.py`: no fixed `container_name`, the card from the generated env; `tests/compose/test_consumers_after_b2.py` lists `cluster` | the one-card render unchanged |
 | 6B-8 | research GPU S-22 (pending RD-18): the DCGM exporter field list in the `monitoring` profile adds `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY`, `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_PROF_PCIE_TX_BYTES`, `DCGM_FI_PROF_PCIE_RX_BYTES`; the Grafana GPU dashboard shows them beside utilization; off in the minimal install | `tests/compose/test_dcgm_profiling_fields.py` | the monitoring render test |
 
-## Lane ES-C `b2/embedding-readers`: every reader resolves its vector field through the registry (research embeddings plan 5.4, 8.1; pending RD-1)
+## Lane ES-C `b2/embedding-readers`: every reader resolves its vector field through the registry (research embeddings plan 5.4, 8.1; approved, RD-1)
 
 **Owns:** every file of `rg -l "pe_embedding|ITEM_EMBEDDING_FIELD|DEFAULT_KNN_FIELD" src scripts` that
-6A and 6B do not own (about 40; the coordinator lists both lanes' files at the cut and moves any
+6A and 6B do not own, **run on the merged W2.3b head** (W2.3a and W2.3b delete or move
+`item_scores/near_dup.py` and `curation/clustering/*`; review 3.5) (about 40; the coordinator lists both lanes' files at the cut and moves any
 shared file's change into one of them); `src/config/project_context.py` (`embedding_space(target,
 key=None)`, refreshed on `config_epoch`); `src/domain/embedding_state.py`;
 `src/services/curation/wire.py` (`embedding_states: {space_key: state}`); the search `space` and
@@ -154,7 +155,7 @@ unit test of the item badge reading `embedding_states` (fails on the old field).
 doc-sync notes of stage 4 (`selectable_assist_plan.md`, `sam3_full_image_detection_plan.md`,
 `auto_label_loop_plan.md`), `docs/PERFORMANCE.md` (the table skeleton for the live-run numbers).
 
-Research content (pending RD-1): `docs/ARCHITECTURE.md` gains the embedding registry, the cluster
+Research content (approved, RD-1): `docs/ARCHITECTURE.md` gains the embedding registry, the cluster
 partition record (assigner, versioned partition, review state), the near-duplicate service with two
 levels, the assist loop's record in PostgreSQL and the serving profile; `docs/opensearch_schema_design.md`
 the registry-named vector fields and the retired-field list, the `cluster_*` and `near_dup_*`

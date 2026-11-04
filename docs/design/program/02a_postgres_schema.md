@@ -5,7 +5,7 @@
 | Status | plan, not started |
 | Part of | [02_control_plane_database.md](02_control_plane_database.md) (read its sections 2 and 3 first) |
 | Built by | B2 stage 1 (all tables, one initial Alembic revision), used by stages 2-6 ([03_b2_overview.md](03_b2_overview.md)) |
-| Research seams | the tables the seven research plans need are in [02d_research_seam_schema.md](02d_research_seam_schema.md) (revisions `0002`-`0004`); the changes they make to tables of this file are edited in place below and listed in 02d section 1 (pending owner question RD-1 of [00d](00d_owner_questions.md)) |
+| Research seams | the tables the seven research plans need are in [02d_research_seam_schema.md](02d_research_seam_schema.md) (revisions `0002`-`0004`); the changes they make to tables of this file are edited in place below and listed in 02d section 1 (approved by the owner 2026-11-04, RD-1 of [00d](00d_owner_questions.md)) |
 | Server | PostgreSQL 18 (latest stable major on 2026-11-04; 19 is a release candidate). The schema needs at least 15 (`NULLS NOT DISTINCT`) and 18 (`uuidv7()`); the exact image tag is in `13_package_pins.md` (written on its own branch) |
 
 The DDL below is the contract. Stage 1 writes it as SQLAlchemy models in `src/db/models/` and one
@@ -30,6 +30,10 @@ unique constraint, partial index and row-level-security policy named here.
   [UUID functions](https://www.postgresql.org/docs/18/functions-uuid.html)). A job's id is also its
   Celery `task_id`.
 - Times `timestamptz NOT NULL DEFAULT now()`; every comparison against an expiry uses `now()` in SQL.
+- Review RR-17: every `CHECK` a later revision alters has an explicit name under the `ck_`
+  convention (`ck_config_documents_kind`, `ck_config_documents_scope`, `ck_config_activations_axis`,
+  `ck_config_activations_axis_kind`, `ck_search_projection_tasks_kind`, `ck_project_state_key`), so
+  `0003` and `0004` drop and recreate them by a stable name.
 - Status columns, and kind columns whose set is closed, are `text` with a `CHECK (... IN (...))`
   (`jobs.kind` is the exception: it is validated against the kind table in code, so adding a job kind
   needs no migration), not `CREATE TYPE ... AS ENUM`:
@@ -54,13 +58,16 @@ unique constraint, partial index and row-level-security policy named here.
   ([constraints](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK)).
 - A reference to a job from a domain row is `ON DELETE SET NULL` (history survives job pruning).
 - A reference that must not dangle while in use keeps the default `NO ACTION`, not `RESTRICT`
-  (research integration, 02d X-1): both refuse a delete of a row still referenced, but `RESTRICT`
-  is checked at once while `NO ACTION` is checked at the end of the statement
-  ([foreign keys](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK)),
-  and a project delete cascades to the referencing row and the referenced row in one statement
-  (`config_activations` and `config_revisions`; `promotions` and `models`; `training_runs` and
-  `jobs`), so only `NO ACTION` lets the cascade pass whatever order the cascade triggers fire in.
-  `tests/db/test_profile_fk_cascade.py` (02d section 6) deletes a project holding every such pair.
+  (research integration, 02d X-1; reason corrected by review RR-6): both refuse a delete of a row
+  still referenced; the documented difference is that `NO ACTION` can be deferred and `RESTRICT`
+  cannot, and `RESTRICT` refuses even when the final state would be valid
+  ([foreign keys](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK),
+  [CREATE TABLE](https://www.postgresql.org/docs/current/sql-createtable.html)). Nothing promises
+  that a non-deferrable `NO ACTION` passes a cascade in every trigger order, so the project delete
+  does not rely on one cascade: the `project_delete` job deletes the project's rows table by table
+  in reverse foreign-key order in batches first (RR-7, lane 4C-5), and
+  `tests/db/test_profile_fk_cascade.py` (02d section 6) enumerates every referencing pair from the
+  catalog; a pair that still fails is declared `DEFERRABLE INITIALLY DEFERRED`.
   Examples: an activation's revision, a
   promotion's model).
 
@@ -85,8 +92,10 @@ Every table with a `project_id` column has row-level security
 ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
 ALTER TABLE <t> FORCE ROW LEVEL SECURITY;
 CREATE POLICY p_<t>_project ON <t>
-  USING      ((SELECT op_scope_is_deployment()) OR project_id = (SELECT op_scope_project()))
-  WITH CHECK ((SELECT op_scope_is_deployment()) OR project_id = (SELECT op_scope_project()));
+  USING      ((SELECT op_scope_is_deployment()) OR project_id = (SELECT op_scope_project())
+              OR (project_id IS NULL AND (SELECT op_scope_is_core())))        -- review RR-3
+  WITH CHECK ((SELECT op_scope_is_deployment()) OR project_id = (SELECT op_scope_project())
+              OR (project_id IS NULL AND (SELECT op_scope_is_core())));
 
 -- review fix R-13: an unset scope raises (still fail closed, but loud, never a silent empty result)
 CREATE FUNCTION op_scope_project() RETURNS uuid
@@ -95,17 +104,20 @@ CREATE FUNCTION op_scope_project() RETURNS uuid
     CASE current_setting('op.scope', true)
       WHEN 'project'    THEN RETURN nullif(current_setting('op.project_id', true), '')::uuid;
       WHEN 'deployment' THEN RETURN NULL;
+      WHEN 'core'       THEN RETURN NULL;   -- review RR-3: core sees only project_id IS NULL rows
       ELSE RAISE EXCEPTION 'scope_not_set' USING ERRCODE = 'insufficient_privilege';
     END CASE;
   END $$;
 CREATE FUNCTION op_scope_is_deployment() RETURNS boolean
   LANGUAGE sql STABLE AS $$ SELECT coalesce(current_setting('op.scope', true) = 'deployment', false) $$;
+CREATE FUNCTION op_scope_is_core() RETURNS boolean
+  LANGUAGE sql STABLE AS $$ SELECT coalesce(current_setting('op.scope', true) = 'core', false) $$;
 -- the EXISTS policies of sections 5 and 7 keep the one-argument form
 CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
   LANGUAGE sql STABLE AS $$ SELECT op_scope_is_deployment() OR pid = op_scope_project() $$;
 ```
 
-- `src/db/session.py` exposes exactly two ways to open a transaction: `project_tx(session, project)`
+- `src/db/session.py` exposes exactly three ways to open a transaction (the third, `core_tx`, below): `project_tx(session, project)`
   runs `SELECT set_config('op.scope','project',true), set_config('op.project_id', :id, true)` first.
   Review fix R-13: the scope is held in a context variable and re-applied by a SQLAlchemy
   `after_begin` session event ([session events](https://docs.sqlalchemy.org/en/21/orm/events.html#sqlalchemy.orm.SessionEvents.after_begin)),
@@ -122,16 +134,29 @@ CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
   plpgsql function, which is why the raising function is wrapped this way. The repositories keep
   their explicit `project_id = :p` filters as well. Test: `EXPLAIN` of a scoped select on `images`
   shows an InitPlan and an index condition on `project_id`.
-- Tables with a nullable `project_id` (`jobs`, `events`, `config_documents`, `models`) allow
-  `project_id IS NULL` rows only under `deployment` scope (the function returns false for NULL in
-  `project` scope).
+- Tables with a nullable `project_id` (`jobs`, `events`, `config_documents`, `models`, and the
+  research tables `cluster_partitions`, `partition_clusters`, `cluster_memberships`,
+  `cluster_identities`, `cluster_activations`, `cluster_activation_events`, `cluster_calibrations`,
+  `image_contents`, `near_dup_runs`, `near_dup_groups`, `near_dup_members`, `near_dup_edges`,
+  `near_dup_pending`) allow `project_id IS NULL` rows under `deployment` scope and under the third
+  scope **`core`** (review RR-3), never under `project` scope. `core_tx(session)` sets
+  `op.scope = 'core'` and sees only the NULL-project rows (core faces, the core global index's
+  near-duplicates, core jobs); it is allowed only in the modules a ratchet lists (`src/routers/persons.py`,
+  `src/services/face_identity*`, the core ingest services and routers, `src/services/duplicate_detection/`,
+  `src/routers/query_duplicates.py`, the core near-duplicate and person-grouping task handlers).
+  Deployment-default `cluster_calibrations` (project NULL) are also readable by a project-scoped
+  run through a second policy `CREATE POLICY p_cluster_calibrations_default ON cluster_calibrations
+  FOR SELECT USING (project_id IS NULL OR op_scope_allows(project_id))` (the `p_model_shares_consumer`
+  pattern): read-only, so a project can never write a shared calibration.
 - The application role `op_app` is not the table owner and has `NOBYPASSRLS`. Review fix R-13:
   "Superusers and roles with the BYPASSRLS attribute always bypass the row security system"
   ([row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)), so `FORCE` only
   matters for a non-superuser owner; section 1.5 makes the schema owner a non-superuser.
 - Tests: `tests/db/test_row_level_security.py` (a project-scoped transaction cannot read, update or
   insert another project's row in every RLS table; an unscoped statement raises `scope_not_set`; a
-  scoped session keeps its scope across commit and auto-begin).
+  scoped session keeps its scope across commit and auto-begin; review RR-3: project scope cannot see
+  core rows, core scope cannot see project rows, a project-scoped run reads a deployment calibration
+  and cannot insert one; `core_tx` outside the allowlist raises).
 
 ### 1.5 Roles
 
@@ -395,6 +420,8 @@ CREATE TABLE project_settings (
   vlm_policy      jsonb NULL,
   vlm_scope_reps  jsonb NULL,
   search          jsonb NULL,                  -- SearchSettings (embeddings plan 5.6; 02d section 1)
+  location_policy text NOT NULL DEFAULT 'store'  -- owner 2026-11-04 (RD-51 reversed): coordinates stored
+                  CHECK (location_policy IN ('drop','store_coarse','store')),
   revision        bigint NOT NULL DEFAULT 1,
   updated_at      timestamptz NOT NULL DEFAULT now(),
   updated_by      text NOT NULL
@@ -591,8 +618,12 @@ CREATE TABLE gpu_reservations (             -- replaces training_gpus.lock (the 
 );
 ```
 
-`gpu_devices` is deployment data (no RLS; written under `deployment_tx` by the GPU workers at
-`worker_ready` through NVML and by `openprocessor gpu plan`). Research S-12: a GPU worker's
+`gpu_devices` is deployment data (no RLS; upserted under `deployment_tx` by every GPU worker at
+`worker_ready` for every NVML-visible card in its container and on every heartbeat, by
+`op.periodic.serving_inventory` for every card a Triton server reports (Triton's GPU metrics carry
+the `gpu_uuid` label), and in the same transaction as every `gpu_reservations` insert, so a card
+with no Celery GPU worker can still be reserved; `openprocessor gpu plan` only reads; review RR-9,
+00b section 5.5). Research S-12: a GPU worker's
 `worker_capabilities` row names the card's `gpu_uuid`.
 
 `job_attempts`, `job_items` and `gpu_reservations` reach the project through `jobs`; their RLS
@@ -871,11 +902,11 @@ CREATE UNIQUE INDEX uq_upgrade_step_done ON upgrade_runs (from_version, step) WH
 | `jobs`, `job_attempts` | one row per start | terminal rows older than 90 days deleted, except kinds referenced by `training_runs`, `dataset_imports`, `combine_runs`, `bakeoff_runs`, `promotions`, `dataset_exports`, `assist_loop_runs`, `embedding_reindex_runs` (those keep their job: each references it without `ON DELETE SET NULL`) |
 | `ingest_source_files` | one row per discovered file | `done` rows older than 30 days deleted |
 | `config_runtime_reports`, `worker_capabilities`, `serving_reports` | one row per process and host, or per server and model | rows not seen for 1 day deleted |
-| `gpu_devices` | one row per card | rows not seen for 1 day deleted, except a card that `gpu_reservations` still names (the foreign key refuses it) |
+| `gpu_devices` | one row per card | `seen_at` refreshed by the worker heartbeat and by `op.periodic.serving_inventory` (review RR-9); `DELETE ... WHERE seen_at < now() - interval '1 day' AND NOT EXISTS (SELECT 1 FROM gpu_reservations r WHERE r.gpu_uuid = gpu_devices.gpu_uuid)`, so a referenced row never fails the batch |
 | `cluster_partitions` and their clusters and memberships ([02d](02d_research_seam_schema.md) 2.2) | about 150 B per membership row, about 150 MB per 1M-item partition | keep the serving, the previous serving and at most 2 `ready` candidates per key; older `discarded` or superseded partitions deleted after 30 days, 10,000 rows per statement |
 | `assist_loop_proposals`, `assist_loop_selections` (02d 2.4) | one row per asked item | rows of runs finished more than 90 days ago deleted (the node rows keep the counts); a run and its children stay while one of its label operations can be undone |
 | `vlm_usage_hourly` | one row per project, endpoint, source and hour | 400 days |
-| `near_dup_runs` and their groups and members (02d section 3) | one members row per image and item per run | the current run and the two newest superseded runs per project and level; older runs deleted by beat |
+| `near_dup_runs` and their groups and members (02d section 3) | one members row per image and item per run | the current run, the two newest superseded runs per project and level, and every run a `holdout_freezes` row references (review RR-22); older runs deleted by beat |
 | `near_dup_pending` | one row per changed member | deleted when its rescore drains it |
 | `dataset_uploads` | one per upload | `expires_at` passed: blob and row removed |
 | `dataset_import_images`, `label_operation_members` | one per image or item | kept with their parent (undo needs them) |

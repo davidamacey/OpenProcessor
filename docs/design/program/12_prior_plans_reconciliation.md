@@ -231,7 +231,7 @@ Reference. `05` 4A adds the request-scoped `TaskGroup` exemption (Q-J7). It rece
 | Z5 detector-class roots | #398 (v0.9.0, research) |
 | Fine-grained make/model | #385, #399 closed; further work parked (#346) |
 | Faces plan (#353, #354, #379) | obsolete (all closed); the rest is `cluster_search_makemodel_plan.md` W3 (2.2) |
-| Attribute signals, plate identity, Leiden/GPU clustering | #400 (RW-5), #401 (W5e), #346 (seams in W2.3 4F, research in RW-3), per the research plans of 2026-11-04 |
+| Attribute signals, plate identity, Leiden/GPU clustering | #400 (RW-5), #401 (W5e), #346 (seams in W2.3b 4F, research in RW-3), per the research plans of 2026-11-04 |
 | PE-Core-L stays; embedding swap | #347, #365 (v0.9.0) |
 | Semantic search over crops; filter cost | obsolete for the built parts (#402 phases A and B, #384, #356 closed); #435, #436 v0.9.0 |
 | Ingest-speed work | obsolete (#390, #392, #393 closed) |
