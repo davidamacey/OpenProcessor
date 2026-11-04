@@ -91,8 +91,8 @@ pe = [
 ]
 dev = [
     "pre-commit>=4.0.0",
-    "ruff==0.17.1",
-    "mypy==2.4.0",
+    "ruff==0.17.3",
+    "mypy==2.4.1",
     "vulture==2.16",
     "bandit[toml]>=1.9.4",
     "pytest>=8.0.0",

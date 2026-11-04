@@ -126,7 +126,7 @@ def test_dockerfile_segmenter_replaces_the_base_python_packages_the_scan_flags()
     runtime_start = text.rindex('FROM pytorch/pytorch')
     builder, runtime = text[:runtime_start], text[runtime_start:]
     for requirement in (
-        "'fastapi==0.143.3'",
+        "'fastapi==0.162.0'",
         "'pillow>=13.0.0'",
         "'certifi>=2026.10.18'",
         "'filelock>=4.2.1'",

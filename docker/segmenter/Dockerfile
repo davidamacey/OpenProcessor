@@ -47,7 +47,7 @@ COPY --from=sam3-src /src/sam3 /opt/sam3
 
 RUN pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
     && pip install --user --no-cache-dir --no-warn-script-location \
-        'fastapi==0.143.3' \
+        'fastapi==0.162.0' \
         'uvicorn[standard]==0.32.0' \
         'pydantic>=2.7,<3' \
         'numpy>=1.26,<2.0' \
