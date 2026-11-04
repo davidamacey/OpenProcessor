@@ -182,7 +182,7 @@ def _to_summary(record: PackRecord) -> PromptPackSummary:
 
 @router.get('/prompt_packs/schema', response_model=PromptPackSchema)
 async def get_prompt_pack_schema() -> PromptPackSchema:
-    class_names = sorted(registry_class_names())[:5] or ['car', 'truck', 'bus']
+    class_names = sorted(await registry_class_names())[:5] or ['car', 'truck', 'bus']
     fields: list[PromptPackFieldSchema] = []
     for f in PromptPackBody.model_fields:
         kind = _FIELD_KIND.get(f, 'text')
@@ -240,7 +240,7 @@ async def validate_prompt_pack_route(
         body.body.model_dump(),
         existing_names=existing,
         profile=resolve_region_profile(profile),
-        class_names=registry_class_names(),
+        class_names=await registry_class_names(),
     )
     return report.model_dump()
 
@@ -324,7 +324,7 @@ async def create_prompt_pack(
         body.body.model_dump(),
         existing_names=existing - {body.name},
         profile=resolve_region_profile(None),
-        class_names=registry_class_names(),
+        class_names=await registry_class_names(),
     )
     name_issues = [
         e for e in report.errors if e.code in ('pack_name_invalid', 'pack_name_reserved')
@@ -453,7 +453,10 @@ async def clone_prompt_pack(
     existing = all_known_names()
     # M-2 fix: new_name must obey the same slug/reserved-word rules as create.
     name_report = validate_pack(
-        body.new_name, source.body, existing_names=existing, class_names=registry_class_names()
+        body.new_name,
+        source.body,
+        existing_names=existing,
+        class_names=await registry_class_names(),
     )
     reject_invalid_clone_name(
         name_report,
@@ -464,7 +467,7 @@ async def clone_prompt_pack(
     )
 
     new_body = dict(source.body)
-    report = validate_pack(None, new_body, class_names=registry_class_names())
+    report = validate_pack(None, new_body, class_names=await registry_class_names())
     if not report.ok:
         raise api_error(
             422, 'validation_failed', 'the cloned pack has content errors', report=report
@@ -511,7 +514,7 @@ async def save_prompt_pack(
     if existing is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
 
-    report = validate_pack(name, body.body.model_dump(), class_names=registry_class_names())
+    report = validate_pack(name, body.body.model_dump(), class_names=await registry_class_names())
     if not report.ok:
         raise api_error(
             422, 'validation_failed', f'the pack has {len(report.errors)} error(s)', report=report

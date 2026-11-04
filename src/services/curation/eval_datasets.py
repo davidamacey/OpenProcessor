@@ -33,7 +33,6 @@ from typing import Any
 
 from scripts.curation.bakeoff.class_map import read_export_id_map, read_names
 from scripts.curation.bakeoff.freeze import LOCK_NAME, test_sha as freeze_test_sha
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.services.curation.export_support import frozen_test_sha_of
 
@@ -102,21 +101,9 @@ class EvalDatasetRecord:
         """Per-dataset output dir name in a job: ``:`` and ``/`` become ``__``."""
         return self.id.replace(':', '__').replace('/', '__')
 
-    def to_wire(self) -> dict[str, Any]:
-        # Registry names are looked up per call, never cached with the record, so a
-        # rename shows up on the next listing.
-        registry_names = _registry_names_by_id()
-        classes = [
-            {
-                **c.__dict__,
-                'registry_class_name': (
-                    registry_names.get(c.registry_class_id)
-                    if c.registry_class_id is not None
-                    else None
-                ),
-            }
-            for c in self.classes
-        ]
+    def to_wire(self, registry_names: dict[int, str]) -> dict[str, Any]:
+        """The wire form; ``registry_names`` is the live registry id -> name, looked up by id so a
+        registry rename shows here and the cached record never holds a stale name."""
         return {
             'id': self.id,
             'source': self.source,
@@ -126,7 +113,15 @@ class EvalDatasetRecord:
             'is_current': self.is_current,
             'dataset_kind': self.dataset_kind,
             'nc': len(self.class_names),
-            'classes': classes,
+            'classes': [
+                {
+                    **c.__dict__,
+                    'registry_class_name': registry_names.get(c.registry_class_id)
+                    if c.registry_class_id is not None
+                    else None,
+                }
+                for c in self.classes
+            ],
             'n_images': self.n_images,
             'n_objects': self.n_objects,
             'n_background_images': self.n_background_images,
@@ -233,19 +228,6 @@ def _count_split(d: Path) -> tuple[Counter[int], Counter[int], int, int, frozens
     n_images = len(image_stems)
     n_background = n_images - len(image_stems & positive_stems)
     return objects, images_per_class, n_images, n_background, frozenset(stems)
-
-
-def _registry_names_by_id() -> dict[int, str]:
-    """Live class-registry id -> name, best-effort ({} on any load failure).
-
-    Looked up by id -- never assumed equal to the eval dataset's own class
-    name for that class -- so a registry rename shows up here and callers
-    never have to re-derive the name from the registry id themselves.
-    """
-    try:
-        return {c.class_id: c.class_name for c in get_class_registry().load().classes}
-    except Exception:
-        return {}
 
 
 _CACHE: dict[tuple[Any, ...], EvalDatasetRecord] = {}

@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.registry_reclassify import UnmatchedLabelSource, reclassify_unmatched
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
@@ -37,21 +37,16 @@ PACK = dataclasses.replace(GENERIC_ITEM_PACK, synonyms={'thingamajig': 'gadget'}
 
 
 @pytest.fixture
-def registry(tmp_path: Path) -> ClassRegistry:
-    path = tmp_path / 'class_registry.json'
-    path.write_text(
-        json.dumps(
-            {
-                'version': 1,
-                'classes': [
-                    {'class_id': 0, 'class_name': 'widget'},
-                    {'class_id': 1, 'class_name': 'gadget'},
-                    {'class_id': 2, 'class_name': 'retired', 'deprecated': True},
-                ],
-            }
-        )
+def registry(tmp_path: Path) -> InMemoryRegistry:
+    reg = InMemoryRegistry(tmp_path)
+    reg.seed_rows(
+        [
+            {'class_id': 0, 'class_name': 'widget'},
+            {'class_id': 1, 'class_name': 'gadget'},
+            {'class_id': 2, 'class_name': 'retired', 'deprecated': True},
+        ]
     )
-    return ClassRegistry(path)
+    return reg
 
 
 def _unmatched(raw: str, **extra: Any) -> dict[str, Any]:
@@ -261,13 +256,12 @@ def test_cli_apply_runs_every_prefix(monkeypatch, registry):
     fake.docs(ITEMS)['u7']['alt_raw_label'] = 'widget'
     monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(fake))
     monkeypatch.setattr(mod, 'get_curation_config', lambda: CFG)
+    monkeypatch.setattr(mod, 'get_class_registry', lambda: registry)
     monkeypatch.setattr(
         sys,
         'argv',
         [
             'x',
-            '--registry',
-            str(registry.path),
             '--label-prefix',
             'vlm',
             '--label-prefix',
@@ -281,9 +275,10 @@ def test_cli_apply_runs_every_prefix(monkeypatch, registry):
     assert 'alt_reclassified' in sources
 
 
-def test_cli_refuses_empty_registry(monkeypatch, tmp_path):
+def test_cli_refuses_empty_registry(monkeypatch):
     mod = _load_script()
-    monkeypatch.setattr(sys, 'argv', ['x', '--registry', str(tmp_path / 'missing.json'), '--apply'])
+    monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(_fake()))
+    monkeypatch.setattr(sys, 'argv', ['x', '--apply'])
     assert mod.main() == 2
 
 

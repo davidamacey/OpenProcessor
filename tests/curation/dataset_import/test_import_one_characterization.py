@@ -100,7 +100,7 @@ def snapshot(h: Harness, store: Any, tmp: Path) -> dict[str, Any]:
 
 
 async def _basic(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo(
         root,
@@ -121,7 +121,7 @@ async def _basic(h: Harness, tmp: Path) -> dict[str, Any]:
 
 
 async def _unreadable(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo(
         root, names=['car'], images={'ok': ['0 0.3 0.3 0.2 0.2'], 'bad': ['0 0.5 0.5 0.2 0.2']}
@@ -132,7 +132,7 @@ async def _unreadable(h: Harness, tmp: Path) -> dict[str, Any]:
 
 
 async def _size_mismatch(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2'], 'b': ['0 0.5 0.5 0.2 0.2']})
     request = h.request(root, map_all(h.registry, 'car'))
@@ -152,7 +152,7 @@ async def _size_mismatch(h: Harness, tmp: Path) -> dict[str, Any]:
 
 async def _regions_label_parents(h: Harness, tmp: Path) -> dict[str, Any]:
     activate_region_profile(parent_classes=('car',))
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo(
         root,
@@ -173,7 +173,7 @@ async def _regions_label_parents(h: Harness, tmp: Path) -> dict[str, Any]:
 
 async def _regions_detected_parents(h: Harness, tmp: Path) -> dict[str, Any]:
     activate_region_profile()
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo(
         root,
@@ -186,7 +186,7 @@ async def _regions_detected_parents(h: Harness, tmp: Path) -> dict[str, Any]:
 
 
 async def _propose(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo(root, names=['car'], images={'match': [SAME], 'far': [FAR], 'neg': [], 'unl': None})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car'), processing='propose'))
@@ -194,7 +194,7 @@ async def _propose(h: Harness, tmp: Path) -> dict[str, Any]:
 
 
 async def _freeze_test_split(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo_splits(
         root,
@@ -206,8 +206,8 @@ async def _freeze_test_split(h: Harness, tmp: Path) -> dict[str, Any]:
 
 
 async def _freeze_updated_item(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     first = tmp / 'ds1'
     write_yolo_splits(first, names=['car', 'truck'], splits={'test': {'e1': [SAME]}})
     await h.run(h.request(first, map_all(h.registry, 'car'), freeze_test_split=False))
@@ -231,8 +231,8 @@ async def _propose_with_detected_parents(h: Harness, tmp: Path) -> dict[str, Any
 
 
 async def _reimport(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp / 'ds'
     rows = ['0 0.2 0.2 0.1 0.1', '1 0.5 0.5 0.1 0.1', '0 0.8 0.8 0.1 0.1']
     write_yolo(root, names=['car', 'truck'], images={'a': rows})
@@ -252,7 +252,7 @@ async def _reimport(h: Harness, tmp: Path) -> dict[str, Any]:
 
 
 async def _resumed_image(h: Harness, tmp: Path) -> dict[str, Any]:
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp / 'ds'
     write_yolo(root, names=['car'], images={'a': [SAME, FAR], 'b': ['0 0.5 0.5 0.1 0.1']})
     request = h.request(root, map_all(h.registry, 'car'))

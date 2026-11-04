@@ -7,11 +7,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation._ingest_profile_world import Pool, WorldOpenSearch, body
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
 from src.services.curation import index_bootstrap
 
@@ -41,7 +41,7 @@ def labels(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> str:
 def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any, labels: str) -> Any:
     del labels
     fake = WorldOpenSearch()
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+    registry = InMemoryRegistry()
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'env_model')
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)

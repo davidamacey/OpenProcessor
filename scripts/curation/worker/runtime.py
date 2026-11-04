@@ -276,6 +276,7 @@ async def quiesce_and_swap(
     slug: str,
     store: ConfigStore,
     registry: ConfigStore,
+    opensearch: Any,
     pool: Any,
     args: argparse.Namespace,
     want: Want,
@@ -311,7 +312,7 @@ async def quiesce_and_swap(
     from src.services.curation.region_class import ensure_region_class
 
     try:
-        ensure_region_class()
+        await ensure_region_class(opensearch)
     except Exception as exc:
         logger.warning('region_class_seed_failed', project=slug, error=str(exc))
     new_pack = get_active_pack()
@@ -401,6 +402,7 @@ async def maybe_hot_reload(
         slug=slug,
         store=store,
         registry=registry,
+        opensearch=opensearch,
         pool=pool,
         args=args,
         want=want,

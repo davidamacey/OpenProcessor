@@ -35,6 +35,7 @@ from src.utils.class_names import normalize_class_name
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.services.curation.item_doc import DetectedItem
 
 
@@ -231,14 +232,14 @@ def assign_classes_by_name(
     return resolved
 
 
-def registry_name_index(registry: Any) -> dict[str, tuple[int, str]]:
+def registry_name_index(registry: ClassRegistryFile) -> dict[str, tuple[int, str]]:
     """``{normalized name: (class_id, class_name)}`` of the classes an item may be
     given (active, and not the region class)."""
     from src.services.curation.region_class import item_classes
 
     return {
         normalize_class_name(c.class_name): (c.class_id, c.class_name)
-        for c in item_classes(registry.load().classes)
+        for c in item_classes(registry.classes)
     }
 
 

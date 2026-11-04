@@ -167,19 +167,6 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
 
     slug = record.slug
     res = record.resources
-    res.class_registry_path.parent.mkdir(parents=True, exist_ok=True)
-    res.class_registry_path.write_text(
-        json.dumps(
-            {
-                'version': 1,
-                'classes': [
-                    {'id': 1, 'name': CLASS_NAMES[slug]},
-                    {'id': 2, 'name': f'{slug}_second'},
-                ],
-            }
-        ),
-        encoding='utf-8',
-    )
     state = {
         'job_id': f'{slug}-job-state',
         'status': 'completed',

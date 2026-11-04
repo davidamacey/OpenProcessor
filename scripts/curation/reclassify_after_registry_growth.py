@@ -35,7 +35,7 @@ it must be the prefix that path writes (``<prefix>_unmatched`` /
         --label-prefix vlm --label-prefix other --page-size 500 \\
         --start-after crop_000123 --apply
 
-Index names and the registry path come from ``CurationConfig`` (``OP_*``
+Index names come from ``CurationConfig`` (``OP_*``
 env); talks to OpenSearch directly, the API does not need to be running.
 """
 
@@ -56,7 +56,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
-from src.clients.curation_opensearch.registry import ClassRegistry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.services.curation.registry_reclassify import (
     UnmatchedLabelSource,
@@ -79,15 +79,14 @@ logger = logging.getLogger('curation_reclassify_after_registry_growth')
 
 async def _async_main(args: argparse.Namespace) -> int:
     cfg = get_curation_config()
-    registry = ClassRegistry(args.registry or cfg.class_registry_path)
-    if not active_name_to_id(registry):
-        logger.error('registry %s has no active classes — nothing to match', registry.path)
-        return 2
-
     sources = [UnmatchedLabelSource(p) for p in (args.label_prefix or [DEFAULT_PREFIX])]
     start_after = [args.start_after] if args.start_after else None
     client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
     try:
+        registry = await get_class_registry().snapshot(client)
+        if not active_name_to_id(registry):
+            logger.error('the class registry has no active classes — nothing to match')
+            return 2
         for source in sources:
             result = await reclassify_unmatched(
                 client,
@@ -118,12 +117,6 @@ def main() -> int:
         action='append',
         default=None,
         help=f'Labeling-path prefix (repeatable; default {DEFAULT_PREFIX!r}).',
-    )
-    p.add_argument(
-        '--registry',
-        type=Path,
-        default=None,
-        help='Registry JSON (default: the --project registry path).',
     )
     p.add_argument('--page-size', type=int, default=1000, help='Items per search_after page.')
     p.add_argument('--max-pages', type=int, default=0, help='Stop after N pages (0 = no limit).')

@@ -54,7 +54,7 @@ from src.services.training.yolo_triton_config import render_labels_file
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from _registry_doc_fake import InMemoryRegistry
 
 
 # =============================================================================
@@ -190,7 +190,7 @@ def assert_written_items_match_fixture_geometry(
 
 
 async def step_real_export(
-    h: Harness, registry: ClassRegistry, tmp_path: Path
+    h: Harness, registry: InMemoryRegistry, tmp_path: Path
 ) -> tuple[Path, dict[int, int]]:
     cfg = CurationConfig(
         items_index=h.cfg.items_index,
@@ -271,7 +271,7 @@ def step_stub_train_manifest(dense_mapping: dict[int, int], names: list[str]) ->
 # =============================================================================
 
 
-def step_promote_labels(manifest: dict, registry: ClassRegistry) -> tuple[dict[int, str], dict]:
+def step_promote_labels(manifest: dict, registry: InMemoryRegistry) -> tuple[dict[int, str], dict]:
     remap = resolve_class_remap(
         job_id='stub_job', checkpoint_path=Path('/tmp/does-not-exist/best.onnx'), manifest=manifest
     )

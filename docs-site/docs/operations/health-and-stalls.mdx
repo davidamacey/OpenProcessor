@@ -50,8 +50,8 @@ Two routes report on curation:
 
 | `status` | When |
 |---|---|
-| `ok` | Triton and OpenSearch reachable, the project's class registry exists, and the active VLM is reachable |
-| `degraded` | OpenSearch is reachable but something else isn't: Triton down, no registry yet (a new project until its first class is created), or the VLM unreachable |
+| `ok` | Triton and OpenSearch reachable, the project's class registry document is readable (not waiting for `curation migrate-registry`), and the active VLM is reachable |
+| `degraded` | OpenSearch is reachable but something else isn't: Triton down, the class registry waiting for `curation migrate-registry` (409 `registry_not_migrated`), or the VLM unreachable |
 | `down` | OpenSearch unreachable |
 
 The `vlm` block reports the project's active endpoint (reachability,

@@ -248,12 +248,12 @@ class _StreamWorker:
         )
         return False
 
-    def _labelable(self, projects: list[Any]) -> list[Any]:
+    async def _labelable(self, projects: list[Any]) -> list[Any]:
         """The projects that have a class to label as. A project without one is not
         fetched, so its crops are never claimed in flight and cannot starve the rest."""
         labelable = []
         for record in projects:
-            if project_has_item_classes(record):
+            if await project_has_item_classes(self.opensearch, record):
                 if record.slug in self.classless:
                     self.classless.discard(record.slug)
                     print(f'[vlm-worker] project={record.slug} has classes now; labeling it')
@@ -314,7 +314,7 @@ class _StreamWorker:
             # In-flight ids are excluded server-side (must_not ids), so a
             # fetch only needs to refill the queue.
             fetch_n = min(args.vlm_batch_size * args.concurrency * 2, 9000)  # OS hits cap
-            labelable = self._labelable(projects)
+            labelable = await self._labelable(projects)
             share = max(1, fetch_n // max(1, len(labelable)))
             if not await self._fetch_cycle(labelable, share):
                 if await self._idle_cycle(projects):

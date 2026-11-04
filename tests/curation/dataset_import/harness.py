@@ -12,11 +12,11 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
+from _registry_doc_fake import InMemoryRegistry
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig, DetectionProfile, get_curation_config
 from src.services.curation.dataset_import import runner
 from src.services.curation.dataset_import.context import ImportContext
@@ -104,7 +104,7 @@ class Harness:
             lambda config=None: ((root or tmp_path).resolve(),),  # noqa: ARG005
         )
         self.os = QueryFakeOpenSearch()
-        self.registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+        self.registry = InMemoryRegistry(tmp_path)
         self.triton = FakeTritonPool()
         if detections is not None:
             self.triton = detections
@@ -152,7 +152,9 @@ class Harness:
         )
 
     def prepare(self, request: DatasetImportRequest):
-        return prepare_import(request, pin_project_view(self.registry), path_guard=self.guard)
+        return prepare_import(
+            request, pin_project_view(self.registry.load()), path_guard=self.guard
+        )
 
     def context(
         self, store: ImportStore, request: DatasetImportRequest, prepared: Any
@@ -184,7 +186,7 @@ class Harness:
         store, reused = await runner.claim_import(self.os, request, prepared)
         assert not reused
         self.last_store = store
-        materialize_created_classes(prepared.resolved, self.registry)
+        await materialize_created_classes(prepared.resolved, self.registry, self.os)
         runner.persist_pinned(store, prepared)
         runner.persist_scan_summary(store, prepared, [])
         store.job.update(freeze_test=runner.freeze_default(prepared, request))
@@ -201,7 +203,7 @@ class Harness:
         but the dataset path comes from what the START persisted."""
         runner.check_resumable(store)
         entries = runner.rescan_for_resume(store, request, path_guard=self.guard)
-        runner.prepare_resume(store, self.registry)
+        await runner.prepare_resume(store, self.registry, self.os)
         resolved, profile, parents = runner.load_pinned(store)
         state = store.job.read()
         ctx = ImportContext(
@@ -248,7 +250,7 @@ class Harness:
         return imports_root()
 
 
-def map_all(registry: ClassRegistry, *names: str) -> list[ClassMappingEntry]:
+def map_all(registry: InMemoryRegistry, *names: str) -> list[ClassMappingEntry]:
     """``map`` each name to its registry class, ``create`` the ones missing."""
     existing = {c.class_name: c.class_id for c in registry.load().classes}
     out = []

@@ -156,10 +156,10 @@ def test_no_cluster_big_enough_is_no_roots(stack: Any) -> None:
 def test_a_project_without_item_classes_is_refused(
     stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from _registry_doc_fake import InMemoryRegistry
 
     _seed(stack)
-    empty = ClassRegistry(path=tmp_path / 'empty_registry.json')
+    empty = InMemoryRegistry()
     monkeypatch.setattr(
         'src.clients.curation_opensearch.registry.get_class_registry', lambda: empty
     )

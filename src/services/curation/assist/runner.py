@@ -179,7 +179,9 @@ async def run_assist(
         if endpoint is not None:
             await assert_may_connect(endpoint)
         labeler = get_vlm_labeler(prepared.pack_name, prepared.pack_revision, endpoint=endpoint)
-        ctx = class_context(labeler, ClassWriteGuard('assist_run'), revision=prepared.pack_revision)
+        ctx = await class_context(
+            labeler, ClassWriteGuard('assist_run'), revision=prepared.pack_revision
+        )
         meta = _meta(job, prepared, created_at, labeler)
         actions = prepared.request.actions
         ids = prepared.scope.sampled_ids

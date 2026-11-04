@@ -7,7 +7,7 @@ from typing import Any
 from src.services.curation.class_registry_names import registry_class_names
 
 
-def validation_inputs() -> dict[str, Any]:
+async def validation_inputs() -> dict[str, Any]:
     """The registry's class names, the primary detector's class names and the
     segmenter probe: the one place they are assembled, so create, save, validate,
     clone and the activation gate cannot disagree."""
@@ -18,7 +18,7 @@ def validation_inputs() -> dict[str, Any]:
 
     detector = project_ingest_profiles().primary.detector_model
     return {
-        'class_names': registry_class_names(),
+        'class_names': await registry_class_names(),
         'detector_class_names': frozenset(get_class_names(detector).values())
         if detector
         else frozenset(),

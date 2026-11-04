@@ -2,7 +2,7 @@
 
 Goal: exercise routing + dependency wiring without spinning up Triton or
 OpenSearch. We patch the heavy collaborators (opensearch, triton_pool,
-ClassRegistry) and assert the router glues them together correctly.
+InMemoryRegistry) and assert the router glues them together correctly.
 
 Covered:
 - ``/curation/test_holdout/freeze`` refuses re-run unless ``?force=true`` (409).
@@ -140,10 +140,10 @@ def test_test_holdout_freeze_zero_cohort_raises_422_even_with_force(
 
 def test_classes_post_appends(app_client: Any, tmp_path: Path) -> None:
     """POST /curation/classes assigns a new class_id via the registry."""
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from _registry_doc_fake import InMemoryRegistry
 
-    fake_path = tmp_path / 'class_registry.json'
-    reg = ClassRegistry(path=fake_path)
+    tmp_path / 'class_registry.json'
+    reg = InMemoryRegistry()
 
     with patch('src.routers.curation.get_class_registry', return_value=reg):
         r = app_client.post(
@@ -160,12 +160,12 @@ def test_classes_merge_deprecates_source(
     app_client: Any, tmp_path: Path, fake_opensearch: AsyncMock
 ) -> None:
     """POST /curation/classes/merge marks source deprecated."""
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from _registry_doc_fake import InMemoryRegistry
 
-    fake_path = tmp_path / 'class_registry.json'
-    reg = ClassRegistry(path=fake_path)
-    src_id = reg.add_class('mustang_gen5', group='muscle')
-    tgt_id = reg.add_class('mustang_gen6', group='muscle')
+    tmp_path / 'class_registry.json'
+    reg = InMemoryRegistry()
+    src_id = reg.add('mustang_gen5', group='muscle')
+    tgt_id = reg.add('mustang_gen6', group='muscle')
 
     fake_opensearch.update_by_query = AsyncMock(return_value={'updated': 5})
 
@@ -191,12 +191,12 @@ def test_classes_merge_refuses_when_source_has_frozen_holdout_crops(
 ) -> None:
     """Refuse with 409 rather than silently relabeling a frozen
     test_holdout crop and leaving its holdout identity stale."""
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from _registry_doc_fake import InMemoryRegistry
 
-    fake_path = tmp_path / 'class_registry.json'
-    reg = ClassRegistry(path=fake_path)
-    src_id = reg.add_class('civic_gen9', group='compact')
-    tgt_id = reg.add_class('civic_gen10', group='compact')
+    tmp_path / 'class_registry.json'
+    reg = InMemoryRegistry()
+    src_id = reg.add('civic_gen9', group='compact')
+    tgt_id = reg.add('civic_gen10', group='compact')
 
     fake_opensearch.count = AsyncMock(return_value={'count': 3})
 
@@ -236,12 +236,12 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     plain update_by_query. This test verifies both legs against their
     actual mechanisms rather than asserting two update_by_query calls.
     """
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from _registry_doc_fake import InMemoryRegistry
 
-    fake_path = tmp_path / 'class_registry.json'
-    reg = ClassRegistry(path=fake_path)
-    src_id = reg.add_class('miata_na', group='sport_compact')
-    tgt_id = reg.add_class('miata_nb', group='sport_compact')
+    tmp_path / 'class_registry.json'
+    reg = InMemoryRegistry()
+    src_id = reg.add('miata_na', group='sport_compact')
+    tgt_id = reg.add('miata_nb', group='sport_compact')
 
     fake_opensearch.update_by_query = AsyncMock(return_value={'updated': 1})
     fake_opensearch.search = AsyncMock(

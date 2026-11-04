@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation import vlm_cli, vlm_worker
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.worker_liveness import check_heartbeat, write_heartbeat
 from src.services.labeling.vlm_client import VlmIdentity
@@ -56,8 +56,8 @@ async def _call_route(
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('widget')
+    reg = InMemoryRegistry()
+    reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
     async def _no_pack(_os: Any) -> None:

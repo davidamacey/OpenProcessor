@@ -6,24 +6,19 @@ Mocks the AsyncOpenSearch client; no real OpenSearch instance required.
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
-from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
+from src.clients.curation_opensearch import ClassRegistryFile
 from src.clients.curation_opensearch.ensure_overlay_fields import (
     ensure_items_probe_fields,
     ensure_items_score_fields,
 )
 from src.clients.curation_opensearch.lifecycle import INDEX_BODIES, create_curation_indexes
-from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.config import IndexRole, get_curation_config
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 config = get_curation_config()
@@ -372,92 +367,71 @@ async def test_ensure_probe_fields_migration_idempotent() -> None:
 
 
 # =============================================================================
-# ClassRegistry — file-system backed, tmp_path fixture
+# ClassRegistry -- the registry document (an in-memory document store stands in for OpenSearch)
 # =============================================================================
 
 
 @pytest.fixture
-def tmp_registry(tmp_path: Path) -> ClassRegistry:
-    """ClassRegistry pointed at an empty tmp file."""
-    path = tmp_path / 'class_registry.json'
-    return ClassRegistry(path=path)
+def tmp_registry() -> InMemoryRegistry:
+    """An empty registry document."""
+    return InMemoryRegistry()
 
 
-def _seeded_registry(path: Path) -> ClassRegistry:
-    """Helper: write a seed file with one class, return registry."""
-    seed = ClassRegistryFile(
-        classes=[RegistryClassEntry(class_id=0, class_name='corvette', group='chevrolet')]
-    )
-    path.write_text(seed.model_dump_json(indent=2), encoding='utf-8')
-    return ClassRegistry(path=path)
-
-
-def test_registry_load_empty_when_missing(tmp_registry: ClassRegistry) -> None:
+def test_registry_load_empty_when_no_class_was_added(tmp_registry: InMemoryRegistry) -> None:
     reg = tmp_registry.load()
     assert isinstance(reg, ClassRegistryFile)
     assert reg.classes == []
-    assert tmp_registry.next_id() == 0
+    assert reg.next_class_id == 0
 
 
-def test_registry_load_caches_until_mtime_changes(tmp_path: Path) -> None:
-    path = tmp_path / 'class_registry.json'
-    reg = _seeded_registry(path)
-    a = reg.load()
-    b = reg.load()
-    assert a is b  # cache hit
-
-
-def test_registry_add_class_assigns_next_id_and_writes(tmp_registry: ClassRegistry) -> None:
-    new_id = tmp_registry.add_class('corvette', group='chevrolet', notes='seed')
-    assert new_id == 0
-    assert tmp_registry.path.exists()
-    raw = json.loads(tmp_registry.path.read_text(encoding='utf-8'))
-    assert raw['classes'][0]['class_name'] == 'corvette'
-    assert raw['classes'][0]['class_id'] == 0
-    # next id increments.
-    next_id = tmp_registry.add_class('camaro', group='chevrolet')
-    assert next_id == 1
-
-
-def test_registry_add_class_creates_snapshot_on_second_write(
-    tmp_registry: ClassRegistry,
+@pytest.mark.asyncio
+async def test_registry_snapshot_caches_until_the_document_version_changes(
+    tmp_registry: InMemoryRegistry,
 ) -> None:
-    tmp_registry.add_class('corvette', group='chevrolet')
-    parent = tmp_registry.path.parent
-    snaps_before = sorted(parent.glob('class_registry.*.json'))
-    # First add with no prior file → no snapshot.
-    assert len(snaps_before) == 0
-    tmp_registry.add_class('camaro', group='chevrolet')
-    snaps_after = sorted(parent.glob('class_registry.*.json'))
-    # Second add — registry already existed → exactly one snapshot.
-    assert len(snaps_after) == 1, f'snapshot files found: {snaps_after}'
-    snap = json.loads(snaps_after[0].read_text(encoding='utf-8'))
-    # Snapshot is the *prior* state — only 'corvette'.
-    assert [c['class_name'] for c in snap['classes']] == ['corvette']
+    tmp_registry.seed(['corvette'])
+    a = await tmp_registry.snapshot()
+    gets_before = len(tmp_registry.fake.gets)
+    b = await tmp_registry.snapshot()
+    # equal content from one version check (a _source=false get), no second full read
+    assert a == b
+    assert tmp_registry.fake.gets[gets_before:] == [False]
 
 
-def test_registry_add_class_rejects_duplicate_name(tmp_registry: ClassRegistry) -> None:
-    tmp_registry.add_class('corvette', group='chevrolet')
+def test_registry_add_class_assigns_next_id_and_writes(tmp_registry: InMemoryRegistry) -> None:
+    new_id = tmp_registry.add('corvette', group='chevrolet', notes='seed')
+    assert new_id == 0
+    doc = tmp_registry.load()
+    assert doc.classes[0].class_name == 'corvette'
+    assert doc.classes[0].class_id == 0
+    assert doc.registry_revision == 1
+    # next id increments.
+    next_id = tmp_registry.add('camaro', group='chevrolet')
+    assert next_id == 1
+    assert tmp_registry.load().next_class_id == 2
+
+
+def test_registry_add_class_rejects_duplicate_name(tmp_registry: InMemoryRegistry) -> None:
+    tmp_registry.add('corvette', group='chevrolet')
     with pytest.raises(ClassRegistryError, match='duplicate class_name'):
-        tmp_registry.add_class('corvette', group='chevrolet')
+        tmp_registry.add('corvette', group='chevrolet')
 
 
-def test_registry_add_class_rejects_empty_name(tmp_registry: ClassRegistry) -> None:
+def test_registry_add_class_rejects_empty_name(tmp_registry: InMemoryRegistry) -> None:
     with pytest.raises(ClassRegistryError, match='non-empty'):
-        tmp_registry.add_class('   ', group='chevrolet')
+        tmp_registry.add('   ', group='chevrolet')
 
 
-def test_registry_rename_keeps_id_and_updates_name(tmp_registry: ClassRegistry) -> None:
-    cid = tmp_registry.add_class('vette', group='chevrolet')
+def test_registry_rename_keeps_id_and_updates_name(tmp_registry: InMemoryRegistry) -> None:
+    cid = tmp_registry.add('vette', group='chevrolet')
     tmp_registry.rename_class(cid, 'corvette')
     after = tmp_registry.load()
     entry = next(c for c in after.classes if c.class_id == cid)
     assert entry.class_name == 'corvette'
 
 
-def test_registry_rename_rejects_collision(tmp_registry: ClassRegistry) -> None:
-    a = tmp_registry.add_class('corvette', group='chevrolet')
-    b = tmp_registry.add_class('camaro', group='chevrolet')
+def test_registry_rename_rejects_collision(tmp_registry: InMemoryRegistry) -> None:
+    a = tmp_registry.add('corvette', group='chevrolet')
+    b = tmp_registry.add('camaro', group='chevrolet')
     with pytest.raises(ClassRegistryError, match='already in use'):
         tmp_registry.rename_class(b, 'corvette')
     # a unchanged, b unchanged
@@ -467,17 +441,17 @@ def test_registry_rename_rejects_collision(tmp_registry: ClassRegistry) -> None:
     assert names[b] == 'camaro'
 
 
-def test_registry_rename_unknown_id_raises(tmp_registry: ClassRegistry) -> None:
+def test_registry_rename_unknown_id_raises(tmp_registry: InMemoryRegistry) -> None:
     with pytest.raises(ClassRegistryError, match='not found'):
         tmp_registry.rename_class(999, 'whatever')
 
 
 def test_registry_merge_class_deprecates_source_and_keeps_id(
-    tmp_registry: ClassRegistry,
+    tmp_registry: InMemoryRegistry,
 ) -> None:
-    src = tmp_registry.add_class('corvette_c5', group='chevrolet')
-    tgt = tmp_registry.add_class('corvette', group='chevrolet')
-    out = tmp_registry.merge_class(src, tgt)
+    src = tmp_registry.add('corvette_c5', group='chevrolet')
+    tgt = tmp_registry.add('corvette', group='chevrolet')
+    out = tmp_registry.merge(src, tgt)
     assert out['source_id'] == src
     assert out['target_id'] == tgt
     assert out['deprecated'] is True
@@ -493,39 +467,47 @@ def test_registry_merge_class_deprecates_source_and_keeps_id(
     # validate_id reflects the deprecation.
     assert tmp_registry.validate_id(src) is False
     assert tmp_registry.validate_id(tgt) is True
-    # next_id still increments past the burned source id.
-    next_id = tmp_registry.next_id()
-    assert next_id == max(src, tgt) + 1
+    # the id counter still moves past the burned source id.
+    assert tmp_registry.load().next_class_id == max(src, tgt) + 1
 
 
-def test_registry_merge_self_raises(tmp_registry: ClassRegistry) -> None:
-    cid = tmp_registry.add_class('corvette', group='chevrolet')
+def test_registry_merge_self_raises(tmp_registry: InMemoryRegistry) -> None:
+    cid = tmp_registry.add('corvette', group='chevrolet')
     with pytest.raises(ClassRegistryError, match='itself'):
-        tmp_registry.merge_class(cid, cid)
+        tmp_registry.merge(cid, cid)
 
 
-def test_registry_merge_into_deprecated_raises(tmp_registry: ClassRegistry) -> None:
-    a = tmp_registry.add_class('a', group='g')
-    b = tmp_registry.add_class('b', group='g')
-    c = tmp_registry.add_class('c', group='g')
-    tmp_registry.merge_class(b, c)  # b deprecated
+def test_registry_merge_into_deprecated_raises(tmp_registry: InMemoryRegistry) -> None:
+    a = tmp_registry.add('a', group='g')
+    b = tmp_registry.add('b', group='g')
+    c = tmp_registry.add('c', group='g')
+    tmp_registry.merge(b, c)  # b deprecated
     with pytest.raises(ClassRegistryError, match='deprecated'):
-        tmp_registry.merge_class(a, b)
+        tmp_registry.merge(a, b)
 
 
 @pytest.mark.asyncio
 async def test_registry_sync_to_opensearch_indexes_each_class(
-    tmp_registry: ClassRegistry,
+    tmp_registry: InMemoryRegistry,
 ) -> None:
-    tmp_registry.add_class('a', group='g')
-    tmp_registry.add_class('b', group='g')
-    client = _make_mock_client(exists_returns=True)
-    out = await tmp_registry.sync_to_opensearch(client)
+    tmp_registry.fake.mirror.clear()
+    tmp_registry.seed(['a', 'b'])
+    out = await tmp_registry.sync_to_opensearch(None)
     assert out == {'upserted': 2, 'n_classes': 2}
-    # One bulk() call for both classes (not one index() per class),
-    # plus 1 refresh.
-    assert client.bulk.await_count == 1
-    assert client.indices.refresh.await_count == 1
-    bulk_body = client.bulk.await_args.kwargs['body']
-    indexed_ids = {action['index']['_id'] for action in bulk_body[0::2]}
-    assert indexed_ids == {'0', '1'}
+    assert set(tmp_registry.fake.mirror) == {'op_test__classes/0', 'op_test__classes/1'}
+
+
+@pytest.mark.asyncio
+async def test_registry_sync_counts_only_the_classes_the_bulk_accepted(
+    tmp_registry: InMemoryRegistry,
+) -> None:
+    tmp_registry.seed(['a', 'b'])
+    tmp_registry.fake.bulk_response = {
+        'errors': True,
+        'items': [
+            {'index': {'_id': '0', 'status': 201}},
+            {'index': {'_id': '1', 'status': 400, 'error': {'type': 'mapper_parsing_exception'}}},
+        ],
+    }
+    out = await tmp_registry.sync_to_opensearch(None)
+    assert out == {'upserted': 1, 'n_classes': 2}

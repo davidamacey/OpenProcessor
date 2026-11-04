@@ -35,7 +35,7 @@ async def test_import_relabels_a_machine_item_with_a_restorable_snapshot(
     tmp_path: Path, monkeypatch
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': [SAME]})
     cid = await _ingest_machine_item(h, root / 'images/train/a.jpg')
@@ -66,7 +66,7 @@ async def test_undo_keeps_a_relabel_a_human_made_after_the_import(
     tmp_path: Path, monkeypatch
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': [SAME]})
     cid = await _ingest_machine_item(h, root / 'images/train/a.jpg')
@@ -82,7 +82,7 @@ async def test_undo_keeps_a_relabel_a_human_made_after_the_import(
 @pytest.mark.asyncio
 async def test_propose_merges_matches_and_creates_the_rest(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'match': [SAME], 'far': [FAR], 'neg': []})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car'), processing='propose'))
@@ -111,7 +111,7 @@ async def test_propose_merges_matches_and_creates_the_rest(tmp_path: Path, monke
 @pytest.mark.asyncio
 async def test_processing_none_never_calls_the_detector(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': [SAME], 'neg': []})
     await h.run(h.request(root, map_all(h.registry, 'car')))
@@ -124,7 +124,7 @@ async def test_suggestion_trust_is_not_locked_and_boxes_are_proposed(
 ) -> None:
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car', 'wheel'], images={'a': [SAME, '1 0.3 0.3 0.05 0.05']})
     mapping = [
@@ -146,7 +146,7 @@ async def test_region_undo_removes_import_boxes_but_keeps_a_human_box(
 ) -> None:
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car', 'wheel'], images={'a': [SAME, '1 0.3 0.3 0.05 0.05']})
     mapping = [

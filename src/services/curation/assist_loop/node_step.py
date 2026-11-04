@@ -287,7 +287,7 @@ def _restate(run: LoopRun, record: NodeRecord, kind: str, **fields: Any) -> None
 
 
 async def _propagate(run: LoopRun, record: NodeRecord) -> None:
-    found = registry_item_class(str((record.decision or {}).get('class_name') or ''))
+    found = await registry_item_class(str((record.decision or {}).get('class_name') or ''))
     if found is None:
         _restate(run, record, 'stale', reason='class_not_in_registry')
         return

@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from src.config.curation_accessors import get_curation_config
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import get_class_registry, logger, router
+from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
 from src.services.training.model_classes import (
     is_model_shared,
     model_class_mapping,
@@ -78,8 +78,8 @@ class ModelClassMappingResponse(BaseModel):
     labels: ModelClassMappingLabels = Field(default_factory=ModelClassMappingLabels)
 
 
-def bound_registry() -> ClassRegistryFile:
-    return get_class_registry().load()
+async def bound_registry(opensearch: Any) -> ClassRegistryFile:
+    return await get_class_registry().snapshot(opensearch)
 
 
 def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, Any]:
@@ -168,7 +168,9 @@ def dedupe_triton_rows(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 @router.get('/models/{model_name}/class_mapping', response_model=ModelClassMappingResponse)
-async def get_model_class_mapping(model_name: str) -> ModelClassMappingResponse:
+async def get_model_class_mapping(
+    model_name: str, opensearch: OpenSearchDep
+) -> ModelClassMappingResponse:
     """How ``model_name``'s classes map by name onto this project's
     registry. Visible for this project's own models and base models, and
     for another project's model only once its owner shares it -- 404
@@ -185,7 +187,7 @@ async def get_model_class_mapping(model_name: str) -> ModelClassMappingResponse:
             project=get_curation_config().project_slug,
         )
     mapping = model_class_mapping(
-        model_name, bound_registry(), project=get_curation_config().project_slug
+        model_name, await bound_registry(opensearch), project=get_curation_config().project_slug
     )
     return ModelClassMappingResponse(
         model=mapping.model,

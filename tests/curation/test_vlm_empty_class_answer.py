@@ -23,11 +23,11 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _combined_class_update
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project
 from src.config.vlm_class_attempt import (
@@ -214,9 +214,9 @@ async def _run_label_batch(
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('widget')
-    reg.add_class('gadget')
+    reg = InMemoryRegistry()
+    reg.add('widget')
+    reg.add('gadget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
     monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=None))
     docs = {cid: (_proposal(cid) if cid.startswith('p') else _item(cid)) for cid in preds}

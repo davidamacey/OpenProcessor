@@ -1,5 +1,5 @@
 {
-  "_comment": "Worked example class_registry.json for a generic (non-vehicle) domain -- a small warehouse/retail inventory set. Copy this over a project's class_registry.json (its class_registry_path, under OP_PROJECTS_DATA_ROOT/<slug>/) and edit `classes` for your own domain. Schema: src.clients.curation_opensearch.ClassRegistryFile / RegistryClassEntry.",
+  "_comment": "Worked example class_registry.json for a generic (non-vehicle) domain -- a small warehouse/retail inventory set. Copy this to a project's class_registry.json (under OP_PROJECTS_DATA_ROOT/<slug>/), edit `classes` for your own domain, then load it with `./openprocessor curation migrate-registry --project <slug>`; the registry itself lives in OpenSearch and the file is renamed to class_registry.json.migrated. Schema: src.clients.curation_opensearch.ClassRegistryFile / RegistryClassEntry.",
   "version": 1,
   "updated_at": "2026-01-01T00:00:00+00:00",
   "classes": [

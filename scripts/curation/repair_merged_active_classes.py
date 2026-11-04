@@ -15,24 +15,26 @@ re-deprecating the source (matching what a real merge always does) — it
 never touches ``merged_into``, crop data, or the target class.
 
 Dry run by default (read-only, prints what it would change);
-``--apply`` writes the registry (through the same
-``ClassRegistry.set_deprecated`` path ``POST /classes/{id}/deprecate``
-uses, so a snapshot of the prior file is taken first).
+``--apply`` writes the registry document (through the same
+``ClassRegistry.set_deprecated`` path ``POST /classes/{id}/deprecate`` uses). A
+``class_registry.json`` migrated from such a file carries the state over, so
+this still applies after ``openprocessor curation migrate-registry``.
 
     python3 scripts/curation/repair_merged_active_classes.py
     python3 scripts/curation/repair_merged_active_classes.py --apply
 
-The registry path comes from ``CurationConfig.class_registry_path``
-unless ``--registry`` is given. No OpenSearch access — this only touches
-``class_registry.json``.
+Talks to OpenSearch directly (``--opensearch-url``, default ``$OPENSEARCH_URL``);
+the API does not need to be running.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -40,18 +42,18 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
-from src.config import get_curation_config
+from src.clients.curation_opensearch.registry import ClassRegistryError, get_class_registry
+from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch import RegistryClassEntry
+    from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
 
 
-def find_broken(registry: ClassRegistry) -> list[RegistryClassEntry]:
+def find_broken(registry: ClassRegistryFile) -> list[RegistryClassEntry]:
     """Active classes (``deprecated=False``) that still carry ``merged_into``."""
-    return [c for c in registry.load().classes if not c.deprecated and c.merged_into is not None]
+    return [c for c in registry.classes if not c.deprecated and c.merged_into is not None]
 
 
 def format_entry(entry: RegistryClassEntry) -> str:
@@ -61,12 +63,13 @@ def format_entry(entry: RegistryClassEntry) -> str:
     )
 
 
-def run(registry: ClassRegistry, *, apply: bool, verbose: bool) -> int:
-    broken = find_broken(registry)
+async def run(client: Any, *, apply: bool, verbose: bool) -> int:
+    store = get_class_registry()
+    broken = find_broken(await store.snapshot(client))
     if verbose:
         for entry in broken:
             print(format_entry(entry))
-    print(f'{len(broken)} active class(es) with merged_into set (registry: {registry.path})')
+    print(f'{len(broken)} active class(es) with merged_into set')
     if not broken:
         return 0
     if not apply:
@@ -76,7 +79,7 @@ def run(registry: ClassRegistry, *, apply: bool, verbose: bool) -> int:
     errors = 0
     for entry in broken:
         try:
-            registry.set_deprecated(entry.class_id, True)
+            await store.set_deprecated(client, entry.class_id, True)
         except ClassRegistryError as exc:
             print(f'error: class_id={entry.class_id}: {exc}', file=sys.stderr)
             errors += 1
@@ -90,9 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument(
-        '--registry',
-        default=None,
-        help='class_registry.json path (default: CurationConfig.class_registry_path).',
+        '--opensearch-url', default=os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
     )
     p.add_argument('--verbose', action='store_true', help='Print one line per broken class.')
     g = p.add_mutually_exclusive_group()
@@ -102,12 +103,18 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+async def _amain(args: argparse.Namespace) -> int:
+    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=60)
+    try:
+        return await run(client, apply=not args.dry_run, verbose=args.verbose)
+    finally:
+        await client.close()
+
+
 def main() -> int:
     args = build_parser().parse_args()
-    bind_script_project(args.project)
-    registry_path = args.registry or get_curation_config().class_registry_path
-    registry = ClassRegistry(registry_path)
-    return run(registry, apply=not args.dry_run, verbose=args.verbose)
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    return asyncio.run(_amain(args))
 
 
 if __name__ == '__main__':

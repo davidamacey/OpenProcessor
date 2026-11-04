@@ -34,7 +34,7 @@ async def list_class_sources() -> dict[str, list[dict[str, str]]]:
 @router.get('/classes', response_model=ClassListResponse)
 async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     """List every class in the registry, with live counts from the items index."""
-    reg = get_class_registry().load()
+    reg = await get_class_registry().snapshot(opensearch)
     # Three counts per class, aggregated in one round-trip:
     #   * counts[cid]      = items whose class_id == cid (labeled)
     #   * validated[cid]   = items with class_id == cid AND class_validated=true

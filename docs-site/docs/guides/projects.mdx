@@ -36,7 +36,7 @@ access that would reach another project's indexes.
 | Resource | Location |
 |---|---|
 | Indexes | `<OP_PROJECT_INDEX_PREFIX><slug>__<role>` (default prefix `op_prj_`) |
-| Class registry | `<OP_PROJECTS_DATA_ROOT>/<slug>/class_registry.json` |
+| Class registry | the `class_registry` document in the project's settings index (a 0.6.x `<OP_PROJECTS_DATA_ROOT>/<slug>/class_registry.json` is moved there by `curation migrate-registry`) |
 | Exports | `<OP_PROJECTS_DATA_ROOT>/<slug>/exports/` |
 | Bake-off eval sets | `<OP_PROJECTS_DATA_ROOT>/<slug>/bakeoff_eval/` |
 | Uploads, bake-off jobs, per-project state | `<OP_STATE_DIR>/projects/<slug>/` |

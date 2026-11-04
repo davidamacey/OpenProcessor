@@ -121,7 +121,7 @@ The management CLI works in a checkout (`./openprocessor`, or the shim
 `./scripts/openprocessor.sh`) and in an installed directory. Subcommands:
 `start`, `stop`, `restart [service]`, `logs [service] [-f]`, `status`,
 `health`, `models [status|install [--only GROUP]|repair]`, `export`,
-`download`, `profile`, `test`, `curation [up|down|logs|status]`, `faces purge [--dry-run|--yes]`,
+`download`, `profile`, `test`, `curation [up|down|logs|status|migrate-registry]`, `faces purge [--dry-run|--yes]`,
 `clean`, `update`, `sample coco [--full]`, `config show`, `cropwright password`, `gpu plan`,
 `vlm list|status|use <id>|apply|probe|key set <slug>`, `train-mode on|off`,
 `upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`

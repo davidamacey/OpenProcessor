@@ -96,6 +96,13 @@ class ClassRegistryFile(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     classes: list[RegistryClassEntry] = Field(default_factory=list)
 
+    def get(self, class_id: int) -> RegistryClassEntry | None:
+        return next((c for c in self.classes if c.class_id == class_id), None)
+
+    def validate_id(self, class_id: int) -> bool:
+        """True iff a non-deprecated class with this id exists."""
+        return any(c.class_id == class_id and not c.deprecated for c in self.classes)
+
 
 # =============================================================================
 # ClassRegistry — append-only registry with snapshots + atomic writes

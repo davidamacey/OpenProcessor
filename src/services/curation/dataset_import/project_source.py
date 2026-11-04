@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import IndexRole
 from src.config.project_context import bind_project
 from src.services.curation.dataset_import.issues import IssueCollector
@@ -25,6 +24,7 @@ from src.services.curation.dataset_import.scan import (
     ScanEntry,
     class_box_counts,
 )
+from src.services.curation.registry_access import project_registry
 
 
 if TYPE_CHECKING:
@@ -69,10 +69,10 @@ class SourceImage:
         return self.split == 'test' or any(i.get('test_holdout') for i in self.items)
 
 
-def class_names_by_id(record: ProjectRecord) -> dict[int, str]:
-    """The source registry's ``class_id -> name`` (read from its file)."""
-    registry = ClassRegistry(path=record.resources.class_registry_path)
-    return {c.class_id: c.class_name for c in registry.load().classes}
+async def class_names_by_id(client: Any, record: ProjectRecord) -> dict[int, str]:
+    """The source registry's ``class_id -> name``."""
+    registry = await project_registry(client, record)
+    return {c.class_id: c.class_name for c in registry.classes}
 
 
 def item_class_name(item: dict[str, Any], names: dict[int, str]) -> str | None:
@@ -198,7 +198,7 @@ async def scan_project(
     """The whole source as a :class:`DatasetScan` (``format='project'``,
     ``root`` = the source slug): the import's mapping completeness reads its class
     box counts."""
-    names = class_names_by_id(record)
+    names = await class_names_by_id(client, record)
     entries: list[ScanEntry] = []
     async for page in iter_source_pages(client, record, validated_only=validated_only):
         entries.extend(to_scan_entry(image, names) for image in page)

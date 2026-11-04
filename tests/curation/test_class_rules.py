@@ -14,10 +14,10 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.services.curation.keymap import reserved_hotkeys
 
 
@@ -27,17 +27,17 @@ from src.services.curation.keymap import reserved_hotkeys
 LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 
-def _entry(registry: ClassRegistry, class_id: int) -> Any:
+def _entry(registry: InMemoryRegistry, class_id: int) -> Any:
     entry = registry.get(class_id)
     assert entry is not None
     return entry
 
 
 @pytest.fixture
-def registry(tmp_path: Any) -> ClassRegistry:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('sedan', group='vehicle')
-    reg.add_class('suv', group='vehicle')
+def registry(tmp_path: Any) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.add('sedan', group='vehicle')
+    reg.add('suv', group='vehicle')
     return reg
 
 
@@ -55,7 +55,7 @@ def fake_os() -> AsyncMock:
 
 
 @pytest.fixture
-def client(registry: ClassRegistry, fake_os: AsyncMock, monkeypatch: pytest.MonkeyPatch):
+def client(registry: InMemoryRegistry, fake_os: AsyncMock, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
@@ -70,14 +70,14 @@ def client(registry: ClassRegistry, fake_os: AsyncMock, monkeypatch: pytest.Monk
 
 @pytest.mark.parametrize('name', ['Pickup Truck', 'pickup-truck', 'SUV', '', 'bus!'])
 def test_create_rejects_non_slug_names(
-    client: TestClient, registry: ClassRegistry, name: str
+    client: TestClient, registry: InMemoryRegistry, name: str
 ) -> None:
     r = client.post('/curation/projects/default/classes', json={'name': name})
     assert r.status_code == 422, r.text
     assert len(registry.load().classes) == 2
 
 
-def test_rename_rejects_non_slug_names(client: TestClient, registry: ClassRegistry) -> None:
+def test_rename_rejects_non_slug_names(client: TestClient, registry: InMemoryRegistry) -> None:
     r = client.put('/curation/projects/default/classes/0', json={'name': 'Sedan Car'})
     assert r.status_code == 422, r.text
     assert _entry(registry, 0).class_name == 'sedan'
@@ -94,7 +94,7 @@ def test_create_and_rename_accept_slug_names(client: TestClient) -> None:
     )
 
 
-def test_create_with_hotkey(client: TestClient, registry: ClassRegistry) -> None:
+def test_create_with_hotkey(client: TestClient, registry: InMemoryRegistry) -> None:
     r = client.post(
         '/curation/projects/default/classes', json={'name': 'van', 'hotkey_letter': 'V'}
     )
@@ -104,7 +104,7 @@ def test_create_with_hotkey(client: TestClient, registry: ClassRegistry) -> None
 
 @pytest.mark.parametrize('letter', ['d', '/', 'b'])
 def test_create_rejects_reserved_hotkey_without_creating(
-    client: TestClient, registry: ClassRegistry, letter: str
+    client: TestClient, registry: InMemoryRegistry, letter: str
 ) -> None:
     r = client.post(
         '/curation/projects/default/classes', json={'name': 'van', 'hotkey_letter': letter}
@@ -113,7 +113,7 @@ def test_create_rejects_reserved_hotkey_without_creating(
     assert len(registry.load().classes) == 2
 
 
-def test_create_rejects_duplicate_hotkey(client: TestClient, registry: ClassRegistry) -> None:
+def test_create_rejects_duplicate_hotkey(client: TestClient, registry: InMemoryRegistry) -> None:
     assert (
         client.put('/curation/projects/default/classes/0', json={'hotkey_letter': 's'}).status_code
         == 200
@@ -133,7 +133,7 @@ def test_list_serves_reserved_hotkeys_and_added_at(client: TestClient) -> None:
 
 
 def test_merge_dry_run_reports_counts_without_writing(
-    client: TestClient, registry: ClassRegistry, fake_os: AsyncMock
+    client: TestClient, registry: InMemoryRegistry, fake_os: AsyncMock
 ) -> None:
     async def _count(*, index: str, body: dict[str, Any]) -> dict[str, int]:
         text = str(body)

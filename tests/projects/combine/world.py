@@ -3,7 +3,7 @@ indexes live in one query-evaluating in-memory OpenSearch, real image files
 under each project's own upload root, and per-project class registries.
 
 Production-shaped: images are real JPEGs with distinct bytes, image ids and
-crop ids come from the production functions, registries are real files.
+crop ids come from the production functions, registries are documents in the project's settings index.
 """
 
 from __future__ import annotations
@@ -13,10 +13,11 @@ import hashlib
 import io
 from typing import TYPE_CHECKING, Any
 
+from _registry_doc_fake import put_registry_doc
 from curation.query_fakes import QueryFakeOpenSearch
 from PIL import Image
 
-from src.clients.curation_opensearch.registry import ClassRegistry
+from src.clients.curation_opensearch import registry as curation_registry
 from src.config.curation_accessors import base_curation_config
 from src.config.curation_roles import IndexRole
 from src.config.projects import ProjectRecord, new_project_record
@@ -70,6 +71,11 @@ class World:
         monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
         monkeypatch.setenv('OP_COMBINE_JOBS_DIR', str(tmp_path / 'combine_jobs'))
         monkeypatch.setattr(curation_mod, '_default_curation_config', None)
+        # The registries here are documents in this world's own fake, read by the real store.
+        monkeypatch.setattr(curation_registry, '_registries', {})
+        monkeypatch.setattr(
+            'src.services.curation.registry_access.make_curation_opensearch', self._client
+        )
         self.fake = QueryFakeOpenSearch()
         self.records: dict[str, ProjectRecord] = {}
         self.registry = StubRegistry(self.records)
@@ -77,6 +83,9 @@ class World:
         self._seed = 0
         monkeypatch.setattr(combine_service, 'target_embedding_dim', lambda: DIM)
         self.settled: list[bool] = []
+
+    async def _client(self) -> QueryFakeOpenSearch:
+        return self.fake
 
     # ------------------------------------------------------------ projects
 
@@ -96,9 +105,7 @@ class World:
         )
         record.resources.upload_root.mkdir(parents=True, exist_ok=True)
         record.resources.project_state_dir.mkdir(parents=True, exist_ok=True)
-        registry = ClassRegistry(path=record.resources.class_registry_path)
-        for name in classes:
-            registry.add_class(name)
+        put_registry_doc(self.fake, record.resources.indexes[IndexRole.SETTINGS], classes)
         self.records[slug] = record
         return record
 
@@ -114,9 +121,17 @@ class World:
     def images(self, slug: str) -> dict[str, dict[str, Any]]:
         return self.fake.docs(self.images_index(slug))
 
+    def registry_json(self, slug: str) -> str:
+        """The project's registry document as stable text, to compare before and after."""
+        import json
+
+        index = self.records[slug].resources.indexes[IndexRole.SETTINGS]
+        return json.dumps(self.fake.docs(index).get('class_registry'), sort_keys=True)
+
     def registry_ids(self, slug: str) -> dict[str, int]:
-        reg = ClassRegistry(path=self.records[slug].resources.class_registry_path)
-        return {c.class_name: c.class_id for c in reg.load().classes}
+        index = self.records[slug].resources.indexes[IndexRole.SETTINGS]
+        raw = self.fake.docs(index)['class_registry']['class_registry']
+        return {c['class_name']: c['class_id'] for c in raw['classes']}
 
     # -------------------------------------------------------------- images
 

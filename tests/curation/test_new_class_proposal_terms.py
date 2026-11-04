@@ -16,11 +16,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.new_class_terms import ProposalTermRules, classify_term
 
@@ -29,14 +29,14 @@ ITEMS = base_curation_config().items_index
 
 
 @pytest.fixture
-def registry(tmp_path: Any) -> ClassRegistry:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('sedan', group='cars')
-    reg.add_class('class_b', group='group_b')
+def registry(tmp_path: Any) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.add('sedan', group='cars')
+    reg.add('class_b', group='group_b')
     return reg
 
 
-def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def _client(fake: Any, registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr(
@@ -103,7 +103,7 @@ def _docs() -> dict[str, dict[str, Any]]:
 
 
 def test_summary_total_equals_the_queue_total(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
     queue = client.get(
@@ -117,7 +117,7 @@ def test_summary_total_equals_the_queue_total(
 
 
 def test_no_answer_items_are_excluded_from_the_queue(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """R5: a VLM attempt with no answer at all (empty_reason=no_answer)
     proposed nothing, so it must never appear in the new-class queue."""
@@ -130,7 +130,7 @@ def test_no_answer_items_are_excluded_from_the_queue(
 
 
 def test_already_classed_items_are_excluded_from_the_queue(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """R5: once an item has a resolved class_id, a stale needs_new_class
     flag must not keep surfacing it as a new-class proposal."""
@@ -143,7 +143,7 @@ def test_already_classed_items_are_excluded_from_the_queue(
 
 
 def test_term_count_equals_resolve_match(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), registry, monkeypatch)
     summary = client.get('/curation/projects/default/review/new_class_proposals/summary').json()
@@ -160,7 +160,7 @@ def test_term_count_equals_resolve_match(
 
 
 def test_resolve_writes_the_vlm_flagged_row_too(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake = QueryFakeOpenSearch({ITEMS: _docs()})
     client = _client(fake, registry, monkeypatch)
@@ -178,7 +178,7 @@ def test_resolve_writes_the_vlm_flagged_row_too(
 
 
 def test_configured_and_registry_rules_flag_terms(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_NEW_CLASS_GENERIC_TERMS', 'motorcycle, vehicle')
     monkeypatch.setenv('OP_NEW_CLASS_NON_OBJECT_TERMS', 'blur,empty_road')
@@ -203,7 +203,7 @@ def test_configured_and_registry_rules_flag_terms(
 
 
 def test_no_configured_rule_flags_only_registry_matches(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_NEW_CLASS_GENERIC_TERMS', raising=False)
     monkeypatch.delenv('OP_NEW_CLASS_NON_OBJECT_TERMS', raising=False)

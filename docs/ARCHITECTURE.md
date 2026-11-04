@@ -236,7 +236,7 @@ cancelled and resumed. Undoing a combine is deleting the target project.
 | `images` | One document per ingested source image | `image_id`, `image_path`, `imohash`, `phash`, `embedding` (512-d), `pe_embedding` (1024-d) |
 | `items` | One document per crop (item) | see below |
 | `labels_confirmed` | Mapping kept, nothing writes it in this release | `label_id`, `crop_id`, `class_id`, `class_name`, `confirmed_at` |
-| `classes` | The class registry mirror | `class_id`, `class_name`, `group`, `deprecated`, `sample_count`, `validated_count` |
+| `classes` | The class registry mirror (the registry itself is one document, below) | `class_id`, `class_name`, `group`, `deprecated`, `sample_count`, `validated_count` |
 | `umap_state` | Fitted reducer cache for clustering | `state_id`, `reducer_b64` |
 | `configs` | Config store plus folded settings and projection state | `doc_type`, `kind`, `name`, `revision`, `body` |
 
@@ -247,8 +247,17 @@ provenance (`vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`), import and combine
 provenance, and the region fields described next. The exact wire keys are in
 [`contracts/json/item_wire.json`](../contracts/json/item_wire.json).
 
-**Class identity is the name.** The class registry
-(`class_registry.json` per project) assigns indexes, but every boundary maps by
+**The class registry is one OpenSearch document per project** (id `class_registry` in
+the settings index), written with optimistic concurrency: every change is one versioned
+read-modify-write that re-reads and re-applies on a conflict, so two users, an import, a
+combine and the open-vocabulary pass can add classes at once without losing one or giving
+two classes one id. `ensure_class` is idempotent by name for the automated writers. A 0.6.0
+`class_registry.json` is moved by `openprocessor curation migrate-registry` (run by
+`upgrade` and `repair`); until then the class routes answer 409 `registry_not_migrated`.
+The file is now only an export snapshot, the training pin and what a rollback writes back.
+See [opensearch_schema_design.md](opensearch_schema_design.md#the-class-registry-document).
+
+**Class identity is the name.** The class registry assigns indexes, but every boundary maps by
 name: dataset import and export, combine, training, promotion and sharing a
 trained model with another project. An index is only a position inside one
 registry at one moment.

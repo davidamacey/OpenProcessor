@@ -63,7 +63,7 @@ async def clone_open_vocab(
         resolve=_resolve,
     )
     existing = all_known_names()
-    inputs = validation_inputs()
+    inputs = await validation_inputs()
     reject_invalid_clone_name(
         await validate_open_vocab(body.new_name, source.body, existing_names=existing, **inputs),
         new_name=body.new_name,

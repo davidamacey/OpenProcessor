@@ -160,11 +160,11 @@ def _wire_label_batch(
     import io
     from types import SimpleNamespace
 
+    from _registry_doc_fake import InMemoryRegistry
     from PIL import Image
 
     import src.routers.curation.vlm as vlm_mod
     from curation.query_fakes import QueryFakeOpenSearch
-    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config.curation_accessors import base_curation_config
 
     items = base_curation_config().items_index
@@ -175,8 +175,8 @@ def _wire_label_batch(
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('widget')
+    reg = InMemoryRegistry()
+    reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
     async def _no_pack(_os: Any) -> None:

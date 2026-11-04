@@ -119,12 +119,12 @@ def _check_segment(request: AssistRunRequest, vlm: RunVlm) -> None:
             )
 
 
-def require_item_classes() -> None:
+async def require_item_classes() -> None:
     """422 ``no_class_names`` when the project has no item class to choose from."""
-    from src.clients.curation_opensearch.registry import get_class_registry
     from src.services.curation.region_class import item_classes
+    from src.services.curation.registry_access import current_registry
 
-    if not item_classes(get_class_registry().load().classes):
+    if not item_classes((await current_registry()).classes):
         raise rejection(
             422,
             'no_class_names',
@@ -132,9 +132,9 @@ def require_item_classes() -> None:
         )
 
 
-def _check_classes(request: AssistRunRequest) -> None:
+async def _check_classes(request: AssistRunRequest) -> None:
     if 'classify' in request.actions:
-        require_item_classes()
+        await require_item_classes()
 
 
 async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) -> PreparedRun:
@@ -142,7 +142,7 @@ async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) ->
     pack_name, pack_revision = await resolve_run_prompt_pack(opensearch, request.prompt_pack)
     pack = resolve_pack(pack_name, pack_revision)
     _check_pack(request, pack)
-    _check_classes(request)
+    await _check_classes(request)
     vlm = await resolve_run_vlm(
         opensearch,
         request.vlm,

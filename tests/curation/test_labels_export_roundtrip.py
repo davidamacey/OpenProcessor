@@ -24,9 +24,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
@@ -56,10 +56,10 @@ def _item(doc_id: str, *, image: str, cluster_id: int = 7, **extra: Any) -> dict
 
 
 @pytest.fixture
-def registry(tmp_path: Path) -> ClassRegistry:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('widget')
-    reg.add_class('gadget')
+def registry(tmp_path: Path) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.add('widget')
+    reg.add('gadget')
     return reg
 
 
@@ -90,7 +90,7 @@ def fake() -> QueryFakeOpenSearch:
     return QueryFakeOpenSearch({ITEMS: items, IMAGES: images})
 
 
-async def _export(fake: QueryFakeOpenSearch, registry: ClassRegistry, tmp_path: Path):
+async def _export(fake: QueryFakeOpenSearch, registry: InMemoryRegistry, tmp_path: Path):
     from src.config import CurationConfig
     from src.services.curation.export import GenericYoloExportService
 

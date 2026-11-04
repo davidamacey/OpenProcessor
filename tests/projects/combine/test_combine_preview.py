@@ -229,9 +229,7 @@ class _WriteRecorder(QueryFakeOpenSearch):
 async def test_preview_writes_nothing(world: World, tmp_path) -> None:
     _two_sources(world)
     before = snapshot_indexes(world, ['cars-a', 'cars-b'])
-    registry_before = {
-        slug: r.resources.class_registry_path.read_text() for slug, r in world.records.items()
-    }
+    registry_before = {slug: world.registry_json(slug) for slug in world.records}
     files_before = sorted(str(p) for p in tmp_path.rglob('*'))
     recorder = _WriteRecorder()
     recorder.store = world.fake.store
@@ -239,9 +237,7 @@ async def test_preview_writes_nothing(world: World, tmp_path) -> None:
     result, _ = await service.preview(recorder, world.request(['cars-a', 'cars-b'], FULL_MAPPING))
     assert result.ok
     assert snapshot_indexes(world, ['cars-a', 'cars-b']) == before
-    assert {
-        slug: r.resources.class_registry_path.read_text() for slug, r in world.records.items()
-    } == registry_before
+    assert {slug: world.registry_json(slug) for slug in world.records} == registry_before
     assert sorted(str(p) for p in tmp_path.rglob('*')) == files_before
     assert 'combined' not in world.records
 

@@ -167,7 +167,7 @@ async def validate_region_profile_route(
         existing_names=all_known_names(),
         for_activation=for_activation,
         segmenter_health=configured_segmenter_health,
-        class_names=registry_class_names(),
+        class_names=await registry_class_names(),
         project_slug=get_curation_config().project_slug,
     )
     return report.model_dump()
@@ -298,7 +298,7 @@ async def create_region_profile(
         body.body.model_dump(),
         existing_names=existing - {body.name},
         segmenter_health=configured_segmenter_health,
-        class_names=registry_class_names(),
+        class_names=await registry_class_names(),
         project_slug=get_curation_config().project_slug,
     )
     name_issues = [
@@ -398,7 +398,7 @@ async def save_region_profile(
         name,
         body.body.model_dump(),
         segmenter_health=configured_segmenter_health,
-        class_names=registry_class_names(),
+        class_names=await registry_class_names(),
         project_slug=get_curation_config().project_slug,
     )
     if not report.ok:

@@ -12,7 +12,7 @@ What it creates
    right order, with the one intentionally-unwired migration correctly
    skipped. Hand-rolling the mappings here would mean testing a schema the
    product never produces.
-2. Eight classes through :meth:`ClassRegistry.add_class`, synced into the
+2. Eight classes through :meth:`ClassRegistry.ensure_class`, synced into the
    classes index — before any item doc, since the label endpoints reject an
    unknown class id.
 3. ~490 item documents with ``_id == crop_id`` (every OCC path addresses by
@@ -447,7 +447,7 @@ async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str
 
 
 async def _seed(args: argparse.Namespace) -> int:
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.clients.curation_opensearch.registry import get_class_registry
     from src.config import get_curation_config, get_region_fields
     from src.services.curation.index_bootstrap import ensure_indexes
 
@@ -489,14 +489,12 @@ async def _seed(args: argparse.Namespace) -> int:
         print(f'indexes ensured: {cfg.items_index}, {cfg.images_index}, ...')
 
         # 2. Class registry — before any item or label write.
-        registry = ClassRegistry(cfg.class_registry_path)
-        existing = {c.class_name for c in registry.load().classes}
+        registry = get_class_registry()
         for name in CLASS_NAMES:
-            if name not in existing:
-                registry.add_class(name, group='shipping')
+            await registry.ensure_class(client, name, group='shipping')
         # The API adds the active region profile's class at startup; seeding
         # it here keeps a restart from changing the registry the tests read.
-        ensure_region_class()
+        await ensure_region_class(client)
         synced = await registry.sync_to_opensearch(client)
         print(f'class registry: {len(CLASS_NAMES)} classes, synced={synced}')
 

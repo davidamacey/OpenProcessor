@@ -43,7 +43,7 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
     return CurationIngestService(
         opensearch=opensearch,
         triton_pool=get_async_triton_pool(),
-        registry=registry,
+        registry=await registry.snapshot(opensearch),
         profile=profile,
         secondary_profile=secondary,
         pe_encoder=pe_encoder,

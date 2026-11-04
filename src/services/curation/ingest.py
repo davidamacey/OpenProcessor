@@ -104,7 +104,7 @@ from src.utils.cpu_pool import encoded_nbytes, run_cpu
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.clients.pe_encoder import PEEncoder
     from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
@@ -127,7 +127,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         *,
         opensearch: AsyncOpenSearch | Any,
         triton_pool: AsyncTritonPool | Any,
-        registry: ClassRegistry | Any,
+        registry: ClassRegistryFile,
         profile: DetectionProfile,
         pe_encoder: PEEncoder | Any,
         secondary_profile: DetectionProfile | None = None,

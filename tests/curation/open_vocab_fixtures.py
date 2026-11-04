@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 from typing import TYPE_CHECKING, Any
 
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.reprocess_fixtures import (
@@ -43,20 +44,20 @@ class _File:
         self.classes = classes
 
 
-class StatefulRegistry:
-    """A class registry that supports ``add_class`` and remembers what was added."""
+class StatefulRegistry(InMemoryRegistry):
+    """A class registry document that remembers which classes were added after the seed."""
 
     def __init__(self, seed: tuple[str, ...] = ('gadget',)) -> None:
-        self.entries = [_Entry(i, n) for i, n in enumerate(seed)]
-        self.added: list[str] = []
+        super().__init__(None, list(seed))
+        self._seeded = len(seed)
 
-    def load(self) -> _File:
-        return _File(self.entries)
+    @property
+    def entries(self) -> list[Any]:
+        return self.load().classes
 
-    def add_class(self, name: str, group: str = 'unknown', notes: str = '') -> int:  # noqa: ARG002
-        self.added.append(name)
-        self.entries.append(_Entry(len(self.entries), name))
-        return len(self.entries) - 1
+    @property
+    def added(self) -> list[str]:
+        return [c.class_name for c in self.load().classes][self._seeded :]
 
 
 class FakeSegmenter:

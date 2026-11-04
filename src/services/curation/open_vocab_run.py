@@ -415,8 +415,9 @@ async def run_open_vocab_image(
     registry = get_class_registry()
     resolved: dict[str, ResolvedClass] = {}
     for name in {h.class_name for h in kept if h.class_name}:
-        resolved[name] = ensure_class_by_name(
+        resolved[name] = await ensure_class_by_name(
             registry,
+            opensearch,
             normalize_class_name(name),
             group=OPEN_VOCAB_CLASS_GROUP,
             notes='created by an open-vocabulary pass',

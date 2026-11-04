@@ -19,8 +19,9 @@ from src.routers.curation._common import (
 )
 
 
-def create_registry_class(
+async def create_registry_class(
     reg: ClassRegistry,
+    client: Any,
     *,
     name: str,
     group: str = 'unknown',
@@ -44,15 +45,12 @@ def create_registry_class(
     letter = None
     if hotkey_letter is not None:
         letter = validated_hotkey(
-            hotkey_letter, class_id=None, registry_obj=reg.load(), keymap_overrides=keymap_overrides
+            hotkey_letter,
+            class_id=None,
+            registry_obj=await reg.snapshot(client),
+            keymap_overrides=keymap_overrides,
         )
-    new_id = reg.add_class(name, group=group, notes=notes)
-    if letter is not None:
-        registry_obj = reg.load()
-        for c in registry_obj.classes:
-            if c.class_id == new_id:
-                c.hotkey_letter = letter
-        reg._atomic_write(registry_obj)
+    new_id = await reg.add_class(client, name, group=group, notes=notes, hotkey_letter=letter)
     return {
         'class_id': new_id,
         'class_name': name,
@@ -71,8 +69,9 @@ async def create_class(payload: ClassCreateRequest, opensearch: OpenSearchDep) -
         await project_keymap_overrides(opensearch) if payload.hotkey_letter is not None else None
     )
     try:
-        return create_registry_class(
+        return await create_registry_class(
             reg,
+            opensearch,
             name=payload.name,
             group=payload.group,
             notes=payload.notes,
@@ -90,35 +89,30 @@ async def update_class(
     """Rename, regroup, or assign/clear a hotkey on a class."""
     reg = get_class_registry()
     try:
-        if payload.name is not None:
-            reg.rename_class(class_id, payload.name)
-        # group + hotkey_letter share the load+mutate+write path.
-        if payload.group is not None or payload.hotkey_letter is not None:
-            registry_obj = reg.load()
-            new_letter: str | None = None
-            if payload.hotkey_letter is not None:
-                keymap_overrides = await project_keymap_overrides(opensearch)
-                new_letter = validated_hotkey(
-                    payload.hotkey_letter,
-                    class_id=class_id,
-                    registry_obj=registry_obj,
-                    keymap_overrides=keymap_overrides,
-                )
-            for c in registry_obj.classes:
-                if c.class_id == class_id:
-                    if payload.group is not None:
-                        c.group = payload.group
-                    if payload.hotkey_letter is not None:
-                        c.hotkey_letter = new_letter
-                    break
-            reg._atomic_write(registry_obj)
+        new_letter: str | None = None
+        if payload.hotkey_letter is not None:
+            new_letter = validated_hotkey(
+                payload.hotkey_letter,
+                class_id=class_id,
+                registry_obj=await reg.snapshot(opensearch),
+                keymap_overrides=await project_keymap_overrides(opensearch),
+            )
+        # Name, group and hotkey change in one versioned write: two PUTs to different
+        # classes (or fields) never overwrite each other.
+        entry = await reg.update_class(
+            opensearch,
+            class_id,
+            name=payload.name,
+            group=payload.group,
+            hotkey_letter=new_letter,
+            set_hotkey=payload.hotkey_letter is not None,
+        )
     except HTTPException:
         raise
     except ClassRegistryError as exc:
+        if 'not found' in str(exc):
+            raise HTTPException(status_code=404, detail=f'class_id {class_id} not found') from exc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    entry = reg.get(class_id)
-    if entry is None:
-        raise HTTPException(status_code=404, detail=f'class_id {class_id} not found')
     return entry.model_dump()
 
 
@@ -154,7 +148,8 @@ async def deprecate_class(class_id: int, opensearch: OpenSearchDep) -> RegistryC
     ``hotkey_letter``.
     """
     reg = get_class_registry()
-    entry = reg.get(class_id)
+    snap = await reg.snapshot(opensearch)
+    entry = snap.get(class_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f'unknown class_id {class_id}')
     if entry.deprecated:
@@ -177,17 +172,17 @@ async def deprecate_class(class_id: int, opensearch: OpenSearchDep) -> RegistryC
             },
         )
     try:
-        return reg.set_deprecated(class_id, True)
+        return await reg.set_deprecated(opensearch, class_id, True)
     except ClassRegistryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post('/classes/{class_id}/restore', response_model=RegistryClassEntry)
-async def restore_class(class_id: int) -> RegistryClassEntry:
+async def restore_class(class_id: int, opensearch: OpenSearchDep) -> RegistryClassEntry:
     """Undo ``POST /classes/{id}/deprecate``. ``404`` for an unknown id;
     ``409`` if a non-deprecated class already uses this class's name
     (the registry's name-uniqueness rule, enforced the same way
-    ``rename_class`` enforces it).
+    ``update_class`` enforces it on rename).
 
     A class merged via ``POST /classes/merge`` (``merged_into`` set) is
     NOT restorable this way — its crops were already bulk-relabeled onto
@@ -198,11 +193,12 @@ async def restore_class(class_id: int) -> RegistryClassEntry:
     ``merged_into``) restores as before.
     """
     reg = get_class_registry()
-    entry = reg.get(class_id)
+    snap = await reg.snapshot(opensearch)
+    entry = snap.get(class_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f'unknown class_id {class_id}')
     if entry.merged_into is not None:
-        target = reg.get(entry.merged_into)
+        target = snap.get(entry.merged_into)
         raise HTTPException(
             status_code=409,
             detail={
@@ -224,6 +220,6 @@ async def restore_class(class_id: int) -> RegistryClassEntry:
             },
         )
     try:
-        return reg.set_deprecated(class_id, False)
+        return await reg.set_deprecated(opensearch, class_id, False)
     except ClassRegistryError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

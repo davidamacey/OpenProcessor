@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 async def _completed(tmp_path: Path, monkeypatch: Any) -> tuple[Harness, ImportStore]:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2']})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))

@@ -31,7 +31,11 @@ async def test_bootstrap_retries_until_opensearch_is_reachable(
     seeded: list[str] = []
     monkeypatch.setattr(guard, 'make_curation_opensearch', _flaky_client)
     monkeypatch.setattr(bootstrap, '_BOOTSTRAP_RETRY_INITIAL_S', 0.01)
-    monkeypatch.setattr(bootstrap, '_seed_region_classes', lambda: seeded.append('seeded'))
+
+    async def _seed(_client: Any) -> None:
+        seeded.append('seeded')
+
+    monkeypatch.setattr(bootstrap, '_seed_region_classes', _seed)
     registry = ProjectRegistry(lambda: fake_registry_client)
     set_project_registry(registry)
     try:

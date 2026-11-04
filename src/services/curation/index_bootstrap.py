@@ -54,6 +54,7 @@ from src.clients.curation_opensearch.open_vocab_fields import ensure_open_vocab_
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.config.curation_accessors import classes_index, images_index, items_index
+from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 
 
@@ -176,13 +177,19 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
 
 async def _autosync_classes(opensearch: Any) -> None:
     """Self-heal the classes index: if a clean OS wipe left it empty,
-    repopulate from the on-disk class registry so labeling works
+    repopulate from the class registry document so labeling works
     out of the box. Without this, labeler PUTs fail with
     "unknown class_id <id>" until an operator manually calls
     the classes sync endpoint."""
     count_resp = await opensearch.count(index=classes_index())
     if (count_resp.get('count') or 0) == 0:
-        synced = await get_class_registry().sync_to_opensearch(opensearch)
+        try:
+            synced = await get_class_registry().sync_to_opensearch(opensearch)
+        except RequestRejectedError as exc:
+            # Not migrated yet: the class routes refuse with 409 until it is; the
+            # indexes themselves are fine and the rest of the project keeps working.
+            logger.warning('curation_classes_autosync_skipped', detail=str(exc.detail))
+            return
         logger.info('curation_classes_autosynced', upserted=synced.get('upserted'))
 
 

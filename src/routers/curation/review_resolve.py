@@ -171,7 +171,8 @@ async def resolve_new_class_proposal(
     crop_ids = _selected_crop_ids(hits)
     matched = len(crop_ids)
 
-    reg = get_class_registry()
+    store = get_class_registry()
+    reg = await store.snapshot(opensearch)
     created = False
     class_id: int | None
     class_name: str
@@ -181,8 +182,9 @@ async def resolve_new_class_proposal(
             class_id, class_name = None, payload.create.class_name
         else:
             try:
-                result = create_registry_class(
-                    reg,
+                result = await create_registry_class(
+                    store,
+                    opensearch,
                     name=payload.create.class_name,
                     group=payload.create.group,
                     notes=payload.create.notes or '',

@@ -87,8 +87,14 @@ def is_not_found(exc: BaseException) -> bool:
     )
 
 
-def _registry_dep() -> ClassRegistry:
-    return get_class_registry()
+async def _registry_dep(
+    opensearch: Annotated[Any, Depends(get_curation_opensearch)],
+) -> ClassRegistry:
+    """The bound project's registry store. Reading the document first makes every class
+    route answer 409 ``registry_not_migrated`` while a leftover file has no document."""
+    registry = get_class_registry()
+    await registry.snapshot(opensearch)
+    return registry
 
 
 RegistryDep = Annotated[ClassRegistry, Depends(_registry_dep)]

@@ -64,6 +64,9 @@ def app_client(
 
     # Stub the registry so preflight class-resolution doesn't blow up.
     class _Reg:
+        async def snapshot(self, *_a: Any, **_k: Any) -> Any:
+            return self.load()
+
         def load(self) -> Any:
             class _Snap:
                 classes: list[Any] = []

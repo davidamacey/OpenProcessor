@@ -20,7 +20,7 @@ HUMAN = {'class_source': 'human', 'label_source': 'human', 'class_validated': Tr
 
 async def _imported(tmp_path: Path, monkeypatch: Any) -> tuple[Harness, Any]:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2'], 'b': ['0 0.5 0.5 0.3 0.3']})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))

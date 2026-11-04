@@ -69,15 +69,17 @@ class VlmContext:
         return resolve_class_name(raw, self.name_to_id, confidence=confidence)  # type: ignore[arg-type]
 
 
-def class_context(labeler: Any, guard: ClassWriteGuard, *, revision: int | None) -> VlmContext:
+async def class_context(
+    labeler: Any, guard: ClassWriteGuard, *, revision: int | None
+) -> VlmContext:
     """The class vocabulary and prompt catalog of the bound project's registry, with
     ``labeler`` (called directly: no HTTP hop) and the write ``guard``."""
-    from src.clients.curation_opensearch.registry import get_class_registry
     from src.services.curation.region_class import item_classes
+    from src.services.curation.registry_access import current_registry
     from src.services.labeling.vlm_class_names import format_class_catalog
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
-    labelable = item_classes(get_class_registry().load().classes)
+    labelable = item_classes((await current_registry()).classes)
     # Render the registry as a grouped+described catalog so the VLM's prompt tells it what
     # each cryptic slug means visually -- a big quality lift over the bare CSV.
     class_dicts = [

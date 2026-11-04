@@ -479,10 +479,10 @@ async def release_resume(opensearch: Any, store: ImportStore, prior: dict[str, A
     )
 
 
-def prepare_resume(store: ImportStore, registry: ClassRegistry) -> None:
+async def prepare_resume(store: ImportStore, registry: ClassRegistry, client: Any) -> None:
     """Re-materialize classes an interrupted start created but never recorded."""
     resolved, _profile, _parents = load_pinned(store)
-    materialize_created_classes(resolved, registry, adopt_existing=True)
+    await materialize_created_classes(resolved, registry, client)
     raw = store.read_mapping()
     raw.update(mapping_to_dict(resolved))
     store.write_mapping(raw)

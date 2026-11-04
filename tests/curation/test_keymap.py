@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 from _curation_app import mount_curation_routers
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation._cropwright_action_ids import CROPWRIGHT_ACTION_IDS
 from curation._fake_config_opensearch import FakeConfigOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.services.curation.keymap import (
     combo_grammar_error,
     effective_keys,
@@ -281,9 +281,9 @@ def test_delta22_agreement_region_keys_subset_of_reserved() -> None:
 
 
 @pytest.fixture
-def registry(tmp_path: Any) -> ClassRegistry:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('sedan', group='vehicle')
+def registry(tmp_path: Any) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.add('sedan', group='vehicle')
     return reg
 
 
@@ -293,7 +293,9 @@ def fake_os() -> FakeConfigOpenSearch:
 
 
 @pytest.fixture
-def client(registry: ClassRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch):
+def client(
+    registry: InMemoryRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
@@ -361,7 +363,7 @@ def test_put_keymap_422_body_internal(client: TestClient) -> None:
 
 
 def test_put_keymap_class_conflict_409_then_unbind(
-    client: TestClient, registry: ClassRegistry
+    client: TestClient, registry: InMemoryRegistry
 ) -> None:
     class_id = registry.load().classes[0].class_id
     registry.load().classes[0].hotkey_letter = 'i'
@@ -443,9 +445,9 @@ def test_class_put_rejects_reserved_hotkey_as_config_error_detail(client: TestCl
 
 
 def test_class_put_rejects_taken_hotkey_as_config_error_detail(
-    client: TestClient, registry: ClassRegistry
+    client: TestClient, registry: InMemoryRegistry
 ) -> None:
-    second_id = registry.add_class('suv', group='vehicle')
+    second_id = registry.add('suv', group='vehicle')
     reg = registry.load()
     for c in reg.classes:
         if c.class_id == 0:
@@ -487,7 +489,7 @@ def test_config_changed_event_published_once_on_put(
 
 
 def test_keymap_save_failure_is_a_500_and_the_class_hotkey_survives(
-    registry: ClassRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An unbind runs before the save; a non-conflict failure of the save
     must roll the unbind back instead of leaving the hotkey cleared."""

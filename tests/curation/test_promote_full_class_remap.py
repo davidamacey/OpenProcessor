@@ -83,6 +83,9 @@ def _gapped_registry():
         ]
 
     class _Reg:
+        async def snapshot(self, *_a: Any, **_k: Any) -> Any:
+            return self.load()
+
         def load(self) -> _Snapshot:
             return _Snapshot()
 
@@ -142,7 +145,9 @@ def test_full_class_promote_uses_class_remap_over_a_registry_gap(
         json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'})
     )
 
-    monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _gapped_registry)
+    monkeypatch.setattr(
+        'src.services.curation.registry_access.get_class_registry', _gapped_registry
+    )
 
     from src.services.training.job_models import TrainJobStatus
 
@@ -180,7 +185,9 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     (tmp_path / f'{job_id}.job.json').write_text(
         json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'})
     )
-    monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _gapped_registry)
+    monkeypatch.setattr(
+        'src.services.curation.registry_access.get_class_registry', _gapped_registry
+    )
 
     from src.services.training.job_models import TrainJobStatus
 
@@ -233,10 +240,13 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
         classes = [_Entry(0, 'car'), _Entry(1, 'truck'), _Entry(2, 'van')]
 
     class _Reg:
+        async def snapshot(self, *_a: Any, **_k: Any) -> Any:
+            return self.load()
+
         def load(self) -> _Snapshot:
             return _Snapshot()
 
-    monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _Reg)
+    monkeypatch.setattr('src.services.curation.registry_access.get_class_registry', _Reg)
 
     from src.services.training.job_models import TrainJobStatus
 
@@ -271,7 +281,9 @@ def test_promote_force_is_accepted_as_a_query_parameter_too(
     (tmp_path / f'{job_id}.job.json').write_text(
         json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'})
     )
-    monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _gapped_registry)
+    monkeypatch.setattr(
+        'src.services.curation.registry_access.get_class_registry', _gapped_registry
+    )
 
     from src.services.training.job_models import TrainJobStatus
 
