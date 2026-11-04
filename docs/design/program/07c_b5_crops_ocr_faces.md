@@ -8,7 +8,7 @@
 | Blocks | 5d P5 (faces and OCR as `gpu_image_prep` branches) uses the OCR contract this batch leaves |
 | Decisions applied | #40 Q2/Q3 (2026-10-03: work-crop cap recommended 1024, shipped off first; the VLM cap set from the VLM's real input size); `faces_ocr_resident_crops_plan.md` J1-J5 (pre-approved; J5 moves face alignment to #67 P5); public data only |
 | Open decisions | none new |
-| Source IDs | former master plan (rev 4, in git history) 7.5 row 5c, 9.1 (N14: GPU-19), 9.2 (#220), 11 (#17/#18 leftover: #220 step 3), 14 (`perf/220-width-buckets`); #219, #220; GPU-7, GPU-19 (`codebase_audit_plan.md` 4.3); `triton_pipeline_optimization_plan.md` Wave 3 and 5, section 7 |
+| Source IDs | former master plan (rev 4, in git history) 7.5 row 5c, 9.1 (N14: GPU-19), 9.2 (#220), 11 (#17/#18 leftover: #220 step 3), 14 (the #220 step-2 evidence); #219, #220; GPU-7, GPU-19 (`codebase_audit_plan.md` 4.3); `triton_pipeline_optimization_plan.md` Wave 3 and 5, section 7 |
 | Verified | Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03 (read-only `rg`, `gh issue view`; nothing run) |
 | Consolidated | Consolidated 2026-11-03 |
 
@@ -24,7 +24,7 @@ P-region, P-ocr) against `ref-b5a` and beats 2x the spread.
 |---|---|---|
 | #219 `crop_max_side` | not started; `rg crop_max_side src` finds nothing | #219 triage 2026-10-31 |
 | #220 step 1: uint8 `ocr_images` and `original_image` into `ocr_pipeline` | **done** (`27ebeb45`; `models/ocr_pipeline/config.pbtxt` inputs `TYPE_UINT8`; `MODEL_VERSION` present; `tests/test_ocr_uint8_inputs.py`) | `faces_ocr_resident_crops_plan.md` 0 |
-| #220 step 2: width-bucketed recognition | **measured, rejected**: buckets with zero padding P-ocr 86.0 % (char edit rate 1.94 %), BLS 43.2 ms vs 48.0 ms; exact-width grouping P-ocr 100 % but 49.5 ms (no gain) | #220 comment 2026-11-02; branch `perf/220-width-buckets` |
+| #220 step 2: width-bucketed recognition | **measured, rejected**: buckets with zero padding P-ocr 86.0 % (char edit rate 1.94 %), BLS 43.2 ms vs 48.0 ms; exact-width grouping P-ocr 100 % but 49.5 ms (no gain) | #220 comment 2026-11-02; the #220 comment of 2026-11-02 |
 | GPU-7: one blocking `exec()` per crop in `models/ocr_pipeline/1/model.py::_call_recognition` (up to `MAX_TEXTS = 128`) | open | audit 4.3 |
 | #220 step 3: argmax in the recognition graph | open (research leftover #17/#18) | `faces_ocr_resident_crops_plan.md` 5 |
 | #220 step 4: face alignment on resident frames | **moved to 5d** (#67 P5, J5) | |
@@ -138,7 +138,7 @@ With the cap off, outputs byte-identical to the 5a reference.
   read from the model, not assumed).
 - Gate: P-ocr >= 98 % exact and CER not worse on the pinned OCR set and set A probes. SVTR-style
   recognisers mix context globally, so padding may change valid steps too; if P-ocr fails, record
-  and stop (the `perf/220-width-buckets` evidence plus this run decide).
+  and stop (the #220 comment of 2026-11-02 plus this run decide).
 
 **5c-O3 Step 3 research: argmax in the recognition graph.** Size M (research; code only on a pass).
 - Re-export `paddleocr_rec_trt` with an ArgMax/ReduceMax tail in a new version directory selected
@@ -176,8 +176,8 @@ With the cap off, outputs byte-identical to the 5a reference.
 - caps exist, default 1024 only after the gate; cap off byte-identical;
 - GPU-7 done (one async gather and identical text) or recorded as no gain;
 - 5c-O2 and 5c-O3 adopted or recorded; GPU-19 recorded;
-- `perf/220-width-buckets`: once its evidence is cited in `docs/research/`, ask the owner to delete
-  the branch (do not delete without the yes);
+- cite the #220 step-2 numbers (the #220 comment of 2026-11-02) in `docs/research/`; the evidence
+  branch was deleted on 2026-11-04 with the owner's OK;
 - `docs/PERFORMANCE.md`, `docs/OCR.md` updated; CI green; PR merged with a merge commit; #219 and
   #220 closed (faces part points at #67);
 - 5c-K4 adopted or recorded;

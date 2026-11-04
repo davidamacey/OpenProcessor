@@ -274,7 +274,7 @@ the OCR-only path in section 9.
 
 See [11_risks_cleanup_host.md](11_risks_cleanup_host.md) section 5 for the full table. For B0:
 `git worktree remove <repo>-wt-r2round`, then `git branch -d fix/411-r2-round` and
-`git push origin --delete fix/411-r2-round`. Keep `perf/220-width-buckets` (B5c evidence).
+`git push origin --delete fix/411-r2-round`. The `perf/220-width-buckets` evidence branch was deleted on 2026-11-04; its measurement is the #220 comment of 2026-11-02.
 
 ## 6. Batch gate (B0 done when)
 

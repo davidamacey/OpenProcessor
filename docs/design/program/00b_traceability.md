@@ -144,7 +144,7 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 |---|---|
 | (a) one local gate command for the sweeps | W2.0 lane `tools/make-gate`: `make gate` and `scripts/dev/gate.sh`, two parallel tracks after the installs, every step logged with its exit code ([00_master_plan.md](00_master_plan.md) section 4.0a) |
 | (b) five stale Cropwright screenshots (`projects-1600.png`, `ingest-policy-1600.png`, `ingest-policy-preview-1600.png`, `dashboard-1600.png`, `clusters-1600.png`) | recaptured in the W2.4 live run, step 23 of [03](03_b2_overview.md) section 9, committed in the B2 closing commit |
-| (c) an S3-compatible storage backend for several hosts (D-46) | v0.8.0 feature F10 of [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md); issue text N21 in section 4.6 |
+| (c) an S3-compatible storage backend for several hosts (D-46) | v0.8.0 feature F10 of [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md); issue text N21 (#483) in section 4.6 |
 
 ### 1.9 Retired, with the reason
 
@@ -352,7 +352,7 @@ Same rules as above. One comment per issue; the plan path is the only link.
 | #416, #473 | "Plan: `docs/design/research_near_duplicates_plan.md`. 0.7.0 replaces the three separate near-duplicate paths with one service (whole images and crops), run-scoped groups in the database, an exact-content key, a single writer per project, and the holdout rule (a held-out item's whole group goes into the holdout). Thresholds stay at today's values until the measurements; they become a per-project setting. #473: part a and c are fixed by the new service in the queue wave, part b by the single-writer core grouping in the stateless-API wave." |
 | #466, #398 | "Plan: `docs/design/research_auto_label_assist_plan.md`. The queue rewrite gives the assist loop its own record in the database, pause and resume that never use up retries, time slices so one project cannot starve another, budgets with token reservations, and an event log. What stays for 0.8.0: the review queue and the measured label rate and precision; the detector-class roots (#398) after their experiment." |
 
-### 4.6 New issue for the coordinator to file: N21, the S3-compatible storage backend (approved addition 2026-11-04)
+### 4.6 New issue for the coordinator to file: N21 (#483), the S3-compatible storage backend (approved addition 2026-11-04)
 
 Title: `feat(storage): an S3-compatible storage backend for multi-host installs`.
 Labels: enhancement, effort:hard, plus the existing area label that fits. Milestone: v0.8.0. Body:

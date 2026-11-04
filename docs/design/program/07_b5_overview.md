@@ -52,7 +52,7 @@ named) or the issue comments.
 | 0.7.0 ingest speed | `gpu_image_prep` memory budget, stage counters, ingest load profile; 2 instances +51 % on the ingest profile | "0.7.0 stage profile", "GPU memory and the ingest load profile" (#390, #392, #393) |
 | Ladders | 2k/4k COCO pins, 10k COCO and 100k Open Images v7 ladders | "Scale ladder: 10k and 100k" |
 | OCR | #220 step 1: uint8 `ocr_images` and `original_image` (commit `27ebeb45`, `tests/test_ocr_uint8_inputs.py`) | `faces_ocr_resident_crops_plan.md` |
-| OCR buckets | #220 step 2 measured and **rejected**: bucket padding P-ocr 86 %, exact-width grouping no speedup; evidence branch `perf/220-width-buckets` | #220 comment 2026-11-02 |
+| OCR buckets | #220 step 2 measured and **rejected**: bucket padding P-ocr 86 %, exact-width grouping no speedup; evidence: the #220 comment of 2026-11-02 | #220 comment 2026-11-02 |
 | Plans | #67 P1: `src/domain/processing_plan.py`, `src/schemas/processing_plan.py`, `tests/test_processing_plan.py`; design doc `processing_plans_plan.md` | PR #426 |
 | Not adopted | system shared memory (under 5 % of API CPU); gRPC ingest channel | "shared memory", "Ingest transports" |
 
