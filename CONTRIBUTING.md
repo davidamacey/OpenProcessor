@@ -11,7 +11,7 @@ git clone https://github.com/davidamacey/OpenProcessor.git
 cd OpenProcessor
 python3 -m venv .venv
 .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-.venv/bin/pip install -r requirements-test.txt pre-commit pytest-xdist
+.venv/bin/pip install -r requirements-test.txt pre-commit
 .venv/bin/pre-commit install
 ```
 

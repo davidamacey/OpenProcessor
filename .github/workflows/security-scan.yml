@@ -96,7 +96,9 @@ jobs:
           filters: |
             root: &root
               - 'Dockerfile'
-              - 'requirements*.txt'
+              - 'requirements.txt'
+              - 'requirements-export.txt'
+              - 'requirements-export-y11.txt'
               - 'scripts/curation/bakeoff/requirements.txt'
             api: *root
             export: *root
