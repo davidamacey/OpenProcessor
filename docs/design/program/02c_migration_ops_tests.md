@@ -77,8 +77,10 @@ RLS policies, the `op_scope_allows` function and the generated `CHECK` lists are
   processes never run together. From v0.8.0 migrations follow expand-then-contract, so the check can
   become "the database head is at or ahead of the code head and marked compatible".
 - `openprocessor upgrade` order: back up Postgres if it exists (section 6) -> pull and verify images
-  -> `up -d postgres valkey opensearch` -> `run --rm db-migrate` -> (from 0.6.0 only) the control-data
-  step of section 2 -> `up -d --remove-orphans` for the rest.
+  -> `up -d postgres valkey opensearch` -> `run --rm db-migrate` (Alembic, then the global indexes)
+  -> (from 0.6.0 only) the control-data step of section 2, which loads the projects, then `run --rm
+  db-migrate` again, which now finds them and migrates and stamps their indexes (RC-1) -> `up -d
+  --remove-orphans` for the rest.
 - Downgrades: each revision has a `downgrade()` for development; production rollback restores the
   pre-upgrade dump (section 6), never `alembic downgrade`.
 

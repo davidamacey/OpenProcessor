@@ -69,7 +69,7 @@ where it lacks it (contracts per family, stage 4).
 | `label_op`, `label_undo` | yes | inline | `label_op`, op id; `label_undo`, '' | no | request-bound | - |
 | `project_create` (B4 4D, R-21) | NULL, scope slug | `jobs` | `project_create`, slug | yes (idempotent: each step checks what exists) | 1 h / 1 h 5 m | 1 h |
 | `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`, `vlm_verify_region_batch` (B4 4A) | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 1 h |
-| `gpu_arbiter` tick (R-20) | NULL | `arbiter` (periodic task, not a `jobs` row) | advisory lock | - | 120 s / 150 s | - |
+| `gpu_arbiter` tick (R-20) | NULL | `arbiter` (periodic task, not a `jobs` row); scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set, which the overlay sets (RC-3) | advisory lock | - | 120 s / 150 s | - |
 
 Auto-resume carries the D-25 recommendation forward. Limits above 3 h carry D-20a. `max_attempts`
 is 3 for every kind (D-20). A test asserts every registered task name maps to exactly one kind and
@@ -463,7 +463,14 @@ reaper rebuilds the queue from the `jobs` rows.
 | `gpu_eval` | `curation-evaluator` (evaluator image) | prefork, 1 | 5 | `evaluator` | `EVALUATOR_GPU_ID` |
 
 Concurrency is capacity, never correctness: every exclusivity rule is the unique index, so any
-service may run several replicas. A queue whose profile is down holds its messages; the job waits
+service may run several replicas. Review RC-3: a queue without a live consumer must never receive
+periodic messages. Celery's `expires` is checked by the worker that receives a message, so beat
+messages to a queue nobody drains pile up in Valkey forever; beat therefore schedules the
+`gpu_arbiter` tick only when `OP_GPU_ARBITER_CONTAINERS` is set (read at beat start; the arbiter
+overlay sets it), and the consumers test treats overlay queues as present only under that setting.
+Review RC-13: a job whose queue's profile is never started is failed by the reaper
+(`queue_wait_exceeded`), but its one broker message stays in Valkey until a consumer starts;
+INSTALLATION says so (small, bounded by the number of such starts). A queue whose profile is down holds its messages; the job waits
 `queued` and the reaper fails it after its max queue wait (`queue_wait_exceeded`), today's behaviour
 for the trigger files. `tests/test_queue_consumers_from_compose.py` asserts every routed queue has a
 consumer in core or in the profile `QUEUE_PROFILE` names (OpenTranscribe's "a valid route is not a
@@ -499,7 +506,8 @@ notes first ([migration_21](https://docs.sqlalchemy.org/en/21/changelog/migratio
 
 | Process | Engine | Per process | Count (default install) | Connections |
 |---|---|---|---|---|
-| API worker | async, `pool_size = max(1, OP_DB_API_CONNECTIONS_TOTAL // (API_WORKERS * OP_API_REPLICAS))`, `max_overflow = 0`; no `LISTEN` connection (the wake-up is on Valkey, section 6) | 2 (the 64 total over 32 processes and 1 replica) | 32 processes, 1 replica, `OP_DB_API_CONNECTIONS_TOTAL=64` | 64 |
+| API worker | async, `pool_size = max(1, OP_DB_API_CONNECTIONS_TOTAL // (API_WORKERS * OP_API_REPLICAS))`, `max_overflow = 0`, `pool_timeout = 5` s mapped to 503 `database_busy` (RC-4); no `LISTEN` connection (the wake-up is on Valkey, section 6) | 2 (the 64 total over 32 processes and 1 replica) | 32 processes, 1 replica, `OP_DB_API_CONNECTIONS_TOTAL=64` | 64 |
+| API worker, polls | a separate sync engine with one connection for the 1 s registry poll and the 5 s config poll (RC-4), so the polls never wait behind requests | 1 | 32 | 32 |
 | API worker, inline jobs (label op, undo) | the heartbeat thread's own sync connection while an inline job runs (R-35) | 0-1 | at most one per process at a time | 32 (worst case) |
 | Celery child (job wrapper) | sync, `pool_size=2` (wrapper + heartbeat thread), `max_overflow=0`; plus a per-task async engine with `NullPool` for handler queries (at most 2 at once) | 4 | 4 + 2 + 1 + 1 + 1 children in core and curation; + 3 GPU children | 48 |
 | Celery parent, Flower | none | 0 | - | 0 |
@@ -508,18 +516,20 @@ notes first ([migration_21](https://docs.sqlalchemy.org/en/21/changelog/migratio
 | `db-migrate`, backup | 1 direct, exits | 1 | - | 2 |
 | reserve (maintenance, `psql`) | | | | 10 |
 | `superuser_reserved_connections` | | | | 3 |
-| **Total** | | | | **165** |
+| **Total** | | | | **197** |
 
 `postgres` runs with `max_connections=${OP_PG_MAX_CONNECTIONS:-300}` (default 100 is too low for 32 API
 processes; it needs a restart to change:
 [connection settings](https://www.postgresql.org/docs/current/runtime-config-connection.html#GUC-MAX-CONNECTIONS)).
 `tests/config/test_db_connection_budget.py` computes the table from the compose file, the settings
-and **the scale factors** (`--scale` per service, as `OP_API_REPLICAS` and the worker replica
-counts; review fix R-6) and fails when the sum exceeds `OP_PG_MAX_CONNECTIONS - 13`.
+and **the scale factors** (`deploy.replicas` per service, `${OP_API_REPLICAS:-1}` for `api` being the
+single source; review fix R-6 and RC-4) and fails when the sum exceeds `OP_PG_MAX_CONNECTIONS - 13`,
+including when `workers x replicas` exceeds the total so the per-process floor of 1 takes over.
 `OP_DB_API_CONNECTIONS_TOTAL` is a real deployment total: every API process takes
 `floor(total / (API_WORKERS * OP_API_REPLICAS))`, at least 1, no overflow (B4-4B folds it into its
-"pools sized from totals" rule; `OP_API_REPLICAS` is written by the installer and by
-`openprocessor scale`, default 1).
+"pools sized from totals" rule; `OP_API_REPLICAS` lives in `.env`, default 1, and compose reads it as
+the `api` service's `deploy.replicas`, so there is no second place to scale; no `openprocessor scale`
+command, RC-4). The 4B-5 benchmark records the pool wait time.
 
 ### 8.1 More replicas or hosts: PgBouncer (D-50)
 

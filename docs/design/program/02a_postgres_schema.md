@@ -76,19 +76,24 @@ Every table with a `project_id` column has row-level security
 ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
 ALTER TABLE <t> FORCE ROW LEVEL SECURITY;
 CREATE POLICY p_<t>_project ON <t>
-  USING      (op_scope_allows(project_id))
-  WITH CHECK (op_scope_allows(project_id));
+  USING      ((SELECT op_scope_is_deployment()) OR project_id = (SELECT op_scope_project()))
+  WITH CHECK ((SELECT op_scope_is_deployment()) OR project_id = (SELECT op_scope_project()));
 
 -- review fix R-13: an unset scope raises (still fail closed, but loud, never a silent empty result)
-CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
+CREATE FUNCTION op_scope_project() RETURNS uuid
   LANGUAGE plpgsql STABLE AS $$
   BEGIN
     CASE current_setting('op.scope', true)
-      WHEN 'project'    THEN RETURN pid = nullif(current_setting('op.project_id', true), '')::uuid;
-      WHEN 'deployment' THEN RETURN true;
+      WHEN 'project'    THEN RETURN nullif(current_setting('op.project_id', true), '')::uuid;
+      WHEN 'deployment' THEN RETURN NULL;
       ELSE RAISE EXCEPTION 'scope_not_set' USING ERRCODE = 'insufficient_privilege';
     END CASE;
   END $$;
+CREATE FUNCTION op_scope_is_deployment() RETURNS boolean
+  LANGUAGE sql STABLE AS $$ SELECT coalesce(current_setting('op.scope', true) = 'deployment', false) $$;
+-- the EXISTS policies of sections 5 and 7 keep the one-argument form
+CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
+  LANGUAGE sql STABLE AS $$ SELECT op_scope_is_deployment() OR pid = op_scope_project() $$;
 ```
 
 - `src/db/session.py` exposes exactly two ways to open a transaction: `project_tx(session, project)`
@@ -102,6 +107,12 @@ CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
   `set_config(..., true)` is transaction-local, so it also works behind a transaction pooler.
 - A session that sets neither gets the `scope_not_set` error on its first row-level-secured
   statement: fail closed, and loud (a bug shows up as an error, not as a wrong 404).
+- Review RC-9: each function call in the policy is a scalar subquery, which PostgreSQL evaluates
+  once per statement as an InitPlan, so the policy costs one call per statement instead of one per
+  row, and `project_id = <constant>` can use the `project_id` indexes. The planner cannot inline a
+  plpgsql function, which is why the raising function is wrapped this way. The repositories keep
+  their explicit `project_id = :p` filters as well. Test: `EXPLAIN` of a scoped select on `images`
+  shows an InitPlan and an index condition on `project_id`.
 - Tables with a nullable `project_id` (`jobs`, `events`, `config_documents`, `models`) allow
   `project_id IS NULL` rows only under `deployment` scope (the function returns false for NULL in
   `project` scope).
@@ -119,7 +130,7 @@ CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
 |---|---|---|
 | `op_super` (the image's `POSTGRES_USER`: the Docker image creates it "with superuser power", [postgres image](https://hub.docker.com/_/postgres)) | bootstrap only: `db-migrate` creates `op_owner` and `op_app` with it, then never again | everything |
 | `op_owner` | `db-migrate` (DDL), `openprocessor db backup/restore` | owns the schema; not a superuser; `BYPASSRLS` so `pg_dump` sees every row (review fix R-13) |
-| `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_allows`; no DDL, not a superuser, `NOBYPASSRLS` |
+| `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_project`, `op_scope_is_deployment` and `op_scope_allows`; no DDL, not a superuser, `NOBYPASSRLS` |
 
 `db-migrate` connects as `op_super` only to create `op_owner` and `op_app` idempotently (passwords
 from their secret files), then runs `alembic upgrade head` as `op_owner`, and re-applies the grants.

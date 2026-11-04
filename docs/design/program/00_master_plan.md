@@ -103,8 +103,10 @@ versions in a small PR of their own, so a dependency regression never blocks or 
 **Sweep and exit.** One CPU offline sweep (the 4 CI shards), pre-commit `--all-files`,
 `make contracts-check`, the frontend set (the #474 re-apply touches `frontend/`); the CPU image
 builds and `pip check` because requirements changed (the CI image scans run once, here); PR to
-`main`, merge commit. Then close PR #474 (00b section 4). **Codes in parallel:** the W2.1 lanes may
-code from `main` and merge this PR in before their own merge (they touch no part A line).
+`main`, merge commit. Then close PR #474 (00b section 4). **Cut point (re-check RC-10):** the W2.1
+lanes are cut from `main` after this PR merges, so they build on the part A pins (1A uses the
+pinned SQLAlchemy, psycopg and Alembic); W2.0 is small, and the W2.1 briefs are written while it
+runs.
 
 ### W2.1 Foundation (B2 stage 1)
 

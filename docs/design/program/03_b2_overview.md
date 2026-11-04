@@ -199,7 +199,7 @@ sleep loops.
 | 14 | per-family smoke (start, progress, completes) for every kind in [02b](02b_jobs_locking_events.md) section 2.1 | each completes | 25 min |
 | 15 | the two B1 checks never scripted (OS-6 filtered-kNN hit count; a blocked event loop does not cost a job its heartbeat), written under `tests/live/` first | both pass; both OS-6 hit counts recorded in `docs/PERFORMANCE.md` and `docs/opensearch_schema_design.md` (carried from the original step 12) | 10 min |
 | 16 | acceptance subset: `acceptance_run.sh --only ingest,cluster,holdout,label_ops,loop,export,train,bakeoff,promote` | PASS | 15 min |
-| 17 | GPU arbiter with the overlay (carried from the original step 9): a training start with the arbiter overlay on `periodic-worker` | one stop per configured container in the Docker events log, not one per API worker | 10 min |
+| 17 | GPU arbiter with the overlay (carried from the original step 9): a training start with the arbiter overlay on `gpu-arbiter-worker` (RC-6) | one stop per configured container in the Docker events log, not one per API worker | 10 min |
 | 18 | auto-label consumers (carried from the original step 10): two `curation-auto-label-worker` replicas, one job; kill one mid-stage; then cancel a second job at a stage boundary | one run per job; the killed one `interrupted` and resumed or restarted per its kind's auto-resume rule; the cancelled one `cancelled` | 15 min |
 
 A step that overruns stops the run; the coordinator reports instead of extending the budget.

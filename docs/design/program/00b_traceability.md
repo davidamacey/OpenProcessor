@@ -105,7 +105,7 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 
 | Original | Now |
 |---|---|
-| 4A-0..4A-5, 4B-1..4B-5, 4D-0 and the 4D track, D-29, D-29a, D-32, D-32a, D-33, R4-n, K-18..K-22 | kept (Redis wording became Valkey; the 202 paths use B2's `start_job`; the B4 kinds module `src/config/job_kinds/b4.py` and `src/tasks/b4.py` are now created empty by 1B-2, restored in this pass) |
+| 4A-0..4A-5, 4B-1..4B-5, 4D-0 and the 4D track, D-29, D-29a, D-32, D-32a, D-33, R4-n, K-18..K-22 | kept (Redis wording became Valkey; the 202 paths use B2's `start_job`; the B4 kinds modules `src/config/job_kinds/b4_fanout.py` and `b4_project.py` (with their `task_routes` and `src/tasks` twins) are now created empty by 1B-2, restored in this pass and split per track by re-check RC-5) |
 | 4A-6 evaluator | moved: [03f](03f_b2_s5_gpu_queues.md) 5C-1..5C-3 |
 | 4C-1 events, the last `flock`, `job_lock.py` | moved: [03e](03e_b2_s3_job_runtime.md) 3B-1..3B-5 and 6A-3; restored in this pass: `tests/events/test_publish_from_worker.py` in 3B-3 |
 | FE-7 SSE reconnect | moved: 3B-4 (`Last-Event-ID` resume) |
@@ -263,7 +263,8 @@ Labels: enhancement, area:curation, effort:hard. Milestone: v0.7.0. Body:
 > security. OpenSearch keeps only the search data: two indexes per project instead of six. The
 > upgrade from 0.6.0 moves the control data once, verifies it, then deletes the old copies, and can be
 > rolled back from its bundle. New commands: `openprocessor db backup`, `db restore`, `db verify`. The
-> inference API keeps serving when the database is down; only the curation and job routes need it.
+> API and the workers require PostgreSQL, Valkey and OpenSearch: they wait for them at start and
+> refuse to start, naming the missing one, and `/ready` names any that goes down later.
 > Tests use a real database (a container locally, a service container in CI).
 >
 > Part of #451. Plan: `docs/design/program/02_control_plane_database.md`, `03a`, `03d` (waves W2.1

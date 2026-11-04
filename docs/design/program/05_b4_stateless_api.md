@@ -209,7 +209,10 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
 - The database pool follows the same rule as a real deployment total (review fix R-6):
   `floor(OP_DB_API_CONNECTIONS_TOTAL / (API_WORKERS * OP_API_REPLICAS))`, at least 1, no overflow
   ([02b](02b_jobs_locking_events.md) section 8); the connection-budget test of B2 (1D-6, which takes
-  the scale factors) is re-run with the chosen default and with two replicas.
+  the scale factors) is re-run with the chosen default and with two replicas. Re-check RC-4: the
+  replica count has one source, `.env` `OP_API_REPLICAS` read by compose as `deploy.replicas`
+  (B2 1C-2); the pool timeout answer 503 `database_busy` and the separate poll engine come from
+  B2 1A-6; 4B adds no scale command.
 - **Red test:** `tests/config/test_api_pools.py`: `API_WORKERS=1` gives the totals, 32 gives
   today's per-process values, 0 or junk fails. **Control:** the lifespan smoke test.
 
@@ -245,6 +248,8 @@ it happens as the first step of the B5 window ([00_index.md](00_index.md) sectio
    Public data only (COCO / Open Images), the existing benchmark scripts, GPU 0, its own `-p`,
    host load recorded.
 2. Run the installer default (D-33) against that retaken baseline; repeat only a disputed point.
+   Record the database pool wait time (SQLAlchemy pool checkout time, p50 and p99) and the count of
+   503 `database_busy` answers next to the throughput (re-check RC-4).
 3. This validates the knob; it is not the B5 baseline (`07_*`).
 
 **4B done when:** the compose and Dockerfile tests, the pool test and the ratchet are green; the
@@ -264,8 +269,9 @@ numbers are its first rows).
   `start_job` (review fix R-21: the `op_type=create` record was an OpenSearch concept B2 deletes, and
   the single-entry ratchet refuses a plain task): deployment-level (`project_id` NULL, scope = slug),
   exclusive per slug, auto-resume (each step checks what already exists: the Postgres rows from 2A,
-  then the two OpenSearch indexes, R-7), registered in `src/config/job_kinds/b4.py` (created empty by
-  B2 lane 1B) and listed in the 02b kind table; the route returns 202 with the
+  then the two OpenSearch indexes, R-7), registered in `src/config/job_kinds/b4_project.py` (with `task_routes/b4_project.py` and
+  `src/tasks/b4_project.py`, created empty by B2 lane 1B; 4A owns the `b4_fanout` modules, RC-5);
+  it creates and stamps its two OpenSearch indexes (RC-1) and listed in the 02b kind table; the route returns 202 with the
   record in **`building`** (D-32a: reuse the existing project status, which combine already uses
   for a target being built, instead of a new `creating` value); Cropwright shows `building` as it
   does for combine. Alternative: keep it synchronous if one slow step explains the time and can be
@@ -390,7 +396,7 @@ are deleted there. B4 has no events track.
 |---|---|---|
 | K-18 | task plan 2e, audit CC-10 | `verify_region_batch` and `resource_links` fan-outs were missing (also in `03_b2_overview.md` section 21) |
 | K-19 | task plan Phase 6 | "VLM chunk fan-out: bound it with a semaphore" would keep the fan-out in the handler, which owner rule 6 forbids; D-29a moves it to a worker |
-| K-20 | former master plan 7.4 4C (Streams consumers) | obsolete: events moved to B2 stage 3 on Postgres (D-48); the per-process tail idea survives as one `LISTEN` connection per API process |
+| K-20 | former master plan 7.4 4C (Streams consumers) | obsolete: events moved to B2 stage 3 on Postgres (D-48); the per-process tail idea survives as one Valkey pub/sub subscription per API process (D-65; RC-11) |
 | K-21 | former master plan 7.4 4D "record in `creating`" | the project status vocabulary already has `building` for the same meaning (D-32a) |
 | K-22 | former master plan 7.4 "Then R-0.9" | obsolete (owner decision 2): R-final (after B5, D-37) owns the release acceptance; section 12 lists the B4 checks |
 
@@ -438,7 +444,9 @@ compose project. Deadline: set by the coordinator at kick-off.
 Track 4A (b4/bulk-occ, <repo>-wt-b4-bulk-occ): do 4A-0 first (offline, no Docker, no GPU), then
 4A-1, 4A-2, 4A-4, 4A-5; 4A-3 only after the owner answered D-29a. The 202 paths use B2's
 `start_job` (kinds `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`,
-`vlm_verify_region_batch` in a new `src/config/job_kinds/b4.py`).
+`vlm_verify_region_batch` in `src/config/job_kinds/b4_fanout.py`, with `task_routes/b4_fanout.py`
+and `src/tasks/b4_fanout.py`, all created empty by B2 lane 1B; 4D uses the `b4_project` modules, so
+the two tracks never share a file, RC-5).
 Compose project: none (offline). GPU: none.
 ```
 

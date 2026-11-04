@@ -308,7 +308,9 @@ Per project: 6 indexes become 2, so the shard budget per project drops from 6 to
 
 Layering contracts added to `scripts/codegen/check_layering.py` (stage 1): `src/db` imports no
 `src.services`, `src.clients`, `src.routers`, `fastapi`; `src/{config,domain,utils,schemas}` import no
-`src.db`; nothing under `src/` except `src/tasks/` imports `src.tasks`; `src/tasks/runtime/` imports
+`src.db`; `src.tasks.runtime` is a leaf layer (re-check RC-2): `src/services`, `src/tasks`,
+`docker/trainer`, `export` and `scripts/curation/bakeoff` may import it, and nothing outside
+`src/tasks/` imports any other `src.tasks` module (the Celery task modules); `src/tasks/runtime/` imports
 only `src.db`, `src.config`, `src.domain`, `src.utils` (checked by a fresh-interpreter test, as in
 `tests/tasks/test_no_cuda_import.py`, and by a planted-import red test in 1A-11: a runtime module
 importing `src.services` fails, review R-2); `src/routers` imports no `src.db.repos` (handlers go
