@@ -37,8 +37,9 @@ import numpy as np
 
 from src.clients.model_adapters import END2END_OUTPUTS
 from src.clients.triton_pool_core import images_input
-from src.config.ingest_profiles import proposer_label
+from src.config.ingest_profiles import model_class_name, proposer_label
 from src.core.logging import get_logger
+from src.services.curation.ingest_policy import registry_name_index
 from src.services.curation.item_doc import DetectedItem
 from src.services.detection.geometry import iou as _iou_fn, letterbox_to_square, undo_letterbox
 from src.utils.class_names import normalize_class_name
@@ -61,6 +62,17 @@ SECONDARY_IOU_MATCH = 0.3
 RAW_OUTPUT = 'output0'
 
 logger = get_logger(__name__)
+
+
+def _log_unmapped(profile: DetectionProfile, model_index: int, name: str | None) -> None:
+    """Record a model output that no active registry class is named like. The index is only
+    context for the operator, never an identity."""
+    logger.info(
+        'detector_class_unmapped',
+        detector=profile.detector_model or profile.name,
+        model_name=name,
+        model_index=model_index,
+    )
 
 
 def _rgb_bytes(img: Image.Image) -> int:
@@ -93,6 +105,18 @@ class WholeImageDetector:
         self.registry = registry
         self.profile = profile
         self.secondary_profile = secondary_profile
+
+    def _registry_class_for(
+        self, profile: DetectionProfile, model_index: int, by_name: dict[str, tuple[int, str]]
+    ) -> tuple[int, str] | None:
+        """The active registry class ``(class_id, class_name)`` named like the model's output
+        ``model_index``, or ``None`` (logged) when the model has no name for it or the registry
+        has no active class of that name."""
+        name = model_class_name(profile, model_index)
+        found = by_name.get(normalize_class_name(name)) if name else None
+        if found is None:
+            _log_unmapped(profile, model_index, name)
+        return found
 
     async def _images(self, model: str, pixels: np.ndarray) -> Any:
         """The ``images`` input for ``model`` in the datatype it declares."""
@@ -364,6 +388,7 @@ class WholeImageDetector:
             conf_thres=profile.confidence_floor,
         )
         detections = per_image[0] if per_image else []
+        by_name = registry_name_index(self.registry)
         secondary_boxes: list[tuple[tuple[float, float, float, float], float, int]] = []
         for det in detections:
             full = undo_letterbox(tuple(det['box']), scale, pad)
@@ -380,9 +405,10 @@ class WholeImageDetector:
             if best is None or best_iou < SECONDARY_IOU_MATCH:
                 continue
             _, sec_score, sec_cls = best
-            entry = self.registry.get(sec_cls)
-            item.class_id = sec_cls
-            item.class_name = entry.class_name if entry is not None else None
+            found = self._registry_class_for(profile, sec_cls, by_name)
+            if found is None:
+                continue
+            item.class_id, item.class_name = found
             item.class_source = f'{profile.name}_model'
             item.class_detector = profile.detector_model or profile.name
             item.class_detector_version = profile.detector_version

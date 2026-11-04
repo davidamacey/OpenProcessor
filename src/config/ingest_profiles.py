@@ -81,18 +81,22 @@ def load_label_names(path: str) -> tuple[str, ...]:
     return tuple(line.strip() for line in confine_labels_path(path).read_text().splitlines())
 
 
+def model_class_name(profile: DetectionProfile, class_id: int) -> str | None:
+    """The detector model's own name for its output index ``class_id``, or ``None`` when it
+    has none. The name is the model's only stable class identity; the index is not."""
+    if profile.labels_path:
+        labels = load_label_names(profile.labels_path)
+        return labels[class_id] or None if 0 <= class_id < len(labels) else None
+    return get_class_names(profile.detector_model).get(class_id) or None
+
+
 def proposer_label(profile: DetectionProfile, class_id: int) -> str:
     """The primary model's own name for ``class_id``: its ``labels_path``
     entry when configured, else the ``labels.txt`` shipped in the model's own
     Triton directory, else the bare id as a string. (A region profile's
     ``parent_classes`` select items by this name, so an unconfigured install
     must still get ``car``, not ``2``.)"""
-    if profile.labels_path:
-        labels = load_label_names(profile.labels_path)
-        if 0 <= class_id < len(labels) and labels[class_id]:
-            return labels[class_id]
-        return str(class_id)
-    return get_class_names(profile.detector_model).get(class_id) or str(class_id)
+    return model_class_name(profile, class_id) or str(class_id)
 
 
 __all__ = [
@@ -103,5 +107,6 @@ __all__ = [
     'ingest_secondary_name',
     'ingest_secondary_profile',
     'load_label_names',
+    'model_class_name',
     'proposer_label',
 ]
