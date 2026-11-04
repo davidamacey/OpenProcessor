@@ -1,0 +1,139 @@
+"""The heartbeat thread of a held job lease.
+
+A lease (:mod:`src.clients.job_lease`) stays alive only while its holder renews it. The
+renew runs on a ``threading.Thread(daemon=True)`` with its own event loop and its own
+OpenSearch client, never on the request loop: CPU work on that loop (an upload extract, a
+``k_center_greedy`` selection) used to stall an asyncio ticker and cost a live job its
+liveness (Python docs: https://docs.python.org/3/library/threading.html,
+https://docs.python.org/3/library/asyncio-runner.html -- one loop per thread, asyncio objects
+are not thread-safe). The bound project reaches the thread through a copied
+``contextvars`` context (https://docs.python.org/3/library/contextvars.html).
+
+The thread also touches the job's file heartbeat, which is what the UI shows. When a renew
+answers :class:`~src.domain.job_lease.Lost`, or no renew has succeeded for
+``LEASE_TTL_S - FENCE_MARGIN_S`` seconds, it sets :attr:`LeaseHeartbeat.lost`: the holder
+stops at its next progress write before anyone can see the lease as expired.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextvars
+import threading
+import time
+from typing import TYPE_CHECKING, Any
+
+from opensearchpy.exceptions import OpenSearchException
+
+from src.clients import job_lease
+from src.config.settings import get_settings
+from src.core.logging import get_logger
+from src.domain.job_lease import (
+    FENCE_MARGIN_S,
+    HEARTBEAT_TICK_S,
+    LEASE_TTL_S,
+    HeldLease,
+    Lost,
+    Renewed,
+)
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from src.services.curation.file_job import FileJob
+
+logger = get_logger(__name__)
+
+
+def _script_client() -> Any:
+    from src.services.projects.guard import make_script_opensearch
+
+    settings = get_settings()
+    return make_script_opensearch([settings.opensearch_url], timeout=settings.opensearch_timeout)
+
+
+class LeaseHeartbeat:
+    """Renews ``lease`` every :data:`HEARTBEAT_TICK_S` until :meth:`stop`."""
+
+    def __init__(
+        self,
+        lease: HeldLease,
+        *,
+        job: FileJob | None = None,
+        client_factory: Callable[[], Any] = _script_client,
+    ) -> None:
+        self.lease = lease
+        self.lost = threading.Event()
+        self.last_renew_ok = time.monotonic()
+        self._job = job
+        self._client_factory = client_factory
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._job is not None:
+            self._job.touch_heartbeat()
+        ctx = contextvars.copy_context()
+        self._thread = threading.Thread(
+            target=ctx.run, args=(self._thread_main,), name='lease-heartbeat', daemon=True
+        )
+        self._thread.start()
+
+    def may_write(self) -> bool:
+        """Whether a progress write is still safe: not lost, and the last renew is young
+        enough that no other process can yet see the lease as expired."""
+        if self.lost.is_set():
+            return False
+        return time.monotonic() - self.last_renew_ok < LEASE_TTL_S - FENCE_MARGIN_S
+
+    def stop(self) -> None:
+        """Stop renewing and wait for an in-flight renew to finish (at most one round trip)."""
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=HEARTBEAT_TICK_S)
+
+    async def confirm(self, client: Any) -> bool:
+        """Stop the thread, then renew once on ``client``: ``True`` only when the lease is
+        still ours. A terminal state is written only after this returns ``True``."""
+        await asyncio.to_thread(self.stop)
+        if self.lost.is_set():
+            return False
+        result = await job_lease.renew(client, self.lease)
+        if isinstance(result, Renewed):
+            self.lease = result.lease
+            self.last_renew_ok = time.monotonic()
+            return True
+        self.lost.set()
+        return False
+
+    async def release(self, client: Any) -> None:
+        """Stop renewing and release the lease (a lease taken over meanwhile is left alone)."""
+        await asyncio.to_thread(self.stop)
+        await job_lease.release(client, self.lease)
+
+    def _thread_main(self) -> None:
+        asyncio.run(self._run())
+
+    async def _run(self) -> None:
+        client = self._client_factory()
+        try:
+            while not self._stop.wait(HEARTBEAT_TICK_S):
+                if self._job is not None:
+                    self._job.touch_heartbeat()
+                try:
+                    result = await job_lease.renew(client, self.lease)
+                except (OpenSearchException, OSError) as exc:
+                    logger.warning('lease_renew_failed', lease=self.lease.doc_id, error=str(exc))
+                    if time.monotonic() - self.last_renew_ok >= LEASE_TTL_S - FENCE_MARGIN_S:
+                        self.lost.set()
+                        return
+                    continue
+                if isinstance(result, Lost):
+                    logger.warning('lease_lost', lease=self.lease.doc_id)
+                    self.lost.set()
+                    return
+                self.lease = result.lease
+                self.last_renew_ok = time.monotonic()
+        finally:
+            await client.close()

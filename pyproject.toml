@@ -344,6 +344,7 @@ markers = [
     "integration: tests that exercise several components together (no live stack required)",
     "live: write-path tests that require the docker/test/ verification harness to be running",
     "unbound: opt out of the autouse `default` project binding (tests/conftest.py)",
+    "real_lease_io: opt out of the in-memory lease store (tests/conftest.py); the test supplies its own lease client",
 ]
 
 # =============================================================================
