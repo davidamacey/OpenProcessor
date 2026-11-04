@@ -1,7 +1,12 @@
-# OpenProcessor 0.7.0 program: index (read first)
+# OpenProcessor 0.7.0 program: decision register, legends and reference
+
+**Execution order lives in [00_master_plan.md](00_master_plan.md)** (the waves, their lanes, the
+GPU windows, the owner questions). This file is the decision register (section 6), the plain-words
+map (section 2.1), the wave exit gates (section 4), the production-ready definition (section 5),
+the branch and test rules (sections 7-8) and the legends (section 11).
 
 Status: plan, approved for execution step by step (owner decision 1 of 2026-11-03); B0 code is done.
-Depends on: owner approval of the set; then each wave's preconditions (section 4).
+Depends on: owner approval of the set; then each wave's preconditions ([00_master_plan.md](00_master_plan.md) section 4).
 Decisions applied: owner decisions 1-9 of 2026-11-03, which override the former master plan
 (rev 4, in git history; section 6 records every D-n with its status).
 Source IDs: every ID in `docs/design/task_queue_plan.md` (Q-), `docs/design/codebase_audit_plan.md`
@@ -28,7 +33,9 @@ task text that file cites by ID. Where a source plan and this set disagree, this
 
 | File | What it owns |
 |---|---|
-| `00_index.md` (this) | mission, schedule (waves), decision register, branch/lane model, test tiers, the test and GPU budget (section 8.1), legends, section map, superseded plans |
+| [00_master_plan.md](00_master_plan.md) | **the execution order**: every wave to the tag, lanes and file ownership, folded-in decided items, sweeps and exit gates, the GPU-window budget, the wave procedure, the owner questions |
+| [00b_traceability.md](00b_traceability.md) | every task, ID and issue of the original plans mapped to its wave and lane or retired with a reason; every open issue mapped; the fold-in record; the proposed GitHub actions |
+| `00_index.md` (this) | mission, decision register, wave exit gates, production-ready definition, branch/lane model, test tiers, the test and GPU budget rules (section 8.1), legends, section map, superseded plans |
 | [01_b0_close_out.md](01_b0_close_out.md) | B0: gate cycle, push, merge |
 | B1 (merged; plan files removed, the lasting facts are in the permanent docs and `CHANGELOG.md`) | B1 correctness: leases, class registry, inference and search, API/frontend/tests, Ultralytics live bugs. **Done.** |
 | [02_control_plane_database.md](02_control_plane_database.md), [02a](02a_postgres_schema.md), [02b](02b_jobs_locking_events.md), [02c](02c_migration_ops_tests.md) | the control-plane design B2 builds: data ownership, the Postgres schema, jobs and events, migrations and the 0.6.0 upgrade |
@@ -42,10 +49,11 @@ task text that file cites by ID. Where a source plan and this set disagree, this
 | [09_github_actions.md](09_github_actions.md) | new issues, re-scopes, milestones, closes, dependabot and the deps lane |
 | [10_standards_and_libraries.md](10_standards_and_libraries.md) | code standards, the library-per-mechanism register with sources, the hand-roll audit |
 | [11_risks_cleanup_host.md](11_risks_cleanup_host.md) | risk register, cleanup, host/GPU/peer rules, the #42 side track, "do not redo" |
+| [13_package_pins.md](13_package_pins.md) | exact pins for every Python dependency and the control-plane images; the bump order (part A in W2.1, part B in W3) |
 
 ### 0.1 Standing procedure for a session resuming the program
 
-1. Read this file, then the file of the current wave (section 4).
+1. Read [00_master_plan.md](00_master_plan.md) (the current wave's section), then the batch file it links.
 2. Read the private ledger `artifacts_local/LEDGER.md`, latest "RESUME HERE" section: the live
    status, what is merged, what is waiting on whom.
 3. Read the repository state: `git -C <repo> worktree list`, `git -C <repo> fetch origin`,
@@ -121,7 +129,7 @@ The audit codes used most often in the table above:
 | OS-n | An OpenSearch query or index fix |
 | U-Step n | A step of the Ultralytics upgrade |
 | Q-Phase n | A phase of the job-queue move |
-| W0..W6 | The program's waves: one integration branch and one full test sweep each |
+| W0..W6 | The program's waves: one integration branch and one full test sweep each; B2's wave W2 has four parts W2.1-W2.4, each closed by a short part check ([00_master_plan.md](00_master_plan.md)) |
 
 Approved by the owner on 2026-11-04: Celery 5.6 (D-17); Valkey as the broker (D-18); PostgreSQL
 for all control data (D-39); OpenSearch for search data (D-40); every long job on Celery, training
@@ -129,7 +137,9 @@ and export included (D-41); stateless scale-out (D-42); the one-step upgrade tha
 deletes the OpenSearch control data (D-43); exact pins (D-44); plain names first (D-45); the
 evaluator on a GPU queue (D-31).
 
-The decisions still waiting on the owner for B2 (section 6 has the recommendation for each):
+The decisions still waiting on the owner for B2 (section 6 has the recommendation for each; the
+master plan's owner question list, [00_master_plan.md](00_master_plan.md) section 9, says when each
+is needed):
 
 | Decision | Question in plain words |
 |---|---|
@@ -164,34 +174,14 @@ The decisions still waiting on the owner for B2 (section 6 has the recommendatio
 
 ## 3. Order and dependencies
 
-```
-B0 --merge--> B1 --merge--> B2 (stages 1 -> 2 -> 3 -> 4 + 5 -> 6) --merge--> B4 --merge--> B5a -> B5b -> B5c -> B5d --> release prep --> R-final --tag v0.7.0-->
-               \                         /
-                +--> B3 (CPU lanes in parallel with B2; rebase on main after B2; GPU gate; merge second)
-side: #42 whenever GPU 1 frees (never blocks)
-```
+Moved to [00_master_plan.md](00_master_plan.md) sections 2-3 (the waves, the dependency diagram and
+the hard edges). The order decision itself is D-13 as amended by D-37 (section 6).
 
-- Order (D-13, D-37): B0, B1, B2, B3, B4, B5, then release prep and R-final last.
-- B3 depends only on B1 in files, so its CPU work runs during B2 on its own integration branch;
-  it merges after B2. Its GPU gate never overlaps B2's live harness.
-- Inside B2, stage 3 codes alongside stage 2 and stages 4 and 5 run in parallel (disjoint files,
-  [03_b2_overview.md](03_b2_overview.md) section 3).
-- B4 needs the control plane (B2) and the final engine (B3), so it is benchmarked once.
-- B5 measures only the final stack (#45 baseline before any optimization code).
-- **Decided (D-37 = yes):** the owner said "not tagging until all of these plans are implemented
-  and tested". B5 is inside the release, R-final runs last (after B5d), there is no separate
-  v0.8.0 acceptance, and the B5 issues sit in milestone v0.7.0. Milestones: `v0.7.0` holds B0-B5
-  and R-final; `v0.8.0` is platform breadth ([09_github_actions.md](09_github_actions.md)
-  section 7); the old `v0.9.0` and `v0.10.0` are closed once empty, never deleted.
+## 4. Wave exit gates
 
-## 4. Execution waves (whole program)
-
-A **wave** is the unit that one full sweep closes. Each lane is one agent in its own worktree
-`<repo>-wt-<lane>` on its own branch; the coordinator merges finished lanes into the integration
-branch with `--no-ff` and runs exactly one sweep per wave. **While one wave's sweep runs, the
-next wave's lanes are already coding** (they branch from the frozen head of the previous
-integration branch and merge into the next one without a rebase, because that head becomes an
-ancestor of `main`). Branch names below are the defaults; the owning file may refine them.
+The waves, their lanes and what codes in parallel during each sweep are in
+[00_master_plan.md](00_master_plan.md) section 4. The task list that used to be section 4.1 is mapped
+task by task in [00b_traceability.md](00b_traceability.md) section 1.
 
 Common exit criteria, required by every wave ("PQ" gates):
 
@@ -206,46 +196,6 @@ Common exit criteria, required by every wave ("PQ" gates):
 | PQ-7 | Hot-path numbers | where the wave touches the hot path, the performance and parity numbers against the stated reference, recorded in `docs/PERFORMANCE.md` (and `docs/research/` for studies) |
 | PQ-8 | Image hygiene | when an image is built for a gate or a push: the image-vs-git audit and the Trivy gate |
 | PQ-9 | Owner rules | no new in-process or file lock for cross-process state (file-lock ratchet from B1), no asyncio fan-out in request handlers, class identity by name, fail closed ([10_standards_and_libraries.md](10_standards_and_libraries.md)) |
-
-| Wave | Batch | Lanes (branch -> brief in) | Codes in parallel / overlaps | Sweep that closes the wave | Exit criteria (in addition to PQ-1..PQ-9) |
-|---|---|---|---|---|---|
-| **W0** | B0 on `fix/411-r2-round` | none: the code is done; the coordinator commits the plan set (B0-1) | GH-0..GH-12 after the owner's D-36 go; W1 lanes may start coding from the frozen B0 head once the plan set is approved | B0 gate cycle: pre-commit `--all-files`, offline suite `-n 8`, contracts-check, docs check, frontend full set with e2e, changelog rules: CPU gates only, no GPU run (the OCR before/after comparison moved to GPU window 1, the B3 gate; [01](01_b0_close_out.md) B0-2, B0-3) | merge commit on `main`; `main` fast-forwarded; #437, #440, #442, #443, #445 and #366 closed; VERSION still 0.6.0; no tag |
-| **W1** | B1 on `int/b1-correctness` | `b1/deps` -> [09](09_github_actions.md) section 8; `b1/ultralytics` (merged); `b1/inference` (merged); `b1/api-frontend` (merged); `b1/leases` (merged); `b1/registry` (merged). Merge order: deps, 1E, 1C, 1D, 1A, 1B (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md))) | all six code in parallel; 1B rebases on 1A before its merge; during W1's sweep, B2 stage W1 (`b2/queue-infra`, spike S1 first) and the B3 CPU lanes start from the frozen `int/b1` head | B1 sweep: T1 + frontend full set + browser check of the export and diverse review pages + a short lease/registry smoke on the live harness (`-p op-b1-live`, cap 30 min; the full live run is the single B1+B2 run at the end of B2) + the `families` CI job; spawn races run 10x locally | file-lock ratchet lists only the B2/B4 sites and `job_lock.py`; no `class_registry.json` read outside export snapshots and the trainer; `registry_not_migrated` tested; lease p50/p99 acquire latency recorded; N2-N7, N9, N10, #447 closed on merge. PQ-7: no GPU gate in B1 by design; the lease round-trip cost is the recorded number |
-| **W2** | B2 on `int/b2-control-plane` | stage 1: `b2/db-core`, `b2/queue-core`, `b2/compose-installer`, `b2/storage-seam`, then `b2/health-ci` -> [03a](03a_b2_w1_queue_infra.md); stage 2: `b2/projects-pg`, `b2/classes-pg`, `b2/config-pg`, `b2/records-pg`, `b2/upgrade-060`, then `b2/opensearch-control-removal` -> [03d](03d_b2_s2_control_data.md); stage 3: `b2/job-runtime`, `b2/events-pg` -> [03e](03e_b2_s3_job_runtime.md); stage 4: `b2/families-a`, `-b`, `-c`, `b2/trigger-workers`, then `b2/frontend-queued` -> [03b](03b_b2_w2_job_families.md); stage 5: `b2/gpu-train`, `b2/gpu-export`, `b2/gpu-eval`, `b2/promote-models` -> [03f](03f_b2_s5_gpu_queues.md); stage 6: `b2/beat-periodic`, `b2/scale-out-compose`, then `b2/hardening`, then `b2/docs` -> [03c](03c_b2_w3_beat_reaper_workers.md) | stages merge in order (stage 3 codes alongside stage 2; stages 4 and 5 in parallel); each stage merge gets targeted tests, `make contracts-check` and the `db` tier (D-63), not a full sweep; B3 lanes code throughout W2 on `int/b3-ultralytics` | B2 sweep after stage 6: T1 (Docker-free suite, `-m db` tier, frontend full set) + the one live run covering B1 and B2 (`-p op-b2-live`, about 4 h: races, kill and cold-shutdown requeue, cancel, API recycle, broker loss, Postgres restart, two beats, SSE resume, GPU queues with fake handlers, detection-worker replicas, per-family smoke) + `acceptance_run.sh --only` the job phases + image audit and Trivy for changed images | the done-when of [03](03_b2_overview.md) section 1 (no `FileJob`, no job files, file-lock ratchet zero, OpenSearch with two roles per project, no `container_name`); OPS-2 measured first; N11, N12 closed. PQ-7: request latency of `/detect` and `/ingest` under a running job recorded against the B1 numbers |
-| **W3** | B3 on `int/b3-ultralytics` | `b3/stagea` first, then `b3/families`, `b3/frame`, `b3/export`, `b3/decoders`, `b3/docs` as [04](04_b3_ultralytics_one_version.md) orders them | codes during all of W2 (CPU only); rebases on `main` after B2 merges; during W3's sweep, B4's 4C spike (on the merged B2 stack) and 4D's measurement start | B3 sweep: T1 + U-6.1 matrix at the pin X + **GPU window 1**: the U-6.2 gate once for Stage A and Stage B plus the B0 OCR before/after comparison (`-p op-b3-gpu`, GPU 0, one GPU day; never overlapping a B2 live run) + `pip check`, image audit, Trivy | one Ultralytics version in every image and requirements file; pin test green in CI and in each image; N8 closed. PQ-7: |delta mAP50-95| <= 0.3, >= 99 % detection agreement, throughput >= 95 % at batch 1/8/32/64 with p99 within +10 %, embedding cosine >= 0.999, export image about -0.9 GB, all recorded |
-| **W4** | B4 on `int/b4-stateless` | `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/project-create` (4D) -> [05](05_b4_stateless_api.md) (the events track moved into B2) | 4D timing during W3's sweep; release-prep drafting (release notes) may start during W4's sweep | B4 sweep: T1 + frontend full set + the third and last live run: the 1-vs-N diff with `API_WORKERS` 1 and 32 and with two `api` and two `jobs-worker` replicas (no GPU in B4: the installer default `API_WORKERS` is provisionally `min(nproc, 32)`; the T5 32-worker ingest and search benchmark on the B3 engine runs in GPU window 2, the B5 window, per 05 step 4B-5, and 5a retakes the same baseline) | the 1-vs-N diff empty; no lifespan side effects; N1, #439 closed. PQ-7: the `API_WORKERS` default is confirmed or corrected by the GPU window 2 benchmark before R-final |
-| **W5a** | B5 baseline ([07a](07a_b5_baseline.md)) on `int/b5a-baseline` | per 07a | no optimization code starts before the 5a reference numbers exist; the B5b/5c/5d lanes may code while earlier sub-batches are measured | 5a sweep: T1 + **GPU window 2** opens: the #45 baseline once (ladders, #268 sweeps, GPU-6 recall) | numbers recorded with host load; no default changes unless the gain beats 2x the run-to-run spread and parity passes; D-35 decided (N13) |
-| **W5b** | B5b decode once ([07b](07b_b5_decode_once.md)) | per 07b (GPU-3b first) | 5c lanes code during W5b's sweep | 5b sweep: T1 + the #40/#407 measurement and parity (boxes within 1 px at the original resolution, embedding cosine >= 0.999), in sequence inside GPU window 2 | #40/#407 acceptance met; numbers in `docs/PERFORMANCE.md` |
-| **W5c** | B5c crops, OCR, faces ([07c](07c_b5_crops_ocr_faces.md)) | per 07c | 5d lanes code during W5c's sweep | 5c sweep: T1 + P-vlm, P-sam, P-region, P-ocr gates, GPU window 2 | #219/#220 acceptance met |
-| **W5d** | B5d processing plans ([07d](07d_b5_processing_plans.md)) | per 07d | release-prep drafting may start | 5d sweep: T1 + #67 acceptance with per-stage "not run" tests, GPU window 2 closes | #67 acceptance met |
-| **W6** | release prep + R-final ([06](06_release_acceptance.md)) | `chore/release-0.7.0-prep` (RP-1..RP-9: VERSION 0.6.0 -> 0.7.0 and CHANGELOG `[Unreleased]` -> `[0.7.0]` first); `fix/rfinal-findings` only if a row fails | nothing else merges to `main` | R-final itself (every RF row), **GPU window 3** | every RF row PASS; the production-ready definition (section 5) ticked; report to the owner; tag v0.7.0 only on the owner's word (D-16); #411 closed after the tag |
-| side | #42 ([07](07_b5_overview.md) section 11) | `perf/42-small-gpu-acceptance` | any time GPU 1 is free; never blocks | its own run on GPU 1 | the #42 pass list; results in `docs/PERFORMANCE.md` and #42 |
-
-### 4.1 Task list (carried from section 11 of the former master plan)
-
-| Task | What | Wave | Status |
-|---|---|---|---|
-| #28 / B0-a..c | GPU-1, GPU-3a+13, GPU-2; OS-2, OS-1, OPS-1; CC-1, BA-7 | W0 | merged into `fix/411-r2-round` |
-| B0-d | uvicorn `>=0.41.0` floor and test | W0 | done (`6a53673c`) |
-| B0-e | `ultralytics==8.4.197` exact pin and test | W0 | done (`d1c6bab0`) |
-| B0-f | release prep | W6 | moved (owner decision 3) |
-| B0-g | OCR before/after comparison | W3 (GPU window 1) | moved out of B0 (budget, section 8.1) |
-| B0-i | docs fixes `ad553ecd` (stale "patch breaks on 8.4" comments), `0cc2b3ac` (docs checker skips route/env checks in `docs/design/`) | W0 | done |
-| #28 rest | plan commit (with removal wave R-1), CPU gate cycle, push, PR, CI, merge, fast-forward | W0 | to do |
-| #25, #22 | R3 live acceptance with the segmenter tier | W6 | moved into R-final (D-3, D-4) |
-| B0-h | tag v0.7.0 and the GitHub release | W6 | after R-final, owner's word |
-| #27 | #42 small-GPU acceptance on GPU 1 | side | waiting for GPU 1 |
-| GH-1 (#38) | GitHub actions | before W1 | to do, on the owner's go (D-36) |
-| #31, #34 | audit plan, Ultralytics plan | - | done (committed, D-14) |
-| B1-0 | commit the source plans | - | done (D-14); the header pointers of the three source plans are repointed to this set in the plan-set commit |
-| B1-1A..1E, deps | B1 lanes | W1 | done (merged) |
-| R-B1 | 0.8.0 acceptance subset | - | dropped (owner decision 3); its checks are in R-final section 4.3 |
-| B2 stages 1-6 | B2 stages | W2 | to do |
-| B3 | B3 | W3 | to do |
-| B4-4A..4D, R-0.9 | B4; R-0.9 merged into R-final | W4, W6 | to do |
-| #17/#18 leftovers | #220 step 3 research (B5c), #67 phase 2+ (B5d) | W5c, W5d | to do |
-| B5a..d | B5 sub-batches | W5a..W5d | to do |
-| #40 (ledger) | leftover cleanup | per [11](11_risks_cleanup_host.md) section 5 | owner yes per row |
 
 ## 5. Definition of production-ready for v0.7.0
 
@@ -295,168 +245,6 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
 | D-17 | Q-J1 Celery 5.6 | approved 2026-11-04 | Celery 5.6 with kombu's `redis://` transport and redis-py; exact pins in `13_package_pins.md` | B2 | [02b](02b_jobs_locking_events.md) section 7 |
 | D-18 | Q-J2 broker | approved 2026-11-04: **Valkey** | Valkey 9 (BSD-3-Clause) by digest; kombu has no `valkey://` scheme (issue #2245), so the documented `redis://` transport and redis-py are used; no third-party transport | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
-| D-19 | Do the new queue containers start by default (recommended), or only under a profile? |
-| D-20 | A job is acknowledged only after it finishes and tried at most 3 times: agreed? |
-| D-20a | May long job types (ingest, import, combine, reprocess) run up to 24 h instead of 3 h? |
-| D-20b | Should `docker stop` interrupt and requeue a running job after 30 s? |
-| D-22a | Does the old directory-ingest route become a background job (202) rather than being deleted? |
-| D-22b | May the synchronous `wait=true` mode of promote be deleted (only tests use it)? |
-| D-23 | How many jobs one general worker runs at once (4, tunable)? |
-| D-24 | Is a broker that keeps about one second of data on a crash, with no backup, enough? |
-| D-25 | Which job types restart by themselves after a crash? |
-| D-26 | Keep the API worker recycling with jitter that landed in B0? |
-| D-46 | Multi-host files: a shared volume now and an S3-compatible store in v0.8.0? |
-| D-47 | Should items keep the class name next to the class id, kept correct by one job? |
-| D-48 | Do job progress and events reach the browser through Postgres (a table plus a wake-up signal)? |
-| D-49 | Should Celery keep no results of its own, the jobs table being the only record? |
-| D-50 | Leave the connection pooler (PgBouncer) out of the default install, as an opt-in for many hosts? |
-| D-51 | Jobs running during the 0.6.0 upgrade end as "interrupted" and are restarted by hand? |
-| D-52 | Move only the lasting 0.6.0 job history (training, promotions, imports, exports, label operations, combine) into Postgres? |
-| D-53 | Keep the detection and VLM workers as stream workers, with each copy claiming whole projects? |
-| D-54 | Remove the fixed container name from every service? |
-| D-55 | Should Postgres itself refuse another project's rows (row-level security)? |
-| D-56 | Delete the four per-project OpenSearch indexes that held control data (6 indexes per project become 2)? |
-| D-57 | Drop the 10,000-class limit? |
-| D-58 | Accept an optional `Idempotency-Key` header on job-start routes? |
-| D-59 | Store prompt packs, profiles and settings as validated JSON documents with relational keys? |
-| D-60 | Enforce a single scheduler with a database lock? |
-| D-61 | No scheduled database backup by default (a dump on every upgrade and on demand)? |
-| D-62 | Real Postgres in tests through testcontainers locally and a CI service container, kept out of the Docker-free command? |
-| D-63 | A quick database test run at each B2 stage merge, in addition to the one full sweep? |
-
-## 3. Order and dependencies
-
-```
-B0 --merge--> B1 --merge--> B2 (stages 1 -> 2 -> 3 -> 4 + 5 -> 6) --merge--> B4 --merge--> B5a -> B5b -> B5c -> B5d --> release prep --> R-final --tag v0.7.0-->
-               \                         /
-                +--> B3 (CPU lanes in parallel with B2; rebase on main after B2; GPU gate; merge second)
-side: #42 whenever GPU 1 frees (never blocks)
-```
-
-- Order (D-13, D-37): B0, B1, B2, B3, B4, B5, then release prep and R-final last.
-- B3 depends only on B1 in files, so its CPU work runs during B2 on its own integration branch;
-  it merges after B2. Its GPU gate never overlaps B2's live harness.
-- Inside B2, stage 3 codes alongside stage 2 and stages 4 and 5 run in parallel (disjoint files,
-  [03_b2_overview.md](03_b2_overview.md) section 3).
-- B4 needs the control plane (B2) and the final engine (B3), so it is benchmarked once.
-- B5 measures only the final stack (#45 baseline before any optimization code).
-- **Decided (D-37 = yes):** the owner said "not tagging until all of these plans are implemented
-  and tested". B5 is inside the release, R-final runs last (after B5d), there is no separate
-  v0.8.0 acceptance, and the B5 issues sit in milestone v0.7.0. Milestones: `v0.7.0` holds B0-B5
-  and R-final; `v0.8.0` is platform breadth ([09_github_actions.md](09_github_actions.md)
-  section 7); the old `v0.9.0` and `v0.10.0` are closed once empty, never deleted.
-
-## 4. Execution waves (whole program)
-
-A **wave** is the unit that one full sweep closes. Each lane is one agent in its own worktree
-`<repo>-wt-<lane>` on its own branch; the coordinator merges finished lanes into the integration
-branch with `--no-ff` and runs exactly one sweep per wave. **While one wave's sweep runs, the
-next wave's lanes are already coding** (they branch from the frozen head of the previous
-integration branch and merge into the next one without a rebase, because that head becomes an
-ancestor of `main`). Branch names below are the defaults; the owning file may refine them.
-
-Common exit criteria, required by every wave ("PQ" gates):
-
-| ID | Gate | Check |
-|---|---|---|
-| PQ-1 | CI green locally, then on the PR | every job of `.github/workflows/ci.yml` (and `frontend.yml` when `frontend/` changed) reproduced locally, the changelog rules included; then `gh pr checks <n>`; the push verified with `git ls-remote` |
-| PQ-2 | Ratchets only shrink | `git diff main...HEAD -- scripts/codegen/baselines/` shows only removed lines or lower counts; an oversize file is split by concern, never re-baselined |
-| PQ-3 | No dead code, no shims | the vulture and dead-code hooks green; a superseded route, field, module or env var deleted in the same change (retired env vars added to `src/config/retired_env.py`); no compatibility read path |
-| PQ-4 | Contracts regenerated | `make contracts` in each commit that changes a wire model; `make contracts-check` clean in the sweep |
-| PQ-5 | Docs check clean | `.venv/bin/python scripts/docs/check_docs_vs_code.py`; the docs listed for the batch (section 9) updated; CHANGELOG entries under `[Unreleased]` (root and frontend) |
-| PQ-6 | Red/green evidence | each task's red test seen failing on the base plus its paired control, with the red output in the PR description |
-| PQ-7 | Hot-path numbers | where the wave touches the hot path, the performance and parity numbers against the stated reference, recorded in `docs/PERFORMANCE.md` (and `docs/research/` for studies) |
-| PQ-8 | Image hygiene | when an image is built for a gate or a push: the image-vs-git audit and the Trivy gate |
-| PQ-9 | Owner rules | no new in-process or file lock for cross-process state (file-lock ratchet from B1), no asyncio fan-out in request handlers, class identity by name, fail closed ([10_standards_and_libraries.md](10_standards_and_libraries.md)) |
-
-| Wave | Batch | Lanes (branch -> brief in) | Codes in parallel / overlaps | Sweep that closes the wave | Exit criteria (in addition to PQ-1..PQ-9) |
-|---|---|---|---|---|---|
-| **W0** | B0 on `fix/411-r2-round` | none: the code is done; the coordinator commits the plan set (B0-1) | GH-0..GH-12 after the owner's D-36 go; W1 lanes may start coding from the frozen B0 head once the plan set is approved | B0 gate cycle: pre-commit `--all-files`, offline suite `-n 8`, contracts-check, docs check, frontend full set with e2e, changelog rules: CPU gates only, no GPU run (the OCR before/after comparison moved to GPU window 1, the B3 gate; [01](01_b0_close_out.md) B0-2, B0-3) | merge commit on `main`; `main` fast-forwarded; #437, #440, #442, #443, #445 and #366 closed; VERSION still 0.6.0; no tag |
-| **W1** | B1 on `int/b1-correctness` | `b1/deps` -> [09](09_github_actions.md) section 8; `b1/ultralytics` (merged); `b1/inference` (merged); `b1/api-frontend` (merged); `b1/leases` (merged); `b1/registry` (merged). Merge order: deps, 1E, 1C, 1D, 1A, 1B (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md))) | all six code in parallel; 1B rebases on 1A before its merge; during W1's sweep, B2 stage W1 (`b2/queue-infra`, spike S1 first) and the B3 CPU lanes start from the frozen `int/b1` head | B1 sweep: T1 + frontend full set + browser check of the export and diverse review pages + a short lease/registry smoke on the live harness (`-p op-b1-live`, cap 30 min; the full live run is the single B1+B2 run at the end of B2) + the `families` CI job; spawn races run 10x locally | file-lock ratchet lists only the B2/B4 sites and `job_lock.py`; no `class_registry.json` read outside export snapshots and the trainer; `registry_not_migrated` tested; lease p50/p99 acquire latency recorded; N2-N7, N9, N10, #447 closed on merge. PQ-7: no GPU gate in B1 by design; the lease round-trip cost is the recorded number |
-| **W2** | B2 on `int/b2-control-plane` | stage 1: `b2/db-core`, `b2/queue-core`, `b2/compose-installer`, `b2/storage-seam`, then `b2/health-ci` -> [03a](03a_b2_w1_queue_infra.md); stage 2: `b2/projects-pg`, `b2/classes-pg`, `b2/config-pg`, `b2/records-pg`, `b2/upgrade-060`, then `b2/opensearch-control-removal` -> [03d](03d_b2_s2_control_data.md); stage 3: `b2/job-runtime`, `b2/events-pg` -> [03e](03e_b2_s3_job_runtime.md); stage 4: `b2/families-a`, `-b`, `-c`, `b2/trigger-workers`, then `b2/frontend-queued` -> [03b](03b_b2_w2_job_families.md); stage 5: `b2/gpu-train`, `b2/gpu-export`, `b2/gpu-eval`, `b2/promote-models` -> [03f](03f_b2_s5_gpu_queues.md); stage 6: `b2/beat-periodic`, `b2/scale-out-compose`, then `b2/hardening`, then `b2/docs` -> [03c](03c_b2_w3_beat_reaper_workers.md) | stages merge in order (stage 3 codes alongside stage 2; stages 4 and 5 in parallel); each stage merge gets targeted tests, `make contracts-check` and the `db` tier (D-63), not a full sweep; B3 lanes code throughout W2 on `int/b3-ultralytics` | B2 sweep after stage 6: T1 (Docker-free suite, `-m db` tier, frontend full set) + the one live run covering B1 and B2 (`-p op-b2-live`, about 4 h: races, kill and cold-shutdown requeue, cancel, API recycle, broker loss, Postgres restart, two beats, SSE resume, GPU queues with fake handlers, detection-worker replicas, per-family smoke) + `acceptance_run.sh --only` the job phases + image audit and Trivy for changed images | the done-when of [03](03_b2_overview.md) section 1 (no `FileJob`, no job files, file-lock ratchet zero, OpenSearch with two roles per project, no `container_name`); OPS-2 measured first; N11, N12 closed. PQ-7: request latency of `/detect` and `/ingest` under a running job recorded against the B1 numbers |
-| **W3** | B3 on `int/b3-ultralytics` | `b3/stagea` first, then `b3/families`, `b3/frame`, `b3/export`, `b3/decoders`, `b3/docs` as [04](04_b3_ultralytics_one_version.md) orders them | codes during all of W2 (CPU only); rebases on `main` after B2 merges; during W3's sweep, B4's 4C spike (on the merged B2 stack) and 4D's measurement start | B3 sweep: T1 + U-6.1 matrix at the pin X + **GPU window 1**: the U-6.2 gate once for Stage A and Stage B plus the B0 OCR before/after comparison (`-p op-b3-gpu`, GPU 0, one GPU day; never overlapping a B2 live run) + `pip check`, image audit, Trivy | one Ultralytics version in every image and requirements file; pin test green in CI and in each image; N8 closed. PQ-7: |delta mAP50-95| <= 0.3, >= 99 % detection agreement, throughput >= 95 % at batch 1/8/32/64 with p99 within +10 %, embedding cosine >= 0.999, export image about -0.9 GB, all recorded |
-| **W4** | B4 on `int/b4-stateless` | `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/project-create` (4D) -> [05](05_b4_stateless_api.md) (the events track moved into B2) | 4D timing during W3's sweep; release-prep drafting (release notes) may start during W4's sweep | B4 sweep: T1 + frontend full set + the third and last live run: the 1-vs-N diff with `API_WORKERS` 1 and 32 and with two `api` and two `jobs-worker` replicas (no GPU in B4: the installer default `API_WORKERS` is provisionally `min(nproc, 32)`; the T5 32-worker ingest and search benchmark on the B3 engine runs in GPU window 2, the B5 window, per 05 step 4B-5, and 5a retakes the same baseline) | the 1-vs-N diff empty; no lifespan side effects; N1, #439 closed. PQ-7: the `API_WORKERS` default is confirmed or corrected by the GPU window 2 benchmark before R-final |
-| **W5a** | B5 baseline ([07a](07a_b5_baseline.md)) on `int/b5a-baseline` | per 07a | no optimization code starts before the 5a reference numbers exist; the B5b/5c/5d lanes may code while earlier sub-batches are measured | 5a sweep: T1 + **GPU window 2** opens: the #45 baseline once (ladders, #268 sweeps, GPU-6 recall) | numbers recorded with host load; no default changes unless the gain beats 2x the run-to-run spread and parity passes; D-35 decided (N13) |
-| **W5b** | B5b decode once ([07b](07b_b5_decode_once.md)) | per 07b (GPU-3b first) | 5c lanes code during W5b's sweep | 5b sweep: T1 + the #40/#407 measurement and parity (boxes within 1 px at the original resolution, embedding cosine >= 0.999), in sequence inside GPU window 2 | #40/#407 acceptance met; numbers in `docs/PERFORMANCE.md` |
-| **W5c** | B5c crops, OCR, faces ([07c](07c_b5_crops_ocr_faces.md)) | per 07c | 5d lanes code during W5c's sweep | 5c sweep: T1 + P-vlm, P-sam, P-region, P-ocr gates, GPU window 2 | #219/#220 acceptance met |
-| **W5d** | B5d processing plans ([07d](07d_b5_processing_plans.md)) | per 07d | release-prep drafting may start | 5d sweep: T1 + #67 acceptance with per-stage "not run" tests, GPU window 2 closes | #67 acceptance met |
-| **W6** | release prep + R-final ([06](06_release_acceptance.md)) | `chore/release-0.7.0-prep` (RP-1..RP-9: VERSION 0.6.0 -> 0.7.0 and CHANGELOG `[Unreleased]` -> `[0.7.0]` first); `fix/rfinal-findings` only if a row fails | nothing else merges to `main` | R-final itself (every RF row), **GPU window 3** | every RF row PASS; the production-ready definition (section 5) ticked; report to the owner; tag v0.7.0 only on the owner's word (D-16); #411 closed after the tag |
-| side | #42 ([07](07_b5_overview.md) section 11) | `perf/42-small-gpu-acceptance` | any time GPU 1 is free; never blocks | its own run on GPU 1 | the #42 pass list; results in `docs/PERFORMANCE.md` and #42 |
-
-### 4.1 Task list (carried from section 11 of the former master plan)
-
-| Task | What | Wave | Status |
-|---|---|---|---|
-| #28 / B0-a..c | GPU-1, GPU-3a+13, GPU-2; OS-2, OS-1, OPS-1; CC-1, BA-7 | W0 | merged into `fix/411-r2-round` |
-| B0-d | uvicorn `>=0.41.0` floor and test | W0 | done (`6a53673c`) |
-| B0-e | `ultralytics==8.4.197` exact pin and test | W0 | done (`d1c6bab0`) |
-| B0-f | release prep | W6 | moved (owner decision 3) |
-| B0-g | OCR before/after comparison | W3 (GPU window 1) | moved out of B0 (budget, section 8.1) |
-| B0-i | docs fixes `ad553ecd` (stale "patch breaks on 8.4" comments), `0cc2b3ac` (docs checker skips route/env checks in `docs/design/`) | W0 | done |
-| #28 rest | plan commit (with removal wave R-1), CPU gate cycle, push, PR, CI, merge, fast-forward | W0 | to do |
-| #25, #22 | R3 live acceptance with the segmenter tier | W6 | moved into R-final (D-3, D-4) |
-| B0-h | tag v0.7.0 and the GitHub release | W6 | after R-final, owner's word |
-| #27 | #42 small-GPU acceptance on GPU 1 | side | waiting for GPU 1 |
-| GH-1 (#38) | GitHub actions | before W1 | to do, on the owner's go (D-36) |
-| #31, #34 | audit plan, Ultralytics plan | - | done (committed, D-14) |
-| B1-0 | commit the source plans | - | done (D-14); the header pointers of the three source plans are repointed to this set in the plan-set commit |
-| B1-1A..1E, deps | B1 lanes | W1 | done (merged) |
-| R-B1 | 0.8.0 acceptance subset | - | dropped (owner decision 3); its checks are in R-final section 4.3 |
-| B2 stages 1-6 | B2 stages | W2 | to do |
-| B3 | B3 | W3 | to do |
-| B4-4A..4D, R-0.9 | B4; R-0.9 merged into R-final | W4, W6 | to do |
-| #17/#18 leftovers | #220 step 3 research (B5c), #67 phase 2+ (B5d) | W5c, W5d | to do |
-| B5a..d | B5 sub-batches | W5a..W5d | to do |
-| #40 (ledger) | leftover cleanup | per [11](11_risks_cleanup_host.md) section 5 | owner yes per row |
-
-## 5. Definition of production-ready for v0.7.0
-
-R-final verifies every line; the RF row ids are in [06_release_acceptance.md](06_release_acceptance.md)
-section 4.
-
-| # | Production-ready means | Verified by |
-|---|---|---|
-| PR-01 | Cross-process control state is in PostgreSQL (transactions, constraints, fenced claims, advisory locks, idempotency keys), item state uses OpenSearch OCC, never a file or in-process lock: `rg -n "fcntl" src` is empty and the file-lock ratchet is at zero | release-prep precondition; B2 exit |
-| PR-02 | A singleton job starts once under concurrent requests; a dead holder blocks a restart for at most 150 s (lease TTL plus one reaper tick) | RF-42 |
-| PR-03 | Concurrent class writes never lose a class or duplicate an id | RF-43 |
-| PR-04 | Jobs run in workers: they survive an API restart, a killed worker's resumable job is re-enqueued, periodic tasks run once | RF-52, RF-53, RF-55 |
-| PR-05 | The API gives the same answers with 1 and 32 workers and with several replicas of the API and the job workers | the B4 sweep record |
-| PR-06 | Class identity is the name across import, combine, export, train, promote and the secondary detector | B1 tests; RF-40, RF-43 |
-| PR-07 | Fail closed: Postgres down -> 503 on every control write and start, `database: down`; OpenSearch down -> 503 on data-plane writes and `review_dismiss`; a schema not at the code's head -> the process refuses to start; another project's rows -> refused by the database; a raw-head engine -> refused; Valkey down -> degraded health and 503 starts | RF-36, RF-41, RF-57, RF-61 |
-| PR-08 | One exact Ultralytics version in every image; one fused detection contract; the B3 parity and throughput gate passed | RF-20, RF-57, the B3 sweep record |
-| PR-09 | Fresh install, re-run, repair, `--skip-models`, engine adoption, uninstall work | RF-01, RF-02, RF-12, RF-23, RF-24, RF-25 |
-| PR-10 | The supported upgrade, 0.6.0 -> 0.7.0, moves every project, class (ids kept), config and lasting job record into Postgres and deletes the OpenSearch copies after verifying them, adds the new services, rebuilds the default engine once; rollback to 0.6.0 recreates the 0.6.0 state from the upgrade bundle | RF-40, RF-41, RF-56, RF-58, RF-59, RF-62, RF-63 |
-| PR-11 | Security: SEC-1..SEC-6 fixed (neutral wording); the broker and the database have no published port and required passwords from files; Trivy fixable CRITICAL = 0; every image passes the image-vs-git audit; no secret in any log or report | RF-08, RF-09, RF-10, RF-34, RF-50 |
-| PR-12 | Quality: CI green; ratchet baselines smaller than or equal to their `5b95591f` values; no dead code or shims; contracts in sync; docs check clean | PQ-1..PQ-5 at every wave; the release commit's full gate |
-| PR-13 | Speed: no regression against the 32-worker baseline retaken on the B3 engine at the shipped `API_WORKERS` default; numbers in `docs/PERFORMANCE.md` | the GPU window 2 record (5a baseline) |
-| PR-14 | UI: every changed page checked at 1440 and 430 px with the screenshots viewed; the frontend live suite passes, region tests included | RF-04, RF-07, RF-33, RF-45, RF-54, RF-60 |
-| PR-15 | Docs and release: INSTALLATION (services, secrets, backup and restore, upgrade, downgrade), ARCHITECTURE (the control plane, services, queues, events, model families), CURATION (job states, the `job_busy` window), SECURITY (broker and database preconditions) current; CHANGELOG consolidated with the breaking changes first; release notes; `/health` reports 0.7.0 | RP-1..RP-6, RF-26 |
-
-## 6. Decision register
-
-Statuses: **approved** (owner decision of 2026-11-03), **done**, **open** (with the plan's
-recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model-family plan.
-
-| ID | Decision | Status | Recommendation or note | Needed by | Detail |
-|---|---|---|---|---|---|
-| D-1 | B0 scope | approved, minus release prep | the B0 small fixes, the uvicorn floor and the pin on `fix/411-r2-round`, one gate cycle | B0 | [01](01_b0_close_out.md) |
-| D-2 | Ultralytics exact pin in B0 (U-J2) | approved, done (`d1c6bab0`) | `==8.4.197` in `requirements.txt`, `requirements-test.txt`, `pyproject.toml`; next move only in B3 | B0 | [01](01_b0_close_out.md) |
-| D-3 | Gates, push, CI, merge commit | approved; R3 deferred into R-final | | B0 | [01](01_b0_close_out.md), [06](06_release_acceptance.md) |
-| D-4 | Segmenter tier in acceptance | approved | HF token from the stack's `.env`, never printed; GPU 0 (GPU 2 if free and agreed) | R-final | [06](06_release_acceptance.md) RF-22 |
-| D-5 | #42 timing | approved | runs when GPU 1 frees; never a tag blocker; release notes say so if unrun | side | [07](07_b5_overview.md) section 11 |
-| D-6 | Known-issue lines for #447, CC-2, CC-4 | dropped | no release ships before B1-B4 fix them | - | |
-| D-7 | Release train (early v0.8.0 after B1) | replaced | by owner decisions 2-3 and D-37: one release v0.7.0 after B5 and R-final | - | [06](06_release_acceptance.md) |
-| D-8 | J-LEASE | approved | OpenSearch lease docs in the SETTINGS role, thread heartbeat 15 s, TTL 120 s, cooperative fencing | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| D-9 | J-REG and its upgrade path | approved | registry doc with OCC (5 attempts, 10,000 classes), 409 `registry_not_migrated`, `upgrade` hook, `.migrated` rename, downgrade note. Only 0.6.0 -> 0.7.0 is tested (no 0.7.0 install exists) | B1 | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| D-10 | B1-1E scope | approved | minimal in B1; trainer `nms`, export module and full matrix in B3 | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
-| D-11 | U-J3 YOLOv5 scope | approved, option b | bring-your-own original-YOLOv5 ONNX for probe and secondary; YOLOv5u for serving | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
-| D-12 | U-J4 `nms` by capability | approved | `nms=False` with `one2one_cv2`, else `nms=True`, class-agnostic | B1 (export), B3 (trainer) | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)), [04](04_b3_ultralytics_one_version.md) |
-| D-13 | Order (Q-J8) | approved; amended by D-37 | B0, B1, B2, B3, B4, B5, then R-final last | - | section 3 |
-| D-14 | Commit the plans | done | committed on `fix/411-r2-round` | - | |
-| D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
-| D-17 | Q-J1 Celery 5.6 | approved 2026-11-04 | Celery 5.6 with kombu's `redis://` transport and redis-py; exact pins in `13_package_pins.md` | B2 | [02b](02b_jobs_locking_events.md) section 7 |
-| D-18 | Q-J2 broker | open | Redis 8 (AGPLv3 option); Valkey only if a redistributor objects. Owner raised the licence question on 2026-11-04: Valkey 9 (BSD-3, Linux Foundation) runs the same `redis://` kombu transport and redis-py client, so only the image and the licence row change; the W1 spike S1 runs the Celery checks against whichever image is chosen | B2 | [03a](03a_b2_w1_queue_infra.md) |
 | D-19 | Q-J3 default install | open | core: `postgres`, `valkey`, `db-migrate` (one-shot), `jobs-worker`, `periodic-worker` (so the reaper and the dispatch tick never wait behind long jobs), `open-vocab-worker`, `jobs-beat`; Flower under `monitoring` | B2 | [02c](02c_migration_ops_tests.md) section 4 |
 | D-20 | Q-J4 delivery | open | `acks_late` + `reject_on_worker_lost` + the claim `UPDATE` with a fencing token + attempt cap 3 + soft shutdown 30 s | B2 | [02b](02b_jobs_locking_events.md) section 3 |
 | D-20a | Time limits for long job kinds | open | default 3 h / 3 h 15 m; 24 h for the long kinds, 72 h for training, as the kind table says | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
@@ -508,15 +296,25 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-61 | Scheduled database backups by default? | open | no: a dump on every upgrade and on demand; an opt-in beat task | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 6 |
 | D-62 | How do tests get a real Postgres? | open | testcontainers locally, a CI service container; the `db` marker outside the Docker-free command | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 7 |
 | D-63 | A database test run at each B2 stage merge? | open | yes (`-m db`, minutes, no GPU) | B2 | [03](03_b2_overview.md) section 4 |
+| MQ-1 | Accept every open B2 recommendation as written, naming only the exceptions? | open | yes | before W2.1 | [00_master_plan.md](00_master_plan.md) section 9.1 |
+| MQ-2 | Postgres image: `postgres:18.6-trixie` (file 13) or `18-alpine` (the B2 files)? | open | trixie by digest (glibc text sort order) | before W2.1 | [13](13_package_pins.md) section 4 |
+| MQ-3 | Also run the Docker-free offline suite (4 shards) at each B2 part check? | open | yes (about 10 min since PR #477) | before W2.1 | [00_master_plan.md](00_master_plan.md) section 8 |
+| MQ-4 | Pillow and simplejpeg ride the W3 GPU gate with OpenCV; the Hugging Face stack and MLflow ride there by the bisect order | open | yes | before W2.1 | [13](13_package_pins.md) section 7 |
+| MQ-5 | #473: what happens to near-duplicates of held-out items at a holdout freeze? | open | the whole near-duplicate group goes into the holdout; the freeze report counts the moved items | W2.2 (2D-4) | [03d](03d_b2_s2_control_data.md) 2D-4 |
+| MQ-6 | #468-#472 (five neutral security items, in no plan yet): one W4 lane scoped from the private notes; #469 and #471 need the owner's decision text | open | yes, lane `b4/privacy-hardening` | before W4 | [00_master_plan.md](00_master_plan.md) W4 |
+| MQ-7 | #465 typed response models (BA-6): CPU lanes during W5a-W5c, merged into the B5 sub-batch PRs | open | yes | before W5a | [05](05_b4_stateless_api.md) section 13 |
+| MQ-8 | Fold the GPU-15 leftover (refuse an undeclared region head at profile validation) into B3-D3 | open | yes | before W3 | [04](04_b3_ultralytics_one_version.md) B3-D3 |
+| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | open | yes | before W5a | [00_master_plan.md](00_master_plan.md) section 10 |
+| MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | open | yes | W6 | [07](07_b5_overview.md) section 11 |
 | OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [07](07_b5_overview.md) section 9 |
 | OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
-| OC-2 | pyclipper in the hardened Triton scan image (`docker/hardened/triton`) | open | decide with B2's image work (stage W3, hardening lane) | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
-| OC-3 | `autolabel/job.get_state` still repairs through `_fail_unclaimed` | decided: leave | B2 stage W3 (trigger workers) deletes it | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
+| OC-2 | pyclipper in the hardened Triton scan image (`docker/hardened/triton`) | open | decide with B2's image work (stage 6, lane 6C) | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
+| OC-3 | `autolabel/job.get_state` still repairs through `_fail_unclaimed` | decided: leave | B2 stage 4 (lane 4D, trigger workers) deletes it | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
 
 ## 7. Branch, lane and wave model
 
 - **B0** merges `fix/411-r2-round` to `main` first, with a merge commit.
-- **Each batch** gets `int/bN-<name>` (`int/b1-correctness`, `int/b2-celery`,
+- **Each batch** gets `int/bN-<name>` (`int/b1-correctness`, `int/b2-control-plane`,
   `int/b3-ultralytics`, `int/b4-stateless`, `int/b5a-baseline` and so on) cut from `main` after
   the previous batch merged. A lane may branch from the previous integration branch's frozen
   head while that batch's PR is open; B3 is cut from `main` after B1 and rebased after B2.
@@ -571,7 +369,7 @@ time are limited. Every batch file follows this section and does not restate it.
 | T0, per task | a targeted red/green test (plus its paired control) and static checks (ruff, mypy, the hooks that apply) on the touched files only. No full suite, no `--all-files`, no live or GPU run in a lane or a commit |
 | One offline sweep per wave | on the merged integration branch, never per lane: the full suite `-n 8`, `pre-commit run --all-files`, `make contracts-check`, the docs check, and the frontend set only if `frontend/` changed |
 | Live harness (`docker/test/compose.yml`) | exactly three runs: (1) a short B1 lease/registry smoke check, cap 30 min (replaces the old 90-minute B1 run); (2) one run at the end of B2 covering B1 and B2 together; (3) one at B4 (1-vs-32 workers). R-final's RF-03 is part of the R-final run itself, not a per-batch run |
-| GPU windows | exactly three: (1) the B3 gate (U-6.2 for Stage A and B) plus the B0 OCR before/after comparison; (2) the B5 window: the #45 baseline once, then each sub-batch's measurement in sequence (5b, 5c, 5d); (3) R-final. Each window is announced to the peer sessions and run on the agreed GPU ([11](11_risks_cleanup_host.md) section 1) |
+| GPU windows | exactly three: (1) the B3 gate (U-6.2 for Stage A and B) plus the B0 OCR before/after comparison; (2) the B5 window: the #45 baseline once, then each sub-batch's measurement in sequence (5b, 5c, 5d); (3) R-final. Each window is announced to the peer sessions and run on the agreed GPU ([11](11_risks_cleanup_host.md) section 1). The contents of each window, in order, are in [00_master_plan.md](00_master_plan.md) section 5 (window 1 also carries the pins part B image smokes and the B2 stage-5 GPU smoke) |
 
 Consequences: the B0 merge needs CPU gates only; a lane that needs a GPU number waits for its
 window instead of running its own; a failed window is re-run only after the fix is merged to the
@@ -654,7 +452,8 @@ Config added or removed per batch (env keys, compose services, installer steps) 
 | `U-Step n`, `U-Jn`, `U-Cn`, `U-Rn`, `U-6.1`, `U-6.2` | `docs/design/model_family_versions_plan.md` | Ultralytics migration steps, judgment calls, corrections, risks, test matrix |
 | `D-n`, `OC-n` | this file, section 6 | owner decisions and open choices |
 | `N-n` | [09](09_github_actions.md) section 4 | GitHub issues to create |
-| `W-n` | this file, section 4 | program waves (B2's internal stages are written `B2-W1..W3`) |
+| `W-n`, `W2.n` | [00_master_plan.md](00_master_plan.md) section 2 | program waves; W2 (B2) has four parts W2.1-W2.4; B2's stages are numbered 1-6 (the file names 03a, 03b, 03c keep older letters) |
+| `MQ-n` | this file, section 6; [00_master_plan.md](00_master_plan.md) section 9 | owner questions raised by the master-plan pass |
 | `PQ-n`, `PR-nn` | this file, sections 4 and 5 | wave exit gates; production-ready items |
 | `RF-nn`, `RP-n` | [06](06_release_acceptance.md) | R-final checks; release-prep tasks |
 | `GH-n`, `C-<issue>` | [09](09_github_actions.md) | GitHub steps; re-scope comments |
@@ -795,6 +594,7 @@ lives now:
 | program set 1 | 2026-11-03 | the master plan split into this set; owner decisions 1-9 applied (one release v0.7.0 after B4 and R-final, B5 = v0.8.0, milestones re-cut, D-6 dropped, D-7/D-16/D-34 replaced, D-37 and D-38 added, the pin marked done); execution waves W0-W10 and the production-ready definition added |
 | program set 2 (consolidation) | 2026-11-03 | owner decision D-37 = yes (B5 inside v0.7.0, R-final last; waves renumbered W0-W6 with W5a-W5d; the v0.8.0 acceptance removed; milestones re-cut); section 8.1 test and GPU budget (live harness three times, GPU windows three); section 8.2 plan lifecycle; the `b1/deps` lane; B0 facts (`d1c6bab0`, `ad553ecd`, `0cc2b3ac`); file 12 added; the master plan deleted; older-plan removal wave R-1 |
 | program set 3 (control plane) | 2026-11-04 | owner decisions of 2026-11-04 applied (D-39..D-45; D-17, D-18, D-31 approved; D-21, D-30 replaced; D-22 widened); files 02, 02a, 02b, 02c added; B2 re-planned in six stages (03, 03a-03f); B4's events track moved into B2; 05, 08, 10, 11 updated; open decisions D-46..D-63 |
+| program set 4 (master plan) | 2026-11-04 | `00_master_plan.md` (execution order, waves W2.1-W6, GPU-window budget, wave procedure, owner questions) and `00b_traceability.md` added; this file became the register and legends (sections 3-4 point to the master plan, the duplicated sections 3-6 and the stale D-18 row removed); MQ-1..MQ-10 added; decided items folded into their lanes (00b section 3) |
 
 ## 16. Corrections found while splitting
 
