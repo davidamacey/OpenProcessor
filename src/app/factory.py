@@ -17,6 +17,7 @@ from src.config.faces import FacesDisabledError
 from src.core.cors import add_lan_cors
 from src.core.error_handlers import (
     faces_disabled_response,
+    triton_deadline_response,
     triton_unavailable_response,
     upstream_unavailable_response,
 )
@@ -46,7 +47,7 @@ from src.routers import (
 )
 from src.routers.api_docs import install_api_docs
 from src.routers.curation._mounting import mount_all_curation_routers
-from src.utils.retry import RetryExhaustedError
+from src.utils.retry import RetryExhaustedError, TritonDeadlineError
 from src.utils.upstream_errors import UpstreamError
 
 
@@ -210,6 +211,7 @@ def create_app() -> FastAPI:
         )
 
     application.exception_handler(RetryExhaustedError)(triton_unavailable_response)
+    application.exception_handler(TritonDeadlineError)(triton_deadline_response)
     application.exception_handler(UpstreamError)(upstream_unavailable_response)
     application.exception_handler(FacesDisabledError)(faces_disabled_response)
 

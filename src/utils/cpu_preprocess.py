@@ -15,6 +15,10 @@ import cv2
 import numpy as np
 
 
+# A resized intermediate longer than this many output sides is never built.
+_SLIVER_FACTOR = 4
+
+
 def center_crop_cpu(
     img_rgb: np.ndarray,
     target_size: int = 256,
@@ -51,13 +55,33 @@ def center_crop_cpu(
     scale = target_size / min(orig_h, orig_w)
     new_w = max(target_size, round(orig_w * scale))
     new_h = max(target_size, round(orig_h * scale))
-    resized = cv2.resize(img_rgb, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-
     # Center crop to target_size x target_size. new_w/new_h >= target_size
     # is now guaranteed, so start_x/start_y are always >= 0 and the crop is
     # always exactly (target_size, target_size).
     start_x = max(0, (new_w - target_size) // 2)
     start_y = max(0, (new_h - target_size) // 2)
+
+    if max(new_w, new_h) > _SLIVER_FACTOR * target_size:
+        # A sliver (e.g. 3000x1) would resize to hundreds of MB only to keep a 256x256 window.
+        # Sample just that window with the same half-pixel-centred bilinear mapping.
+        sx, sy = new_w / orig_w, new_h / orig_h
+        matrix = np.array(
+            [
+                [1 / sx, 0.0, (start_x + 0.5) / sx - 0.5],
+                [0.0, 1 / sy, (start_y + 0.5) / sy - 0.5],
+            ],
+            dtype=np.float64,
+        )
+        window = cv2.warpAffine(
+            img_rgb,
+            matrix,
+            (target_size, target_size),
+            flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+            borderMode=cv2.BORDER_REPLICATE,
+        )
+        return np.transpose(window.astype(np.float32) / 255.0, (2, 0, 1))
+
+    resized = cv2.resize(img_rgb, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
     cropped = resized[start_y : start_y + target_size, start_x : start_x + target_size]
 
     # Normalize to [0, 1]

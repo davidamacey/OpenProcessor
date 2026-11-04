@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.services.curation.clustering.id_normalize import run_update_by_query_polled
+from src.clients.opensearch.tasks import run_update_by_query_polled
 
 
 def _client(*, tasks_get_results: list[dict]) -> AsyncMock:

@@ -21,7 +21,7 @@ from src.routers.curation._audit_models import (
     AuditStartRequest,
     AuditStartResponse,
 )
-from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.routers.curation._common import OpenSearchDep, guard_page_depth, items_index, router
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.audit import (
     DEFAULT_MIN_PER_CLASS,
@@ -64,6 +64,7 @@ async def audit_queue(
     page_size: int = Query(30, ge=1, le=200),
 ) -> dict[str, Any]:
     """Drawn crops still waiting for a human label, in a stable order."""
+    guard_page_depth(page, page_size)
     await ensure_indexes(opensearch)
     try:
         resp = await opensearch.search(

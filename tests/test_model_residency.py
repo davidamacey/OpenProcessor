@@ -47,10 +47,7 @@ class _SyncClient:
 
 
 @pytest.fixture(autouse=True)
-def _fresh(monkeypatch: pytest.MonkeyPatch) -> None:
-    residency._ready.clear()
-    residency._sync_locks.clear()
-    residency._async_locks.clear()
+def _profile(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_LOAD_PROFILE', raising=False)
 
 
@@ -68,7 +65,7 @@ def test_an_unknown_profile_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
         residency.on_demand()
 
 
-def test_a_missing_model_is_loaded_once_under_the_ingest_profile(
+def test_a_missing_model_is_loaded_and_then_not_asked_for_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv('OP_LOAD_PROFILE', 'ingest')
@@ -116,33 +113,26 @@ def test_a_load_that_raced_another_process_counts_when_the_model_became_ready(
     residency.ensure_loaded_sync(Racing(), 'mobileclip2_s2_image_encoder')
 
 
-def test_threads_asking_together_load_a_model_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_model_unloaded_after_it_was_ready_is_loaded_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv('OP_LOAD_PROFILE', 'ingest')
-    client = _SyncClient()
-    threads = [
-        threading.Thread(target=residency.ensure_loaded_sync, args=(client, 'arcface_w600k_r50'))
-        for _ in range(16)
-    ]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(10)
+    client = _SyncClient(ready={'arcface_w600k_r50'})
+    residency.ensure_loaded_sync(client, 'arcface_w600k_r50')
+    assert client.loads == []
+    client.ready.clear()  # a manual unload or a Triton restart
+    residency.ensure_loaded_sync(client, 'arcface_w600k_r50')
     assert client.loads == ['arcface_w600k_r50']
 
 
 @pytest.mark.asyncio
-async def test_async_callers_load_a_model_once(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_the_async_path_loads_again_after_an_unload(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_LOAD_PROFILE', 'ingest')
     client = _AioClient()
-    await asyncio.gather(*(residency.ensure_loaded(client, 'paddleocr_det_trt') for _ in range(16)))
-    assert client.loads == ['paddleocr_det_trt']
-
-
-@pytest.mark.asyncio
-async def test_async_default_profile_asks_nothing() -> None:
-    client = _AioClient()
     await residency.ensure_loaded(client, 'paddleocr_det_trt')
-    assert client.loads == []
+    client.ready.clear()
+    await residency.ensure_loaded(client, 'paddleocr_det_trt')
+    assert client.loads == ['paddleocr_det_trt', 'paddleocr_det_trt']
 
 
 @pytest.mark.asyncio
@@ -217,7 +207,7 @@ def test_the_face_client_loads_both_face_models(monkeypatch: pytest.MonkeyPatch)
         def as_numpy(self, _name: str) -> np.ndarray:
             return np.ones((1, 4), np.float32)
 
-    ff.client.infer = lambda model_name, **_k: (  # type: ignore[method-assign]
+    ff.client.infer = lambda model_name, *_a, **_k: (  # type: ignore[method-assign]
         ff.client.calls.append(f'infer {model_name}'),  # type: ignore[attr-defined]
         _Out(),
     )[1]

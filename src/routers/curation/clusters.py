@@ -131,13 +131,25 @@ async def cluster_facets_endpoint(cluster_id: int, opensearch: OpenSearchDep) ->
     return await cluster_facets(opensearch, cluster_id)
 
 
+_REPRESENTATIVES_MAX_CLUSTERS = 1000
+# The terms aggregation asks for offset + max_clusters buckets; OpenSearch refuses more than
+# search.max_buckets (default 65,535): https://docs.opensearch.org/latest/aggregations/bucket/index/
+_OPENSEARCH_MAX_BUCKETS = 65_535
+_REPRESENTATIVES_MAX_OFFSET = _OPENSEARCH_MAX_BUCKETS - _REPRESENTATIVES_MAX_CLUSTERS
+
+
 @router.get('/clusters/representatives')
 async def cluster_representatives(
     opensearch: OpenSearchDep,
     per_cluster: int = Query(4, ge=1, le=10, description='Top crops per cluster'),
-    max_clusters: int = Query(200, ge=1, le=1000),
+    max_clusters: int = Query(200, ge=1, le=_REPRESENTATIVES_MAX_CLUSTERS),
     class_id: int | None = Query(None, description='Restrict to clusters containing this class'),
-    offset: int = Query(0, ge=0, description='Offset into the _count-desc cluster list'),
+    offset: int = Query(
+        0,
+        ge=0,
+        le=_REPRESENTATIVES_MAX_OFFSET,
+        description='Offset into the _count-desc cluster list',
+    ),
 ) -> dict[str, Any]:
     """Return up to ``per_cluster`` representative crop_ids per cluster, one page.
 

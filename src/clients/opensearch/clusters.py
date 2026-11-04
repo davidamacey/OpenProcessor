@@ -10,6 +10,7 @@ import numpy as np
 from opensearchpy.helpers import async_bulk
 
 from src.clients.opensearch.names import IndexName
+from src.clients.opensearch.scroll import clear_scroll_quietly
 from src.utils.upstream_errors import UpstreamError
 
 
@@ -54,6 +55,7 @@ class ClustersMixin:
 
         embeddings = []
         doc_ids = []
+        scroll_id: str | None = None
 
         try:
             # Initialize scroll
@@ -88,15 +90,14 @@ class ClustersMixin:
                 scroll_id = response['_scroll_id']
                 hits = response['hits']['hits']
 
-            # Clear scroll
-            await self.client.clear_scroll(scroll_id=scroll_id)
-
             logger.info(f'Extracted {len(embeddings)} embeddings from {index_name.value}')
             return np.array(embeddings, dtype=np.float32), doc_ids
 
         except Exception as e:
             logger.error(f'Failed to extract embeddings from {index_name.value}: {e}')
             raise UpstreamError('opensearch', 'opensearch_unavailable') from e
+        finally:
+            await clear_scroll_quietly(self.client, scroll_id)
 
     async def get_unclustered_embeddings(
         self,
@@ -116,6 +117,7 @@ class ClustersMixin:
 
         embeddings = []
         doc_ids = []
+        scroll_id: str | None = None
 
         try:
             response = await self.client.search(
@@ -142,14 +144,14 @@ class ClustersMixin:
                 scroll_id = response['_scroll_id']
                 hits = response['hits']['hits']
 
-            await self.client.clear_scroll(scroll_id=scroll_id)
-
             logger.info(f'Found {len(embeddings)} unclustered items in {index_name.value}')
             return np.array(embeddings, dtype=np.float32), doc_ids
 
         except Exception as e:
             logger.error(f'Failed to get unclustered embeddings from {index_name.value}: {e}')
             raise UpstreamError('opensearch', 'opensearch_unavailable') from e
+        finally:
+            await clear_scroll_quietly(self.client, scroll_id)
 
     async def update_cluster_assignments(
         self,

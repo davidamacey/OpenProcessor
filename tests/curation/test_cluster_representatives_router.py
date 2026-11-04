@@ -300,3 +300,15 @@ def test_cluster_representatives_500_on_msearch_error(
     r = app_client.get('/curation/projects/default/clusters/representatives')
     assert r.status_code == 500
     assert 'representatives msearch failed' in r.text
+
+
+def test_an_offset_past_the_bucket_limit_is_422(app_client) -> None:
+    r = app_client.get(
+        '/curation/projects/default/clusters/representatives', params={'offset': 70000}
+    )
+    assert r.status_code == 422, r.text
+
+
+def test_offset_zero_is_200(app_client) -> None:
+    r = app_client.get('/curation/projects/default/clusters/representatives', params={'offset': 0})
+    assert r.status_code == 200, r.text

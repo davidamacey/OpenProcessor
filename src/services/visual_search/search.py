@@ -1,5 +1,6 @@
 """Category-specific and similarity search operations."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -11,6 +12,16 @@ from src.services.inference import InferenceService
 
 
 logger = logging.getLogger(__name__)
+
+
+def _detect_and_embed(image_bytes: bytes) -> dict[str, Any]:
+    """YOLO detection plus per-box MobileCLIP vectors on the sync Triton client (blocking;
+    callers run it off the event loop)."""
+    from src.clients.triton_client import get_sync_triton_client
+    from src.config import get_settings
+
+    client = get_sync_triton_client(get_settings().triton_url)
+    return client.infer_yolo_clip_cpu(image_bytes)
 
 
 class SearchMixin:
@@ -44,7 +55,9 @@ class SearchMixin:
         Returns:
             List of similar images with scores
         """
-        query_embedding = self.inference.encode_image(image_bytes, use_cache=True)
+        query_embedding = await asyncio.to_thread(
+            self.inference.encode_image, image_bytes, use_cache=True
+        )
         return await self.opensearch.search_global(
             query_embedding=query_embedding,
             top_k=top_k,
@@ -76,160 +89,12 @@ class SearchMixin:
         Returns:
             List of matching images with scores
         """
-        query_embedding = self.inference.encode_text(text, use_cache)
+        query_embedding = await asyncio.to_thread(self.inference.encode_text, text, use_cache)
         return await self.opensearch.search_global(
             query_embedding=query_embedding,
             top_k=top_k,
             min_score=min_score,
         )
-
-    async def search_vehicles(
-        self,
-        image_bytes: bytes,
-        box_index: int = 0,
-        top_k: int = 10,
-        min_score: float | None = None,
-        class_filter: list[int] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Find similar vehicles across all images.
-
-        Like "Find all red cars" or "Show me motorcycles like this one".
-
-        Pipeline:
-        1. Run YOLO detection + MobileCLIP encoding to get vehicle embedding
-        2. k-NN search on visual_search_vehicles index
-
-        Args:
-            image_bytes: Query image with vehicle
-            box_index: Which detected vehicle to use (0 = first)
-            top_k: Number of results
-            min_score: Minimum similarity
-            class_filter: Filter by vehicle type [2=car, 3=motorcycle, 5=bus, 7=truck, 8=boat]
-
-        Returns:
-            dict with query vehicle info and matching vehicles
-        """
-        from src.clients.triton_client import get_sync_triton_client
-        from src.config import get_settings
-
-        settings = get_settings()
-        client = get_sync_triton_client(settings.triton_url)
-        result = client.infer_yolo_clip_cpu(image_bytes)
-
-        if result['num_dets'] == 0:
-            return {'status': 'error', 'error': 'No objects detected', 'results': []}
-
-        # Find vehicle detections
-        classes = result.get('classes', [])
-        vehicle_indices = [
-            i for i, c in enumerate(classes) if get_category(int(c)) == DetectionCategory.VEHICLE
-        ]
-
-        if not vehicle_indices:
-            return {'status': 'error', 'error': 'No vehicles detected', 'results': []}
-
-        if box_index >= len(vehicle_indices):
-            return {
-                'status': 'error',
-                'error': f'Vehicle index {box_index} out of range (0-{len(vehicle_indices) - 1})',
-                'results': [],
-            }
-
-        actual_idx = vehicle_indices[box_index]
-        box_embeddings = np.array(result['box_embeddings'])
-        query_embedding = box_embeddings[actual_idx]
-
-        boxes = result.get('normalized_boxes', [])
-        scores = result.get('scores', [])
-
-        query_info = {
-            'box': boxes[actual_idx].tolist() if len(boxes) > actual_idx else None,
-            'class_id': int(classes[actual_idx]),
-            'score': float(scores[actual_idx]) if len(scores) > actual_idx else None,
-        }
-
-        results = await self.opensearch.search_vehicles(
-            query_embedding=query_embedding,
-            top_k=top_k,
-            min_score=min_score,
-            class_filter=class_filter,
-        )
-
-        return {'status': 'success', 'query_vehicle': query_info, 'results': results}
-
-    async def search_people(
-        self,
-        image_bytes: bytes,
-        box_index: int = 0,
-        top_k: int = 10,
-        min_score: float | None = None,
-    ) -> dict[str, Any]:
-        """
-        Find similar people by appearance (clothing, pose).
-
-        Like "Find people wearing similar outfits" - NOT identity matching.
-        For identity matching, use search_faces (future - requires ArcFace).
-
-        Pipeline:
-        1. Run YOLO detection + MobileCLIP encoding to get person embedding
-        2. k-NN search on visual_search_people index
-
-        Args:
-            image_bytes: Query image with person
-            box_index: Which detected person to use (0 = first)
-            top_k: Number of results
-            min_score: Minimum similarity
-
-        Returns:
-            dict with query person info and matching people
-        """
-        from src.clients.triton_client import get_sync_triton_client
-        from src.config import get_settings
-
-        settings = get_settings()
-        client = get_sync_triton_client(settings.triton_url)
-        result = client.infer_yolo_clip_cpu(image_bytes)
-
-        if result['num_dets'] == 0:
-            return {'status': 'error', 'error': 'No objects detected', 'results': []}
-
-        # Find person detections
-        classes = result.get('classes', [])
-        person_indices = [
-            i for i, c in enumerate(classes) if get_category(int(c)) == DetectionCategory.PERSON
-        ]
-
-        if not person_indices:
-            return {'status': 'error', 'error': 'No people detected', 'results': []}
-
-        if box_index >= len(person_indices):
-            return {
-                'status': 'error',
-                'error': f'Person index {box_index} out of range (0-{len(person_indices) - 1})',
-                'results': [],
-            }
-
-        actual_idx = person_indices[box_index]
-        box_embeddings = np.array(result['box_embeddings'])
-        query_embedding = box_embeddings[actual_idx]
-
-        boxes = result.get('normalized_boxes', [])
-        scores = result.get('scores', [])
-
-        query_info = {
-            'box': boxes[actual_idx].tolist() if len(boxes) > actual_idx else None,
-            'class_id': int(classes[actual_idx]),
-            'score': float(scores[actual_idx]) if len(scores) > actual_idx else None,
-        }
-
-        results = await self.opensearch.search_people(
-            query_embedding=query_embedding,
-            top_k=top_k,
-            min_score=min_score,
-        )
-
-        return {'status': 'success', 'query_person': query_info, 'results': results}
 
     async def search_by_object(
         self,
@@ -242,7 +107,8 @@ class SearchMixin:
         """
         Object-to-object search with auto-routing to category index.
 
-        Automatically routes to vehicles or people index based on detection class.
+        Automatically routes to vehicles or people index based on detection class. Any other
+        class is refused with ``RequestRejectedError(422, object_class_not_indexed)``.
 
         Args:
             image_bytes: Query image bytes
@@ -254,12 +120,7 @@ class SearchMixin:
         Returns:
             dict with results and query box info
         """
-        from src.clients.triton_client import get_sync_triton_client
-        from src.config import get_settings
-
-        settings = get_settings()
-        client = get_sync_triton_client(settings.triton_url)
-        result = client.infer_yolo_clip_cpu(image_bytes)
+        result = await asyncio.to_thread(_detect_and_embed, image_bytes)
 
         if result['num_dets'] == 0:
             return {'status': 'error', 'error': 'No objects detected', 'results': []}
@@ -302,11 +163,19 @@ class SearchMixin:
                 min_score=min_score,
             )
         else:
-            # For other classes, search global (fallback)
-            results = await self.opensearch.search_global(
-                query_embedding=query_embedding,
-                top_k=top_k,
-                min_score=min_score,
+            # A box vector belongs to the per-object indexes; the global index holds
+            # whole-image vectors, so a query against it would compare two vector spaces.
+            from src.core.exceptions import RequestRejectedError  # src.core imports this package
+
+            raise RequestRejectedError(
+                422,
+                {
+                    'error': 'object_class_not_indexed',
+                    'message': (
+                        f'class {class_id} (category {category.value!r}) has no per-object index; '
+                        'only vehicles and people do. Use /search/image for whole-image similarity.'
+                    ),
+                },
             )
 
         return {'status': 'success', 'query_object': query_info, 'results': results}
@@ -336,7 +205,7 @@ class SearchMixin:
             dict with query_face info and search results
         """
         # Run face detection + recognition to get embeddings via InferenceService
-        result = self.inference.recognize_faces(image_bytes)
+        result = await asyncio.to_thread(self.inference.recognize_faces, image_bytes)
 
         if result.get('num_faces', 0) == 0:
             return {

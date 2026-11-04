@@ -7,21 +7,28 @@ from typing import Any
 
 import pytest
 
-from src.domain.embedding_state import backfill_embedded_state, legacy_embedded_clause
+from src.domain.embedding_state import legacy_embedded_clause
+from src.services.projects.legacy_repair import backfill_embedded_state
 
 
 class _Client:
+    count_value = 7
+
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
+        self.tasks = self
+        self.polled: list[str] = []
 
-    count_value = 7
+    async def get(self, task_id: str) -> dict[str, Any]:
+        self.polled.append(task_id)
+        return {'completed': True, 'response': {'updated': 7}}
 
     async def count(self, **_kw: Any) -> dict[str, Any]:
         return {'count': self.count_value}
 
     async def update_by_query(self, **kw: Any) -> dict[str, Any]:
         self.calls.append(kw)
-        return {'updated': 7}
+        return {'task': 'node:1'}
 
 
 @pytest.mark.asyncio
@@ -33,6 +40,8 @@ async def test_backfill_targets_only_vectored_items_without_a_state() -> None:
     assert call['body']['query'] == legacy_embedded_clause()
     assert "'embedded'" in call['body']['script']['source']
     assert call['conflicts'] == 'proceed'
+    assert call['wait_for_completion'] is False
+    assert client.polled == ['node:1']
     must_not = call['body']['query']['bool']['must_not']
     assert must_not == [{'exists': {'field': 'embedding_state'}}]
 

@@ -74,7 +74,7 @@ embedding only. `GET /query/stats` returns counts for every index and
 | Route | Index searched |
 |---|---|
 | `POST /search/image`, `POST /search/text` | `visual_search_global` |
-| `POST /search/object` | `visual_search_vehicles` or `visual_search_people`, falling back to `visual_search_global` |
+| `POST /search/object` | `visual_search_vehicles` or `visual_search_people`; a box of any other class is refused with `422 object_class_not_indexed` (the global index holds whole-image vectors) |
 | `POST /search/face`, `POST /faces/search`, `POST /faces/identify` | `visual_search_faces` |
 | `POST /search/ocr` | `visual_search_ocr` |
 

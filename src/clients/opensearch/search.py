@@ -164,20 +164,15 @@ class SearchMixin:
             class_filter: Filter by class IDs (for vehicle searches)
             cluster_ids: Filter by cluster IDs (for cluster-optimized search)
 
-        When cluster_ids is provided, OpenSearch only searches documents
-        in those clusters, typically providing 10-100x speedup for large indexes.
+        ``class_filter`` and ``cluster_ids`` restrict which documents the k nearest are taken
+        from (a filter inside the ``knn`` clause); they narrow the result, they are not a
+        speed-up.
         """
         try:
-            query = {
+            knn_clause: dict[str, Any] = {'vector': query_embedding.tolist(), 'k': top_k}
+            query: dict[str, Any] = {
                 'size': top_k,
-                'query': {
-                    'knn': {
-                        embedding_field: {
-                            'vector': query_embedding.tolist(),
-                            'k': top_k,
-                        }
-                    }
-                },
+                'query': {'knn': {embedding_field: knn_clause}},
             }
 
             # Build filter conditions
@@ -187,14 +182,14 @@ class SearchMixin:
             if cluster_ids:
                 filters.append({'terms': {'cluster_id': cluster_ids}})
 
-            # Apply filters if any
+            # Efficient filtering: the filter goes inside the knn clause so the k nearest are
+            # taken among documents that match. A bool filter around knn would keep the global
+            # top k and then drop the non-matching ones, returning fewer than k hits.
+            # https://docs.opensearch.org/latest/vector-search/filter-search-knn/
             if filters:
-                query['query'] = {
-                    'bool': {
-                        'must': [query['query']],
-                        'filter': filters,
-                    }
-                }
+                knn_clause['filter'] = (
+                    filters[0] if len(filters) == 1 else {'bool': {'filter': filters}}
+                )
 
             if min_score is not None:
                 query['min_score'] = min_score

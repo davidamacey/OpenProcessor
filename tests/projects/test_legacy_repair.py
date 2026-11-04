@@ -23,6 +23,11 @@ class _Client:
         self.legacy = legacy
         self.failures = failures
         self.updates = 0
+        self.done = 0
+        self.tasks = self
+
+    async def get(self, **_kw: Any) -> dict[str, Any]:
+        return {'completed': True, 'response': {'updated': self.done}}
 
     async def count(self, **_kw: Any) -> dict[str, Any]:
         return {'count': self.legacy}
@@ -32,8 +37,8 @@ class _Client:
             self.failures -= 1
             raise _BusyError('rejected_execution_exception')
         self.updates += 1
-        done, self.legacy = self.legacy, 0
-        return {'updated': done}
+        self.done, self.legacy = self.legacy, 0
+        return {'task': 'node:1'}
 
 
 @pytest.fixture(autouse=True)

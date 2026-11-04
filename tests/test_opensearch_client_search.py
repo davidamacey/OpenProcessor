@@ -243,3 +243,42 @@ class TestOcrSearch:
         assert call is not None
         body = call.kwargs['body']
         assert body['query']['bool']['should'] == [{'term': {'text_raw': {'value': 'STOP'}}}]
+
+
+class TestFilteredKnnIsAnEfficientFilter:
+    """The class and cluster filters sit inside the ``knn`` clause (OpenSearch efficient
+    filtering), so a restrictive filter still returns ``k`` hits."""
+
+    @staticmethod
+    async def _body(client: OpenSearchClient, **kwargs) -> dict:
+        client.client.search = AsyncMock(return_value={'hits': {'hits': []}})
+        await client._search_index(
+            'visual_search_global', 'global_embedding', np.zeros(4, dtype=np.float32), **kwargs
+        )
+        return client.client.search.call_args.kwargs['body']
+
+    @pytest.mark.asyncio
+    async def test_class_filter_is_inside_the_knn_clause(self, client: OpenSearchClient) -> None:
+        body = await self._body(client, top_k=10, class_filter=[2], min_score=0.5)
+        knn = body['query']['knn']['global_embedding']
+        assert knn['filter'] == {'terms': {'class_id': [2]}}
+        assert 'bool' not in body['query']
+        assert body['min_score'] == 0.5
+
+    @pytest.mark.asyncio
+    async def test_both_filters_combine_inside_the_knn_clause(
+        self, client: OpenSearchClient
+    ) -> None:
+        body = await self._body(client, top_k=10, class_filter=[2], cluster_ids=[7])
+        knn = body['query']['knn']['global_embedding']
+        assert knn['filter'] == {
+            'bool': {'filter': [{'terms': {'class_id': [2]}}, {'terms': {'cluster_id': [7]}}]}
+        }
+
+    @pytest.mark.asyncio
+    async def test_no_filter_builds_the_plain_knn_body(self, client: OpenSearchClient) -> None:
+        body = await self._body(client, top_k=10)
+        assert body == {
+            'size': 10,
+            'query': {'knn': {'global_embedding': {'vector': [0.0] * 4, 'k': 10}}},
+        }

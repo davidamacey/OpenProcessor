@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 
+from src.clients.triton_deadline import infer_with_deadline
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 
@@ -179,7 +180,7 @@ class TritonTextBackend:
 
         inp = InferInput(PE_TEXT_INPUT, list(tokens.shape), 'INT64')
         inp.set_data_from_numpy(tokens)
-        result = self._client.infer(
-            self.model_name, [inp], outputs=[InferRequestedOutput(PE_TEXT_OUTPUT)]
+        result = infer_with_deadline(
+            self._client, self.model_name, [inp], [InferRequestedOutput(PE_TEXT_OUTPUT)]
         )
         return np.asarray(result.as_numpy(PE_TEXT_OUTPUT), dtype=np.float32)

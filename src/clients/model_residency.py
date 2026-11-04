@@ -9,13 +9,13 @@ control) to load it when it is not. A load that fails fails the call; nothing is
 
 Triton reloads a model that a load request names while it is loaded, so a READY model is never
 asked for again, and a load that errors because another API worker's load won is accepted when the
-model is READY afterwards.
+model is READY afterwards. Readiness is asked of Triton on every call (no process-local memo), so a
+model unloaded by hand or lost to a Triton restart is loaded again; Triton serialises loads, so
+concurrent callers need no lock here.
 """
 
 from __future__ import annotations
 
-import asyncio
-import threading
 from typing import Any, Protocol
 
 from src.config.env import env_str
@@ -38,11 +38,6 @@ _CALLS = {
     ),
 }
 
-_ready: set[str] = set()
-_sync_locks: dict[str, threading.Lock] = {}
-_async_locks: dict[str, asyncio.Lock] = {}
-_registry_lock = threading.Lock()
-
 
 def on_demand() -> bool:
     """True under the ingest profile. An unknown value is refused, never read as the default."""
@@ -53,39 +48,29 @@ def on_demand() -> bool:
 
 
 def ensure_loaded_sync(client: _SyncClient, model_name: str) -> None:
-    if model_name in _ready or not on_demand():
+    if not on_demand():
         return
     for dep in _CALLS.get(model_name, ()):
         ensure_loaded_sync(client, dep)
-    with _registry_lock:
-        lock = _sync_locks.setdefault(model_name, threading.Lock())
-    with lock:
-        if model_name in _ready:
-            return
+    if client.is_model_ready(model_name):
+        return
+    try:
+        client.load_model(model_name)
+    except Exception:
         if not client.is_model_ready(model_name):
-            try:
-                client.load_model(model_name)
-            except Exception:
-                if not client.is_model_ready(model_name):
-                    raise
-        _ready.add(model_name)
+            raise
 
 
 async def ensure_loaded(client: Any, model_name: str) -> None:
     """``client`` is a ``tritonclient.grpc.aio`` client."""
-    if model_name in _ready or not on_demand():
+    if not on_demand():
         return
     for dep in _CALLS.get(model_name, ()):
         await ensure_loaded(client, dep)
-    with _registry_lock:
-        lock = _async_locks.setdefault(model_name, asyncio.Lock())
-    async with lock:
-        if model_name in _ready:
-            return
+    if await client.is_model_ready(model_name):
+        return
+    try:
+        await client.load_model(model_name)
+    except Exception:
         if not await client.is_model_ready(model_name):
-            try:
-                await client.load_model(model_name)
-            except Exception:
-                if not await client.is_model_ready(model_name):
-                    raise
-        _ready.add(model_name)
+            raise

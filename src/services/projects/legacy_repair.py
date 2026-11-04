@@ -23,7 +23,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from src.clients.opensearch.tasks import run_update_by_query_polled
 from src.core.logging import get_logger
+from src.domain.embedding_state import legacy_embedded_backfill_body
 from src.services.curation.job_lock import exclusive_start_lock
 from src.services.projects.vlm_default import pin_legacy_vlm
 
@@ -35,11 +37,30 @@ _RETRY_BASE_DELAY_S = 2.0
 _TOO_MANY_REQUESTS = 429
 
 
+# Gentle on a small-heap node: a bounded scroll rate, no parallel slices.
+_BACKFILL_REQUESTS_PER_SECOND = 500
+
+
+async def backfill_embedded_state(client: Any, index: str) -> int:
+    """Record ``embedded`` on every legacy item that has its vector. Idempotent: after one pass
+    nothing matches, and a cheap count says so without starting a task. Runs as a polled
+    OpenSearch task, never a blocking ``update_by_query``. Returns the items updated."""
+    body = legacy_embedded_backfill_body()
+    if int((await client.count(index=index, body={'query': body['query']})).get('count') or 0) == 0:
+        return 0
+    resp = await run_update_by_query_polled(
+        client,
+        index=index,
+        body=body,
+        slices=1,
+        requests_per_second=_BACKFILL_REQUESTS_PER_SECOND,
+    )
+    return int(resp.get('updated', 0))
+
+
 async def _backfill_with_retry(client: Any, index: str) -> int:
     """The embedded-state backfill, retried with backoff while OpenSearch
     answers 429 (the node is busy, not the request wrong)."""
-    from src.domain.embedding_state import backfill_embedded_state
-
     for attempt in range(_RETRY_ATTEMPTS):
         try:
             return await backfill_embedded_state(client, index)

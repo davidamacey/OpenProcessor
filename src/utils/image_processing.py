@@ -64,6 +64,18 @@ def decode_image(image_bytes: bytes, filename: str = 'unknown') -> np.ndarray:
     if not image_bytes:
         raise ValueError('Empty image data provided')
 
+    # Pillow's Image.open is lazy: .size reads the header only, so an oversized image is
+    # refused before cv2 or Pillow allocate its bitmap.
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as header:
+            header_size = header.size
+    except Image.DecompressionBombError as e:  # Pillow refuses the header itself
+        raise ValueError(f"Image '{filename}' is larger than {MAX_IMAGE_DIMENSION}: {e}") from e
+    except (OSError, ValueError, SyntaxError):  # not Pillow-readable: decoders below report it
+        header_size = None
+    if header_size is not None and max(header_size) > MAX_IMAGE_DIMENSION:
+        raise ValueError(f"Image '{filename}' is {header_size}, larger than {MAX_IMAGE_DIMENSION}")
+
     # Fast path: OpenCV decoding (handles 95% of cases)
     # Uses optimized libjpeg-turbo, libpng, etc. via C++ backend
     try:
