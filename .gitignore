@@ -119,17 +119,10 @@ models*/*/config.pbtxt.generated
 # The standard (non-NMS) YOLO11 TensorRT export is optional and nothing in the stack serves it;
 # `make export-models` writes its config and labels, the end2end export is the tracked one.
 /models/yolov11_*_trt/
-# Class registry generated at runtime (default OP_REGISTRY_PATH); the
+# A project's legacy registry file, kept until `curation migrate-registry` renames it; the
 # warehouse example data/class_registry.example.json IS committed.
 /data/class_registry.json
-# F-45: every class-registry write leaves a timestamped backup snapshot
-# (data/class_registry.<ISO8601Z-with-micros>.json) that isn't tracked.
-# The one prior attempt at this (a2abeb9) added only a test and never
-# added a pattern -- `git check-ignore` on a real backup file returned
-# nothing. Match the writer's actual timestamp format (see
-# src/services/curation/registry_backup.py or equivalent): digits, T,
-# more digits, optional micros, Z, .json.
-/data/class_registry.[0-9]*Z.json
+/data/class_registry.json.migrated*
 /data/exports/*
 # Anchored at repo root -- an earlier unanchored `backends/` pattern
 # accidentally hid the bake-off harness's source subpackage (see the
