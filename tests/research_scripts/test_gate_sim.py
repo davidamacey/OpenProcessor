@@ -105,14 +105,13 @@ def test_simulate_counts_decisions_and_propagated_precision() -> None:
 
 
 def test_simulate_scores_open_set_items_separately() -> None:
-    # 200 'goat' items sitting in one 'sheep'-looking cluster of 220 (20 sheep): the gate sees 91 %
-    # goat, so a pass is possible; whatever it does, a propagated goat takes the top class, and
-    # the open-set count is the propagated goats
-    truth = ['goat'] * 200 + ['sheep'] * 20
-    out = gs.simulate(np.zeros(220, dtype=int), truth, seed=3, open_set={'goat'})
-    if out['propagated']:
-        assert out['open_propagated'] <= out['propagated']
-        assert out['open_correct'] <= out['open_propagated']
+    # 3 goats hide in a cluster of 300 that is otherwise sheep. With seed 1 the gate asks 32, sees
+    # no goat, passes, and propagates 268 labels; the 3 unasked goats take 'sheep', so all 3 are
+    # open-set propagations and none is right
+    truth = ['goat'] * 3 + ['sheep'] * 297
+    out = gs.simulate(np.zeros(300, dtype=int), truth, seed=1, open_set={'goat'})
+    assert (out['decisions'], out['passed_clusters'], out['propagated']) == (32, 1, 268)
+    assert (out['open_propagated'], out['open_correct'], out['u2_open']) == (3, 0, 0.0)
 
 
 def test_the_result_does_not_depend_on_the_order_clusters_are_listed() -> None:
