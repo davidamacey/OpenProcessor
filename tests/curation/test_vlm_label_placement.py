@@ -14,10 +14,10 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.clustering.id_normalize import class_cluster_placement
 from src.services.labeling.vlm_client import VlmIdentity
@@ -62,9 +62,9 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('gadget')
-    widget_id = reg.add_class('widget')
+    reg = InMemoryRegistry()
+    reg.add('gadget')
+    widget_id = reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
     async def _no_pack(_os: Any) -> None:
@@ -132,7 +132,7 @@ async def test_label_batch_with_no_classes_is_a_409_not_a_500(
     import src.routers.curation.vlm as vlm_mod
     from src.routers.curation.vlm import VlmLabelBatchRequest
 
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
+    reg = InMemoryRegistry()
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
     class _NeverCalled:

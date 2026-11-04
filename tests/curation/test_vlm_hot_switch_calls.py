@@ -12,11 +12,11 @@ from typing import Any
 
 import httpx
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.conftest import ACTIVE, SCOPED, HybridOpenSearch, good_probe
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 
 
@@ -88,8 +88,8 @@ def stack(vlm_api, tmp_path, monkeypatch: pytest.MonkeyPatch, reference_region_p
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
-    registry.add_class('widget')
+    registry = InMemoryRegistry()
+    registry.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: registry)
 
     from src.routers.curation import _raw_opensearch_dep

@@ -68,7 +68,7 @@ def test_item_classes_exclude_the_region_class(monkeypatch: pytest.MonkeyPatch) 
 
     reg = _seed(monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
     reg.seed(['car', 'Wheel', 'old'])
-    reg.seed_deprecated(2)
+    reg.deprecate(2)
 
     names = [c.class_name for c in item_classes(reg.load().classes)]
     assert 'Wheel' not in names

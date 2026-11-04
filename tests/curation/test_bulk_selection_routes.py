@@ -45,6 +45,9 @@ class _Registry:
     class _Entry:
         class_name = 'widget'
 
+    async def snapshot(self, *_a: Any, **_k: Any) -> Any:
+        return self
+
     def validate_id(self, class_id: int) -> bool:
         return class_id == 1
 

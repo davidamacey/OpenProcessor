@@ -214,6 +214,15 @@ def leak_env(
     monkeypatch.setattr(ProjectRegistry, 'refresh_strict', _fresh)
     registry_mod.set_project_registry(registry)
 
+    # The sweep drives the real registry store through the fake transport (not the in-memory
+    # stand-in every other test gets), so the document's reads and writes are recorded and
+    # checked against the bound project like any other index access.
+    from src.services.curation import registry_access
+    from src.services.projects.guard import make_curation_opensearch
+
+    monkeypatch.setattr(curation_registry, '_registries', {})
+    monkeypatch.setattr(registry_access, 'make_curation_opensearch', make_curation_opensearch)
+
     accesses: list[tuple[str | None, str, str, str]] = []
     fake = _FakeTransport(store)
     raw = AsyncOpenSearch(hosts=['http://127.0.0.1:9'])

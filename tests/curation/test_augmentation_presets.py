@@ -42,6 +42,9 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
     class _Reg:
+        async def snapshot(self, *_a: Any, **_k: Any) -> Any:
+            return self.load()
+
         def load(self) -> Any:
             class _Snap:
                 classes: list[Any] = []

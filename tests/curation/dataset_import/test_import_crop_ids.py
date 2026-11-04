@@ -28,7 +28,7 @@ async def test_region_labels_reach_a_parent_whose_box_sits_on_a_rounding_edge(
 ) -> None:
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car', 'wheel'], images={'a': [EDGE_CAR, WHEEL_INSIDE]})
     mapping = [
@@ -44,7 +44,7 @@ async def test_region_labels_reach_a_parent_whose_box_sits_on_a_rounding_edge(
 @pytest.mark.asyncio
 async def test_ledger_ids_are_the_stored_item_ids(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': [EDGE_CAR]})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))
@@ -62,7 +62,7 @@ async def test_undo_removes_the_standalone_region_items_an_import_created(
 
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(
         root,

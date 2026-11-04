@@ -25,8 +25,8 @@ TRUCK = '1 0.7 0.7 0.2 0.2'
 
 async def _v1(tmp_path: Path, monkeypatch: Any) -> tuple[Harness, Path]:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     v1 = tmp_path / 'v1'
     write_yolo(v1, names=['car', 'truck'], images={'a': [CAR, TRUCK]})
     await h.run(h.request(v1, map_all(h.registry, 'car', 'truck')))

@@ -37,11 +37,11 @@ def fake_os() -> SettingsFakeOpenSearch:
 def client(
     fake_os: SettingsFakeOpenSearch, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from _registry_doc_fake import InMemoryRegistry
 
     monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
-    registry.add_class('car')
+    registry = InMemoryRegistry()
+    registry.add('car')
     with curation_app(fake_os, FakeTritonPool(), monkeypatch, registry=registry) as c:
         yield c
 

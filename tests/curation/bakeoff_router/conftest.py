@@ -64,4 +64,9 @@ def client() -> TestClient:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
+    # The registry-reading routes take the OpenSearch dependency; the in-memory registry
+    # needs no cluster behind it.
+    from src.routers.curation import _raw_opensearch_dep
+
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: None
     return TestClient(app)

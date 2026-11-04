@@ -17,9 +17,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
@@ -95,23 +95,23 @@ _NAMES = ('widget', 'gadget', 'gizmo')
 
 
 @pytest.fixture
-def registry_ids(tmp_path: Path) -> tuple[ClassRegistry, dict[str, int]]:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    return reg, {name: reg.add_class(name) for name in _NAMES}
+def registry_ids(tmp_path: Path) -> tuple[InMemoryRegistry, dict[str, int]]:
+    reg = InMemoryRegistry()
+    return reg, {name: reg.add(name) for name in _NAMES}
 
 
 @pytest.fixture
-def registry(registry_ids: tuple[ClassRegistry, dict[str, int]]) -> ClassRegistry:
+def registry(registry_ids: tuple[InMemoryRegistry, dict[str, int]]) -> InMemoryRegistry:
     return registry_ids[0]
 
 
 @pytest.fixture
-def ids(registry_ids: tuple[ClassRegistry, dict[str, int]]) -> dict[str, int]:
+def ids(registry_ids: tuple[InMemoryRegistry, dict[str, int]]) -> dict[str, int]:
     return registry_ids[1]
 
 
 @pytest.fixture
-def crops(monkeypatch: pytest.MonkeyPatch, registry: ClassRegistry):
+def crops(monkeypatch: pytest.MonkeyPatch, registry: InMemoryRegistry):
     from types import SimpleNamespace
 
     from src.routers.curation import crops_exclude, crops_write

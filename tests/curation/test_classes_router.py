@@ -5,7 +5,7 @@ owns the reserved set and serves it on `GET /classes`.
 
 We mount the shared curation `router` (all sub-modules register onto
 one `APIRouter`, see `src/routers/curation/_common.py`) on a minimal
-FastAPI app and back `get_class_registry()` with a real `ClassRegistry`
+FastAPI app and back `get_class_registry()` with a real `InMemoryRegistry`
 pointed at a tmp-path JSON file, seeded via `add_class`, so the tests
 exercise the real load -> mutate -> atomic-write path rather than a mock.
 """
@@ -16,10 +16,10 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.services.curation.keymap import reserved_hotkeys
 
 
@@ -27,10 +27,10 @@ LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 
 @pytest.fixture
-def registry(tmp_path: Any) -> ClassRegistry:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('sedan', group='vehicle')
-    reg.add_class('suv', group='vehicle')
+def registry(tmp_path: Any) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.add('sedan', group='vehicle')
+    reg.add('suv', group='vehicle')
     return reg
 
 
@@ -50,7 +50,7 @@ def fake_opensearch() -> AsyncMock:
 
 @pytest.fixture
 def app_client(
-    registry: ClassRegistry, fake_opensearch: AsyncMock, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, fake_opensearch: AsyncMock, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
 
@@ -73,7 +73,7 @@ def app_client(
 
 @pytest.mark.parametrize('letter', sorted(LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}))
 def test_put_class_rejects_reserved_hotkey(
-    app_client: TestClient, registry: ClassRegistry, letter: str
+    app_client: TestClient, registry: InMemoryRegistry, letter: str
 ) -> None:
     class_id = registry.load().classes[0].class_id
     resp = app_client.put(
@@ -87,7 +87,7 @@ def test_put_class_rejects_reserved_hotkey(
 
 
 def test_put_class_accepts_nonreserved_hotkey(
-    app_client: TestClient, registry: ClassRegistry
+    app_client: TestClient, registry: InMemoryRegistry
 ) -> None:
     class_id = registry.load().classes[0].class_id
     resp = app_client.put(
@@ -169,7 +169,7 @@ def test_list_classes_merged_into_is_null_for_an_unmerged_class(
 
 def test_region_class_is_marked_kind_region_and_keeps_real_item_counts(
     app_client: TestClient,
-    registry: ClassRegistry,
+    registry: InMemoryRegistry,
     fake_opensearch: AsyncMock,
     reference_region_profile: None,
 ) -> None:
@@ -179,7 +179,7 @@ def test_region_class_is_marked_kind_region_and_keeps_real_item_counts(
     NOT overridden with the region inventory total -- they stay whatever
     the class/cluster aggregations reported (0 here, since no item doc
     has that class_id)."""
-    registry.add_class('license_plate', group='region')
+    registry.add('license_plate', group='region')
     fake_opensearch.count = AsyncMock(side_effect=[{'count': 7}, {'count': 3}])
 
     resp = app_client.get('/curation/projects/default/classes')
@@ -204,13 +204,13 @@ def test_non_region_class_is_marked_kind_item(
 
 def test_region_class_kind_marking_is_a_noop_without_an_active_profile(
     app_client: TestClient,
-    registry: ClassRegistry,
+    registry: InMemoryRegistry,
     fake_opensearch: AsyncMock,
 ) -> None:
     """No region profile configured -- a class happening to be named
     'license_plate' must NOT be marked kind='region' (it isn't hardcoded
     to that literal)."""
-    registry.add_class('license_plate', group='vehicle')
+    registry.add('license_plate', group='vehicle')
 
     resp = app_client.get('/curation/projects/default/classes')
     assert resp.status_code == 200, resp.text
@@ -222,12 +222,12 @@ def test_region_class_kind_marking_is_a_noop_without_an_active_profile(
 
 def test_a_region_group_class_stays_region_without_an_active_profile(
     app_client: TestClient,
-    registry: ClassRegistry,
+    registry: InMemoryRegistry,
     fake_opensearch: AsyncMock,
 ) -> None:
     """The stored group keeps the kind stable across processes and after the
     profile is deactivated."""
-    registry.add_class('wheel', group='region')
+    registry.add('wheel', group='region')
 
     resp = app_client.get('/curation/projects/default/classes')
     entry = next(c for c in resp.json()['classes'] if c['class_name'] == 'wheel')
@@ -236,7 +236,7 @@ def test_a_region_group_class_stays_region_without_an_active_profile(
 
 def test_region_class_kind_marking_uses_a_differently_named_profiles_region_class(
     app_client: TestClient,
-    registry: ClassRegistry,
+    registry: InMemoryRegistry,
     fake_opensearch: AsyncMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -251,7 +251,7 @@ def test_region_class_kind_marking_uses_a_differently_named_profiles_region_clas
     )
     profile_registry._reset_registry_for_tests()
     try:
-        registry.add_class('widget_label', group='region')
+        registry.add('widget_label', group='region')
 
         resp = app_client.get('/curation/projects/default/classes')
         assert resp.status_code == 200, resp.text

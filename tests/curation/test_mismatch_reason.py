@@ -11,11 +11,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.review_reasons import mismatch_reason
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 ITEMS = base_curation_config().items_index
 
 
-def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def _client(fake: Any, registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr(
@@ -49,8 +49,8 @@ def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_mismatch_reasons_per_item(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('suv')
+    reg = InMemoryRegistry()
+    reg.add('suv')
     docs = {
         'named': {
             'crop_id': 'named',

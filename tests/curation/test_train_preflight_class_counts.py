@@ -91,8 +91,11 @@ if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
 
+@pytest.mark.asyncio
 @pytest.mark.usefixtures('reference_region_profile')
-def test_default_target_classes_leave_out_the_region_class(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_default_target_classes_leave_out_the_region_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Every project seeds the active profile's region class with no per-item
     samples; requiring them blocked the default preflight."""
     from types import SimpleNamespace
@@ -108,9 +111,11 @@ def test_default_target_classes_leave_out_the_region_class(monkeypatch: pytest.M
     profile = get_active_region_profile()
     assert profile is not None
     region_name = profile.region_class_name
-    registry = SimpleNamespace(
-        load=lambda: SimpleNamespace(classes=[entry(0, region_name), entry(1, 'car')])
-    )
+
+    async def snapshot(_client: Any) -> Any:
+        return SimpleNamespace(classes=[entry(0, region_name), entry(1, 'car')])
+
+    registry = SimpleNamespace(snapshot=snapshot)
     monkeypatch.setattr(preflight_checks, 'get_class_registry', lambda: registry)
     spec: Any = SimpleNamespace(include_classes=None)
-    assert preflight_checks.resolve_target_classes(spec) == [1]
+    assert await preflight_checks.resolve_target_classes(spec, None) == [1]

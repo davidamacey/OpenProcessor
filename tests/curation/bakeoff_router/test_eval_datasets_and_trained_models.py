@@ -60,7 +60,6 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
     """``registry_class_name`` is looked up by ``registry_class_id`` -- never
     assumed equal to the eval dataset's own class name -- and stays null
     for a registry id that has a gap (deprecated/removed) at that slot."""
-    from src.services.curation import eval_datasets
 
     class _Cls:
         def __init__(self, class_id: int, class_name: str) -> None:
@@ -72,7 +71,7 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
             self.classes = classes
 
     class _FakeRegistry:
-        def load(self) -> _Loaded:
+        async def snapshot(self, _client: object) -> _Loaded:
             # LIVE_EXPORT_ID_MAP maps registry r -> export r-1, so the
             # export's 5 test classes (eval ids 37/38/43/51/78) carry
             # registry ids 38/39/44/52/79. Registry id 38 is gone here --
@@ -88,7 +87,7 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
                 ]
             )
 
-    monkeypatch.setattr(eval_datasets, 'get_class_registry', _FakeRegistry)
+    monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', _FakeRegistry)
 
     _live_export(env, background=('bg_0',))
     body = client.get(

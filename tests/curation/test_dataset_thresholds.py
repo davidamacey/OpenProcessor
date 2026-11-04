@@ -68,6 +68,10 @@ class _Entry:
 class _Reg:
     classes = [_Entry(1, 'a'), _Entry(2, 'b'), _Entry(3, 'c')]
 
+    async def snapshot(self, *_a: Any, **_k: Any) -> Any:
+
+        return self.load()
+
     def load(self) -> _Reg:
         return self
 

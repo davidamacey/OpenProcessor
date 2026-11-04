@@ -6,11 +6,11 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
 
 
@@ -84,7 +84,7 @@ class InstrumentedFake(QueryFakeOpenSearch):
 class OpsEnv:
     client: TestClient
     fake: InstrumentedFake
-    registry: ClassRegistry
+    registry: InMemoryRegistry
     class_ids: dict[str, int]
     prefix: str
 
@@ -127,8 +127,8 @@ def build_env(
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(accessors, '_default_curation_config', None)
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
-    class_ids = {name: registry.add_class(name) for name in ('widget', 'gadget', 'gizmo')}
+    registry = InMemoryRegistry()
+    class_ids = {name: registry.add(name) for name in ('widget', 'gadget', 'gizmo')}
     monkeypatch.setattr(crops_write, 'get_class_registry', lambda: registry)
     fake = InstrumentedFake({items_index(): docs or {}})
     app = mount_curation_routers(FastAPI(), router)

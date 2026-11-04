@@ -43,8 +43,8 @@ async def test_same_key_completed_import_is_reused_and_writes_nothing(
     tmp_path: Path, monkeypatch
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp_path / 'ds'
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))
@@ -61,8 +61,8 @@ async def test_same_key_completed_import_is_reused_and_writes_nothing(
 @pytest.mark.asyncio
 async def test_only_one_import_runs_per_project(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp_path / 'ds'
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))
@@ -79,8 +79,8 @@ async def test_only_one_import_runs_per_project(tmp_path: Path, monkeypatch) -> 
 async def test_crash_then_resume_equals_an_uninterrupted_run(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv('OP_DATASET_IMPORT_CHUNK', '1')
     h = Harness(tmp_path / 'crash', monkeypatch, root=tmp_path)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp_path / 'ds'
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))
@@ -104,8 +104,8 @@ async def test_crash_then_resume_equals_an_uninterrupted_run(tmp_path: Path, mon
     assert store.job.read()['status'] == 'completed'
 
     clean = Harness(tmp_path / 'clean', monkeypatch, root=tmp_path)
-    clean.registry.add_class('car')
-    clean.registry.add_class('truck')
+    clean.registry.add('car')
+    clean.registry.add('truck')
     clean_store, _ = await clean.run(clean.request(root, map_all(clean.registry, 'car', 'truck')))
     assert _snapshot(h) == _snapshot(clean)
     assert store.job.read()['report']['items_created'] == 3
@@ -125,7 +125,7 @@ async def test_resume_consumes_the_persisted_mapping_not_the_resumers_registry(
     the class ids the START resolved."""
     monkeypatch.setenv('OP_DATASET_IMPORT_CHUNK', '1')
     h = Harness(tmp_path / 'w', monkeypatch, root=tmp_path)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))
@@ -153,8 +153,8 @@ async def test_resume_consumes_the_persisted_mapping_not_the_resumers_registry(
 async def test_resume_refuses_when_the_dataset_changed(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv('OP_DATASET_IMPORT_CHUNK', '1')
     h = Harness(tmp_path / 'w', monkeypatch, root=tmp_path)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp_path / 'ds'
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))
@@ -178,7 +178,7 @@ async def test_undo_removes_only_import_labels_and_keeps_human_edits(
     tmp_path: Path, monkeypatch
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     _dataset(root)
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car', 'truck')))
@@ -217,8 +217,8 @@ async def test_a_crash_inside_a_chunk_keeps_created_truthful_for_undo(
     so it would call them ``noop``; the write-ahead row must keep them
     ``created`` or undo would leave them behind."""
     h = Harness(tmp_path / 'w', monkeypatch, root=tmp_path)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp_path / 'ds'
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))

@@ -59,7 +59,7 @@ def test_outage_is_503(path: str) -> None:
 
 def test_stats_classes_registry_failure_is_503(monkeypatch: pytest.MonkeyPatch) -> None:
     class _BrokenRegistry:
-        def load(self) -> Any:
+        async def snapshot(self, *_a: Any, **_k: Any) -> Any:
             raise OSError('registry unreadable')
 
     monkeypatch.setattr('src.routers.curation.get_class_registry', _BrokenRegistry)

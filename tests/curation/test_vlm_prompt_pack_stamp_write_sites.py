@@ -11,10 +11,10 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_region_fields
 from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
@@ -78,8 +78,8 @@ async def test_label_batch_stamps_vlm_prompt_pack(
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('widget')
+    reg = InMemoryRegistry()
+    reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
     async def _no_pack(_os: Any) -> None:

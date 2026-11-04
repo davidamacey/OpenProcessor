@@ -22,7 +22,7 @@ async def test_import_lands_on_the_copy_stored_after_its_lookup(
     tmp_path: Path, monkeypatch
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2']})
     data = (root / 'images/train/a.jpg').read_bytes()

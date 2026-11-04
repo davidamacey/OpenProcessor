@@ -8,10 +8,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.config.region_fields import RegionFields
 from src.services.curation.export import GenericYoloExportService
@@ -63,18 +63,18 @@ def write_images(export_dir: Path, *, suffix: str = '.jpg') -> None:
 
 def multi_registry(
     base: Path, names: list[str], *, deprecate: tuple[str, ...] = ()
-) -> ClassRegistry:
-    reg = ClassRegistry(path=base / 'class_registry.json')
-    ids = {name: reg.add_class(name) for name in names}
+) -> InMemoryRegistry:
+    reg = InMemoryRegistry(base, names)
+    ids = {c.class_name: c.class_id for c in reg.load().classes}
     for name in deprecate:
-        reg.merge_class(ids[name], ids[names[0]])
+        reg.merge(ids[name], ids[names[0]])
     return reg
 
 
 async def export_multi_class(
     tmp_path: Path,
     docs: dict[str, dict[str, Any]],
-    registry: ClassRegistry,
+    registry: InMemoryRegistry,
     *,
     images: dict[str, dict[str, Any]] | None = None,
     **kwargs: Any,

@@ -34,8 +34,8 @@ def _items_of(h: Harness, class_name: str) -> list[dict]:
 @pytest.mark.asyncio
 async def test_cvat_import_maps_by_name_and_keeps_negatives(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('person')
-    h.registry.add_class('dog')
+    h.registry.add('person')
+    h.registry.add('dog')
     root = tmp_path / 'ds'
     write_cvat(
         root,
@@ -60,7 +60,7 @@ async def test_cvat_import_maps_by_name_and_keeps_negatives(tmp_path: Path, monk
 @pytest.mark.asyncio
 async def test_cvat_lock_rule(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('dog')
+    h.registry.add('dog')
     root = tmp_path / 'ds'
     write_cvat(root, {'a.jpg': [cvat_box('dog', (1, 1, 40, 40))]})
     mapping = map_all(h.registry, 'dog')
@@ -125,8 +125,8 @@ async def test_other_formats_import_by_name_with_negatives(
     fmt: str, tmp_path: Path, monkeypatch
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('person')
-    h.registry.add_class('dog')
+    h.registry.add('person')
+    h.registry.add('dog')
     root = tmp_path / 'ds'
     _BUILDERS[fmt](root)
     prepared = h.prepare(h.request(root))

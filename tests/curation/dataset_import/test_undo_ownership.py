@@ -35,7 +35,7 @@ async def test_a_human_verdict_on_an_untouched_import_box_keeps_the_box(
 ) -> None:
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car', 'wheel'], images={'a': [SAME, '1 0.3 0.3 0.05 0.05']})
     mapping = [
@@ -59,7 +59,7 @@ async def test_undo_clears_the_holdout_it_set_and_keeps_one_a_curator_set(
     tmp_path: Path, monkeypatch: Any
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo_splits(
         root,
@@ -86,7 +86,7 @@ async def test_undo_of_a_relabel_keeps_a_holdout_a_curator_set_afterwards(
     tmp_path: Path, monkeypatch: Any
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': [SAME]})
     image = root / 'images/train/a.jpg'
@@ -107,7 +107,7 @@ async def test_a_human_accept_of_an_imports_region_set_survives_undo(
 ) -> None:
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car', 'wheel'], images={'a': [SAME, '1 0.3 0.3 0.05 0.05']})
     mapping = [
@@ -130,7 +130,7 @@ async def test_a_curator_holdout_freeze_survives_undo_of_an_import_that_did_not_
     tmp_path: Path, monkeypatch: Any
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': [SAME]})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))
@@ -149,7 +149,7 @@ async def test_an_item_the_import_froze_into_the_holdout_is_still_deleted_by_und
     tmp_path: Path, monkeypatch: Any
 ) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo_splits(
         root,

@@ -8,27 +8,29 @@ still have items.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
+from src.clients.curation_opensearch.registry import ClassRegistryError
 
 
-def _entry(registry: ClassRegistry, class_id: int) -> Any:
+def _entry(registry: InMemoryRegistry, class_id: int) -> Any:
     entry = registry.get(class_id)
     assert entry is not None
     return entry
 
 
 @pytest.fixture
-def registry(tmp_path: Any) -> ClassRegistry:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('sedan', group='vehicle')
-    reg.add_class('suv', group='vehicle')
+def registry(tmp_path: Any) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.add('sedan', group='vehicle')
+    reg.add('suv', group='vehicle')
     return reg
 
 
@@ -42,7 +44,7 @@ def fake_os() -> AsyncMock:
 
 
 @pytest.fixture
-def client(registry: ClassRegistry, fake_os: AsyncMock, monkeypatch: pytest.MonkeyPatch):
+def client(registry: InMemoryRegistry, fake_os: AsyncMock, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
@@ -60,13 +62,13 @@ def client(registry: ClassRegistry, fake_os: AsyncMock, monkeypatch: pytest.Monk
 # =============================================================================
 
 
-def test_set_deprecated_unknown_id_raises(registry: ClassRegistry) -> None:
+def test_set_deprecated_unknown_id_raises(registry: InMemoryRegistry) -> None:
     with pytest.raises(ClassRegistryError, match='not found'):
-        registry.set_deprecated(9999, True)
+        registry.deprecate(9999, True)
 
 
-def test_set_deprecated_true_clears_hotkey(registry: ClassRegistry) -> None:
-    registry.set_deprecated(0, False)  # no-op path still exercised below
+def test_set_deprecated_true_clears_hotkey(registry: InMemoryRegistry) -> None:
+    registry.deprecate(0, False)  # no-op path still exercised below
     reg = registry.load()
     for c in reg.classes:
         if c.class_id == 0:
@@ -74,17 +76,17 @@ def test_set_deprecated_true_clears_hotkey(registry: ClassRegistry) -> None:
     registry._atomic_write(reg)
     assert _entry(registry, 0).hotkey_letter == 'v'
 
-    entry = registry.set_deprecated(0, True)
+    entry = registry.deprecate(0, True)
     assert entry.deprecated is True
     assert entry.hotkey_letter is None
     assert _entry(registry, 0).hotkey_letter is None
 
 
-def test_set_deprecated_false_name_clash_raises(registry: ClassRegistry) -> None:
-    registry.set_deprecated(0, True)  # sedan deprecated
-    registry.add_class('sedan', group='vehicle')  # new active class reuses the name
+def test_set_deprecated_false_name_clash_raises(registry: InMemoryRegistry) -> None:
+    registry.deprecate(0, True)  # sedan deprecated
+    registry.add('sedan', group='vehicle')  # new active class reuses the name
     with pytest.raises(ClassRegistryError, match='already in use'):
-        registry.set_deprecated(0, False)
+        registry.deprecate(0, False)
 
 
 # =============================================================================
@@ -92,7 +94,7 @@ def test_set_deprecated_false_name_clash_raises(registry: ClassRegistry) -> None
 # =============================================================================
 
 
-def test_deprecate_empty_class_works(client: TestClient, registry: ClassRegistry) -> None:
+def test_deprecate_empty_class_works(client: TestClient, registry: InMemoryRegistry) -> None:
     resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 200, resp.text
     assert resp.json()['deprecated'] is True
@@ -100,7 +102,7 @@ def test_deprecate_empty_class_works(client: TestClient, registry: ClassRegistry
 
 
 def test_deprecate_class_with_items_is_409_with_counts(
-    client: TestClient, fake_os: AsyncMock, registry: ClassRegistry
+    client: TestClient, fake_os: AsyncMock, registry: InMemoryRegistry
 ) -> None:
     fake_os.count = AsyncMock(side_effect=[{'count': 3}, {'count': 1}])
     resp = client.post('/curation/projects/default/classes/0/deprecate')
@@ -114,7 +116,7 @@ def test_deprecate_class_with_items_is_409_with_counts(
 
 
 def test_deprecate_class_with_only_confirmed_labels_is_409(
-    client: TestClient, fake_os: AsyncMock, registry: ClassRegistry
+    client: TestClient, fake_os: AsyncMock, registry: InMemoryRegistry
 ) -> None:
     """Items-index count can be zero while confirmed-label docs still
     reference the class -- either nonzero count blocks."""
@@ -132,7 +134,7 @@ def test_deprecate_unknown_id_is_404(client: TestClient) -> None:
 
 
 def test_deprecate_is_idempotent(
-    client: TestClient, fake_os: AsyncMock, registry: ClassRegistry
+    client: TestClient, fake_os: AsyncMock, registry: InMemoryRegistry
 ) -> None:
     assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
     # Second call must succeed even though a real count would now 409 --
@@ -144,7 +146,7 @@ def test_deprecate_is_idempotent(
     assert resp.json()['deprecated'] is True
 
 
-def test_deprecate_clears_hotkey(client: TestClient, registry: ClassRegistry) -> None:
+def test_deprecate_clears_hotkey(client: TestClient, registry: InMemoryRegistry) -> None:
     assert (
         client.put('/curation/projects/default/classes/0', json={'hotkey_letter': 'v'}).status_code
         == 200
@@ -162,7 +164,7 @@ def test_deprecate_clears_hotkey(client: TestClient, registry: ClassRegistry) ->
 # =============================================================================
 
 
-def test_restore_works(client: TestClient, registry: ClassRegistry) -> None:
+def test_restore_works(client: TestClient, registry: InMemoryRegistry) -> None:
     assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
     resp = client.post('/curation/projects/default/classes/0/restore')
     assert resp.status_code == 200, resp.text
@@ -174,9 +176,9 @@ def test_restore_unknown_id_is_404(client: TestClient) -> None:
     assert client.post('/curation/projects/default/classes/9999/restore').status_code == 404
 
 
-def test_restore_name_clash_is_409(client: TestClient, registry: ClassRegistry) -> None:
+def test_restore_name_clash_is_409(client: TestClient, registry: InMemoryRegistry) -> None:
     assert client.post('/curation/projects/default/classes/0/deprecate').status_code == 200
-    registry.add_class('sedan', group='vehicle')  # active class reclaims the name
+    registry.add('sedan', group='vehicle')  # active class reclaims the name
 
     resp = client.post('/curation/projects/default/classes/0/restore')
     assert resp.status_code == 409, resp.text
@@ -189,14 +191,14 @@ def test_restore_name_clash_is_409(client: TestClient, registry: ClassRegistry) 
 
 
 def test_restore_on_merged_class_is_409_with_structured_detail(
-    client: TestClient, registry: ClassRegistry
+    client: TestClient, registry: InMemoryRegistry
 ) -> None:
     """A class merged via ``POST /classes/merge`` has already had its
     crops bulk-relabeled onto the target; restoring it directly would
     resurrect an empty class while the data stays put. Refused with a
     structured detail naming the merge target, distinct from the
     plain-string detail a name clash produces."""
-    registry.merge_class(source_id=0, target_id=1)  # sedan -> suv
+    registry.merge(source_id=0, target_id=1)  # sedan -> suv
     assert _entry(registry, 0).deprecated is True
     assert _entry(registry, 0).merged_into == 1
 
@@ -213,7 +215,7 @@ def test_restore_on_merged_class_is_409_with_structured_detail(
 
 
 def test_restore_on_plain_deprecated_class_still_works_after_merge_guard(
-    client: TestClient, registry: ClassRegistry
+    client: TestClient, registry: InMemoryRegistry
 ) -> None:
     """The merge guard must only fire when merged_into is set -- a class
     deprecated directly (no merge, no target) keeps restoring exactly as
@@ -233,7 +235,7 @@ def test_restore_on_plain_deprecated_class_still_works_after_merge_guard(
 
 
 def test_deprecated_class_disappears_from_non_deprecated_class_name_lists(
-    client: TestClient, registry: ClassRegistry
+    client: TestClient, registry: InMemoryRegistry
 ) -> None:
     """``GET /classes`` still lists a deprecated class (with
     ``deprecated: true``, for history/dashboards); every consumer that
@@ -255,7 +257,7 @@ def test_deprecated_class_disappears_from_non_deprecated_class_name_lists(
     orig = curation_train_mod.get_class_registry
     curation_train_mod.get_class_registry = lambda: registry
     try:
-        target_ids = resolve_target_classes(spec)
+        target_ids = asyncio.run(resolve_target_classes(spec, None))
     finally:
         curation_train_mod.get_class_registry = orig
     assert 0 not in target_ids

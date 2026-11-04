@@ -14,11 +14,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 
 
@@ -37,13 +37,13 @@ CLASS_STATE_FIELDS = (
 
 
 @pytest.fixture
-def registry(tmp_path: Any) -> ClassRegistry:
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('sedan', group='vehicle')
+def registry(tmp_path: Any) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.add('sedan', group='vehicle')
     return reg
 
 
-def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def _client(fake: Any, registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr(
@@ -80,7 +80,7 @@ def _class_state(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_resolve_with_class_id_writes_every_matching_pending_item(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class_id = registry.load().classes[0].class_id  # 'sedan'
     n = 25
@@ -121,7 +121,7 @@ def test_resolve_with_class_id_writes_every_matching_pending_item(
 
 
 def test_resolve_unknown_class_id_is_400(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'p1': _pending_doc('p1', 'sidecar')}})
     client = _client(fake, registry, monkeypatch)
@@ -139,7 +139,7 @@ def test_resolve_unknown_class_id_is_400(
 
 
 def test_resolve_with_create_registers_class_and_writes_items(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     docs = {f'p{i}': _pending_doc(f'p{i}', 'sidecar') for i in range(3)}
     fake = QueryFakeOpenSearch({ITEMS: docs})
@@ -171,7 +171,7 @@ def test_resolve_with_create_registers_class_and_writes_items(
 
 
 def test_resolve_create_with_zero_matches_still_creates_the_class(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
     client = _client(fake, registry, monkeypatch)
@@ -188,7 +188,7 @@ def test_resolve_create_with_zero_matches_still_creates_the_class(
 
 
 def test_resolve_create_duplicate_name_is_409_and_writes_nothing(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     docs = {'p1': _pending_doc('p1', 'sedan')}
     fake = QueryFakeOpenSearch({ITEMS: docs})
@@ -204,7 +204,7 @@ def test_resolve_create_duplicate_name_is_409_and_writes_nothing(
 
 
 def test_resolve_create_bad_slug_is_422(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
     client = _client(fake, registry, monkeypatch)
@@ -222,7 +222,7 @@ def test_resolve_create_bad_slug_is_422(
 
 
 def test_resolve_neither_class_id_nor_create_is_422(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
     client = _client(fake, registry, monkeypatch)
@@ -233,7 +233,7 @@ def test_resolve_neither_class_id_nor_create_is_422(
 
 
 def test_resolve_both_class_id_and_create_is_422(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class_id = registry.load().classes[0].class_id
     fake = QueryFakeOpenSearch({ITEMS: {}})
@@ -251,7 +251,7 @@ def test_resolve_both_class_id_and_create_is_422(
 
 
 def test_resolve_dry_run_writes_and_creates_nothing(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     docs = {f'p{i}': _pending_doc(f'p{i}', 'sidecar') for i in range(5)}
     fake = QueryFakeOpenSearch({ITEMS: docs})
@@ -276,7 +276,7 @@ def test_resolve_dry_run_writes_and_creates_nothing(
 
 
 def test_resolve_dry_run_with_class_id_writes_nothing(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class_id = registry.load().classes[0].class_id
     docs = {'p1': _pending_doc('p1', 'sidecar')}
@@ -300,7 +300,7 @@ def test_resolve_dry_run_with_class_id_writes_nothing(
 
 
 def test_resolve_skips_item_whose_state_changed_before_write(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class_id = registry.load().classes[0].class_id
     docs = {
@@ -340,7 +340,7 @@ def test_resolve_skips_item_whose_state_changed_before_write(
 
 
 def test_resolve_undo_batch_restores_pending_state(
-    registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class_id = registry.load().classes[0].class_id
     docs = {f'p{i}': _pending_doc(f'p{i}', 'sidecar') for i in range(3)}

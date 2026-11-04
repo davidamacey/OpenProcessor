@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
 import httpx
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
 from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
@@ -21,63 +23,50 @@ from src.domain.ingest_class_sources import (
 from src.services.curation.class_ensure import ensure_class_by_name
 
 
-class _Entry:
-    def __init__(self, class_id: int, name: str, deprecated: bool = False) -> None:
-        self.class_id, self.class_name, self.deprecated = class_id, name, deprecated
+def _registry(*rows: tuple[int, str, bool]) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.seed_rows([{'class_id': i, 'class_name': n, 'deprecated': d} for i, n, d in rows])
+    return reg
 
 
-class _Registry:
-    def __init__(self, entries: list[_Entry]) -> None:
-        self.entries = entries
-        self.race: _Entry | None = None
-
-    def load(self) -> Any:
-        return type('F', (), {'classes': self.entries})()
-
-    def add_class(self, name: str, group: str = 'unknown', notes: str = '') -> int:  # noqa: ARG002
-        if self.race is not None:
-            self.entries.append(self.race)
-            raise ClassRegistryError('duplicate')
-        self.entries.append(_Entry(len(self.entries), name))
-        return len(self.entries) - 1
+@pytest.mark.asyncio
+async def test_ensure_class_matches_by_name_ignoring_case_and_deprecated() -> None:
+    reg = _registry((0, 'Cone', True), (1, 'cone', False))
+    assert await ensure_class_by_name(reg, None, ' CONE ', group='g') == (1, 'cone')
 
 
-def test_ensure_class_matches_by_name_ignoring_case_and_deprecated() -> None:
-    reg = _Registry([_Entry(0, 'Cone', deprecated=True), _Entry(1, 'cone')])
-    assert ensure_class_by_name(reg, ' CONE ', group='g') == (1, 'cone')
+@pytest.mark.asyncio
+async def test_ensure_class_uses_the_one_name_equality_rule_and_returns_the_registry_spelling() -> (
+    None
+):
+    reg = _registry((4, 'traffic_light', False))
+    assert await ensure_class_by_name(reg, None, 'Traffic Light', group='g') == (4, 'traffic_light')
+    assert len(reg.load().classes) == 1
 
 
-def test_ensure_class_uses_the_one_name_equality_rule_and_returns_the_registry_spelling() -> None:
-    reg = _Registry([_Entry(4, 'traffic_light')])
-    assert ensure_class_by_name(reg, 'Traffic Light', group='g') == (4, 'traffic_light')
-    assert len(reg.entries) == 1
+@pytest.mark.asyncio
+async def test_ensure_class_adds_a_missing_name_once() -> None:
+    reg = _registry((0, 'cup', False))
+    assert await ensure_class_by_name(reg, None, 'cone', group='g') == (1, 'cone')
+    assert await ensure_class_by_name(reg, None, 'cone', group='g') == (1, 'cone')
+    assert len(reg.load().classes) == 2
 
 
-def test_ensure_class_adds_a_missing_name_once() -> None:
-    reg = _Registry([_Entry(0, 'cup')])
-    assert ensure_class_by_name(reg, 'cone', group='g') == (1, 'cone')
-    assert ensure_class_by_name(reg, 'cone', group='g') == (1, 'cone')
-    assert len(reg.entries) == 2
+@pytest.mark.asyncio
+async def test_ensure_class_concurrent_adds_of_the_same_name_share_one_id() -> None:
+    reg = InMemoryRegistry()
+    first, second = await asyncio.gather(
+        ensure_class_by_name(reg, None, 'cone', group='g'),
+        ensure_class_by_name(reg, None, 'cone', group='g'),
+    )
+    assert first == second
+    assert len(reg.load().classes) == 1
 
 
-def test_ensure_class_tolerates_a_concurrent_add_of_the_same_name() -> None:
-    reg = _Registry([])
-    reg.race = _Entry(7, 'cone')
-    assert ensure_class_by_name(reg, 'cone', group='g') == (7, 'cone')
-
-
-def test_ensure_class_refuses_a_name_with_nothing_slug_safe() -> None:
+@pytest.mark.asyncio
+async def test_ensure_class_refuses_a_name_with_nothing_slug_safe() -> None:
     with pytest.raises(ClassRegistryError):
-        ensure_class_by_name(_Registry([]), ' !! ', group='g')
-
-
-def test_ensure_class_reraises_when_the_failure_is_not_a_race() -> None:
-    class Broken(_Registry):
-        def add_class(self, name: str, group: str = '', notes: str = '') -> int:  # noqa: ARG002
-            raise ClassRegistryError('class_name must be non-empty')
-
-    with pytest.raises(ClassRegistryError):
-        ensure_class_by_name(Broken([]), 'x', group='g')
+        await ensure_class_by_name(InMemoryRegistry(), None, ' !! ', group='g')
 
 
 def test_open_vocab_items_count_as_unlabeled_proposals() -> None:

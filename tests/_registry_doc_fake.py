@@ -92,6 +92,15 @@ class FakeDocOpenSearch:
         return self.bulk_response
 
 
+def _run_sync(coro: Any) -> Any:
+    """Run ``coro`` to completion from sync code, also when an event loop is already running
+    (the in-memory store has no loop affinity)."""
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 class InMemoryRegistry:
     """A real :class:`~src.clients.curation_opensearch.registry.ClassRegistry` over its own
     in-memory document store, for tests that hand a registry to code under test.
@@ -140,37 +149,43 @@ class InMemoryRegistry:
         self.fake.seqs[key] = self.fake.seqs.get(key, 0) + 1
         self._real._cache = None
 
-    def seed_deprecated(self, class_id: int) -> None:
-        """Mark a class deprecated straight in the document."""
-        from src.clients.curation_opensearch.registry import DOC_KEY, REGISTRY_DOC_ID
+    def seed_rows(self, rows: list[dict[str, Any]]) -> None:
+        """Replace the classes with ``rows`` (dicts with ``class_id`` and ``class_name``)."""
+        from src.clients.curation_opensearch import RegistryClassEntry
+        from src.clients.curation_opensearch.registry import DOC_KEY, REGISTRY_DOC_ID, RegistryDoc
 
-        doc = self.load()
-        for c in doc.classes:
-            if c.class_id == class_id:
-                c.deprecated = True
+        doc = RegistryDoc(classes=[RegistryClassEntry(**row) for row in rows])
+        doc.next_class_id = max((c.class_id for c in doc.classes), default=-1) + 1
         key = f'{self._real.index}/{REGISTRY_DOC_ID}'
         self.fake.docs[key] = {DOC_KEY: doc.model_dump()}
         self.fake.seqs[key] = self.fake.seqs.get(key, 0) + 1
         self._real._cache = None
 
-    def rename_class(self, class_id: int, new_name: str) -> None:
-        """Rename a class straight in the document (test setup; no name-rule checks)."""
-        from src.clients.curation_opensearch.registry import DOC_KEY, REGISTRY_DOC_ID
+    # ---- sync facades over the real store logic (test setup and inspection)
 
-        doc = self.load()
-        for c in doc.classes:
-            if c.class_id == class_id:
-                c.class_name = new_name
-        key = f'{self._real.index}/{REGISTRY_DOC_ID}'
-        self.fake.docs[key] = {DOC_KEY: doc.model_dump()}
-        self.fake.seqs[key] = self.fake.seqs.get(key, 0) + 1
-        self._real._cache = None
+    def add(self, name: str, **kw: Any) -> int:
+        """``add_class`` for synchronous test code; raises ``ClassRegistryError`` like the store."""
+        return _run_sync(self._real.add_class(self.fake, name, **kw))
+
+    def deprecate(self, class_id: int, deprecated: bool = True) -> Any:
+        return _run_sync(self._real.set_deprecated(self.fake, class_id, deprecated))
+
+    def merge(self, source_id: int, target_id: int) -> Any:
+        return _run_sync(self._real.merge_class(self.fake, source_id, target_id))
+
+    def rename_class(self, class_id: int, new_name: str) -> Any:
+        return _run_sync(self._real.update_class(self.fake, class_id, name=new_name))
 
     def load(self) -> Any:
         from src.clients.curation_opensearch.registry import DOC_KEY, REGISTRY_DOC_ID, RegistryDoc
 
         raw = self.fake.docs.get(f'{self._real.index}/{REGISTRY_DOC_ID}', {}).get(DOC_KEY)
         return RegistryDoc.model_validate(raw) if raw else RegistryDoc()
+
+    @property
+    def classes(self) -> Any:
+        """Live view, so a service handed this object as its registry snapshot sees later edits."""
+        return self.load().classes
 
     def get(self, class_id: int) -> Any:
         return self.load().get(class_id)
@@ -252,10 +267,22 @@ class InMemoryRegistries(dict):  # type: ignore[type-arg]
     """Stands in for ``registry._registries``: every project gets its own empty in-memory
     registry the first time the code under test asks for it."""
 
+    override: Any = None
+
     def get(self, key: Any, default: Any = None) -> Any:  # noqa: ARG002
+        if self.override is not None:
+            return self.override
         if key not in self:
             self[key] = InMemoryRegistry()
         return self[key]
+
+
+def use_registry(registry: InMemoryRegistry) -> InMemoryRegistry:
+    """Make ``registry`` the one every project's ``get_class_registry()`` answers in this test."""
+    from src.clients.curation_opensearch import registry as registry_module
+
+    registry_module._registries.override = registry
+    return registry
 
 
 def registry_of(record: Any) -> InMemoryRegistry:

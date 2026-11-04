@@ -23,8 +23,8 @@ async def test_import_maps_classes_by_name_not_index(tmp_path: Path, monkeypatch
     """Dataset ``{0: truck, 1: car}`` against registry ``[car(0), truck(1)]``
     must import trucks as truck: the bug of resolving classes by index."""
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp_path / 'ds'
     write_yolo(
         root,
@@ -50,7 +50,7 @@ async def test_import_maps_classes_by_name_not_index(tmp_path: Path, monkeypatch
 @pytest.mark.asyncio
 async def test_create_action_materializes_a_real_class_id(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(
         root, names=['car', 'truck'], images={'a': ['0 0.3 0.3 0.2 0.2', '1 0.7 0.7 0.2 0.2']}
@@ -66,8 +66,8 @@ async def test_create_action_materializes_a_real_class_id(tmp_path: Path, monkey
 @pytest.mark.asyncio
 async def test_reimport_never_overwrites_a_locked_human_label(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
-    h.registry.add_class('truck')
+    h.registry.add('car')
+    h.registry.add('truck')
     root = tmp_path / 'ds'
     write_yolo(
         root, names=['car', 'truck'], images={'a': ['0 0.3 0.3 0.2 0.2', '1 0.7 0.7 0.2 0.2']}
@@ -101,7 +101,7 @@ async def test_first_validated_import_writes_region_boxes(tmp_path: Path, monkey
     pre-existing lock that drops the region boxes."""
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(
         root,
@@ -133,7 +133,7 @@ async def test_region_box_outside_every_parent_becomes_a_standalone_item(
 ) -> None:
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(
         root,
@@ -158,7 +158,7 @@ async def test_region_box_outside_every_parent_becomes_a_standalone_item(
 @pytest.mark.asyncio
 async def test_negatives_unlabeled_and_splits(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(
         root,
@@ -185,7 +185,7 @@ async def test_freeze_test_split_marks_holdout_and_leaves_current_untouched(
     from src.config import get_curation_config
 
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'t': ['0 0.5 0.5 0.2 0.2']}, split='test')
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car'), freeze_test_split=True))
