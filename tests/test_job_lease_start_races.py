@@ -144,6 +144,21 @@ async def _start_promote(client: Any) -> str:
     return 'started' if created else 'busy'
 
 
+def _autolabel_pipeline() -> None:
+    """Only its import path is recorded in the trigger."""
+
+
+async def _start_autolabel(client: Any) -> str:
+    from src.services.curation.autolabel import job
+
+    _widen_check(job, 'is_busy')
+    try:
+        await job.start_job(client, _autolabel_pipeline, {})
+    except RuntimeError:
+        return 'busy'
+    return 'started'
+
+
 async def _start_region_job(client: Any, which: str) -> str:
     """The region jobs return a snapshot either way, so a run counts as started when its
     own body ran in this process."""
@@ -183,6 +198,7 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
     'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
     'promote': (_start_promote, {'OP_TRAIN_JOBS_DIR': 'train'}),
+    'autolabel': (_start_autolabel, {'OP_AUTO_LABEL_STATE_DIR': 'autolabel'}),
     'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),
     'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
     'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),

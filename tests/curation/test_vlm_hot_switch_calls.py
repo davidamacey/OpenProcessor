@@ -188,7 +188,7 @@ async def test_a_started_job_keeps_the_endpoint_it_was_accepted_against(stack, m
     api = stack.api
     captured: dict[str, Any] = {}
 
-    def fake_start(fn: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def fake_start(_os: Any, fn: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'status': 'queued', 'job_id': 'j1'}
 

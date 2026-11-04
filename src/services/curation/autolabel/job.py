@@ -61,6 +61,8 @@ from collections.abc import Callable, Coroutine
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from src.clients import job_lease
+from src.domain.job_lease import Busy, LeaseKind
 from src.services.curation.clustering.pool_coverage import PARTIAL
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
 from src.utils.atomic_write import atomic_write_json
@@ -451,8 +453,14 @@ def _serializable(kwargs: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]:
+async def start_job(
+    opensearch: Any, pipeline_fn: PipelineFn, kwargs: dict[str, Any]
+) -> dict[str, Any]:
     """Write a trigger file the worker container will pick up.
+
+    The ``autolabel`` lease is held only across the check-and-write below, which closes the
+    race between two starts landing on different ``api`` workers; the record-based busy
+    check stays the guard against a start while the worker runs.
 
     Returns the initial 'queued' state snapshot. The worker flips
     status to 'running' once it claims the trigger (typically within
@@ -461,8 +469,22 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
     Raises ``RuntimeError`` if a run is already in flight; the caller
     surfaces this as HTTP 409.
     """
+    busy = RuntimeError('auto_label run already in progress')
+    job_id = uuid.uuid4().hex
+    result = await job_lease.acquire(opensearch, LeaseKind.AUTOLABEL, None, job_id)
+    if isinstance(result, Busy):
+        raise busy
+    try:
+        return _write_trigger(pipeline_fn, kwargs, job_id, busy)
+    finally:
+        await job_lease.release(opensearch, result.lease)
+
+
+def _write_trigger(
+    pipeline_fn: PipelineFn, kwargs: dict[str, Any], job_id: str, busy: RuntimeError
+) -> dict[str, Any]:
     if is_busy():
-        raise RuntimeError('auto_label run already in progress')
+        raise busy
 
     # Clean up any leftover sentinels from a prior aborted run so
     # operators get a clean slate. (cancel.flag would otherwise short-
@@ -479,7 +501,6 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
 
     pipeline_path = _pipeline_import_path(pipeline_fn)
     serializable_args = _serializable(kwargs)
-    job_id = uuid.uuid4().hex
 
     # Initial state — 'queued' until the worker picks it up. Distinct
     # from 'running' so the dashboard can show "waiting on worker"
