@@ -1,12 +1,11 @@
 # `annotation_slots` wire contract — draft (H3 opening offer)
 
-> **Status: DRAFT / PROPOSAL. Not a commitment by either side.** This is
-> Cropwright's opening offer for the `annotation_slots` wire contract
-> (H3). Nothing described here is implemented on either side: the
-> frontend's tier-2 and tier-3 profile loading are both explicitly "not
-> yet wired" (`src/lib/annotations/registry.ts:4-9`), and the backend has
-> not added the field. It exists so the backend has something concrete to
-> amend or reject rather than a blank page.
+> **Status: schema reference (tier 2, shipped) plus a draft proposal
+> (tier 3, not implemented).** The `SlotSpec` schema in section 4 is what
+> the deployment file `annotation-profiles.json` (tier 2) is validated
+> against today. The server-declared `annotation_slots` field (tier 3) is
+> only a proposal: the frontend does not read it and the backend does not
+> serve it. Sections that describe the "pre-release" state are history.
 
 This document is Cropwright's half of handoff point **H3** between
 Cropwright and OpenProcessor (the backend integration plan and this
@@ -56,11 +55,12 @@ to hand-maintenance.
 ## 2. The three-tier resolution model
 
 `src/lib/annotations/registry.ts:4-9` documents the intended merge order,
-of which only tier 1 is wired today:
+of which tiers 1 and 2 are wired today:
 
-1. **Built-in profiles** (tier 1, **the only one shipped**). Compiled
-   into the app — `src/lib/annotations/profiles/licensePlate.ts` is the
-   sole real, deployed instance today.
+1. **Built-in profiles** (tier 1). Compiled into the app. The one built-in
+   slot is the region slot, synthesized from the backend's served region
+   profile (`src/lib/annotations/servedRegionSlot.ts`); no
+   domain-specific profile is compiled in.
 2. **Deployment override**, loaded from `static/annotation-profiles.json`
    (tier 2, **wired as of 2026-09-20** —
    `src/lib/annotations/deploymentProfiles.ts` fetches it in the root

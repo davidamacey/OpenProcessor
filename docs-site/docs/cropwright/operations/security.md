@@ -8,7 +8,13 @@ title: Security
 **The curation API that Cropwright talks to has no request
 authentication.** Anyone who can reach Cropwright's nginx origin can label,
 discard, ingest (including server-path ingest), export, freeze a test
-holdout, and start training. There is no login and no token.
+holdout, and start training. The API has no login and no token.
+
+Cropwright's nginx can add one layer in front: set `OP_CROPWRIGHT_BASIC_AUTH=true`
+with an htpasswd file and every route except `/nginx-health` asks for a login
+(`./openprocessor cropwright password` sets it; the installer turns it on for a LAN
+bind). It protects this origin only, not the API port. See
+[Environment variables](../configuration/environment-variables.md).
 
 - **Never expose Cropwright, or the OpenProcessor API it proxies, to the
   public internet.** Run it only on a trusted LAN or VPN, or put it behind
@@ -20,7 +26,7 @@ holdout, and start training. There is no login and no token.
 ## Scope
 
 - Cropwright is a static single-page app served by nginx, with no database
-  and no authentication of its own. The container runs nginx as a non-root
+  and no application-level authentication of its own (only the optional nginx basic auth above). The container runs nginx as a non-root
   user (uid 101).
 - The data and model backend is OpenProcessor, a separate project. Most
   security-relevant surface (authentication, input validation, file access)

@@ -12,6 +12,7 @@ import numpy as np
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.config.settings import TritonModelConfig
+from src.utils.image_processing import decode_ocr_image
 from src.utils.stage_timing import stage_timer
 
 
@@ -41,32 +42,26 @@ def require_uint8_ocr_inputs(model_name: str, datatype_of: Callable[[str], str])
             raise ValueError(msg)
 
 
-def _uint8_bgr(img: np.ndarray) -> np.ndarray:
-    """A decoded image as 3-channel uint8 BGR (grey, RGBA and 16-bit inputs included)."""
+def _bgr_frame(img: np.ndarray) -> np.ndarray:
+    """A decoded OCR image as 3-channel uint8 BGR (a grey decode gains its channels)."""
     import cv2
 
-    if img.dtype != np.uint8:
-        img = cv2.convertScaleAbs(img, alpha=255.0 / 65535.0)
     if img.ndim == 2:
         return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    if img.shape[2] == 4:
-        alpha = img[:, :, 3:4] / 255.0
-        rgb = img[:, :, :3]
-        white_bg = np.ones_like(rgb) * 255
-        return (rgb * alpha + white_bg * (1 - alpha)).astype(np.uint8)
     return img
 
 
 def infer_ocr(
     infer: Callable[[str, list, list], Any],
-    image_bytes: bytes,
+    image: bytes | np.ndarray,
     datatype_of: Callable[[str], str],
 ) -> dict[str, Any]:
     """
     OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
 
     Args:
-        image_bytes: Raw JPEG/PNG bytes
+        image: an already decoded, EXIF-oriented BGR array (the frame the caller reports
+            sizes in), or raw image bytes, which are decoded here by ``decode_ocr_image``
         datatype_of: input name -> datatype the loaded ``ocr_pipeline`` declares
 
     Returns:
@@ -76,22 +71,26 @@ def infer_ocr(
     import cv2
 
     require_uint8_ocr_inputs(TritonModelConfig.OCR_PIPELINE_MODEL, datatype_of)
-    img_array = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
-    if img_array is None:
-        return {
-            'num_texts': 0,
-            'texts': [],
-            'text_boxes': np.array([]),
-            'text_boxes_normalized': np.array([]),
-            'text_scores': np.array([]),
-            'rec_scores': np.array([]),
-        }
+    if isinstance(image, np.ndarray):
+        img_array = image
+    else:
+        try:
+            img_array = decode_ocr_image(image)
+        except ValueError:
+            return {
+                'num_texts': 0,
+                'texts': [],
+                'text_boxes': np.array([]),
+                'text_boxes_normalized': np.array([]),
+                'text_scores': np.array([]),
+                'rec_scores': np.array([]),
+            }
 
-    img_array = _uint8_bgr(img_array)
+    img_array = _bgr_frame(img_array)
 
     orig_h, orig_w = img_array.shape[:2]
 
-    # PP-OCR approach: scale to fit within limit, pad to 32-boundary
+    # PP-OCR approach: scale to fit within the limit, then round each side to 32
     ocr_limit_side = 960
     ocr_min_side = 640
 
@@ -103,18 +102,13 @@ def infer_ocr(
     else:
         ratio = 1.0
 
-    resize_h = max(32, int(orig_h * ratio))
-    resize_w = max(32, int(orig_w * ratio))
+    # Each axis is stretched to its own multiple of 32 (PaddleOCR DetResizeForTest), never
+    # zero-padded: the BLS maps boxes back as ``orig / map size``, which only holds when the
+    # map covers the whole image.
+    resize_h = max(32, round(orig_h * ratio / 32) * 32)
+    resize_w = max(32, round(orig_w * ratio / 32) * 32)
 
     resized = cv2.resize(img_array, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR)
-
-    # Pad to 32-boundary
-    pad_h = (32 - resize_h % 32) % 32
-    pad_w = (32 - resize_w % 32) % 32
-    if pad_h > 0 or pad_w > 0:
-        padded = np.zeros((resize_h + pad_h, resize_w + pad_w, 3), dtype=np.uint8)
-        padded[:resize_h, :resize_w, :] = resized
-        resized = padded
 
     # The BLS normalizes ((x / 127.5) - 1 for the detector) and crops from the raw pixels.
     with stage_timer('triton_request', nbytes=resized.nbytes + img_array.nbytes):

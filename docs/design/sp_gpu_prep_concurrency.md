@@ -1,6 +1,7 @@
 # SPD: `gpu_image_prep` under concurrency, design review (diagnosis first, then code)
 
-Status: **design review only, nothing implemented.** Written on a branch (from
+Status: partially done (C1, the byte budget, shipped in #392; C2 to C5 are in `program/07b_b5_decode_once.md`,
+v0.7.0 B5b; remove after B5b). Written on a branch (from
 `perf/v070-ingest-speed` at `2d231652`), 2026-10-30. Issues: #392 (the symptom), #40 (epic, SP4 bar),
 #337 (admission charge on fallbacks), #219 (SP3, crop size), #42 (12 GB cards), #391 (health).
 
@@ -8,7 +9,7 @@ Inputs read: [`../reviews/sp0_review.md`](../reviews/sp0_review.md) "Measurement
 tables and the 36 per-repetition JSON files in [`../benchmarks/v070/sp0/`](../benchmarks/v070/sp0/sp0_tables_clients.md),
 [`../research/v070_measurement_log.md`](../research/v070_measurement_log.md) sections B, E4, F1, G3, G5 and
 "SP0: stage profile", [`../PERFORMANCE.md`](../PERFORMANCE.md) "0.7.0 stage profile", the ship-track plan
-section 5 (`docs/design/ship_track_plan.md` on branch `docs/ship-track-plan`), the model
+section 5 (the retired ship-track plan, in git history), the model
 ([`model.py`](../../models/gpu_image_prep/1/model.py), [`prep_kernels.py`](../../models/gpu_image_prep/1/prep_kernels.py),
 [`prep_geometry.py`](../../models/gpu_image_prep/1/prep_geometry.py), [`nvjpeg_lanes.py`](../../models/gpu_image_prep/1/nvjpeg_lanes.py),
 [`stage_metrics.py`](../../models/gpu_image_prep/1/stage_metrics.py), [`config.pbtxt`](../../models/gpu_image_prep/config.pbtxt)),

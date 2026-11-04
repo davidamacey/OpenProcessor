@@ -190,7 +190,8 @@ button {
   .btn-sm:hover {
     background-color: rgb(var(--bg-hover));
   }
-  .btn-sm:disabled {
+  .btn-sm:disabled,
+  .btn-sm[aria-disabled='true'] {
     opacity: 0.6;
     cursor: not-allowed;
   }

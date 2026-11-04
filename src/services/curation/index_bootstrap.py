@@ -10,7 +10,6 @@ index already has its inner-result window) it runs no migration (#376).
 
 from __future__ import annotations
 
-import asyncio
 import functools
 import hashlib
 import json
@@ -125,31 +124,23 @@ async def warm_knn_indexes(opensearch: Any) -> None:
     )
 
 
-# Guards the whole bootstrap sequence below. Without this, concurrent requests
-# that all arrive before the first one records their project in
-# _INDEXES_BOOTSTRAPPED each independently race through it against OpenSearch
-# (redundant reads, `exists` and `put_mapping` calls, all discarded but the first
-# to finish).
-_ensure_indexes_lock = asyncio.Lock()
-
-
 async def ensure_indexes(opensearch: Any) -> bool:
     """Create and migrate the bound project's curation indexes on its first request
     in this process (idempotent); True once the project is bootstrapped.
 
-    Cheap fast path (no lock) once bootstrapped; the lock only guards the
-    (at most once per project) cold-start race. A failure is logged and leaves
-    the project unbootstrapped, so the next request retries.
+    Safe to run from any number of tasks, workers and processes at once, so there is
+    deliberately no lock: an in-process lock cannot exclude another process, and every
+    step is idempotent. Index creation treats ``resource_already_exists_exception`` as
+    success (create-if-absent), the mapping puts only add fields, and the schema marker
+    is written last, only after every migration succeeded. A redundant run costs
+    requests, not correctness, and once any run has stamped the marker later runs read
+    it and stop. A failure is logged and leaves the project unbootstrapped, so the next
+    request retries.
     """
     slug = get_curation_config().project_slug
-    if slug in _INDEXES_BOOTSTRAPPED:
-        return True
-    async with _ensure_indexes_lock:
-        # Re-check inside the lock: another request may have completed
-        # the whole bootstrap sequence while we were waiting to acquire.
-        if slug not in _INDEXES_BOOTSTRAPPED:
-            await _ensure_indexes_locked(opensearch)
-        return slug in _INDEXES_BOOTSTRAPPED
+    if slug not in _INDEXES_BOOTSTRAPPED:
+        await _bootstrap_indexes(opensearch)
+    return slug in _INDEXES_BOOTSTRAPPED
 
 
 def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
@@ -254,11 +245,9 @@ async def _stamp_schema(opensearch: Any, names: list[str]) -> None:
         logger.warning('curation_schema_marker_write_failed', error=str(exc), exc_info=True)
 
 
-async def _ensure_indexes_locked(opensearch: Any) -> None:
-    """The actual bootstrap sequence — only ever called while holding
-    :data:`_ensure_indexes_lock`. A project is recorded as bootstrapped only
-    when every step succeeded; otherwise the next request retries the whole
-    sequence."""
+async def _bootstrap_indexes(opensearch: Any) -> None:
+    """The bootstrap sequence. A project is recorded as bootstrapped only when every
+    step succeeded; otherwise the next request retries the whole sequence."""
     names = curation_index_names()
     if not await _schema_is_current(opensearch, names):
         if not await _create_and_migrate(opensearch):

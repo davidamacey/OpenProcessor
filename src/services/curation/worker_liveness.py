@@ -70,12 +70,11 @@ def write_heartbeat(name: str, tasks: Mapping[str, bool], stall: str | None = No
     # Lazy: the healthcheck CLI runs this file by path under a 5 s timeout and
     # only ever calls check_heartbeat, never this writer.
     from src.services.curation.ops_metrics import record_worker_heartbeat
+    from src.utils.atomic_write import atomic_write_json
 
     record_worker_heartbeat(name, tasks, now)
     path = _heartbeat_path(name)
-    tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(payload))
-    tmp.replace(path)
+    atomic_write_json(path, payload, default=None)
 
 
 def check_heartbeat(name: str, max_age_s: float) -> tuple[bool, str]:

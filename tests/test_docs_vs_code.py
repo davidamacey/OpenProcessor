@@ -71,6 +71,26 @@ def test_env_check_rejects_unknown_var(tmp_path: Path) -> None:
     assert 'OP_DEFINITELY_NOT_A_REAL_VAR' in bad[0]
 
 
+def test_route_and_env_checks_skip_design_plans_but_not_user_docs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A plan names the routes and settings it will add; a user doc may only name real ones."""
+    design = tmp_path / 'design'
+    design.mkdir()
+    body = (
+        'Set `OP_DEFINITELY_NOT_A_REAL_VAR`, then POST /curation/projects/{project}/no_such_route\n'
+    )
+    plan, guide = design / 'plan.md', tmp_path / 'guide.md'
+    plan.write_text(body, encoding='utf-8')
+    guide.write_text(body, encoding='utf-8')
+    monkeypatch.setattr(checker, '_DESIGN_DOCS', f'{design.as_posix()}/')
+    checker.set_only([plan, guide])
+    for name in ('routes', 'env'):
+        errors = checker.CHECKS[name]()
+        assert len(errors) == 1, (name, errors)
+        assert 'guide.md' in errors[0]
+
+
 def test_compose_check_rejects_a_variable_missing_from_env_template(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

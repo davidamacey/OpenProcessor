@@ -40,11 +40,10 @@ curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setu
 ```
 
 The installer checks every file against the release's `SHA256SUMS` (integrity,
-not authenticity) and sizes the OpenSearch heap from your RAM (half of it, 2 to
-30 GB). Cropwright is reachable on your LAN by default, for homelab or
-small-business use. The API itself stays bound to 127.0.0.1. There is no login
-on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
-everything on 127.0.0.1.
+not authenticity) and sizes the OpenSearch heap from your RAM. Cropwright is
+reachable on your LAN by default and the API stays on 127.0.0.1; pass
+`--local-only` to keep everything on 127.0.0.1. See
+[Network access](./installer.mdx#network-access).
 
 Tier sizes, every flag, verifying the download by hand, network access, heap
 sizing, upgrade, rollback and troubleshooting: [One-line installer](./installer.mdx).
@@ -99,7 +98,7 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor
 ```
 
 `scripts/setup.sh` pulls the pre-built images, detects your GPU and picks a
-profile (`minimal`, `standard`, `full`), writes `.env` (it never overwrites an
+profile (`minimal`, `small`, `standard`, `full`), writes `.env` (it never overwrites an
 existing `.env` unless you pass `--force`, and a forced rewrite keeps your
 `OPENSEARCH_HEAP`), downloads the base weights, runs the one-time TensorRT
 export, starts the core services and runs smoke tests.
@@ -109,7 +108,7 @@ Useful flags (all from `./scripts/setup.sh --help`):
 | Flag | Effect |
 |---|---|
 | `--yes`, `-y` | Accept defaults, no prompts |
-| `--profile=NAME` | Force `minimal`, `standard` or `full` |
+| `--profile=NAME` | Force `minimal`, `small`, `standard` or `full` |
 | `--gpu=ID` | GPU id to use (default `0`) |
 | `--skip-download` / `--skip-export` / `--skip-start` | Skip that step |
 | `--force` | Overwrite an existing `.env` |
@@ -196,10 +195,8 @@ Expected: 200 images and an `ATTRIBUTION.csv` under
 #### Step 3: let the containers see the sample
 
 The API and the workers read images from one **source root**, mounted
-read-only at `/data/source`. The host side is `OP_SOURCE_ROOT_HOST` in `.env`.
-Three services mount it: `api`, `curation-detection-worker` and
-`curation-auto-label-worker`. If one of them lacks the mount, thumbnails 404
-and the VLM stage labels nothing.
+read-only at `/data/source`; its host side is `OP_SOURCE_ROOT_HOST` in `.env`
+(see [Basic configuration](../configuration/basic.mdx)).
 
 - **Installed directory.** The installer already set
   `OP_SOURCE_ROOT_HOST=./data`, so the sample is at
@@ -219,9 +216,7 @@ and the VLM stage labels nothing.
   `curation-detection-worker` and `curation-auto-label-worker` as recently
   created. The sample is at `/data/source/coco_va_readme/images`.
 
-`restart` does not re-read `.env`, so a plain restart keeps the old mount.
-`./openprocessor start` and `make up` / `make curation-up` recreate the services
-whose configuration changed.
+A plain `restart` keeps the old mount because it does not re-read `.env`; recreate with `./openprocessor start`.
 
 #### Step 4: create a project and its classes
 

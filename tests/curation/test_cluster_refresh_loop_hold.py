@@ -53,7 +53,12 @@ def _live_loop() -> str:
 
 def _obs(count: int, *, loop_live: bool = False) -> Observation:
     return Observation(
-        count=count, unfinished=0, tracked_status=None, busy=False, loop_live=loop_live
+        count=count,
+        unfinished=0,
+        tracked_status=None,
+        busy=False,
+        loop_live=loop_live,
+        recent_ingest=False,
     )
 
 
@@ -111,6 +116,7 @@ class _Api:
                     sched=sched,
                     policy=POLICY,
                     auto_label=auto_label,
+                    settle_s=240,
                     now=0.0,
                 )
 

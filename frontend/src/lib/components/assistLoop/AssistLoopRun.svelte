@@ -31,7 +31,8 @@
   };
   const STOP_TEXT: Record<string, string> = {
     done: 'every cluster was decided',
-    budget_crops: 'the crop budget was spent',
+    budget_crops:
+      'the crop budget was spent; clusters it could not cover were left not visited',
     budget_requests: 'the request budget was spent',
     budget_time: 'the time budget ran out',
     vlm_failed: 'the VLM did not answer; fix the endpoint or model, then resume',

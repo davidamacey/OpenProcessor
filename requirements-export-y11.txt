@@ -3,8 +3,10 @@
 # =============================================================================
 # The vendored end2end patch (src/ultralytics_patches) injects the TensorRT
 # EfficientNMS_TRT plugin into YOLO11 ONNX exports. It targets the 8.3.x
-# exporter API — ultralytics 8.4 (YOLO26) changed the end2end handling and
-# breaks it — so this toolchain is pinned and isolated in its own venv.
+# exporter API and is validated on GPU only there, so this toolchain is pinned
+# and isolated in its own venv. A CPU run of the patch on 8.4 did not fail;
+# the GPU check and the venv's removal are planned in
+# docs/design/model_family_versions_plan.md (C4, Steps 4-9).
 # export/export_models.py transparently re-execs into it (see the toolchain
 # guard at the top of that script). YOLO26 uses the main environment.
 #

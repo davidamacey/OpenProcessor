@@ -6,6 +6,7 @@ re-run keeps what is installed, and several edge cases fail closed.
 from __future__ import annotations
 
 import hashlib
+import re
 import subprocess
 import tarfile
 from typing import TYPE_CHECKING
@@ -539,3 +540,34 @@ def test_fresh_install_still_plans_from_free_vram(shimmed: Shimmed) -> None:
     shimmed.gpus(LOW_VRAM)
     assert install(shimmed, '--no-start').returncode == 0
     assert env_value(shimmed.root / 'inst' / '.env', 'GPU_PROFILE') == 'minimal'
+
+
+TWO_GPUS = '0, NVIDIA RTX A6000, 49140, 0, 8.6\n1, NVIDIA RTX A6000, 49140, 0, 8.6\n2, NVIDIA RTX A6000, 49140, 0, 8.6\n'
+
+
+def test_explicit_segmenter_plan_survives_reruns_while_the_tier_is_off(shimmed: Shimmed) -> None:
+    shimmed.gpus(TWO_GPUS)
+    plan = 'triton=0,segmenter=0,vlm=0,trainer=0'
+    first = install(shimmed, '--no-start', '--gpu-plan', plan, tiers='core')
+    assert first.returncode == 0, first.stderr[-1500:]
+    inst = shimmed.root / 'inst'
+    managed = inst / '.install' / 'managed.env'
+    assert env_value(managed, 'SEGMENTER_GPU_ID') == '0'
+    again = install(shimmed, '--no-start', tiers=None)
+    assert again.returncode == 0, again.stderr[-1500:]
+    assert 'segmenter=0' in again.stdout
+    assert re.search(r'SEGMENTER_GPU_ID\s+0\b', again.stdout), again.stdout[-2500:]
+    assert env_value(inst / '.env', 'SEGMENTER_GPU_ID') == '0'
+
+
+def test_segmenter_tier_turned_on_later_keeps_the_explicit_gpu(shimmed: Shimmed) -> None:
+    shimmed.gpus(TWO_GPUS)
+    plan = 'triton=0,segmenter=0,vlm=0,trainer=0'
+    assert install(shimmed, '--no-start', '--gpu-plan', plan, tiers='core').returncode == 0
+    inst = shimmed.root / 'inst'
+    tok = shimmed.root / 'tok'
+    tok.write_text('hf_TESTSECRET1234567890\n')
+    tok.chmod(0o600)
+    again = install(shimmed, '--no-start', tiers='core,segmenter', HF_TOKEN_FILE=str(tok))
+    assert again.returncode == 0, again.stderr[-1500:]
+    assert env_value(inst / '.env', 'SEGMENTER_GPU_ID') == '0'

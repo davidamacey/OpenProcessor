@@ -19,8 +19,8 @@ set -euo pipefail
 
 API_URL="${API_URL:-http://localhost:4603}"
 TRITON_URL="${TRITON_URL:-http://localhost:4600}"
-TEST_IMAGE="${TEST_IMAGE:-test_images/zidane.jpg}"
-TEST_IMAGE_BUS="${TEST_IMAGE_BUS:-test_images/bus.jpg}"
+TEST_IMAGE="${TEST_IMAGE:-test_images/coco/000000011051.jpg}"
+TEST_IMAGE_BUS="${TEST_IMAGE_BUS:-test_images/coco/000000001584.jpg}"
 TEST_IMAGE_OCR="${TEST_IMAGE_OCR:-test_images/ocr-synthetic/caution_sign.jpg}"
 
 # Auto-download test images if missing
@@ -32,8 +32,8 @@ download_if_missing() {
         curl -sL "$url" -o "$file" || { echo "WARNING: Failed to download $file"; return 1; }
     fi
 }
-download_if_missing "$TEST_IMAGE_BUS" "https://ultralytics.com/images/bus.jpg"
-download_if_missing "$TEST_IMAGE" "https://ultralytics.com/images/zidane.jpg"
+download_if_missing "$TEST_IMAGE_BUS" "http://images.cocodataset.org/val2017/000000001584.jpg"
+download_if_missing "$TEST_IMAGE" "http://images.cocodataset.org/val2017/000000011051.jpg"
 
 PASS=0
 FAIL=0

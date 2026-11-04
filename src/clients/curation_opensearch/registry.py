@@ -3,9 +3,7 @@ atomic writes, mirrored into the ``classes`` index."""
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -14,6 +12,7 @@ from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntr
 from src.clients.curation_opensearch.base import config, logger
 from src.clients.curation_opensearch.lifecycle import INDEX_BODIES
 from src.config import IndexRole, index_name
+from src.utils.atomic_write import atomic_write_bytes
 from src.utils.class_names import resolve_class_by_name
 
 
@@ -78,13 +77,7 @@ class ClassRegistry:
             logger.info('curation_registry_snapshot', snapshot=str(snapshot_path))
 
         # 2. Atomic write: tmp → fsync → replace.
-        tmp_path = self.path.with_suffix(self.path.suffix + '.tmp')
-        payload = registry.model_dump_json(indent=2)
-        with tmp_path.open('w', encoding='utf-8') as f:
-            f.write(payload)
-            f.flush()
-            os.fsync(f.fileno())
-        tmp_path.replace(self.path)
+        atomic_write_bytes(self.path, registry.model_dump_json(indent=2).encode('utf-8'))
 
         # 3. Refresh cache.
         self._cache = registry
@@ -310,7 +303,6 @@ class ClassRegistry:
 # ``class_registry.json``, so a class added in one project is invisible
 # in every other.
 _registries: dict[tuple[str, str], ClassRegistry] = {}
-_registry_lock = asyncio.Lock()
 
 
 def get_class_registry() -> ClassRegistry:

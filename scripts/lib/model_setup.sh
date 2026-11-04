@@ -181,10 +181,21 @@ triton_model_ready() {
     curl -fsS --max-time 5 "$(_ms_triton_url)/v2/models/${1}/ready" >/dev/null 2>&1
 }
 
-# triton_load_and_wait NAME [TIMEOUT_S]
+# triton_load_and_wait NAME [TIMEOUT_S] [strict]
+# strict: a load request Triton answers with an error fails at once (return 1: the model
+# cannot be loaded) instead of waiting for a READY that will not come, and a Triton that
+# cannot be reached fails with return 2 (not the model's fault; the caller must not
+# conclude "invalid"). A request that merely outlasts curl's timeout is a load still
+# running: it is waited for like in the default mode.
 triton_load_and_wait() {
-    local name="$1" timeout="${2:-120}" waited=0
-    if ! curl -fsS --max-time 60 -X POST "$(_ms_triton_url)/v2/repository/models/${name}/load" >/dev/null 2>&1; then
+    local name="$1" timeout="${2:-120}" strict="${3:-}" waited=0 code rc=0
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 -X POST \
+        "$(_ms_triton_url)/v2/repository/models/${name}/load" 2>/dev/null)" || rc=$?
+    if (( rc != 0 || code >= 400 )); then
+        if [[ "$strict" == strict ]]; then
+            (( rc == 0 )) && return 1
+            (( rc == 28 )) || return 2
+        fi
         log_warn "load request for ${name} was rejected; waiting for READY anyway"
     fi
     while (( waited < timeout )); do
@@ -210,16 +221,45 @@ group_should_skip() {
     read -ra out_list <<< "$outputs"
     read -ra model_list <<< "$models"
 
-    for f in "${out_list[@]}"; do
+    for f in ${out_list[@]+"${out_list[@]}"}; do
         [[ -e "$f" ]] || return 1
     done
-    for m in "${model_list[@]}"; do
+    for m in ${model_list[@]+"${model_list[@]}"}; do
         triton_model_ready "$m" || return 1
     done
 
     [[ -f "$state_file" && -n "$digest" ]] || return 1
     recorded="$(sed -n -E 's/.*"triton_image_digest":[[:space:]]*"([^"]*)".*/\1/p' "$state_file" | head -n1)"
     [[ -n "$recorded" && "$recorded" == "$digest" ]]
+}
+
+# _ms_load_present_engines GROUP OUTPUTS MODELS: asks Triton to load the models of a group
+# whose output files all exist but are not READY. Triton loads models only at its own start
+# (explicit model control), so engines placed on disk after it started, or copied in from
+# another install, are READY only after this; whether Triton can load them (this GPU, this
+# TensorRT, this config) is the proof they are valid. A load Triton refuses is logged and
+# left to the rebuild. Returns 1 when Triton cannot be reached: that says nothing about the
+# engines, so the caller stops instead of rebuilding them.
+_ms_load_present_engines() {
+    local group="$1" outputs="$2" models="$3" f m rc
+    local -a out_list
+    read -ra out_list <<< "$outputs"
+    for f in ${out_list[@]+"${out_list[@]}"}; do
+        [[ -s "$f" ]] || return 0
+    done
+    for m in $models; do
+        triton_model_ready "$m" && continue
+        rc=0
+        triton_load_and_wait "$m" 60 strict || rc=$?
+        case "$rc" in
+            0) log_info "group ${group}: loaded the existing ${m}" ;;
+            2)
+                log_error "group ${group}: Triton is not reachable at $(_ms_triton_url); the existing ${m} was not judged (start it: ./openprocessor logs triton-server)"
+                return 1
+                ;;
+            *) log_info "group ${group}: Triton could not load the existing ${m} (built for another GPU or TensorRT, or damaged); it will be rebuilt" ;;
+        esac
+    done
 }
 
 # Groups (section 4.2 table): the tables live in model_groups.sh.
@@ -451,12 +491,20 @@ model_setup_run_group() {
 
     # A degraded group (fallback precision) is never "up to date": re-running
     # retries the preferred precision.
-    if [[ -n "$outputs" ]] && [[ "$(model_setup_group_status "$group")" != degraded ]] \
-        && ! _ms_group_stamp_stale "$group" \
-        && group_should_skip "$outputs" "$models" "$state" "${MODEL_SETUP_TRITON_DIGEST:-}"; then
-        log_info "group ${group}: up to date, skipped"
-        _ms_record "$group" skipped 0
-        return 0
+    if [[ -n "$outputs" ]] && [[ "$(model_setup_group_status "$group")" != degraded ]]; then
+        # An explicit statement, not part of the skip test: loading engines into Triton is a
+        # side effect (up to 60 s a model) and its failure must stop the group, not be
+        # swallowed by the condition.
+        if ! _ms_load_present_engines "$group" "$outputs" "$models"; then
+            _ms_record "$group" failed 0
+            return 1
+        fi
+        if ! _ms_group_stamp_stale "$group" \
+            && group_should_skip "$outputs" "$models" "$state" "${MODEL_SETUP_TRITON_DIGEST:-}"; then
+            log_info "group ${group}: up to date, skipped"
+            _ms_record "$group" skipped 0
+            return 0
+        fi
     fi
 
     _ms_trt_env || return 1

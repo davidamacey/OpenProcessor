@@ -42,6 +42,9 @@ the deployment tracks it, a capacity banner naming how many search shards
 are in use against the deployment's recommended and hard limits, so you
 can see a capacity warning before it turns into a blocked create.
 
+At phone width the table becomes stacked rows: the counts sit under the
+project name and the Open, Edit and Archive buttons below them.
+
 Available actions, each shown only when the project's own served status
 allows it:
 
@@ -70,8 +73,8 @@ allows it:
   you have to resolve the blocker first. Once nothing blocks it, deleting
   requires typing the project's own slug to confirm.
 - **Combine projects…** — merges several projects into a new one; see
-  [Combine projects](./combine-projects.md). Shown only when the backend
-  supports it. A project that was created by a combine links back to its
+  [Combine projects](./combine-projects.md). Always offered, because the
+  backend always mounts the combine router. A project that was created by a combine links back to its
   job, and its delete button reads **Undo combine**.
 - A row whose status is still transient (building or deleting) refreshes
   itself every couple of seconds until it settles, so a finished delete

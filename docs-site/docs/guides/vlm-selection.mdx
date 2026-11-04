@@ -381,6 +381,10 @@ stale. The worker re-reads the policy about every 30 seconds; the next
 `auto_label` run uses it at once, and a run can override the scope with
 `vlm_scope=<scope>`. The policy is cloned with the project.
 
+Under `representatives` the representatives of a cluster are claimed once and persisted: a VLM
+label moves the crop to its class cluster, so re-ranking the current members on each poll would
+cascade (#192).
+
 `sample_frac` hashes the crop id, so the sample is only as uniform as the ids: hash-like ids
 give a proportional sample, sequential or patterned ids may not.
 

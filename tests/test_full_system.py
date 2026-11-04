@@ -53,10 +53,16 @@ CONTAINER_TEST_IMAGES = Path('/app/test_images')
 
 
 def download_test_images() -> None:
-    """Fetch the public COCO test images if not present."""
+    """Fetch the public COCO test images if not present.
+
+    Raises ``RuntimeError`` naming every image still missing afterwards (a failed download,
+    or a ``test_images`` directory this user cannot write): a missing input must never turn
+    into skipped checks and a green run.
+    """
     from scripts.datasets._common import download
     from scripts.datasets.bench_set import IMAGE_URL_TMPL
 
+    missing: list[str] = []
     for path in (TEST_IMAGE, TEST_IMAGE_2):
         if path.exists():
             continue
@@ -65,7 +71,16 @@ def download_test_images() -> None:
         try:
             download(url, path)
         except Exception as e:
-            print(f'  WARNING: Failed to download {path.name}: {e}')
+            print(f'  ERROR: Failed to download {path.name}: {e}')
+        if not path.exists():
+            missing.append(str(path))
+    if missing:
+        msg = (
+            f'required test images are missing: {", ".join(missing)}. Fix the download or make '
+            f'{TEST_IMAGE.parent.parent} writable (chown it to the current user if a container '
+            'created it) and re-run.'
+        )
+        raise RuntimeError(msg)
 
 
 # Results tracking
@@ -245,10 +260,6 @@ def test_detection() -> bool:
     """Test object detection endpoint."""
     print_header('OBJECT DETECTION')
 
-    if not TEST_IMAGE.exists():
-        print_test('Detection', 'SKIP', f'Test image not found: {TEST_IMAGE}')
-        return False
-
     with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint('Single Detection', 'POST', f'{API_BASE}/detect', files=files)
@@ -266,10 +277,6 @@ def test_detection() -> bool:
 def test_faces() -> bool:
     """Test face detection and recognition."""
     print_header('FACE DETECTION & RECOGNITION')
-
-    if not TEST_IMAGE.exists():
-        print_test('Face Tests', 'SKIP', f'Test image not found: {TEST_IMAGE}')
-        return False
 
     # Face detection
     with Path(TEST_IMAGE).open('rb') as f:
@@ -297,10 +304,6 @@ def test_faces() -> bool:
 def test_embeddings() -> bool:
     """Test CLIP embedding endpoints."""
     print_header('CLIP EMBEDDINGS')
-
-    if not TEST_IMAGE.exists():
-        print_test('Embedding Tests', 'SKIP', f'Test image not found: {TEST_IMAGE}')
-        return False
 
     # Image embedding
     with Path(TEST_IMAGE).open('rb') as f:
@@ -336,9 +339,6 @@ def test_ocr() -> bool:
         ocr_images = [TEST_IMAGE]
 
     test_img = ocr_images[0]
-    if not test_img.exists():
-        print_test('OCR', 'SKIP', 'No test image found')
-        return False
 
     with Path(test_img).open('rb') as f:
         files = {'image': f}
@@ -357,10 +357,6 @@ def test_ocr() -> bool:
 def test_analyze() -> bool:
     """Test combined analysis endpoint."""
     print_header('COMBINED ANALYSIS')
-
-    if not TEST_IMAGE.exists():
-        print_test('Analyze', 'SKIP', f'Test image not found: {TEST_IMAGE}')
-        return False
 
     with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
@@ -392,10 +388,6 @@ def test_ingest_single() -> bool:
     """Test single image ingestion."""
     print_header('SINGLE IMAGE INGEST')
 
-    if not TEST_IMAGE.exists():
-        print_test('Ingest', 'SKIP', f'Test image not found: {TEST_IMAGE}')
-        return False
-
     with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         params = {'image_id': 'test_ingest_001'}
@@ -420,10 +412,6 @@ def test_ingest_directory(skip: bool = False) -> bool:
         print_test('Directory Ingest', 'SKIP', 'Skipped by user')
         return True
 
-    if not INGEST_DIR.exists():
-        print_test('Directory Ingest', 'SKIP', f'Directory not found: {INGEST_DIR}')
-        return True
-
     if os.environ.get('OP_TEST_INGEST_DIR_MOUNTED') != '1':
         print_test(
             'Directory Ingest',
@@ -432,6 +420,10 @@ def test_ingest_directory(skip: bool = False) -> bool:
             'set OP_TEST_INGEST_DIR_MOUNTED=1 when it is mounted',
         )
         return True
+
+    if not INGEST_DIR.exists():
+        print_test('Directory Ingest', 'FAIL', f'Directory not found: {INGEST_DIR}')
+        return False
 
     num_images = len(list(INGEST_DIR.glob('*.jpg')))
     print(f'  Ingesting {num_images} images from {INGEST_DIR}...')
@@ -511,10 +503,6 @@ def test_image_search() -> bool:
     """Test image similarity search."""
     print_header('IMAGE SIMILARITY SEARCH')
 
-    if not TEST_IMAGE.exists():
-        print_test('Image Search', 'SKIP', f'Test image not found: {TEST_IMAGE}')
-        return False
-
     with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint(
@@ -560,7 +548,11 @@ def run_all_tests(skip_ingest: bool = False) -> bool:
     print('=' * 80)
 
     # Phase 0: Ensure test images exist
-    download_test_images()
+    try:
+        download_test_images()
+    except RuntimeError as exc:
+        print(f'\n❌ {exc}')
+        return False
 
     # Phase 0b: Clear OpenSearch data for fresh testing
     clear_opensearch_data()

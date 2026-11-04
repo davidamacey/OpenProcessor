@@ -30,6 +30,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = (REPO_ROOT / 'README.md').read_text()
 CLAUDE_MD = (REPO_ROOT / 'CLAUDE.md').read_text()
+CORE_API_DOC = (REPO_ROOT / 'docs-site' / 'docs' / 'api-reference' / 'core.mdx').read_text()
 
 
 def _search_text_query_param_names() -> set[str]:
@@ -53,13 +54,13 @@ def test_search_by_text_route_takes_query_params_not_a_json_body() -> None:
 
 
 def test_readme_python_example_uses_query_params_for_search_text() -> None:
-    section = README[README.index('Text-to-Image Search') :][:400]
+    section = CORE_API_DOC[CORE_API_DOC.index('search/text takes query parameters') :][:400]
     assert "params={'text'" in section, (
-        "README's Text-to-Image Search example must post 'text' as a query "
+        "The Python Text-to-Image Search example (core.mdx, the home of the Python API examples) must post 'text' as a query "
         f'param (search_by_text has no request body). Got:\n{section}'
     )
     assert "json={'query'" not in section, (
-        'README still shows a JSON body with a query field for /search/text, '
+        'core.mdx still shows a JSON body with a query field for /search/text, '
         'which 422s -- the route only reads query params.'
     )
 

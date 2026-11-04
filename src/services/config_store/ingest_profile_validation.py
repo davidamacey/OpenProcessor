@@ -20,7 +20,7 @@ from src.clients.model_adapters import END2END_OUTPUTS
 from src.schemas.curation.config_common import ValidationReport
 from src.schemas.curation.ingest_profile import IngestProfileBody
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
-from src.services.config_store.profile_issues import _issue
+from src.services.config_store.profile_issues import issue_builder
 
 
 if TYPE_CHECKING:
@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 #: Errors ``force: true`` bypasses on activation.
 BYPASSABLE_CODES: frozenset[str] = frozenset({'triton_unreachable'})
+_issue = issue_builder(BYPASSABLE_CODES)
 
 
 def taken_message(name: str) -> str:

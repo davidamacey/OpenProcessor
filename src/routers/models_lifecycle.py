@@ -26,7 +26,13 @@ from src.schemas.models import (
     ModelLoadResponse,
 )
 from src.services.model_export import PYTORCH_MODELS_DIR, list_export_tasks
-from src.services.model_repository import promoted_owner, resolve_load_dir, resolve_model_dirs
+from src.services.model_repository import (
+    checked_model_name,
+    inside_repository,
+    promoted_owner,
+    resolve_load_dir,
+    resolve_model_dirs,
+)
 from src.services.model_unload_guard import UnloadRefusedError, check_unload
 from src.services.training.triton_repo import set_explicitly_unloaded
 from src.services.triton_control import TritonControlService
@@ -37,6 +43,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 TRITON_MODELS_DIR = Path('/app/models')
+
+
+def _valid_name(model_name: str) -> str:
+    try:
+        return checked_model_name(model_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # =============================================================================
@@ -56,7 +69,7 @@ async def get_model_status(model_name: str) -> ModelStatusResponse:
     - Current export status (if exporting)
     - Model metadata (classes, file size)
     """
-    # Check PyTorch model
+    _valid_name(model_name)
     pt_file = PYTORCH_MODELS_DIR / f'{model_name}.pt'
     has_pytorch = pt_file.exists()
     file_size_mb = None
@@ -133,6 +146,7 @@ async def load_model(model_name: str) -> ModelLoadResponse:
     - `{name}_trt` for standard TRT
     - `{name}_trt_end2end` for End2End TRT
     """
+    _valid_name(model_name)
     model_dir = resolve_load_dir(TRITON_MODELS_DIR, model_name)
     if model_dir is None:
         raise HTTPException(
@@ -164,6 +178,7 @@ async def unload_model(
     Same guard as the delete routes: 403 for the configured detector / OCR
     (even with ``force``), 409 for core models without ``force``.
     """
+    _valid_name(model_name)
     try:
         await check_unload(model_name, force=force, client=opensearch)
     except UnloadRefusedError as exc:
@@ -201,6 +216,7 @@ async def delete_model(
     detector / OCR, 409 core without ``force``); nothing is deleted when any is
     refused. A project-promoted model is a 409 ``project_owned_model``.
     """
+    _valid_name(model_name)
     triton = TritonControlService()
     deleted_files, unloaded = [], False
     model_dirs = resolve_model_dirs(TRITON_MODELS_DIR, model_name)
@@ -223,7 +239,7 @@ async def delete_model(
 
     # Delete PyTorch model
     pt_file = PYTORCH_MODELS_DIR / f'{model_name}.pt'
-    if pt_file.exists():
+    if pt_file.exists() and inside_repository(PYTORCH_MODELS_DIR, pt_file):
         pt_file.unlink()
         deleted_files.append(f'pytorch_models/{model_name}.pt')
         logger.info(f'Deleted PyTorch model: {pt_file}')

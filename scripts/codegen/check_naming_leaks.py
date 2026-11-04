@@ -30,8 +30,7 @@ never grows an exemption automatically.
 
 Run directly: ``python3 scripts/codegen/check_naming_leaks.py``.
 Wired into ``.pre-commit-config.yaml`` as a ``language: system``,
-``pass_filenames: false``, ``always_run: true`` hook (like its sibling
-``check_no_literal_region_fields.py``), so it always scans the whole tree
+``pass_filenames: false``, ``always_run: true`` hook, so it always scans the whole tree
 regardless of which files are staged.
 """
 
@@ -54,7 +53,8 @@ _ALWAYS_EXCLUDE_PATHS: tuple[str, ...] = ('src/static/docs/*.js', 'src/static/do
 
 SCAN_A = codecs.decode(
     r'xvyyobl|Xvyyobl|XVYYOBL|(?<![N-Mn-m0-9])(?:xo|XO)_|\oXo[N-M]|/xo\o|\oxo-[n-m]|'
-    r'Cbjreurnq|cbjreurnq|nggriba|/zag/anf|/zag/aiz|zbgbefcbeg|fhcrefghqvb|ubzr\.necn',
+    r'Cbjreurnq|cbjreurnq|nggriba|/zag/anf|/zag/aiz|zbgbefcbeg|fhcrefghqvb|ubzr\.necn|'
+    r'eha_qrrcfgernz|eha-qrrcfgernz',
     'rot13',
 )
 SCAN_B = (

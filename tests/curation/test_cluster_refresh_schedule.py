@@ -4,6 +4,8 @@ pinned by ``test_cluster_schedule_equivalence.py``."""
 
 from __future__ import annotations
 
+import pytest
+
 from src.services.curation.clustering.refresh_schedule import (
     Action,
     Observation,
@@ -19,7 +21,12 @@ POLICY = Policy(threshold=200, max_deferral_s=600.0, retry_backoff_s=300.0)
 
 def obs(count: int, *, unfinished: int = 0, tracked: str | None = None, busy: bool = False):
     return Observation(
-        count=count, unfinished=unfinished, tracked_status=tracked, busy=busy, loop_live=False
+        count=count,
+        unfinished=unfinished,
+        tracked_status=tracked,
+        busy=busy,
+        loop_live=False,
+        recent_ingest=False,
     )
 
 
@@ -179,3 +186,15 @@ def test_growth_past_the_threshold_from_empty_triggers_exactly_once() -> None:
     s.on_started(300, 'job-1', previous_trained=0)
     for cycle in range(3, 7):
         assert step(s, obs(300, tracked='completed'), cycle * 120.0, POLICY) is Action.NONE
+
+
+def test_recent_ingest_defers_even_when_count_is_flat_and_nothing_pending() -> None:
+    s = settled(1000)
+    step(s, Observation(1250, 0, None, False, False, recent_ingest=True), 0.0, POLICY)
+    flat = Observation(1250, 0, None, False, False, recent_ingest=True)
+    assert step(s, flat, 120.0, POLICY) is Action.DEFER
+
+
+def test_recent_ingest_must_be_given() -> None:
+    with pytest.raises(TypeError):
+        Observation(count=1, unfinished=0, tracked_status=None, busy=False, loop_live=False)  # type: ignore[call-arg]

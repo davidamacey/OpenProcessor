@@ -24,7 +24,7 @@ access control:
   mount and the upload root).
 
 The `curation` subsystem (see [`docs/CURATION.md`](docs/CURATION.md), opt-in
-behind the `curation` compose profile) adds about 237 operations, about 125 of
+behind the `curation` compose profile) adds about 310 operations, about 165 of
 them writes, all under the same no-authentication model. Projects isolate data
 from each other inside the application (an OpenSearch request guard refuses
 cross-project access), but that is a correctness boundary, not an access
@@ -177,7 +177,7 @@ index (person ids and names are fields on its documents), a face link on
   authentication, so it has no purge route. The `visual_search_people` documents themselves
   (whole-body crops) are not deleted.
 - **What the purge does not reach:** OpenSearch snapshots you took yourself, backups of
-  `data/`, container or Loki logs written before this release (a person rename used to log the
+  `data/`, container or Loki logs written by older versions (a person rename used to log the
   name), and copies a client already downloaded.
 
 ## Reporting a vulnerability

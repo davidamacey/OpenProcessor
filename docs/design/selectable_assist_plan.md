@@ -1,13 +1,14 @@
 # Selectable VLM and segmenter assist: per run, cluster, sub-cluster, selection, box and crop
 
-Status: plan, not implemented. Audience: a fresh implementation agent (Sonnet) with no
+Status: implemented (waves A, B and C; reference). The "Deviations" section is the as-built
+record; the base and PR notes below are the original plan. Audience: a fresh implementation agent (Sonnet) with no
 conversation memory. Base: `origin/main` at `bbe929a2` **plus** PR #329
 (`feat/workflow-controls`, not yet merged). Every line number below is from `bbe929a2`
 unless marked `(#329)`. Before starting PR 1, rebase on `main` after #329 merges; if it has
 not merged, branch from `feat/workflow-controls` and say so in the PR body.
 
 Read first: `CLAUDE.md`, `docs/VISION_AND_GOALS.md`, `CONTRIBUTING.md` (ratchets, baselines),
-`docs/design/label_confirmation_plan.md` (the VLM scope history).
+`docs-site/docs/guides/vlm-selection.mdx` (the VLM scope table).
 
 Notation: `{P}` = `/curation/projects/{project}`. Planned routes are written `{P}/assist/...`
 because `scripts/docs/check_docs_vs_code.py` rejects any doc that names a route the app

@@ -16,7 +16,7 @@ profile and, optionally, a small JSON config you drop in at deploy time
 (see "Configuring your own domain" below). Cropwright ships with **no
 domain built in**.
 
-Built with SvelteKit 2 + Svelte 5 runes + TypeScript strict + Tailwind
+Built with SvelteKit 3 + Svelte 5 runes + TypeScript strict + Tailwind
 v4. Pointer-event drag-and-drop via `svelte-dnd-action`. Dark theme,
 Apple system colors, keyboard-first UX.
 
@@ -89,7 +89,7 @@ backend hasn't mounted.
 | Score chips, mistakenness/uniqueness sort options            | `OP_SCORES_ENABLED`                                                                                                    |
 | Diverse-selection overlay on `/clusters/[id]`                | `OP_SELECT_DIVERSE_ENABLED`                                                                                            |
 | Embedding-plot lasso tool on `/clusters`                     | `OP_VIZ_PROJECTION_ENABLED`                                                                                            |
-| Semantic (embedding) search box                              | `OP_SEMANTIC_SEARCH_ENABLED`                                                                                           |
+| Semantic (embedding) search box                              | `OP_SEMANTIC_SEARCH_ENABLED` (on by default)                                                                           |
 | `/train` (preflight, launch, promote)                        | The backend's trainer container/worker running                                                                         |
 | `/bakeoff`                                                   | The backend's on-demand evaluator container, and its `/bakeoff/*` router mounted                                       |
 | `/ingest` browser upload persisting bytes for later browsing | The backend's ingest-upload persistence (a pre-persistence backend shows a banner explaining uploads aren't browsable) |

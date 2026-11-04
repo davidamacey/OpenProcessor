@@ -22,6 +22,7 @@ from src.services.labeling.vlm_attributes import specs_for
 from src.services.labeling.vlm_endpoints import (
     VlmEndpoint,
     VlmEndpointUnavailableError,
+    VlmRegistryUnavailableError,
     active_vlm_endpoint,
     available_vlm_endpoints,
     refresh_vlm_state,
@@ -53,6 +54,10 @@ def _unknown(requested: str) -> Any:
         requested=requested,
         valid_ids=[e.name for e in available_vlm_endpoints()],
     )
+
+
+def _registry_unavailable(exc: Exception) -> Any:
+    return rejection(503, 'config_store_unavailable', str(exc))
 
 
 def _parse(requested: str) -> tuple[str, int | None]:
@@ -87,7 +92,10 @@ async def resolve_run_vlm(
             return RunVlm(None, None, None)
     else:
         name, revision = _parse(requested)
-        endpoint = await resolve_vlm_source(opensearch, name, revision)
+        try:
+            endpoint = await resolve_vlm_source(opensearch, name, revision)
+        except VlmRegistryUnavailableError as exc:
+            raise _registry_unavailable(exc) from exc
         if endpoint is None:
             raise _unknown(requested)
     _pack, profile = current_pack_and_profile()
@@ -117,6 +125,8 @@ async def resolve_test_vlm(
     await refresh_vlm_state(opensearch)
     try:
         endpoint = await resolve_vlm_source(opensearch, name, revision, draft)
+    except VlmRegistryUnavailableError as exc:
+        raise _registry_unavailable(exc) from exc
     except VlmEndpointUnavailableError as exc:
         raise rejection(409, 'vlm_endpoint_unavailable', str(exc)) from exc
     if endpoint is None:

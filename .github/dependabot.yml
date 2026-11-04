@@ -29,9 +29,10 @@ updates:
         patterns:
           - "*"
     ignore:
-      # requirements-export-y11.txt pins ultralytics==8.3.x on purpose: the vendored
-      # EfficientNMS end2end patch breaks on 8.4. requirements.txt already carries the
-      # 8.4 range for YOLO26. Dependabot cannot ignore per file, so bump the pin by hand.
+      # ultralytics is an exact pin everywhere: 8.4.x in requirements.txt,
+      # requirements-test.txt and pyproject.toml (a test keeps them equal), and 8.3.x in
+      # requirements-export-y11.txt for the vendored EfficientNMS patch. The export head
+      # changed inside 8.4.x (#447), so every bump is by hand after the export checks.
       - dependency-name: "ultralytics"
       # tensorrt-cu13 must equal the TensorRT inside the Triton image (engine compatibility,
       # asserted at image build in Dockerfile.triton). Bump both together by hand.

@@ -28,20 +28,42 @@ reported."
 
 ## The ingest policy page (`/settings/ingest-policy`)
 
-The form starts from the policy the backend serves.
+The page shows, top to bottom, the **Detector (ingest profile)** card, the
+**Ingest profiles** list and the policy form. The form starts from the policy
+the backend serves.
 
 - **Embedding mode**, always open: `all` (every detection), `selected` (only
-  those matching your criteria) or `lazy` (no detection vector until asked for;
+  those matching your criteria), `lazy` (no detection vector until asked for;
   the whole-frame vector of each image is still computed) or `none` (detection
   only: no vector of any kind).
 - **Clustering**, a checkbox: "Cluster automatically". Unchecked, new items are not
   placed in clusters and the refresh and idle retrains skip the project.
 - **Detect filter**, collapsed under advanced: classes, excluded classes,
   confidence, area, a per-image cap and how classes are resolved.
-- **Per-project detector override**, also advanced.
+
+The detector is not part of the policy. It comes from the project's active
+ingest profile (see below).
 
 Nothing is checked in the browser, so for example `selected` mode with no
 criterion is refused by the backend when you save.
+
+### Ingest profiles
+
+The detector a project ingests with is chosen by its active ingest profile.
+
+- The **Detector (ingest profile)** card names the active profile and
+  revision. With none active it says ingest uses the deployment's default
+  detector and names it.
+- The **Ingest profiles** list marks the active one with an **Active** chip
+  and has **Activate** on the others.
+- A refused activation shows the backend's message and each issue it served
+  (for example `detector_model_not_ready`, `detector_model_unusable`,
+  `triton_unreachable`) as sent. **Activate anyway** appears only when the
+  backend says the refusal can be overridden. Warnings on a successful
+  activation are listed under "Activated, with warnings."
+
+Creating and editing profiles is done through the API; see the
+[Ingest profiles](../../guides/ingest-profiles.mdx) guide.
 
 ### Cost preview
 
@@ -55,12 +77,10 @@ only affects **future** ingests. When the backend sampled, it says
 
 ### Saving
 
-**Save** asks for confirmation, then writes the policy. If someone else saved
+**Save policy** asks for confirmation, then writes the policy. If someone else saved
 first you are offered **Reload** (drops your edits) or **Keep my edits**
 (rebases them on the latest policy). A list of unknown class names is shown
-as a warning; the policy is saved anyway. A detector that cannot be served
-shows the backend's message and reasons.
-
+as a warning; the policy is saved anyway. 
 ## Create classes from the detector (`/classes`)
 
 When a detector is reported, **Classes** has a collapsed panel that creates

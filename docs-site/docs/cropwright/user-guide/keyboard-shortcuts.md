@@ -56,7 +56,9 @@ makes the shortcuts below customizable per project rather than fixed.
 
 | Key | Action |
 | --- | --- |
+| `D` | Reject the item (no region visible) |
 | `F` | Mark false positive (box kept) |
+| `B` / `←` | Step back to the last confirmed item |
 | `E` | Enter box edit mode |
 | `Y` / `R` | Accept / reject the selected box (saves immediately) |
 | `Enter` | Confirm every box still proposed (see [Multi-box regions](./multi-box-regions.md)) |

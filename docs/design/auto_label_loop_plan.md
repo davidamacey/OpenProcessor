@@ -1,10 +1,10 @@
 # Cluster-sampled VLM auto-labeling loop over assist runs
 
-Status: S1 to S8 (engine, worker, routes, contracts, docs) and S10 (fake VLM modes, live test) are
-implemented on `feat/v070-assist-loop`; S9 (the Cropwright panel, on the clusters page, with the gaps below) is
-implemented; S0 and S11 (acceptance runs) are open. Issue #286, milestone v0.7.0, wave W3 of
-[`v070_wave_plan.md`](v070_wave_plan.md) (that file calls this doc `assist_loop_plan.md`; this is
-the same plan under the name the issue thread settled on). Audience: a fresh implementation agent
+Status: implemented (reference). S1 to S11 shipped; the S11 live run on public COCO was done
+2026-11-02 (#286 closed). S0 (the label-rate measurement) was never run, and the pause control, event
+log and token budgets are tracked in issue N16 (`program/09_github_actions.md`, v0.8.0). Issue #286,
+milestone v0.7.0, wave W3 of the 0.7.0 wave plan (retired; that plan called this doc
+`assist_loop_plan.md`; this is the same plan under the name the issue thread settled on). Audience: a fresh implementation agent
 with no conversation memory. Paths were checked with `rg` on `release/0.7.0` at `5f596793`;
 symbols are named instead of line numbers, re-find them with `rg`.
 
@@ -20,7 +20,7 @@ its source volume is read-only to every tool in this plan. The tested local cata
 two `tested` rows of `examples/vlm/catalog.tsv`; this doc calls the higher-ranked one "the tested
 local catalog model" (the naming scan bans its family name outside the catalog).
 
-Read first: `CLAUDE.md`, `docs/VISION_AND_GOALS.md`, `v070_wave_plan.md` (section 0 ground rules,
+Read first: `CLAUDE.md`, `docs/VISION_AND_GOALS.md`, the 0.7.0 wave plan (retired; section 0 ground rules,
 W3), [`selectable_assist_plan.md`](selectable_assist_plan.md) (sections 3.2 to 3.7),
 `docs-site/docs/guides/selective-assist.mdx`, `docs/research/cluster_types.md` (3.1),
 `docs/research/cluster_eval_baseline.md`.
@@ -270,7 +270,13 @@ the stack.
 
 Best-first: a priority queue of open nodes keyed by `(-N, path)`, so the budget goes to the nodes
 that label the most items per call first; deterministic for a fixed tree. Up to
-`node_concurrency` nodes evaluate at once; all VLM requests share one semaphore of
+`node_concurrency` nodes evaluate at once, each admitted against the crops and requests it may
+still need (an `admit` event records its claim; a resume restarts admitted nodes on that claim
+and does not decide again). The queue is strict: a head that must wait holds the nodes behind it
+even if a smaller one would fit. Reproducibility: the same seed and VLM answers give the same
+samples and splits; the set of nodes a binding budget covers is the same in every run only at
+`node_concurrency` 1, because with more the admission of the head depends on which running nodes
+have finished; all VLM requests share one semaphore of
 `vlm_concurrency` in-flight requests (the per-run `CONCURRENCY = 4` of assist runs would cap a
 loop near 2 crops/s, section 9). Stop: queue empty (`done`), budget (5.8), cancel, audit pause,
 `max_wall_s`. Defaults: `max_depth 3`, `branching 4`, `min_node_size 40`, `theta 0.9`,
@@ -548,7 +554,7 @@ propagated and clusters left for review.
    truth, false propagation on the similar-class stratum, the leaf partition scored by
    `cluster_eval.py`. Its clusters are tiny (about 4 labeled crops each), so it measures
    precision, not the cost ratio.
-2. The 10k COCO rehearsal-lite project (`v070_wave_plan.md` 3.2) for coverage and VLM crops per
+2. The 10k COCO rehearsal-lite project (the retired 0.7.0 wave plan, 3.2) for coverage and VLM crops per
    labeled item, once with the stub VLM and once with the real VLM.
 3. Set P: a copy of a sample (never the source volume), aggregates only into
    `artifacts_local/assist_loop/`.

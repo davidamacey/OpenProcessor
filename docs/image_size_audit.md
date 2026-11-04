@@ -1,9 +1,11 @@
 # Docker image size audit
 
-Status: audit (sections 1 to 6, measured 2026-09-26 against the published
-`davidamacey/openprocessor*:latest` images, the `cutover-local` builds of main
-`1ecdef8d`) and the result of executing it (sections 7 and 8, issue #41). The
-sections before 7 describe the images as they were.
+Status: **historical snapshot.** Sections 1 to 6 are the audit of 2026-09-26 (the published
+`davidamacey/openprocessor*:latest` images, the `cutover-local` builds of main `1ecdef8d`) and
+describe the 0.6.0 images as they were. Issue #41 executed it on this branch (sections 7 and
+8, measured 2026-11-01); the changes are under `[Unreleased]` in `CHANGELOG.md`, and 0.6.0 is
+still the latest published release. For the current images read the Dockerfiles and the
+results in section 8, not the sizes in sections 1 to 5.
 
 ## 1. Current sizes
 

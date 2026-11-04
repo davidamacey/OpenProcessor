@@ -41,7 +41,7 @@ The letter is in the reserved set (global actions + every registered
 slot's keymap). Pick a different letter — `/classes` shows the backend's
 detail text verbatim when a bind is rejected server-side.
 
-## A page I expect (Datasets, Prompt packs, Region profiles, Models registry, Combine) isn't there
+## A page I expect (Datasets, Prompt packs, Region profiles, Models registry) isn't there
 
 Each is probed once and shown only when the backend serves it (see
 [Backend feature flags](../configuration/backend-feature-flags.md)). A

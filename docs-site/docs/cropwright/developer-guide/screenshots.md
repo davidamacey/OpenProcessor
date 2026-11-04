@@ -32,6 +32,7 @@ exactly these calls, each of which writes nothing server-side:
 | `POST .../train/preflight` | preflight report |
 | `DELETE /curation/projects/{project}?dry_run=true` (never with `confirm`) | the delete dialog's dry-run report |
 | `POST /projects/combine/preview` | combine preview report |
+| `POST .../datasets/preview` | the import wizard's preview (a dry run) |
 | `POST .../reprocess` with `dry_run: true` | Reprocess "Check what would run" |
 | `POST .../assist/runs` with `dry_run: true`, `POST .../assist/runs/{run_id}/apply` with `dry_run: true` | the Assist dialog's plan and the proposal card's apply count (the server plans and counts, writes nothing) |
 | `POST .../prompt_packs/validate` | live pack validation |
@@ -76,7 +77,7 @@ a manual capture or a small extension that drives the clicks read-only.
 | `models-sharing` | `/models` | state | The owner's model marked "Shared with other projects" with Stop sharing |
 | `models-unshare-force` | `/models` | state | The 409 in-use list (project and profile) and the Unshare anyway button, never armed |
 
-The routes in `frontend/scripts/screenshot_routes.json` use bare paths, which redirect to the
+Page paths in the table are relative to `/p/<project>`. The routes in `frontend/scripts/screenshot_routes.json` use bare paths, which redirect to the
 default project; the script follows the redirect. Check each capture for
 anything private: project slugs, host names, secret reference names and file
 paths must be sample-data values.
@@ -101,10 +102,10 @@ stack does not have.
 
 ## Slots for the region, embedding and import-lock features
 
-These sixteen slots are scripted states
+These eighteen slots are scripted states
 (`--only <name>`) in `frontend/scripts/capture_docs_screenshots.py`, 1600px only (none of
-these layouts is narrow-sensitive). Two environment variables pick the projects:
-`LIFE_PROJECT=<the throwaway cwlife- project>`.
+these layouts is narrow-sensitive). The throwaway project is created and removed by
+`frontend/scripts/docs_screenshot_fixtures.py` (its name starts with `cwlife-`).
 
 | File (`-1600.png`) | Project | What it shows |
 | --- | --- | --- |

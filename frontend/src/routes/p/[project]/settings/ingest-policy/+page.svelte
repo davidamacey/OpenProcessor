@@ -10,8 +10,10 @@
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import ActiveIngestProfileCard from '$lib/components/detector/ActiveIngestProfileCard.svelte';
+  import IngestProfilePicker from '$lib/components/detector/IngestProfilePicker.svelte';
   import IngestPolicyForm from '$lib/components/detector/IngestPolicyForm.svelte';
   import IngestPolicyPreviewPanel from '$lib/components/detector/IngestPolicyPreviewPanel.svelte';
+  import { IngestProfilePicker as ProfilePickerCtl } from '$lib/detector/ingestProfilePickerController.svelte';
   import { IngestPolicyEditor } from '$lib/detector/ingestPolicyController.svelte';
   import { projectHref } from '$lib/projectPaths';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -22,11 +24,13 @@
   });
 
   const editor = new IngestPolicyEditor();
+  const picker = ProfilePickerCtl.withDefaults(() => editor.reloadProfile());
   let confirming = $state(false);
 
   onMount(() => {
     const ctl = new AbortController();
     void editor.load(ctl.signal);
+    void picker.load(ctl.signal);
     return () => {
       ctl.abort();
       editor.dispose();
@@ -73,6 +77,7 @@
       error={editor.profileError}
       detector={editor.detector}
     />
+    <IngestProfilePicker ctl={picker} />
     <IngestPolicyForm {editor} />
     <IngestPolicyPreviewPanel {editor} />
 

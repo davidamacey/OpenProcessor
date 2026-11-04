@@ -32,7 +32,7 @@ from typing import Any, Literal
 
 from src.clients.triton_client import get_sync_triton_client
 from src.config import get_settings
-from src.utils.image_processing import decode_image, validate_image
+from src.utils.image_processing import decode_ocr_image, validate_image
 from src.utils.retry import RetryExhaustedError
 
 
@@ -87,7 +87,7 @@ class OcrService:
             # An unusable image is the caller's problem (422), not an
             # inference failure (502).
             try:
-                image = decode_image(image_bytes)
+                image = decode_ocr_image(image_bytes)
                 if image is None:
                     return self._empty_result(error='Failed to decode image', kind='input')
                 validate_image(image)
@@ -98,7 +98,7 @@ class OcrService:
 
             # Call Triton OCR pipeline
             client = get_sync_triton_client(self.settings.triton_url)
-            result = client.infer_ocr(image_bytes)
+            result = client.infer_ocr(image)
 
             if result is None:
                 return self._empty_result(error='OCR inference failed', kind='inference')

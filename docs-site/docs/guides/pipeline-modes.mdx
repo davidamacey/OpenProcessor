@@ -20,7 +20,7 @@ is whatever `API_PORT` says in `.env`.
 | [(b) Detection, embedding, clustering](#b-detection-embedding-and-clustering) | Core stack and the `curation` workers. Every detection embedded. | The default. | A cluster-refresh retrain stalls on an audit-gate 409. (issue #280) |
 | [(c) VLM-assisted labeling of a large batch](#c-vlm-assisted-labeling-of-a-large-batch) | Mode (b) plus a VLM. | `vlm` profile or a remote endpoint, **project activation**, VLM policy. | Nothing: a project calls no VLM until it activates one. |
 | [Selective VLM](#recipe-ingest-without-the-vlm-cluster-name-by-hand-then-run-the-vlm-for-one-thing) | Mode (b), then the VLM for one cluster, batch or filter. | The recipe below. | Nothing runs the VLM on its own. |
-| [(d) Iterative cluster-sampled labeling](#d-iterative-cluster-sampled-auto-labeling-planned) | Not shipped. | Not selectable. | Planned. (issue #286) |
+| [(d) Iterative cluster-sampled labeling](#d-iterative-cluster-sampled-auto-labeling) | Mode (b), a VLM and the `curation-assist-loop-worker`. | `POST .../assist/loops`; see [Auto-label loop](./auto-label-loop.mdx). | The VLM budget (`max_vlm_crops`) is required. |
 
 :::note How the commands on this page were checked
 Blocks marked `# ran` were run on the local stack against the public project
@@ -541,21 +541,16 @@ each detected car, text-prompted (`wheel`), with the VLM verifying each box: see
 open-vocabulary prompt set: see [Open vocabulary](./open-vocabulary.mdx). Both call the
 VLM, so activate one for the project first.
 
-## (d) Iterative cluster-sampled auto-labeling (planned)
+## (d) Iterative cluster-sampled auto-labeling
 
-:::info Planned
-This mode is **not shipped**. There is no route, flag or setting for it, and no design
-document yet. (issue #286), related to #97 and #218.
+The auto-label loop samples crops from each cluster, labels them with the VLM, measures
+how well the answers agree, propagates the label to the cluster when the sample passes
+its gate, and splits the cluster and repeats when it does not. It runs in the
+`curation-assist-loop-worker` service under a required crop budget and can be rolled
+back. How to plan, start, monitor and roll back a loop is on
+[Auto-label loop](./auto-label-loop.mdx); this page does not repeat it.
 
-The idea is a loop: sample crops from each cluster and sub-cluster, label them with
-the VLM, measure how well the labels agree, propagate the label to the whole cluster
-when agreement passes a gate, and split the cluster and repeat when it does not. The
-parts exist as single steps today: the seeded, stratified sample, the proposal with its
-agreement gate and the explicit apply of an assist run (step 5 of the recipe above).
-The loop that drives them is what is not shipped.
-:::
-
-What exists today, and can be combined by hand:
+The single steps it is built from can still be run by hand:
 
 | Piece | Where |
 |---|---|
@@ -569,7 +564,6 @@ What exists today, and can be combined by hand:
   caption="A cluster page (public sample project)"
 />
 
-Each step is manual and one-shot. Nothing measures agreement or repeats.
 
 ## Troubleshooting
 

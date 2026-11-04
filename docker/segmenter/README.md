@@ -93,10 +93,10 @@ before persisting, the same contract the primary-detector path uses.
 ## Build and run
 
 ```bash
-# Build (pins upstream SAM 3 to the Dockerfile's SAM3_SHA default).
+# Build (SAM3_SHA defaults to upstream `main`, which publishes no releases).
 docker compose --profile segmenter build segmenter
 
-# Re-pin upstream SAM 3 to a specific commit.
+# Pin upstream SAM 3 to a specific commit.
 docker compose --profile segmenter build --build-arg SAM3_SHA=<sha> segmenter
 
 # Run it alongside the curation workers, and point them at it.
@@ -119,7 +119,7 @@ segmenter leg is a clean no-op; see
 | `SEGMENTER_LISTEN_PORT` | `8000` | HTTP port inside the container. Deliberately distinct from `SEGMENTER_PORT`, the host-side port compose maps (`env.template`) — sharing a name let `.env`'s host-port value leak into the container's own uvicorn bind and break it. |
 | `SEGMENTER_LOG_LEVEL` | `info` | uvicorn / app log level. |
 | `SEGMENTER_INSTANCES` | `2` | Processors in the pool = max concurrent forwards. |
-| `SEGMENTER_SHARED_WEIGHTS` | `0` | `1` builds the model once and wraps it in N processors (see below). |
+| `SEGMENTER_SHARED_WEIGHTS` | `0` in the code, `1` under the compose service | `1` builds the model once and wraps it in N processors (see below). |
 | `SEGMENTER_COMPILE` | `0` | `1` enables `torch.compile`. First call pays a 30–60 s warmup; steady state improves ~25–50%. |
 | `SEGMENTER_ENABLE_MASKS` | `1` | `0` skips the mask head — faster, but `mask_iou` comes back `null`. |
 
@@ -131,7 +131,7 @@ from `.env`.
 A SAM 3 image model is roughly 4 GB in bf16, and the pool bounds
 concurrency:
 
-* **Independent weights** (`SEGMENTER_SHARED_WEIGHTS=0`, default) — each
+* **Independent weights** (`SEGMENTER_SHARED_WEIGHTS=0`, the code default; compose sets `1`) — each
   processor gets its own model copy. Simple and obviously safe; VRAM
   scales linearly with `SEGMENTER_INSTANCES`.
 * **Shared weights** (`=1`) — one model, N processors over it.

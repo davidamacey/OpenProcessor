@@ -390,6 +390,14 @@ for those, use the webhook.
   cap (`too_large`) or one that is not an image is `dead` at once. A permission or
   network error (`forbidden`, `fetch_error`) is retried by later runs, three attempts in
   all, then `dead`. `retry-dead` puts dead rows back to `pending`.
+
+  | Cause | `error_kind` | Row after |
+  |---|---|---|
+  | 404, `NoSuchKey`, `NoSuchVersion` | `gone` | `dead` (deleted before the fetch; not retried) |
+  | 403, `AccessDenied`, other 4xx | `forbidden` | `failed` (retried: permissions can be fixed) |
+  | 5xx, throttling, timeout, connection | `fetch_error` | `failed` (boto3 retries first, standard mode, 5 attempts) |
+  | larger than `S3_MAX_OBJECT_MB` | `too_large` | `dead` |
+  | not an accepted extension, empty or undecodable | the existing decode `error_kind` values | `dead` (deterministic) |
 - **Failures list.** Each failure appears with its reason in the run's failures
   (`GET /curation/projects/{project}/ingest/bulk/{run_id}/failures`) and in the source's
   `errors`.

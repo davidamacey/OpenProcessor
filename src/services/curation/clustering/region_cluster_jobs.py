@@ -23,6 +23,7 @@ from src.services.curation.clustering.region_box_clustering import (
     cluster_region_residuals,
     count_false_positive_boxes,
 )
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -84,9 +85,7 @@ def _read_region_cluster_job() -> dict[str, Any]:
 def _write_region_cluster_job(state: dict[str, Any]) -> None:
     try:
         _job_file().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _job_file().with_suffix('.tmp')
-        tmp.write_text(json.dumps(state))
-        tmp.replace(_job_file())  # atomic rename
+        atomic_write_json(_job_file(), state, default=None)
     except OSError as exc:
         logger.warning('curation_region_cluster_job_write_failed', error=str(exc))
 
@@ -118,11 +117,11 @@ def mark_region_refine(cluster_id: int) -> None:
     """Record that a good region bucket was just manually refined (TTL anchor)."""
     try:
         _refine_marker().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _refine_marker().with_suffix('.tmp')
-        tmp.write_text(
-            json.dumps({'last_refine_at': datetime.now(UTC).isoformat(), 'cluster_id': cluster_id})
+        atomic_write_json(
+            _refine_marker(),
+            {'last_refine_at': datetime.now(UTC).isoformat(), 'cluster_id': cluster_id},
+            default=None,
         )
-        tmp.replace(_refine_marker())
     except OSError as exc:
         logger.warning('curation_region_refine_marker_write_failed', error=str(exc))
 
@@ -138,11 +137,11 @@ def _read_region_refine_marker() -> dict[str, Any]:
 def _write_region_partition_marker(fp_count: int) -> None:
     try:
         _partition_marker().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _partition_marker().with_suffix('.tmp')
-        tmp.write_text(
-            json.dumps({'last_partition_at': datetime.now(UTC).isoformat(), 'fp_count': fp_count})
+        atomic_write_json(
+            _partition_marker(),
+            {'last_partition_at': datetime.now(UTC).isoformat(), 'fp_count': fp_count},
+            default=None,
         )
-        tmp.replace(_partition_marker())
     except OSError as exc:
         logger.warning('curation_region_partition_marker_write_failed', error=str(exc))
 
@@ -285,9 +284,7 @@ def _read_region_fp_job() -> dict[str, Any]:
 def _write_region_fp_job(state: dict[str, Any]) -> None:
     try:
         _fp_job_file().parent.mkdir(parents=True, exist_ok=True)
-        tmp = _fp_job_file().with_suffix('.tmp')
-        tmp.write_text(json.dumps(state))
-        tmp.replace(_fp_job_file())
+        atomic_write_json(_fp_job_file(), state, default=None)
     except OSError as exc:
         logger.warning('curation_region_fp_job_write_failed', error=str(exc))
 

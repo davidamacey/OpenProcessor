@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.config.env import env_path
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -100,12 +100,7 @@ async def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 
     def _do() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + '.tmp')
-        with tmp.open('w', encoding='utf-8') as fh:
-            json.dump(payload, fh, indent=2, sort_keys=True, default=str)
-            fh.flush()
-            os.fsync(fh.fileno())
-        tmp.replace(path)
+        atomic_write_json(path, payload, indent=2, sort_keys=True)
 
     await asyncio.to_thread(_do)
 

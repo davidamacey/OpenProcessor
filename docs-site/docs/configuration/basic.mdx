@@ -56,7 +56,7 @@ Details are on [Projects](../guides/projects.mdx) and
 ## GPU profile and performance
 
 The installer and `scripts/setup.sh` write these keys from the selected GPU
-profile (`minimal`, `standard` or `full`; see [GPU sizing](../deployment/gpu-sizing.mdx)).
+profile (`minimal`, `small`, `standard` or `full`; see [GPU sizing](../deployment/gpu-sizing.mdx)).
 The profile is applied **when it is chosen**: it sets the Triton model
 instance counts and batch size in the model configs, and decides whether GPU
 decode is on (`OP_INGEST_GPU_DECODE`, the one profile-driven key the app
@@ -65,9 +65,10 @@ acts on). The API runs 32 uvicorn workers and every service that sets
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GPU_PROFILE` | `standard` | `minimal` (6-8 GB), `standard` (12-24 GB), `full` (40 GB+). Read by `./openprocessor gpu plan` and the model setup, not by compose |
+| `GPU_PROFILE` | `standard` | `minimal` (under 12 GB), `small` (12-15 GB), `standard` (16-39 GB), `full` (40 GB+). Read by `./openprocessor gpu plan` and the model setup, not by compose |
 | `GPU_ID` | `0` | GPU the setup scripts measure for the profile |
-| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal` and `standard` | Decode large photos on the GPU; costs about 8.5 GB more VRAM on the Triton card per `gpu_image_prep` instance (`full`: two) |
+| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal` and `standard` | Decode large photos on the GPU; costs about 8.5 GB more VRAM on the Triton card per `gpu_image_prep` instance (every profile runs one) |
+| `OP_TRT_BUILD_TARGET` / `OP_TRT_WORKSPACE_GB` | unset (`small` is implied by `GPU_PROFILE=small`) | TensorRT engine build target and workspace; see [12 GB cards](../deployment/gpu-sizing.mdx#12-gb-cards) |
 | `OPENSEARCH_HEAP` | `2g` in `env.template` | OpenSearch JVM heap. The installer sets it to half of host RAM, between 2 and 30 GB, and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
 
 Choose the profile at install time: pass `--profile NAME` to the installer,
@@ -143,7 +144,7 @@ curation deployment actually sets:
 | `OP_INGEST_PRIMARY_DETECTOR_MODEL` | **Required for ingest** (it `503`s without one): the Triton end2end model that proposes items, e.g. `yolov11_small_trt_end2end` |
 | `OP_INGEST_PRIMARY_CLASS_IDS` | Retired and ignored with a warning. Narrow ingest per project with the ingest policy instead |
 | `OP_INGEST_PRIMARY_ASSIGNS_CLASS` | `false` (default): detections are unlabeled proposals. `true` only if the detector was trained on your class registry |
-| `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in three services: `api`, `curation-detection-worker` and `curation-auto-label-worker`. A source checkout defaults to `./data/source`; the installer writes `./data`. Recreate all three after changing it |
+| `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in four services: `api`, `curation-detection-worker`, `curation-auto-label-worker` and `curation-assist-loop-worker`. A source checkout defaults to `./data/source`; the installer writes `./data`. Without the worker mounts thumbnails 404 and the VLM stage labels nothing. Recreate all four after changing it with `./openprocessor start` (or `make up && make curation-up` in a checkout); `./openprocessor restart` does not re-read `.env`. Paths you pass to ingest are container paths under `/data/source`; more roots: [Ingest a large folder](../guides/ingest-large-folder.mdx#3-more-than-one-share-op_source_path_aliases) |
 | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` | An OpenAI-compatible `/v1/chat/completions` endpoint. This defines the built-in `env` VLM endpoint, which a project uses only after it activates it; `OP_VLM_MODEL` is required whenever `OP_VLM_URL` is set. More endpoints are registered through the API; see [VLM selection](../guides/vlm-selection.mdx) |
 | `OP_SEGMENTER_URL` | e.g. `http://segmenter:8000`; empty makes the cascade's segmenter leg a clean no-op |
 | `HF_TOKEN` | Needed by the segmenter (gated SAM 3 weights) and for gated VLM weights |

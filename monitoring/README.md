@@ -26,6 +26,8 @@ docker compose logs -f grafana
 
 ## Access Points
 
+The compose profile, every monitoring service and its port override are in [Monitoring](../docs-site/docs/operations/monitoring.mdx); the dashboards and alert rules are below.
+
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | Grafana | http://localhost:4605 | admin / admin |
@@ -35,13 +37,13 @@ docker compose logs -f grafana
 
 The API job (`api:8000/metrics`) is scraped once and already aggregates every API worker (multiprocess mode, `PROMETHEUS_MULTIPROC_DIR` on a tmpfs in compose).
 
-## Dashboard
+## Dashboards
 
-### YOLO Triton Unified Dashboard
+Six dashboards are provisioned on startup (list at the end of this file). Open Grafana at http://localhost:4605.
 
-**Auto-loaded on startup** - Available immediately at http://localhost:4605
+### OpenProcessor Triton Dashboard (`triton-unified-dashboard.json`)
 
-**The all-in-one production dashboard** combining model performance, GPU resources, and system metrics.
+Model performance, GPU resources and system metrics in one place.
 
 **Dashboard Layout:**
 
@@ -475,7 +477,7 @@ Exposed by `node-exporter` on port 9100 inside the compose network (not publishe
 
 Query them in Prometheus (`http://localhost:4604`) or Grafana Explore.
 
-## Dashboards (provisioned from `monitoring/dashboards/`)
+## Provisioned dashboards (`monitoring/dashboards/`)
 
 `overview.json`, `ingest-pipeline.json`, `api-curation.json`,
 `triton-unified-dashboard.json`, `gpu-metrics-dashboard.json`, `logs.json`.

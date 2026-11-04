@@ -235,8 +235,8 @@ describe('Embedded column (v0.4.0)', () => {
     ];
     await render();
     expect(document.querySelector('thead')!.textContent).toContain('Embedded');
-    expect(q('project-embedded-a1')!.textContent!.trim()).toBe('7');
-    expect(q('project-embedded-b1')!.textContent!.trim()).toBe('—');
+    expect(q('project-embedded-a1')!.textContent!.trim()).toBe('Embedded 7');
+    expect(q('project-embedded-b1')!.textContent!.trim()).toBe('Embedded —');
   });
 });
 

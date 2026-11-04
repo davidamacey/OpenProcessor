@@ -9,6 +9,7 @@ not edit by hand: change the Python source and regenerate.
 | `ts/regionStatus.ts` | `RegionStatus` enum, `RegionStatusValue` union, `REGION_STATUS_VALUES`, `TERMINAL_REGION_STATUSES`, `PENDING_REGION_STATUSES`, `HUMAN_REGION_STATUSES` (the statuses an operator may write), `REGION_STATUS_ROLE` (each status's role), `CONFIRM_STATUS_VALUE` / `REJECT_STATUS_VALUE` / `FALSE_POSITIVE_STATUS_VALUE` — all derived from `REGION_STATUS_INFO` | `src/config/region_state.py` |
 | `ts/itemWire.ts` | `ItemWire` interface (the item every item-returning endpoint emits), `ITEM_WIRE_KEYS`, `REGION_WIRE_KEYS` (the `region_*` attribute subset), and per-endpoint extra keys (`REVIEW_EXTRA_KEYS`, `SEARCH_EXTRA_KEYS`, `TRAINING_CANDIDATE_EXTRA_KEYS`) | `ItemDoc` in `src/routers/curation/_item_models.py`, checked against `serialize_item` in `src/services/curation/wire.py` |
 | `json/item_wire.json` | The same item contract as JSON: ordered `item_keys`, `region_keys`, `extra_keys`, and the full `ItemDoc` JSON schema (types and nullability) | same as above |
+| `json/keymap_actions.json` | The keymap action table: `actions`, `contexts`, `grammar` | `src/config/keymap_actions.json` |
 | `ts/classSources.ts` | `CLASS_SOURCE_ROLES`, the `ClassSourceRole` union, and the `ClassSourceEntry` shape of `GET {prefix}/class_sources` | `src/services/curation/class_sources.py` |
 | `openapi/curation.json` | `app.openapi()` filtered to paths under the curation API prefix (default `/curation`) plus only the components those paths reference. Keys are sorted, and the app version is left out, so diffs show real contract changes only | the FastAPI app (`src/main.py`) |
 
@@ -28,7 +29,7 @@ Individual generators (each supports `--check`):
 
 ```bash
 python3 scripts/codegen/export_region_status_to_ts.py [--check]
-python3 scripts/codegen/export_api_contracts.py [--check] [--only item-wire|class-sources|openapi]
+python3 scripts/codegen/export_api_contracts.py [--check] [--only item-wire|class-sources|keymap-actions|openapi]
 ```
 
 `export_api_contracts.py` imports the app. It re-runs itself under the

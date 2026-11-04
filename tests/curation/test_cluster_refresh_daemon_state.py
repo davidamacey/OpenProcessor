@@ -49,9 +49,17 @@ class _Fake(SettingsFakeOpenSearch):
         super().__init__({})
         self.items = 0
         self.unfinished = 0
+        self.recent_ingest = 0
+        self.probes: list[Any] = []
 
     async def count(self, *, body: Any = None, **_: Any) -> dict[str, int]:
         return {'count': self.unfinished if body else self.items}
+
+    async def search(self, *, body: Any = None, **_: Any) -> dict[str, Any]:
+        """The "anything ingested lately" probe: it must ask for no documents and stop at
+        the first match, since only zero versus nonzero matters."""
+        self.probes.append(body)
+        return {'hits': {'total': {'value': min(self.recent_ingest, 1)}, 'hits': []}}
 
 
 class _Api:
@@ -98,6 +106,7 @@ def _poll(
                 sched=sched,
                 policy=POLICY,
                 auto_label=True,
+                settle_s=240,
                 now=now,
             )
 
@@ -206,7 +215,14 @@ def test_without_the_persisted_state_a_restart_would_start_early() -> None:
     """The schedule alone, to show what the persisted ``prev_count`` buys: a fresh
     schedule has no previous count and calls a growing ingest quiet."""
     fresh = ProjectSchedule(last_trained_count=1000)
-    obs = Observation(count=1600, unfinished=0, tracked_status=None, busy=False, loop_live=False)
+    obs = Observation(
+        count=1600,
+        unfinished=0,
+        tracked_status=None,
+        busy=False,
+        loop_live=False,
+        recent_ingest=False,
+    )
     assert step(fresh, obs, 0.0, POLICY) is Action.START
     restored = ProjectSchedule(last_trained_count=1000, prev_count=1300)
     assert step(restored, obs, 0.0, POLICY) is Action.DEFER
@@ -248,3 +264,37 @@ def test_a_failed_save_is_retried_on_the_next_poll() -> None:
         stored = asyncio.run(load_refresh_state(fake))
     assert stored.last_trained_count == 1000
     assert stored.trained_before is None  # the job completed by the second poll
+
+
+# ---- #443 -----------------------------------------------------------------
+
+
+def test_a_slow_ingest_batch_with_a_flat_count_does_not_start_the_retrain() -> None:
+    """Items did not change between two polls and nothing is pending, yet images were
+    ingested inside the settle window: ingest is still running."""
+    api, fake, sched = _Api(), _Fake(), ScheduleBook().get('alpha')
+    fake.items = 1000
+    fake.recent_ingest = 12
+
+    _poll(api, fake, sched, 0.0)
+    _poll(api, fake, sched, 120.0)
+
+    assert not api.started
+
+    fake.recent_ingest = 0
+    _poll(api, fake, sched, 240.0)
+
+    assert api.started
+
+
+def test_the_recent_ingest_probe_reads_no_documents_and_stops_at_one_match() -> None:
+    api, fake, sched = _Api(), _Fake(), ScheduleBook().get('alpha')
+    fake.items = 1000
+    fake.recent_ingest = 5000
+
+    _poll(api, fake, sched, 0.0)
+
+    (probe,) = fake.probes
+    assert probe['size'] == 0
+    assert probe['terminate_after'] == 1
+    assert probe['query']['range']['indexed_at']['gte'].startswith('now-')

@@ -1,4 +1,4 @@
-# Vector store benchmark stack (docs/design/v060_vector_db_evaluation_plan.md section 5).
+# Vector store benchmark stack (docs/research/v060_vector_db_evaluation_plan.md section 5).
 #
 # Always run under its own project name, never the live one, and one engine at a time:
 #   docker compose -p vecdb -f docker/bench/vectordb/compose.yml up -d opensearch

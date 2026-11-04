@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from src.domain.loop_tree import parse_path
 from src.services.curation.assist.proposal import ClassAnswer
 from src.services.curation.file_job import FileJob
+from src.utils.atomic_write import atomic_write_bytes
 from src.utils.timeutil import now_iso
 
 
@@ -51,12 +52,7 @@ def _fsync_dir(directory: Path) -> None:
 
 def _write_atomic(target: Path, text: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f'.{target.name}.tmp')
-    with tmp.open('w', encoding='utf-8') as fh:
-        fh.write(text)
-        fh.flush()
-        os.fsync(fh.fileno())
-    tmp.replace(target)
+    atomic_write_bytes(target, text.encode('utf-8'))
     _fsync_dir(target.parent)
 
 
@@ -216,6 +212,9 @@ class NodeRecord:
     """Eligible members of each child, from the ``children`` event."""
     crops: int = 0
     """VLM crops reserved for this node."""
+    claim: int | None = None
+    """Crops the scheduler admitted the node against (spent plus still possible); ``None``
+    until it is admitted. A resume restarts an admitted node on this claim."""
     propagate_begun: bool = False
     propagated: dict[str, Any] | None = None
 
@@ -281,6 +280,8 @@ def _apply(tree: LoopTree, event: dict[str, Any]) -> None:
         node = tree.node(event['path'])
         node.children = [c['path'] for c in event['children']]
         node.child_n = {c['path']: int(c['n']) for c in event['children']}
+    elif kind == 'admit':
+        tree.node(event['path']).claim = int(event['claim'])
     elif kind == 'propagate_begin':
         tree.node(event['path']).propagate_begun = True
     elif kind == 'propagated':

@@ -41,7 +41,7 @@ Comprehensive guide for optimizing and deploying models with Triton in productio
 
 ```protobuf
 dynamic_batching {
-  preferred_batch_size: [8, 16, 25, 50]  # Powers of 2 + GPU-optimal sizes
+  preferred_batch_size: [8, 16, 25, 50]  # Example: powers of 2 + GPU-optimal sizes
   max_queue_delay_microseconds: 100
 }
 ```
@@ -52,9 +52,7 @@ dynamic_batching {
 - Smaller models benefit from larger batches
 - Larger models may need smaller preferred sizes
 
-**Our YOLO11 Configuration:**
-- `max_batch_size: 50` - allows up to 50 concurrent images
-- `preferred_batch_size: [8, 16, 25, 50]` - Triton waits to form these sizes
+**Our YOLO11 configuration** is in `models/yolov11_small_trt_end2end/config.pbtxt` (batch size, preferred sizes and queue delay, with the reasons in the file's comments).
 
 ---
 
@@ -145,14 +143,9 @@ instance_group [
 - **Smaller models**: 2-4 instances
 - **GPU memory limit**: `instances × model_memory < GPU_memory × 0.8`
 
-**Our RTX A6000 (48GB) Capacity:**
-```
-YOLO11 small (end2end): ~400MB  → 2 instances (production)
-SCRFD-10G:              ~12MB   → 2 instances (production)
-ArcFace w600k_r50:      ~86MB   → 2 instances (production)
-MobileCLIP encoders:    ~100MB  → 2 instances (production)
-PaddleOCR det+rec:      ~50MB   → 2 instances (production)
-```
+**Our capacity.** Per-instance GPU memory differs by model and by TensorRT build; the figures are in the
+comments of each `config.pbtxt` (for example SCRFD is about 1.7 GB for one instance). Instance counts
+come from the installer GPU profile; `./openprocessor gpu plan` shows what fits the card.
 
 **Testing Strategy:**
 ```bash
@@ -188,7 +181,7 @@ curl http://localhost:8002/metrics | grep gpu_utilization
 Optimal Concurrency = 2 × max_batch_size × instance_count
 
 Example (our config):
-= 2 × 50 × 2 = 200 concurrent requests
+= 2 × 64 × 2 = 256 concurrent requests
 ```
 
 **Tuning Process:**
@@ -235,10 +228,10 @@ concurrency: 128+
 
 **Balanced (our use case):**
 ```protobuf
-max_batch_size: 50
+max_batch_size: 64
 dynamic_batching {
-  preferred_batch_size: [8, 16, 25, 50]
-  max_queue_delay_microseconds: 100
+  preferred_batch_size: [8, 16, 32, 64]
+  max_queue_delay_microseconds: 25000
 }
 instance_group { count: 2 }
 concurrency: 16-64
@@ -417,77 +410,28 @@ YOLO11-large:  max_batch: 8-32,   preferred: [4, 8, 16]
 2. Validate (null checks, max dimension)
 3. Pass to YOLO
 
-### Expected Performance (RTX A6000)
+### Measured performance
 
-**Triton + TensorRT (current production):**
-```
-Single request:   ~10-15ms latency
-Batch 8:          ~30-40ms latency, 200-250 img/sec
-Batch 16:         ~50-60ms latency, 250-300 img/sec
-Batch 64:         ~100-150ms latency, 350-500 img/sec
-Concurrent (64):  ~300-500 img/sec sustained
-```
+This guide holds no throughput numbers. The measured results, with hardware and method, are in [PERFORMANCE.md](../PERFORMANCE.md).
 
 ---
 
 ## Our Current Configuration
 
-### What We Have Now
+The model configs are the source of truth: read `models/*/config.pbtxt` for batch sizes, instance
+counts and queue delays, and `./openprocessor gpu plan` for what the installer profile
+(`minimal`, `small`, `standard`, `full`) puts on a card. Engines are built by the `model-export`
+container ([export/README.md](../../export/README.md)); precision follows the ONNX dtypes
+(TensorRT 11 builds are strongly typed).
 
-All models use native TensorRT FP16 plans on GPU 0. Example from `yolov11_small_trt_end2end`:
+Models Triton serves: `yolov11_small_trt_end2end` (YOLO11, GPU NMS), `yolo26_small_trt` (YOLO26,
+NMS-free), `scrfd_10g_bnkps`, `arcface_w600k_r50`, `mobileclip2_s2_image_encoder`,
+`mobileclip2_s2_text_encoder`, `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a Python
+BLS), `pe_image_encoder`, `pe_text_encoder` and `gpu_image_prep` (decode-once ingest, a Python
+backend).
 
-```protobuf
-platform: "tensorrt_plan"
-max_batch_size: 128
-
-instance_group [
-  {
-    count: 2
-    kind: KIND_GPU
-    gpus: [0]
-  }
-]
-
-dynamic_batching {
-  preferred_batch_size: [8, 16, 32, 64]
-  max_queue_delay_microseconds: 5000
-}
-```
-
-**Active Models (8 total):**
-- `yolov11_small_trt_end2end` — YOLO11 object detection (TRT, end2end NMS)
-- `scrfd_10g_bnkps` — SCRFD face detection (TRT, CPU NMS)
-- `arcface_w600k_r50` — ArcFace face embeddings (TRT)
-- `mobileclip2_s2_image_encoder` — CLIP image embeddings (TRT)
-- `mobileclip2_s2_text_encoder` — CLIP text embeddings (TRT)
-- `paddleocr_det_trt` — PaddleOCR text detection (TRT)
-- `paddleocr_rec_trt` — PaddleOCR text recognition (TRT)
-- `ocr_pipeline` — BLS ensemble (det → rec)
-
-### Recommended Configuration
-
-**For testing/development (current):**
-```protobuf
-max_batch_size: 50
-instance_group { count: 2 }
-preferred_batch_size: [8, 16, 25, 50]
-```
-
-**For production (high throughput):**
-```protobuf
-max_batch_size: 64  # Increase capacity
-instance_group { count: 2 }  # Keep at 2
-preferred_batch_size: [8, 16, 32, 64]  # Larger preferred sizes
-max_queue_delay_microseconds: 200  # Allow more batching
-```
-
-**For production (low latency):**
-```protobuf
-max_batch_size: 16  # Smaller batches
-instance_group { count: 1 }  # Single instance
-preferred_batch_size: [4, 8]  # Small preferred
-max_queue_delay_microseconds: 50  # Quick response
-```
+Tuning for latency or throughput is done per model with the method below, and recorded in
+[PERFORMANCE.md](../PERFORMANCE.md).
 
 ---
 
@@ -552,6 +496,3 @@ perf_analyzer -m yolov11_small_trt_end2end --concurrency-range 1:128:16
 - [NVIDIA Developer Forums](https://forums.developer.nvidia.com/c/ai/triton-inference-server/)
 
 ---
-
-**Last Updated:** January 2026
-**For:** Multi-model deployment on RTX A6000 with Triton Inference Server

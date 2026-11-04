@@ -37,12 +37,13 @@ make curation-down
 | `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls each project's items index (every 120 s by default). Once a project has grown by 200 items it calls that project's `POST /curation/projects/{project}/clusters/auto_promote`, then queues the auto-label job (no VLM stage) as the centroid retrain. The retrain is on by default (`--no-auto-label` turns it off). The flags are command-line only; see [Pipeline modes](../guides/pipeline-modes.mdx#3-what-the-cluster-refresh-daemon-does). |
 | `curation-evaluator` | its own image | Watches each project's `bakeoff_jobs` directory and runs model comparisons. It has no restart policy and its own `evaluator` profile, so `--profile curation up -d` and `./openprocessor curation up` do not start it. Start it on purpose with `./openprocessor curation up curation-evaluator` or `docker compose run --rm curation-evaluator`. It needs the NVIDIA runtime and the card named by `EVALUATOR_GPU_ID`. |
 
-`api`, `curation-detection-worker` and `curation-auto-label-worker` must
+`api`, `curation-detection-worker`, `curation-auto-label-worker` and
+`curation-assist-loop-worker` must
 mount the **same** source directory at the same container path
 (`OP_SOURCE_ROOT_HOST` → `/data/source`, read-only). If a worker lacks it,
 ingest succeeds but that worker's reads fail with `detection_failed` /
 `image_unavailable`. After changing `OP_SOURCE_ROOT_HOST`, recreate all
-three with `./openprocessor start`. See
+four with `./openprocessor start`. Details: [Basic configuration](../configuration/basic.mdx) and
 [Ingest a large folder](../guides/ingest-large-folder.mdx).
 
 ## Which worker needs what

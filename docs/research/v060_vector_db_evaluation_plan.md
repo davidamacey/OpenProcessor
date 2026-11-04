@@ -1,7 +1,7 @@
 # v0.6.0 vector store evaluation plan
 
 Status: measured at 2k, 10k and 100k real vectors (section 10); 1M not run. Issue: #221 (work package WP-V of
-[v060_wave_plan.md](v060_wave_plan.md)); its OpenSearch-tuning arm is #56. Measurement only: no
+the retired 0.6.0 wave plan, see [PERFORMANCE.md](../PERFORMANCE.md)); its OpenSearch-tuning arm is #56. Measurement only: no
 datastore change ships from this plan without an explicit owner decision.
 
 Question: for the curation embedding index, is OpenSearch k-NN (as shipped, or tuned) the right
@@ -168,7 +168,7 @@ Adopt a split for the embedding index only if **all** hold at D1M on the benchma
 
 Otherwise: adopt the best OS-tuned configuration (expected outcome is unknown; the arms are run
 precisely to find out), record its numbers in `docs/PERFORMANCE.md` and
-`docs/design/storage_sizing_and_ingest_baselines.md`, and close #56 with them. Any change to the
+[storage_sizing_and_ingest_baselines.md](storage_sizing_and_ingest_baselines.md), and close #56 with them. Any change to the
 shipped index settings (ef_search, quantization) is its own WP with the parity gates of the wave
 plan (kNN overlap@10 against the float32 reference >= 0.95 on the review-default filter).
 

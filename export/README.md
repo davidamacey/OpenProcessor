@@ -337,11 +337,6 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
 - Output (end2end): `num_dets`, `det_boxes`, `det_scores`, `det_classes`
 - Dynamic batching: 1-64 (configurable)
 
-### Dual-Head Detector
-- Input: `[B, 3, S, S]` UINT8 RGB, letterboxed; the engine divides by 255 (`S` = `--imgsz`)
-- Output: `output0` (detection tensor) + `sppf_feat` `[B, C, S/32, S/32]`
-- Dynamic batching: 1-`--max-batch`
-
 ### SCRFD-10G Face Detection
 - Input: `[B, 3, 640, 640]` FP32, RGB, (x-127.5)/128.0 normalized
 - Output: 9 tensors (3 FPN strides x score/bbox/kps), CPU post-processed

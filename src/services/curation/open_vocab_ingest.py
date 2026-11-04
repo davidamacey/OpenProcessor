@@ -35,7 +35,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 #: One ingest-time pass at a time per process, so ingest bursts queue behind
-#: each other instead of multiplying the segmenter load.
+#: each other instead of multiplying the segmenter load. A local throttle only, not
+#: a guard: other API workers (and the sweeper) run their own passes, and that is
+#: safe because a pass over an image is idempotent and the durable ``pending`` stamp
+#: is what recovers an unfinished one. It binds to the API worker's single event loop.
 _PASS_LOCK = asyncio.Lock()
 _tasks: set[asyncio.Task[None]] = set()
 

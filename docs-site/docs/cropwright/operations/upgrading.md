@@ -19,5 +19,7 @@ repository, so a genuine wire-shape mismatch fails a build rather than shipping 
 change `PUBLIC_API_PREFIX`, it must still equal the backend's own
 `OP_API_PREFIX` after the upgrade.
 
+The backend side (backups, rollback, retired variables) is in [Upgrade, repair and back up](../../operations/upgrade-and-backup.mdx).
+
 There is no data migration on the Cropwright side — it holds no state of
 its own.

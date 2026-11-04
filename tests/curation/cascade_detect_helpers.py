@@ -89,6 +89,7 @@ def _make_mock_pool(
     """
     pool = MagicMock()
     pool.get_model_input_datatype = AsyncMock(return_value=input_datatype)
+    pool.get_model_output_shape = AsyncMock(return_value=(-1, 5, -1))
     if raises is not None:
         pool.infer = AsyncMock(side_effect=raises)
     else:

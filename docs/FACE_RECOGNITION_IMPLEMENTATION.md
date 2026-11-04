@@ -28,9 +28,7 @@ FastAPI Client (fast_face_client.py)
 | Model | `scrfd_10g_bnkps` (Batch Normalization, with Keypoints) |
 | Input | `[B, 3, 640, 640]` FP32, RGB, normalized |
 | Outputs | 9 tensors: 3 strides × (scores, boxes, landmarks) |
-| Max Batch | 32 |
-| TensorRT | FP16, GPU 0, 2 instances |
-| Dynamic Batching | preferred_batch_size: [1, 4, 8, 16, 32] |
+| Triton settings | FP16 build; batch size, instances and queue in `models/scrfd_10g_bnkps/config.pbtxt` (the installer profile sets them) |
 | WiderFace | 95.2% Easy / 93.9% Medium / 83.1% Hard |
 
 **Landmark Order (5 points):**
@@ -47,9 +45,7 @@ FastAPI Client (fast_face_client.py)
 | Model | `arcface_w600k_r50` (WebFace600K trained ResNet-50) |
 | Input | `[B, 3, 112, 112]` FP32, RGB, `(x - 127.5) / 128` |
 | Output | `[B, 512]` FP32, L2-normalized |
-| Max Batch | 64 |
-| TensorRT | FP16, GPU 0, 2 instances |
-| Dynamic Batching | preferred_batch_size: [1, 4, 8, 16, 32, 64] |
+| Triton settings | FP16 build; batch size, instances and queue in `models/arcface_w600k_r50/config.pbtxt` (the installer profile sets them) |
 | LFW Accuracy | 99.8% |
 
 **ArcFace Reference Landmarks (112x112 aligned face):**
@@ -82,28 +78,15 @@ ARCFACE_REF_LANDMARKS = [
 
 ## OpenSearch Faces Index
 
-**Index:** `visual_search_faces`
+The `visual_search_faces` index (512-d ArcFace `embedding`, HNSW `ef_construction` 1024, `m` 32, `ef_search` 512)
+is described field by field in [opensearch_schema_design.md](opensearch_schema_design.md#fields).
 
-| Field | Type | Description |
-|-------|------|-------------|
-| face_id | keyword | Unique face detection ID |
-| person_id | keyword | Identity cluster (same person) |
-| image_id | keyword | Source image ID |
-| image_path | keyword | Source image path |
-| embedding | knn_vector[512] | ArcFace embedding |
-| cluster_id | integer | FAISS IVF cluster |
-| cluster_distance | float | Distance to centroid |
-| box | float[4] | [x1,y1,x2,y2] normalized |
-| landmarks | object | 5-point facial landmarks |
-| confidence | float | Detection confidence |
-| quality_score | float | Face quality metric |
-| person_name | keyword | Optional identity label |
-| is_reference | boolean | Reference face for clustering |
+**Persons.** `POST /persons/cluster` gives every face a person and keeps ids stable across re-runs. A person
+that was named or merged is locked: the clusterer never moves its faces. The routes are under `/persons`.
 
-**HNSW Parameters:**
-- ef_construction: 1024
-- m: 32
-- ef_search: 512
+**Switching faces off.** `OP_FACES_ENABLED=false` (installer flag `--no-faces`) turns the face models off
+deployment-wide: the face, person and `/search/face` routes answer `400 faces_disabled`, and ingest and
+analyze skip faces. `./openprocessor faces purge` deletes stored face data.
 
 ---
 
@@ -185,7 +168,3 @@ make test-faces
 - [InsightFace Model Zoo](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)
 - [InsightFace-REST (TensorRT deployment)](https://github.com/SthPhoenix/InsightFace-REST)
 - [LFW Dataset](https://vis-www.cs.umass.edu/lfw/)
-
----
-
-**Last Updated:** January 2026

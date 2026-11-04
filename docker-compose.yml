@@ -262,6 +262,7 @@ services:
       # ===================================================================
       - --workers=32  # Increased for higher face pipeline throughput
       - --limit-max-requests=10000       # Recycle workers every 10k requests (prevents memory leaks)
+      - --limit-max-requests-jitter=1000 # Stagger recycles so the workers do not all restart together
       # ===================================================================
       # Event Loop & HTTP Protocol (Already Optimized)
       # ===================================================================

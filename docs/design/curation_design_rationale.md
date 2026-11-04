@@ -158,28 +158,24 @@ confusion before:
   symptom. Do not "fix" this again; both are the correct, already-fixed
   form.)
 
-`scripts/codegen/check_no_literal_region_fields.py` is the automated
-half of this guarantee: a pre-commit hook that bans a raw
-`'region_...'`-shaped domain literal (the exemplar the check was built
-against was the reference deployment's own field prefix) from appearing
-in any file it has been told to police, via a growing `PORTED_PATHS`
-allowlist. Each wave that ports or writes new curation code appends its
-paths to that allowlist in the same commit — once a module is covered,
-it can never silently regress to hardcoding a storage field name again.
-Two categories are deliberately exempt from the ban and documented
-in-file: `RegionFields`' own docstrings (which must name the
-illustrative override example) and the frozen Pydantic wire-model
-attribute declarations from §3 (which are a different naming system
-entirely and were never in this guard's scope).
+`tests/test_no_legacy_region_scalars.py` is the automated half of this
+guarantee. Every per-box attribute lives in the `region_boxes` list, and the
+item-level `RegionFields` names that once held them are gone. The test
+fails on any module under `src/` or `scripts/` that reads a retired attribute
+through `RegionFields`, spells a retired wire name in a string (whole, embedded in
+a script, or built from parts) or reaches a `RegionFields` value reflectively.
+Two categories are deliberately exempt and documented in-file: `RegionFields`'
+own docstrings (which must name the illustrative override example) and the
+frozen Pydantic wire-model attribute declarations from §3 (a different naming
+system, never in this guard's scope).
 
 ## 5. The pre-commit size ratchet
 
-`.pre-commit-config.yaml`'s `max-file-size` hook caps source files at
-700 LOC to keep modules reviewable and discourage grab-bag files. The
-files that arrived with the curation port over that cap were split into
-modules per concern, each under the cap, and the hook has no exemptions.
-A new oversize file is split before it is committed; do not add an
-exclude.
+The `max-file-size` hook (`scripts/codegen/check_file_size.py`) caps first-party source files at
+700 lines to keep modules reviewable and discourage grab-bag files. Baselined files sit in
+`scripts/codegen/baselines/file_size.txt` and may only shrink; the full set of guards is in
+[engineering_standards.md](engineering_standards.md). A new oversize file is split by concern
+before it is committed; do not add an exclude or re-baseline.
 
 ## 6. Known gaps
 
@@ -190,12 +186,12 @@ discovered-in-production surprises.
   /curation/projects/{project}/ingest/image` and `/ingest/batch` create items
   (duplicate detection, quality gate, crop-cache population, bulk indexing),
   and `POST /curation/projects/{project}/datasets/imports` brings in labeled
-  YOLO, COCO or OpenProcessor-export datasets. What is deliberately not
+  datasets (YOLO, COCO, the OpenProcessor export and six more formats). What is deliberately not
   included is a domain-specific detector ensemble, a fixed class allowlist or a
   region-status assignment policy: those are the region profile, the class
   registry and your detector models.
 - **The asynchronous half is opt-in and needs your models.** `docker compose
-  --profile curation up -d` starts the detection, VLM, auto-label and
+  --profile curation up -d` starts the detection, VLM, auto-label, auto-label-loop and
   cluster-refresh workers. The trainer (`docker/trainer/`, profile `training`)
   and the segmenter (`docker/segmenter/`, profile `segmenter`) ship as
   reference containers speaking the file and wire protocols the API already
@@ -216,7 +212,7 @@ discovered-in-production surprises.
 
 None of this blocks the core loop of ingest or import, browse, cluster,
 review, label and export. It limits how turnkey the subsystem is for an
-arbitrary deployment, which is why it is labelled experimental for v0.4.0;
+arbitrary deployment, which is why it is labelled experimental for v0.6.0;
 see `docs/CURATION.md`.
 
 ## 7. Labeling-assist selection: `PromptPack`, `DetectionProfile`, and the frontend's annotation-slot model
@@ -298,7 +294,7 @@ external baselines are compared on identical ground, per class.
 request into a job spec (`src/services/curation/bakeoff_jobs.py`, with
 `bakeoff_resolve.py` and `bakeoff_mapping.py`) and drops
 `<job_id>.job.json` into a shared directory; the evaluator container
-(`docker/evaluator/Dockerfile`, running `bakeoff_runner --watch`) does the
+(the `evaluator` target of the root `Dockerfile`, running `bakeoff_runner --watch`) does the
 scoring and writes `status.json`, one `comparison.json` per dataset and a
 `matrix.json` back. The harness lives under `scripts/` rather than `src/`
 because it needs a newer detection stack than the API image pins and never
@@ -422,8 +418,8 @@ other.
 **Why a config store.** Domain configuration as environment variables and files means that
 changing a prompt is a file edit and a restart. Operators
 need to edit, test and roll back configuration while workers run. The store
-keeps three kinds of document (prompt packs, region profiles, VLM endpoints)
-plus the settings defaults, with the same rules:
+keeps these kinds of document (prompt packs, region profiles, ingest profiles,
+open-vocabulary sets, VLM endpoints) plus the settings defaults, with the same rules:
 
 - Saves are immutable revisions with audit fields; a revision number is never
   reused, so "profile `wheels` r3" always means the same body.
@@ -595,7 +591,7 @@ share one design.
   (`OP_DATASET_IMPORT_MAX_PENDING`) keeps an import from burying the queue.
 - **Dry run by default.** Reprocess (`POST
   /curation/projects/{project}/reprocess`) is the single re-run route for the
-  `detect`, `region`, `vlm` and `embed` scopes. It counts what it would do and
+  `detect`, `open_vocab`, `region`, `vlm` and `embed` scopes. It counts what it would do and
   what the lock rule skips before it does anything, and large detect or embed
   runs are file-backed jobs that survive a restart. It replaced a handful of
   separate requeue, clear and retry paths whose differing guards were the

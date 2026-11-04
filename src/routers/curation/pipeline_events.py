@@ -34,13 +34,29 @@ from src.routers.curation._common import OpenSearchDep, router
 # identical `_search?size=0` round-trips every 15s. Keyed by the bound
 # project's slug -- a single shared cache entry here previously served
 # project B's stats to project A's SSE connection (and vice versa)
-# whenever their refresh windows overlapped. The lock ensures that when
-# several connections for the same project fire in the same window,
-# only the first actually queries OpenSearch.
+# whenever their refresh windows overlapped.
+#
+# A per-process optimisation only: it guards no shared state (the index is the
+# truth and every API worker keeps its own copy, so a duplicate aggregation
+# across workers is just a repeated read). Concurrent connections of one
+# project share one in-flight aggregation; there is no lock, so one project's
+# slow aggregation never holds up another's.
 _STATS_CACHE_TTL_SECONDS = 10.0
-_stats_cache_lock = asyncio.Lock()
 _stats_cache_payload: dict[str, dict[str, Any]] = {}
 _stats_cache_expires_at: dict[str, float] = {}
+_stats_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
+
+
+async def _aggregate_stats(slug: str, opensearch: AsyncOpenSearch) -> dict[str, Any]:
+    from src.routers.curation.stats import stats_dataset
+
+    try:
+        payload = await stats_dataset(opensearch)
+    except Exception as exc:
+        payload = {'error': f'{type(exc).__name__}: {exc}'}
+    _stats_cache_payload[slug] = payload
+    _stats_cache_expires_at[slug] = time.monotonic() + _STATS_CACHE_TTL_SECONDS
+    return payload
 
 
 async def _cached_stats_payload(opensearch: AsyncOpenSearch) -> dict[str, Any]:
@@ -48,23 +64,17 @@ async def _cached_stats_payload(opensearch: AsyncOpenSearch) -> dict[str, Any]:
     ``_STATS_CACHE_TTL_SECONDS`` per project, shared across that
     project's concurrent SSE connections only."""
     from src.config.project_context import current_project
-    from src.routers.curation.stats import stats_dataset
 
     slug = current_project().record.slug
-
-    async with _stats_cache_lock:
-        # Re-check inside the lock: another connection for this project
-        # may have just refreshed it while we were waiting to acquire.
-        expires = _stats_cache_expires_at.get(slug, 0.0)
-        if slug in _stats_cache_payload and time.monotonic() < expires:
-            return _stats_cache_payload[slug]
-        try:
-            payload = await stats_dataset(opensearch)
-        except Exception as exc:
-            payload = {'error': f'{type(exc).__name__}: {exc}'}
-        _stats_cache_payload[slug] = payload
-        _stats_cache_expires_at[slug] = time.monotonic() + _STATS_CACHE_TTL_SECONDS
-        return payload
+    if slug in _stats_cache_payload and time.monotonic() < _stats_cache_expires_at.get(slug, 0.0):
+        return _stats_cache_payload[slug]
+    task = _stats_inflight.get(slug)
+    if task is None:
+        task = asyncio.create_task(_aggregate_stats(slug, opensearch))
+        _stats_inflight[slug] = task
+        task.add_done_callback(lambda _done: _stats_inflight.pop(slug, None))
+    # Shielded: a tab that disconnects must not cancel the aggregation the others wait on.
+    return await asyncio.shield(task)
 
 
 @router.get('/pipeline/events')

@@ -76,6 +76,11 @@
             <th scope="row" class="py-1 pr-3 text-left font-normal">{n.path}</th>
             <td class="pr-3 font-sans" title={n.reason ?? ''}>
               {n.decision ? LABEL[n.decision] : 'Open'}
+              {#if n.decision === 'unvisited' && n.reason}
+                <span class="block text-zinc-500" data-testid="loop-node-why"
+                  >{n.reason_message ?? n.reason}</span
+                >
+              {/if}
             </td>
             <td class="pr-3 font-sans">{n.class_name ?? '—'}</td>
             <td class="pr-3 text-right">{formatCount(n.n)}</td>

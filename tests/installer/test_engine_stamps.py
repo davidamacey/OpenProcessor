@@ -221,15 +221,13 @@ def _unadoptable(tmp_path: Path, group: str, case: str) -> str:
     elif case == 'compute capability differs from the PE stamp':
         pe_row = PE_ROW.replace('\t8.6\t', '\t7.5\t')
     elif case == 'not READY in Triton':
-        extra = 'triton_model_ready() { return 1; }; '
+        extra = 'triton_model_ready() { return 1; }; triton_load_and_wait() { return 1; }; '
     elif case == 'no GPU compute capability':
         extra = '_ms_compute_cap() { :; }; '
     elif case == 'no TensorRT version':
         extra = '_ms_trt_version() { :; }; '
     prelude = _unstamped(tmp_path, group, pe_row=pe_row) + extra
-    if case == 'ONNX missing':
-        (tmp_path / ENGINES[group][first][0]).unlink()
-    elif case == 'engine missing':
+    if case == 'engine missing':
         (tmp_path / 'models' / PLANS[group][0] / '1' / 'model.plan').unlink()
     elif case == 'no config input datatype':
         (tmp_path / 'models' / first / 'config.pbtxt').unlink()
@@ -244,7 +242,6 @@ UNADOPTABLE = [
     'not READY in Triton',
     'no GPU compute capability',
     'no TensorRT version',
-    'ONNX missing',
     'engine missing',
     'engine empty',
     'no config input datatype',
@@ -364,3 +361,142 @@ def test_a_v060_ledger_keeps_every_engine(tmp_path: Path, bash) -> None:
         assert 'up to date, skipped' in out, group
     assert not (tmp_path / 'rebuilt').exists()
     assert _rows(tmp_path)['pe_image_encoder'][5] == 'a' * 64
+
+
+# ---- engines already on disk are adopted, not rebuilt (#411 R2) ----
+
+
+def _unloaded(tmp_path: Path, group: str, stamps: dict[str, str], *, loadable: bool) -> str:
+    """An installed group whose engines are on disk but not loaded in Triton: a model is READY
+    only after a load request, which succeeds only when `loadable`."""
+    prelude = _installed(tmp_path, group, stamps)
+    return (
+        prelude
+        + 'dc() { touch "$OP_DIR/rebuilt"; return 0; }; '
+        + 'triton_model_ready() { [[ -e "$OP_DIR/loaded.$1" ]]; }; '
+        + f'triton_load_and_wait() {{ {"touch" if loadable else "false"} "$OP_DIR/loaded.$1"; }}; '
+    )
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_engines_on_disk_but_not_loaded_are_loaded_not_rebuilt(
+    tmp_path: Path, bash, group: str
+) -> None:
+    prelude = _unloaded(tmp_path, group, _good_stamps(group), loadable=True)
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'up to date, skipped' in out
+    assert not (tmp_path / 'rebuilt').exists()
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_engines_triton_cannot_load_are_rebuilt_and_say_why(
+    tmp_path: Path, bash, group: str
+) -> None:
+    prelude = _unloaded(tmp_path, group, _good_stamps(group), loadable=False)
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'skipped' not in out
+    assert 'Triton could not load the existing' in out
+    assert (tmp_path / 'rebuilt').exists()
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_a_stamped_engine_whose_onnx_is_absent_is_kept(tmp_path: Path, bash, group: str) -> None:
+    prelude = _installed(tmp_path, group, _good_stamps(group))
+    for rel, _ in ENGINES[group].values():
+        (tmp_path / rel).unlink()
+    assert 'up to date, skipped' in bash(prelude + f'model_setup_run_group {group}').stdout
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_an_unstamped_engine_without_its_onnx_is_adopted(tmp_path: Path, bash, group: str) -> None:
+    prelude = _unstamped(tmp_path, group)
+    for rel, _ in ENGINES[group].values():
+        (tmp_path / rel).unlink()
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'up to date, skipped' in out
+    assert not (tmp_path / 'rebuilt').exists()
+    for model in ENGINES[group]:
+        assert _rows(tmp_path)[model][5] == '-'
+    # the ONNX appearing later is pinned (trust on first sight): no rebuild, the real hash is
+    # recorded, so a later change of the ONNX is no longer masked by the "-" placeholder
+    _put_onnx(tmp_path, group)
+    assert 'up to date, skipped' in bash(prelude + f'model_setup_run_group {group}').stdout
+    for model in ENGINES[group]:
+        assert _rows(tmp_path)[model][5] == _sha(model)
+    assert not (tmp_path / 'rebuilt').exists()
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_a_pinned_stamp_catches_a_later_onnx_change(tmp_path: Path, bash, group: str) -> None:
+    prelude = _unstamped(tmp_path, group)
+    onnx = {model: tmp_path / rel for model, (rel, _) in ENGINES[group].items()}
+    for path in onnx.values():
+        path.unlink()
+    bash(prelude + f'model_setup_run_group {group}')  # adopted with "-"
+    _put_onnx(tmp_path, group)
+    bash(prelude + f'model_setup_run_group {group}')  # pinned
+    first = next(iter(onnx.values()))
+    first.write_bytes(b'a different export')
+    out = bash(prelude + f'model_setup_run_group {group}').stdout
+    assert 'ONNX changed since the build' in out
+    assert (tmp_path / 'rebuilt').exists()
+
+
+def test_an_unready_engine_keeps_the_placeholder_hash(tmp_path: Path, bash) -> None:
+    # Only an engine Triton serves is pinned; the placeholder is never rewritten blind.
+    prelude = _unstamped(tmp_path, 'yolo')
+    model = next(iter(ENGINES['yolo']))
+    (tmp_path / ENGINES['yolo'][model][0]).unlink()
+    bash(prelude + 'model_setup_run_group yolo')
+    _put_onnx(tmp_path, 'yolo')
+    bash(prelude + 'triton_model_ready() { return 1; }; _ms_group_stamp_stale yolo')
+    assert _rows(tmp_path)[model][5] == '-'
+
+
+def _curl(rc: int, code: str) -> str:
+    """A curl double: the /load POST exits RC and prints CODE; anything else is not READY."""
+    return (
+        f'curl() {{ if [[ "$*" == */load* ]]; then printf %s {code}; return {rc}; fi; return 22; }}; '
+        'sleep() { :; }; '
+    )
+
+
+def test_strict_load_tells_triton_down_from_a_refused_load(bash) -> None:
+    base = f'source {LIB}; log_warn() {{ :; }}; '
+    down = bash(base + _curl(7, '000') + 'triton_load_and_wait m 4 strict; echo "rc=$?"')
+    assert 'rc=2' in down.stdout  # unreachable: not "engine invalid"
+    refused = bash(base + _curl(0, '400') + 'triton_load_and_wait m 4 strict; echo "rc=$?"')
+    assert 'rc=1' in refused.stdout
+    slow = bash(base + _curl(28, '000') + 'triton_load_and_wait m 4 strict; echo "rc=$?"')
+    assert 'rc=1' in slow.stdout  # a load still running past curl's timeout is waited for
+
+
+def test_a_slow_load_is_waited_for_not_called_unreachable(bash) -> None:
+    script = (
+        f'source {LIB}; log_warn() {{ :; }}; sleep() {{ :; }}; n=0; '
+        'curl() { if [[ "$*" == */load* ]]; then printf 000; return 28; fi; '
+        '(( ++n > 2 )) && return 0; return 22; }; '
+        'triton_load_and_wait m 20 strict; echo "rc=$?"'
+    )
+    assert 'rc=0' in bash(script).stdout
+
+
+@pytest.mark.parametrize('group', GROUPS)
+def test_triton_down_fails_the_group_without_a_rebuild(tmp_path: Path, bash, group: str) -> None:
+    prelude = _unloaded(tmp_path, group, _good_stamps(group), loadable=False)
+    prelude += 'triton_load_and_wait() { return 2; }; '
+    out = bash(prelude + f'model_setup_run_group {group}; echo "rc=$?"')
+    assert 'rc=0' not in out.stdout
+    assert 'rc=' in out.stdout
+    assert 'not reachable' in out.stdout + out.stderr
+    assert 'will be rebuilt' not in out.stdout
+    assert not (tmp_path / 'rebuilt').exists()
+    assert 'failed' in (tmp_path / '.install' / 'groups.tsv').read_text()
+
+
+def test_a_failing_preload_stops_the_group_instead_of_rebuilding(tmp_path: Path, bash) -> None:
+    prelude = _installed(tmp_path, 'yolo', _good_stamps('yolo'))
+    prelude += '_ms_load_present_engines() { return 1; }; dc() { touch "$OP_DIR/rebuilt"; }; '
+    out = bash('set -e; ' + prelude + 'model_setup_run_group yolo; echo "rc=$?"')
+    assert 'rc=0' not in out.stdout
+    assert not (tmp_path / 'rebuilt').exists()

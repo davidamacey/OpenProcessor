@@ -23,7 +23,7 @@ probes at runtime.
 | `/bakeoff` | The backend's on-demand evaluator container, and its `/bakeoff/*` router mounted |
 | `/ingest` browser upload persisting bytes for later browsing | The backend's ingest-upload persistence (a pre-persistence backend shows a banner explaining uploads aren't browsable) |
 | Projects (`/p/<project>`, `/projects`) | The backend's projects API; the project list and each project's served prefix come from it |
-| Combine projects | The backend's combine router mounted (probed once; absent otherwise) |
+| Combine projects | The backend's combine router, which the backend always mounts; the link is always offered |
 | [Dataset import and Reprocess](../user-guide/dataset-import.md) | The backend's `datasets` routes (probed once per project via the formats list) |
 | [Prompt-pack editor](../user-guide/prompt-packs.md) | The backend's prompt-pack routes (probed once per project) |
 | [Region-profile editor](../user-guide/region-profiles.md) | The backend's region-profile routes (probed once per project) |

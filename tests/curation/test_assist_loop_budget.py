@@ -350,3 +350,20 @@ def test_a_loop_never_exceeds_its_caps_through_failures_retries_and_a_crash(
         assert crops <= caps['max_crops']
         assert requests <= caps['max_requests']
     assert len(vlm.asked) <= caps['max_crops']
+
+
+def test_per_node_crops_survive_a_resume(tmp_path: Path) -> None:
+    store = LoopStore(tmp_path / 'loop')
+    budget = _budget(store)
+    res = budget.reserve(VLM, 'r1', _ids(4))
+    assert res is not None
+    assert budget.reserve(VLM, 'r2', _ids(3, 'd')) is not None
+    budget.settle(res)
+
+    assert budget.node_crops(VLM, 'r1') == 4
+    assert budget.node_crops(VLM, 'r2') == 3
+    assert budget.node_crops(VLM, 'r3') == 0
+
+    again = _budget(LoopStore(tmp_path / 'loop'))
+    assert again.node_crops(VLM, 'r1') == 4
+    assert again.node_crops(VLM, 'r2') == 3

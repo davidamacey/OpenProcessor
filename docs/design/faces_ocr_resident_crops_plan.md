@@ -1,6 +1,6 @@
 # uint8 OCR input, width-bucketed recognition, face alignment on resident frames (#220)
 
-Status: step 1 (uint8 OCR inputs) implemented in this change; steps 2-4 open. Line numbers drift:
+Status: open. Step 1 (uint8 OCR inputs) is done (`27ebeb45`); step 2 was measured and rejected (#220 comment, 2026-11-02); steps 3 and 4 are `program/07c_b5_crops_ocr_faces.md` and `07d_b5_processing_plans.md` (v0.7.0 B5c and B5d; remove after B5c). Line numbers drift:
 re-find by symbol. Read first: `docs/design/triton_pipeline_optimization_plan.md` (Wave 3 item 3,
 Wave 5, section 7 parity gates), `docs/OCR.md`.
 

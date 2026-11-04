@@ -122,6 +122,7 @@ export function loopNode(over: Partial<LoopNode> = {}): LoopNode {
     answered: 33,
     decision: 'pass',
     reason: null,
+    reason_message: null,
     class_name: 'widget_a',
     agree: 33,
     bound: 0.913,

@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -34,6 +33,7 @@ from typing import Any, Literal
 from src.config.curation_accessors import get_curation_config
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
+from src.utils.atomic_write import atomic_write_bytes, atomic_write_json
 
 
 # Every class that appears in the cohort gets at least this many crops held
@@ -329,12 +329,7 @@ def persist_freeze_record(
         return snapshot_path
 
     current_path = target_dir / 'current.json'
-    tmp_path = target_dir / 'current.json.tmp'
-    with tmp_path.open('w', encoding='utf-8') as f:
-        f.write(payload)
-        f.flush()
-        os.fsync(f.fileno())
-    tmp_path.replace(current_path)
+    atomic_write_bytes(current_path, payload.encode('utf-8'))
 
     return snapshot_path
 
@@ -353,6 +348,4 @@ def mark_freeze_record_undone(snapshot_path: Path) -> None:
         msg = f'{snapshot_path} is not an import freeze record'
         raise ValueError(msg)
     record['undone_at'] = datetime.now(UTC).isoformat()
-    tmp = snapshot_path.with_suffix('.json.tmp')
-    tmp.write_text(json.dumps(record, indent=2), encoding='utf-8')
-    tmp.replace(snapshot_path)
+    atomic_write_json(snapshot_path, record, default=None, indent=2)

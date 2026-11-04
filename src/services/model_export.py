@@ -34,6 +34,7 @@ from typing import Any
 
 from src.config.env import env_path
 from src.schemas.models import ExportStatus
+from src.utils.atomic_write import atomic_write_json
 
 
 logger = logging.getLogger(__name__)
@@ -81,9 +82,7 @@ def persist_task(task_id: str) -> None:
     if task is None:
         return
     _ensure_task_dir()
-    tmp = _task_file(task_id).with_suffix('.tmp')
-    tmp.write_text(json.dumps(task, default=str))
-    tmp.replace(_task_file(task_id))
+    atomic_write_json(_task_file(task_id), task)
 
 
 def _load_task_file(path: Path) -> dict[str, Any] | None:
@@ -128,7 +127,12 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
     """
     try:
         import torch
-        from ultralytics import YOLO
+        from ultralytics.nn.tasks import _SafeLoad, torch_safe_load
+
+        # torch_safe_load quietly drops safe_only when this torch cannot restrict
+        # unpickling; refuse instead of falling back to an unrestricted load.
+        if not _SafeLoad.SUPPORTED:
+            return False, 'Restricted model loading is unavailable in this build', {}
 
         # Check file size
         file_size = file_path.stat().st_size
@@ -137,17 +141,23 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
         if file_size > 500 * 1024 * 1024:
             return False, 'File too large (max 500MB)', {}
 
-        # Load and validate model
-        model = YOLO(str(file_path))
+        # Restricted load: torch.load(weights_only=True) plus the Ultralytics
+        # allow-list of model classes, requested per call (not via the
+        # ULTRALYTICS_SAFE_LOAD env var alone). Anything else in the file is refused.
+        ckpt, _ = torch_safe_load(file_path, safe_only=True)
+        model = ckpt.get('model') if isinstance(ckpt, dict) else None
+        if model is None or not hasattr(model, 'names'):
+            return False, 'Not an Ultralytics model checkpoint', {}
+        names = model.names
 
         model_info = {
             'task': getattr(model, 'task', 'detect'),
-            'num_classes': len(model.names) if hasattr(model, 'names') else 0,
-            'class_names': list(model.names.values()) if isinstance(model.names, dict) else [],
+            'num_classes': len(names),
+            'class_names': list(names.values()) if isinstance(names, dict) else [],
             # End-to-end (NMS-free) architectures — YOLO26 — export through
             # the native toolchain; classic YOLO11-family models go through
             # the EfficientNMS toolchain. run_export() routes on this flag.
-            'end2end': bool(getattr(getattr(model, 'model', None), 'end2end', False)),
+            'end2end': bool(getattr(model, 'end2end', False)),
         }
 
         if model_info['task'] != 'detect':
@@ -309,9 +319,7 @@ def enqueue_export_job(
     queue = queue_dir()
     queue.mkdir(parents=True, exist_ok=True)
     final = queue / f'{task_id}.job.json'
-    tmp = final.with_suffix('.tmp')
-    tmp.write_text(json.dumps(job))
-    tmp.replace(final)
+    atomic_write_json(final, job, default=None)
 
 
 async def save_uploaded_file(

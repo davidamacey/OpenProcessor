@@ -9,8 +9,8 @@ Merge several existing projects into a **new** one. The concepts, priority
 rules and the API path are in the
 [Combine projects guide](../../guides/combine-projects.mdx). Like `/projects`, these pages are not scoped to a
 project, since the target doesn't exist yet. The **Combine projects…**
-button on `/projects` appears only when the backend supports combining;
-otherwise the page says so and nothing else is requested.
+button on `/projects` is always offered, because the backend always mounts the
+combine router.
 
 ## The wizard
 

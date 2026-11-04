@@ -53,8 +53,8 @@ If you run a second Cropwright against another backend, see
 
 ## Upgrading the backend
 
-Match the backend release to the Cropwright version: Cropwright's wire
-contract is vendored from a specific backend release. See
+Cropwright and the backend ship from one repository, so upgrade them
+together; the frontend's tests read the backend's generated contract. See
 [Upgrading](./upgrading.md). Features that a backend predates simply don't
 appear, so a missing page after a backend change is usually a version
 mismatch, not a bug.

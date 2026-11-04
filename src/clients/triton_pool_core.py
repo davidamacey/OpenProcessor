@@ -200,6 +200,7 @@ class AsyncTritonPool:
         self._initialized = False
         self._stats = PoolStats()
         self._input_datatypes: dict[tuple[str, str], tuple[float, str]] = {}
+        self._output_shapes: dict[tuple[str, str], tuple[float, tuple[int, ...]]] = {}
 
     async def initialize(self) -> None:
         """
@@ -400,6 +401,30 @@ class AsyncTritonPool:
                 self._input_datatypes[key] = (now + MODEL_INFO_TTL_S, datatype)
                 return datatype
         msg = f"model '{model_name}' declares no '{input_name}' input"
+        raise ValueError(msg)
+
+    async def get_model_output_shape(
+        self, model_name: str, output_name: str, timeout: float = 10.0
+    ) -> tuple[int, ...]:
+        """The shape the model DECLARES for ``output_name`` (``-1`` for a dynamic dim,
+        batch axis included), cached for ``MODEL_INFO_TTL_S``. Raises when the model has no
+        such output."""
+        now = time.monotonic()
+        key = (model_name, output_name)
+        cached = self._output_shapes.get(key)
+        if cached is not None and cached[0] > now:
+            return cached[1]
+        if not self._initialized:
+            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
+        client = self._clients[await self._get_client_index()]
+        await ensure_loaded(client, model_name)
+        metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
+        for tensor in metadata.get('outputs', []):
+            if tensor.get('name') == output_name:
+                shape = tuple(int(d) for d in tensor.get('shape', []))
+                self._output_shapes[key] = (now + MODEL_INFO_TTL_S, shape)
+                return shape
+        msg = f"model '{model_name}' declares no '{output_name}' output"
         raise ValueError(msg)
 
     async def _metadata_names(self, model_name: str, key: str, timeout: float) -> list[str]:

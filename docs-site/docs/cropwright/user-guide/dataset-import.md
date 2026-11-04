@@ -3,14 +3,14 @@ sidebar_position: 4
 title: Dataset import and Reprocess
 ---
 
-# Dataset import and Reprocess (`/p/<project>/datasets`)
+# Dataset import and Reprocess (`/p/<project>/datasets/import`)
 
 Bring an already-labeled dataset into the current project and re-run the
 backend's machine proposals without overwriting human work. This page covers the
 screens; formats, class mapping rules and the API/CLI path are in the
 [Dataset import guide](../../guides/dataset-import.mdx) and the
-[Reprocess guide](../../guides/reprocess.mdx). These pages exist only when the backend supports
-dataset import; otherwise there is no link to them and nothing is requested.
+[Reprocess guide](../../guides/reprocess.mdx). The **Import a labeled dataset** link on the Ingest page appears only when
+the backend supports dataset import; otherwise nothing is requested.
 Compare with [Ingest](./ingest.md), which brings in unlabeled images.
 
 ## Formats
@@ -21,7 +21,7 @@ backend serves **Detect automatically**, **YOLO** (a `data.yaml` layout),
 [Export](./export.md) page writes). The wizard only offers what the backend
 serves.
 
-## The import wizard (`/datasets/import`)
+## The import wizard (`/p/<project>/datasets/import`)
 
 1. **Source.** Type a folder path the backend can read (the allowed roots
    are listed under the field, and the preview tells you if the path isn't
@@ -42,7 +42,7 @@ serves.
    existing class, create a new class, treat it as a region, or skip it. A
    row that has boxes but no target yet is highlighted. **Use suggestion**
    copies the suggestion into a row; **Accept suggestions** lets the backend
-   fill every row it can; and **Use the mapping from a previous import**
+   fill every row it can; and **Use the mapping from** *a previous import…*
    copies an earlier completed import's choices by class name. Two dataset
    classes merge by picking the same target class on both rows.
 4. **Options.** What to do with each image (import as-is, or also run the
@@ -63,8 +63,8 @@ you're in.
 
 ## Imports and the job view
 
-`/datasets/imports` lists past imports with their status and a **New import**
-button. An import's page (`/datasets/imports/<id>`) shows:
+`/p/<project>/datasets/imports` lists past imports with their status and a **New import**
+button. An import's page (`/p/<project>/datasets/imports/<id>`) shows:
 
 - the status, a progress bar with throughput and ETA, and whatever the job is
   waiting for;

@@ -192,7 +192,7 @@ def check_routes() -> list[str]:
     known = known_routes()
     errors = []
     for doc in doc_files():
-        if _rel(doc).as_posix().startswith(_EXTERNAL_DOC_PREFIXES):
+        if _is_design_doc(doc) or _rel(doc).as_posix().startswith(_EXTERNAL_DOC_PREFIXES):
             continue
         text = doc.read_text(encoding='utf-8', errors='replace')
         for method, path in route_mentions(text):
@@ -228,6 +228,8 @@ def check_env() -> list[str]:
     corpus = _env_corpus()
     errors = []
     for doc in doc_files():
+        if _is_design_doc(doc):
+            continue
         text = doc.read_text(encoding='utf-8', errors='replace')
         for var in sorted(set(_ENV_RE.findall(text))):
             if var not in corpus:
@@ -366,13 +368,14 @@ _SPAN_RE = re.compile(r'`([^`\n]+)`')
 _SHELL_ASSIGN_RE = re.compile(r'^[ \t]*(?:export[ \t]+)?([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)=', re.M)
 
 
+def _is_design_doc(path: Path) -> bool:
+    """Design notes describe plans, so they name routes and settings that do not exist yet."""
+    return _rel(path).as_posix().startswith(_DESIGN_DOCS)
+
+
 def _user_docs() -> list[Path]:
-    """Docs a reader follows (markdown only; design notes describe plans, not the product)."""
-    return [
-        d
-        for d in doc_files()
-        if d.suffix in _DOC_SUFFIXES and not _rel(d).as_posix().startswith(_DESIGN_DOCS)
-    ]
+    """Docs a reader follows (markdown only, no design notes)."""
+    return [d for d in doc_files() if d.suffix in _DOC_SUFFIXES and not _is_design_doc(d)]
 
 
 def _cli_commands() -> set[str]:

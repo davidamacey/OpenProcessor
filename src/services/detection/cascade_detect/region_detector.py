@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from tritonclient.grpc import InferRequestedOutput
@@ -15,6 +15,8 @@ from src.services.detection.geometry import undo_letterbox
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import DetectionProfile
 
@@ -33,6 +35,102 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
+HeadLayout = Literal['anchors', 'end2end']
+
+#: Columns of an end2end row: ``x1, y1, x2, y2, score, class``.
+_END2END_COLS = 6
+#: Channels of an anchors head: ``cx, cy, w, h, score``.
+_ANCHOR_CHANNELS = 5
+
+
+def head_layout(declared_shape: Sequence[int]) -> HeadLayout | None:
+    """The head a model's DECLARED ``output0`` shape describes, or ``None`` when it is neither.
+
+    ``[B, 5, N]`` is a single-class YOLO11-style anchors head (``cx, cy, w, h, score`` per
+    anchor); ``[B, N, 6]`` is an end2end head (``x1, y1, x2, y2, score, class`` per detection,
+    already NMS-free). The batch axis is optional and ``-1`` marks a dynamic dim. Read from the
+    declared shape, never from a runtime array whose axes could be anything.
+    """
+    dims = tuple(declared_shape)
+    if len(dims) == 3:
+        dims = dims[1:]
+    if len(dims) != 2:
+        return None
+    rows, cols = dims
+    if cols == _END2END_COLS:
+        return 'end2end'
+    if rows == _ANCHOR_CHANNELS and cols != _ANCHOR_CHANNELS:
+        return 'anchors'
+    return None
+
+
+def _anchors_xyxy_score(
+    raw: np.ndarray, input_size: int, layout: HeadLayout
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """The head's rows as network-pixel ``xyxy`` boxes and their scores.
+
+    ``layout`` comes from the model's declared output (:func:`head_layout`). A runtime array
+    that does not have that layout is rejected (logged, ``None``) rather than decoded as
+    garbage. The head is single-class: an end2end head's class column is not used, matching
+    the profile, which names no class to keep.
+    """
+    arr = np.asarray(raw)
+    if arr.ndim == 3:
+        arr = arr[0]
+    if layout == 'end2end':
+        if arr.ndim != 2 or arr.shape[1] != _END2END_COLS:
+            logger.warning('region_head_layout_mismatch: layout=end2end shape=%s', arr.shape)
+            return None
+        arr = arr[(arr[:, 4] > 0) & (arr[:, 2] > arr[:, 0])]
+        boxes = arr[:, 0:4].astype(np.float64)
+    else:
+        if arr.ndim != 2 or arr.shape[0] != _ANCHOR_CHANNELS:
+            logger.warning('region_head_layout_mismatch: layout=anchors shape=%s', arr.shape)
+            return None
+        arr = arr.T
+        c = arr[:, 0:4].astype(np.float64)
+        boxes = np.stack(
+            [
+                c[:, 0] - c[:, 2] / 2,
+                c[:, 1] - c[:, 3] / 2,
+                c[:, 0] + c[:, 2] / 2,
+                c[:, 1] + c[:, 3] / 2,
+            ],
+            axis=1,
+        )
+    # The Ultralytics-style TRT export emits network-pixel boxes; an engine shipping
+    # normalized [0, 1] outputs is told apart once for the whole tensor (no pixel tensor
+    # stays within 1.5 of the origin), so one small box near the origin cannot flip a row.
+    if boxes.size and np.abs(boxes).max() <= 1.5:
+        boxes *= input_size
+    return boxes, arr[:, 4]
+
+
+def _candidate(
+    box: np.ndarray,
+    score: float,
+    scale: float,
+    pad: tuple[float, float],
+    crop_w: int,
+    crop_h: int,
+    source: str,
+) -> RegionCandidate | None:
+    """One network-pixel box undone through the letterbox into the crop's normalized frame."""
+    cx1, cy1, cx2, cy2 = undo_letterbox(
+        (float(box[0]), float(box[1]), float(box[2]), float(box[3])), scale, pad
+    )
+    nx1 = max(0.0, min(1.0, cx1 / max(crop_w, 1)))
+    ny1 = max(0.0, min(1.0, cy1 / max(crop_h, 1)))
+    nx2 = max(0.0, min(1.0, cx2 / max(crop_w, 1)))
+    ny2 = max(0.0, min(1.0, cy2 / max(crop_h, 1)))
+    # A fully collapsed box is decoder noise, not signal.
+    if nx2 <= nx1 or ny2 <= ny1:
+        return None
+    return RegionCandidate(
+        bbox_norm=(nx1, ny1, nx2, ny2), score=score, source=source, rectangularity=None
+    )
+
+
 def _decode_yolo_output(
     raw: np.ndarray,
     scale: float,
@@ -42,83 +140,30 @@ def _decode_yolo_output(
     confidence_floor: float = 0.4,
     input_size: int = 640,
     source: str = '',
+    *,
+    layout: HeadLayout,
 ) -> RegionCandidate | None:
-    """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to a normalized region box.
+    """Decode a detector output to the highest-scoring region, normalized to the crop.
 
-    The detector is single-class, so the fifth row is the
-    class-0 score. We pick the highest-scoring anchor, apply the
-    confidence floor, undo the letterbox into crop-pixel space, then
-    normalize to ``[0, 1]`` of the crop.
-
-    Args:
-        raw: Triton response array. Shape ``[1, 5, N]`` or ``[5, N]`` or
-            ``[N, 5]`` (each accepted for robustness).
-        scale: Scale factor from the letterbox transform.
-        pad: ``(pad_w, pad_h)`` from the letterbox transform.
-        crop_w: Original crop width in pixels.
-        crop_h: Original crop height in pixels.
-        confidence_floor: Drop detections below this score.
-        input_size: Network input size (for the pixel-vs-normalized heuristic).
-        source: Detector identifier stamped on the returned candidate.
+    Handles both heads (see :func:`head_layout`). The detector is
+    treated as single-class: the best-scoring row wins, the confidence floor
+    applies, then the letterbox is undone.
 
     Returns:
-        A :class:`RegionCandidate` in the crop's normalized frame, or
-        ``None`` if no anchor cleared the floor.
+        A :class:`RegionCandidate` in the crop's normalized frame, or ``None``
+        if no row cleared the floor or the output shape is not a known head.
     """
-    arr = np.asarray(raw)
-    if arr.ndim == 3:
-        arr = arr[0]
-    # Accept either [5, N] or [N, 5].
-    if arr.ndim != 2:
+    decoded = _anchors_xyxy_score(raw, input_size, layout)
+    if decoded is None:
         return None
-    if arr.shape[0] == 5 and arr.shape[1] != 5:
-        arr = arr.T
-    if arr.shape[1] < 5:
+    boxes, confs = decoded
+    if confs.size == 0:
         return None
-
-    confs = arr[:, 4]
     best = int(np.argmax(confs))
     conf = float(confs[best])
     if conf < confidence_floor:
         return None
-
-    cx, cy, w, h = (float(v) for v in arr[best, 0:4])
-
-    # The Ultralytics-style TRT export emits boxes in **network-pixel
-    # space** (i.e. multiplied by input_size). If a future engine ships
-    # with normalized [0, 1] outputs, ``cx`` will be < 1. We detect that
-    # case here: a box center smaller than one pixel only happens with
-    # normalized coords. This keeps us compatible with both export styles.
-    if max(abs(cx), abs(cy), abs(w), abs(h)) <= 1.5:
-        cx *= input_size
-        cy *= input_size
-        w *= input_size
-        h *= input_size
-
-    x1 = cx - w / 2.0
-    y1 = cy - h / 2.0
-    x2 = cx + w / 2.0
-    y2 = cy + h / 2.0
-
-    # Undo letterbox: subtract pad, divide by scale → crop-pixel space.
-    cx1, cy1, cx2, cy2 = undo_letterbox((x1, y1, x2, y2), scale, pad)
-
-    # Normalize to crop frame, clamp, and enforce x2 > x1 / y2 > y1.
-    nx1 = max(0.0, min(1.0, cx1 / max(crop_w, 1)))
-    ny1 = max(0.0, min(1.0, cy1 / max(crop_h, 1)))
-    nx2 = max(0.0, min(1.0, cx2 / max(crop_w, 1)))
-    ny2 = max(0.0, min(1.0, cy2 / max(crop_h, 1)))
-
-    # Drop fully-collapsed boxes — they're decoder noise, not signal.
-    if nx2 <= nx1 or ny2 <= ny1:
-        return None
-
-    return RegionCandidate(
-        bbox_norm=(nx1, ny1, nx2, ny2),
-        score=conf,
-        source=source,
-        rectangularity=None,
-    )
+    return _candidate(boxes[best], conf, scale, pad, crop_w, crop_h, source)
 
 
 # Pre-NMS safety cap on a raw detector output before it reaches
@@ -139,65 +184,30 @@ def _decode_yolo_output_multi(
     confidence_floor: float = 0.4,
     input_size: int = 640,
     source: str = '',
+    *,
+    layout: HeadLayout,
 ) -> list[RegionCandidate]:
-    """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to every candidate
-    region above ``confidence_floor`` (the multi-candidate detector leg).
+    """Decode a detector output to every candidate region above ``confidence_floor``
+    (the multi-candidate detector leg).
 
-    Same geometry pipeline as :func:`_decode_yolo_output` (letterbox
-    undo, crop-frame normalization, degenerate-box drop) but keeps every
-    anchor clearing the floor instead of only the best one. Anchors are
-    capped to the highest-scoring :data:`_MAX_PRE_NMS_ANCHORS` before
-    returning -- caller (:func:`select_region_candidates`) does the real
-    greedy NMS + per-profile cap.
-
-    Returns candidates in no particular order (the caller sorts).
+    Same geometry as :func:`_decode_yolo_output` but keeps every row clearing the
+    floor, capped to the highest-scoring :data:`_MAX_PRE_NMS_ANCHORS`; the caller
+    (:func:`select_region_candidates`) does the real greedy NMS and per-profile cap.
+    Candidates come back in no particular order.
     """
-    arr = np.asarray(raw)
-    if arr.ndim == 3:
-        arr = arr[0]
-    if arr.ndim != 2:
+    decoded = _anchors_xyxy_score(raw, input_size, layout)
+    if decoded is None:
         return []
-    if arr.shape[0] == 5 and arr.shape[1] != 5:
-        arr = arr.T
-    if arr.shape[1] < 5:
-        return []
-
-    confs = arr[:, 4]
+    boxes, confs = decoded
     keep_idx = np.nonzero(confs >= confidence_floor)[0]
-    if keep_idx.size == 0:
-        return []
     if keep_idx.size > _MAX_PRE_NMS_ANCHORS:
         top = np.argsort(confs[keep_idx])[::-1][:_MAX_PRE_NMS_ANCHORS]
         keep_idx = keep_idx[top]
-
     out: list[RegionCandidate] = []
     for idx in keep_idx:
-        conf = float(confs[idx])
-        cx, cy, w, h = (float(v) for v in arr[idx, 0:4])
-        if max(abs(cx), abs(cy), abs(w), abs(h)) <= 1.5:
-            cx *= input_size
-            cy *= input_size
-            w *= input_size
-            h *= input_size
-        x1 = cx - w / 2.0
-        y1 = cy - h / 2.0
-        x2 = cx + w / 2.0
-        y2 = cy + h / 2.0
-        cx1, cy1, cx2, cy2 = undo_letterbox((x1, y1, x2, y2), scale, pad)
-        nx1 = max(0.0, min(1.0, cx1 / max(crop_w, 1)))
-        ny1 = max(0.0, min(1.0, cy1 / max(crop_h, 1)))
-        nx2 = max(0.0, min(1.0, cx2 / max(crop_w, 1)))
-        ny2 = max(0.0, min(1.0, cy2 / max(crop_h, 1)))
-        if nx2 <= nx1 or ny2 <= ny1:
-            continue
-        out.append(
-            RegionCandidate(
-                bbox_norm=(nx1, ny1, nx2, ny2),
-                score=conf,
-                source=source,
-                rectangularity=None,
-            )
-        )
+        cand = _candidate(boxes[idx], float(confs[idx]), scale, pad, crop_w, crop_h, source)
+        if cand is not None:
+            out.append(cand)
     return out
 
 
@@ -264,10 +274,10 @@ class RegionDetector:
 
     async def _infer_raw(
         self, crop_jpeg: bytes
-    ) -> tuple[np.ndarray, float, tuple[float, float], int, int] | None:
+    ) -> tuple[np.ndarray, float, tuple[float, float], int, int, HeadLayout] | None:
         """Shared preprocess + Triton call for :meth:`detect` / :meth:`detect_multi`.
 
-        Returns ``(raw, scale, pad, crop_w, crop_h)`` or ``None`` on any
+        Returns ``(raw, scale, pad, crop_w, crop_h, layout)`` or ``None`` on any
         decode / letterbox / infer failure (already logged).
         """
         try:
@@ -291,6 +301,16 @@ class RegionDetector:
             datatype = await self.triton_pool.get_model_input_datatype(self.model_name)
             # A promoted model declares UINT8 (the graph scales); an older one FP32.
             inp = images_input(chw, datatype)
+            declared = await self.triton_pool.get_model_output_shape(self.model_name, 'output0')
+            layout = head_layout(declared)
+            if layout is None:
+                logger.error(
+                    'region_head_unrecognised: model=%s declared_output0=%s (want [B,5,N] or '
+                    '[B,N,6])',
+                    self.model_name,
+                    declared,
+                )
+                return None
             result = await self.triton_pool.infer(self.model_name, [inp], outputs=outs)
         except Exception:
             logger.exception('region_infer_failed')
@@ -300,7 +320,7 @@ class RegionDetector:
         if raw is None:
             logger.warning('region_infer_missing_output: model=%s', self.model_name)
             return None
-        return raw, scale, pad, crop_w, crop_h
+        return raw, scale, pad, crop_w, crop_h, layout
 
     async def detect(self, crop_jpeg: bytes) -> RegionCandidate | None:
         """Run region detection on one item crop.
@@ -319,7 +339,7 @@ class RegionDetector:
         decoded = await self._infer_raw(crop_jpeg)
         if decoded is None:
             return None
-        raw, scale, pad, crop_w, crop_h = decoded
+        raw, scale, pad, crop_w, crop_h, layout = decoded
         return _decode_yolo_output(
             raw,
             scale=scale,
@@ -329,6 +349,7 @@ class RegionDetector:
             confidence_floor=self.confidence_floor,
             input_size=self.profile.input_size,
             source=self.model_name,
+            layout=layout,
         )
 
     async def detect_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
@@ -345,7 +366,7 @@ class RegionDetector:
         decoded = await self._infer_raw(crop_jpeg)
         if decoded is None:
             return []
-        raw, scale, pad, crop_w, crop_h = decoded
+        raw, scale, pad, crop_w, crop_h, layout = decoded
         return _decode_yolo_output_multi(
             raw,
             scale=scale,
@@ -355,6 +376,7 @@ class RegionDetector:
             confidence_floor=self.confidence_floor,
             input_size=self.profile.input_size,
             source=self.model_name,
+            layout=layout,
         )
 
     # ------------------------------------------------------------------

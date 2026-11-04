@@ -110,6 +110,7 @@ class LoopBudget:
         self._lock = threading.Lock()
         self._counts = {pool: _Counts() for pool in limits.pools}
         self._open: dict[int, Reservation] = {}
+        self._path_crops: dict[tuple[str, str], int] = {}
         self._refused: dict[str, str] = {}
         rids = [0]
         wall = [0.0]
@@ -122,6 +123,8 @@ class LoopBudget:
             counts = self._counts.setdefault(event['pool'], _Counts())
             counts.crops_spent += int(event['crops'])
             counts.requests_spent += int(event['requests'])
+            key = (event['pool'], str(event.get('path')))
+            self._path_crops[key] = self._path_crops.get(key, 0) + int(event['crops'])
         self._next_rid = max(rids) + 1
         self._wall_before = max(wall)
         self._started = clock()
@@ -160,6 +163,11 @@ class LoopBudget:
         with self._lock:
             return self._refusal(pool, crops, requests)
 
+    def node_crops(self, pool: str, path: str) -> int:
+        """Crops reserved or spent so far for node ``path`` in ``pool``."""
+        with self._lock:
+            return self._path_crops.get((pool, path), 0)
+
     def reserve(
         self, pool: str, path: str, ids: Sequence[str], *, requests: int = 1
     ) -> Reservation | None:
@@ -188,6 +196,8 @@ class LoopBudget:
             counts = self._counts[pool]
             counts.crops_reserved += crops
             counts.requests_reserved += requests
+            key = (pool, path)
+            self._path_crops[key] = self._path_crops.get(key, 0) + crops
             self._persist()
             return res
 

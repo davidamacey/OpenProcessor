@@ -1,7 +1,7 @@
 # Engineering standards and lessons learned
 
 Status: reference. Every number, snippet and failure below comes from the repo cleanup series
-(nine PRs plus follow-up fixes, planned in [repo_cleanup_plan.md](repo_cleanup_plan.md)). This file
+(nine cleanup PRs, #300 to #324, plus follow-up fixes). This file
 is written to be applied to a **sister repo** (a Python/FastAPI + Svelte application of similar
 shape). The sister repo is not touched by this series; section 4 is the ordered port checklist.
 
@@ -323,6 +323,7 @@ failure through the real hook, remove). The plants were run with `pre-commit run
 | Broad except (same script) | `BLE001` count per file, ruff isolated. A new handler, or a handler moved to a new file without moving its baseline line, fails | `broad_except.txt`: key `path`, value = count, reason `ratchet: may only go down` | extra `except Exception:` in a baselined file: `src/utils/cpu_pool.py: 2 handler(s) grew past the baseline 1` |
 | Process ids (`check_process_ids.py`) | wave, round, work-package and review-finding ids and history names in comments and docstrings (Python via `tokenize` and `ast`; string data ignored; other languages by comment prefix) of code files and Dockerfiles; and in file names under `tests scripts frontend/src frontend/e2e` | `process_ids.txt` (ended **empty**); `path (file name)` keys for name hits | comment `# W8.2: ...` in `src/_probe.py` and a file `tests/test_r9_x.py`: `src/_probe.py: 1 hit(s)` and `tests/test_r9_x.py (file name): 1 hit(s)` |
 | Dead code (`check_vulture.py`) | vulture at `--min-confidence 60` over `src scripts export docker` (tests are not scanned, so test-only code is reported: no production caller is dead). `--ignore-decorators` for route, validator, fixture, setter and app-factory decorators (`@application.*` was needed because the factory names its app `application`); class-body fields (pydantic, dataclass, enum members) dropped from the report. A reviewed false positive goes in `vulture_whitelist.py` with a reason per line | `vulture.txt` (ended empty, 0 bytes) | unused function: `src/_probe.py::function never_called: 1 finding(s) (new violation, not in the baseline)` |
+| Cited paths (`check_cited_paths.py`) | a comment or docstring that cites a repo file under `docs`, `scripts`, `examples`, `docker`, `export`, `config_templates`, `monitoring` or `contracts` cites one that exists (same scope as the process-id guard; globs, placeholders and URLs skipped) | `cited_paths.txt`: `path`, hits, reason; only shrinks | not planted for this guard (it was added after the plants of this table) |
 | Naming leaks (`check_naming_leaks.py`) | three `git grep -P` scans of the tracked tree: A zero tolerance for private names and paths (pattern stored ROT13 so neither tree nor history spells them), B domain vocabulary generic code must not hardcode, C private class-registry names. Hits are filtered through `naming_leak_allowlist.txt` (reason per line) | allowlist; scan A accepts no directory-prefix exemption | a scan-A term in `examples/_probe.yaml`: `Scan A: 1 non-allowlisted hit(s)` (it had passed before because a directory entry covered scan A) |
 | Version consistency (test) | docs name no release other than the current one; a regex lookahead that rejects only a following word character or dot-digit, so a version at a sentence end is caught; scope includes `SECURITY.md`, `CONTRIBUTING.md`, `docs-site`; plans and history (`docs/design`, `docs/research`, release notes, `CHANGELOG.md`) are out of scope because they name other versions by design | none | `Shipped in v0.9.9.` in a doc: `test_docs_name_only_the_current_release` fails |
 | Config-path existence (`tests/test_tooling_config.py`) | every ruff `include` glob and per-file-ignore key matches a tracked file; every mypy override module resolves; every pre-commit path prefix exists. Found: a ruff include for a deleted tree, an override for a deleted module, hook prefixes for two directories that no longer existed (10 failures on the first run) | none | `"nope/**/*.py"` added to ruff `include`: `test_ruff_include_globs_match_a_tracked_file[nope/**/*.py]` fails |
@@ -536,6 +537,37 @@ Splitting rules that worked:
     eagerly), so the retired-name refusal lives in the CLI, the installer and the container
     entrypoint, not in compose.
 
+Lessons from the cluster research and the 0.7.0 measurement work (moved here from the retired
+improvement backlog):
+
+19. **Synthetic data misleads.** Leiden recovered planted partitions and then barely beat the baseline
+    on 539 real crops; the k-means fit was 2.3 times slower on real vectors than on a synthetic mixture
+    of the same size. A quality or speed claim needs real photos. The scorecard refuses quality fields
+    on a synthetic dataset for this reason (`scripts/bench/scorecard.py`).
+20. **Weak labels mislead.** The encoder ranking from Commons set C (category-name labels) did not
+    survive the author-labelled benchmarks. Check labels before comparing models on them.
+21. **Test on standard benchmarks.** CARS196, CUB-200-2011 and SOP have published numbers and were the
+    only fair check of the encoder question. Even they were labelled exploratory here because the
+    registered sanity check failed.
+22. **Register the bar before the score.** Bars were committed before scoring in W0e, Z4, WB and WB2,
+    and none was moved. Z4's open-set bar was still unreadable: register a minimum sample size per bar
+    too.
+23. **CI-only float noise.** Tolerances that pass on one machine can fail on another (TensorRT kernels,
+    batching and concurrency change embeddings at the level of run-to-run noise even with the same
+    inputs). Pin the comparison to cosine and sorted outputs, not bit equality.
+24. **GPU sharing etiquette.** Several sessions share three GPUs. Check `nvidia-smi` first, give the
+    stack its own compose project name (`docker compose -p`), keep to the agreed cards, and never act
+    on the live stack. A measurement taken on a busy host is an upper bound: record the load average
+    and mark the row noisy (the harness does).
+25. **Wait-loop pitfalls.** Poll a health route with a timeout and a marker, never `pgrep -f` or
+    `pkill -f` on a string that is also in your own command line (it matches itself), and never a blind
+    `sleep` before a check. Time `/health` before a run: a slow health route is the first sign of a
+    loaded stack.
+26. **Counters can crash the server.** Custom Triton Python-backend metrics must be kept alive,
+    dropped in the right order and incremented from one thread (#390).
+27. **Fail closed beats a quiet empty result.** A partial cluster pass used to report success (#357);
+    undo re-decides each item inside the write so a person's edit wins.
+
 ## 6. Results
 
 Before is the first guards commit (`d4e44556`, the day the baselines were generated from the old
@@ -596,5 +628,5 @@ Decide before starting; each is an owner decision here (marked OC in the plan).
 - **Agents.** The Opus-plans/Sonnet-implements split and parallel worktrees assume cheap parallel CI;
   a repo with slow or scarce CI should batch more per PR and merge less often.
 
-Related: [CONTRIBUTING.md](../../CONTRIBUTING.md) (day-to-day rules and the guard table),
-[repo_cleanup_plan.md](repo_cleanup_plan.md) (the plan this series executed).
+Related: [CONTRIBUTING.md](../../CONTRIBUTING.md) (day-to-day rules and the guard table); the nine cleanup
+PRs (#300 to #324) are the record of this series.

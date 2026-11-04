@@ -51,6 +51,7 @@ at port 4603.
 | Path | What is there |
 |---|---|
 | `src/main.py`, `src/app/` | `main.py` builds the `app` that `uvicorn src.main:app` serves; `app/` holds `factory.py` (`create_app`, middleware, router mounting), `lifespan.py`, `resources.py` |
+| `src/core/` | App-wide plumbing: CORS, dependencies, error handlers, logging, metrics, request origin, upload limits |
 | `src/routers/` | Core routers; `src/routers/curation/` holds the curation routers (thin HTTP adapters) |
 | `src/services/` | Logic with no FastAPI dependency: `curation/`, `config_store/`, `projects/`, `labeling/` (VLM), `detection/`, `training/` |
 | `src/clients/` | Triton, OpenSearch (`curation_opensearch/` has the index bodies, class registry and mapping migrations), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |
@@ -58,11 +59,11 @@ at port 4603.
 | `src/domain/` | Pure rules and field vocabularies shared by clients and services (`region_boxes`, `history`, `embedding_state`, `item_text`, `audit_math`, `ingest_class_sources`); imports only `config` and `utils` |
 | `src/schemas/` | Wire models (`curation/`, `bakeoff/`, `embed`, `ingest`, ...); routers and services import them, they import neither |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
-| `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/` |
+| `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/`, `bench/`, `research/`, `validation/` |
 | `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
 | `models/` | Triton model repository (`config.pbtxt` per model; `.plan` engines are built, not committed) |
 | `export/` | Model export scripts, see [export/README.md](export/README.md) |
-| `docker/` | Side-car images: `segmenter/`, `trainer/`, `test/` (live harness), `hardened/`; the root `Dockerfile` holds the `api`, `export` and `evaluator` targets |
+| `docker/` | Side-car images: `segmenter/`, `trainer/`, `test/` (live harness), `hardened/`, plus `bench/` and `buildlib/`; `Dockerfile.triton` at the root builds the Triton image; the root `Dockerfile` holds the `api`, `export` and `evaluator` targets |
 | `contracts/` | Generated OpenAPI and TypeScript/JSON wire contracts. Do not hand-edit |
 | `examples/` | Region profiles, prompt packs, bake-off profiles, the VLM catalog (`vlm/catalog.tsv`) |
 | `tests/` | Offline pytest suite; `tests/live/` needs the live harness |
@@ -82,7 +83,7 @@ Docker socket (read its header first).
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
 | `api` | none | 4603 | FastAPI, all routes |
 | `opensearch` | none | 4607 | k-NN store and the curation datastore |
-| `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh` | `curation` | | Region cascade, VLM loop, auto-label driver, clustering refresh |
+| `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-assist-loop-worker`, `curation-cluster-refresh` | `curation` | | Region cascade, VLM loop, auto-label driver, cluster-sampled auto-label loop, clustering refresh |
 | `model-export` | `setup` | | One-shot engine-build toolchain (TensorRT, ModelOpt, export scripts, model-repo seed); `models install`, `export` and the `make` export targets run it; never started by `up` |
 | `model-export-worker` | `export` | | Runs the engine builds the API queues for `POST /models/upload` and `POST /models/{model_name}/export` (job files under `/jobs/model_export`); the routes answer 503 while it is down |
 | `curation-evaluator` | `evaluator` | | Bake-off runner, on demand (`./openprocessor curation up curation-evaluator`) |
@@ -90,6 +91,7 @@ Docker socket (read its header first).
 | `vlm` | `vlm` | 4612 | Local vLLM serving a catalog model |
 | `curation-trainer`, `curation-mlflow` | `training` | 4609 (MLflow) | Training jobs through a file protocol, tracking |
 | Prometheus, Grafana, Loki, Alloy, DCGM, node exporter, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4608 | Opt in: `make up-monitoring` |
+| `cropwright` | `cropwright` | 5184 | Static Cropwright frontend (nginx), optional basic auth |
 | `triton-sdk` | `benchmark` | | Benchmark client |
 
 GPU placement comes from `.env` (`TRITON_GPU_ID`, `API_GPU_ID`,
@@ -119,11 +121,12 @@ The management CLI works in a checkout (`./openprocessor`, or the shim
 `./scripts/openprocessor.sh`) and in an installed directory. Subcommands:
 `start`, `stop`, `restart [service]`, `logs [service] [-f]`, `status`,
 `health`, `models [status|install [--only GROUP]|repair]`, `export`,
-`download`, `profile`, `test`, `curation [up|down|logs|status]`, `faces purge [--dry-run|--yes]`, `bench`,
-`clean`, `update`, `sample coco [--full]`, `config show`, `gpu plan`,
+`download`, `profile`, `test`, `curation [up|down|logs|status]`, `faces purge [--dry-run|--yes]`,
+`clean`, `update`, `sample coco [--full]`, `config show`, `cropwright password`, `gpu plan`,
 `vlm list|status|use <id>|apply|probe|key set <slug>`, `train-mode on|off`,
-`upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`,
-`bench` and `setup` need a checkout. Details:
+`upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`
+and `setup` need a checkout. `bench` exists in the CLI but is broken (its tool is not in the repo; task 1D-21 in
+`docs/design/program/02d_b1_api_frontend_tests.md`). Details:
 [INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli).
 
 Python source is mounted into `api` in a checkout, so most edits are live;
@@ -132,20 +135,25 @@ restart `api` after route changes. Rebuild images only when a Dockerfile or
 
 ## Core API shape
 
-Coordinates are normalized `0.0-1.0`. Face landmarks are a flat list of 10
-floats.
+Coordinates are normalized `0.0-1.0`. A face `box` is a flat `[x1, y1, x2, y2]`
+list and its landmarks a flat list of 10 floats; the embeddings come in a
+separate list, one per face (`FaceRecognizeResponse` in
+`src/schemas/visual_search.py`):
 
 ```json
 {
+  "num_faces": 1,
   "faces": [
     {
-      "box": {"x1": 0.30, "y1": 0.10, "x2": 0.50, "y2": 0.40},
-      "confidence": 0.98,
+      "box": [0.30, 0.10, 0.50, 0.40],
       "landmarks": [0.35, 0.20, 0.45, 0.20, 0.40, 0.28, 0.36, 0.35, 0.44, 0.35],
-      "embedding": [0.012, -0.034, ...]
+      "score": 0.98,
+      "quality": 0.91
     }
   ],
-  "inference_time_ms": 18.3
+  "embeddings": [[0.012, -0.034, ...]],
+  "status": "success",
+  "total_time_ms": 18.3
 }
 ```
 
@@ -205,7 +213,9 @@ the code:
 ```
 
 Docs may only name routes that exist in `contracts/openapi/curation.json` or
-the app, `OP_*` variables read by code, and links that resolve.
+the app, `OP_*` variables read by code, and links that resolve. Plans under
+`docs/design/` may name the routes and variables they will add; their links
+are still checked.
 
 ## Testing
 
@@ -226,7 +236,7 @@ Settings live in `.env` (template `env.template`). The "Curation quick-config"
 block lists the keys the curation tiers need. Index names are not
 configurable: they come from the project. Ports: API 4603, Triton 4600-4602,
 Prometheus 4604, Grafana 4605, Loki 4606, OpenSearch 4607, Dashboards 4608,
-MLflow 4609, DCGM 4610, segmenter 4611, VLM 4612. Set `OP_BIND_ADDRESS` to
+MLflow 4609, DCGM 4610, segmenter 4611, VLM 4612, Cropwright 5184. Set `OP_BIND_ADDRESS` to
 publish beyond loopback (the installer asks for consent).
 
 The API has no authentication. Do not expose it. See [SECURITY.md](SECURITY.md).
@@ -235,6 +245,7 @@ The API has no authentication. Do not expose it. See [SECURITY.md](SECURITY.md).
 
 - [README.md](README.md), [INSTALLATION.md](INSTALLATION.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data model, topology
+- [docs/design/program/00_index.md](docs/design/program/00_index.md): the planned work toward 0.7.0 (plans, not current behaviour)
 - [docs/CURATION.md](docs/CURATION.md): curation user guide
 - [docs/design/curation_api_contract.md](docs/design/curation_api_contract.md): routes and wire models
 - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): index schemas

@@ -121,7 +121,7 @@ gate (`min_agreement`, default 0.6). Nothing is labelled until you apply it, wit
 count first (`POST .../assist/runs/{run_id}/apply`). Apply labels the scope's current
 members as you would by hand, skips every locked or validated one, and refuses
 (`scope_changed`) when a re-refine has moved the members since the run.
-[Assist runs](../docs/design/curation_api_contract.md#assist-runs).
+[Assist runs](design/curation_api_contract.md#assist-runs).
 
 Cropwright's **Assist…** button on a cluster page is the front end of this: pick the
 selection, all members or a representative sample, the actions and the VLM, read the
@@ -135,7 +135,7 @@ class to the rest of a cluster only when an exact bound shows it homogeneous (a 
 label, not validated, kept out of the training export until reviewed), splits what fails and
 leaves the rest for review, within a hard VLM budget, with an optional second-model audit and a
 rollback: [Auto-label loop](../docs-site/docs/guides/auto-label-loop.mdx) and
-[the routes](../docs/design/curation_api_contract.md#auto-label-loops).
+[the routes](design/curation_api_contract.md#auto-label-loops).
 
 ## Test on a crop
 
@@ -228,46 +228,7 @@ CreateML or LabelMe dataset, or an OpenProcessor export, into a project.
 Preview, decide each class by name (`map`, `create`, `skip`, `region`), import, undo.
 [Dataset import](../docs-site/docs/guides/dataset-import.mdx).
 
-### Importing other formats
-
-The importer reads these layouts and detects them from the files in the dataset
-directory (first match wins; `source.format` forces one):
-
-| Format | Layout | Classes come from |
-|---|---|---|
-| YOLO | `data.yaml` with `names`; or `classes.txt` / `obj.names` / `names.txt` beside `images/` and `labels/` (optionally `images/<split>/`) | the names, by line (or YAML index) |
-| COCO | `annotations/*.json` | category names |
-| Pascal VOC | `Annotations/*.xml`, `JPEGImages/`, optional `ImageSets/Main/*.txt` | `<name>` |
-| Open Images | `*annotations-bbox*.csv` plus `class-descriptions*.csv` | the display name |
-| CVAT for images 1.1 | `annotations.xml`, `images/` | the `label` attribute |
-| Label Studio | the full JSON export (a list of tasks) with `rectanglelabels` results | the rectangle label |
-| KITTI | `label_2/*.txt` and `image_2/` (or under `training/`), optional `ImageSets/*.txt` | the object type |
-| CreateML | `_annotations.createml.json` (or any CreateML JSON), at the root or in `train`/`valid`/`test` directories | `label` |
-| LabelMe | one JSON per image, beside the image, at the root or in split directories | `label` |
-
-Class identity is always the name. A YOLO dataset with no names (no `data.yaml`
-`names`, no names file) is refused as `format_undetected`; a names file with a blank
-or repeated name is a blocking `yolo_names_file_invalid`.
-
-How each format maps to boxes:
-
-- An image with no object at all is a reviewed negative (VOC, CVAT, KITTI, CreateML,
-  LabelMe). An image whose objects were all skipped is unlabeled. A Label Studio task
-  with no annotation is unlabeled; one annotation with no box is a negative; a task
-  with several annotations is skipped (`labelstudio_task_skipped`).
-- Only axis-aligned boxes are boxes. Rotated boxes, polygons, points, masks, `DontCare`
-  regions and (Label Studio) other result types are skipped with the info issue
-  `shape_not_box_skipped`. YOLO rows with more than five columns (segmentation, OBB)
-  are imported as their bounding box.
-- Pixel formats (CVAT, KITTI, CreateML, LabelMe) read the image size from the image;
-  a declared size that disagrees with the image skips the image
-  (`image_size_mismatch`). Label Studio coordinates are percentages.
-- An image reference that leaves the dataset (`..`, an absolute path, a link out) or
-  names a remote URL is never followed (`image_file_missing`).
-- Auto-detection of the JSON formats looks at the first 64 KiB of each file. The
-  Label Studio `JSON_MIN` export, CVAT video (track) exports and COCO
-  segmentation-only files are not read directly: convert them or export the full JSON.
-- A `format_undetected` error means none of these layouts was found at the path.
+The layouts the importer detects, how each maps to boxes and the issue codes are in [Dataset import](../docs-site/docs/guides/dataset-import.mdx). Class identity is always the name.
 
 ## Reprocess
 
@@ -331,14 +292,7 @@ The HTTP API works with no workers. The asynchronous half is opt-in:
 docker compose -p <project> --profile curation up -d
 ```
 
-| Service | What it does |
-|---|---|
-| `curation-detection-worker` | Runs the region cascade and verifies boxes. Needs `triton-server`. |
-| `curation-vlm-worker` | Labels classes through each project's active VLM endpoint. |
-| `curation-auto-label-worker` | Drives the auto-label protocol. Clusters unless a caller passes `run_vlm=true`. |
-| `curation-assist-loop-worker` | Runs auto-label loops. While one runs, the cluster retrain is held. |
-| `curation-cluster-refresh` | Queues the full cluster retrain once 200 new items exist and ingest is quiet. |
-| `curation-evaluator` | Bake-off runner. Run it on demand; it reserves a GPU. |
+Six services run under the `curation` profile (the evaluator on demand): detection, VLM, auto-label, assist-loop, cluster refresh and the bake-off evaluator.
 
 Details, GPU needs and the segmenter, trainer and GPU arbiter profiles:
 [Workers](../docs-site/docs/operations/workers.mdx) and
@@ -348,14 +302,15 @@ Details, GPU needs and the segmenter, trainer and GPU arbiter profiles:
 
 Ingest resolves paths under `OP_SOURCE_ROOT` (container default `/data/source`). Four
 services mount the same host directory read-only at that path: `api`,
-`curation-detection-worker` and `curation-auto-label-worker` (and `curation-assist-loop-worker`, which reads the crops it asks about).
+`curation-detection-worker`, `curation-auto-label-worker` and
+`curation-assist-loop-worker` (which reads the crops it asks about).
 
 ```yaml
 volumes:
   - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
 ```
 
-Set `OP_SOURCE_ROOT_HOST` in `.env`, then recreate all three services
+Set `OP_SOURCE_ROOT_HOST` in `.env`, then recreate all four services
 (`./openprocessor start`, or `docker compose -p <project> up -d`). If a worker lacks
 the mount, ingest succeeds but later worker reads fail with
 `reason=image_unavailable`. `GET /curation/projects/{project}/ingest/config` lists the

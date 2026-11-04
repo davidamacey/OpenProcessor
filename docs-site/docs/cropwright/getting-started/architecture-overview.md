@@ -72,7 +72,7 @@ that hasn't enabled a feature simply doesn't get a page section for it.
 ## Absent, not disabled
 
 Newer backend features (dataset import, prompt-pack and region-profile
-editors, the VLM registry, project combine, model sharing, the keymap) are
+editors, the VLM registry, model sharing, the keymap) are
 each probed once and shown only when served, so one Cropwright build works
 against backends at different versions.
 

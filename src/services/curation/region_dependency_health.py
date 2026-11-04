@@ -31,6 +31,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_path, env_str
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -69,9 +70,7 @@ def _atomic_write(state: dict[str, float]) -> None:
     poll instead of losing the whole response."""
     try:
         _state_dir().mkdir(parents=True, exist_ok=True)
-        tmp = _state_file().with_suffix('.tmp')
-        tmp.write_text(json.dumps(state))
-        tmp.replace(_state_file())
+        atomic_write_json(_state_file(), state, default=None)
     except OSError:
         pass
 

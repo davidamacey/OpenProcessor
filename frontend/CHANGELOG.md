@@ -7,11 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ingest policy page (`/settings/ingest-policy`): an "Ingest profiles" list (`GET /ingest_profiles`) marks the active profile and activates another (`POST /ingest_profiles/{name}/activate`). A refused activation shows the served message and each served issue (`detector_model_not_ready`, `detector_model_unusable`, `triton_unreachable`) verbatim; "Activate anyway" appears only when the served report says `force_allowed`. A successful activation re-reads the active-profile card; a failing follow-up read is reported as that, never as a refused activation. A 404 or any 409 refusal re-reads the stale list, and only the newest list read is kept. Each button is named for its profile ("Activate yolo-large"), a refusal is an alert that takes focus, warnings are announced through a status region, focus lands on the newly active row, and the in-flight button stays focusable with `aria-disabled` (#440).
+
 ### Fixed
+
+- `/projects` at phone width: the table becomes stacked rows (counts under the project, actions below) instead of needing sideways scrolling to reach Embedded and the Open/Edit/Archive buttons. The count labels are real text ("Images 0"), not CSS-generated content that read as "Images0".
 
 - Ingest policy page: with no active ingest profile the card now says ingest uses the deployment's default detector (naming it from `GET /ingest/config`) instead of claiming ingest is refused (#411).
 - Search by image popover on `/clusters` opens under its button at phone width instead of pinned to the top of the viewport over the header.
 - The live e2e tier (`npm run test:live`) accepts basic-auth credentials through `OP_CROPWRIGHT_LIVE_USER` and `OP_CROPWRIGHT_LIVE_PASSWORD_FILE`.
+- Auto-label loop: the budget stop now says clusters it could not cover were left not visited, and each not-visited cluster row states which budget could not cover it, with the sentence the backend serves in `reason_message` (#411).
 - Auto-label loop run view: a loop that stopped because every VLM call of a node failed shows the served `vlm_failed` reason and error, and offers Resume for that case only (other failed loops stay non-resumable) (#286).
 
 ### Changed

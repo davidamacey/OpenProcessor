@@ -1,6 +1,6 @@
 # OpenProcessor `/curation` API contract
 
-Reference for the `/curation` HTTP API as shipped in v0.4.0. The generated
+Reference for the `/curation` HTTP API as it is on this branch (0.6.0 plus the `[Unreleased]` changes). The generated
 OpenAPI document `contracts/openapi/curation.json` is the source of truth for
 routes and schemas. The JSON/TypeScript helpers in `contracts/json/` and
 `contracts/ts/` are generated from the same code. This document adds the
@@ -26,6 +26,7 @@ domain, a model vendor or a frontend.
 - [Clusters](#clusters)
 - [VLM labeling and the auto-label pipeline](#vlm-labeling-and-the-auto-label-pipeline)
 - [Ingest](#ingest)
+- [Ingest profiles, ingest sources and other route families](#ingest-profiles-ingest-sources-and-other-route-families)
 - [Dataset import](#dataset-import)
 - [Reprocess](#reprocess)
 - [Export](#export)
@@ -126,15 +127,15 @@ failures of a request body are the standard FastAPI `422` list.
 
 | Status | Codes |
 |---|---|
-| `404` | `project_not_found`, `not_found`, `unknown_revision`, `model_not_found`, `crop_not_found`, `image_not_found`, `import_not_found`, `combine_not_found`, an export artifact that is not whitelisted or not present, `unknown_box_id` |
+| `404` | `project_not_found`, `not_found`, `ingest_source_not_found`, `unknown_revision`, `model_not_found`, `crop_not_found`, `image_not_found`, `import_not_found`, `combine_not_found`, an export artifact that is not whitelisted or not present, `unknown_box_id` |
 | `403` | `read_only` (a non-stored pack, profile or endpoint), region-detector models in `DELETE /models/{model_name}` |
-| `409` | `crop_not_embedded`, `box_not_embedded` (`GET /search/similar`), `project_archived`, `project_read_only`, `project_building`, `project_deleting`, `project_failed`, `project_busy`, `project_protected`, `slug_taken`, `slug_retired`, `last_active_project`, `shard_budget_exceeded`, `invalid_transition`, `target_not_empty`, `clone_source_not_ready`, `in_use`, `name_conflict`, `revision_conflict`, `active_conflict`, `no_previous`, `previous_deleted`, `no_active_profile`, `preview_stale`, `combine_not_resumable`, `import_busy`, `import_resumable`, `import_not_resumable`, `import_not_undoable`, `dataset_changed`, `reprocess_busy`, `class_hotkey_conflict`, `hotkey_taken`, `region_conflict`, `vlm_not_configured`, `vlm_endpoint_unavailable`, `no_local_vlm`, `finish_in_progress`, `no_classes` |
+| `409` | `crop_not_embedded`, `box_not_embedded` (`GET /search/similar`), `project_archived`, `project_read_only`, `project_building`, `project_deleting`, `project_failed`, `project_busy`, `project_protected`, `slug_taken`, `slug_retired`, `last_active_project`, `shard_budget_exceeded`, `invalid_transition`, `target_not_empty`, `clone_source_not_ready`, `in_use`, `name_conflict`, `revision_conflict`, `active_conflict`, `no_previous`, `previous_deleted`, `no_active_profile`, `preview_stale`, `assist_loop_running`, `audit_no_candidates`, `detector_in_use`, `project_owned_model`, `webhook_disabled`, `combine_not_resumable`, `import_busy`, `import_resumable`, `import_not_resumable`, `import_not_undoable`, `dataset_changed`, `reprocess_busy`, `class_hotkey_conflict`, `hotkey_taken`, `region_conflict`, `vlm_not_configured`, `vlm_endpoint_unavailable`, `no_local_vlm`, `finish_in_progress`, `no_classes` |
 | `413` | `upload_too_large` (also `POST /search/image`: over `OP_SEARCH_IMAGE_MAX_BYTES` or `OP_SEARCH_IMAGE_MAX_PIXELS`), an upload or batch over its per-request limit |
-| `422` | `validation_failed`, `slug_invalid`, `confirm_mismatch`, `combine_invalid`, `class_mapping_incomplete`, `class_mapping_invalid`, `import_blocked`, `format_undetected`, `dataset_path_not_allowed`, `archive_invalid`, `reprocess_targets_invalid`, `region_profile_required`, `unknown_pack`, `unknown_profile`, `unknown_vlm`, `vlm_external_not_acknowledged`, `unknown_catalog_id`, `vlm_catalog_does_not_fit`, `export_outside_project`, `pack_invalid`, `profile_invalid`, `no_box_to_verify`, `too_many_crops`, `too_many_crop_ids`, `too_many_boxes`, `region_text_disabled`, `box_id_in_batch`, `box_id_required` |
+| `422` | `validation_failed`, `slug_invalid`, `confirm_mismatch`, `combine_invalid`, `class_mapping_incomplete`, `class_mapping_invalid`, `import_blocked`, `format_undetected`, `dataset_path_not_allowed`, `archive_invalid`, `reprocess_targets_invalid`, `region_profile_required`, `unknown_pack`, `unknown_profile`, `unknown_detector_names`, `ingest_source_invalid`, `too_few_items`, `unknown_vlm`, `vlm_external_not_acknowledged`, `unknown_catalog_id`, `vlm_catalog_does_not_fit`, `export_outside_project`, `pack_invalid`, `profile_invalid`, `no_box_to_verify`, `too_many_crops`, `too_many_crop_ids`, `too_many_boxes`, `region_text_disabled`, `box_id_in_batch`, `box_id_required` |
 | `429` | `probe_busy` (VLM endpoint probe), `test_busy` (test-on-crop) |
 | `500` | `internal_isolation_error` (a cross-project access was refused), `path_escape` |
 | `502` | `vlm_transport_error`, `segmenter_error`, `detector_error`, a Triton load refusal on promote |
-| `503` | `config_store_unavailable`, an OpenSearch outage on a read, ingest unavailable before the encoder has loaded |
+| `503` | `config_store_unavailable`, `detector_unavailable` (`POST /classes/seed_from_detector`), `vlm_unreachable` (`POST /vlm/label_batch`: no crop got an answer, nothing was written), an OpenSearch outage on a read, ingest unavailable before the encoder has loaded |
 | `504` | `test_timeout` |
 
 The full code enumeration is `ConfigErrorDetail.error` in the OpenAPI
@@ -658,7 +659,7 @@ returns an item returns the same shape, built by one serializer
 (`serialize_item` in `src/services/curation/wire.py`). The wire names are
 fixed. They do not change when a deployment overrides its storage field names
 with `OP_REGION_FIELD_*`; the translation happens once at the boundary.
-`contracts/json/item_wire.json` lists the exact key set (106 keys, all always
+`contracts/json/item_wire.json` lists the exact key set (123 keys, all always
 present, nullable where the schema says so) and `contracts/ts/itemWire.ts` is
 the TypeScript form. `tests/curation/test_wire_contract.py` pins the key set.
 
@@ -1694,7 +1695,7 @@ writes a cluster field.
 
 `LoopNode`: `path` (`r<cluster_id>`, then `.<index>` per level), `level`, `parent`, `n`
 (free members at the snapshot), `sampled`, `answered`, `decision` (`pass`, `split`,
-`review_leaf`, `review_small`, `stale`, `unvisited`; null while open), `reason`, `class_name`
+`review_leaf`, `review_small`, `stale`, `unvisited`; null while open), `reason`, `reason_message` (a sentence for `reason`; null when it has none), `class_name`
 (the top voted class), `agree`, `bound` (the exact lower bound on homogeneity),
 `distribution` (`class_name`, `votes`), `new_class_proposals` (`name`, `votes`) and
 `items_propagated`. The nodes with `review_leaf`, `review_small`, `stale` or `unvisited` are
@@ -1805,10 +1806,29 @@ cluster.
   backend outage.
 - Ingest answers `503` until the encoder has loaded.
 
+## Ingest profiles, ingest sources and other route families
+
+Routes that the sections above do not cover. Their guides are in `docs-site/docs/guides/`; the
+schemas are in `contracts/openapi/curation.json`.
+
+| Family | Routes | Semantics |
+|---|---|---|
+| Ingest profiles | `/ingest_profiles`, `/ingest_profiles/{name}`, `.../revisions`, `.../revisions/{revision}`, `.../activate`, `.../clone`, `/ingest_profiles/active`, `.../active/rollback`, `/ingest_profiles/deactivate`, `/ingest_profiles/validate`, `/ingest_profiles/schema` | The same revisioned config lifecycle as prompt packs and region profiles (config axis `ingest_profile`). The active profile is the project's ingest detector (`primary`, optional `secondary`); with none active the deployment `OP_INGEST_*` settings apply. Activation checks that Triton serves the models. [Ingest profiles](../../docs-site/docs/guides/ingest-profiles.mdx) |
+| Open vocabulary | `/open_vocab`, `/open_vocab/{name}`, `.../revisions`, `.../activate`, `.../clone`, `/open_vocab/active`, `.../active/rollback`, `/open_vocab/deactivate`, `/open_vocab/validate`, `/open_vocab/schema`, `POST /open_vocab/test` | Open-vocabulary prompt sets, again a revisioned config axis (`open_vocab`) that needs the segmenter. `test` runs one stored image and writes nothing. [Open-vocabulary detection](../../docs-site/docs/guides/open-vocabulary.mdx) |
+| Ingest policy | `GET/PUT /ingest/policy`, `POST /ingest/policy/preview` | The project's `detect` filter, `embedding` mode and `clustering.automatic` switch. `PUT` replaces the document; it applies to future ingests only. `preview` counts what a candidate policy would embed over stored items and writes nothing. The detector is an ingest profile, not a policy part. [Ingest policy](../../docs-site/docs/guides/ingest-policy.mdx) |
+| Object-store ingest | `POST /ingest/objects`, `POST /ingest/objects/presign` | The S3-compatible sibling of `/ingest/upload`: the request carries references and the API fetches the bytes. Which buckets and prefixes may be read is `OP_S3_ALLOWED` (empty means off). Credentials never travel in a request. |
+| Ingest sources | `/ingest/sources`, `/ingest/sources/{source_id}`, `.../run`, `.../retry-dead`, `.../events` | A registered folder or bucket prefix with watch, schedule or webhook triggers, drained by the one bulk runner. `events` receives S3 event notifications (`409 webhook_disabled` when the source takes none). [Ingest sources](../../docs-site/docs/guides/ingest-sources.mdx) |
+| Region stage | `GET /region_stage`, `POST /region_stage/pause`, `POST /region_stage/resume` | Pause or resume the region stage for this project only (idempotent, loses nothing). `409` until a region profile is active. |
+| Accuracy audit | `POST /audit/start`, `GET /audit/queue`, `GET /audit/report` | Draws a stratified sample of machine-labelled crops for a human to label through the normal label routes, then reports how often the detector and the VLM agreed with those labels. `409 audit_no_candidates` when nothing is eligible. |
+| Class seeding | `POST /classes/seed_from_detector` | Creates registry classes from the ingest detector's vocabulary; `422 unknown_detector_names`, `503 detector_unavailable`. |
+| Detections | `GET /detections/summary` | Stored detections per detector label, each with its embedding breakdown, over the shared item filter. |
+| VLM scope policy | `GET/PUT /vlm/policy` | Which crops the VLM stage takes (scope `all` when none was written). `PUT` takes `expected_revision` (`409 revision_conflict`); it applies at the worker's next poll and the next `auto_label` run, and stored labels are untouched. |
+| Promote job | `GET /train/promote/{job_id}/jobs/{promote_id}` | Status of one promotion. |
+
 ## Dataset import
 
-Import an already-labeled dataset (YOLO, COCO, Pascal VOC, Open Images or an OpenProcessor export)
-into a project. The importer is chunked, persisted, resumable and runs on the
+Import an already-labeled dataset (YOLO, COCO, Pascal VOC, Open Images, CVAT, Label Studio, KITTI,
+CreateML, LabelMe or an OpenProcessor export; `GET /datasets/formats` lists them) into a project. The importer is chunked, persisted, resumable and runs on the
 shared jobs volume. Labels are written through the same single class writer
 that human labels use, so the lock rule holds. A human edit made between
 planning and writing wins.
@@ -2470,7 +2490,7 @@ The table lists renamed or restructured wire surfaces.
 | `GET /crops` | `classifier_conf_lt`, `limit`, `sort`, `conf_min`, `conf_max`, `k`, `item_text`, `import_id`, `dataset_split`, `on_negative_frame`, `proposed_by_import` |
 | `GET /health` | `vlm` (the active endpoint), `region_profile`, `mlflow_public_url` |
 | Environment variables | VLM and segmenter connection variables are `OP_VLM_*` and `OP_SEGMENTER_*`; retired names are listed in `src/config/retired_env.py` |
-| Item key count | 106 keys; the list in `contracts/json/item_wire.json` is authoritative |
+| Item key count | The list in `contracts/json/item_wire.json` is authoritative (123 keys at this writing) |
 
 ## Notes for consumers
 

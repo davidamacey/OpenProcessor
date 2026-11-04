@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import requests
 
+from scripts.datasets.fetch_test_images import IMAGE_DIR
 from scripts.validation.validate_models_lib import (
     API_BASE,
     CONF_TOL,
@@ -18,12 +19,16 @@ from scripts.validation.validate_models_lib import (
 )
 
 
-def validate_detection(image_path: str, expected: dict) -> ValidationResult:
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+def validate_detection(image_path: Path, expected: dict) -> ValidationResult:
     """Validate object detection against ground truth."""
     vr = ValidationResult(f'Detection ({expected["image"]})')
 
     try:
-        with Path(image_path).open('rb') as f:
+        with image_path.open('rb') as f:
             r = requests.post(f'{API_BASE}/detect', files={'image': f}, timeout=30)
         data = r.json()
     except (requests.RequestException, OSError, ValueError) as e:
@@ -91,7 +96,7 @@ def validate_faces(expected: dict) -> ValidationResult:
     vr = ValidationResult(f'Face Recognition ({expected["image"]})')
 
     try:
-        with Path(f'test_images/{expected["image"]}').open('rb') as f:
+        with (IMAGE_DIR / expected['image']).open('rb') as f:
             r = requests.post(f'{API_BASE}/faces/recognize', files={'image': f}, timeout=30)
         data = r.json()
     except (requests.RequestException, OSError, ValueError) as e:
@@ -170,7 +175,7 @@ def validate_clip_image(expected: dict) -> ValidationResult:
     vr = ValidationResult(f'CLIP Image Embedding ({expected["image"]})')
 
     try:
-        with Path(f'test_images/{expected["image"]}').open('rb') as f:
+        with (IMAGE_DIR / expected['image']).open('rb') as f:
             r = requests.post(f'{API_BASE}/embed/image', files={'image': f}, timeout=30)
         data = r.json()
     except (requests.RequestException, OSError, ValueError) as e:
@@ -259,7 +264,7 @@ def validate_ocr(expected: dict) -> ValidationResult:
     vr = ValidationResult(f'OCR ({expected["image"]})')
 
     try:
-        with Path(f'test_images/{expected["image"]}').open('rb') as f:
+        with (IMAGE_DIR / expected['image']).open('rb') as f:
             r = requests.post(f'{API_BASE}/ocr/predict', files={'image': f}, timeout=30)
         data = r.json()
     except (requests.RequestException, OSError, ValueError) as e:
@@ -324,7 +329,7 @@ def validate_analyze(expected: dict) -> ValidationResult:
     vr = ValidationResult(f'Analyze ({expected["image"]})')
 
     try:
-        with Path(f'test_images/{expected["image"]}').open('rb') as f:
+        with (IMAGE_DIR / expected['image']).open('rb') as f:
             r = requests.post(f'{API_BASE}/analyze', files={'image': f}, timeout=60)
         data = r.json()
     except (requests.RequestException, OSError, ValueError) as e:

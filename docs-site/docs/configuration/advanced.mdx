@@ -84,9 +84,9 @@ checkout rarely needs them.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_SOURCE_ROOT` | `/data/source` | Container path item paths resolve against; must match the mount on all three services below |
-| `OP_SOURCE_ROOT_HOST` | `./data/source` in a source checkout; `./data` when the installer wrote `.env` | Host side of that mount, read-only. Mounted by `api`, `curation-detection-worker` and `curation-auto-label-worker`; recreate all three after changing it (`./openprocessor start`) |
-| `OP_SOURCE_PATH_ALIASES` | unset | Extra named roots, JSON object or `alias=path,...`, served at `GET /curation/projects/{project}/images/root/{alias}`. Compose does not mount them: bind-mount each alias path into the same three services with your own compose override file |
+| `OP_SOURCE_ROOT` | `/data/source` | Container path item paths resolve against; must match the mount on all four services |
+| `OP_SOURCE_ROOT_HOST` | `./data/source` in a source checkout; `./data` when the installer wrote `.env` | Host side of that mount; see [Basic configuration](basic.mdx) |
+| `OP_SOURCE_PATH_ALIASES` | unset | Extra named roots, JSON object or `alias=path,...`, served at `GET /curation/projects/{project}/images/root/{alias}`. Compose does not mount them: bind-mount each alias path into the same four services with your own compose override file |
 | `OP_EXPORT_KEEP_LAST` | `5` | Keep-last retention for auto-named exports under each project's exports directory; `0` keeps all |
 | `OP_STATE_DIR` | `/var/lib/openprocessor` | Persistent state; projects nest under it |
 | `OP_CROP_CACHE_DIR` | `/dev/shm/openprocessor_crops` | Crop cache (compose points it at a dedicated volume) |

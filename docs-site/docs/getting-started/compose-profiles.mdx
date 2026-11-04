@@ -14,11 +14,12 @@ exactly Triton, the API and OpenSearch. Everything else is opt-in.
 | *(none)* | `triton-server`, `api`, `opensearch` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
 | `setup` | `model-export` (TensorRT and ModelOpt export toolchain, one-shot) | yes | never started by `up`; `./openprocessor models install` and `export` run it with `docker compose run --rm model-export ...` |
 | `export` | `model-export-worker` (runs the engine builds queued by `POST /models/upload` and `POST /models/{model_name}/export`) | yes | `docker compose --profile export up -d model-export-worker` |
-| `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh` | no | `docker compose --profile curation up -d` / `make curation-up` |
+| `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-assist-loop-worker`, `curation-cluster-refresh` | no | `docker compose --profile curation up -d` / `make curation-up` |
 | `evaluator` | `curation-evaluator` (bake-off runner, on demand) | yes | `./openprocessor curation up curation-evaluator` / `docker compose run --rm curation-evaluator` |
 | `segmenter` | `segmenter` (SAM 3 behind the generic segment protocol) | yes, plus `HF_TOKEN` for the gated weights | `docker compose --profile curation --profile segmenter up -d` |
 | `vlm` | `vlm` (vLLM, OpenAI-compatible) | yes | `docker compose --profile vlm up -d` |
 | `training` | `curation-trainer`, `curation-mlflow` | the trainer | `docker compose --profile training up -d` |
+| `cropwright` | `cropwright` (the web UI; the installer's `cropwright` tier) | no | `docker compose --profile cropwright up -d` |
 | `monitoring` | `prometheus`, `grafana`, `loki`, `alloy`, `node-exporter`, `dcgm-exporter`, `opensearch-dashboards` | no (DCGM reads all GPUs) | `docker compose --profile monitoring up -d` / `make up-monitoring` |
 | `benchmark` | `triton-sdk` (Triton client SDK image, idles for `perf_analyzer`) | no | `docker compose --profile benchmark up -d triton-sdk` |
 
@@ -63,6 +64,24 @@ Notes:
   stop and restart named sibling containers around a run, at the cost of
   giving `api` root-equivalent control of the Docker host. See
   [Security](../deployment/security.mdx).
+
+## Ports
+
+| Service | Port |
+|---|---|
+| API | 4603 |
+| Triton HTTP / gRPC / metrics | 4600 / 4601 / 4602 |
+| Prometheus, Grafana, Loki | 4604, 4605, 4606 |
+| OpenSearch | 4607 |
+| OpenSearch Dashboards | 4608 |
+| MLflow | 4609 |
+| DCGM exporter | 4610 |
+| Segmenter | 4611 |
+| Local VLM | 4612 |
+| Cropwright | 5184 (`OP_CROPWRIGHT_PORT`) |
+
+Ports bind to `127.0.0.1` unless `OP_BIND_ADDRESS` says otherwise; `--port-base N` moves the 46xx block
+(see the [installer](./installer.mdx)).
 
 ## Wiring a frontend to the stack
 

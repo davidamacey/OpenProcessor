@@ -1,6 +1,6 @@
 # Triton pipeline optimization plan: crop at model size, decode once, stay on the GPU
 
-Status: plan; Wave 0 tooling implemented (`select_baseline_set.py`, `run_baseline.py`, per-stage timers; see section 5.3 status note); baseline numbers not yet recorded, waves 1 onward not started. Issue: #40. This is the single
+Status: partially done. Waves 0, 1 (FP16 PE), 5 and 7 shipped (baseline numbers are in section 11 and `docs/PERFORMANCE.md`); Waves 2, 3, 4, 6, 8, 9 and 10 are open: 2, 3, 4, 6 and 9 are `program/07a` to `07d` (v0.7.0 B5), Waves 8 and 10 are v0.8.0 platform breadth (remove after B5d). Issue: #40. This is the single
 consolidated plan; it replaces the earlier private design notes. A fresh agent
 with no memory should be able to implement it from this file alone.
 

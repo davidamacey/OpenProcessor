@@ -164,7 +164,7 @@ def test_index_bootstrap_runs_once_per_project(tmp_path: Any, monkeypatch: Any) 
         index_bootstrap._INDEXES_BOOTSTRAPPED.add(get_curation_config().project_slug)
 
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', set())
-    monkeypatch.setattr(index_bootstrap, '_ensure_indexes_locked', _fake_locked)
+    monkeypatch.setattr(index_bootstrap, '_bootstrap_indexes', _fake_locked)
 
     async def _run() -> None:
         for slug in ('alpha', 'alpha', 'beta'):

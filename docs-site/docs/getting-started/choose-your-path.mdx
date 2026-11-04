@@ -94,13 +94,9 @@ Run these from the install directory.
 ./openprocessor upgrade --version vX.Y.Z  # a specific release
 ```
 
-Expected: the installer backs up the release files, `.env` and state to
-`backups/<UTC timestamp>/`, adds any new `.env` keys without changing yours,
-updates the image pins, re-runs model groups that need it, restarts the stack
-and checks health. If a step fails, `./setup-openprocessor.sh --repair`
-re-verifies and retries, and `./setup-openprocessor.sh --rollback` restores the
-newest backup of a different version. If the Triton image changed after a
-rollback, rebuild the engines with `./openprocessor models install`.
+The installer backs up first, keeps your `.env` values and checks health at the end. Repair,
+rollback and what each step does are on
+[Upgrade, repair and back up](../operations/upgrade-and-backup.mdx).
 
 ### Source checkout
 

@@ -136,6 +136,11 @@ export class IngestPolicyEditor {
     }
   }
 
+  /** Re-read the served active profile (after the picker activated one). */
+  async reloadProfile(): Promise<void> {
+    await this.#loadProfile();
+  }
+
   /** Re-read the policy and drop every edit. */
   async reload(): Promise<void> {
     this.conflict = false;

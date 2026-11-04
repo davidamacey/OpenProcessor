@@ -1,7 +1,7 @@
 # Contributing to OpenProcessor
 
 Thanks for contributing. This document covers dev setup, how to run the
-test suites, what the region-field ratchet is, and the commit/merge
+test suites, the pre-commit guards and baselines, and the commit/merge
 conventions this repo uses.
 
 ## Dev setup
@@ -49,6 +49,25 @@ binary path.
 `pyproject.toml`'s `addopts` deselects the `live` marker by default, so
 a plain `pytest tests/` never touches Docker.
 
+`tests/test_full_system.py` and `tests/validate_visual_results.py` hit the running stack over HTTP and read
+their ports from the environment (`API_PORT`, `TRITON_HTTP_PORT`, `OPENSEARCH_PORT`; defaults 4603/4600/4607):
+
+```bash
+mkdir -p test_results
+.venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
+.venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
+```
+
+**Docker-only path.** The production `api` image installs only `requirements.txt` (no `pytest`), so a bare
+`docker compose exec api pytest ...` fails. To run the suite in the container, install the test deps first
+(not persisted across a recreate):
+
+```bash
+docker compose -p openprocessor cp requirements-test.txt api:/tmp/requirements-test.txt
+docker compose -p openprocessor exec api pip install -r /tmp/requirements-test.txt
+docker compose -p openprocessor exec api python -m pytest tests/ -q --ignore=tests/live
+```
+
 ## Running the live write-path verification harness
 
 Roughly half the curation subsystem's write endpoints are only
@@ -90,10 +109,37 @@ Pre-commit rejects a commit that leaves a contract stale. See
 
 The api and the workers bind-mount the source. Python modules already imported by a
 running container go stale, which shows up as transient 500 `ImportError`s. After a pull
-or merge run `make dev-restart` (restarts `api` and the detection, VLM, auto-label
-and cluster-refresh workers without recreating them). Restart does not re-read `.env`:
+or merge run `make dev-restart` (restarts `api` and the detection, VLM, auto-label,
+assist-loop and cluster-refresh workers without recreating them). Restart does not re-read `.env`:
 after editing it run `make dev-up` instead (plain `docker restart` or `make dev-restart`
 keep the old values).
+
+## Building and scanning images
+
+Two production Dockerfiles at the repo root: `Dockerfile` (the FastAPI `api`
+image, with `export` and `evaluator` targets; base `python:3.13-slim-trixie`) and
+`Dockerfile.triton` (Triton; base `nvcr.io/nvidia/tritonserver:26.06-py3`).
+`scripts/docker-build-push.sh` builds, scans and pushes them:
+
+```bash
+./scripts/docker-build-push.sh all      # build and push to Docker Hub (also: api, triton)
+./scripts/docker-build-push.sh local    # build locally without pushing
+./scripts/docker-build-push.sh scan     # build locally and scan, no push
+VERSION=v1.0.0 ./scripts/docker-build-push.sh all
+```
+
+Scanning (`scripts/security-scan.sh`) uses free tools: Hadolint (Dockerfile lint),
+Dockle (CIS Docker Benchmark), Trivy and Grype (vulnerabilities) and Syft (SBOM).
+`./scripts/security-scan.sh install` installs them, `all` or `api` scans, and the
+reports land in `security-reports/` as `*-hadolint.txt`, `*-dockle.json`,
+`*-sbom.json`, `*-trivy.json/txt` and `*-grype.json/txt`.
+
+In CI, fail the build on findings, or skip the scan for a faster build:
+
+```bash
+FAIL_ON_SECURITY_ISSUES=true FAIL_ON_CRITICAL=true ./scripts/docker-build-push.sh all
+SKIP_SECURITY_SCAN=true ./scripts/docker-build-push.sh all
+```
 
 ## Documentation checks
 
@@ -141,14 +187,11 @@ Never add a line to hide a new finding; fix it.
 The config that makes these work, each guard's baseline and proof recipe, and the pitfalls hit while
 landing them are in [docs/design/engineering_standards.md](docs/design/engineering_standards.md).
 
-Commit messages follow Conventional Commits (`type(scope): summary`); the `commit-msg` hook
-checks them.
-
 ## Commit conventions
 
 **Conventional commits**, imperative mood: `<type>(<scope>): <summary>`.
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `build`,
-`chore`, `security`, `perf`, `ci`.
+`chore`, `security`, `perf`, `ci`. The `commit-msg` hook checks the format.
 
 Examples from this repo's history:
 - `feat(curation): add generic YOLO label import`

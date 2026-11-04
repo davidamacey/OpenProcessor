@@ -32,7 +32,7 @@ A heap you set in `.env` is never overwritten. Every project adds six shards
   `409 shard_budget_exceeded`.
 - `GET /curation/projects` always reports the current capacity.
 
-To make room, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and run
+The installer summary prints both numbers, for example `OpenSearch  : heap 4g, soft shard budget 80 (20 shards per heap GB)`. To make room, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and run
 `./openprocessor restart opensearch`.
 
 ### Host kernel setting

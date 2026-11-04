@@ -1,7 +1,7 @@
 # v0.6.0 serving backend trade study: maximum GPU throughput for bulk ingest
 
 Status: study and plan (nothing implemented). Milestone v0.6.0. Umbrella: #40 (pipeline), #67
-(request-driven plans). Sequencing home: [v060_wave_plan.md](v060_wave_plan.md) section 13. New
+(request-driven plans). Sequencing home: the retired 0.6.0 wave plan (results in [PERFORMANCE.md](../PERFORMANCE.md)). New
 work packages WP-S1 to WP-S7 (issues in section 11). Written 2026-10-10 against `origin/main`
 `52981772` plus the FP16 measurement of PR #225.
 

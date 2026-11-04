@@ -6,7 +6,9 @@ Complete guide for optimizing FastAPI and Triton Inference Server performance.
 > Triton pipeline optimization milestone (summary table below; plan in
 > [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md)),
 > and the benchmark protocol. The scale ladder at 10k and 100k images is in
-> [Scale ladder: 10k and 100k](#scale-ladder-10k-and-100k); the 1M step is planned for the next release.
+> [Scale ladder: 10k and 100k](#scale-ladder-10k-and-100k); the 1M step is a goal, not a result.
+> Later measurements (the 0.7.0 work, unreleased) are in sections further down and in
+> [research/v070_measurement_log.md](research/v070_measurement_log.md).
 
 ---
 
@@ -61,12 +63,14 @@ the pinned Commons photos (12 to 24 MP). Ranges and the host conditions are in t
 The system includes several production-grade optimizations:
 
 1. **High-Performance JSON** (orjson) - 2-3x faster serialization
-2. **Optimized Image Processing** (pillow-simd) - 4-10x faster operations
+2. **Image Processing** - OpenCV and Pillow, with the decode-once GPU path for large photos
 3. **Request Validation** - Early rejection of invalid/oversized requests
 4. **Performance Monitoring** - Automatic request timing and metrics
 5. **Optimized Uvicorn Configuration** - Tuned worker and connection settings
 
 ### Expected Performance Impact
+
+Estimates from the first API-layer tuning pass (January 2026); they were not re-measured. The measured results are in the summary table above and the sections it links.
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
@@ -102,80 +106,26 @@ in-process request, 30 runs; the old path is the former orjson response class):
 
 Bodies are byte-identical in every case.
 
-### 2. Optimized Image Processing (pillow-simd)
+### 2. Image Processing
 
-**Implementation**:
-- Replaced standard `Pillow` with `pillow-simd` in requirements.txt
-- SIMD-accelerated (AVX2, SSE4) image operations
-- Drop-in replacement, no code changes required
-
-**Impact**: 4-10x faster image operations (resize, decode, color conversion)
-
-**Affected operations**:
-- Image decoding from bytes
-- Resizing operations
-- Color space conversions
+The API uses standard `Pillow` (installed with `ultralytics`) and OpenCV. `pillow-simd` is not used.
+Decode cost is addressed by the decode-once GPU path, not by a faster Pillow: see
+[Decode once and the GPU decode](#decode-once-and-the-gpu-decode-217).
 
 ### 3. Request Validation and Size Limits
 
-**Implementation**:
-Performance middleware in `src/app/factory.py`:
-
-```python
-MAX_FILE_SIZE_MB = 50  # Adjust based on requirements
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-
-@app.middleware("http")
-async def performance_middleware(request: Request, call_next):
-    # Early validation - reject oversized files before processing
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_FILE_SIZE_BYTES:
-        return JSONResponse(
-            status_code=413,
-            content={"error": f"File too large. Max size: {MAX_FILE_SIZE_MB}MB"}
-        )
-
-    # Request timing
-    start_time = time.time()
-    response = await call_next(request)
-    process_time = (time.time() - start_time) * 1000
-    response.headers["X-Process-Time"] = f"{process_time:.2f}ms"
-
-    return response
-```
-
-**Impact**:
-- Prevents DoS attacks
-- Fast-fail for invalid requests
-- Reduces memory exhaustion risk
+`performance_middleware` in `src/app/factory.py` refuses a POST whose declared body exceeds the
+largest upload the server accepts (the larger of `MAX_FILE_SIZE_MB` and
+`OP_UPLOAD_MAX_BYTES_PER_REQUEST`) with 413 before reading it. The per-file cap is enforced where the
+upload is parsed (`src/core/upload_limits.py`). See [File Size Limit](#file-size-limit).
 
 ### 4. Performance Monitoring Middleware
 
-**Implementation**:
-Automatic request timing and slow request detection:
+The same middleware times every request: it sets `X-Process-Time` on each response, adds the timing
+to the JSON body of the inference routes, and logs a warning for a request slower than
+`slow_request_threshold_ms` (default 100).
 
-```python
-slow_request_threshold_ms = 100  # settings value; log requests slower than this
-
-@app.middleware("http")
-async def performance_middleware(request: Request, call_next):
-    start = time.time()
-    response = await call_next(request)
-    duration_ms = (time.time() - start) * 1000
-
-    # Add timing header
-    response.headers["X-Process-Time"] = f"{duration_ms:.2f}ms"
-
-    # Log slow requests
-    if duration_ms > settings.slow_request_threshold_ms:
-        logger.warning(f"Slow request: {request.url.path} took {duration_ms:.2f}ms")
-
-    return response
-```
-
-**Usage**:
 ```bash
-# Check response time in headers
 curl -I http://localhost:4603/detect
 # Response includes: X-Process-Time: 23.45ms
 ```
@@ -397,7 +347,7 @@ python scripts/bench/ingest_cost_probe.py --images 1000 --full-items 7
 
 ### Measured ingest speed
 
-One run, not averaged, from `docs/design/storage_sizing_and_ingest_baselines.md`
+One run, not averaged, from `docs/research/storage_sizing_and_ingest_baselines.md`
 section 6: `POST /ingest/batch`, 32 images per request, 4 client threads, one 48 GB
 GPU for the detection models, API with 32 workers. A 2,000-image public COCO subset
 ingested at **13.39 images/s** (0 failed, 1.37 crops per image, batch p50 10.0 s). A
@@ -645,7 +595,7 @@ alongside Triton, which does not fit the 33 GB GPU 0 leaves free.
 
 Measured in a separate run (2 repetitions per route) that merges until no deleted documents
 remain and the size repeats; the first run measured too early and saw up to 2x inflation from
-the cluster-refresh worker still rewriting documents. Reference: `docs/design/storage_sizing_and_ingest_baselines.md`.
+the cluster-refresh worker still rewriting documents. Reference: `docs/research/storage_sizing_and_ingest_baselines.md`.
 
 | Route | bytes/image | bytes/vector | vs 8.35 KB reference |
 |---|---:|---:|---:|
@@ -1005,8 +955,52 @@ as in the gates section below.
 Every 0.6.0 change is gated by `scripts/bench/parity.py` (WP-0.1, #208): it captures the per-stage
 outputs of one ingest of the pinned set and compares two captures against the accuracy gates of
 `docs/design/triton_pipeline_optimization_plan.md` section 7 and the cluster-agreement metric of
-`docs/design/v060_wave_plan.md` section 2.1. This section describes the tool and records the gate run
-that accepts the FP16 PE engine of the section above.
+the cluster-agreement metric defined below. This section holds the benchmark protocol, the parity
+chain and the gate table, then describes the tool and records the gate run that accepts the FP16 PE
+engine of the section above.
+
+#### Benchmark protocol (every change that claims speed)
+
+Tooling: `scripts/bench/baseline_suite.py` and `suite_report.py` (PR #206). Fresh project per
+repetition, a 100-image warm-up project first, `/ingest/upload` and `/ingest/batch` interleaved,
+**3 repetitions, report the median (min-max)**, 32 images per request, 4 client threads, ingest
+policy `all` as the headline row (the "embed everything" case is the one that must be fast), plus
+`selected` and `lazy` as extra rows when the change touches embedding. Record the host load average
+before each repetition and discard runs above 8. The VLM worker stays stopped during ingest runs
+unless the change measures it. The compose project is never the default name (always
+`docker compose -p <bench-name>`), on GPU 0 only. The pinned public set is
+`scripts/datasets/manifests/coco_bench_2000.json` (2,000 COCO images, seed 20261009, manifest sha256
+`edde8ae3...`) plus larger pins from the same command; the private high-resolution archive is run by
+the owner only and public docs carry pass/fail and ratios for it, never paths or counts. Parity comes
+before speed: a change may alter the numerics of **one stage only**, and its gates are checked at that
+stage and at every downstream consumer in the order below. A transport-only change must be
+bit-identical (gate P-json).
+
+#### Downstream order and parity chain
+
+Data flows `decode -> detection (boxes, classes) -> crops -> embeddings (PE crop, PE whole frame;
+MobileCLIP on core routes) -> faces / OCR -> clustering -> VLM labeling and region stage -> review ->
+training / export`. A change upstream silently changes everything below it, so a change to stage S
+must show, on the pinned set, that every consumer below S is either unchanged or passes its gate on
+the new S outputs:
+
+| Stage changed | Gate at the stage | Downstream gates that must also pass |
+|---|---|---|
+| Detection input (decode, letterbox, uint8) | P-box, P-item (`docs/design/triton_pipeline_optimization_plan.md` section 7), class **names** identical per item | crop boxes identical (integer pixel rect per item) => crops and everything below unchanged; if any crop box differs, run all gates below |
+| PE precision or input (FP16, INT8, uint8, GPU resize) | P-pe (crop), P-pew (whole frame): cosine against the reference capture | kNN neighbour overlap@10 >= 0.95 on 1,000 query items; IVF agreement (below); near-duplicate decisions at 0.98 identical on >= 99.5 % of pairs; VLM label agreement only if the VLM consumes vectors (it does not today: skip) |
+| Clustering implementation | IVF agreement and objective (below) | auto-promote outcome per item (class, `class_validated`) identical on >= 99 %; review-queue membership per tab identical on >= 99 % |
+| Work crop size (VLM, segmenter, region) | P-vlm, P-sam, P-region, P-ocr (parent plan) | export manifest equality (class names, boxes within 1 px) |
+| Transport only (shared memory, batching, serializer) | P-json: outputs and stored documents identical, minus ids and timestamps | none (identity) |
+
+#### Cluster-agreement metric
+
+On the residual pool of the pinned set with a fixed seed: (a) adjusted Rand index between the
+reference and candidate assignment, (b) fraction of items whose nearest centroid is unchanged when the
+candidate vectors are assigned to the **reference** centroids, (c) k-means objective relative
+difference, (d) purity against COCO ground truth: for each item, the class of the best-IoU COCO
+annotation (IoU >= 0.5, else "none"); cluster purity = share of the modal class, weighted mean. Pass
+for a numerics change: (b) >= 0.98, (d) not lower by more than 0.5 points; (a) and (c) are recorded
+(k-means is chaotic: ARI alone is too strict a gate). Implemented in `scripts/bench/parity.py`.
 
 #### The tool
 
@@ -2201,7 +2195,7 @@ models follow the lowest listed host index on any mix of cards.
 ### Vector store evaluation: tuned OpenSearch against Milvus, Qdrant, pgvector and LanceDB (#221, #230)
 
 Question: is OpenSearch k-NN the right engine for the curation embedding index, or is a second
-store worth its cost? Protocol: [v060_vector_db_evaluation_plan.md](design/v060_vector_db_evaluation_plan.md).
+store worth its cost? Protocol: [v060_vector_db_evaluation_plan.md](research/v060_vector_db_evaluation_plan.md).
 Raw documents: `docs/benchmarks/vectordb/` (one JSON per size, arm and repetition, plus
 `environment.json` with versions, digests and the deviations from the plan). Harness:
 `scripts/bench/vectordb/`, compose file `docker/bench/vectordb/compose.yml`.
@@ -3490,8 +3484,31 @@ one shard, no replica, 1 s refresh). Medians of 2 repetitions on a loaded host.
 
 ### Ingest transports (#263)
 
-Question: would a gRPC ingest channel beat HTTP beyond noise? Decision protocol:
-`docs/design/ingest_surfaces_plan.md` section 8. **Decision: no. The rule says skip, nothing is built.**
+Question: would a gRPC ingest channel beat HTTP beyond noise? **Decision: no. The rule says skip,
+nothing is built.**
+
+Decision protocol (written before the numbers). Step 1, transport only (no pipeline, no GPU, no
+OpenSearch): `scripts/bench/ingest_transport_bench.py` sends the real bytes of set A (the pinned 2,000
+COCO images, 640 x 480, median 166 KB) and set B (the pinned Commons photo set, 12 to 24 MP) to a server
+that reads the bytes, computes the imohash and returns a fixed-size result shaped like a
+`BatchIngestResponse`. Contenders at equal client concurrency (4, 16, 32), 3 repetitions, median and
+range: (1) HTTP/1.1 multipart through the production stack, one connection per client; (2) HTTP/2
+multipart (hypercorn if installable, otherwise stated as not measured); (3) gRPC `grpc.aio` client
+streaming of image chunks with one response per batch, and unary with the whole batch as a second row.
+Recorded per row: images/s, request p50/p99, server and client CPU seconds per image (`psutil`), bytes on
+the wire per image, peak server memory. Step 2, Amdahl bound: `transport_share` = (server CPU per image
+of the HTTP row minus that of the gRPC row) / API CPU per image of the full pipeline, using the measured
+0.18 s (set A) and 1.10 s (set B) and the images/s plateaus of 21 (set A, GPU bound) and 15 (set B, CPU
+bound); on set A a transport change cannot raise images/s, only lower API CPU. Step 3, rule: **skip**
+(record the numbers, close #263, build nothing) unless the transport-only saving is at least 10 percent
+of the pipeline's API CPU per image on set A or set B with ranges that do not overlap across the 3
+repetitions. If it passes: prototype a `grpc.aio` servicer behind a flag calling the shared
+`stage_and_ingest` (one implementation, two transports), repeat through the full pipeline at equal
+concurrency (3 repetitions, policy `all`, fresh project per repetition, warm-up first), and ship only if
+images/s or API CPU per image improves by at least 10 percent with non-overlapping ranges and p99 not
+worse than 1.1x; otherwise delete the prototype. A gRPC service, if built, must use the same project
+binding (fail closed when unbound), the same lock rule and OCC (it calls `ingest_batch`), the decode
+routing, and a generated `.proto` checked by a contract hook.
 
 Measured by: `scripts/bench/ingest_transport_bench.py` (transport only, no pipeline, no GPU, no
 OpenSearch) and, for the pipeline side, `scripts/bench/baseline_suite.py --phases ingest --modes upload`,
@@ -3929,170 +3946,29 @@ the endpoint check: [Ingest load profile and GPU memory](../docs-site/docs/opera
 
 ## Benchmarking
 
-### Using the Go Benchmark Tool
+The tools are listed in [benchmarks/README.md](../benchmarks/README.md): the Go ingest benchmarks,
+`make bench-detect|bench-faces|bench-embed|bench-ingest|bench-search|bench-quick`, the Python httpx
+script and the `wrk` script. The ingest and cluster measurements in this file use
+`scripts/bench/` (`run_baseline.py`, `ingest_profile.py`, `cluster_ladder.py` and others), and every
+number's method is in the section that reports it. Keep a result only with its setup: record a
+baseline before a change, run the same command after it, and compare latency (average, p95, p99),
+throughput and error rate. The shared rules are in [Baseline protocol](#baseline-protocol).
 
-The repository includes `benchmarks/triton_bench.go` for testing.
-
-#### 1. Baseline (Before Optimization)
-
-```bash
-# Record baseline metrics
-cd benchmarks
-go run triton_bench.go \
-    --url http://localhost:4603/detect \
-    --clients 50 \
-    --requests 1000 \
-    --image ../test_images/sample.jpg \
-    > baseline_results.txt
-```
-
-#### 2. Rebuild with Optimizations
-
-```bash
-# Rebuild containers with new requirements
-docker compose down
-docker compose build --no-cache api
-docker compose up -d
-
-# Wait for warmup (~30 seconds)
-sleep 30
-```
-
-#### 3. Optimized Benchmark
-
-```bash
-# Run same benchmark
-cd benchmarks
-go run triton_bench.go \
-    --url http://localhost:4603/detect \
-    --clients 50 \
-    --requests 1000 \
-    --image ../test_images/sample.jpg \
-    > optimized_results.txt
-```
-
-#### 4. Compare Results
-
-```bash
-# Compare latency metrics
-echo "=== BASELINE ==="
-grep -A 5 "Latency" baseline_results.txt
-
-echo "=== OPTIMIZED ==="
-grep -A 5 "Latency" optimized_results.txt
-```
-
-### Recommended Test Matrix
-
-Test with various concurrency levels:
-
-```bash
-for clients in 1 10 50 100 256; do
-    echo "Testing with $clients concurrent clients..."
-    go run triton_bench.go \
-        --url http://localhost:4603/detect \
-        --clients $clients \
-        --requests 1000 \
-        --image ../test_images/sample.jpg \
-        > results_${clients}_clients.txt
-done
-```
-
-### Key Metrics to Track
-
-1. **Average Latency**: Should decrease 10-15%
-2. **P95 Latency**: Should decrease 15-25% (better consistency)
-3. **P99 Latency**: Should decrease 20-35% (fewer spikes)
-4. **Throughput**: Should increase 15-20% (requests/sec)
-5. **Error Rate**: Should remain 0%
+`./openprocessor bench` is not available yet: the `triton_bench` tool and `benchmarks/build.sh` it needs are not in the repository. For model-level load tests use Triton's `perf_analyzer` from the `triton-sdk` service (compose profile `benchmark`).
 
 ---
 
 ## Profiling
 
-### Using py-spy (Flamegraph Analysis)
-
-#### Install py-spy in Container
-
-Add to `requirements.txt`:
-```
-py-spy>=0.3.14
-```
-
-Rebuild:
-```bash
-docker compose build api
-docker compose up -d
-```
-
-#### Run Profiling Script
-
-```bash
-# Profile for 60 seconds (recommended during load test)
-./scripts/profile_api.sh 60 profile_optimized.svg
-```
-
-#### Analyze Flamegraph
-
-1. Open `profile_optimized.svg` in browser
-2. Look for wide bars (expensive operations)
-3. Check for:
-   - ✅ Less time in JSON serialization
-   - ✅ Less time in image decoding
-   - ⚠️ Most time should be in GPU inference (expected)
-
-#### Generate Load During Profiling
-
-```bash
-# Terminal 1: Start profiler
-./scripts/profile_api.sh 60 profile.svg
-
-# Terminal 2: Generate load
-cd benchmarks
-go run triton_bench.go \
-    --url http://localhost:4603/detect \
-    --clients 50 \
-    --requests 500 \
-    --image ../test_images/sample.jpg
-```
-
-### Using triton_bench (Comprehensive Load Testing)
-
-Quick start:
-```bash
-cd benchmarks
-
-# Quick validation (30 seconds, 16 clients)
-./triton_bench --mode quick
-
-# Full benchmark (60 seconds, 64 clients)
-./triton_bench --mode full --clients 64 --duration 60
-
-# High concurrency test (256 clients)
-./triton_bench --mode full --clients 256 --duration 120
-
-# Sustained throughput (auto-finds optimal client count)
-./triton_bench --mode sustained
-```
+Per-stage ingest timing needs no profiler: `op_pipeline_stage_seconds` and
+`op_pipeline_stage_bytes_total` (see [Ingest cost per image](#ingest-cost-per-image)) and, for the
+GPU decode, the [0.7.0 stage profile](#070-stage-profile). For a flamegraph, `py-spy` is not
+installed in the API image; install it into a running container (`pip install py-spy`, which does
+not survive a recreate) and attach with `py-spy record -o profile.svg -d 60 -p <worker pid>`
+(the container needs `SYS_PTRACE`). `scripts/bench/ingest_micro_profile.py` measures the
+single-thread cost of the ingest primitives inside the `api` container.
 
 ---
-
-### MobileCLIP image encoder FP16
-
-One RTX 3080 Ti (12 GB, no foreign load during the runs), TensorRT 11.1, dynamic batch 1/8/32 at
-256 x 256, engine-only `trtexec` timings (no Triton, no preprocessing):
-
-| Engine | Size | Build | Batch 8 GPU compute | Batch 8 images/s | Batch 32 GPU compute | Batch 32 images/s |
-|---|---:|---:|---:|---:|---:|---:|
-| FP32 | 146.6 MB | 62 s | 12.7 ms | 627 | 41.5 ms | 771 |
-| FP16 (4 convs FP32) | 75.1 MB | 65 s | 8.3 ms | 966 | 19.9 ms | 1604 |
-
-Parity of the FP16 engine against the FP32 engine on the first 200 images of the pinned COCO
-benchmark set (hashes verified): cosine similarity min 0.99986, mean 0.99998; top-1 nearest
-neighbour agrees for 98.5 percent of images and the top-5 neighbour overlap is 99.1 percent. The
-engine built by `export_mobileclip_image_encoder.py` itself (71.5 MB, 72 s, no fallback) measures
-cosine min 0.99984, mean 0.99998, top-1 99.5 percent, top-5 99.3 percent. Per-model Triton
-`perf_analyzer` runs were not made; the engine-only figures above are the speedup bound.
 
 ## Tuning Parameters
 
@@ -4115,7 +3991,7 @@ Triton.
 
 ### Worker Count Optimization
 
-Current: **32 workers** (assumes 16-core CPU)
+Current: **32 workers** (fixed in `docker-compose.yml`; the installer does not change it)
 
 **How to tune**:
 
@@ -4151,19 +4027,10 @@ docker compose restart api
 
 ### File Size Limit
 
-Current: **50MB** maximum upload size
+Current: **50MB** per uploaded file (`max_file_size_mb`; the `MAX_FILE_SIZE_MB` key in `.env`, see
+`env.template`). A larger file answers 413.
 
-**To adjust**:
-
-Edit `src/app/factory.py`:
-```python
-MAX_FILE_SIZE_MB = 100  # Increase to 100MB
-```
-
-Restart:
-```bash
-docker compose restart api
-```
+**To adjust**: set `MAX_FILE_SIZE_MB=100` in `.env`, then `docker compose restart api`.
 
 ### Slow Request Threshold
 
@@ -4197,9 +4064,6 @@ slow_request_threshold_ms=50  # More aggressive logging
    ```bash
    # Verify orjson is installed
    docker exec api python -c "import orjson; print('orjson OK')"
-
-   # Verify pillow-simd is installed
-   docker exec api python -c "from PIL import features; print(features.check_feature('libjpeg_turbo'))"
    ```
 
 ### Issue: Increased Memory Usage
@@ -4229,10 +4093,7 @@ docker stats api
 docker compose logs -f api | grep "Slow request"
 ```
 
-2. Profile during slow requests:
-```bash
-./scripts/profile_api.sh 30 slow_profile.svg
-```
+2. Profile during slow requests: see [Profiling](#profiling).
 
 3. Check if GPU is the bottleneck:
 ```bash
@@ -4266,37 +4127,24 @@ nvidia-smi dmon -s u
 
 ### Health Endpoint
 
-Use the `/health` endpoint for monitoring:
+Use the `/health` endpoint (an alias of `/ready`) for monitoring:
 
 ```bash
 # Quick check
 curl -s http://localhost:4603/health | python -m json.tool
 
 # Monitor memory over time
-watch -n 5 'curl -s http://localhost:4603/health | jq ".performance.memory_mb"'
+watch -n 5 'curl -s http://localhost:4603/health | jq ".resources.memory_mb"'
 
-# Check optimization status
-curl -s http://localhost:4603/health | jq ".performance.optimizations"
+# Readiness detail per dependency
+curl -s http://localhost:4603/health | jq .
 ```
 
 ### Integration with Prometheus/Grafana
 
-Your Prometheus + Grafana setup can scrape these metrics:
-
-1. Create `/metrics` endpoint (optional enhancement):
-```python
-from prometheus_client import Counter, Histogram, generate_latest
-
-request_count = Counter('api_requests_total', 'Total requests')
-request_duration = Histogram('api_request_duration_seconds', 'Request duration')
-```
-
-2. Add to Prometheus config:
-```yaml
-- job_name: 'api'
-  static_configs:
-    - targets: ['api:4603']
-```
+The API serves `GET /metrics` (multiprocess: every worker's `op_*` and request metrics), and
+`monitoring/prometheus.yml` scrapes it with Triton, the workers and the exporters. Start the stack with
+`make up-monitoring`. See [monitoring/README.md](../monitoring/README.md).
 
 ---
 
@@ -4306,7 +4154,6 @@ request_duration = Histogram('api_request_duration_seconds', 'Request duration')
 
 ✅ **Optimizations Applied**:
 - orjson for JSON (2-3x faster)
-- pillow-simd for images (4-10x faster)
 - Request size limits (prevents DoS)
 - Performance monitoring (tracks latency)
 - Optimized Uvicorn config (better throughput)
@@ -4316,9 +4163,9 @@ request_duration = Histogram('api_request_duration_seconds', 'Request duration')
 - Run baseline benchmark
 - Rebuild containers
 - Run optimized benchmark
-- Compare results (expect 10-15% improvement)
+- Compare results
 - Profile with py-spy
-- Load test with triton_bench
+- Load test with the tools in benchmarks/README.md
 
 ✅ **Tuning**:
 - Adjust worker count for your CPU
@@ -4326,16 +4173,5 @@ request_duration = Histogram('api_request_duration_seconds', 'Request duration')
 - Configure slow request threshold
 - Monitor memory usage
 
-### Expected Results
-
-- ✅ **10-15% latency reduction** (total end-to-end)
-- ✅ **15-20% throughput increase**
-- ✅ **Better P99 latency** (fewer spikes)
-- ✅ **Lower memory usage**
-
 Remember: **GPU inference is still the bottleneck** (60-70% of total time). These optimizations maximize API efficiency!
 
----
-
-**Last Updated**: 2026-01-26
-**Version**: 2.0 (Consolidated documentation)

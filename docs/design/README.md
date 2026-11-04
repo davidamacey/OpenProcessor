@@ -1,94 +1,96 @@
 # Design documents
 
-Index of the design docs and plans in `docs/design/`, plus the research notes in
-`docs/research/`. Status values: **implemented** (reference doc, code matches), **open** (not
-started), **partially done** (evidence in the doc), **in progress**. Work is announced and tracked
-in GitHub issues; the repository file is the canonical, versioned copy of each plan.
+Index of the design docs and plans in `docs/design/`. The research notes have their own index in
+[`docs/research/README.md`](../research/README.md). Status values: **implemented** (reference doc, code
+matches), **open** (not started), **partially done** (evidence in the doc), **in progress**. Work is
+announced and tracked in GitHub issues; the repository file is the canonical, versioned copy of each plan.
+
+Plan lifecycle: a plan file is deleted once its work is done, in the same PR that closes its batch,
+after the lasting knowledge moves to the reference docs ([`program/00_index.md`](program/00_index.md),
+"Plan lifecycle"). Only `curation_api_contract.md`, `curation_design_rationale.md` and
+`engineering_standards.md` stay as living reference.
+
+## Program plan (current)
+
+One release, v0.7.0 (B0 to B5, then R-final last), and v0.8.0 for platform breadth. The `program/` files
+are removed as their batches close, and the whole folder after R-final and the v0.7.0 tag. Start at
+the index; execute one file per batch, lane or procedure.
+
+| Doc | What it is |
+|---|---|
+| [program/00_index.md](program/00_index.md) | Read first: mission, waves, decision register, branch and lane model, test and GPU budget, legends, superseded plans |
+| [program/01_b0_close_out.md](program/01_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
+| [program/02_b1_overview.md](program/02_b1_overview.md) | B1 correctness: overview of the five tracks plus the deps lane, merge order and sweep |
+| [program/02a_b1_job_leases.md](program/02a_b1_job_leases.md) | B1 track 1A: OpenSearch job leases replace every start lock |
+| [program/02b_b1_class_registry.md](program/02b_b1_class_registry.md) | B1 track 1B: class registry document with OCC and the upgrade migration |
+| [program/02c_b1_inference_search.md](program/02c_b1_inference_search.md) | B1 track 1C: inference and search hygiene |
+| [program/02d_b1_api_frontend_tests.md](program/02d_b1_api_frontend_tests.md) | B1 track 1D: API correctness, frontend, test integrity, two security items |
+| [program/02e_b1_ultralytics_live_bugs.md](program/02e_b1_ultralytics_live_bugs.md) | B1 track 1E: minimal Ultralytics live-bug fixes on the pinned version |
+| [program/03_b2_overview.md](program/03_b2_overview.md) | B2: jobs off the API on Celery, three stages |
+| [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | B2 stage 1: queue infrastructure |
+| [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | B2 stage 2: move the request-started job families |
+| [program/03c_b2_w3_beat_reaper_workers.md](program/03c_b2_w3_beat_reaper_workers.md) | B2 stage 3: beat, the lease reaper, trigger workers, hardening |
+| [program/04_b3_ultralytics_one_version.md](program/04_b3_ultralytics_one_version.md) | B3: one Ultralytics version and one detection contract |
+| [program/05_b4_stateless_api.md](program/05_b4_stateless_api.md) | B4: stateless API, the worker count becomes a tuning knob |
+| [program/07_b5_overview.md](program/07_b5_overview.md) | B5 speed on the final stack: overview, shared measurement protocol, #42 side track |
+| [program/07a_b5_baseline.md](program/07a_b5_baseline.md) | B5a: the public baseline, the Triton sweeps and the `/detect` recall question |
+| [program/07b_b5_decode_once.md](program/07b_b5_decode_once.md) | B5b: decode once (GPU-3b, the rest of #40, #407, GPU-12) |
+| [program/07c_b5_crops_ocr_faces.md](program/07c_b5_crops_ocr_faces.md) | B5c: work crops at model size (#219) and OCR on the GPU (#220) |
+| [program/07d_b5_processing_plans.md](program/07d_b5_processing_plans.md) | B5d: request-driven processing plans (#67) |
+| [program/06_release_acceptance.md](program/06_release_acceptance.md) | Release prep, R-final acceptance run, and the v0.7.0 tag procedure |
+| [program/08_environment_and_setup.md](program/08_environment_and_setup.md) | Cross-cutting: environment, setup, configuration and CI parity |
+| [program/09_github_actions.md](program/09_github_actions.md) | Issues, re-scopes, milestones, closes and dependabot; section 7 is the issue map |
+| [program/10_standards_and_libraries.md](program/10_standards_and_libraries.md) | Cross-cutting: code standards and the "no hand-rolling" library register |
+| [program/11_risks_cleanup_host.md](program/11_risks_cleanup_host.md) | Risk register, cleanup, host, GPU and peer rules |
+| [program/12_prior_plans_reconciliation.md](program/12_prior_plans_reconciliation.md) | What was unfinished in the older plans and where it went; the removal waves |
 
 ## Reference docs
 
 | Doc | Status | Issue | What it is |
 |---|---|---|---|
-| [curation_api_contract.md](curation_api_contract.md) | implemented | n/a | Semantics of the `/curation` HTTP API: ordering, locking, error codes, concurrency tokens, which route for which job |
-| [curation_design_rationale.md](curation_design_rationale.md) | implemented | n/a | Why the curation subsystem is built the way it is, and the known tracked gaps |
+| [curation_api_contract.md](curation_api_contract.md) | implemented (reference) | n/a | Semantics of the `/curation` HTTP API: ordering, locking, error codes, concurrency tokens, which route for which job |
+| [curation_design_rationale.md](curation_design_rationale.md) | implemented (reference) | n/a | Why the curation subsystem is built the way it is, and the known tracked gaps |
+| [engineering_standards.md](engineering_standards.md) | implemented (reference) | n/a | Portable standards and lessons from the repo cleanup and the cluster research: config that worked, every guard with its baseline and proof recipe, the ordered port checklist for a sister repo, pitfalls hit, before/after numbers |
 
-## Plans
+## Source plans for the program (task detail by ID)
+
+| Doc | Status | What it is |
+|---|---|---|
+| [task_queue_plan.md](task_queue_plan.md) | plan (task detail by ID for `program/`) | Background and concurrent work across processes (Q- IDs) |
+| [codebase_audit_plan.md](codebase_audit_plan.md) | plan (task detail by ID for `program/`) | Codebase audit fix plan (BA-, OS-, GPU-, FE-, T-, OPS-, CC-, SEC- IDs) |
+| [model_family_versions_plan.md](model_family_versions_plan.md) | plan (task detail by ID for `program/`) | Model families and Ultralytics versions: one toolchain, tested (U- IDs) |
+
+## Implemented plans kept as reference (as-built design)
 
 | Doc | Status | Issue | What it is |
 |---|---|---|---|
-| [generic_detector_and_selective_embedding_plan.md](generic_detector_and_selective_embedding_plan.md) | implemented (W0 to W9; deferred: arbitrary-filter clustering, model-delete guard for a project's own detector, optional `backfill_embedding_state.py`) | #52 | Default detector, store every detection, per-project embedding policy |
-| [auto_label_loop_plan.md](auto_label_loop_plan.md) | in progress (S1 to S10 implemented, S9 without a pause button and event log the API does not serve; S0, S11 open) | #286 (W3 of `v070_wave_plan.md`; seam for #343) | Cluster-sampled VLM auto-labeling loop over assist runs: pinned partition, exact sampled-agreement gate, propagate or split and recurse, budgets, resume, second-opinion audit, rollback, routes, Cropwright panel, staged build order |
-| [cq3_label_operations.md](cq3_label_operations.md) | open (design review; nothing implemented; gate G7 and D-CQ3-1 to D-CQ3-8 pending) | none (ship-track wave CQ3) | Server-side label operations: op record and item tag, undo by operation that survives a reload, per-item restore that keeps later edits and never touches the holdout, bounded and resumable for 20,000 items, routes and wire models, tests, acceptance, implementation brief |
-| [cluster_search_makemodel_plan.md](cluster_search_makemodel_plan.md) | open (plan; nothing implemented) | #341 to #346, #353, #354, #356, #372, #379, #286, #347 | Clustering and semantic search for faces, objects, whole images and items; Immich comparison; crop search; fine-grained make/model workflow for set P; public proxies and identity ground truth; attribute signals and plate identity text; embedding and processing benchmark; measurement standard; LLM visual verification and a human review gate per wave |
-| [sam3_full_image_detection_plan.md](sam3_full_image_detection_plan.md) | implemented (waves 1 to 8; as-built deviations in section 16) | #30 (shares the gating layer with #46, region-stage gating #46 also shipped) | Open-vocabulary full-image detection with SAM 3 |
-| [triton_pipeline_optimization_plan.md](triton_pipeline_optimization_plan.md) | partially done (shipped in 0.6.0: the baseline, decode once, uint8 inputs, FP16 PE engine, GPU decode, multi-GPU PE encoding, coalesced writes; the fully GPU-resident pipeline and the 1M scale step are v0.7.0, issue #40) | #40 | Decode once, stay on GPU, Triton pipeline optimization with before/after numbers; design detail and accuracy gates |
-| [v070_wave_plan.md](v070_wave_plan.md) | open (plan; waves not started) | #341, #337, #259, #219, #268, #286, #84, #45, #41, #335 (umbrella #40) | v0.7.0 sequencing: cluster evaluation harness first, then cluster and embed pass, high-res path, assist loop, rehearsal and ladders, slim images |
-| [sp_gpu_prep_concurrency.md](sp_gpu_prep_concurrency.md) | open (design review; nothing implemented, experiments first) | #392, #40, #337, #219, #42 | Why `gpu_image_prep` slows under concurrency: SP0 route counters show GPU-route photos falling back to the CPU decode when the card is full; ranked hypotheses with cheap discriminating experiments, then byte-budget admission, fewer syncs per image, concurrency shape; acceptance bars and agent briefs |
-| [program_plan.md](program_plan.md) | open (plan) | every open issue (#8 to #363) and the research items | Ordered program through v0.7.0, v0.8.0 and v0.9.0: completion matrix with the definition of done, Opus design reviews and audit gates, phases A (winter pipeline) to G (white paper), data and storage budget, public multi-view datasets, GPU schedule |
-| [ship_track_plan.md](ship_track_plan.md) | open (plan; nothing implemented) | #40, #41, #45, #84, #154, #219, #286, #335, #337, #355, #356, #357, #363, #371, #373, #377, #378, #380 to #383 | v0.7.0 ship track: measured state per area, issue to wave map with acceptance bars, ingest baseline protocol and ordered speed fixes, server-side cluster sort/filter/quality outputs and label-operation undo, Cropwright cluster review flow and loop panel, loop S9 to S11 and the Z5 follow-up, installer and docs wave, conflict matrix, GPU locks, release gates, per-wave owner review package; says where `program_plan.md` is out of date |
-| [v060_wave_plan.md](v060_wave_plan.md) | implemented in 0.6.0 (waves executed; measured results in `docs/PERFORMANCE.md`; the unfinished items moved to milestone v0.7.0) | #208 to #221, #207, #153 (umbrella #40) | v0.6.0 sequencing: FP16 PE and engine build stamp, API and idle CPU, cluster scheduling, INT8 evaluation, uint8 inputs, shared memory, GPU-resident ingest, clustering acceleration, downstream parity chain |
-| [v060_serving_backend_trade_study.md](v060_serving_backend_trade_study.md) | open (study and experiment plan; nothing implemented) | WP-S1 to WP-S7 issues (umbrella #40, #67) | Roofline ceilings per stage on one and two A6000s, trade matrix of serving architectures (Triton hardened, bulk ingest runner, ortloom-serve, custom offline), recommendation, gated experiments toward a 1M-image batch |
-| [processing_plans_plan.md](processing_plans_plan.md) | open (design only for v0.9.0; implementation after #220) | #67 (umbrella #40; depends on #220) | Request-driven processing plans: closed branch vocabulary, per-route defaults, fail-closed validation, one resolved plan driving the API-orchestrated CPU route and the `gpu_image_prep` BLS (C1: BLS, not ensembles), selective-embedding and load-profile interaction, per-branch metrics, skip-proof tests, phases P0 to P6 |
-| [gpu_decode_plan.md](gpu_decode_plan.md) | implemented (built and on by default above 3 MP; build and A/B in section 13 of the doc) | #217 (WP-2.4; related #67, #219, #220) | GPU decode once and a GPU-resident ingest GPU decode: dataflow map, decode and resize costs per image size, contention with PE, decoder coverage, parity and AP effect, size gate, placement, batching, implementation items |
-| [v060_vector_db_evaluation_plan.md](v060_vector_db_evaluation_plan.md) | implemented (tuned OpenSearch compared with Milvus, Qdrant, pgvector and LanceDB; results in `docs/PERFORMANCE.md`; Lucene engine adopted for new projects) | #221, #56 | Fair benchmark of OpenSearch k-NN (shipped and tuned) against dedicated vector stores, datastore needs beyond vectors, split-architecture costs, decision criteria |
-| [ingest_surfaces_plan.md](ingest_surfaces_plan.md) | implemented in 0.6.0 (S3 and registered sources, bulk ingest runner, poll, cron and webhook triggers, Cropwright sources panel; transports measured and gRPC skipped) | #264, #263 | S3 and S3-compatible bulk source, webhook, schedule and poll-with-checkpoint triggers on one queue, Cropwright sources panel, and the measured decision on a gRPC ingest channel |
-| [release_acceptance_plan.md](release_acceptance_plan.md) | open (release scripts, `make release-verify` and API-level live tests exist; the full clean-install run is not scripted) | #54 (installer live test #44) | The scripted clean-install-to-uninstall run that gates each release |
-| [combine_preview_warnings_plan.md](combine_preview_warnings_plan.md) | implemented | #55 | `embedding_model_mismatch` and `region_profiles_differ` combine preview warnings |
-| [storage_sizing_and_ingest_baselines.md](storage_sizing_and_ingest_baselines.md) | partially done (measurements done; re-measured on the public set in PR #206; quantization benchmark open, planned in `v060_vector_db_evaluation_plan.md`) | #45, #53, #56 | Measured OpenSearch storage per vector, item and image; sizing formula; ingest and pipeline baseline to repeat |
-| [label_confirmation_plan.md](label_confirmation_plan.md) | partially done (`vlm_scope` is implemented; #192 fixed the `representatives` bound) | #192 | Detector against VLM against human ground truth: whether the VLM runs on every crop, and how labels are confirmed |
-| [v060_execution_path.md](v060_execution_path.md) | in progress (status table, updated as packages merge) | umbrella #40 | Status of the v0.6.0 packages and the order of the remaining work; companion to `v060_wave_plan.md` |
-| [docs_overhaul_plan.md](docs_overhaul_plan.md) | in progress | n/a | Documentation overhaul: audit, task guides, pipeline modes, screenshots, and the work breakdown |
-| [repo_cleanup_plan.md](repo_cleanup_plan.md) | in progress (PR 1 of 9, the guards) | n/a | Repo cleanup: effective guards, dead code, naming, fail-open handlers, duplicates, and splits of oversize files, in nine PRs |
-| [engineering_standards.md](engineering_standards.md) | implemented (reference) | n/a | Portable standards and lessons from the repo cleanup: config that worked, every guard with its baseline and proof recipe, the ordered port checklist for a sister repo, pitfalls hit, before/after numbers |
+| [generic_detector_and_selective_embedding_plan.md](generic_detector_and_selective_embedding_plan.md) | implemented (reference; delete guard done; arbitrary-filter clustering parked) | #52 | Default detector, store every detection, per-project embedding policy |
+| [auto_label_loop_plan.md](auto_label_loop_plan.md) | implemented (reference; S0 not run, pause control, events and token budgets in N16, v0.8.0) | #286 | Cluster-sampled VLM auto-labeling loop over assist runs: pinned partition, exact sampled-agreement gate, propagate or split and recurse, budgets, resume, audit, rollback |
+| [cq3_label_operations.md](cq3_label_operations.md) | implemented (reference) | #404, #419 | Server-side label operations: op record, undo by operation, per-item restore that keeps later edits and never touches the holdout |
+| [selectable_assist_plan.md](selectable_assist_plan.md) | implemented (reference) | n/a | Selectable VLM and segmenter assist per run, cluster, selection, box and crop; the "Deviations" section is the as-built record |
+| [sam3_full_image_detection_plan.md](sam3_full_image_detection_plan.md) | implemented (reference; waves 1 to 8, as-built deviations in section 16) | #30 | Open-vocabulary full-image detection with SAM 3 |
+
+## Open plans that program batches read as their design input
+
+Each is removed in the PR of the batch named (removal waves R-2 and R-3 of `program/12_prior_plans_reconciliation.md`).
+
+| Doc | Status | Issue | What it is |
+|---|---|---|---|
+| [triton_pipeline_optimization_plan.md](triton_pipeline_optimization_plan.md) | partially done (Waves 0, 1, 5, 7 shipped; the rest in `program/07`-`07d`, v0.7.0 B5; Waves 8 and 10 are v0.8.0); remove after B5d | #40 | Decode once, stay on GPU, Triton pipeline optimization with before/after numbers; design detail and accuracy gates |
+| [gpu_decode_plan.md](gpu_decode_plan.md) | implemented (follow-ups in `program/07b`, v0.7.0 B5b); remove after B5b | #217 | GPU decode once and a GPU-resident ingest: dataflow map, decode and resize costs, decoder coverage, parity, size gate, build record in section 13 |
+| [sp_gpu_prep_concurrency.md](sp_gpu_prep_concurrency.md) | partially done (C1 shipped in #392; C2-C5 in `program/07b`, v0.7.0 B5b); remove after B5b | #392, #40, #337, #219, #42 | Why `gpu_image_prep` slows under concurrency: diagnosis, byte-budget admission, fewer syncs, concurrency shape |
+| [faces_ocr_resident_crops_plan.md](faces_ocr_resident_crops_plan.md) | open (step 1 done, step 2 rejected; steps 3-4 in `program/07c` and `07d`, v0.7.0 B5c and B5d); remove after B5c | #220 | uint8 OCR input, width-bucketed recognition, face alignment on resident frames |
+| [processing_plans_plan.md](processing_plans_plan.md) | open (P1 done; P0, P2-P6 in `program/07d`, v0.7.0 B5d); remove after B5d | #67 | Request-driven processing plans: closed branch vocabulary, per-route defaults, fail-closed validation, one resolved plan driving the CPU route and the `gpu_image_prep` BLS, per-branch metrics, skip-proof tests |
+| [release_acceptance_plan.md](release_acceptance_plan.md) | open (method for R-final, `program/06`; the run is mostly scripted in `acceptance_run.sh`); remove at R-final RP-9 | #54 | The scripted clean-install-to-uninstall run that gates each release |
+| [cluster_search_makemodel_plan.md](cluster_search_makemodel_plan.md) | open (parked research; W2, the W3 privacy part and W4 shipped; v0.8.0 and later) | #341 to #346, #347, #353, #354, #356, #372, #379 | Clustering and semantic search for faces, objects, whole images and items; fine-grained make/model workflow; attribute signals and plate identity text; measurement standard |
 
 ## Issues without a plan doc
 
-The issue body carries the full description (context, evidence, proposed fix, acceptance).
-Rows marked implemented are merged for v0.4.0; the rest are open.
+See [`program/09_github_actions.md`](program/09_github_actions.md) section 7 (the issue map).
 
-| Issue | Topic |
-|---|---|
-| #57, #58, #59, #60, #64, #66 | Implemented in the v0.4.0 hardening merge (regions re-verify safety, config-store hardening, test fakes and dev tooling, silent failures, docs, GPU clustering overlay); the issues stay open until the owner closes them |
-| #53, #55 | Implemented (shard budget `capacity` block, combine preview warnings) |
-| #46 | Implemented (region-stage hit-rate gate, pause and resume) |
-| #61 | VLM proposal noise, optional detector hint, label agreement vs cluster purity |
-| #62 | Split oversize files, unify job state files, rename the `api` compose service |
-| #63 | Release decisions (`:latest`, control-plane-only) and remaining local VLM catalog verification |
-| #65 | Roadmap: deferred any-domain features |
-| #38, #39, #41, #42, #43 | Existing follow-ups: image slimming and sizes (#41), 12 GB engine builds (#42), docs screenshots (#43) |
+## Research notes
 
-## Research notes (`docs/research/`)
-
-Measured snapshots and external-reference research. Numbers drift; each note states where and
-how it was measured and whether the design is implemented.
-
-| Doc | What it is |
-|---|---|
-| [triton_deep_research_2026-09.md](../research/triton_deep_research_2026-09.md) | External references, production lessons and a performance architecture review for Triton-based vision serving (basis for #40) |
-| [triton_perf_crossvalidation.md](../research/triton_perf_crossvalidation.md) | Batch size versus output payload findings on a live Triton |
-| [dali_gpu_decode_lessons.md](../research/dali_gpu_decode_lessons.md) | GPU decode with DALI inside Triton: traps, ensemble configuration, throughput |
-| [vlm_serving_sizing.md](../research/vlm_serving_sizing.md) | vLLM sizing, flag recon, profile sweep and the VLM-versus-segmenter bottleneck finding |
-| [pe_encoder_batching_benchmark.md](../research/pe_encoder_batching_benchmark.md) | Perception encoder batched TensorRT parity and throughput |
-| [ingest_concurrency_tuning.md](../research/ingest_concurrency_tuning.md) | Batch and concurrency sweep for bulk ingest |
-| [embedding_model_eval_plan.md](../research/embedding_model_eval_plan.md) | Plan (not yet measured) to evaluate Google's newest open multimodal embedding model for text and image search, with benchmark design and go/no-go rubric (#347) |
-| [cluster_eval_baseline.md](../research/cluster_eval_baseline.md) | Baseline of the cluster-quality harness (false merges and false splits scored separately) on the current IVF + AHC partition of a public COCO project (#341) |
-| [cluster_proxy_datasets.md](../research/cluster_proxy_datasets.md) | Public face and vehicle make/model proxy datasets for cluster evaluation: licences, counts, skipped sets |
-| [cluster_config_experiments.md](../research/cluster_config_experiments.md) | Results of the decision note's CPU experiments X0 to X7 and X9 against their acceptance bars: the product bars, representation arms, novelty, cut transfer, late arrivals, scale and split spread |
-| [cluster_config_fresh_set.md](../research/cluster_config_fresh_set.md) | Fresh-set acceptance of the corrected bars A1 to A7 (fail on recall and the rare stratum), the label-free per-key cut rule (fail), chaining by size on set P and split by descent (fail) |
-| [cluster_config_loop_cost.md](../research/cluster_config_loop_cost.md) | Loop-cost bars U-a to U-d on a fresh vehicle-heavy set (U-a to U-c pass on their means, U-c not robust by seed, U-d unreadable; A6 still fails) and a judge-gated within-key merge that does not pay |
-| [cluster_config_z4.md](../research/cluster_config_z4.md) | Z4: key roots with and without the hold-back guard, within-key and IVF through the loop's recursion on a fresh Open Images test-split set (key roots pass precision and effort, the guard removes the open-set minority exposure, within-key fails effort; the open-set bar is unreadable at 758 crops, so IVF stays by the registered rule) |
-| [cluster_config_decision.md](../research/cluster_config_decision.md) | Residual-pool clustering decision from the 3,000-item held-out baseline: average linkage inside the detector class with per-key cuts, kill-rule verdicts per arm (updated with W0c), corrected acceptance bars, next experiments, wave order (W0d, W8, WC) |
-| [fine_grained_benchmark_plan.md](../research/fine_grained_benchmark_plan.md) | Fine-grained (make and model) embedding and grouping benchmark, wave WB: data, arms, metrics and pre-registered bars |
-| [fine_grained_benchmark_results.md](../research/fine_grained_benchmark_results.md) | Results of wave WB against the registered bars FG-0 to FG-7: five encoders and four preprocessing variants on Commons set C plus 10,358 car-key distractors, average linkage, k-reciprocal, DBA, Leiden and ECG inside the key, novelty queue, judge agreement at make and model level, encode cost. |
-| [wb2_standard_benchmarks.md](../research/wb2_standard_benchmarks.md) | Wave WB re-run on CARS196, CUB-200-2011 and SOP: registered protocol, sanity check, bars and results |
-| [leiden_refinement_prototype.md](../research/leiden_refinement_prototype.md) | Phase 1 of the graph refinement epic: global mutual-kNN graph plus Leiden (CPM) and a CHAMELEON-style filter against the IVF + AHC baseline, HDBSCAN, FINCH and consensus Leiden on synthetic planted partitions at 20k to 500k (CPU); real-data and GPU arms not run (#342, #346) |
-| [v070_measurement_log.md](../research/v070_measurement_log.md) | Paper-ready log of the IVF cluster pass size ladder (10k to 1M crops): stage split, memory, index size, k-NN latency, and the super-linear k-means fit (#337, #356, #45) |
-| [clustering_methods.md](../research/clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF methods, the IVF-then-refine hierarchy and the ablation |
-| [cluster_types.md](../research/cluster_types.md) | The three kinds of clustering (visual-search IVF, curation item and region-box clustering, face clustering): embedding spaces, algorithms, triggers, storage, routes, limits, and how the graph refinement epic (#346) applies to each |
-| [OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md](../research/OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md) | Long-term research: discovering same-place photo groups, COLMAP and Gaussian-splat reconstruction, a dated spatial timeline. Not implemented; scheduled after 0.7.0 |
-| [installer_drive_log.md](../research/installer_drive_log.md) | Hand-driven runs of the one-line installer (control-plane-only, no-start, branch mode, upgrade and rollback, edge cases) with the defects they found |
-| [cross_domain_clustering_lessons.md](../research/cross_domain_clustering_lessons.md) | What a sibling speaker-linking system does and learned, which techniques transfer to multi-view object and face clustering (multi-prototype clusters, anti-chaining, constraints carried by data, calibrated thresholds with abstention, view-stratified evaluation), and an ordered experiment plan for #342 to #345, #354, #372 and #286 |
-| [gpu_clustering.md](../research/gpu_clustering.md) | cuML UMAP backend detection and VRAM budget (#66) |
-| [clustering_research_consolidated.md](../research/clustering_research_consolidated.md) | Consolidated clustering research for the four kinds (whole image, crops, faces, fine-grained): sources, real-data diagnostics, recommended method stack and real-data experiments (#346) |
-| [curation_scores.md](../research/curation_scores.md) | Uniqueness, mistakenness, near-duplicate and diversity score validation |
-| [detector_quantization_results.md](../research/detector_quantization_results.md) | Detector precision, runtime and hardware matrix |
+Measured snapshots and external-reference research, including the notes moved from this folder
+(`ingest_write_path_investigation.md`, `storage_sizing_and_ingest_baselines.md`,
+`v060_vector_db_evaluation_plan.md`, `v060_serving_backend_trade_study.md`): see
+[`docs/research/README.md`](../research/README.md).

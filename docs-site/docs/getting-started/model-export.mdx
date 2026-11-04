@@ -115,6 +115,11 @@ PyTorch encoder.
 | `make export-config CONFIG=/path/to/config.yaml` | Batch export from a YAML config |
 | `POST /models/upload`, `POST /models/{name}/export` | Upload and export through the API instead of the CLI |
 
+The two API routes queue the TensorRT build for the `model-export-worker` service (the export
+image; the API image has no TensorRT). Start it with
+`docker compose --profile export up -d model-export-worker`; while it is down both routes answer
+`503` naming it.
+
 A training run you promote from the curation subsystem is written into
 the model repository and loaded for you. The model is named for the
 project that trained it (`{slug}__<name>`; `default` has no prefix), and

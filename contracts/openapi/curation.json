@@ -16269,6 +16269,18 @@
             ],
             "title": "Reason"
           },
+          "reason_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A sentence for `reason`; null when it has no wording.",
+            "title": "Reason Message"
+          },
           "sampled": {
             "title": "Sampled",
             "type": "integer"

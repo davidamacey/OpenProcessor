@@ -1,9 +1,8 @@
 # Triton Inference Server — CVE Posture & Scan-Pass Remediation
 
 **Scope:** NVIDIA Triton Inference Server container security for a deployment with a
-"no unresolved HIGH/CRITICAL" scan gate. Trimmed from an earlier combined Triton+DeepStream
-analysis — DeepStream is not part of this product; that half now lives in the `run_deepstream`
-project, which built on the same methodology (see its `docs/security/cve-remediation.md`).
+"no unresolved HIGH/CRITICAL" scan gate. DeepStream is not part of this product, so this
+document covers Triton only.
 
 **Evidence:** live Trivy 0.67.1 scan of `nvcr.io/nvidia/tritonserver:26.06-py3` + in-container
 `apt` inspection (Ubuntu 24.04.4). Sources listed at the end.
@@ -69,7 +68,7 @@ changes the build surface more invasively than Tier 1); see
 [`docker/hardened/triton/Dockerfile`](../../docker/hardened/triton/Dockerfile) for a verified,
 opt-in build that does this. Also remove the Nsight Systems/Compute profilers (~600MB dev-only
 tooling whose bundled Go binaries carry the remaining HIGH CVEs) — this part *is* already applied
-in the production Dockerfile.
+in the production Dockerfile (together with the `starlette`, `anyio` and `certifi` raises).
 
 ```dockerfile
 RUN apt-get update && apt-get -y upgrade \
@@ -109,11 +108,14 @@ host kernel), loaded into the scan gate as a `.trivyignore` / OpenVEX doc.
 
 ## 6. Unauthenticated HTTP — a deployment note, not a scan finding
 
-Triton has **no built-in authentication**. Independent of any CVE, `8000`/`8001` must never be
-exposed to untrusted networks — keep Triton on a private/overlay network or behind an
-authenticating reverse proxy, prefer mTLS on the gRPC link, run with
-`--model-control-mode=none`, and disable unused shared-memory/repo endpoints to shrink the
-surface.
+Triton has **no built-in authentication**. Independent of any CVE, its HTTP and gRPC ports
+(`8000`/`8001` in the container, published as `4600`/`4601` by this repo's compose file, on
+loopback unless `OP_BIND_ADDRESS` says otherwise) must never be exposed to untrusted networks —
+keep Triton on a private/overlay network or behind an authenticating reverse proxy, prefer mTLS
+on the gRPC link, and disable unused shared-memory endpoints to shrink the surface. This stack
+runs `--model-control-mode=explicit` because the API loads and unloads models and the model
+routes need it; `none` would break them, so the repository API is reachable by anyone who can
+reach the port. See [SECURITY.md](../../SECURITY.md).
 
 ---
 

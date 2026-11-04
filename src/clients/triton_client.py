@@ -365,12 +365,12 @@ class TritonClient:
     # OCR: PP-OCRv5 Text Detection and Recognition
     # =========================================================================
 
-    def infer_ocr(self, image_bytes: bytes) -> dict[str, Any]:
+    def infer_ocr(self, image: bytes | np.ndarray) -> dict[str, Any]:
         """
         OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
 
         Args:
-            image_bytes: Raw JPEG/PNG bytes
+            image: a decoded, EXIF-oriented BGR array, or raw image bytes
 
         Returns:
             Dict with num_texts, texts, text_boxes, text_boxes_normalized,
@@ -378,7 +378,7 @@ class TritonClient:
         """
         return infer_ocr(
             self._infer_with_retry,
-            image_bytes,
+            image,
             lambda name: self._input_datatype(TritonModelConfig.OCR_PIPELINE_MODEL, name),
         )
 

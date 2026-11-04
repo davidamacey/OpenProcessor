@@ -36,9 +36,9 @@ registered bar and the limits. Nothing in this program changed product code.
 | WB2 | The WB encoder question re-run on CARS196, CUB-200-2011 and Stanford Online Products | [wb2_standard_benchmarks.md](wb2_standard_benchmarks.md) |
 | Leiden and GPU arms (#342) | Global kNN graph plus Leiden against IVF plus average linkage, on CPU and GPU | [leiden_refinement_prototype.md](leiden_refinement_prototype.md) |
 
-The contract for how each wave was run is the program plan in
-[ship_track_plan.md](../design/ship_track_plan.md) (state of the product lanes, measurement protocol,
-Z5 definition in section 7). Bars were committed before scores in W0e, Z4, WB and WB2; the notes say
+The contract for how each wave was run was the retired ship-track plan (git history: state of the
+product lanes, measurement protocol, Z5 definition in its section 7); the measurement rules now live in
+[07_b5_overview.md](../design/program/07_b5_overview.md) section 5 and Z5 is issue #398. Bars were committed before scores in W0e, Z4, WB and WB2; the notes say
 where a bar was missed and by how much, and none was moved afterwards.
 
 ## 3. Decision per arm
@@ -84,7 +84,7 @@ evidence. "Killed" means a registered bar failed and no follow-up is planned.
   for search, and four of the five encoders have one.
 - **The auto-label loop stays as designed.** Its gate certifies a cluster at 90 % homogeneity from a
   sample. Class-level effort figures for the loop are in section 6. The loop branch itself is outside this
-  research PR ([ship_track_plan.md](../design/ship_track_plan.md), section 7).
+  research PR (the Z5 definition is in issue #398).
 
 ## 5. Fine-grained results (make and model)
 
@@ -146,8 +146,8 @@ The registered rule needed at least 30 open-set items propagated per run to read
 verdict is **inconclusive and IVF stays**. The direction is clear: class roots cost 0.35 times IVF's
 effort, the guard costs 29 % more effort than class roots alone and removes 97 % of the open-set exposure.
 Z5 would repeat Z4 on the Open Images train split with at least 1,200 open-set crops
-([ship_track_plan.md](../design/ship_track_plan.md), section 7.3), then integrate the roots and the guard
-into the loop (Z5-I, section 7.4) only if a bar passes. No Z5 note exists yet.
+(issue #398, Z5), then integrate the roots and the guard
+into the loop (Z5-I) only if a bar passes. No Z5 note exists yet.
 
 The decision note also records why this does not carry over to make and model: inside the `car` key the
 detector class gives no help ([cluster_config_decision.md](cluster_config_decision.md), 0A.3).

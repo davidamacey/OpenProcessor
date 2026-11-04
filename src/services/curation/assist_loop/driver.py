@@ -31,8 +31,16 @@ from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.domain.loop_tree import best_first_key
 from src.services.curation.assist.scope import membership_digest
+from src.services.curation.assist_loop.budget import VLM
 from src.services.curation.assist_loop.evaluate import EvalContext, GateParams
-from src.services.curation.assist_loop.node_step import LoopRun, advance, finished
+from src.services.curation.assist_loop.node_step import (
+    LoopRun,
+    admit,
+    advance,
+    crops_needed,
+    finished,
+    leave_unvisited,
+)
 from src.services.curation.assist_loop.partition import read_snapshot, write_snapshot
 from src.services.curation.assist_loop.progress import level_rows, totals
 from src.services.curation.assist_loop.rollback import rollback_loop
@@ -220,20 +228,96 @@ async def _drain(running: dict[asyncio.Task[list[str]], str]) -> None:
     await asyncio.gather(*running, return_exceptions=True)
 
 
+def _claim(run: LoopRun, path: str) -> int | None:
+    record = run.tree.nodes.get(path)
+    return record.claim if record is not None else None
+
+
+def _admit(run: LoopRun, path: str, claims: dict[str, int]) -> tuple[str, str | None]:
+    """Whether the head of the queue, node ``path``, may start now: ``('start', None)``,
+    ``('wait', None)`` (for a running node to free budget) or ``('refuse', reason)`` with
+    the budget (``budget_crops``, ``budget_requests`` or ``budget_time``) that cannot
+    cover it.
+
+    Nodes running together must not each take a slice of a budget none of them can finish
+    on. A node starts only when the crops and requests it may still need fit beside what
+    the running nodes may still need: each running node counts at its claim, the *full*
+    crops it can ask for (the top-up the allowed dissent calls for included), less what
+    it spent; the claim is recorded as an ``admit`` event. Alone, a node must only afford
+    its first draw to start (its top-up, if it dissents, is then a claim like any other).
+    Requests are estimated as the crops over ``images_per_call``, rounded up.
+
+    The queue is best-first and strict: when the head must wait, nodes behind it wait too,
+    even a smaller one that would fit, so a large node is never starved by small ones.
+    That is intended.
+
+    Reproducibility: the decision reads only the budget's counters, the claims of the
+    running nodes and the node's own members, so with ``node_concurrency`` 1 (a node
+    starts when the previous one is done) the set of visited nodes is the same in every
+    run over the same VLM answers. With more, whether the head starts or waits depends on
+    which running nodes have finished by then, which is timing: under a binding budget the
+    visited set can differ between runs. A node already admitted
+    in the event log is not decided again: a resume restarts it on its recorded claim."""
+    minimum = crops_needed(run, path, with_top_up=False)
+    full = crops_needed(run, path, with_top_up=True)
+    need = full if claims else minimum
+    held = run.budget.node_crops(VLM, path)
+    if need == 0:
+        admit(run, path, held)
+        claims[path] = held
+        return 'start', None
+    outstanding = sum(
+        max(0, total - run.budget.node_crops(VLM, other)) for other, total in claims.items()
+    )
+    size = max(1, run.deps.asker.images_per_call)
+    crops = outstanding + need
+    reason = run.budget.would_refuse(VLM, crops=crops, requests=-(-crops // size))
+    if reason is None:
+        claim = held + full
+        admit(run, path, claim)
+        claims[path] = claim
+        return 'start', None
+    if claims and reason != 'budget_time':
+        return 'wait', None
+    return 'refuse', reason
+
+
 async def schedule(run: LoopRun) -> LoopOutcome:
     """Work the queue until it is empty or a stop rule fires."""
     heap = _pending(run)
+    # Nodes a previous session admitted restart first, on the claim the log recorded; their
+    # claims count against every later admission from the start.
+    resumed = sorted(entry for entry in heap if _claim(run, entry[1]) is not None)
+    heap = [entry for entry in heap if entry not in resumed]
+    heapq.heapify(heap)
+    claims = {path: claim for _, path in resumed if (claim := _claim(run, path)) is not None}
     running: dict[asyncio.Task[list[str]], str] = {}
     try:
         while True:
-            while _halt_reason(run) is None and heap and len(running) < run.params.node_concurrency:
-                _, path = heapq.heappop(heap)
+            while (
+                _halt_reason(run) is None
+                and (resumed or heap)
+                and len(running) < run.params.node_concurrency
+            ):
+                if resumed:
+                    _, path = resumed.pop(0)
+                    running[asyncio.create_task(advance(run, path))] = path
+                    continue
+                _, path = heap[0]
+                admission, reason = _admit(run, path, claims)
+                if admission == 'wait':
+                    break
+                heapq.heappop(heap)
+                if admission == 'refuse':
+                    leave_unvisited(run, path, reason or 'budget_crops')
+                    continue
                 running[asyncio.create_task(advance(run, path))] = path
             if not running:
                 break
             done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
             for task in sorted(done, key=lambda t: running[t]):
                 path = running.pop(task)
+                claims.pop(path, None)
                 children = task.result()
                 sizes = run.tree.nodes[path].child_n
                 for child in children:

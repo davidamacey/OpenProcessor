@@ -28,6 +28,7 @@ from src.services.curation.class_write_guard import (
 )
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.reprocess_targets import scan_items
+from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -244,9 +245,7 @@ def write_snapshot(job_dir: Path, root: RootRef) -> dict[str, Any]:
             for m in root.members
         ],
     }
-    tmp = target.with_suffix('.tmp')
-    tmp.write_text(json.dumps(body), encoding='utf-8')
-    tmp.replace(target)
+    atomic_write_json(target, body, default=None)
     return snapshot_line(root)
 
 

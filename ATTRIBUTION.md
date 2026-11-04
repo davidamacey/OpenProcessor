@@ -185,6 +185,7 @@ models exported to ONNX/TensorRT.
 - `export/export_paddleocr_det.py` / `export/export_paddleocr_rec.py`: TensorRT export of the detection/recognition ONNX models
 - `export/download_paddleocr.py`: fetches the ONNX source models
 - No PaddleOCR source code is vendored into this repository; only the exported model weights are used, served behind Triton's `ocr_pipeline` BLS
+- `pyclipper` 1.4.0 (installed in the Triton image and the offline test requirements): Python wrapper of Angus Johnson's Clipper library, MIT License (Clipper itself: Boost Software License 1.0). `models/ocr_pipeline/1/ocr_postprocess.py` uses it for the DB unclip polygon offset, as PaddleOCR's `DBPostProcess` does. Not redistributed in this repository.
 
 ---
 
@@ -226,7 +227,7 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 - **Model weights:** pulled from HuggingFace at first run (gated; requires `HF_TOKEN`)
 
 ### Usage in This Project
-- `docker/segmenter/Dockerfile` pip-installs SAM 3 from a pinned upstream commit; no SAM 3 source is vendored into this repository
+- `docker/segmenter/Dockerfile` pip-installs SAM 3 from an upstream checkout (`SAM3_SHA`, default `main`; pass a commit to pin it); no SAM 3 source is vendored into this repository
 - `docker/segmenter/sam3_backend.py` imports `sam3.model_builder.build_sam3_image_model` and `sam3.model.sam3_image_processor.Sam3Processor`
 - Service-local attribution detail: [`docker/segmenter/NOTICE`](docker/segmenter/NOTICE)
 
@@ -270,6 +271,14 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 - **Synthetic geometry:** the `yolo_region/` and `yolo_region_only/` variants contain wheel
   boxes computed from COCO car boxes. They are not COCO annotations and not wheel ground truth.
 
+### COCO val2017 smoke-test images
+
+- **What:** two val2017 images (`000000001584.jpg`, `000000011051.jpg`) fetched on demand by
+  `make download-test-images` (`scripts/datasets/fetch_test_images.py`) for the demo targets,
+  the setup smoke test and `scripts/validation/validate_models.py`. Not committed.
+- **License:** COCO images carry per-image Flickr licenses (the `license` field of the COCO
+  annotations); annotations are CC BY 4.0 (COCO Consortium).
+
 ### Open Images V7
 
 - **Source:** https://storage.googleapis.com/openimages/web/factsfigures_v7.html
@@ -284,12 +293,6 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
   `data/samples/oi_plates/ATTRIBUTION.csv` (ImageID, OriginalURL,
   Author, License).
 - **Used for:** the "Vehicle registration plate" region sample set (`make sample-plates`).
-
-### Ultralytics test images (`bus.jpg`, `zidane.jpg`)
-
-- **Source:** https://github.com/ultralytics/assets (fetched by `make download-test-images`)
-- **License:** AGPL-3.0, same as the Ultralytics repository that publishes them as standard smoke-test assets.
-- **Credit:** Ultralytics.
 
 ---
 
@@ -393,13 +396,13 @@ propagates to the combined work.
 | Meta Perception Encoder (PE-Core) | Apache 2.0 | ✓ Yes (this file) |
 | OpenSearch | Apache 2.0 | ✓ Yes |
 | OpenCLIP | MIT | ✓ Yes |
+| pyclipper (Clipper polygon offset, OCR box unclip) | MIT (Clipper: Boost Software License 1.0) | ✓ Yes (this file) |
 | Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | COCO 2017 (annotations) | CC BY 4.0 (COCO Consortium) | ✓ Yes (this file) |
 | COCO 2017 (images) | Per-image Flickr license, filtered to BY/BY-SA/no-known/US-Gov | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
 | Open Images V7 (annotations) | CC BY 4.0 (Google LLC) | ✓ Yes (this file) |
 | Open Images V7 (images) | Listed CC BY 2.0, verified per image | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
-| Ultralytics test images (`bus.jpg`, `zidane.jpg`) | AGPL-3.0 | ✓ Yes (this file) |
 
 ### Per-model weight-license summary (redistributable vs. user-fetched)
 
@@ -427,4 +430,4 @@ For questions about attribution or licensing:
 
 ---
 
-**Last Updated:** January 2026
+**Last Updated:** November 2026

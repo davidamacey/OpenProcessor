@@ -26,7 +26,7 @@
 # `make contracts`.
 fastapi==0.143.3
 pydantic==2.14.1
-uvicorn[standard]
+uvicorn[standard]>=0.41.0
 python-multipart
 orjson
 pydantic-settings
@@ -34,7 +34,7 @@ pydantic-settings
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
 torch
 torchvision
-ultralytics>=8.4.82,<8.5
+ultralytics==8.4.197
 
 # transformers import site: src/utils/cache.py (CLIP tokenizer)
 transformers>=4.30.0
@@ -43,6 +43,8 @@ transformers>=4.30.0
 # src/utils/face_align.py, image_processing.py, src/utils/cpu_preprocess.py,
 # src/services/detection/{pe_preprocess,crop_quality}.py
 opencv-python
+# models/ocr_pipeline/1/ocr_postprocess.py (DB unclip), imported by the BLS tests
+pyclipper==1.4.0
 # src/services/curation/image_decode.py
 simplejpeg
 

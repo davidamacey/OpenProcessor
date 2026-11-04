@@ -49,16 +49,16 @@ unchanged, or large uploads will fail with a 413 or a gateway timeout.
 
 ## Network exposure
 
-The compose file publishes on `${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:${OP_CROPWRIGHT_PORT:-5184}`,
-so by default Cropwright answers on this machine only. Set `OP_UI_BIND_ADDRESS=0.0.0.0` (or a LAN
-address) to let your local network open it; that also opens the optional monitoring UIs, and the API
-port stays on `OP_BIND_ADDRESS`.
+The compose file publishes on `${OP_CROPWRIGHT_BIND_ADDRESS:-${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}}:${OP_CROPWRIGHT_PORT:-5184}`,
+so by default Cropwright answers on this machine only. Set `OP_CROPWRIGHT_BIND_ADDRESS` (this port only) or
+`OP_UI_BIND_ADDRESS=0.0.0.0` (also opens the optional monitoring UIs) to let your local network open it; the API
+port stays on `OP_BIND_ADDRESS`. The installer enables HTTP basic auth (`OP_CROPWRIGHT_BASIC_AUTH`) on a LAN bind.
 See [Security](./security.md): the API has no authentication.
 
 ## Production Dockerfile conventions
 
 Multi-stage build (Node build stage discarded, `nginx:alpine`-family
-runtime), non-root user, healthcheck against `127.0.0.1:8080/` (not
+runtime), non-root user, healthcheck against `127.0.0.1:8080/nginx-health` (not
 `localhost` — that resolves to `::1` and nginx only listens on IPv4 inside
 the container).
 

@@ -27,6 +27,7 @@ cmd_models() {
                     --only) only="${2:?--only needs a group name}"; shift 2 ;;
                     --build-target) OP_TRT_BUILD_TARGET="${2:?--build-target needs default or small}"; shift 2 ;;
                     --workspace) OP_TRT_WORKSPACE_GB="${2:?--workspace needs a whole number of GB}"; shift 2 ;;
+                    --yes|-y) shift ;; # never prompts; accepted so scripted callers can pass the same flag everywhere
                     *) log_error "unknown option: $1"; return 2 ;;
                 esac
             done
@@ -34,7 +35,7 @@ cmd_models() {
             cmd_models_install "$only"
             ;;
         *)
-            log_error "usage: openprocessor models status|install|repair [--only GROUP] [--build-target default|small] [--workspace GB]"
+            log_error "usage: openprocessor models status|install|repair [--only GROUP] [--build-target default|small] [--workspace GB] [--yes]"
             return 2
             ;;
     esac
@@ -331,7 +332,7 @@ Service Commands:
 
 Model Commands:
   models [status]     List Triton models and their state
-  models install [--only GROUP] [--build-target default|small] [--workspace GB]
+  models install [--only GROUP] [--build-target default|small] [--workspace GB] [--yes]
                       Export/load model groups (skips up-to-date ones)
   models repair       Same as install: re-runs failed or missing groups
   export <model>      Export model to TensorRT

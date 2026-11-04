@@ -75,9 +75,9 @@ What a profile changes, and what it does not:
 Leave off the optional second argument (a GPU id): it writes that id into every
 `config.pbtxt`.
 
-A checkout also needs `COMPOSE_PROJECT_NAME` in `.env` before `./openprocessor` will
-run; a `.env` made by `scripts/setup.sh` or copied from `env.template` does not set it.
-Add `COMPOSE_PROJECT_NAME=openprocessor` (or your project name).
+In a checkout, a `.env` without `COMPOSE_PROJECT_NAME` runs the default project `openprocessor` and
+says so; set `COMPOSE_PROJECT_NAME` (or `OP_PROJECT`) to use another. An install directory refuses to run
+without it.
 
 ## Core Triton loadout
 
@@ -109,8 +109,12 @@ workspace limit caps scratch memory while an engine is *built*; the memory an en
 both. The `standard` profile and its engines are unchanged.
 
 To build the small engines on a card the installer picked another profile for, run
-`./openprocessor models install --build-target small`. Engine stamps record the target, so a
-later run rebuilds only engines built for another target. A segmenter (about 2 GB) or the local VLM
+`./openprocessor models install --build-target small`, or set a workspace with `--workspace GB`.
+The flags win over `.env`; the `.env` keys are `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`, which the
+`model-export-worker` (API model upload) also reads. Engine stamps (`.install/precision.tsv`) record the
+build target and workspace, so a later run rebuilds only the engines whose target changed (for example
+after moving from `standard` to `small`); switching between `standard` and `full` rebuilds nothing.
+An engine build that runs out of memory (`permanent:oom`) names this option in its hint. A segmenter (about 2 GB) or the local VLM
 does not fit next to Triton on a 12 GB card; the installer's plan leaves them out or warns.
 The peak VRAM of the small profile on a 12 GB card has not been measured yet; the acceptance run for #42 records it in `docs/PERFORMANCE.md`.
 

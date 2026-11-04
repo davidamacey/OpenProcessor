@@ -32,6 +32,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.datasets.fetch_test_images import FACES_IMAGE, IMAGE_DIR, STREET_IMAGE, fetch
 from scripts.validation.modality_checks import (
     validate_analyze,
     validate_clip_image,
@@ -52,6 +53,10 @@ from scripts.validation.validate_models_lib import (
 )
 
 
+STREET_PATH = IMAGE_DIR / STREET_IMAGE
+FACES_PATH = IMAGE_DIR / FACES_IMAGE
+
+
 def update_ground_truth() -> None:
     """Re-capture ground truth from live API and save to expected_results.json."""
     print('Capturing ground truth from live API...\n')
@@ -60,8 +65,8 @@ def update_ground_truth() -> None:
         '_description': 'Ground truth expected outputs for validating all model modalities.',
         '_usage': 'Run: python scripts/validation/validate_models.py',
         '_images': {
-            'bus.jpg': '810x1080 Ultralytics standard test image (bus, people, text)',
-            'zidane.jpg': '1280x720 Ultralytics standard test image (2 people, 2 ties)',
+            STREET_IMAGE: 'COCO val2017 street scene: a double-decker bus with readable text',
+            FACES_IMAGE: 'COCO val2017: two frontal faces and a tie',
         },
         '_tolerances': {
             'box_coords': BOX_TOL,
@@ -71,17 +76,17 @@ def update_ground_truth() -> None:
         },
     }
 
-    # Detection - bus.jpg
-    print('  1/7 Detection (bus.jpg)...')
-    with Path('test_images/bus.jpg').open('rb') as img:
+    # Detection - street image
+    print('  1/7 Detection (street image)...')
+    with STREET_PATH.open('rb') as img:
         r = requests.post(f'{API_BASE}/detect', files={'image': img}, timeout=30)
     data = r.json()
     class_counts: dict[str, int] = {}
     for d in data['detections']:
         cls = d['class_name']
         class_counts[cls] = class_counts.get(cls, 0) + 1
-    ground_truth['detect_bus'] = {
-        'image': 'bus.jpg',
+    ground_truth['detect_street'] = {
+        'image': STREET_IMAGE,
         'image_size': data['image'],
         'num_detections': data['num_detections'],
         'expected_classes': sorted(class_counts.keys()),
@@ -97,17 +102,17 @@ def update_ground_truth() -> None:
         ],
     }
 
-    # Detection - zidane.jpg
-    print('  2/7 Detection (zidane.jpg)...')
-    with Path('test_images/zidane.jpg').open('rb') as img:
+    # Detection - faces image
+    print('  2/7 Detection (faces image)...')
+    with FACES_PATH.open('rb') as img:
         r = requests.post(f'{API_BASE}/detect', files={'image': img}, timeout=30)
     data = r.json()
     class_counts = {}
     for d in data['detections']:
         cls = d['class_name']
         class_counts[cls] = class_counts.get(cls, 0) + 1
-    ground_truth['detect_zidane'] = {
-        'image': 'zidane.jpg',
+    ground_truth['detect_pair'] = {
+        'image': FACES_IMAGE,
         'image_size': data['image'],
         'num_detections': data['num_detections'],
         'expected_classes': sorted(class_counts.keys()),
@@ -123,9 +128,9 @@ def update_ground_truth() -> None:
         ],
     }
 
-    # Face recognition - zidane.jpg
-    print('  3/7 Face recognition (zidane.jpg)...')
-    with Path('test_images/zidane.jpg').open('rb') as img:
+    # Face recognition - faces image
+    print('  3/7 Face recognition (faces image)...')
+    with FACES_PATH.open('rb') as img:
         r = requests.post(f'{API_BASE}/faces/recognize', files={'image': img}, timeout=30)
     data = r.json()
     faces_out = []
@@ -142,21 +147,21 @@ def update_ground_truth() -> None:
                 'embedding_first_5': [round(x, 6) for x in emb[:5]],
             }
         )
-    ground_truth['faces_zidane'] = {
-        'image': 'zidane.jpg',
+    ground_truth['faces_pair'] = {
+        'image': FACES_IMAGE,
         'num_faces': data['num_faces'],
         'faces': faces_out,
     }
 
-    # CLIP image embedding - bus.jpg
-    print('  4/7 CLIP image embedding (bus.jpg)...')
-    with Path('test_images/bus.jpg').open('rb') as img:
+    # CLIP image embedding - street image
+    print('  4/7 CLIP image embedding (street image)...')
+    with STREET_PATH.open('rb') as img:
         r = requests.post(f'{API_BASE}/embed/image', files={'image': img}, timeout=30)
     data = r.json()
     emb = data['embedding']
     norm = math.sqrt(sum(x * x for x in emb))
-    ground_truth['embed_image_bus'] = {
-        'image': 'bus.jpg',
+    ground_truth['embed_image_street'] = {
+        'image': STREET_IMAGE,
         'dimensions': len(emb),
         'norm': round(norm, 4),
         'first_5': [round(x, 6) for x in emb[:5]],
@@ -165,25 +170,27 @@ def update_ground_truth() -> None:
 
     # CLIP text embedding
     print('  5/7 CLIP text embedding...')
-    r = requests.post(f'{API_BASE}/embed/text', json={'text': 'a bus on the street'}, timeout=30)
+    r = requests.post(
+        f'{API_BASE}/embed/text', json={'text': 'a red double-decker bus on a street'}, timeout=30
+    )
     data = r.json()
     emb = data['embedding']
     norm = math.sqrt(sum(x * x for x in emb))
     ground_truth['embed_text'] = {
-        'text': 'a bus on the street',
+        'text': 'a red double-decker bus on a street',
         'dimensions': len(emb),
         'norm': round(norm, 4),
         'first_5': [round(x, 6) for x in emb[:5]],
         'last_5': [round(x, 6) for x in emb[-5:]],
     }
 
-    # OCR - bus.jpg
-    print('  6/7 OCR (bus.jpg)...')
-    with Path('test_images/bus.jpg').open('rb') as img:
+    # OCR - street image
+    print('  6/7 OCR (street image)...')
+    with STREET_PATH.open('rb') as img:
         r = requests.post(f'{API_BASE}/ocr/predict', files={'image': img}, timeout=30)
     data = r.json()
-    ground_truth['ocr_bus'] = {
-        'image': 'bus.jpg',
+    ground_truth['ocr_street'] = {
+        'image': STREET_IMAGE,
         'num_texts': data['num_texts'],
         'texts': data['texts'],
         'full_text': data['full_text'],
@@ -198,15 +205,15 @@ def update_ground_truth() -> None:
         ],
     }
 
-    # Analyze - bus.jpg
-    print('  7/7 Analyze (bus.jpg)...')
-    with Path('test_images/bus.jpg').open('rb') as img:
+    # Analyze - street image
+    print('  7/7 Analyze (street image)...')
+    with STREET_PATH.open('rb') as img:
         r = requests.post(f'{API_BASE}/analyze', files={'image': img}, timeout=60)
     data = r.json()
     det_classes = sorted({d.get('class_name', '') for d in data.get('detections', [])})
     ocr = data.get('ocr', {})
-    ground_truth['analyze_bus'] = {
-        'image': 'bus.jpg',
+    ground_truth['analyze_street'] = {
+        'image': STREET_IMAGE,
         'status': data.get('status'),
         'num_detections': data.get('num_detections'),
         'detection_classes': det_classes,
@@ -235,6 +242,7 @@ def main() -> int:
         '--update', action='store_true', help='Re-capture ground truth from live API'
     )
     args = parser.parse_args()
+    fetch()  # raises when an input image cannot be fetched: no silent skips
 
     if args.update:
         update_ground_truth()
@@ -257,23 +265,23 @@ def main() -> int:
 
     all_results: list[ValidationResult] = []
 
-    # 1. Detection - bus.jpg
-    vr = validate_detection('test_images/bus.jpg', expected['detect_bus'])
+    # 1. Detection - street image
+    vr = validate_detection(STREET_PATH, expected['detect_street'])
     print_result(vr, args.verbose)
     all_results.append(vr)
 
-    # 2. Detection - zidane.jpg
-    vr = validate_detection('test_images/zidane.jpg', expected['detect_zidane'])
+    # 2. Detection - faces image
+    vr = validate_detection(FACES_PATH, expected['detect_pair'])
     print_result(vr, args.verbose)
     all_results.append(vr)
 
-    # 3. Face recognition - zidane.jpg
-    vr = validate_faces(expected['faces_zidane'])
+    # 3. Face recognition - faces image
+    vr = validate_faces(expected['faces_pair'])
     print_result(vr, args.verbose)
     all_results.append(vr)
 
-    # 4. CLIP image embedding - bus.jpg
-    vr = validate_clip_image(expected['embed_image_bus'])
+    # 4. CLIP image embedding - street image
+    vr = validate_clip_image(expected['embed_image_street'])
     print_result(vr, args.verbose)
     all_results.append(vr)
 
@@ -282,13 +290,13 @@ def main() -> int:
     print_result(vr, args.verbose)
     all_results.append(vr)
 
-    # 6. OCR - bus.jpg
-    vr = validate_ocr(expected['ocr_bus'])
+    # 6. OCR - street image
+    vr = validate_ocr(expected['ocr_street'])
     print_result(vr, args.verbose)
     all_results.append(vr)
 
-    # 7. Analyze - bus.jpg
-    vr = validate_analyze(expected['analyze_bus'])
+    # 7. Analyze - street image
+    vr = validate_analyze(expected['analyze_street'])
     print_result(vr, args.verbose)
     all_results.append(vr)
 

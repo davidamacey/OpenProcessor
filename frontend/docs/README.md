@@ -2,7 +2,7 @@
 
 | Doc                                                                      | What it is                                                                              |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| [FEATURES.md](FEATURES.md)                                               | Route-by-route feature tour                                                             |
+| [FEATURES.md](FEATURES.md)                                               | Route-by-route index that points to the user guide                                      |
 | [annotation-slots-contract-draft.md](annotation-slots-contract-draft.md) | The annotation-slot wire contract and the tier-2 `annotation-profiles.json` schema (§4) |
 | [branding/](branding/)                                                   | Logo concepts (SVG and PNG)                                                             |
 | [../examples/](../examples/README.md)                                    | Example tier-2 annotation profiles (license plate, aircraft tail number, defect code)   |

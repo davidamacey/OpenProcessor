@@ -20,7 +20,7 @@ Work through this list once. Each item has a step below.
 - A detector is configured. Ingest answers 503 `No detector configured for ingest`
   until `OP_INGEST_PRIMARY_DETECTOR_MODEL` names a Triton model.
 - The share is mounted on the host and the container user can read it.
-- `OP_SOURCE_ROOT_HOST` is set and the three services that mount it were recreated.
+- `OP_SOURCE_ROOT_HOST` is set and the four services that mount it were recreated.
 - `GET /curation/projects/{project}/ingest/bulk/config` lists `/data/source`.
 - A fresh project exists and its [ingest policy](./ingest-policy.mdx) is set. A policy
   changes future ingests only.
@@ -65,13 +65,14 @@ OpenProcessor reads images from one source root. Set it in `.env` as the host pa
 OP_SOURCE_ROOT_HOST=/srv/nas/photos
 ```
 
-Compose mounts that path read-only at `/data/source` in three services:
+Compose mounts that path read-only at `/data/source` in four services:
 
 - `api`;
 - `curation-detection-worker`;
-- `curation-auto-label-worker`.
+- `curation-auto-label-worker`;
+- `curation-assist-loop-worker`.
 
-All three need the mount. Without it on the workers, thumbnails return 404 and the
+All four need the mount. Without it on the workers, thumbnails return 404 and the
 VLM stage predicts 0 labels while the job still reports `completed`. Every path you
 give an ingest command is the **container** path, so `/srv/nas/photos/2024/a.jpg`
 on the host is `/data/source/2024/a.jpg` in the commands below.
@@ -123,7 +124,7 @@ OP_SOURCE_PATH_ALIASES={"archive": "/data/archive"}
 
 An alias name cannot contain `/`, and a malformed value is rejected with an error instead of being dropped.
 
-Compose does **not** mount alias paths. Add the bind mount to the same three services
+Compose does **not** mount alias paths. Add the bind mount to the same four services
 in `docker-compose.local.yml`, next to `docker-compose.yml`. `./openprocessor` and
 `make` load that file after the stock files when it exists, and git ignores it:
 
@@ -461,8 +462,8 @@ ingest can decode JPEGs on the GPU.
   already have it off.
 - Only images of at least `OP_INGEST_GPU_MIN_MEGAPIXELS` (default 3.0) use it. Small
   frames are faster on the CPU.
-- It needs about 8.5 GB more VRAM on the Triton card per model instance (the `full` profile runs
-  two, 17 GB; the other profiles one), loaded on first use. If the model
+- It needs about 8.5 GB more VRAM on the Triton card per model instance (every profile runs one;
+  two need `OP_LOAD_PROFILE=ingest`, see [GPU sizing](../deployment/gpu-sizing.mdx)), loaded on first use. If the model
   cannot load, every photo is decoded on the CPU instead.
 - A JPEG that is not a baseline 8-bit file falls back to the CPU; the counter
   `op_ingest_decode_total` shows how many were taken either way.
@@ -502,7 +503,7 @@ from the trial (`crops / images`), then run the policy preview from step 5: it r
 `estimated_vector_mb` for the stored items.
 
 **Memory.** Search keeps the vector graph in RAM. The sizing note in
-`docs/design/storage_sizing_and_ingest_baselines.md` gives about 4.6 KB per vector for
+`docs/research/storage_sizing_and_ingest_baselines.md` gives about 4.6 KB per vector for
 the HNSW graph and says to verify the formula against the OpenSearch documentation.
 The 100,000-vector runs used an 8 GB OpenSearch heap, and `docs/PERFORMANCE.md` advises
 keeping 8 GB for the build buffers and leaving the rest to the page cache. See also

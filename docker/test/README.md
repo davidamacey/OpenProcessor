@@ -100,26 +100,14 @@ are the only ones that are:
 
 Everything else on the curation write surface is exercised by `tests/live/`.
 
-## Findings this harness has already produced
+## Notes from the live tests
 
-Both are asserted as `xfail(strict=True)` tests, so they will fail loudly the
-day they are fixed:
-
-1. **Region verdict key mismatch** — the built-in prompt pack asks the model to
-   answer with `is_region`, but both region-verdict parsers in
-   `src/services/labeling/vlm_labeler_verify.py` read `is_plate`. A model that follows
-   the shipped prompt is parsed as a negative verdict with
-   `reason='parse_failure'`. See
-   `tests/live/test_live_vlm.py::test_vlm_verdict_key_matches_the_shipped_prompt`.
-2. **Every index is the bound project's** — including the two UMAP state
-   indexes (`embedding_viz.py`, `clustering/umap_state.py`); the
-   harness's `OP_PROJECT_INDEX_PREFIX=verify_prj_` moves all of them. See
-   `tests/live/test_live_clusters.py::test_viz_state_index_honours_the_configured_index_prefix`.
-
-A third, non-bug prerequisite is documented by
-`test_embedding_scorers_report_their_missing_prerequisite`: the `uniqueness`
-and `near_dup` scorers require a trained IVF centroid store, which only the
-item-clustering pipeline produces.
+The `uniqueness` and `near_dup` embedding scorers need a trained IVF centroid
+store, which only the item-clustering pipeline produces;
+`test_embedding_scorers_report_their_missing_prerequisite` asserts that they
+say so. `test_viz_state_index_honours_the_configured_index_prefix` checks that
+the UMAP state indexes follow the bound project's prefix
+(`OP_PROJECT_INDEX_PREFIX=verify_prj_` in this harness).
 
 ## The docs-screenshot overlay
 
@@ -134,6 +122,10 @@ The host ports are `VERIFY_API_PORT`, `VERIFY_OPENSEARCH_PORT`,
 `VERIFY_FAKE_VLM_PORT` and `VERIFY_CROPWRIGHT_PORT` (defaults 14701, 14702, 14704
 and 14705). Bind-mounted state lives in the git-ignored `verify-data/`; remove it
 before starting a stack that must begin empty.
+
+## The S3 overlay
+
+`compose.s3.yml` is a throwaway MinIO for trying S3 and watched-source ingest. It is an overlay for a stack you may write to, never for a live deployment's default project name; its header has the commands.
 
 ## Running a second harness beside the first
 
