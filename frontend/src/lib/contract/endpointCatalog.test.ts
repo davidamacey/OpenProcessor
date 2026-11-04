@@ -57,7 +57,6 @@ const SCANNED_FILES = [
   'lib/api_train.ts',
   'lib/api_viz.ts',
   'lib/sse.ts',
-  'routes/p/[project]/export/+page.svelte',
   'lib/components/SlotCard.svelte',
   'lib/api_vlm.ts',
   'lib/api_configTest.ts',
