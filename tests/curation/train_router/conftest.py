@@ -62,23 +62,6 @@ def app_client(
 
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
-    # Stub the registry so preflight class-resolution doesn't blow up.
-    class _Reg:
-        async def snapshot(self, *_a: Any, **_k: Any) -> Any:
-            return self.load()
-
-        def load(self) -> Any:
-            class _Snap:
-                classes: list[Any] = []
-
-            return _Snap()
-
-        def get(self, _cid: int) -> Any:
-            return None
-
-    monkeypatch.setattr('src.services.training.preflight_run.get_class_registry', _Reg)
-    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
-
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation.train import router as curation_train_router
 

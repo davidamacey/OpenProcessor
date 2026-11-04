@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry, use_registry
 
 from src.services.curation.clustering.region_box_clustering import count_false_positive_boxes
 from src.services.curation.clustering.residual_gate import _park_gated_residuals
@@ -32,20 +33,20 @@ async def test_a_failed_false_positive_count_is_an_error_not_zero() -> None:
         await count_false_positive_boxes(_Down())
 
 
-def test_a_corrupt_class_registry_stops_the_probe(tmp_path) -> None:
-    from src.config.curation import CurationConfig
+@pytest.mark.asyncio
+async def test_an_unreadable_class_registry_stops_the_probe() -> None:
+    class _Unreadable(InMemoryRegistry):
+        async def snapshot(self, _client: Any = None, **_kw: Any) -> Any:
+            raise ConnectionError('registry document unreadable')
 
-    path = tmp_path / 'class_registry.json'
-    path.write_text('{not json')
-    cfg = CurationConfig(class_registry_path=path)
+    use_registry(_Unreadable())
 
-    with pytest.raises(ValueError, match='Expecting'):
-        _registry_class_ids(cfg)
+    with pytest.raises(ConnectionError, match='unreadable'):
+        await _registry_class_ids(None)  # type: ignore[arg-type]
 
 
-def test_an_absent_class_registry_is_no_classes(tmp_path) -> None:
-    from src.config.curation import CurationConfig
+@pytest.mark.asyncio
+async def test_an_empty_class_registry_is_no_classes() -> None:
+    use_registry(InMemoryRegistry())
 
-    cfg = CurationConfig(class_registry_path=tmp_path / 'absent.json')
-
-    assert _registry_class_ids(cfg) == {}
+    assert await _registry_class_ids(None) == {}  # type: ignore[arg-type]
