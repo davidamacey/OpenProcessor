@@ -62,8 +62,8 @@ If a symbol moved, re-find it by concept and record the new name in the lane's P
 | 1 | Foundation: Postgres, Valkey, the Celery app, the schema, the storage seam, the test database | [03a_b2_w1_queue_infra.md](03a_b2_w1_queue_infra.md) | 1-0 (deps, coordinator), 1A, 1B, 1C, 1D, 1E, 1F (research-seam tables) | - | - |
 | 2 | Control data moves to Postgres, and the 0.6.0 upgrade step | [03d_b2_s2_control_data.md](03d_b2_s2_control_data.md) | 2A, 2B, 2C, 2D, 2E, ES-A (embedding registry), then 2F | stage 3 | stage 1 |
 | 3 | Job runtime, the reaper and the event feed | [03e_b2_s3_job_runtime.md](03e_b2_s3_job_runtime.md) | 3A, 3B | stage 2 (codes from the stage-1 head) | stage 2 |
-| 4 | The API-hosted job families move to Celery | [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md) | 4A, 4B, 4C, 4D, 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard) and 4E (frontend) | stage 5 | stage 3 |
-| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03f_b2_s5_gpu_queues.md](03f_b2_s5_gpu_queues.md) | 5A, 5B, 5C, 5D | stage 4 | stage 3 |
+| 4 | The API-hosted job families move to Celery, in two parts | [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md) | W2.3a: 4A, 4B, 4C, 4D. W2.3b (after the W2.3a part check): 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard), then 4E (frontend) | stage 5 (W2.3a only) | stage 3 |
+| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03f_b2_s5_gpu_queues.md](03f_b2_s5_gpu_queues.md) | 5A, 5B, 5C, 5D (W2.3a) | stage 4 W2.3a | stage 3 |
 | 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03c_b2_w3_beat_reaper_workers.md](03c_b2_w3_beat_reaper_workers.md) | 6A, 6B and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) | - | stages 4 and 5 |
 
 (The file names keep their earlier stage letters so links elsewhere stay valid; the table above is
@@ -177,7 +177,7 @@ the frontend full set (4E changed `frontend/`): `npm ci`, `npm run check`, lint,
 `npm run build`, `npm run test:e2e`.
 
 **T2 live harness, `-p op-b2-live`, budget 5 h 30 min (4 h 30 min plus the research-seam steps
-19-23, pending owner question RD-1), the one run that covers B1 and B2.** The harness gains
+19-23, approved by the owner 2026-11-04, RD-1), the one run that covers B1 and B2.** The harness gains
 `postgres`, `valkey`, `db-migrate`, `jobs-worker` (scaled to 2), `periodic-worker`,
 `open-vocab-worker`, `jobs-beat`, the two curation consumers and a fake GPU consumer per GPU queue
 (no GPU: the fake handlers sleep and write progress). Wait with healthchecks or the Monitor tool; no
