@@ -23,19 +23,18 @@ curation-specific, so its directory setting lives on the base ``Settings`` class
 
 import json
 import logging
-import pickletools  # nosec B403 - only disassembles a pickle stream, never loads it
 import re
 import shutil
 import tempfile
 import time
 import uuid
-import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.config.env import env_path
 from src.schemas.models import ExportStatus
+from src.services.checkpoint_inspect import YOLOV5_ORIGINAL_MESSAGE, head_kind, is_original_yolov5
 from src.utils.atomic_write import atomic_write_json
 
 
@@ -120,44 +119,6 @@ def load_tasks_from_disk() -> int:
     return loaded
 
 
-YOLOV5_ORIGINAL_MESSAGE = (
-    'Original YOLOv5 checkpoints are not supported by Ultralytics; retrain from YOLOv5u '
-    '(yolov5su.pt), or export an ONNX with the official ultralytics/yolov5 export.py for the '
-    'probe or the ingest secondary detector'
-)
-_YOLOV5_REPO_MODULES = ('models.yolo', 'models.common', 'models.experimental')
-
-
-def _is_original_yolov5(path: Path) -> bool:
-    """True when the checkpoint pickles classes from the original yolov5 repo.
-
-    The pickle stream is only disassembled (``pickletools``), never executed.
-    """
-    try:
-        with zipfile.ZipFile(path) as archive:
-            member = next((n for n in archive.namelist() if n.endswith('data.pkl')), None)
-            if member is None:
-                return False
-            data = archive.read(member)
-    except (OSError, zipfile.BadZipFile):
-        return False
-    try:
-        return any(
-            isinstance(arg, str) and arg.startswith(_YOLOV5_REPO_MODULES)
-            for _, arg, _ in pickletools.genops(data)
-        )
-    except (ValueError, EOFError, IndexError):  # a stream pickletools cannot read
-        return False
-
-
-def _head_kind(model: Any) -> str:
-    """``one2one`` for the NMS-free head (YOLO26, YOLOv10), else ``nms``.
-
-    ``model.end2end`` is not reliable: a loaded ``yolo26n.pt`` reports ``False`` on 8.4.197.
-    """
-    return 'one2one' if hasattr(model.model[-1], 'one2one_cv2') else 'nms'
-
-
 def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
     """
     Validate uploaded file is a valid YOLO11 detection model.
@@ -187,7 +148,7 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
         try:
             ckpt, _ = torch_safe_load(file_path, safe_only=True)
         except TypeError:
-            if _is_original_yolov5(file_path):
+            if is_original_yolov5(file_path):
                 return False, YOLOV5_ORIGINAL_MESSAGE, {}
             raise
         model = ckpt.get('model') if isinstance(ckpt, dict) else None
@@ -201,7 +162,7 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
             'class_names': list(names.values()) if isinstance(names, dict) else [],
             # The NMS-free head (YOLO26, YOLOv10) exports through the native toolchain; the
             # other heads go through the EfficientNMS toolchain. The export worker routes on it.
-            'head_kind': _head_kind(model),
+            'head_kind': head_kind(model),
             'ultralytics_version': ckpt.get('version'),
         }
 
