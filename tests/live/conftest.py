@@ -49,8 +49,11 @@ _GLOBAL_PATHS = ('/projects', '/health', '/events')
 # `default`'s indexes: OP_PROJECT_INDEX_PREFIX=verify_prj_ in the compose file.
 INDEXES = {
     role: f'verify_prj_default__{role}'
-    for role in ('images', 'items', 'labels_confirmed', 'classes', 'settings')
+    for role in ('images', 'items', 'labels_confirmed', 'classes', 'configs')
 }
+# Every project folds the settings role into its configs index (src/config/projects.py,
+# shard folding), so the registry and settings documents live there.
+INDEXES['settings'] = INDEXES['configs']
 # op_global_configs belongs to no project --
 # OP_GLOBAL_CONFIGS_INDEX=verify_global_configs in the compose file --
 # but still must carry the verify_ prefix, so it goes through the same
