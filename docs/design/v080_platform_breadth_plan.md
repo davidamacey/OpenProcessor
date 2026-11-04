@@ -59,7 +59,7 @@ families), then add access control, then the new surfaces (a second segmenter, v
 | F7 | Video files as an ingest source | N17 (new, split from #8) | L | W8.3 | breadth |
 | F8 | Public wheel teacher-student example at scale | #84 | L (+ GPU) | W8.3 | proof |
 | F9 | Embedding-model swap (register, build, evaluate, flip on the v0.7.0 registry) | #365 | M (was XL: the machinery ships in v0.7.0) | W8.4, **conditional** | breadth |
-| F10 | S3-compatible storage backend for multi-host installs (D-46) | N21 (drafted in the 0.7.0 program's `00b_traceability.md` section 4.6) | L | W8.3 | platform |
+| F10 | S3-compatible storage backend for multi-host installs (D-46) | N21 (#483) (drafted in the 0.7.0 program's `00b_traceability.md` section 4.6) | L | W8.3 | platform |
 | C | Carry-over from v0.7.0 (if still open at the tag) | N14 leftovers, N15 remainder, GPU-15 leftover | S each | W8.1 fill lanes | cleanup |
 
 ### 1.3 Order and the reasons for it
@@ -820,7 +820,7 @@ start, from the item count and dimension). **Upgrade impact.** None until a proj
 
 ---
 
-### 2.10 F10: S3-compatible storage backend for multi-host installs (N21; D-46)
+### 2.10 F10: S3-compatible storage backend for multi-host installs (N21 (#483); D-46)
 
 **Goal.** API and worker replicas on different hosts share blobs through an S3-compatible object
 store instead of one POSIX volume.
@@ -1004,7 +1004,7 @@ Edit the v0.8.0 description:
 |---|---|---|---|---|
 | N17 | `feat(ingest): video files as an ingest source (sampled frames, GPU decode)` | enhancement, area:ingest, area:curation, effort:hard | v0.8.0 | Problem: users with recordings cannot curate them. Scope: section 2.7 (upload route, `video_extract` job on a `video` queue, PyNvVideoCodec decode with a PyAV CPU path, sampling and dedup, provenance fields, split by video, Cropwright Video tab). Out of scope: live streams, tracking, the rest of #8. Acceptance: R8-26, R8-27. Plan: this file |
 | N18 | `chore(release): 0.8.0 close-out` | chore | v0.8.0 | the checklist of section 3.2 waves and R8; closes after the tag (like #411 for 0.7.0) |
-| N21 | `feat(storage): an S3-compatible storage backend for multi-host installs` | enhancement, effort:hard | v0.8.0 | the exact text is in the 0.7.0 program's `00b_traceability.md` section 4.6 (filed by the 0.7.0 coordinator); plan section 2.10 |
+| N21 (#483) | `feat(storage): an S3-compatible storage backend for multi-host installs` | enhancement, effort:hard | v0.8.0 | the exact text is in the 0.7.0 program's `00b_traceability.md` section 4.6 (filed by the 0.7.0 coordinator); plan section 2.10 |
 
 No other new issues: the remaining work fits the existing issues.
 
