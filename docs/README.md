@@ -45,7 +45,7 @@ Build the site with `make docs-build`.
 | Folder | What it holds |
 |---|---|
 | [design/](design/README.md) | Reference design docs, open plans and their status and issue numbers |
-| [design/program/](design/program/00_index.md) | The v0.7.0 program plan (batches B0 to B5, release acceptance). Start at `00_index.md`; files are removed as batches close |
+| [design/program/](design/program/00_index.md) | The next release program plan (batches B0 to B5, release acceptance). Start at `00_index.md`; files are removed as batches close |
 | [research/](research/README.md) | Measured snapshots and external-reference research (clustering, VLM sizing, GPU decode, quantization, ingest write path, storage sizing, vector database and serving backend studies) |
 | [reviews/](reviews/) | Review records of past work (historical) |
 | [market/](market/README.md) | Market research and competitive analysis, as of 2026-10-04 |

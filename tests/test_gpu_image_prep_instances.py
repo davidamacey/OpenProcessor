@@ -109,6 +109,6 @@ def test_generate_all_configs_covers_gpu_image_prep() -> None:
 def test_docs_state_the_footprint_the_config_implies() -> None:
     full = _profile('full')[KEY] * _mib_per_instance()
     assert full == 8704
-    for doc in ('docs/PERFORMANCE.md', 'INSTALLATION.md'):
+    for doc in ('docs/PERFORMANCE.md', 'docs-site/docs/deployment/gpu-sizing.mdx'):
         text = (ROOT / doc).read_text()
         assert f'{full:,} MiB' in text, f'{doc} does not state {full:,} MiB for the full profile'

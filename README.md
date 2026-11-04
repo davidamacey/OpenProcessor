@@ -137,10 +137,12 @@ releases are follow-up work.
 
 ### Network access
 
-The API stays bound to 127.0.0.1. Cropwright is reachable on your LAN by
-default (homelab or small-business use), behind a shared HTTP basic-auth login;
-`--local-only` keeps everything on loopback. Never port-forward any
-OpenProcessor port to the public internet. Policy: [SECURITY.md](SECURITY.md);
+Cropwright is reachable on your LAN by default, for homelab or
+small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
+installer puts a shared HTTP basic-auth login in front of Cropwright. Pass
+`--local-only` to opt out and keep everything on 127.0.0.1. Never port-forward
+any OpenProcessor port to the public internet; use a reverse proxy with
+authentication if you need remote access. Policy: [SECURITY.md](SECURITY.md);
 how-to: [Security and network exposure](docs-site/docs/deployment/security.mdx).
 
 ### After the install
@@ -212,7 +214,7 @@ curl -X POST $API/projects/cars/classes -H 'Content-Type: application/json' \
   -d '{"name": "car"}'
 ```
 
-No dataset ships in this repo. Fetch a small, license-filtered public COCO 2017
+**Try it with a public sample.** No dataset ships in this repo. Fetch a small, license-filtered public COCO 2017
 subset (200 images, 20 per class, about 1-2 minutes):
 
 ```bash
@@ -350,7 +352,7 @@ curl -X POST http://localhost:4603/faces/recognize -F "image=@face.jpg"
 curl -X POST http://localhost:4603/embed/image -F "image=@photo.jpg"
 # {"embedding": [...512 floats...], "embedding_norm": 1.0, "indexed": false, "status": "success"}
 
-# Text search (query parameters, not a JSON body: `text`, not `query`)
+# Text Search (query parameters, not a JSON body: `text`, not `query`)
 curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 # {"status": "success", "query_type": "text", "results": [{"image_id": "...", "image_path": "...",
 #   "score": 0.31}], "total_results": 1, "search_time_ms": 8.2}

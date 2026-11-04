@@ -33,6 +33,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = (REPO_ROOT / 'README.md').read_text()
+CONTRIBUTING = (REPO_ROOT / 'CONTRIBUTING.md').read_text()
 
 
 def _compose_source_root_mount() -> str:
@@ -86,12 +87,12 @@ def test_requirements_test_txt_exists() -> None:
 
 
 def test_readme_docker_only_test_path_installs_test_deps_first() -> None:
-    section = README[README.index('Docker-only path') :][:600]
+    section = CONTRIBUTING[CONTRIBUTING.index('Docker-only path') :][:700]
     assert 'cp requirements-test.txt api:/tmp/requirements-test.txt' in section, (
-        f'README must copy requirements-test.txt into the container (the image does not ship it):\n{section}'
+        f'CONTRIBUTING must copy requirements-test.txt into the container (the image does not ship it):\n{section}'
     )
     assert 'pip install -r /tmp/requirements-test.txt' in section, (
-        f"F-31: README's Docker-only test path must install test deps into "
+        f"F-31: CONTRIBUTING's Docker-only test path must install test deps into "
         f'the running container first -- the production image ships '
         f'without pytest:\n{section}'
     )

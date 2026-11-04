@@ -215,12 +215,12 @@ in the same commit as any wire change; lane checks only (section 9).
   3. production export (`export/ultralytics_export.py` after B3-E1; in the Stage A commit, the
      B1 `export_fused_onnx` for one2one families) at `batch=8`: one output `[batch, 300, 6]`;
      `NonMaxSuppression` count 8 for `nms`, `TopK` present for `one2one`;
-  4. onnxruntime on `bus.jpg` and `zidane.jpg`: `nms` families equal a torchvision NMS oracle over
+  4. onnxruntime on the two Ultralytics sample images: `nms` families equal a torchvision NMS oracle over
      the raw-head export (matched fraction 1.0 at IoU >= 0.95, same class, score diff < 1e-4);
   5. over-batch: the `batch=8` ONNX at batch 10 returns empty rows 9-10 (documents U-C7), and the
      J7 writer guard refuses a config whose `max_batch_size` differs from the ONNX `batch`;
   6. original YOLOv5 ONNX: `_build_yolov5_objectness_predictor` returns a name in the metadata;
-     `apply_ensemble_nms` returns detections on `bus.jpg` (no fakes);
+     `apply_ensemble_nms` returns detections on an Ultralytics sample image (no fakes);
   7. pin: `importlib.metadata.version('ultralytics') == X`.
 - **Discrepancy rows (ledger, must be explicit):** `yolo26n` and `yolo26s` exported with
   `nms=False` and with `simplify=True` **and** `simplify=False`: all four give `[batch, 300, 6]`
@@ -374,7 +374,7 @@ Run by the coordinator (or one gate agent) after merges 1-5, on the integration 
 | GPU | 0 (`TRITON_GPU_ID=0`, `API_GPU_ID=0` in the stack's own env); GPU 2 only if agreed with peers |
 | Budget | GPU window 1 of exactly three ([00_index.md](00_index.md) section 8.1): one GPU day for G0-G9, plus G10 (about 2 h); announce start and end to peer sessions |
 | Images | local-only tags (never `:latest`, Watchtower re-pulls it): `openprocessor-local/<image>:b3-ref` (main before B3), `:b3-stagea` (Stage A point), `:b3-stageb` (integration head) |
-| Data | public only: COCO val2017 (5,000 images, about 1 GB, CC BY 4.0 annotations, per-image Flickr licences), the pinned set A (`coco_bench_2000`), Ultralytics `bus.jpg`/`zidane.jpg` |
+| Data | public only: COCO val2017 (5,000 images, about 1 GB, CC BY 4.0 annotations, per-image Flickr licences), the pinned set A (`coco_bench_2000`), the two Ultralytics sample images |
 | Host record | `/proc/loadavg` at start and end of every run, foreign GPU processes (`nvidia-smi --query-compute-apps`), GPU sampled every 500 ms; a run with 1-minute load above 16 is noisy and repeated |
 | Raw data | `artifacts_local/b3/gate/<step>/` (gitignored); public result files to `docs/benchmarks/b3/` |
 
@@ -385,7 +385,7 @@ Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
 |---|---|---|
 | G0 | build the three image sets; from `:b3-ref` train 1 epoch in the **8.4.48 trainer** on a public COCO train subset (500 images, `fetch_coco_subset.py`, seed 20261009) and keep the `best.pt` | checkpoint exists (ledger: never verified before) |
 | G1 | engine builds E0, EA, EB at production settings (max batch 64, ModelOpt FP16, uint8 input) with the image's TensorRT; record build time, plan size; read the TRT log for the `NonMaxSuppression` -> `INMSLayer` mapping (EB) | all build (ledger: TRT builds never verified) |
-| G2 | Triton load + contract: EB metadata `output0 [-1, 300, 6]`; EA 4 outputs; `resolve_adapter` picks the right adapter; `/detect` on `bus.jpg` returns boxes; class column FP32 and integral (U-R4) | all hold (ledger: Triton serving never verified) |
+| G2 | Triton load + contract: EB metadata `output0 [-1, 300, 6]`; EA 4 outputs; `resolve_adapter` picks the right adapter; `/detect` on an Ultralytics sample image returns boxes; class column FP32 and integral (U-R4) | all hold (ledger: Triton serving never verified) |
 | G3 | parity on COCO val2017 (5k, conf 0.25, IoU 0.7, class-agnostic): **EA vs E0** and **EB vs EA**: abs(delta mAP50-95) <= 0.3 and per-image detection agreement >= 99 % at IoU 0.95; EB vs `yolo val` of the `.pt` within 0.5 (`scripts/bench/detector_quality.py`) | both pairs pass |
 | G4 | throughput: `perf_analyzer` at batch 1, 8, 32, 64 (3 repetitions each, median and min-max) and the set A ingest benchmark (3 repetitions): **EB >= 95 % of EA images/s at every batch, p99 within +10 %**; EA vs E0 recorded (same plugin, expect noise) | EB bar (ledger: embedded NMS at batch 64 never measured) |
 | G5 | families: YOLO26, v10, v5u, v8, v9 build, load, and a 500-image COCO val subset mAP within 0.5 of `yolo val`; repeat the discrepancy check on GPU: `yolo26n` and `yolo26s` through the production export with `simplify` True and False all give `[300,6]` (or are refused, never served raw) | all pass |
@@ -472,7 +472,7 @@ v0.7.0 release.
 
 | # | Check |
 |---|---|
-| RF-B3-1 | `installer_upgrade` from 0.6.0: the yolo stamp reads stale, the engine is re-exported and rebuilt, Triton metadata shows `output0 [-1, 300, 6]` (Stage B), `/detect` on `bus.jpg` returns boxes |
+| RF-B3-1 | `installer_upgrade` from 0.6.0: the yolo stamp reads stale, the engine is re-exported and rebuilt, Triton metadata shows `output0 [-1, 300, 6]` (Stage B), `/detect` on an Ultralytics sample image returns boxes |
 | RF-B3-2 | fresh install: the export image has no `/opt/venv-y11`; `ultralytics == X` in the API, export and trainer images; `pip check` clean |
 | RF-B3-3 | train and promote phases: 1 epoch, promote, served `[300, 6]`, ingest primary accepts the promoted engine |
 | RF-B3-4 | `POST /models/upload` of `yolo26n.pt` and `yolo11n.pt`: export worker builds a fused engine for each; an original YOLOv5 `.pt` is refused naming YOLOv5u |
