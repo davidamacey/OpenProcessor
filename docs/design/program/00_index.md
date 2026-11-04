@@ -76,6 +76,60 @@ Speed is measured once the stack it is measured on stops changing. See
 | **R-final** | v0.7.0 | M (1-2 days) | B5d merged; D-16 | release prep (VERSION and CHANGELOG), one acceptance run (old R3 + R-B1 + R-0.9), tag on the owner's word | the production-ready definition (section 5) | no regression against the retaken baseline and the B5 numbers | [06](06_release_acceptance.md) |
 | side #42 | v0.8.0 | S (GPU time) | GPU 1 free | 12 GB card acceptance; never blocks the tag | | | [07](07_b5_overview.md) section 11 |
 
+### 2.1 The plan in plain words (read this before the codes)
+
+The codes (B2, W1, D-18, CC-4, Q-Phase 3, ...) are cross-reference handles. The wording below
+says what each piece is without them. Plan text names the thing first and puts the code after
+it, for example "the lease reaper (Q-P3.2)".
+
+| Batch | Plain name | What it changes, in one sentence | Status |
+|---|---|---|---|
+| B0 | Close out the 0.6 audit round | Merge the audit fixes, the docs scrub and the plan set to `main` | done, merged |
+| B1 | Correctness under many workers | One owner per background job (job leases), one class list per project stored with conflict checks (class registry), plus inference, API and frontend bug fixes | done, merged |
+| B2 | Background jobs move to a job queue | Long jobs leave the API processes and run on Celery workers fed by a broker (Redis or Valkey), so restarting the API no longer kills them | next |
+| B3 | One Ultralytics version | Every image and the trainer use one pinned Ultralytics release and one detector output format | after B2's coding starts (runs alongside) |
+| B4 | Stateless API | The API's worker count becomes a plain tuning setting; the last file locks and per-process state go | after B2 and B3 |
+| B5 | Speed | Measure first, then decode each image once on the GPU, crop at model size, run OCR and faces on those crops, and add per-project processing plans | after B4 |
+| R-final | Release acceptance | One full acceptance run on the finished stack, then the v0.7.0 tag on the owner's word | last |
+
+B2 has three stages, each with its own plan file:
+
+| Stage | Plain name | File |
+|---|---|---|
+| B2-W1 | The queue itself: broker service, Celery app, worker containers, settings | [03a](03a_b2_w1_queue_infra.md) |
+| B2-W2 | Move each job type (17 of them) from the API onto the queue | [03b](03b_b2_w2_job_families.md) |
+| B2-W3 | Timed jobs run once instead of once per API worker; a reaper restarts jobs whose worker died | [03c](03c_b2_w3_beat_reaper_workers.md) |
+
+The audit codes used most often in the table above:
+
+| Code | Plain meaning |
+|---|---|
+| CC-4 | A running job dies when its API worker restarts (B2 fixes it) |
+| CC-2 | Concurrent class-list edits lose classes or duplicate ids (B1 fixed it with the class registry document) |
+| OPS-2 | Metrics files left behind by dead API workers are never cleaned (measure first, then fix in B2) |
+| SEC-n | A security hardening item (details stay off the public tree) |
+| GPU-n | A GPU memory or throughput fix |
+| OS-n | An OpenSearch query or index fix |
+| U-Step n | A step of the Ultralytics upgrade |
+| Q-Phase n | A phase of the job-queue move |
+| W0..W6 | The program's waves: one integration branch and one full test sweep each |
+
+The decisions waiting on the owner for B2 (section 6 has the recommendation and trade-off for
+each one):
+
+| Decision | Question in plain words |
+|---|---|
+| D-17 | Confirm Celery 5.6 as the job queue |
+| D-18 | Which broker: Redis 8 or Valkey |
+| D-19 | Do the five queue containers start by default (recommended), or only under a profile |
+| D-20 | Delivery rules: a job is acknowledged only after it finishes, retried at most 3 times, guarded by its lease |
+| D-21 | Job status, progress and cancel stay in the job files; the OpenSearch lease decides who runs it |
+| D-22 | Scope: all 17 API-hosted job types and the timed loops move; the detection/VLM workers, trainer and export worker stay as they are |
+| D-23 | How many jobs one worker runs at once (4, tunable) |
+| D-24 | Broker durability: append-only log, no backup |
+| D-25 | Which job types restart by themselves after a crash (reprocess, dataset import, bulk ingest, combine, assist loop) |
+| D-26 | Keep the API worker recycling with jitter that landed in B0 |
+
 ## 3. Order and dependencies
 
 ```
@@ -206,7 +260,7 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
 | D-17 | Q-J1 Celery 5.6 | open per decision 6 | the owner already chose Celery (task plan J1); confirm the 5.6 line at B2 kick-off | B2 | [03](03_b2_overview.md) |
-| D-18 | Q-J2 broker | open | Redis 8 (AGPLv3 option); Valkey only if a redistributor objects | B2 | [03a](03a_b2_w1_queue_infra.md) |
+| D-18 | Q-J2 broker | open | Redis 8 (AGPLv3 option); Valkey only if a redistributor objects. Owner raised the licence question on 2026-11-04: Valkey 9 (BSD-3, Linux Foundation) runs the same `redis://` kombu transport and redis-py client, so only the image and the licence row change; the W1 spike S1 runs the Celery checks against whichever image is chosen | B2 | [03a](03a_b2_w1_queue_infra.md) |
 | D-19 | Q-J3 default install | open | five core containers: `redis`, `jobs-worker`, `open-vocab-worker`, a `periodic-worker` for the `periodic` queue (so the reaper and the dispatch tick never wait behind long jobs), `jobs-beat`; Flower under monitoring | B2 | [03a](03a_b2_w1_queue_infra.md) |
 | D-20 | Q-J4 delivery | open | `acks_late` + `reject_on_worker_lost` + lease + attempt cap 3 + soft shutdown 30 s | B2 | [03a](03a_b2_w1_queue_infra.md) |
 | D-20a | Time limits for long job kinds (new) | open | default 3 h / 3 h 15 m; 24 h / 24 h 15 m for the long kinds named in 03 | B2 | [03](03_b2_overview.md) |
