@@ -206,7 +206,8 @@ def test_the_gpu_decode_is_on_by_default_with_the_three_megapixel_gate() -> None
 @pytest.mark.asyncio
 async def test_a_model_that_fails_to_load_leaves_ingest_on_the_cpu_path(tmp_path) -> None:
     """Triton out of memory for gpu_image_prep: the load raises, every photo is ingested on the
-    CPU, the detector is used as before and the load is not retried for every batch."""
+    CPU and the detector is used as before. A failure is a transient, not a verdict, so the
+    next batch asks again (see the recovery test below)."""
     svc, os_fake, triton, calls, sizes = _gpu_service(tmp_path)
     attempts: list[str] = []
 
@@ -220,6 +221,39 @@ async def test_a_model_that_fails_to_load_leaves_ingest_on_the_cpu_path(tmp_path
         result = await svc.ingest_batch([big], [f'/x/{name}.jpg'])
         assert result.summary.successful == 1
     assert calls == []  # the GPU decode was never called
-    assert attempts == [ingest_gpu_decode.GPU_IMAGE_PREP_MODEL]
+    assert attempts == [ingest_gpu_decode.GPU_IMAGE_PREP_MODEL] * 2
     assert triton.calls == ['primary_end2end', 'primary_end2end']
     assert len(os_fake.images) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_transient_probe_failure_is_not_cached(tmp_path) -> None:
+    svc, _os, triton, _calls, _sizes = _gpu_service(tmp_path)
+    real_load = triton.load_model
+    failures = [True]
+
+    async def flaky_load(model: str) -> None:
+        if failures:
+            failures.pop()
+            raise RuntimeError('triton restarting')
+        await real_load(model)
+
+    triton.load_model = flaky_load
+    assert await ingest_gpu_decode.gpu_decode_ready(svc) is False
+    assert await ingest_gpu_decode.gpu_decode_ready(svc) is True
+
+
+@pytest.mark.asyncio
+async def test_a_verdict_is_cached_across_lookups(tmp_path) -> None:
+    svc, _os, triton, _calls, _sizes = _gpu_service(tmp_path)
+    probes: list[str] = []
+    real = triton.get_model_parameters
+
+    async def counting(model: str) -> dict[str, str]:
+        probes.append(model)
+        return await real(model)
+
+    triton.get_model_parameters = counting
+    assert await ingest_gpu_decode.gpu_decode_ready(svc) is True
+    assert await ingest_gpu_decode.gpu_decode_ready(svc) is True
+    assert len(probes) == 1
