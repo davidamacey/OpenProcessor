@@ -234,10 +234,13 @@ class WholeImageDetector:
         and raw score are kept for lineage. A non-empty
         ``profile.class_ids`` drops detections of any other class. With
         ``profile.assigns_class`` false every detection is an unlabeled
-        ``{name}_proposal`` carrying the proposer's own label.
+        ``{name}_proposal`` carrying the proposer's own label. With it true the registry class is
+        the active one named like the model's output (never the output index); a model name
+        with no such class stays an unlabeled ``{name}_low_conf`` proposal.
         """
         num_dets = int(num_dets_row[0])
         floor = self.profile.confidence_floor
+        by_name = registry_name_index(self.registry) if self.profile.assigns_class else {}
 
         out: list[DetectedItem] = []
         for box, score, cls in zip(
@@ -274,23 +277,25 @@ class WholeImageDetector:
                     )
                 )
                 continue
-            entry = self.registry.get(cls_id)
-            class_name = entry.class_name if entry is not None else None
-            confident = conf >= floor
+            model_name = model_class_name(self.profile, cls_id)
+            found = self._registry_class_for(self.profile, cls_id, by_name)
+            registry_id, class_name = found if found is not None else (None, None)
+            confident = conf >= floor and found is not None
             out.append(
                 DetectedItem(
                     bbox_pixel=full,
                     score=conf,
-                    class_id=cls_id if confident else None,
+                    class_id=registry_id if confident else None,
                     class_name=class_name if confident else None,
                     class_source=(
                         f'{self.profile.name}_model'
                         if confident
                         else f'{self.profile.name}_low_conf'
                     ),
-                    proposal_name=class_name,
-                    detector_class_name=normalize_class_name(class_name or '') or None,
-                    detector_class_id=cls_id if entry is not None else None,
+                    proposal_name=class_name or model_name,
+                    detector_class_name=normalize_class_name(model_name or class_name or '')
+                    or None,
+                    detector_class_id=registry_id,
                     detector_confidence=conf,
                     class_detector=self.profile.detector_model or self.profile.name,
                     class_detector_version=self.profile.detector_version,

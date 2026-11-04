@@ -247,3 +247,19 @@ def label_ops_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     return tmp_path / 'state'
+
+
+@pytest.fixture(autouse=True)
+def _ingest_test_detector_labels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Names for the output indices of the fake ingest detector ``primary_end2end``
+    (``ingest_fakes``): a detector that assigns classes maps its output to the registry by name,
+    and the fake registries name ids 0 and 1 ``gadget`` and ``widget``. Any other model keeps
+    its real label lookup."""
+    from src.config import ingest_profiles
+
+    real = ingest_profiles.get_class_names
+
+    def names_for(model_name: str) -> dict[int, str]:
+        return {0: 'gadget', 1: 'widget'} if model_name == 'primary_end2end' else real(model_name)
+
+    monkeypatch.setattr(ingest_profiles, 'get_class_names', names_for)

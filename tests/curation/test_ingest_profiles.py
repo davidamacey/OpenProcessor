@@ -180,6 +180,23 @@ class _DomainRegistry:
         return self._Entry(f'domain_class_{class_id}')
 
 
+class _NamedRegistry:
+    """Registry classes ``(name, id)``, read the way ``ClassRegistry.load()`` exposes them."""
+
+    def __init__(self, *classes: tuple[str, int]) -> None:
+        from types import SimpleNamespace
+
+        self._file = SimpleNamespace(
+            classes=[
+                SimpleNamespace(class_id=i, class_name=n, deprecated=False, group=None)
+                for n, i in classes
+            ]
+        )
+
+    def load(self) -> Any:
+        return self._file
+
+
 def test_default_primary_does_not_assign_class(tmp_path: Any) -> None:
     labels = tmp_path / 'labels.txt'
     labels.write_text('person\nbicycle\ncar\n')
@@ -202,9 +219,16 @@ def test_default_primary_does_not_assign_class(tmp_path: Any) -> None:
     assert [i.proposal_name for i in items] == ['car', '7']
 
 
-def test_assigning_primary_keeps_registry_labelling() -> None:
-    profile = DetectionProfile(name='item', assigns_class=True)
-    detector = WholeImageDetector(triton_pool=None, registry=_DomainRegistry(), profile=profile)
+def test_assigning_primary_labels_with_the_registry_class_of_the_same_name(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
+    labels = tmp_path / 'labels.txt'
+    labels.write_text('person\nbicycle\ncar\n')
+    profile = DetectionProfile(name='item', assigns_class=True, labels_path=str(labels))
+    detector = WholeImageDetector(
+        triton_pool=None, registry=_NamedRegistry(('car', 7)), profile=profile
+    )
     items = detector.decode_primary_row(
         np.array([1]),
         np.array([[0.1, 0.1, 0.5, 0.5]], dtype=np.float32),
@@ -214,8 +238,9 @@ def test_assigning_primary_keeps_registry_labelling() -> None:
         (0.0, 0.0),
         640,
     )
-    assert items[0].class_id == 2
-    assert items[0].class_name == 'domain_class_2'
+    # model index 2 is "car"; the registry's "car" has id 7
+    assert items[0].class_id == 7
+    assert items[0].class_name == 'car'
     assert items[0].class_source == 'item_model'
 
 
