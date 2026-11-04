@@ -58,7 +58,8 @@ families), then add access control, then the new surfaces (a second segmenter, v
 | F6 | Second segmenter backend behind `POST /segment` | #367 | L | W8.3 | breadth |
 | F7 | Video files as an ingest source | N17 (new, split from #8) | L | W8.3 | breadth |
 | F8 | Public wheel teacher-student example at scale | #84 | L (+ GPU) | W8.3 | proof |
-| F9 | Embedding-model swap with a dual-field migration | #365 | XL | W8.4, **conditional** | breadth |
+| F9 | Embedding-model swap (register, build, evaluate, flip on the v0.7.0 registry) | #365 | M (was XL: the machinery ships in v0.7.0) | W8.4, **conditional** | breadth |
+| F10 | S3-compatible storage backend for multi-host installs (D-46) | N21 (drafted in the 0.7.0 program's `00b_traceability.md` section 4.6) | L | W8.3 | platform |
 | C | Carry-over from v0.7.0 (if still open at the tag) | N14 leftovers, N15 remainder, GPU-15 leftover | S each | W8.1 fill lanes | cleanup |
 
 ### 1.3 Order and the reasons for it
@@ -232,6 +233,15 @@ is in R8 (R8-20). **Upgrade impact.** None (no mapping change; `image_id` is alr
 ---
 
 ### 2.3 F3: assist loop pause, events and token budgets (N16)
+
+**Re-scoped by the 0.7.0 research integration (2026-11-04, pending its owner question RD-1).** The
+0.7.0 rebuild now ships the loop's own record in PostgreSQL, pause and resume that never spend
+retries, time slices, budgets with token reservations from the endpoint's `usage`, the event types
+and the Cropwright pause and budget controls (B2 lanes 4D and 4E; the research plan
+`docs/design/research_auto_label_assist_plan.md` section 5). What F3 keeps: the review queue and
+metrics routes and the Cropwright review grid (`feat/loop-review`), the daily cap read from
+`vlm_usage_hourly` and the optional price per million tokens (RD-74), and the `sweep` strategy
+(RD-73). The text below is the earlier design and is replaced by that plan's section 7.3 at W8.0.
 
 **Goal.** The assist loop gets a pause control, a live event log and token budgets for remote VLM
 endpoints. (Scope as filed in N16 by the 0.7.0 program.)
@@ -760,6 +770,16 @@ Ultralytics train and val: https://docs.ultralytics.com/modes/train/ , https://d
 
 ### 2.9 F9: embedding-model swap (#365), conditional
 
+**Re-scoped by the 0.7.0 research integration (2026-11-04, pending RD-1).** The project setting, the
+dual field, the migrate job and the routes exist from v0.7.0 (lanes ES-A, ES-B, ES-C of the 0.7.0
+program: the embedding registry, `embedding_reindex` on Celery and PostgreSQL with no lease, the
+fenced flip). F9 becomes: register the winning model version in the catalog, build its space,
+evaluate it in-product against the primary, flip; size M instead of XL. The gate is the embeddings
+research plan's EP-4 verdict (research wave RW-2), no longer the clustering plan. Q-8 is answered by
+RD-33 (copy matching spaces, defer the rest). F2's `group_by` composes with the search `space`
+parameter. The design text below is the earlier one and is superseded at W8.0 by
+`docs/design/research_embeddings_search_plan.md` sections 5 and 8.2.
+
 **Gate.** Build only if `research_clustering_plan.md` (the #347 evaluation) names an encoder that
 passes its registered gain over PE-Core-L on the public benchmarks by the W8.3 sweep. Without a
 candidate the machinery would be dead code, so #365 then moves to parked (section 6).
@@ -800,7 +820,70 @@ start, from the item count and dimension). **Upgrade impact.** None until a proj
 
 ---
 
-### 2.10 Carry-over from v0.7.0
+### 2.10 F10: S3-compatible storage backend for multi-host installs (N21; D-46)
+
+**Goal.** API and worker replicas on different hosts share blobs through an S3-compatible object
+store instead of one POSIX volume.
+
+**User-visible outcome.** An install can set `OP_STORAGE_BACKEND=s3` with an endpoint, bucket and
+credentials; uploads, crops, exports, training artifacts, model files and the upgrade bundle go to
+the store; a migration command moves an existing install's blobs and verifies them; nothing else
+changes for the user.
+
+**Today (after v0.7.0).** Every blob goes through `src/clients/storage/` (`BlobStore`: `open_read`,
+`write_atomic`, `exists`, `stat`, `list_prefix`, `delete_prefix`, `local_path`) with one backend,
+`LocalFsStore`; database rows hold relative keys only (a ratchet enforces it); the roots are
+`source`, `projects`, `models`, `cache`, `upgrade` (0.7.0 program `02c` section 5).
+
+**Design.**
+- A second backend `S3Store` behind the same protocol, chosen per deployment; the library is chosen
+  at W8.0 from maintained S3 clients (the AWS SDK for Python `boto3` and `aiobotocore` are the
+  documented candidates; MinIO's community distribution changed in 2025, so a server is not bundled:
+  the operator brings an S3-compatible endpoint) with the licence read then.
+- `write_atomic` maps to a single PUT (objects appear whole); multipart above a size threshold.
+  `delete_prefix` lists and deletes in batches. `stat` and `exists` are HEAD requests.
+- `local_path(key)` materializes the object into job-local scratch and returns the path; writes from
+  code that needs a real file (Ultralytics training, engine builds, `faiss.write_index`, COLMAP's
+  scratch database in a later spatial lane) go to scratch and are uploaded with `write_atomic` when
+  the step ends; nothing reads a shared path.
+- Triton reads the `models` root from the store natively (its cloud-storage model repository);
+  the `source` root stays read-only (local or a read-only bucket); the `cache` root may stay local
+  per host (regenerable derivatives, as Immich keeps them apart from originals).
+- Migration: `openprocessor storage migrate --to s3` copies every key of every root, verifies size
+  and SHA-256 per object against the source, and switches the setting only after a clean verify;
+  `--dry-run` lists counts and bytes. No database row changes (keys are relative).
+- Credentials from a secrets file, never in env values or logs; TLS on by default; the bucket is
+  private (the API still has no authentication: SECURITY says so).
+
+**Library and standard.** S3 API semantics (strong read-after-write consistency):
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel ; Triton cloud
+storage: https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html#cloud-storage-with-environment-variables ;
+boto3: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html .
+
+**Tasks (lanes).**
+
+| Lane | Owns | Red test (fails before) | Control |
+|---|---|---|---|
+| `v8/storage-s3-core` (ST-1..ST-4) | new `src/clients/storage/s3.py`, `src/config/storage.py` (the backend setting and its secrets), the shared `BlobStore` contract tests run against both backends | `tests/clients/storage/test_contract_s3.py` against a local S3-compatible test container: atomic visibility, prefix list and delete, `local_path` materialize and write-back | the same suite on `LocalFsStore` unchanged |
+| `v8/storage-s3-consumers` (ST-5, ST-6; after core) | the call sites that need a real file (training, export, the FAISS index store) moved to scratch-and-upload; Triton's repository URL from the setting | `tests/storage/test_no_shared_path_reads.py`: an AST scan finds no direct filesystem read of a `projects` or `models` key outside the backend | a local install behaves as before |
+| `v8/storage-s3-migrate` (ST-7) | the `storage migrate` CLI and its script; INSTALLATION multi-host section | `tests/storage/test_migrate_verify.py`: a corrupted object stops the switch | a clean copy switches |
+| `v8/storage-s3-live` (ST-8, in the W8.3 sweep) | none (coordinator) | a two-host install (two compose projects on one host with the object store, `-p op-v8-s3a`, `-p op-v8-s3b`) ingests, trains, exports and promotes; R8 row | - |
+
+**Size.** L. **Risks.** Small-object latency on the crop cache (keep `cache` local per host);
+partial uploads (single PUT or completed multipart only); cost of listing large prefixes (delete in
+batches, keys stay prefix-scoped). **Upgrade impact.** None until an install opts in; then the
+migrate command.
+
+### 2.11 Landings from the post-tag research waves
+
+The 0.7.0 program's research waves RW-1..RW-6 (`docs/design/program/00e_research_track.md`
+section 5) land these into v0.8.0, each only on its prototype's PASS: F9 reduced (RW-2); F2
+`group_by` with `space` (RW-2); F3's review queue and metrics (RW-6); `feat/loop-strategies` and
+`feat/loop-z5i` (RW-6); the faces lane L5 and the verification tables L6 with the Cropwright review
+screens (RW-3); the geo-photo timeline L-T1 (RW-5, under the location policy); the two-card serving
+default (RW-1). Each joins the W8.x wave whose files it touches, decided at W8.0.
+
+### 2.12 Carry-over from v0.7.0
 
 At the v0.7.0 tag the 0.7.0 program moves still-open items to v0.8.0. They are cleanup, not
 features, and fill W8.1 lanes.
@@ -843,8 +926,8 @@ features, and fill W8.1 lanes.
 | **W8.0** kick-off | none | none. The coordinator: checks v0.7.0 is tagged and `program/` removed; runs the GitHub actions of section 5 on the owner's go; gets answers to section 7; runs spike SP-1 (OpenSearch only, CPU, 10 min, `-p op-v8-sp1`) and GPU window **V0** for SP-2 and SP-3 (at most 3 h, GPU 0) | W8.1 lanes may start once their decisions are answered | none | decisions recorded in this file (a docs commit); spike results in the PRs that use them |
 | **W8.1** finish | `int/v080-w1-finish` | `v8/coco-seg` (F1), `v8/search-group` (F2), `v8/assist-loop` (F3 code), `v8/train-families` (F4 CPU tasks FT-1..FT-6), `v8/carry-<item>` (one per carry-over row, if any) | all in parallel; W8.2 lanes start during this sweep | T1: pre-commit `--all-files`, offline suite `-n 8`, `make contracts-check`, docs check, changelog rules, frontend full set (`npm run check`, `npm run build`, e2e stubbed). No live, no GPU | #370 and #436 close on merge; #435 decided |
 | **W8.2** auth | `int/v080-w2-auth` | `v8/auth-core` (AU-1..AU-8), `v8/auth-clients` (AU-9), `v8/auth-cropwright` (AU-10, AU-11), `v8/auth-install` (AU-12, AU-13) | core first; the other three branch from core's frozen head once AU-3 and AU-6 are committed; W8.3 lanes start during this sweep and branch from the merged auth head | T1 + frontend full set with e2e + **live harness run 1** (`-p op-v8-auth-live`, about 2 h): the three modes, the permission matrix per role, session revocation across `API_WORKERS=1` and `=32` (the B4 diff extended to auth), CSRF, login limits across workers, every worker with the service token, `/detect` p50/p99 with auth on vs the v0.7.0 number + an independent security review of the permission table and the store | #369 closes on merge; SECURITY.md rewritten; review findings fixed in the wave |
-| **W8.3** breadth | `int/v080-w3-breadth` | `v8/segmenter` (F6), `v8/video` (F7), `v8/wheel` (F8 WE-1, WE-2, WE-4) | F9 lanes may code during this sweep only if its gate passed | T1 + frontend full set + image audit and Trivy for the new and changed images (segmenter targets, video worker) + **GPU window V1** in this order: F3 S0 (about 2 h), F6 SG-7 (about 3 h), F7 VI-9 (about 2 h), F4 FT-7 (about 3 h), F8 WE-3 (about 6 h). GPU 0, `-p op-v8-gpu` | #367, N17, #84 and #368 close on merge; numbers in `docs/PERFORMANCE.md` |
-| **W8.4** (conditional) | `int/v080-w4-embed` | `v8/embed-swap` (F9) | | T1 + GPU window **V-EM** (about 1 day) | #365 closes; or the wave is skipped and #365 parked |
+| **W8.3** breadth | `int/v080-w3-breadth` | `v8/segmenter` (F6), `v8/video` (F7), `v8/wheel` (F8 WE-1, WE-2, WE-4), `v8/storage-s3-core` then `v8/storage-s3-consumers` and `v8/storage-s3-migrate` (F10; the S3 lanes touch no F6-F8 file) | F9 lanes may code during this sweep only if its gate passed | T1 + frontend full set + image audit and Trivy for the new and changed images (segmenter targets, video worker) + **GPU window V1** in this order: F3 S0 (about 2 h), F6 SG-7 (about 3 h), F7 VI-9 (about 2 h), F4 FT-7 (about 3 h), F8 WE-3 (about 6 h). GPU 0, `-p op-v8-gpu` | #367, N17, #84 and #368 close on merge; numbers in `docs/PERFORMANCE.md` |
+| **W8.4** (conditional) | `int/v080-w4-embed` | `v8/embed-swap` (F9, now register, build, evaluate, flip) | | T1 + GPU window **V-EM** (about half a day) | #365 closes; or the wave is skipped and #365 parked |
 | **W8R** release | `chore/release-0.8.0-prep`, then R8 | release prep (VERSION 0.7.0 -> 0.8.0, CHANGELOG `[Unreleased]` -> `[0.8.0]`, release notes, `docs/releases/v0.8.0.md`); `fix/r8-findings` only if a row fails | nothing else merges | R8 itself (section 4), **GPU window V2** and **live harness run 2** inside it | every R8 row PASS; tag v0.8.0 only on the owner's word |
 
 ### 3.3 Test and GPU budget for v0.8.0
@@ -918,6 +1001,7 @@ Edit the v0.8.0 description:
 |---|---|---|---|---|
 | N17 | `feat(ingest): video files as an ingest source (sampled frames, GPU decode)` | enhancement, area:ingest, area:curation, effort:hard | v0.8.0 | Problem: users with recordings cannot curate them. Scope: section 2.7 (upload route, `video_extract` job on a `video` queue, PyNvVideoCodec decode with a PyAV CPU path, sampling and dedup, provenance fields, split by video, Cropwright Video tab). Out of scope: live streams, tracking, the rest of #8. Acceptance: R8-26, R8-27. Plan: this file |
 | N18 | `chore(release): 0.8.0 close-out` | chore | v0.8.0 | the checklist of section 3.2 waves and R8; closes after the tag (like #411 for 0.7.0) |
+| N21 | `feat(storage): an S3-compatible storage backend for multi-host installs` | enhancement, effort:hard | v0.8.0 | the exact text is in the 0.7.0 program's `00b_traceability.md` section 4.6 (filed by the 0.7.0 coordinator); plan section 2.10 |
 
 No other new issues: the remaining work fits the existing issues.
 
@@ -954,7 +1038,7 @@ section 1.2 plus N17, N18 and the research items; the unmilestoned open issues a
 
 | Item | Why parked | Revisit trigger |
 |---|---|---|
-| #348 spatial scene discovery and photogrammetry | research, not product; no experiment run; needs licence review of the 3D tools and a go/no-go report before any code (the issue's own rule) | v0.8.0 released **and** the clustering research plan reports its place-recall results; then only the issue's one-weekend experiment on public or owned data, with a report in `docs/research/` |
+| #348 spatial scene discovery and photogrammetry | research, not product; no experiment run; needs licence review of the 3D tools and a go/no-go report before any code (the issue's own rule); capture metadata at ingest already ships in v0.7.0 | the v0.7.0 tag exists, a research window has about 4 GPU hours on GPU 0 or 2, and the owner says go (the spatial research plan's J9, RD-2 of the 0.7.0 program); S1 is P-4..P-8 of `docs/design/research_spatial_attributes_plan.md`, run in research wave RW-5. The geo-photo timeline (L-T1) is a v0.8.0 candidate under the location policy (RD-51, RD-58) |
 | #8 live video analytics (RTSP, tracking, message bus, SQL store, Helm) | a separate product from dataset curation; the DeepStream groundwork was removed; N17 covers the curation need | N17 shipped **and** a stated user need for live streams; then a fresh design doc and spikes, DeepStream as the documented NVIDIA path |
 | #365 embedding swap (if its gate fails) | no candidate encoder; the machinery would be dead code | the research plan names a candidate that passes its registered gain |
 | Segmenter on Triton / on resident crops (Wave 8 of `triton_pipeline_optimization_plan.md`, moved here when that plan is deleted after B5d) | speed work, needs measured evidence that the segmenter leg dominates worker time; needs its own plan | the B5 numbers or the F6 V1 measurement show the segmenter leg as a large share of worker time; F6's backend protocol makes a Triton backend possible |
@@ -981,6 +1065,7 @@ Each has a recommendation. Needed by the wave named.
 | Q-11 | Add `pycocotools` to the API image for RLE, or refuse RLE-only annotations with an issue code? | add it (lazy import) | W8.1 |
 | Q-12 | One release for v0.8.0 with one acceptance run, as for v0.7.0? | yes | W8.0 |
 | Q-13 | Wheel example scale: how many COCO cars? | 3,000, capped by half a GPU day | W8.3 |
+| Q-14 | F10: which S3 client library (`boto3` with `aiobotocore`, or another maintained client), and is the crop cache kept local per host? | the AWS SDK pair; cache local per host | W8.0 |
 
 ## 8. Plan lifecycle and keep-list
 
