@@ -133,7 +133,7 @@ time and an evidence path. A failing row becomes a finding; never relax a criter
 | RF-58 | Engine rebuild on upgrade (U-R3) | Install B upgrade log | the default detector engine rebuilt once (stamp changed); other groups skipped |
 | RF-59 | `API_WORKERS` (B4) | `.env` of install B after the upgrade; install A's `.env` | the key is present with the D-33 default |
 | RF-60 | Events (B4-4C) | a live page in the browser; restart the API; watch the page | the page reconnects and resumes from `Last-Event-ID` with no lost or duplicated event |
-| RF-61 | Queue outage | stop `redis` for 30 s | `/health` shows `queue: down` as degraded; the UI shows the outage; job starts answer 503; recovery after restart |
+| RF-61 | Queue outage | stop `redis` for 30 s | `/ready` answers 503 naming `queue`; the UI shows the outage; job starts answer 503; recovery after restart (D-69) |
 | RF-62 | Rollback to 0.6.0 after the control-data move | `setup-openprocessor.sh --dir <B> --rollback --yes` on install B after RF-40 | 0.6.0 API healthy; no 0.7.0-only container (Postgres, Valkey, workers, beat) left running; the control indexes and job files recreated from the bundle; the projects' classes and configs readable without a manual step; then a re-upgrade succeeds |
 | RF-63 | Re-upgrade (reworded after review R-9: rollback abandons the Postgres data, so this is a fresh upgrade) | upgrade install B again after RF-62 | the same counts and ids as the first upgrade; `upgrade_state` completed; no `upgrade_incomplete` refusal |
 

@@ -34,31 +34,45 @@ RLS policies, the `op_scope_allows` function and the generated `CHECK` lists are
   section 1.5), then connects as `op_owner` on the direct host, takes `pg_advisory_lock(MIGRATE = 2, 0)`
   on that session for the whole run (the OpenTranscribe runner's pattern), runs
   `command.upgrade(cfg, "head")` on the same connection, re-applies the `op_app` grants, unlocks.
-  Review fix R-7: it then runs the **OpenSearch step** (`scripts/opensearch/migrate.py`, idempotent):
-  creates the global indexes and every project's `images` and `items` indexes that are missing,
-  applies the mapping migrations, writes each index's mapping fingerprint, and runs the kNN warm-up
-  once (server-side, so once per deployment is enough). It exits 0. Two migrators started at once
-  serialize; the second finds everything at head. No API process creates indexes, migrates mappings
-  or warms kNN any more; the API lifespan only checks the fingerprints read-only and refuses to start
-  on a mismatch (`opensearch_mapping_not_current`), like the Alembic check. Project creation creates
-  its two indexes inside its job (B4 4D).
-- **Who waits on whom (owner decision 2026-11-04 after review R-11):** every Python service except
-  `api` and `db-migrate` itself has `depends_on: db-migrate: condition: service_completed_successfully`
+  It exits 0. Two migrators started at once serialize; the second finds the schema at head.
+- **The OpenSearch step runs in `db-migrate` after Alembic** (review fix R-7; re-check RC-1 as
+  re-evaluated under D-69, which replaced D-64 on 2026-11-04: nothing runs without Postgres, so the
+  one migrate step serves both stores). `scripts/db/migrate.py` calls `scripts/opensearch/migrate.py`
+  after the Alembic run, idempotently: it creates the global visual-search indexes and the `images`
+  and `items` indexes of every project in the Postgres `projects` table that are missing, applies the
+  mapping migrations, stamps each index's mapping `_meta` with its schema fingerprint (the existing
+  `SCHEMA_META_KEY` stamp of `src/services/curation/index_bootstrap.py`), and runs the kNN warm-up
+  once (server-side, so once per deployment is enough). While the 0.6.0 data is not loaded yet
+  (`upgrade_state` is `in_progress`, or the old `op_projects` index still exists) it does the global
+  indexes only and logs that the project step waits for the upgrade, because the project rows come
+  from the control-data step of section 2. No API process creates indexes, migrates mappings or warms
+  kNN any more. `project_create` (B4 4D) creates and stamps its two indexes in its job. Review RC-7:
+  the warm state is lost when OpenSearch restarts or evicts its graph cache; the first query after
+  that pays the load (accepted; INSTALLATION says so, and 5a measures the cold-query latency).
+- **Who waits on whom (owner decision D-69, 2026-11-04):** the API and every worker require
+  PostgreSQL, Valkey and OpenSearch, and Triton where they call it (the API always). Every Python
+  service except `db-migrate` itself has `depends_on: db-migrate: condition:
+  service_completed_successfully` and `condition: service_healthy` on `postgres`, `valkey`,
+  `opensearch` and (the API and the Triton-calling workers) `triton-server`
   ([depends_on](https://docs.docker.com/reference/compose-file/services/#depends_on)); `db-migrate`
-  waits on `postgres` and `opensearch` healthy. The `api` service depends on neither `db-migrate` nor
-  `valkey`: the inference routes (`/detect`, `/faces`, `/embed`, `/ocr`, `/search`, `/health`) keep
-  serving when PostgreSQL or Valkey is down.
-- **Startup check, fail closed:** every process reads `SELECT version_num FROM alembic_version` and
-  compares it with the head of the bundled `src/db/migrations` (`ScriptDirectory.get_current_head()`);
-  a reachable database at another revision exits with `schema_not_current` naming both revisions,
-  and an `upgrade_state` row of `in_progress` exits with `upgrade_incomplete` (section 2.2). A new
-  image never runs on an old schema, and an old image never runs on a newer one. Workers and beat
-  also exit when the database is unreachable (compose restarts them). The API does not: an
-  unreachable database at start means "control plane down": the curation and job routes (everything
-  under `/curation`, `/jobs`, the job-start routes of `/models`, `/ingest/directory`,
-  `/persons/cluster`) answer 503 `database_unavailable` (or `queue_unavailable` for Valkey), the
-  inference routes serve, and `/health` and `/ready` name the dependency that is down. The check
-  runs again when the database becomes reachable, and a wrong head then stops the process.
+  waits on `postgres` and `opensearch` healthy. There is no degraded mode and no flag for one.
+- **Startup check, fail closed (D-69):** every process waits for its dependencies with bounded
+  retries (a 60 s budget with a fixed backoff, a constant in `src/db/schema_check.py`, not a
+  setting), then refuses to start
+  with one error naming the missing dependency (`dependency_unavailable: database`, `queue`,
+  `opensearch` or `triton`). Then it reads `SELECT version_num FROM alembic_version` and compares it
+  with the head of the bundled `src/db/migrations` (`ScriptDirectory.get_current_head()`): another
+  revision exits with `schema_not_current` naming both revisions, and an `upgrade_state` row of
+  `in_progress` exits with `upgrade_incomplete` (section 2.2). It reads every index's `_meta` stamp
+  in one `GET <global and project indexes>/_mapping?filter_path=*.mappings._meta` call and exits with
+  `opensearch_mapping_not_current` naming the index when one is wrong or missing. A new image never
+  runs on an old schema or mapping, and an old image never runs on a newer one.
+- **Liveness and readiness (D-69, the existing split of `src/routers/health.py`):** `/live` says the
+  process is up and never probes a dependency; `/ready` (and `/health`, its existing alias) answers
+  503 while any required dependency is down and names each one (`database`, `queue`, `opensearch`,
+  `triton` and its required models); the compose healthcheck of `api` probes `/ready`. At run time a
+  route that reaches a dependency that is down answers 503 naming it (`database_unavailable`,
+  `queue_unavailable`); no route is designed or tested to keep serving through an outage.
 - **Upgrades are stop-the-world in 0.7.0** (review R-26): the strict head equality means old and new
   processes never run together. From v0.8.0 migrations follow expand-then-contract, so the check can
   become "the database head is at or ahead of the code head and marked compatible".
@@ -213,9 +227,10 @@ without capabilities (stage 6 verifies each), `restart: unless-stopped` (except 
 |---|---|---|---|---|---|
 | `postgres` | `postgres:18.6-trixie` by the digest of [13](13_package_pins.md) section 4 (owner decision 2026-11-04) ([image](https://hub.docker.com/_/postgres)) | `postgres -c max_connections=${OP_PG_MAX_CONNECTIONS:-300} -c shared_buffers=${OP_PG_SHARED_BUFFERS:-512MB} -c password_encryption=scram-sha-256`; env `POSTGRES_USER=op_super`, `POSTGRES_DB=openprocessor`, `POSTGRES_PASSWORD_FILE=/run/secrets/op_pg/super_password`; `shm_size: 256m`; `stop_grace_period: 60s`; `deploy.resources.limits.memory: ${OP_PG_MEM_LIMIT:-4g}` (R-19) | `pg_isready -h 127.0.0.1 -U op_super -d openprocessor` (TCP, so the socket-only server the entrypoint runs during first init does not count; spike S0 verifies) | `openprocessor-pg:/var/lib/postgresql` (**18 moved `PGDATA` to `/var/lib/postgresql/18/docker` and the volume to `/var/lib/postgresql`**; 17 and older mount `/var/lib/postgresql/data`) | the entrypoint starts as root and drops to `postgres`; the secret must be readable by that user (S0 records the ownership rule) |
 | `valkey` | the Valkey image and digest of [13](13_package_pins.md) section 4 (`9.1.3-alpine3.24`) ([image](https://hub.docker.com/r/valkey/valkey)) | `valkey-server /run/secrets/op_valkey/valkey.conf --appendonly yes --appendfsync everysec --maxmemory ${OP_VALKEY_MAXMEMORY:-1gb} --maxmemory-policy noeviction` (the conf holds only `requirepass`); `deploy.resources.limits.memory` above `maxmemory` (R-19) | `sh -c 'REDISCLI_AUTH="$(cat /run/secrets/op_valkey/password)" valkey-cli ping \| grep -q PONG'` (password not in argv; S1 verifies `valkey-cli` honours the variable, else `redis-cli`, which the image also ships, as Immich uses) | `openprocessor-queue:/data` | no backup (D-24) |
-| `db-migrate` | api image | `python -m scripts.db.migrate upgrade` (Postgres, then the OpenSearch step, R-7); `restart: "no"`; mounts the superuser, owner and app password files; waits on `postgres` and `opensearch` healthy | none (one-shot) | none | every Python service below except `api` `depends_on` it with `service_completed_successfully` (R-11) |
+| `db-migrate` | api image | `python -m scripts.db.migrate upgrade` (Alembic, then the OpenSearch step, R-7, RC-1); `restart: "no"`; mounts the superuser, owner and app password files; waits on `postgres` and `opensearch` healthy | none (one-shot) | none | every Python service below `depends_on` it with `service_completed_successfully` (D-69) |
 | `jobs-worker` | api image | `celery -A src.tasks.app worker -Q jobs --concurrency=${OP_JOBS_CONCURRENCY:-4} --max-tasks-per-child=50 --max-memory-per-child=${OP_JOBS_MAX_MEMORY_PER_CHILD_KB:-8000000} --hostname jobs@%h -E`; `REMAP_SIGTERM=SIGQUIT`; `stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s`; own `PROMETHEUS_MULTIPROC_DIR` tmpfs; `deploy.resources.limits.memory: ${OP_JOBS_MEM_LIMIT:-24g}` (R-19) | the ported pool healthcheck (`scripts/healthcheck/celery_pool_healthcheck.py`) | storage roots as `api`, no `/jobs` | `API_GPU_ID` reservation |
 | `periodic-worker` | api image | `-Q periodic -c 2 --max-tasks-per-child=200 --hostname periodic@%h -E`; memory limit `${OP_PERIODIC_MEM_LIMIT:-2g}` (R-19) | pool healthcheck | as `api` | never mounts the Docker socket (R-20) |
+| `api` (changed) | api image | as today, plus `deploy.replicas: ${OP_API_REPLICAS:-1}` (RC-4: the one source of the replica count, read by the budget test; scale through `.env`, not `--scale`) | `/ready` | as today | waits on `db-migrate` (completed) and on `postgres`, `valkey`, `opensearch`, `triton-server` healthy (D-69) |
 | `gpu-arbiter-worker` (GPU-arbiter overlay only) | api image | `-Q arbiter -c 1 --hostname arbiter@%h` | pool healthcheck | as `api` | the only service that mounts the Docker socket; consumes only `arbiter` (review fix R-20) |
 | `open-vocab-worker` | api image | `-Q open_vocab -c 1 --max-tasks-per-child=50` | pool healthcheck | as `api` | |
 | `jobs-beat` | api image | `celery -A src.tasks.app beat -s /run/beat/celerybeat-schedule` (tmpfs); memory limit `${OP_BEAT_MEM_LIMIT:-512m}` (R-19) | newest mtime of `/run/beat/celerybeat-schedule*` under 300 s, failing on an empty glob | tmpfs only | single-beat lock (D-60); `deploy.replicas: 1` |

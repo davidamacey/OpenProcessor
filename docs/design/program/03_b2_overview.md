@@ -6,7 +6,7 @@
 | Release | part of the single v0.7.0 release (no intermediate tag; R-final in [06_release_acceptance.md](06_release_acceptance.md)) |
 | Depends on | B1 merged into `main` (done); the owner's go for B2 |
 | Design | [02_control_plane_database.md](02_control_plane_database.md), [02a](02a_postgres_schema.md) (schema), [02b](02b_jobs_locking_events.md) (jobs, events, queues, pools), [02c](02c_migration_ops_tests.md) (migrations, upgrade, services, storage, tests, traps). This file and the stage files say **who builds what, in which order, proven how** |
-| Decisions applied | approved 2026-11-04: D-17 (Celery 5.6), D-18 (Valkey), D-31 (evaluator on `gpu_eval`), D-39..D-45 (the owner decisions). Also approved 2026-11-04 as a block: D-19, D-20, D-20a, D-20b, D-22a, D-22b, D-23, D-24, D-25, D-26, D-46..D-63 (D-48 and D-50 as amended), and after the review [00c](00c_plan_review.md): D-64 (inference without the control plane), D-65 (Valkey wake-up), D-66 (kombu and redis-py held), D-67 (pins part A first). Register: [00_index.md](00_index.md) section 6 |
+| Decisions applied | approved 2026-11-04: D-17 (Celery 5.6), D-18 (Valkey), D-31 (evaluator on `gpu_eval`), D-39..D-45 (the owner decisions). Also approved 2026-11-04 as a block: D-19, D-20, D-20a, D-20b, D-22a, D-22b, D-23, D-24, D-25, D-26, D-46..D-63 (D-48 and D-50 as amended), and after the review [00c](00c_plan_review.md): D-64 (inference without the control plane; replaced the same day by D-69: every service requires the control plane), D-65 (Valkey wake-up), D-66 (kombu and redis-py held), D-67 (pins part A first). Register: [00_index.md](00_index.md) section 6 |
 | Packages | named here, pinned in `13_package_pins.md` (written on its own branch): SQLAlchemy (with the `asyncio` extra), Alembic, psycopg 3 (`psycopg[binary]`), Celery, kombu, billiard, redis-py, Flower, testcontainers (`testcontainers[postgres,redis]`); the Postgres and Valkey images and digests of `13_package_pins.md` section 4 (Postgres base: owner question MQ-2) |
 | Source IDs | `task_queue_plan.md` Phases 2-5 and E1-E26 (task detail where still valid); audit CC-4, CC-5, CC-9, CC-11, OPS-2, SEC-4, SEC-5; ENV-4, ENV-6, ENV-14, ENV-18, ENV-20 of [08](08_environment_and_setup.md) |
 
@@ -190,8 +190,8 @@ sleep loops.
 | 5 | cold-shutdown requeue: `docker stop` one replica mid-job (`REMAP_SIGTERM`, soft shutdown) | `interrupted` at once, resumed by the reaper without waiting for the lease TTL | 15 min |
 | 6 | cancel running; cancel queued (workers stopped, start, cancel, start workers) | `cancelled` within one progress step; the queued job never runs | 15 min |
 | 7 | API recycle: `--limit-max-requests=50`, 500 requests during a reprocess | the job completes | 15 min |
-| 8 | broker loss: stop Valkey, delete its volume, start it | queued jobs dispatched again by the reaper (rule c); running jobs keep their lease; `/detect` keeps answering 200; SSE events keep arriving on the 2 s tick (owner decisions 2026-11-04, R-6, R-11) | 10 min |
-| 9 | Postgres restart mid-job | the heartbeat reconnects (`pool_pre_ping`); the job completes or is resumed; starts answer 503 during the outage while `/detect`, `/embed` and `/health` keep answering 200 and `/ready` names `database` (R-11) | 15 min |
+| 8 | broker loss: stop Valkey, delete its volume, start it | `/ready` answers 503 naming `queue` during the outage and 200 after; queued jobs dispatched again by the reaper (rule c); running jobs keep their lease; SSE events arrive on the 2 s tick (owner decisions 2026-11-04, R-6, D-69) | 10 min |
+| 9 | Postgres restart mid-job | the heartbeat reconnects (`pool_pre_ping`); the job completes or is resumed; during the outage starts answer 503, `/ready` answers 503 naming `database` and `/live` answers 200; after it `/ready` is 200 again (D-69) | 15 min |
 | 10 | two beats (start a second `jobs-beat`) | the second exits with `beat_already_running`; periodic tasks run once per interval | 10 min |
 | 11 | SSE: subscribe, kill and reconnect a client with `Last-Event-ID` mid-job; then resume with an id older than the retained minimum | no lost or duplicated event per project; terminal state delivered; the stale resume gets one `reset` event (R-34) | 15 min |
 | 12 | GPU queues with fake handlers: train, export, bake-off start, progress, cancel | each completes or cancels; no file under the old job roots | 20 min |
@@ -227,7 +227,6 @@ Then one PR from `int/b2-control-plane` against `main`, local CI parity first, C
 | R2-9 | a secret file unreadable by a container user | spikes S0 and S1 record the ownership rule; installer tests |
 | R2-10 | Celery and kombu versions drift | exact pins, `pip check`, spike S1 on the pins (trap T-17) |
 | R2-11 | the live run overruns its 4 h 30 min budget | stop and report |
-| R2-13 | the inference tier taken down by a control-plane outage | the `api` service depends on neither `db-migrate` nor `valkey`; inference routes serve in "control plane down" mode (owner decision 2026-11-04, R-11); live steps 8 and 9 |
 | R2-12 | projects starve each other on the `jobs` queue (carried from the original E13) | FIFO with `OP_JOBS_CONCURRENCY` (4) plus the per-project exclusive kinds; per-project routing is added only if the live run or a user report measures starvation |
 
 ## 11. What to keep after merge

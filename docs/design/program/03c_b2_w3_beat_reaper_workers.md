@@ -128,10 +128,12 @@ one Alembic head, `project_tx` for every project query); INSTALLATION (services,
 ownership rule, `max_connections`, backup and restore, PgBouncer overlay, multi-host with a shared
 volume, the 0.6.0 upgrade, the downgrade note; review fixes R-26 and R-36: upgrades are stop-the-world
 in 0.7.0 (old and new processes never run together), the GPU-arbiter overlay is single-host, from
-v0.8.0 migrations follow expand-then-contract; a PostgreSQL major version moves only with a release,
+v0.8.0 migrations follow expand-then-contract; messages for a queue whose profile never started stay in Valkey after the reaper fails their job
+(RC-13); the kNN warm-up is lost on an OpenSearch restart and the first query pays it (RC-7);
+a PostgreSQL major version moves only with a release,
 through `db backup` and `db restore`; the operator checklist of the review (back up `secrets/` and the
 Postgres volume, size `OP_PG_MAX_CONNECTIONS` with replicas, `db verify` after any restore, a shared
-POSIX volume for multi-host); the inference API keeps serving without Postgres and Valkey, R-11); SECURITY (neutral preconditions: the broker and the
+POSIX volume for multi-host); every service requires Postgres, Valkey and OpenSearch, and `/ready` names the one that is down, D-69); SECURITY (neutral preconditions: the broker and the
 database are internal-only with required passwords, JSON-only messages, whoever reaches the broker
 can enqueue work); ATTRIBUTION rows (SQLAlchemy MIT, Alembic MIT, psycopg LGPL-3.0, Celery, kombu,
 billiard BSD-3, redis-py MIT, Flower BSD-3, testcontainers Apache-2.0 (test only), Valkey BSD-3,

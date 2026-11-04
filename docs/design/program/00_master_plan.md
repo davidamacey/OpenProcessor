@@ -7,7 +7,7 @@
 | What it is not | the decision register and the legends: those are [00_index.md](00_index.md) (section 6 is the register, section 11 the ID legend, section 2.1 the plain-words map). Where this file and a batch file disagree on order, this file wins; on task content, the batch file wins |
 | Traceability | [00b_traceability.md](00b_traceability.md): every original task, ID and open issue mapped to its wave and lane, or retired with a reason; the fold-in record; the GitHub actions (approved 2026-11-04, D-68) |
 | Review | [00c_plan_review.md](00c_plan_review.md): the independent review (R-1..R-38) and, in its section 5, the planner's response to each finding. Every finding is applied in the plan files; this file carries the wave and lane consequences |
-| Owner answers applied | 2026-11-04, after the review: inference keeps serving without the control plane (D-64); event wake-ups over Valkey pub/sub (D-65); kombu and redis-py held (D-66); pins part A as its own PR first (D-67, wave W2.0); every open B2 recommendation accepted as a block; `postgres:18.6-trixie`; the security lane in W4 and the typed-response lanes in W5a-W5c; near-duplicate groups held out together; research experiments after the tag; #42 to v0.8.0 if unrun; the GitHub actions of 00b (D-68) |
+| Owner answers applied | 2026-11-04, after the review: every service requires PostgreSQL, Valkey and OpenSearch, no degraded mode (D-69, which replaced D-64 the same day); event wake-ups over Valkey pub/sub (D-65); kombu and redis-py held (D-66); pins part A as its own PR first (D-67, wave W2.0); every open B2 recommendation accepted as a block; `postgres:18.6-trixie`; the security lane in W4 and the typed-response lanes in W5a-W5c; near-duplicate groups held out together; research experiments after the tag; #42 to v0.8.0 if unrun; the GitHub actions of 00b (D-68) |
 | Owner direction applied | 2026-11-04: foundation first (PostgreSQL for control data, Celery and Valkey for every long job, a stateless API that scales to N replicas); then the speed work on it; all package upgrades with the bumps that can change model output riding the B3 GPU gate; no task dropped except with a reason; decided items folded into the lane that already rewrites their code; plain names first; waves with disjoint lanes and one sweep each; CI path-scoped and sharded |
 
 Plain-words rule: every heading and row names the thing first and puts its code after it, for
@@ -109,8 +109,9 @@ code from `main` and merge this PR in before their own merge (they touch no part
 ### W2.1 Foundation (B2 stage 1)
 
 **Goal.** The stack starts with PostgreSQL at the schema head, Valkey, idle Celery workers and
-beat; the API runs its inference routes even when the control plane is down and refuses to start
-only on a reachable database at the wrong head (D-64); tests get a real database, and the default
+beat; the API and every worker wait for PostgreSQL, Valkey and OpenSearch (and Triton where they
+call it) and refuse to start, naming the missing one, or on a schema at the wrong head (D-69);
+`/ready` names any dependency that is down; tests get a real database, and the default
 offline command deselects the database tests (R-4). No job family moves yet.
 
 **Preconditions.** PR #477 (CI shards) and W2.0 merged; this plan set merged to `main`;
@@ -129,14 +130,14 @@ Merge order: lane 0, 1A, 1E, 1B, 1C, then 1D. The pieces that need 1A's code whi
 coding moved into 1D (R-18).
 
 **Folded in (decided).** `postgres:18.6-trixie` and the Valkey image by the digests of 13 section 4
-(D-44, owner decision 6); kombu 5.6.2 and redis-py 6.4.0 (D-66); the API without a hard dependency
-on `db-migrate` or `valkey` (D-64); Valkey `maxmemory` and memory limits on the new services (R-19);
+(D-44, owner decision 6); kombu 5.6.2 and redis-py 6.4.0 (D-66); every Python service waits on
+`db-migrate` and on healthy `postgres`, `valkey` and `opensearch` (D-69); Valkey `maxmemory` and memory limits on the new services (R-19);
 the `arbiter` queue declared (R-20); OPS-2 is measured first (1B-0, #464).
 
 **Red-then-green tests.** Each lane's table in 03a, including the review cases: a failed commit is a
 5xx (R-1), an unscoped statement raises (R-13), the default selection holds no `db` test (R-4), a
-runtime module importing `src.services` fails the layering check (R-2), `/detect` answers with the
-database down (R-11).
+runtime module importing `src.services` fails the layering check (R-2), an unreachable database
+or broker refuses the start naming it, and `/ready` answers 503 naming `database` (D-69).
 
 **Part check.** 03a "Stage 1 exit criteria": the lanes' tests on the merged head, `-m db`,
 `make contracts-check`, the 15-minute CPU bring-up (`-p op-b2-s1check`); plus the Docker-free
@@ -460,11 +461,18 @@ Lanes never run a full suite, `--all-files`, the live harness or a GPU.
 ### 9.1 Answered on 2026-11-04 (recorded in the register, [00_index.md](00_index.md) section 6)
 
 Every open B2 recommendation as a block (D-19..D-26, D-46..D-63, with D-48 and D-50 as amended);
-inference keeps serving without the control plane (D-64); Valkey pub/sub wake-ups (D-65); kombu
+every service requires the control plane, no degraded mode (D-69, replacing D-64); Valkey
+pub/sub wake-ups (D-65); kombu
 5.6.2 and redis-py 6.4.0 held (D-66); pins part A as its own PR (D-67); the GitHub actions of 00b
 (D-68); `postgres:18.6-trixie` (MQ-2); near-duplicate groups into the holdout together (MQ-5); the
 security lane in W4 (MQ-6); typed-response lanes in W5a-W5c (MQ-7); research experiments after the
 tag with their decided items kept in the rewrite (MQ-9); #42 to v0.8.0 if unrun at the tag (MQ-10).
+Later the same day: every service requires PostgreSQL, Valkey and OpenSearch with no degraded mode
+(D-69, replacing D-64); the Docker-free suite in 4 shards at every B2 part check (MQ-3); Pillow,
+simplejpeg, the Hugging Face stack and MLflow in pins part B (MQ-4); the GPU-15 leftover in B3-D3
+(MQ-8); Flower on loopback port 4613 and the gateway subpath, only with `monitoring` (Q-3,
+ENV-18); #469 and #471 kept as they are, closed with no code change, with a SECURITY.md statement
+in the privacy lane (OI-1, OI-2).
 
 ### 9.2 Still open, with the plan's recommendation
 

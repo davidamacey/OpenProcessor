@@ -384,7 +384,8 @@ FastAPI 0.135.0 or newer). The SSE `id:` is `<xid>-<id>`. A reconnect replays fr
 joins the live fan-out. The two hand-written SSE framers (`events.py::sse_response`,
 `pipeline_events.py::_sse`) are deleted (LIB-3 of [10](10_standards_and_libraries.md)).
 
-Postgres down: SSE routes answer 503; `/health` reports `database: down`. The UI shows the outage.
+Postgres down: SSE routes answer 503; `/ready` answers 503 naming `database` (D-69). The UI shows
+the outage.
 SSE routes never declare the per-request `DbSessionDep` (section 8): a stream holds no pooled
 connection between queries (review fix R-1).
 

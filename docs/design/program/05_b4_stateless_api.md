@@ -349,7 +349,7 @@ are deleted there. B4 has no events track.
 |---|---|---|
 | R4-1 | a lower default worker count reduces throughput (M15) | the benchmark against the retaken baseline decides the default |
 | R4-2 | SSE rewrite regressions (M16) | the spike gates it; ids give ordered resume per stream; browser check of every live page |
-| R4-3 | Postgres becomes load-bearing for the UI feed (since B2) | `/health` degraded; SSE 503; the UI shows the outage |
+| R4-3 | Postgres becomes load-bearing for the UI feed (since B2) | `/ready` 503 naming `database` (D-69); SSE 503; the UI shows the outage |
 | R4-4 | `TaskGroup` changes the exception type callers see (`ExceptionGroup`) | `except*` or re-raise at the boundary; `rg` every caller first |
 | R4-5 | bulk OCC changes conflict semantics | outcome vocabulary kept; fixture comparing the per-crop and bulk outcomes |
 | R4-6 | the ratchet allowlist hides a new process state | each entry needs a reason; the baseline only shrinks |

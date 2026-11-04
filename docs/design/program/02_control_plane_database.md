@@ -56,11 +56,12 @@ models, datasets, exports), addressed by storage keys that Postgres records.
 6. **Class identity is the name at every boundary.** Inside one project the registry's `class_id`
    is a stable foreign key (ids are never reused); import, combine, export, train, promote and model
    sharing map by name, as today.
-7. **Fail closed.** Postgres unreachable: every curation write route and every job start answers
-   503; `/health` and `/ready` report `database: down`. The inference routes (`/detect`, `/faces`,
-   `/embed`, `/ocr`, `/search`, `/health`) need neither Postgres nor Valkey and keep serving (owner
-   decision 2026-11-04, review R-11). A reachable database whose schema is not at the code's Alembic
-   head refuses to start the process (`schema_not_current`). An unbound project raises
+7. **Fail closed.** The API and every worker require PostgreSQL, Valkey and OpenSearch, plus
+   Triton for inference (owner decision D-69, which replaced D-64 on 2026-11-04): a process waits for
+   them with bounded retries and then refuses to start, naming the missing one; there is no degraded
+   mode. At run time `/ready` answers 503 and names each dependency that is down, `/live` says only
+   that the process is up, and a route that reaches a down dependency answers 503. A database whose
+   schema is not at the code's Alembic head refuses to start the process (`schema_not_current`). An unbound project raises
    `scope_not_set` in the database (R-13).
 8. **Stateless processes.** The API, every Celery worker and beat keep no state another process
    needs: shared state lives in Postgres, Valkey or OpenSearch; blobs behind the storage seam.
