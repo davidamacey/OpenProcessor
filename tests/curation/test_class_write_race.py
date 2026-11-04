@@ -175,7 +175,6 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
 async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
     from src.routers.curation.pipeline_public import pipeline_auto_label
     from src.services.curation import auto_label_run, image_serving
     from src.services.curation.autolabel import selection, vlm_stage
@@ -200,9 +199,10 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
         auto_label_run, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None))
     )
     monkeypatch.setattr(auto_label_run, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': 7, 'class_name': 'sportscar'}])
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry',
-        lambda: _FakeRegistry([_FakeClassEntry(7, 'sportscar')]),
+        'src.services.curation.registry_access.get_class_registry', lambda: registry
     )
     monkeypatch.setattr(
         'src.services.labeling.vlm_class_names.format_class_catalog', lambda *_a, **_k: ''
