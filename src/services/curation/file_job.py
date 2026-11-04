@@ -29,9 +29,28 @@ from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 logger = get_logger(__name__)
+
+_FENCES: dict[Path, Callable[[], bool]] = {}
+
+
+class LeaseLostError(RuntimeError):
+    """A job tried to write its state after its lease was taken over or went unrenewed."""
+
+
+def register_fence(directory: Path, may_write: Callable[[], bool]) -> None:
+    """Fence ``directory``'s state writes in this process: :meth:`FileJob.write` raises
+    :class:`LeaseLostError` while ``may_write()`` is false. Set by the lease holder when it
+    starts a job (:class:`~src.services.curation.lease_heartbeat.LeaseHeartbeat`)."""
+    _FENCES[directory] = may_write
+
+
+def clear_fence(directory: Path) -> None:
+    _FENCES.pop(directory, None)
+
 
 HEARTBEAT_STALE_S = LEASE_TTL_S
 
@@ -77,6 +96,10 @@ class FileJob:
         return None if isinstance(raw, dict) else 'the state is not a JSON object'
 
     def write(self, state: dict[str, Any]) -> None:
+        fence = _FENCES.get(self.directory)
+        if fence is not None and not fence():
+            msg = f'the lease of the job in {self.directory.name} is lost; refusing to write'
+            raise LeaseLostError(msg)
         atomic_write_json(self.state_file, state)
 
     def update(self, **fields: Any) -> dict[str, Any]:
@@ -163,4 +186,11 @@ async def heartbeat_ticker(job: FileJob) -> None:
         job.touch_heartbeat()
 
 
-__all__ = ['HEARTBEAT_STALE_S', 'FileJob', 'heartbeat_ticker']
+__all__ = [
+    'HEARTBEAT_STALE_S',
+    'FileJob',
+    'LeaseLostError',
+    'clear_fence',
+    'heartbeat_ticker',
+    'register_fence',
+]

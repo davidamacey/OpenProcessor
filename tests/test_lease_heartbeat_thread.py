@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from typing import TYPE_CHECKING
 
 import pytest
 from _fake_lease_opensearch import FakeLeaseOpenSearch
@@ -12,6 +13,9 @@ from src.clients import job_lease
 from src.domain.job_lease import Acquired, Busy
 from src.services.curation import lease_heartbeat
 
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.real_lease_io
 
@@ -103,3 +107,24 @@ async def test_unreachable_opensearch_self_fences_before_the_ttl(
     beat.start()
 
     assert beat.lost.wait(5)
+
+
+@pytest.mark.asyncio
+async def test_a_lost_lease_fences_the_jobs_state_writes(
+    fast: FakeLeaseOpenSearch, tmp_path: Path
+) -> None:
+    from src.services.curation.file_job import FileJob, LeaseLostError
+
+    held = await _acquire(fast)
+    job = FileJob(tmp_path / 'job')
+    beat = lease_heartbeat.LeaseHeartbeat(held.lease, job=job, client_factory=lambda: fast)
+    beat.start()
+    job.write({'status': 'running'})
+
+    beat.lost.set()
+
+    with pytest.raises(LeaseLostError):
+        job.update(status='completed')
+    assert job.read()['status'] == 'running'
+    beat.stop()
+    job.update(status='completed')  # the fence is cleared once the holder is done

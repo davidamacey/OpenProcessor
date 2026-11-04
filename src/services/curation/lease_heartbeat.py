@@ -32,14 +32,17 @@ from src.domain.job_lease import (
     FENCE_MARGIN_S,
     HEARTBEAT_TICK_S,
     LEASE_TTL_S,
+    Busy,
     HeldLease,
+    LeaseKind,
     Lost,
     Renewed,
 )
+from src.services.curation.file_job import clear_fence, register_fence
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from src.services.curation.file_job import FileJob
 
@@ -74,6 +77,7 @@ class LeaseHeartbeat:
     def start(self) -> None:
         if self._job is not None:
             self._job.touch_heartbeat()
+            register_fence(self._job.directory, self.may_write)
         ctx = contextvars.copy_context()
         self._thread = threading.Thread(
             target=ctx.run, args=(self._thread_main,), name='lease-heartbeat', daemon=True
@@ -92,6 +96,8 @@ class LeaseHeartbeat:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=HEARTBEAT_TICK_S)
+        if self._job is not None:
+            clear_fence(self._job.directory)
 
     async def confirm(self, client: Any) -> bool:
         """Stop the thread, then renew once on ``client``: ``True`` only when the lease is
@@ -137,3 +143,36 @@ class LeaseHeartbeat:
                 self.last_renew_ok = time.monotonic()
         finally:
             await client.close()
+
+
+async def acquire_heartbeat(
+    client: Any,
+    kind: LeaseKind,
+    scope: str | None,
+    job_id: str,
+    *,
+    job: FileJob | None,
+    busy: Callable[[str | None], Exception],
+) -> LeaseHeartbeat:
+    """Take the lease of a job about to start; the caller starts the heartbeat
+    (:meth:`LeaseHeartbeat.start`) once the job's first state is written.
+
+    Check the family's record-based busy test *before* this call: it is what keeps a
+    pre-lease job (no lease document, fresh heartbeat) busy. Raises ``busy(holder_job_id)`` -- the family's own busy error -- when a live holder
+    exists; any OpenSearch error propagates, so a start with OpenSearch down refuses
+    instead of proceeding without a lease. The caller releases the lease
+    (:meth:`LeaseHeartbeat.release`) when its start step fails; :func:`run_leased` releases
+    it when the run ends.
+    """
+    result = await job_lease.acquire(client, kind, scope, job_id)
+    if isinstance(result, Busy):
+        raise busy(result.job_id)
+    return LeaseHeartbeat(result.lease, job=job)
+
+
+async def run_leased(beat: LeaseHeartbeat, client: Any, run: Awaitable[None]) -> None:
+    """Await ``run``, then release the lease (also when it fails or is cancelled)."""
+    try:
+        await run
+    finally:
+        await beat.release(client)

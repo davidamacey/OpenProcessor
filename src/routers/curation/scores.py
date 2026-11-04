@@ -59,7 +59,7 @@ async def scores_compute(
         )
 
     try:
-        state = scores_job.start_job(opensearch, requested)
+        state = await scores_job.start_job(opensearch, requested)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return state

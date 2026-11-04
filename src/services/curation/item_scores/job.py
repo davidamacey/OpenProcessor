@@ -63,7 +63,9 @@ from src.config.curation_accessors import get_curation_config
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
+from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
 
 
 if TYPE_CHECKING:
@@ -93,10 +95,6 @@ def _state_dir() -> Path:
 
 def _job() -> FileJob:
     return FileJob(_state_dir())
-
-
-def _lock_file() -> Path:
-    return _state_dir() / 'start.lock'
 
 
 @dataclass
@@ -156,34 +154,24 @@ def get_state() -> dict[str, Any]:
     return state.to_dict()
 
 
-def start_job(opensearch: AsyncOpenSearch, scorer_names: list[str]) -> dict[str, Any]:
-    """Write 'running' state synchronously, then schedule the background
-    task. Raises ``RuntimeError`` if a run is already in flight — the
-    router surfaces this as HTTP 409.
+async def start_job(opensearch: AsyncOpenSearch, scorer_names: list[str]) -> dict[str, Any]:
+    """Take the scoring lease, write 'running' state, then schedule the background task.
+    Raises ``RuntimeError`` if a run is already in flight -- the router surfaces this as
+    HTTP 409.
 
-    Deliberately NOT ``async``: the busy-check + state transition to
-    'running' happens before any ``await`` point, so a second call issued
-    immediately after (even from a concurrent request) sees the 'running'
-    state without racing the background task's own progress. That
-    in-process ordering isn't enough on its own though — ``api`` runs
-    under ``--workers=N``, so two calls landing on *different* worker
-    processes at nearly the same instant could both pass ``_is_busy()``
-    before either has written ``'running'``. The
-    :func:`~src.services.curation.job_lock.exclusive_start_lock` makes the
-    whole check-and-claim atomic across processes too, not just within
-    one (2026-09-25 fix — this gap predates the probe job's file-backed
-    rewrite that surfaced it; both now share the same fix).
+    The record-based busy check comes first (a run from before leases has a fresh
+    heartbeat and no lease document); the lease then closes the race between two
+    ``api`` worker processes that both pass it.
     """
-    from src.services.curation.job_lock import exclusive_start_lock
-
-    with exclusive_start_lock(_lock_file()) as acquired:
-        if not acquired:
-            raise RuntimeError('scoring job already in progress')
-        if _is_busy():
-            raise RuntimeError('scoring job already in progress')
+    busy = RuntimeError('scoring job already in progress')
+    if _is_busy():
+        raise busy
+    job_id = uuid.uuid4().hex
+    beat = await acquire_heartbeat(
+        opensearch, LeaseKind.ITEM_SCORES, None, job_id, job=_job(), busy=lambda _holder: busy
+    )
+    try:
         _job().clear_signals()
-
-        job_id = uuid.uuid4().hex
         state = _JobState(
             job_id=job_id,
             status='running',
@@ -191,9 +179,13 @@ def start_job(opensearch: AsyncOpenSearch, scorer_names: list[str]) -> dict[str,
             started_at=time.time(),
         )
         _job().write(state.to_dict())
-        _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
-            run_scoring_job(job_id, opensearch, scorer_names)
-        )
+    except BaseException:
+        await beat.release(opensearch)
+        raise
+    beat.start()
+    _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
+        run_leased(beat, opensearch, run_scoring_job(job_id, opensearch, scorer_names))
+    )
     return state.to_dict()
 
 
