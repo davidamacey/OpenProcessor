@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Response
 
+from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - FastAPI resolves the annotation at runtime
 from src.schemas.train_promote import (
     PromoteJobStatus,
     PromoteRequest,
@@ -36,6 +37,7 @@ async def promote_run(
     payload: PromoteRequest,
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
     response: Response,
+    opensearch: OpenSearchDep,
     wait: Annotated[
         bool,
         Query(
@@ -93,7 +95,9 @@ async def promote_run(
     # Async (default): the validation above already ran, so every 4xx a
     # caller can fix is synchronous; only the build/load/warm-up is a job.
     try:
-        pjob, created = promote_job.claim(run_job_id=job_id, triton_name=plan.triton_name)
+        pjob, created = await promote_job.claim(
+            opensearch, run_job_id=job_id, triton_name=plan.triton_name
+        )
     except promote_job.PromoteJobConflictError as exc:
         raise HTTPException(
             status_code=409,
@@ -108,7 +112,7 @@ async def promote_run(
         async def _work(on_phase: Callable[[str], None]) -> dict[str, Any]:
             return (await execute_promote(plan, payload, on_phase)).model_dump()
 
-        promote_job.start(pjob, _work)
+        promote_job.start(pjob, _work, opensearch)
     else:
         response.status_code = 200  # idempotent: the already-active job
     state = promote_job.read_job(pjob.directory.name)

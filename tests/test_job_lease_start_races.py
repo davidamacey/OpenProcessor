@@ -32,8 +32,8 @@ def _widen_check(module: Any, name: str = '_is_busy') -> None:
     all eight see an idle job and only the lease decides who starts."""
     real = getattr(module, name)
 
-    def slow() -> Any:
-        busy = real()
+    def slow(*args: Any, **kwargs: Any) -> Any:
+        busy = real(*args, **kwargs)
         time.sleep(0.5)
         return busy
 
@@ -133,6 +133,17 @@ async def _start_dataset_import(client: Any) -> str:
     return 'started'
 
 
+async def _start_promote(client: Any) -> str:
+    from src.services.training import promote_job
+
+    _widen_check(promote_job, '_active_for_run')
+    try:
+        _job, created = await promote_job.claim(client, run_job_id='run1', triton_name='m')
+    except promote_job.PromoteJobConflictError:
+        return 'busy'
+    return 'started' if created else 'busy'
+
+
 async def _start_region_job(client: Any, which: str) -> str:
     """The region jobs return a snapshot either way, so a run counts as started when its
     own body ran in this process."""
@@ -171,6 +182,7 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'reprocess': (_start_reprocess, {'OP_REPROCESS_JOBS_DIR': 'reprocess'}),
     'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
     'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
+    'promote': (_start_promote, {'OP_TRAIN_JOBS_DIR': 'train'}),
     'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),
     'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
     'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),

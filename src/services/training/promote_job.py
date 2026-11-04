@@ -15,14 +15,14 @@ file-backed jobs use. Only the process that accepted the POST runs the task.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
-from src.services.curation.file_job import FileJob, heartbeat_ticker
-from src.services.curation.job_lock import exclusive_start_lock
+from src.domain.job_lease import LeaseKind
+from src.services.curation.file_job import FileJob
+from src.services.curation.lease_heartbeat import acquire_heartbeat, hold, run_leased, take
 from src.utils.timeutil import now_iso
 
 
@@ -132,24 +132,30 @@ def _wire(promote_id: str, state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def claim(*, run_job_id: str, triton_name: str) -> tuple[FileJob, bool]:
-    """Claim the per-run singleton. Returns ``(job, created)``: when a promote
-    of this run is already live, that job and ``False``. Raises
-    :class:`PromoteJobConflictError` when the live one targets another name."""
+async def claim(opensearch: Any, *, run_job_id: str, triton_name: str) -> tuple[FileJob, bool]:
+    """Claim the per-run singleton (the ``promote`` lease, scoped to the run). Returns
+    ``(job, created)``: when a promote of this run is already live, that job and ``False``.
+    Raises :class:`PromoteJobConflictError` when the live one targets another name."""
     root = jobs_root()
     root.mkdir(parents=True, exist_ok=True)
-    with exclusive_start_lock(root / 'start.lock') as acquired:
-        active = _active_for_run(run_job_id)
-        if active is not None:
-            promote_id, state = active
-            if state.get('triton_name') != triton_name:
-                raise PromoteJobConflictError(promote_id, str(state.get('triton_name')))
-            return _job(promote_id), False
-        if not acquired:
-            # another process is mid-claim; its job is not visible yet
-            raise PromoteJobConflictError('starting', triton_name)
-        promote_id = f'pm_{datetime.now(UTC):%Y%m%dT%H%M%S}_{uuid.uuid4().hex[:6]}'
-        job = _job(promote_id)
+    active = _active_for_run(run_job_id)
+    if active is not None:
+        promote_id, state = active
+        if state.get('triton_name') != triton_name:
+            raise PromoteJobConflictError(promote_id, str(state.get('triton_name')))
+        return _job(promote_id), False
+    promote_id = f'pm_{datetime.now(UTC):%Y%m%dT%H%M%S}_{uuid.uuid4().hex[:6]}'
+    job = _job(promote_id)
+    beat = await acquire_heartbeat(
+        opensearch,
+        LeaseKind.PROMOTE,
+        run_job_id,
+        promote_id,
+        job=job,
+        # the holder's job record is not visible yet: another process is mid-claim
+        busy=lambda _holder: PromoteJobConflictError('starting', triton_name),
+    )
+    try:
         job.directory.mkdir(parents=True)
         job.clear_signals()
         job.write(
@@ -162,14 +168,24 @@ def claim(*, run_job_id: str, triton_name: str) -> tuple[FileJob, bool]:
             }
         )
         job.touch_heartbeat()
+    except BaseException:
+        await beat.release(opensearch)
+        raise
+    hold(promote_id, beat)
     return job, True
 
 
-def start(job: FileJob, work: Callable[[Callable[[str], None]], Awaitable[dict[str, Any]]]) -> None:
-    """Schedule ``work`` in this process. ``work`` receives a phase callback
-    and returns the JSON-able result; any exception fails the job (an
-    ``HTTPException``'s status is kept in ``error_status``)."""
-    _tasks[job.directory.name] = asyncio.create_task(_run(job, work))
+def start(
+    job: FileJob,
+    work: Callable[[Callable[[str], None]], Awaitable[dict[str, Any]]],
+    opensearch: Any,
+) -> None:
+    """Schedule ``work`` in this process under the lease :func:`claim` took. ``work``
+    receives a phase callback and returns the JSON-able result; any exception fails the
+    job (an ``HTTPException``'s status is kept in ``error_status``)."""
+    beat = take(job.directory.name)
+    beat.start()
+    _tasks[job.directory.name] = asyncio.create_task(run_leased(beat, opensearch, _run(job, work)))
 
 
 _detached: set[asyncio.Task[Any]] = set()
@@ -204,7 +220,6 @@ async def _run(
         job.update(status=phase, updated_at=now_iso())
         job.touch_heartbeat()
 
-    ticker = asyncio.create_task(heartbeat_ticker(job))
     try:
         on_phase('exporting')
         result = await work(on_phase)
@@ -225,9 +240,6 @@ async def _run(
             updated_at=now_iso(),
         )
     finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
         _tasks.pop(job.directory.name, None)
 
 

@@ -227,19 +227,24 @@ def test_train_status_surfaces_the_latest_promote(client, monkeypatch) -> None:
     fake.release.set()
 
 
-def test_a_job_left_active_by_a_dead_process_reads_failed(client, tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_a_job_left_active_by_a_dead_process_reads_failed(
+    client, tmp_path, monkeypatch
+) -> None:
     from src.services.training import promote_job
 
-    job, created = promote_job.claim(run_job_id=RUN, triton_name='pj_model')
+    job, created = await promote_job.claim(object(), run_job_id=RUN, triton_name='pj_model')
     assert created
     old = time.time() - 600
     os.utime(job.heartbeat_file, (old, old))  # process died; heartbeat stale
+    real = time.time
+    monkeypatch.setattr('src.clients.job_lease.time.time', lambda: real() + 600)  # and its lease
 
     body = client.get(f'{BASE}/promote/{RUN}/jobs/{job.directory.name}').json()
     assert body['status'] == 'failed'
     assert 'heartbeat stale' in body['error']
     # and a fresh promote is no longer blocked by it
-    again, created = promote_job.claim(run_job_id=RUN, triton_name='pj_model')
+    again, created = await promote_job.claim(object(), run_job_id=RUN, triton_name='pj_model')
     assert created
     assert again.directory != job.directory
 
