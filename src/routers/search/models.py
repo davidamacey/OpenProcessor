@@ -97,5 +97,5 @@ class OCRSearchResponse(BaseModel):
     results: list[OCRSearchResult] = Field(
         default_factory=list, description='Search results ordered by relevance'
     )
-    total_results: int = Field(..., ge=0, description='Number of results returned')
+    total_results: int = Field(..., ge=0, description='Images matching the query across all pages')
     search_time_ms: float = Field(..., ge=0.0, description='Search execution time in milliseconds')
