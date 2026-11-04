@@ -80,7 +80,7 @@ async def test_undo_refuses_while_another_import_is_live(tmp_path, monkeypatch) 
     other.job.write({'status': 'running'})
     other.job.touch_heartbeat()
     with pytest.raises(runner.ImportBusyError) as busy:
-        runner.claim_undo(store)
+        await runner.claim_undo(object(), store)
     assert busy.value.import_id == other.import_id
     assert store.job.read()['status'] == 'completed'
 
@@ -90,11 +90,11 @@ async def test_undo_claim_marks_the_import_undoing_when_nothing_else_is_live(
     tmp_path, monkeypatch
 ) -> None:
     _h, store = await _completed(tmp_path, monkeypatch)
-    runner.claim_undo(store)
+    await runner.claim_undo(object(), store)
     state = store.job.read()
     assert (state['status'], state['mode']) == ('undoing', 'undo')
     with pytest.raises(runner.ImportNotUndoableError):
-        runner.claim_undo(store)
+        await runner.claim_undo(object(), store)
 
 
 def test_repair_leaves_a_job_that_has_not_ticked_yet(tmp_path: Path) -> None:

@@ -181,7 +181,7 @@ class Harness:
     ) -> tuple[ImportStore, Any]:
         prepared = self.prepare(request)
         assert not prepared.resolved.errors, prepared.resolved.errors
-        store, reused = runner.claim_import(request, prepared)
+        store, reused = await runner.claim_import(self.os, request, prepared)
         assert not reused
         self.last_store = store
         materialize_created_classes(prepared.resolved, self.registry)
@@ -190,7 +190,10 @@ class Harness:
         store.job.update(freeze_test=runner.freeze_default(prepared, request))
         ctx = self.context(store, request, prepared)
         ctx.after_chunk = after_chunk
-        await runner.run_import_job(ctx, store, runner.ordered_entries(prepared.scan.entries))
+        try:
+            await runner.run_import_job(ctx, store, runner.ordered_entries(prepared.scan.entries))
+        finally:
+            await runner.abandon_claim(self.os, store)
         return store, ctx
 
     async def resume(self, store: ImportStore, request: DatasetImportRequest) -> ImportContext:

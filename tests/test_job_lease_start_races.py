@@ -117,6 +117,22 @@ async def _start_assist(client: Any) -> str:
     return 'started'
 
 
+async def _start_dataset_import(client: Any) -> str:
+    from src.services.curation.dataset_import import runner
+    from src.services.curation.dataset_import.store import ImportStore, imports_root
+
+    store = ImportStore(imports_root() / 'imp_20990101T000000_deadbeef')
+    store.job.directory.mkdir(parents=True, exist_ok=True)
+    if not store.job.state_file.exists():
+        store.job.write({'status': 'completed'})
+    _widen_check(runner, 'active_import')
+    try:
+        await runner.claim_undo(client, store)
+    except (runner.ImportBusyError, runner.ImportNotUndoableError):
+        return 'busy'
+    return 'started'
+
+
 async def _start_region_job(client: Any, which: str) -> str:
     """The region jobs return a snapshot either way, so a run counts as started when its
     own body ran in this process."""
@@ -154,6 +170,7 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'embedding_viz': (_start_embedding_viz, {'OP_VIZ_JOBS_DIR': 'viz'}),
     'reprocess': (_start_reprocess, {'OP_REPROCESS_JOBS_DIR': 'reprocess'}),
     'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
+    'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
     'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),
     'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
     'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),

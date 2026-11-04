@@ -170,6 +170,21 @@ async def acquire_heartbeat(
     return LeaseHeartbeat(result.lease, job=job)
 
 
+_HELD: dict[str, LeaseHeartbeat] = {}
+
+
+def hold(key: str, beat: LeaseHeartbeat) -> None:
+    """Remember the lease this process took for ``key`` between a claim and the spawn of
+    its run (a claim and a spawn are separate steps of one request)."""
+    _HELD[key] = beat
+
+
+def take(key: str) -> LeaseHeartbeat:
+    """The lease :func:`hold` remembered for ``key``; ``KeyError`` when the claim was never
+    made in this process (a run must not start without its lease)."""
+    return _HELD.pop(key)
+
+
 async def run_leased(beat: LeaseHeartbeat, client: Any, run: Awaitable[None]) -> None:
     """Await ``run``, then release the lease (also when it fails or is cancelled)."""
     try:
