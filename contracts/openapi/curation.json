@@ -39587,6 +39587,7 @@
             "schema": {
               "default": 0,
               "description": "Offset into the _count-desc cluster list",
+              "maximum": 64535,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
