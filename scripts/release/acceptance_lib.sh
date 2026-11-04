@@ -120,6 +120,17 @@ cleanup_resources() {
             case "$HTTP_CODE" in 200|202|404) ;; *) rc=1 ;; esac
         done <<< "$models"
     fi
+    # throwaway projects of the import and combine phases (listed before they are created)
+    local extra
+    while IFS= read -r extra; do
+        [[ -z "$extra" ]] && continue
+        _delete_extra() {
+            api DELETE "${API_PREFIX}/projects/${extra}?confirm=${extra}&force=true"
+            case "$HTTP_CODE" in 200|202|404) return 0 ;; esac
+            return 1
+        }
+        poll 120 _delete_extra || rc=1
+    done <<< "$(st_get extra_projects)"
     if [[ "$(st_get project_created)" == 1 ]]; then
         # project_busy (409) while a job runs: cancel it and retry until it drains
         _delete_project() {
