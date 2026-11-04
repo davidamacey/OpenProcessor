@@ -10,9 +10,8 @@ from typing import TYPE_CHECKING, Any
 from src.config.curation_accessors import get_curation_config
 from src.core.logging import get_logger
 from src.schemas.curation.config_common import ValidationIssue, ValidationReport
-from src.services.curation.job_lock import exclusive_start_lock
 from src.services.projects import lifecycle
-from src.services.projects.combine import store as job_store
+from src.services.projects.combine import lease, store as job_store
 from src.services.projects.combine.execute import load_plan, persist_plan, run_combine
 from src.services.projects.combine.models import (
     CombineIssue,
@@ -35,8 +34,11 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from src.config.projects import ProjectRecord
     from src.services.curation.dataset_import.store import ImportStore
+    from src.services.curation.lease_heartbeat import LeaseHeartbeat
 
 logger = get_logger(__name__)
 
@@ -159,20 +161,33 @@ async def start(client: Any, request: CombineStartRequest) -> dict[str, str]:
             'started_at': now_iso(),
         }
     )
-    _spawn(client, store, analysis.records, target)
+    beat = await lease.take(client, target, job_id, busy=_not_resumable_busy)
+    _spawn(client, store, analysis.records, target, beat)
     return {'job_id': job_id, 'target': target.slug}
 
 
+def _not_resumable_busy(_holder: str | None) -> Exception:
+    return rejection(409, 'combine_not_resumable', 'the job is already being resumed')
+
+
 def _spawn(
-    client: Any, store: ImportStore, sources: list[ProjectRecord], target: ProjectRecord
+    client: Any,
+    store: ImportStore,
+    sources: list[ProjectRecord],
+    target: ProjectRecord,
+    beat: LeaseHeartbeat,
 ) -> None:
-    task = asyncio.create_task(_run(client, store, sources, target))
+    task = asyncio.create_task(_run(client, store, sources, target, beat))
     _TASKS[store.import_id] = task
     task.add_done_callback(lambda _t: _TASKS.pop(store.import_id, None))
 
 
 async def _run(
-    client: Any, store: ImportStore, sources: list[ProjectRecord], target: ProjectRecord
+    client: Any,
+    store: ImportStore,
+    sources: list[ProjectRecord],
+    target: ProjectRecord,
+    beat: LeaseHeartbeat,
 ) -> None:
     """Run the job, then settle the target: ``active`` on success, ``failed`` on
     a failure; a cancelled or interrupted job leaves it ``building`` so it can
@@ -187,6 +202,20 @@ async def _run(
                 'project.created', target=target.slug, status='active', revision=target.revision
             )
 
+    lease.begin(beat, target)
+    try:
+        await _run_combine(client, store, sources, target, settle)
+    finally:
+        await lease.give_back(client, target, beat)
+
+
+async def _run_combine(
+    client: Any,
+    store: ImportStore,
+    sources: list[ProjectRecord],
+    target: ProjectRecord,
+    settle: Callable[[bool], Awaitable[None]],
+) -> None:
     await run_combine(
         client,
         store=store,
@@ -218,7 +247,7 @@ def cancel(job_id: str) -> dict[str, Any]:
 
 async def resume(client: Any, job_id: str) -> dict[str, Any]:
     """Resume an interrupted or cancelled combine. One worker per job: the
-    claim (the ``queued`` write) is made under the job's start lock, and the
+    claim (the ``queued`` write) is made under the job's ``combine`` lease, and the
     sources go through the same :func:`resolve_sources` gate as a start. A job
     whose worker is still alive in this process is not resumable, stale
     heartbeat or not; across processes the worker that notices a newer claim
@@ -227,46 +256,44 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
     store = job_store.open_job(job_id)
     if store is None:
         raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
-    with exclusive_start_lock(store.directory / 'start.lock') as acquired:
-        if not acquired:
-            raise rejection(409, 'combine_not_resumable', 'the job is already being resumed')
-        running = _TASKS.get(job_id)
-        if running is not None and not running.done():
-            raise rejection(409, 'combine_not_resumable', 'a worker for this job is still running')
-        state = job_state(job_id)
-        if state.get('status') not in job_store.RESUMABLE_STATUSES:
-            raise rejection(
-                409,
-                'combine_not_resumable',
-                f'the job is {state.get("status")}; only an interrupted or cancelled combine '
-                'resumes',
-            )
-        plan = load_plan(store)
-        sources, errors = await resolve_sources(plan.request, ignore_job=job_id)
-        if errors:
-            raise rejection(
-                409,
-                'combine_not_resumable',
-                'a source can no longer be combined',
-                report=report_of(errors),
-            )
-        states = [await source_state(client, r) for r in sources]
-        if compute_preview_sha(plan.request, states) != store.read_request().get('preview_sha'):
-            raise rejection(
-                409,
-                'preview_stale',
-                'a source changed since the preview this combine was started from; '
-                'start a new combine',
-            )
-        target, _seq, _term = await get_record_with_seq(client, state['target'])
-        if target is None or target.status != 'building':
-            raise rejection(
-                409, 'combine_not_resumable', 'the target project is no longer building'
-            )
+    running = _TASKS.get(job_id)
+    if running is not None and not running.done():
+        raise rejection(409, 'combine_not_resumable', 'a worker for this job is still running')
+    state = job_state(job_id)
+    if state.get('status') not in job_store.RESUMABLE_STATUSES:
+        raise rejection(
+            409,
+            'combine_not_resumable',
+            f'the job is {state.get("status")}; only an interrupted or cancelled combine resumes',
+        )
+    plan = load_plan(store)
+    sources, errors = await resolve_sources(plan.request, ignore_job=job_id)
+    if errors:
+        raise rejection(
+            409,
+            'combine_not_resumable',
+            'a source can no longer be combined',
+            report=report_of(errors),
+        )
+    states = [await source_state(client, r) for r in sources]
+    if compute_preview_sha(plan.request, states) != store.read_request().get('preview_sha'):
+        raise rejection(
+            409,
+            'preview_stale',
+            'a source changed since the preview this combine was started from; start a new combine',
+        )
+    target, _seq, _term = await get_record_with_seq(client, state['target'])
+    if target is None or target.status != 'building':
+        raise rejection(409, 'combine_not_resumable', 'the target project is no longer building')
+    beat = await lease.take(client, target, job_id, busy=_not_resumable_busy)
+    try:
         store.job.clear_signals()
         store.job.update(status='queued', error=None, finished_at=None)
         store.job.touch_heartbeat()
-    _spawn(client, store, sources, target)
+    except BaseException:
+        await lease.give_back(client, target, beat)
+        raise
+    _spawn(client, store, sources, target, beat)
     return job_state(job_id)
 
 

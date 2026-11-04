@@ -58,7 +58,10 @@ async def test_a_failed_settle_fails_the_job_instead_of_completing_it(
 
     monkeypatch.setattr(svc.lifecycle, 'finish_building', finish_building)
     store.job.update(status='interrupted')
-    await svc._run(world.fake, store, [world.records['cars-a'], world.records['cars-b']], target)
+    beat = await svc.lease.take(world.fake, target, store.import_id, busy=svc._not_resumable_busy)
+    await svc._run(
+        world.fake, store, [world.records['cars-a'], world.records['cars-b']], target, beat
+    )
     state = store.job.read()
     assert state['status'] == 'failed'
     assert 'could not finish the target' in state['error']

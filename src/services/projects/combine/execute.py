@@ -12,7 +12,6 @@ the sources' current classes, so a resumed run copies what the preview showed.
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import uuid
 from collections import Counter
@@ -26,7 +25,6 @@ from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.dataset_import.mapping import MapTarget, norm_class_name
 from src.services.curation.dataset_import.project_source import class_names_by_id, iter_source_pages
-from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.next_steps import recluster_items
 from src.services.projects.combine import holdout
 from src.services.projects.combine.image_copy import CopyContext, copy_page
@@ -200,7 +198,6 @@ async def run_combine(
     job_id = store.import_id
     claim = uuid.uuid4().hex
     job.touch_heartbeat()
-    ticker = asyncio.create_task(heartbeat_ticker(job))
     try:
         done = store.chunks_done()
         job.update(
@@ -245,9 +242,6 @@ async def run_combine(
                 error = f'{error}; could not fail the target: {settle_exc}'[:300]
         job.update(status='failed', error=error, finished_at=now_iso())
     finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
         _publish(job_id, target.slug, job.read())
     return True
 
