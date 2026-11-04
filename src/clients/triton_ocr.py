@@ -90,6 +90,8 @@ def infer_ocr(
 
     orig_h, orig_w = img_array.shape[:2]
 
+    # `/ocr` follows PaddleOCR DetResizeForTest; the cascade sizes crops for the region
+    # engine (ocr_recognizer.ocr_det_input_size). The default engine profile is 32..960.
     # PP-OCR approach: scale to fit within the limit, then round each side to 32
     ocr_limit_side = 960
     ocr_min_side = 640
