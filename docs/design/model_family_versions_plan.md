@@ -34,7 +34,7 @@ Why, from the runs in section 3:
   knows):
   - `nms=True` (embedded NMS, ONNX `NonMaxSuppression`) for YOLOv5u, v8, v9, 11: output
     `[batch, 300, 6]`, and the detections equal a torchvision-NMS oracle on the raw head
-    exactly (matched fraction 1.0, max score diff 0.0) on `bus.jpg` and `zidane.jpg`.
+    exactly (matched fraction 1.0, max score diff 0.0) on the two Ultralytics sample images.
   - `nms=False` (NMS-free one-to-one head) for YOLO26 and YOLOv10: output `[batch, 300, 6]`.
 - The vendored patch is not needed for any family: what it adds (TensorRT `EfficientNMS_TRT`
   baked into the ONNX) is obsolete. NVIDIA deprecated `EfficientNMS_TRT` in TensorRT 10.12 ("will
@@ -120,7 +120,7 @@ Environments and commands:
 `ultralytics.nn.tasks.torch_safe_load(pt, safe_only=True)`; (3) ONNX exports with the repo's
 settings (`format='onnx', imgsz=640, dynamic=True, simplify=True, device='cpu'`, plus `batch=8`
 where a max batch matters), reading the graph outputs and NMS ops with `onnx`, then running the
-ONNX in onnxruntime at batch 2 on Ultralytics' `bus.jpg` and `zidane.jpg` (letterbox 640, pad 114);
+ONNX in onnxruntime at batch 2 on the two Ultralytics sample images (letterbox 640, pad 114);
 (4) for `nms=True` exports an oracle: torchvision NMS (class-agnostic, conf 0.25, IoU 0.7) over the
 raw-head export of the same model, matched at IoU >= 0.95 with the same class.
 `patched.py` runs the repo's exact YOLO11 end2end call (`export/yolo_formats.py::export_onnx_end2end`
@@ -178,7 +178,7 @@ the original `yolov5n.pt` v7.0:
 `python export.py --weights yolov5n.pt --include onnx --imgsz {640,1280} --device cpu --simplify`
 and `--imgsz 640 --dynamic` (script `artifacts_local/model_versions/scripts/y5_env.sh`). Then the repo's own code ran on
 them in the API image (`openprocessor:0.7.0-rc5`, script `artifacts_local/model_versions/scripts/v5probe.py`):
-`_build_predictor(path, 'yolov5_objectness')` on a crop of `bus.jpg`, and
+`_build_predictor(path, 'yolov5_objectness')` on a crop of an Ultralytics sample image, and
 `apply_ensemble_nms(raw, conf_thres=0.25)` on the raw output.
 
 | ONNX | Output | Metadata | Probe (`yolov5_objectness`) | `apply_ensemble_nms` |
@@ -217,7 +217,7 @@ it, so **on the shipped 8.4.197 a YOLO26 upload is routed to the YOLO11 Efficien
 (8.3.253). That toolchain does **not** refuse YOLO26: 8.3.253 unpickles `yolo26n.pt`, but
 `nms=False` and the default both give the raw `[batch, 84, anchors]` head, `end2end=True` is
 rejected as an unknown argument, and `nms=True` produces `[batch, 300, 6]` with **different,
-fewer detections** (3 and 0 boxes on `bus.jpg`/`zidane.jpg` where every 8.4 release finds 5 and
+fewer detections** (3 and 0 boxes on the two Ultralytics sample images where every 8.4 release finds 5 and
 3; treat as wrong until a COCO check says otherwise).
 A YOLO26 upload therefore builds a silently wrong engine today (or fails in the patch path). The capability
 that is stable across versions is the presence of the one-to-one branch
@@ -369,14 +369,14 @@ functions (not re-implemented calls):
 2. Head kind from capability equals the expected (`one2one` for v10/26, `nms` otherwise).
 3. Production export to ONNX at `batch=8`: single output `[batch, 300, 6]`; `NonMaxSuppression`
    count == 8 for `nms` families, `TopK` present for `one2one` families.
-4. onnxruntime on `bus.jpg` + `zidane.jpg` (Ultralytics assets): for `nms` families the detections
+4. onnxruntime on the two Ultralytics sample images: for `nms` families the detections
    equal a torchvision NMS oracle over the raw-head export (matched fraction 1.0 at IoU >= 0.95,
    same class, score diff < 1e-4) — the probe in this plan already implements that oracle.
 5. Over-batch: run the `batch=8` ONNX at batch 10 and assert the guard (J7) is what prevents it in
    serving; the test documents that images 9-10 come back empty from the graph.
 6. Original YOLOv5 ONNX (exported once by the official repo, checked into `tests/fixtures/` only if
    under ~8 MB, else fetched): `_build_yolov5_objectness_predictor` returns a class name present in
-   the metadata, and `apply_ensemble_nms` returns detections on `bus.jpg` (no fakes).
+   the metadata, and `apply_ensemble_nms` returns detections on an Ultralytics sample image (no fakes).
 7. A pin test: `importlib.metadata.version('ultralytics')` equals the pin in `requirements.txt`
    (catches CI/image drift).
 
@@ -392,7 +392,7 @@ Run under its own compose project name on GPUs 0/2, public COCO val2017 only.
    with TensorRT 11.1; record build time and plan size. Check the TRT log for the
    `NonMaxSuppression` -> INMSLayer mapping.
 2. **Triton load + contract**: Triton metadata shows `output0 [-1, 300, 6]`; `resolve_adapter`
-   picks the fused adapter; `/detect` returns boxes for `bus.jpg`.
+   picks the fused adapter; `/detect` returns boxes for an Ultralytics sample image.
 3. **Detection parity gate** (YOLO11 small, the default): COCO val2017 mAP50-95 of the new
    engine vs the current EfficientNMS engine (same weights, same conf 0.25 / IoU 0.7,
    class-agnostic): |delta| <= 0.3 points; per-image detection-set agreement >= 99 % at IoU 0.95.

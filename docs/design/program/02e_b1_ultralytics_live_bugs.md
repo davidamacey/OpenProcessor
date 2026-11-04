@@ -217,8 +217,8 @@ detects drift after the fact). It is fixed in B1, not left to #368 or B3.
   `[.., N, 5 + nc]` with `nc == len(names)` from the ONNX metadata, at build time, with a message.
 - Red: `tests/test_yolov5_onnx_probe.py` (marker `families`): the real 640 static official export
   predicts a class name present in its metadata (fails today: "Got 1280 Expected 640"); a real
-  `--dynamic` export still works at 1280; `apply_ensemble_nms` returns detections on Ultralytics'
-  `bus.jpg` (no fakes).
+  `--dynamic` export still works at 1280; `apply_ensemble_nms` returns detections on an
+  Ultralytics sample image (no fakes).
 - Control: `tests/curation/test_probe_models.py` (fake onnxruntime) passes.
 
 ### 1E-6 CI job `families` (S)
