@@ -43,6 +43,7 @@ from PIL import Image, ImageOps
 
 from src.config import CurationConfig, get_curation_config
 from src.core.exceptions import RequestRejectedError
+from src.utils.cpu_pool import run_cpu
 
 
 if TYPE_CHECKING:
@@ -348,6 +349,23 @@ class ThumbnailCache:
             self._misses += 1
         return thumb_bytes
 
+    async def get_or_compute_offloaded(
+        self,
+        image_path: Path,
+        bbox_norm: tuple[float, ...] | list[float],
+        size: int = 128,
+    ) -> bytes:
+        """:meth:`get_or_compute` for async handlers: a hit is served in place, a miss
+        decodes on the CPU pool. Concurrent misses for one key may each compute it once
+        (a per-process cache; the last write wins)."""
+        key = (str(image_path), self._normalize_bbox(bbox_norm), int(size))
+        with self._lock:
+            cached: bytes | None = self._cache.get(key)
+            if cached is not None:
+                self._hits += 1
+                return cached
+        return await run_cpu(self.get_or_compute, image_path, bbox_norm, size)
+
     @staticmethod
     def _render_thumbnail(
         image_path: Path,
@@ -432,6 +450,12 @@ async def render_source_image(
     image_path: Path,
     max_dim: int | None = None,
 ) -> bytes:
+    """Render the clean source image as JPEG bytes on the CPU pool (see
+    :func:`_render_source_image`)."""
+    return await run_cpu(_render_source_image, image_path, max_dim)
+
+
+def _render_source_image(image_path: Path, max_dim: int | None) -> bytes:
     """Render the clean source image as JPEG bytes: EXIF-transpose,
     RGB-convert, optionally downscale, re-encode. No box, label or other
     overlay is ever drawn — the frontend draws every box itself from
