@@ -107,10 +107,10 @@ release.
 ## What came after v0.6.0
 
 v0.6.0 is the latest published release (`VERSION` is 0.6.0). Work since then is on the
-`[Unreleased]` list in `CHANGELOG.md`. The next release, v0.7.0, is cut only when the whole
+`[Unreleased]` list in `CHANGELOG.md`. The next release is cut only when the whole
 program is implemented and tested: correctness (B0, B1), jobs off the API on Celery (B2), one
 Ultralytics version (B3), a stateless API (B4) and speed on the final stack (B5), then one
-acceptance run. Platform breadth is v0.8.0. The plan, with the issue map, is in
+acceptance run. Platform breadth comes in the release after that. The plan, with the issue map, is in
 [`design/program/00_index.md`](design/program/00_index.md).
 
 Not in v0.6.0, and still not shipped:
@@ -118,7 +118,7 @@ Not in v0.6.0, and still not shipped:
 - **The full zero-copy GPU pipeline** (issue #40). v0.6.0 ships the measured steps
   (decode once, uint8 inputs to Triton, an FP16 PE image encoder, GPU decode for large
   photos, data-parallel PE encoding, coalesced ingest writes); keeping the decoded
-  frame resident on the GPU across every model is planned for v0.7.0 (B5).
+  frame resident on the GPU across every model is planned for the next release (B5).
 - **The 1M-image scale step.** The scale ladder is a goal, not a claim.
 - Request-driven processing plans (#67), faces and OCR on resident crops (#220) and
   slimmer images (#41). Smaller-GPU engine builds (#42) are in `[Unreleased]`.
