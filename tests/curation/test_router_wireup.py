@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from opensearchpy.exceptions import NotFoundError
 
 from src.services.labeling.vlm_client import VlmIdentity
@@ -402,9 +403,8 @@ def test_human_class_writers_replace_detector_provenance(
 
     fake_opensearch.mget = AsyncMock(side_effect=_fake_mget)
     fake_opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
-    reg = MagicMock()
-    reg.validate_id.return_value = True
-    reg.get.return_value = MagicMock(class_name='gadget')
+    reg = InMemoryRegistry()
+    reg.seed_rows([{'class_id': 3, 'class_name': 'gadget'}])
 
     with patch('src.routers.curation.crops_write.get_class_registry', return_value=reg):
         r = getattr(app_client, method)(url, json=body)
