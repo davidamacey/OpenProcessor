@@ -3,7 +3,7 @@ like its own label, written like a classifier's label; nothing else changes."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -36,20 +36,14 @@ class _Entry:
     group: str | None = None
 
 
-@dataclass
-class _File:
-    classes: list[_Entry] = field(default_factory=list)
-
-
 class _Registry:
-    def __init__(self, *entries: _Entry) -> None:
-        self._file = _File(list(entries))
+    """A registry document snapshot: ``classes`` and ``get``."""
 
-    def load(self) -> _File:
-        return self._file
+    def __init__(self, *entries: _Entry) -> None:
+        self.classes = list(entries)
 
     def get(self, class_id: int) -> _Entry | None:
-        return next((c for c in self._file.classes if c.class_id == class_id), None)
+        return next((c for c in self.classes if c.class_id == class_id), None)
 
 
 def _item(name: str | None, **kw: Any) -> DetectedItem:
