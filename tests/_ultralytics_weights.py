@@ -21,13 +21,26 @@ from pathlib import Path
 ASSETS = 'https://github.com/ultralytics/assets/releases/download/v8.4.0/'
 YOLOV5 = 'https://github.com/ultralytics/yolov5/releases/download/v7.0/'
 
-# file name -> (download url, sha256 prefix). The prefixes are the ones recorded on 2026-11-03; a
-# prefix of at least 8 hex digits is compared, replace with the full digest on the first fetch.
+# file name -> (download url, sha256 or sha256 prefix). The digests are the ones GitHub publishes
+# for the release assets; the original yolov5n.pt asset publishes none, so its 8-digit prefix
+# (recorded 2026-11-03) is pinned until its full digest is taken from a first fetch.
 WEIGHTS: dict[str, tuple[str, str]] = {
-    'yolo26n.pt': (ASSETS + 'yolo26n.pt', '9b09cc8b'),
-    'yolo11n.pt': (ASSETS + 'yolo11n.pt', '0ebbc80d'),
-    'yolov10n.pt': (ASSETS + 'yolov10n.pt', '11287ed0'),
-    'yolov5nu.pt': (ASSETS + 'yolov5nu.pt', '9e9c1be4'),
+    'yolo26n.pt': (
+        ASSETS + 'yolo26n.pt',
+        '9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef',
+    ),
+    'yolo11n.pt': (
+        ASSETS + 'yolo11n.pt',
+        '0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1',
+    ),
+    'yolov10n.pt': (
+        ASSETS + 'yolov10n.pt',
+        '11287ed0735678e7ba1ac2a9b3098c049155b3fde123992e724c1264bcc16b6f',
+    ),
+    'yolov5nu.pt': (
+        ASSETS + 'yolov5nu.pt',
+        '9e9c1be448b0e1b8598975a9abcab9a0fd0e21182eb422cda7f044a0442d0937',
+    ),
     'yolov5n.pt': (YOLOV5 + 'yolov5n.pt', '4f180cf2'),
 }
 
