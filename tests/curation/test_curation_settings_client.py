@@ -160,3 +160,41 @@ async def test_uses_the_fixed_singleton_doc_id(
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+class _FlakyOpenSearch(FakeSettingsOpenSearch):
+    """Fails the first ``get`` with a transport error, then answers."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gets = 0
+
+    async def get(self, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002 - mirrors opensearchpy's kwarg name
+        self.gets += 1
+        if self.gets == 1:
+            raise ConnectionError('opensearch down')
+        return await super().get(index, id, **kw)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_fetch_raises_and_is_not_cached() -> None:
+    client = _FlakyOpenSearch()
+    client.gets = 1  # the seeding write reads back; only later reads fail
+    await update_curation_settings(client, {'cluster': 'umap_hdbscan'})
+    settings_doc._settings_cache.clear()
+    client.gets = 0
+
+    with pytest.raises(ConnectionError):
+        await get_curation_settings(client)
+
+    assert (await get_curation_settings(client))['defaults'] == {'cluster': 'umap_hdbscan'}
+
+
+@pytest.mark.asyncio
+async def test_a_successful_fetch_is_cached_for_the_ttl() -> None:
+    client = _FlakyOpenSearch()
+    client.gets = 1
+    await get_curation_settings(client)
+    await get_curation_settings(client)
+
+    assert client.gets == 2

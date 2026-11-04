@@ -50,6 +50,7 @@ tabulate
 pyyaml
 
 # Structured Logging
+cachetools>=7.2  # Bounded TTL/LRU per-process caches (src/services/curation/, settings_doc.py)
 structlog>=24.1.0  # Structured logging with context and JSON output
 tenacity>=8.2  # Retry/backoff for src/services/labeling/vlm_client.py (VLM HTTP calls)
 

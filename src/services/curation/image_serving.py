@@ -34,11 +34,11 @@ from __future__ import annotations
 
 import io
 import os
-from collections import OrderedDict
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
+from cachetools import LRUCache
 from PIL import Image, ImageOps
 
 from src.config import CurationConfig, get_curation_config
@@ -285,35 +285,6 @@ def source_media_type(path: Path) -> str:
 # =============================================================================
 
 
-# Try cachetools (preferred), fall back to a small thread-safe
-# ``OrderedDict`` LRU. The fallback is enough for unit tests when the
-# package is not installed in a slim test env.
-try:
-    from cachetools import LRUCache as _CachetoolsLRU
-
-    _HAS_CACHETOOLS = True
-except ImportError:  # pragma: no cover - fallback path
-    _HAS_CACHETOOLS = False
-
-    class _CachetoolsLRU(OrderedDict):  # type: ignore[no-redef]
-        """Tiny stand-in mimicking ``cachetools.LRUCache`` semantics."""
-
-        def __init__(self, maxsize: int) -> None:
-            super().__init__()
-            self.maxsize = maxsize
-
-        def __getitem__(self, key: Any) -> Any:
-            value = super().__getitem__(key)
-            self.move_to_end(key)
-            return value
-
-        def __setitem__(self, key: Any, value: Any) -> None:
-            super().__setitem__(key, value)
-            self.move_to_end(key)
-            while len(self) > self.maxsize:
-                self.popitem(last=False)
-
-
 THUMBNAIL_CACHE_MAX_ENTRIES = 2000  # ~50MB at 128x128 JPEG q=85.
 
 
@@ -326,7 +297,7 @@ class ThumbnailCache:
     """
 
     def __init__(self, maxsize: int = THUMBNAIL_CACHE_MAX_ENTRIES) -> None:
-        self._cache: Any = _CachetoolsLRU(maxsize=maxsize)
+        self._cache: Any = LRUCache(maxsize=maxsize)
         self._lock = Lock()
         self._hits = 0
         self._misses = 0
@@ -362,10 +333,7 @@ class ThumbnailCache:
         """
         key = (str(image_path), self._normalize_bbox(bbox_norm), int(size))
         with self._lock:
-            cached = self._cache.get(key) if _HAS_CACHETOOLS else None
-            if cached is None and not _HAS_CACHETOOLS and key in self._cache:
-                # OrderedDict fallback path — use ``in`` instead of get.
-                cached = self._cache[key]
+            cached = self._cache.get(key)
             if cached is not None:
                 self._hits += 1
                 typed: bytes = cached

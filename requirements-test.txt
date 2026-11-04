@@ -54,6 +54,7 @@ pyyaml
 requests
 
 # src/core/logging.py (imported by src/main.py)
+cachetools>=7.2
 structlog>=24.1.0
 
 # src/clients/opensearch/client.py (imported transitively via src/clients/__init__.py
