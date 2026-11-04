@@ -33,6 +33,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+import job_claim
 import trainer_kwargs
 from campaign import maybe_handle_campaign, write_quant_bakeoff_job
 from dataset_prep import copy_class_remap_to_weights_dir, prepare_dataset, read_class_remap
@@ -120,7 +121,7 @@ def _finalize_run(spec: JobSpec, state: StatusState, model: Any, data_yaml_path:
     )
 
 
-def run_job(spec: JobSpec) -> None:
+def run_job(spec: JobSpec, claim_generation: int = 1) -> None:
     """Process a single job end-to-end.
 
     Updates ``status.json`` and ``run.log`` throughout, writes the manifest
@@ -140,7 +141,10 @@ def run_job(spec: JobSpec) -> None:
 
     stop_hb = threading.Event()
     hb_thread = threading.Thread(
-        target=_heartbeat_loop, args=(stop_hb, state, spec.status_path), daemon=True
+        target=_heartbeat_loop,
+        args=(stop_hb, state, spec.status_path),
+        kwargs={'superseded': lambda: job_claim.superseded(spec.job_path, claim_generation)},
+        daemon=True,
     )
     hb_thread.start()
 
@@ -269,16 +273,24 @@ def process_one(jobs_dir: Path) -> bool:
     pending = list_pending_jobs(jobs_dir)
     if not pending:
         return False
-    job_path = pending[0]
-    try:
-        spec = parse_and_validate_job(job_path)
-    except Exception as exc:  # any parse failure is a job rejection
-        logger.exception('invalid job', path=str(job_path))
-        reject_job(job_path, exc)
+    for job_path in pending:
+        generation = job_claim.claim(job_path)
+        if generation is None:
+            continue  # another replica runs it (or is reclaiming it)
+        try:
+            try:
+                spec = parse_and_validate_job(job_path)
+            except Exception as exc:  # any parse failure is a job rejection
+                logger.exception('invalid job', path=str(job_path))
+                reject_job(job_path, exc)
+                return True
+            logger.info('running job', job_id=spec.job_id, claim_generation=generation)
+            run_job(spec, generation)
+        finally:
+            if not job_claim.superseded(job_path, generation):
+                job_claim.release(job_path)
         return True
-    logger.info('running job', job_id=spec.job_id)
-    run_job(spec)
-    return True
+    return False
 
 
 def watch_loop(jobs_dir: Path) -> None:

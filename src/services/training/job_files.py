@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.config.env import env_path
-from src.utils.atomic_write import atomic_write_json
+from src.utils.atomic_write import atomic_create_bytes, atomic_write_json
 
 
 if TYPE_CHECKING:
@@ -101,6 +101,17 @@ async def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     def _do() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, payload, indent=2, sort_keys=True)
+
+    await asyncio.to_thread(_do)
+
+
+async def _create_json(path: Path, payload: dict[str, Any]) -> None:
+    """Create ``path`` with ``payload`` only if it does not exist; ``FileExistsError`` when a
+    concurrent submit of the same job id won."""
+
+    def _do() -> None:
+        text = json.dumps(payload, default=str, indent=2, sort_keys=True)
+        atomic_create_bytes(path, text.encode('utf-8'))
 
     await asyncio.to_thread(_do)
 
