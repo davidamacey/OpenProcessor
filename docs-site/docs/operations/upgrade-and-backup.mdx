@@ -186,6 +186,12 @@ Rollback is not an `openprocessor` subcommand; call the installer script:
 ./setup-openprocessor.sh --rollback
 ```
 
+Before it restores any file it writes every project's class registry back to
+`class_registry.json` (`openprocessor curation migrate-registry --all --reverse`),
+so the older version sees every class, including the ones added after the
+0.7.0 migration. Without a running OpenSearch it says so and prints the command
+to run by hand.
+
 It restores the newest backup of a **different version** than the one
 installed and re-pins that version's images. Backups made by a same-version
 re-run or a repair are skipped. The files it replaces are kept in
@@ -193,6 +199,19 @@ re-run or a repair are skipped. The files it replaces are kept in
 not restore OpenSearch data. It restarts the stack unless you add `--no-start`; if the Triton image changed,
 rebuild engines with `./openprocessor models install`. If you also need the data from before the
 upgrade, restore your data backup (below).
+
+## The class registry moves to OpenSearch (0.7.0)
+
+Since 0.7.0 each project's class registry is an OpenSearch document, not
+`class_registry.json`. `upgrade` and `repair` of an existing install migrate every
+project once the stack is healthy: a dry-run report first, then the migration, both
+saved under `.install/registry_migration/`. Every class id is kept and the file is
+renamed `class_registry.json.migrated` (never deleted). If the migration fails the
+installer exits 8 and names the report; until it passes, class routes answer
+`409 registry_not_migrated` (inference keeps working). A checkout upgrade
+(`git pull`, `make up`) must run `./openprocessor curation migrate-registry --all`
+itself. Per-write backups of the registry file (`class_registry.<timestamp>.json`) no
+longer exist: back up OpenSearch, and every export carries its own `class_registry.json`.
 
 ## What lives where
 

@@ -51,10 +51,13 @@ omits that prefix. A project can copy another's settings at creation
 
 ## 2. Classes
 
-Each project has its own class registry, a JSON file under its data
-directory. Start from zero with `POST /classes` (see the
+Each project has its own class registry, one OpenSearch document written with
+optimistic concurrency (two users adding classes at once never lose one). Start
+from zero with `POST /classes` (see the
 [Quick start](../getting-started/quick-start.mdx)), copy
-`data/class_registry.example.json` (a small warehouse example) and edit it,
+`data/class_registry.example.json` (a small warehouse example) to the project's
+`class_registry.json`, edit it and load it with
+`./openprocessor curation migrate-registry --project $P`,
 seed every class a detector knows with
 `scripts/curation/seed_class_registry.py --project $P --model <detector.onnx>`
 so class ids can't drift from the model's order, or let a

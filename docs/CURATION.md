@@ -78,7 +78,16 @@ endpoints are immutable revisions, and activation is a separate step.
 ## Class registry and class identity
 
 Class identity is the name, never the index. Anything that crosses a boundary (import,
-combine, export, train, promote) pairs classes by name. Manage classes in
+combine, export, train, promote) pairs classes by name.
+
+A project's class registry is one OpenSearch document, written with optimistic concurrency, so
+concurrent class writes never lose a class or give two classes one id. Four errors come from it:
+`409 registry_not_migrated` (the project still has a 0.6.x `class_registry.json` and no document;
+run `./openprocessor curation migrate-registry --project <slug>`, or `--all`, which `upgrade` and
+`repair` already run), `409 registry_full` (the 10,000-class bound), `409 registry_conflict` (five
+lost races in a row; retry) and the unchanged `409` on a duplicate class name. Inference routes and
+other projects are not affected by an unmigrated project. `class_registry.json` is now only an
+export snapshot and what a rollback writes back. Manage classes in
 [Projects](../docs-site/docs/guides/projects.mdx) and the
 [Cropwright classes page](../docs-site/docs/cropwright/user-guide/classes.md). The
 rule is in [`ARCHITECTURE.md`](ARCHITECTURE.md) and
