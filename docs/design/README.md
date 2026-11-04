@@ -56,6 +56,7 @@ the master plan; execute one wave at a time from the batch files it links.
 | [research_gpu_pipeline_plan.md](research_gpu_pipeline_plan.md) | plan (research; after B5) | Where image-processing time goes per stage, a hypothesis register (batched GPU decode, per-card replicas, native resident-frame backend, faces in-graph, a last INT8 round), experiments in three GPU windows, the target architecture and stop rules |
 | [research_clustering_plan.md](research_clustering_plan.md) | plan (research after the tag; seams for the v0.7.0 rebuild) | Clustering for curation and the visual judge: measured state, literature and industry review, candidate methods, the versioned-partition seams (tables, job kinds, OpenSearch fields, config kind, routes), production design, lanes, owner questions; absorbs the #346 and #406 plans |
 | [research_clustering_plan_b_protocol.md](research_clustering_plan_b_protocol.md) | plan (research; R0 any time, the rest after the tag) | How the clustering and judge claims are measured: tracked prototype code with pinned venvs, data and set P sampling, metrics and bars, the calibrated judge and blind human re-judge, experiments CL-0 to CL-9, GPU etiquette, stop rules, failure register |
+| [research_embeddings_search_plan.md](research_embeddings_search_plan.md) | plan (research after the tag; its seams in v0.7.0 B2/B4) | Embeddings and semantic search: measured baseline, encoder candidates (#347), the embedding registry and dual-field swap seams for the rebuild (#365), frame search and group-by-image (#435, #436), kNN settings at 1M real vectors, prototype protocol, bars and stop rules |
 | [v080_platform_breadth_plan.md](v080_platform_breadth_plan.md) | plan (v0.8.0, not started) | Platform breadth after v0.7.0: COCO segmentation import, search by image, model-family training, API authentication, a second segmenter, video files as a source, the wheel example and the embedding swap, in waves with a test and GPU budget |
 
 ## Per-issue plans (published as gists on the issues)
@@ -67,7 +68,6 @@ closes.
 | Doc | Issue | What it is |
 |---|---|---|
 | [issue-42-plan.md](issue_plans/issue-42-plan.md) | #42 | Smaller-workspace TensorRT builds and 12 GB GPU guidance |
-| [issue-347-plan.md](issue_plans/issue-347-plan.md) | #347 | Evaluate a second public embedding model for similarity and text search (the earlier protocol is [`docs/research/embedding_model_eval_plan.md`](../research/embedding_model_eval_plan.md)) |
 | [issue-348-plan.md](issue_plans/issue-348-plan.md) | #348 | Spatial scene discovery and photogrammetry: feasibility study and staged plan |
 | [issue-398-plan.md](issue_plans/issue-398-plan.md) | #398 | Detector-class roots with a hold-back guard as the auto-label loop partition |
 | [issue-400-plan.md](issue_plans/issue-400-plan.md) | #400 | Attribute-signal layer for clustering |
