@@ -25,6 +25,7 @@ from prometheus_client import REGISTRY
 from prometheus_client.metrics import MetricWrapperBase
 
 from curation.ingest_fakes import _jpeg_bytes, _make_service
+from curation.region_cascade_helpers import class_group_answer
 from curation.test_vlm_labeler import _fake_client, _make_chat_response
 from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
@@ -357,7 +358,7 @@ class TestWorkerPipelineMetrics:
             segmenter=RegionCandidate(bbox_norm=(0.4, 0.45, 0.5, 0.5), score=0.8, source='sam3'),
             reply=_accept(),
             visible=True,
-            class_group=lambda _name: 'group_a',
+            class_group=class_group_answer('group_a'),
             profile_overrides={'secondary_shape_groups': frozenset({'group_a'})},
         )
         assert _sample('op_region_segmenter_requests_total', outcome='hit') >= hit + 1
@@ -385,7 +386,7 @@ class TestWorkerPipelineMetrics:
             segmenter=None,
             reply=_accept(),
             visible=True,
-            class_group=lambda _name: 'group_a',
+            class_group=class_group_answer('group_a'),
             profile_overrides={'secondary_shape_groups': frozenset({'group_a'})},
         )
         assert _sample('op_region_segmenter_requests_total', outcome='miss') >= miss + 1

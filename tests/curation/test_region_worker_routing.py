@@ -8,7 +8,14 @@ from unittest.mock import MagicMock
 import pytest
 
 import scripts.curation.worker.state as worker_state
-from curation.region_cascade_helpers import _accept, _drive_worker, _FakeOpenSearch, _item, _profile
+from curation.region_cascade_helpers import (
+    _accept,
+    _drive_worker,
+    _FakeOpenSearch,
+    _item,
+    _profile,
+    class_group_answer,
+)
 from scripts.curation.worker.client import SegmenterRequestFailed
 from src.config import get_region_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
@@ -127,7 +134,7 @@ class TestRouting:
             segmenter=sam_cand,
             reply=_accept(),
             visible=True,
-            class_group=lambda _name: 'group_a',
+            class_group=class_group_answer('group_a'),
             profile_overrides={'secondary_shape_groups': frozenset({'group_a'})},
         )
         mocks['primary'].detect_batch_multi.assert_not_awaited()
@@ -324,31 +331,35 @@ class TestIsSecondaryShape:
     (class_name -> group), not the dead ``_ItemTask.group`` field nothing
     ever wrote or mapped on the item doc."""
 
-    def test_explicit_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.asyncio
+    async def test_explicit_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for grp in worker_state.region_profile().secondary_shape_groups:
-            monkeypatch.setattr(worker_state, '_class_group', lambda _name, grp=grp: grp)
-            assert worker_state._is_secondary_shape(_make_task(class_name='some-class'))
+            monkeypatch.setattr(worker_state, '_class_group', class_group_answer(grp))
+            assert await worker_state._is_secondary_shape(_make_task(class_name='some-class'), None)
 
-    def test_non_secondary_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.asyncio
+    async def test_non_secondary_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for grp in ('cars', 'sportycars', 'exotics'):
-            monkeypatch.setattr(worker_state, '_class_group', lambda _name, grp=grp: grp)
-            assert not worker_state._is_secondary_shape(_make_task(class_name='audi'))
+            monkeypatch.setattr(worker_state, '_class_group', class_group_answer(grp))
+            assert not await worker_state._is_secondary_shape(_make_task(class_name='audi'), None)
 
-    def test_no_registry_group_is_never_secondary_shape(
+    @pytest.mark.asyncio
+    async def test_no_registry_group_is_never_secondary_shape(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Class not in the registry (no group resolves) -- there is no
         # private-naming-convention fallback; a group-less item is simply
         # not routed to the secondary-shape path.
-        monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
+        monkeypatch.setattr(worker_state, '_class_group', class_group_answer(None))
         t = _make_task(class_name='class_b')
-        assert not worker_state._is_secondary_shape(t)
+        assert not await worker_state._is_secondary_shape(t, None)
 
-    def test_registry_group_takes_priority_over_class_name(
+    @pytest.mark.asyncio
+    async def test_registry_group_takes_priority_over_class_name(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The registry's group answer is the only source of truth --
         the class name itself is never inspected."""
-        monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'cars')
+        monkeypatch.setattr(worker_state, '_class_group', class_group_answer('cars'))
         t = _make_task(class_name='class_b')
-        assert not worker_state._is_secondary_shape(t)
+        assert not await worker_state._is_secondary_shape(t, None)

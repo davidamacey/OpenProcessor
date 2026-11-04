@@ -88,6 +88,15 @@ def _combined(**over: Any) -> dict[str, Any]:
 _BOX_KEYS = frozenset({'region_bbox_correct', 'region_text', 'region_confidence'})
 
 
+def class_group_answer(group: str | None = None) -> Any:
+    """An async stand-in for the worker's ``_class_group`` answering ``group`` for every class."""
+
+    async def _answer(_opensearch: Any, _class_name: str) -> str | None:
+        return group
+
+    return _answer
+
+
 def _capture_signal_handler(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     handlers: list[Any] = []
 
@@ -332,16 +341,11 @@ async def _drive_worker(
     )
     vlm_cls = MagicMock(return_value=vlm)
     monkeypatch.setattr(runner_mod, 'build_vlm_labeler', vlm_cls)
-    # Registry load is best-effort; keep it out of the test.
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.ClassRegistry',
-        MagicMock(side_effect=RuntimeError('no registry in test')),
-    )
     # Stage A resolves the class group through the process-wide registry
     # singleton; without this the test depends on another test having
     # loaded it first.
     monkeypatch.setattr(
-        'scripts.curation.worker.state._class_group', class_group or (lambda _name: None)
+        'scripts.curation.worker.state._class_group', class_group or class_group_answer()
     )
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')

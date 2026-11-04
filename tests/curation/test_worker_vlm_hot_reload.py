@@ -451,6 +451,7 @@ async def test_the_swap_pins_the_registry_together_with_the_project_store() -> N
             slug='alpha',
             store=store,
             registry=registry,
+            opensearch=client,
             pool=MagicMock(),
             args=MagicMock(segmenter_url='', vlm_url=''),
             want=current_want(store, registry),

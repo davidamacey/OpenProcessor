@@ -32,6 +32,10 @@ if TYPE_CHECKING:
     from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 
+async def _no_class_group(_opensearch: Any, _class_name: str) -> None:
+    return None
+
+
 def _capture_signal_handler(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     handlers: list[Any] = []
 
@@ -126,7 +130,7 @@ async def run_region_worker(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
     monkeypatch.setattr(runner_mod, 'build_vlm_labeler', MagicMock(return_value=labeler))
-    monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
+    monkeypatch.setattr('scripts.curation.worker.state._class_group', _no_class_group)
 
     args = parse_args(
         [
