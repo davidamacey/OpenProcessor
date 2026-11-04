@@ -15,7 +15,7 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | Script | Purpose | Output |
 |--------|---------|--------|
 | `export_models.py` | YOLO11 object detection with end2end NMS | TensorRT engine |
-| `export_yolo26.py` | YOLO26 (NMS-free, single output tensor), stock Ultralytics toolchain | ONNX + TensorRT engine |
+| `export_yolo26.py` | NMS-free heads (YOLO26, YOLOv10): exported with `nms=False`, one `[batch, 300, 6]` output tensor; anything else is refused | ONNX + TensorRT engine |
 | `export_scrfd.py` | SCRFD-10G face detection + landmarks | TensorRT engine |
 | `export_face_recognition.py` | ArcFace face embeddings | TensorRT engine |
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
@@ -30,7 +30,7 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
 | `download_paddleocr.py` | Download PP-OCRv5 models | ONNX models |
 | `download_pytorch_models.py` | Download YOLO11 PyTorch models | PyTorch weights |
-| `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue as job files under `/jobs/model_export`, then loads the engines into Triton | task status files |
+| `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue as job files under `/jobs/model_export`, then loads the engines into Triton. It routes by head kind: a head with `one2one_cv2` (YOLO26, YOLOv10) goes to `export_yolo26.py`, every other head to `export_models.py`; a job queued by an older version has no head kind and fails with "re-upload the model" | task status files |
 
 ## Model Directory Structure
 
