@@ -24,7 +24,8 @@ import asyncio
 from typing import Any
 
 from src.core.logging import get_logger
-from src.services.curation.job_lock import exclusive_start_lock
+from src.domain.job_lease import LeaseKind
+from src.services.curation.lease_heartbeat import leased
 from src.services.projects.vlm_default import pin_legacy_vlm
 
 
@@ -60,47 +61,58 @@ async def _ensure_active_region_class(client: Any) -> int | None:
     return ensure_region_class()
 
 
-async def repair_bound_project(client: Any, slug: str, lock_file: Any, items_index: str) -> None:
-    """Repair the bound project unless another process already holds its
-    lock. Logs a summary at info only when rows were repaired (warning on a
-    failed step, debug otherwise); a failed step is logged and left for the
-    next start."""
-    with exclusive_start_lock(lock_file) as acquired:
-        if not acquired:
-            return
-        summary: dict[str, Any] = {}
-        steps = (
-            ('region_class_id', 'region_class_error', lambda: _ensure_active_region_class(client)),
-            ('vlm_pinned', 'vlm_pin_error', lambda: pin_legacy_vlm(client)),
-            (
-                'embedded_state_backfilled',
-                'embedded_state_error',
-                lambda: _backfill_with_retry(client, items_index),
-            ),
-        )
-        for key, error_key, step in steps:
-            try:
-                summary[key] = await step()
-            except Exception as exc:
-                summary[error_key] = str(exc)
-        if any(k.endswith('_error') for k in summary):
-            level = logger.warning
-        elif summary.get('embedded_state_backfilled') or summary.get('vlm_pinned'):
-            level = logger.info
-        else:
-            # Nothing to repair: a worker that starts after the lock is
-            # released re-checks and must not repeat the line per project.
-            level = logger.debug
-        level('legacy_project_repair', project=slug, **summary)
+class _HeldElsewhereError(Exception):
+    """Another process holds the project's repair lease."""
+
+
+async def repair_bound_project(client: Any, slug: str, items_index: str) -> None:
+    """Repair the bound project unless another process already holds its ``legacy_repair``
+    lease (32 workers start at once: one wins, the rest skip). Logs a summary at info only
+    when rows were repaired (warning on a failed step, debug otherwise); a failed step is
+    logged and left for the next start."""
+    try:
+        async with leased(
+            client,
+            LeaseKind.LEGACY_REPAIR,
+            None,
+            f'repair-{slug}',
+            busy=lambda _holder: _HeldElsewhereError(),
+        ):
+            await _repair_steps(client, slug, items_index)
+    except _HeldElsewhereError:
+        return
+
+
+async def _repair_steps(client: Any, slug: str, items_index: str) -> None:
+    summary: dict[str, Any] = {}
+    steps = (
+        ('region_class_id', 'region_class_error', lambda: _ensure_active_region_class(client)),
+        ('vlm_pinned', 'vlm_pin_error', lambda: pin_legacy_vlm(client)),
+        (
+            'embedded_state_backfilled',
+            'embedded_state_error',
+            lambda: _backfill_with_retry(client, items_index),
+        ),
+    )
+    for key, error_key, step in steps:
+        try:
+            summary[key] = await step()
+        except Exception as exc:
+            summary[error_key] = str(exc)
+    if any(k.endswith('_error') for k in summary):
+        level = logger.warning
+    elif summary.get('embedded_state_backfilled') or summary.get('vlm_pinned'):
+        level = logger.info
+    else:
+        # Nothing to repair: a worker that starts after the lease is released re-checks and
+        # must not repeat the line per project.
+        level = logger.debug
+    level('legacy_project_repair', project=slug, **summary)
 
 
 async def repair_legacy_projects(client: Any) -> None:
     from src.config import get_curation_config
-    from src.config.project_context import current_project
     from src.services.projects.bootstrap import for_each_project
 
     for slug in for_each_project():
-        state_dir = current_project().record.resources.project_state_dir
-        await repair_bound_project(
-            client, slug, state_dir / 'legacy_repair.lock', get_curation_config().items_index
-        )
+        await repair_bound_project(client, slug, get_curation_config().items_index)

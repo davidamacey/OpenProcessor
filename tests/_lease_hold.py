@@ -14,7 +14,7 @@ from src.domain.job_lease import Acquired
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import AsyncIterator, Iterator
 
 
 @contextlib.contextmanager
@@ -25,3 +25,16 @@ def held(kind: str, scope: str | None = None, job_id: str = 'held-by-test') -> I
         yield
     finally:
         asyncio.run(job_lease.release(object(), result.lease))  # type: ignore[arg-type]
+
+
+@contextlib.asynccontextmanager
+async def aheld(
+    kind: str, scope: str | None = None, job_id: str = 'held-by-test'
+) -> AsyncIterator[None]:
+    """:func:`held` for an async test."""
+    result = await job_lease.acquire(object(), kind, scope, job_id)  # type: ignore[arg-type]
+    assert isinstance(result, Acquired), result
+    try:
+        yield
+    finally:
+        await job_lease.release(object(), result.lease)  # type: ignore[arg-type]
