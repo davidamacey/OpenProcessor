@@ -43,6 +43,8 @@ EXPORT_SCRIPT = EXPORT_DIR / 'export_models.py'
 EXPORT_SCRIPT_Y26 = EXPORT_DIR / 'export_yolo26.py'
 POLL_INTERVAL_S = 2.0
 HEARTBEAT_INTERVAL_S = 2.0
+# A claimed task whose own heartbeat is older than this was left by a dead worker.
+TASK_STALE_S = 30.0
 # A TensorRT build of a large detector takes minutes; hours means the build is hung.
 EXPORT_TIMEOUT_S = 4 * 3600.0
 # A task file the API wrote this recently may still be waiting for its job file.
@@ -61,10 +63,31 @@ def write_heartbeat() -> None:
     beat.write_text(str(time.time()))
 
 
+# The task this worker is exporting now, so its heartbeat thread can mark that claim alive.
+_running_task: str | None = None
+
+
+def _task_heartbeat(task_id: str) -> Path:
+    return store.claimed_dir() / f'{task_id}.heartbeat'
+
+
+def _task_is_alive(task_id: str) -> bool:
+    """A claimed job whose per-task heartbeat is fresh belongs to a running worker (maybe a
+    sibling replica); a missing or old one belongs to a dead worker."""
+    try:
+        age = time.time() - _task_heartbeat(task_id).stat().st_mtime
+    except OSError:
+        return False
+    return age <= TASK_STALE_S
+
+
 def _heartbeat_loop(stop: threading.Event) -> None:
     while not stop.is_set():
         with contextlib.suppress(OSError):
             write_heartbeat()
+            task_id = _running_task
+            if task_id is not None:
+                _task_heartbeat(task_id).touch()
         stop.wait(HEARTBEAT_INTERVAL_S)
 
 
@@ -101,11 +124,12 @@ def reconcile_claimed() -> int:
     reconciled = 0
     if claimed.is_dir():
         for path in sorted(claimed.glob('*.job.json')):
-            _fail(
-                path.name.removesuffix('.job.json'),
-                'the model-export worker stopped while this export was running',
-            )
+            task_id = path.name.removesuffix('.job.json')
+            if _task_is_alive(task_id):
+                continue  # another worker is exporting it right now
+            _fail(task_id, 'the model-export worker stopped while this export was running')
             path.unlink(missing_ok=True)
+            _task_heartbeat(task_id).unlink(missing_ok=True)
             reconciled += 1
     store.load_tasks_from_disk()
     queued = store.queue_dir()
@@ -208,9 +232,12 @@ def _phase_of(line: str) -> tuple[str, float, str] | None:
 
 def run_job(job: dict[str, Any]) -> None:
     """Run one claimed job to a terminal task status and release the claim."""
+    global _running_task  # noqa: PLW0603 - the one task this worker runs, read by its heartbeat thread
     task_id = job['task_id']
     claim = store.claimed_dir() / f'{task_id}.job.json'
     started = perf_counter()
+    _task_heartbeat(task_id).touch()
+    _running_task = task_id
     try:
         task = store.get_export_task(task_id)
         if task is None:
@@ -221,7 +248,9 @@ def run_job(job: dict[str, Any]) -> None:
         logger.exception('[%s] export failed', task_id)
         _fail(task_id, str(exc), started)
     finally:
+        _running_task = None
         claim.unlink(missing_ok=True)
+        _task_heartbeat(task_id).unlink(missing_ok=True)
 
 
 def _export(task_id: str, task: dict[str, Any], job: dict[str, Any], started: float) -> None:
