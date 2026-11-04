@@ -195,3 +195,32 @@ async def test_forward_after_reverse_reseeds_from_the_file_with_ids_preserved(
     assert [c.class_id for c in doc.classes] == [0, 2, 5, 7]
     assert doc.next_class_id == 8
     assert doc.reversed_to_file_at is None
+
+
+async def test_the_untouched_empty_document_of_a_new_project_is_replaced_by_a_copied_in_file(
+    tmp_path: Path,
+) -> None:
+    """The worked example: a project is created (empty document), the example file is copied in."""
+    record, client = _record(tmp_path), FakeDocOpenSearch()
+    await _snapshot(record, client)  # first use creates the empty document
+    path = _write_file(record)
+
+    report = await migrate.migrate_project(client, record, dry_run=False, reverse=False)
+
+    assert report['action'] == 'reseed_empty'
+    assert not path.exists()
+    assert [c.class_id for c in (await _snapshot(record, client)).classes] == [0, 2, 5]
+
+
+async def test_a_document_that_has_been_written_to_is_never_replaced_by_a_copied_in_file(
+    tmp_path: Path,
+) -> None:
+    record, client = _record(tmp_path), FakeDocOpenSearch()
+    with bind_project(record):
+        await get_class_registry().add_class(client, 'mine')
+        await get_class_registry().set_deprecated(client, 0, True)  # emptied by use, not untouched
+    _write_file(record)
+
+    report = await migrate.migrate_project(client, record, dry_run=False, reverse=False)
+
+    assert report['action'] == 'conflict'

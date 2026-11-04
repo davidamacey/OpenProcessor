@@ -14,7 +14,8 @@ snapshot only. A project that still has the file and no document answers 409
 Forward, per project: no file means nothing to do. No document: the document is created from the
 file with every class id preserved and ``next_class_id = max(id) + 1``. A document equal to the
 file only gets the file renamed. A document written back to the file by an earlier ``--reverse``
-(the file is then the authority of the downgrade period) is replaced from the file. Any other
+(the file is then the authority of the downgrade period) is replaced from the file, and so is the
+still-untouched empty document of a new project when a file is copied in. Any other
 difference is an error for that project and nothing is written for it. The file is renamed to
 ``class_registry.json.migrated``, never deleted.
 
@@ -128,6 +129,10 @@ async def _forward(client: Any, path: Path, *, dry_run: bool, report: dict[str, 
         report['action'] = 'rename_only'
     elif doc.reversed_to_file_at:
         report['action'] = 'reseed_after_reverse'
+    elif not doc.classes and doc.registry_revision == 0:
+        # The empty document a new project gets on first use, never written since: a file
+        # copied in afterwards (the worked example) is the registry to load.
+        report['action'] = 'reseed_empty'
     else:
         report['action'] = 'conflict'
         report['error'] = (
@@ -139,7 +144,7 @@ async def _forward(client: Any, path: Path, *, dry_run: bool, report: dict[str, 
         return
     if dry_run:
         return
-    if report['action'] == 'reseed_after_reverse':
+    if report['action'] in ('reseed_after_reverse', 'reseed_empty'):
         await replace_from_file(client, store, file_doc)
     report['archived_to'] = str(_rename_to_migrated(path))
     report['applied'] = True
