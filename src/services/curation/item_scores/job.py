@@ -202,12 +202,16 @@ async def bulk_write_result(
     result: ScoreResult,
     *,
     chunk_size: int = 500,
-) -> None:
+) -> int:
+    """Write ``result`` back by bulk update; returns the number of items OpenSearch
+    refused (a bulk answers 200 with per-item errors, which a discarded response hides)."""
+    from src.clients.opensearch.bulk import failed_bulk_items
     from src.config.curation_accessors import get_curation_config
     from src.config.curation_roles import IndexRole, index_name
 
     index = index_name(get_curation_config(), IndexRole.ITEMS)
     items = list(result.fields.items())
+    failed = 0
     for start in range(0, len(items), chunk_size):
         chunk = items[start : start + chunk_size]
         bulk: list[dict[str, Any]] = []
@@ -215,7 +219,12 @@ async def bulk_write_result(
             bulk.append({'update': {'_index': index, '_id': crop_id}})
             bulk.append({'doc': doc})
         if bulk:
-            await opensearch.bulk(body=bulk, refresh=False)
+            resp = await opensearch.bulk(body=bulk, refresh=False)
+            if isinstance(resp, dict):
+                failed += len(failed_bulk_items(resp))
+    if failed:
+        logger.warning('curation_scores_bulk_item_errors', failed=failed, total=len(items))
+    return failed
 
 
 _PROBE_SCORED_PAGE_SIZE = 2000
@@ -335,9 +344,13 @@ async def run_scoring_job(
             scorer = scorers[name]
             ids, embeddings = pools[scorer.pool]
             result = await scorer.score(ids, embeddings, opensearch=opensearch)
-            await bulk_write_result(opensearch, result)
+            n_failed = await bulk_write_result(opensearch, result)
+            if n_failed and n_failed >= len(result.fields):
+                msg = f'{name}: no score was written ({n_failed} bulk item errors)'
+                raise RuntimeError(msg)
             results[name] = {
                 'n_scored': result.n_scored,
+                'n_failed': n_failed,
                 'extra': result.extra,
                 'pool': scorer.pool,
                 'pool_size': len(ids),

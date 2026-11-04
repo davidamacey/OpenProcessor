@@ -398,6 +398,8 @@ async def _bulk_write_coordinates(
     """Write ``viz_x``/``viz_y``/``viz_projection_version`` only -- never
     ``cluster_id``/``cluster_subid``/``cluster_distance`` (guarded by
     ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``)."""
+    from src.clients.opensearch.bulk import failed_bulk_items
+
     index = items_index()
     n_written = 0
     for start in range(0, len(ids), chunk_size):
@@ -416,8 +418,12 @@ async def _bulk_write_coordinates(
                 }
             )
         if bulk:
-            await opensearch.bulk(body=bulk, refresh=False)
-            n_written += len(chunk_ids)
+            resp = await opensearch.bulk(body=bulk, refresh=False)
+            refused = len(failed_bulk_items(resp)) if isinstance(resp, dict) else 0
+            n_written += len(chunk_ids) - refused
+    if ids and n_written == 0:
+        msg = f'no viz coordinate was written ({len(ids)} bulk items refused)'
+        raise RuntimeError(msg)
     return n_written
 
 
