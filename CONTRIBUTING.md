@@ -177,6 +177,7 @@ Never add a line to hide a new finding; fix it.
 | `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400); a file in the 640-700 band is split by concern when you touch it, never by collapsing lines |
 | `check_layering.py` | routers import services and clients, never the reverse; clients never import services; `src/domain`, `config`, `utils` and `schemas` import neither; only routers import `fastapi`. No baseline: the one permanent exception (the guarded OpenSearch client factory) is listed with its reason in the script |
 | `check_ruff_ratchet.py` | no function above complexity 15, no new `except Exception` |
+| `check_file_locks.py` | no `fcntl.flock`, `exclusive_*_lock` or `filelock` guarding cross-process state: claim it with an OpenSearch job lease (`src/clients/job_lease.py`) |
 | `check_process_ids.py` | no wave, round or work-package ids, and no history names, in comments, docstrings or file names |
 | `check_cited_paths.py` | a comment or docstring that cites a `docs/`, `scripts/` or similar file cites one that exists |
 | `check_vulture.py` | no unused code; a reviewed false positive goes in `vulture_whitelist.py` with a reason |

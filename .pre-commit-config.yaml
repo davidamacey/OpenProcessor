@@ -139,6 +139,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: check-file-locks
+        name: No file locks guard cross-process state (use a job lease)
+        entry: python3 scripts/codegen/check_file_locks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: check-cited-paths
         name: Comments and docstrings cite files that exist
         entry: python3 scripts/codegen/check_cited_paths.py

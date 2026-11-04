@@ -1,0 +1,7 @@
+src/services/curation/bulk_ingest/dispatcher.py	1	B2: the ingest dispatcher becomes a Celery beat task with a lease
+src/services/curation/bulk_ingest/runner.py	1	bulk-ingest claim_run is sync and called from the dispatcher thread; moves with the dispatcher to a lease in B2
+src/services/curation/bulk_ingest/source_scan.py	1	scan_source is blocking and called from worker threads; moves with the dispatcher to a lease in B2
+src/services/curation/event_hub.py	2	B4: the event hub moves to Redis Streams
+src/services/curation/job_lock.py	4	the helpers themselves; deleted when the last caller (dispatcher, bulk-ingest runner, source scan, open-vocab sweeper) moves to a lease in B2
+src/services/curation/open_vocab_sweeper.py	1	B2: becomes a beat task on a single-concurrency queue
+src/services/curation/source_image_cache.py	2	B2: the cache prune becomes a beat task
