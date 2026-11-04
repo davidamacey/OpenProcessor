@@ -192,7 +192,7 @@ fix every reference (`rg -l '<file name>'` outside `CHANGELOG.md` entries of pas
 | 5d | `processing_plans_plan.md` | branch vocabulary and per-route defaults -> `docs/ARCHITECTURE.md` and the API docs | `CHANGELOG.md` (`[Unreleased]` mention: re-point), `decision_register.md`, `07`, `07b`, `07d` |
 | 5d | `triton_pipeline_optimization_plan.md` | section 7 accuracy gates -> `docs/PERFORMANCE.md` parity section (section 11 verification log is already there) | `docs/PERFORMANCE.md` lines 7, 421, 516, 748, 1007, `docs/VISION_AND_GOALS.md` line 115, `docs/research/triton_deep_research_2026-09.md` line 1, `scripts/bench/parity_gates.json`, the `07` files, `decision_register.md`; issue comments #40, #67, #84, #219, #220 |
 
-Also at each sub-batch's closing PR: delete that sub-batch's `program/07*` file(s) after moving
+Also at each sub-batch's closing PR: delete that sub-batch's `v070_rebuild/06*` file(s) after moving
 the keep-list in its "What to keep after merge" section, and remove its row from `decision_register.md`
 and `docs/design/README.md`. The overview `06_b5_overview.md` goes with 5d (after the #42 side
 track facts move to `docs/PERFORMANCE.md`).

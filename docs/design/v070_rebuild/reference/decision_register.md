@@ -401,7 +401,7 @@ integration branch, not per attempt.
 ### 8.2 Plan lifecycle
 
 Plans are working papers, not archives. The closing PR of each batch (and of each B5
-sub-batch) deletes that batch's `program/` files in the same PR, after moving the lasting
+sub-batch) deletes that batch's `v070_rebuild/` files in the same PR, after moving the lasting
 knowledge into the permanent docs:
 
 | What | Moves to |

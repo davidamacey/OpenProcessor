@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](03d_stage4_job_families.md) (W2.3a and W2.3b), [program/03d](03b_stage2_control_data.md), [program/03c](03f_stage6_scheduler_scaleout.md), [program/05](05_b4_stateless_api.md) and [program/03g](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00f_research_track.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [03d_stage4_job_families.md](03d_stage4_job_families.md) (W2.3a and W2.3b), [03b_stage2_control_data.md](03b_stage2_control_data.md), [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md), [05_b4_stateless_api.md](05_b4_stateless_api.md) and [06e_w5e_plate_text.md](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([traceability.md](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([v070_rebuild/08_research_prototype_track.md.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
 | Status | plan (research first, then product). Nothing here is implemented. Written 2026-11-04 against `origin/main` at `497315954` |
 | Issues | #401 (the feature; parked until now), #470 (a neutral security item about stored recognized text, owned by the W4 privacy lane), #220 (OCR on the GPU, B5c) |
 | Absorbs | the former issue-401 plan (deleted in the commit that adds this file; its privacy model, sink inventory, key design, purge and test list are carried into sections 4, 5, 7 and 9 below, corrected where the owner's 2026-11-04 decisions changed them) |
@@ -195,7 +195,7 @@ Open Images transcriptions plus set P.
 | R6 | Format-constrained re-decode of the CTC output (top-N per position plus the `text_format` regex) | 🟡 P2 | the OpenALPR pattern; helps where a jurisdiction format is known; US formats vary by state, so gains may be small |
 | R7 | Agreement with the configured VLM (`both`), VLM as fallback on low confidence | ✅ keep | already wired; matches fusion and the BLPR pattern; external endpoints allowed as today (OI-1) |
 | R8 | TrOCR, the 2018 segmentation-free CNN reader, commercial engines | ❌ | too slow, untrained for US plates, or not open-source |
-| R9 | PP-OCRv6 recognition (Apache-2.0, released June 2026) in place of PP-OCRv5 | 🟡 P1 (owner Q-B, review RR-5) | one short comparison against R1 in `pt:P1`; adopted only on a clear win at no more than today's latency, and then for the B5c OCR model too ([program/07c](06c_b5_crops_ocr_faces.md)) |
+| R9 | PP-OCRv6 recognition (Apache-2.0, released June 2026) in place of PP-OCRv5 | 🟡 P1 (owner Q-B, review RR-5) | one short comparison against R1 in `pt:P1`; adopted only on a clear win at no more than today's latency, and then for the B5c OCR model too ([06c_b5_crops_ocr_faces.md](06c_b5_crops_ocr_faces.md)) |
 
 ### 4.2 Confidence and tiers
 
@@ -606,7 +606,7 @@ n of at least 500 confident test readings per reader that claims the bar.
 - **Plate strings never appear in any committed file**: not in notes, manifests, tests, fixtures,
   issue comments or commit messages. Transcriptions and predictions live only in
   `artifacts_local/identity_text/`. Tests use canaries that fail every plate format: a character outside `[A-Z0-9]`, or
-  12 characters (review 3.7; [program/03g](06e_w5e_plate_text.md)).
+  12 characters (review 3.7; [06e_w5e_plate_text.md](06e_w5e_plate_text.md)).
 - Per-run JSON, logs and GPU samples stay in `artifacts_local/`; never bulk-deleted.
 
 ## 7. Production design

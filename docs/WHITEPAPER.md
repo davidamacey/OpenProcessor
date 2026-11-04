@@ -3,7 +3,7 @@
 Status: draft, written 2026-10-31 from the 0.7.0 measurement log, research notes and review documents, after the
 0.7.0 release candidate was merged (#408, #409). Issue #412. Release 0.6.0 is the latest published release; the
 "0.7.0" work described here is on `main` and in `[Unreleased]` in the changelog, and 0.7.0 is tagged only after the
-program in [design/program/00a_decision_register.md](design/v070_rebuild/reference/decision_register.md) is implemented and tested. This paper reports nothing new: every number
+program in [design/v070_rebuild/reference/decision_register.md.md](design/v070_rebuild/reference/decision_register.md) is implemented and tested. This paper reports nothing new: every number
 below is copied from the document cited next to it, which holds the method, the raw data and the caveats.
 Where the source and this paper disagree, the source is right.
 

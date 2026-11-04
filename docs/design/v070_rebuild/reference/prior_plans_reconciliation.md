@@ -695,21 +695,21 @@ read `v0.8.0` below as v0.7.0 B5 and `v0.9.0` as v0.8.0). The "Status" column be
 
 | Doc | New status |
 |---|---|
-| `program/00a_decision_register.md` (new row, added by B0-1) | plan (the 0.7.0 and 0.8.0 program) |
+| `v070_rebuild/reference/decision_register.md` (new row, added by B0-1) | plan (the 0.7.0 and 0.8.0 program) |
 | `auto_label_loop_plan.md` | implemented (reference; S0 not run, pause and events in N16) |
 | `cluster_search_makemodel_plan.md` | open (parked research; W2, the W3 privacy part and W4 shipped; v0.9.0 and later) |
 | `cq3_label_operations.md` | implemented (reference) |
 | `curation_api_contract.md`, `curation_design_rationale.md`, `engineering_standards.md` | implemented (reference) (unchanged) |
-| `faces_ocr_resident_crops_plan.md` (new row) | open (step 1 done, step 2 rejected; steps 3-4 in `program/07c` and `07d`, v0.8.0) |
+| `faces_ocr_resident_crops_plan.md` (new row) | open (step 1 done, step 2 rejected; steps 3-4 in `v070_rebuild/06c_b5_crops_ocr_faces.md` and `07d`, v0.8.0) |
 | `generic_detector_and_selective_embedding_plan.md` | implemented (reference; delete guard done; arbitrary-filter clustering parked) |
-| `gpu_decode_plan.md` | implemented (follow-ups in `program/07b`, v0.8.0) |
-| `processing_plans_plan.md` | open (P1 done; P0, P2-P6 in `program/07d`, v0.8.0) |
-| `release_acceptance_plan.md` | open (method for R-final, `program/06`; removed at RP-9) |
+| `gpu_decode_plan.md` | implemented (follow-ups in `v070_rebuild/06b_b5_decode_once.md`, v0.8.0) |
+| `processing_plans_plan.md` | open (P1 done; P0, P2-P6 in `v070_rebuild/06d_b5_processing_plans.md`, v0.8.0) |
+| `release_acceptance_plan.md` | open (method for R-final, `v070_rebuild/07_release_acceptance.md`; removed at RP-9) |
 | `sam3_full_image_detection_plan.md` | implemented (reference) (unchanged) |
 | `selectable_assist_plan.md` (new row) | implemented (reference) |
-| `sp_gpu_prep_concurrency.md` | partially done (C1 shipped in #392; C2-C5 in `program/07b`, v0.8.0) |
-| `triton_pipeline_optimization_plan.md` | partially done (Waves 0, 1, 5, 7 shipped; the rest in `program/07`-`07d`, v0.8.0, and v0.9.0 for Waves 8 and 10) |
-| `task_queue_plan.md`, `codebase_audit_plan.md`, `model_family_versions_plan.md` (rows added by B0-1) | plan (task detail by ID for `program/`) |
+| `sp_gpu_prep_concurrency.md` | partially done (C1 shipped in #392; C2-C5 in `v070_rebuild/06b_b5_decode_once.md`, v0.8.0) |
+| `triton_pipeline_optimization_plan.md` | partially done (Waves 0, 1, 5, 7 shipped; the rest in `v070_rebuild/06_b5_overview.md`-`07d`, v0.8.0, and v0.9.0 for Waves 8 and 10) |
+| `task_queue_plan.md`, `codebase_audit_plan.md`, `model_family_versions_plan.md` (rows added by B0-1) | plan (task detail by ID for `v070_rebuild/`) |
 
 Rows removed (the docs are deleted or moved): `combine_preview_warnings_plan.md`,
 `docs_overhaul_plan.md`, `label_confirmation_plan.md`, `program_plan.md`, `repo_cleanup_plan.md`,
@@ -725,7 +725,7 @@ also lacks rows for existing notes: `cluster_config_baseline.md`, `cluster_progr
 `retrieval_baseline.md`, `spatial_datasets.md`, `visual_judge_e0.md`, `audits/phase_a1_audit.md`.
 
 The section "Issues without a plan doc" lists only closed issues (#38, #39, #41, #43, #46, #53,
-#55, #57-#66). Replace it with one line pointing to `program/09_github_actions.md` section 7 (the
+#55, #57-#66). Replace it with one line pointing to `v070_rebuild/reference/github_actions.md` section 7 (the
 issue map).
 
 Each kept doc whose own status line is stale gets it fixed in the same commit:

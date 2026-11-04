@@ -131,7 +131,7 @@ Steps:
 1. Check that every section of the former master plan is placed: walk the mapping table in
    [decision_register.md](decision_register.md) section 12 and open each target file.
 2. `git rm` the master-plan file; rewrite every reference (the three source-plan headers,
-   `docs/design/program/*.md`) to `program/00a_decision_register.md`, the specific batch file, or, where the
+   `docs/design/program/*.md`) to `v070_rebuild/reference/decision_register.md`, the specific batch file, or, where the
    history is meant, "the former master plan (rev 4, in git history)".
 3. A search of `docs` for the old file name (master, underscore, plan) must find nothing.
 4. Run the naming-leak scan and the docs check on the changed files:
@@ -283,7 +283,7 @@ See [risks_cleanup_host.md](risks_cleanup_host.md) section 5 for the full table.
 - No VERSION change (`cat VERSION` is `0.6.0`), no tag (`git ls-remote --tags origin | rg v0.7`
   is empty).
 - Gate evidence under `artifacts_local/b0/`.
-- Delete this batch's plan file (`program/13_b0_close_out.md`) and its rows in `decision_register.md` and
+- Delete this batch's plan file (`v070_rebuild/reference/b0_close_out_done.md`) and its rows in `decision_register.md` and
   `docs/design/README.md` after moving the keep-list below ([decision_register.md](decision_register.md)
   section 8.2). Do this in the B0 closing PR, or in the first B1 docs commit if B0 already
   merged.

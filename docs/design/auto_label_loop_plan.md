@@ -2,7 +2,7 @@
 
 Status: implemented (reference). S1 to S11 shipped; the S11 live run on public COCO was done
 2026-11-02 (#286 closed). S0 (the label-rate measurement) was never run, and the pause control, event
-log and token budgets are tracked in issue N16 (`program/09_github_actions.md`, v0.8.0). Issue #286,
+log and token budgets are tracked in issue N16 (`v070_rebuild/reference/github_actions.md`, v0.8.0). Issue #286,
 milestone v0.7.0, wave W3 of the 0.7.0 wave plan (retired; that plan called this doc
 `assist_loop_plan.md`; this is the same plan under the name the issue thread settled on). Audience: a fresh implementation agent
 with no conversation memory. Paths were checked with `rg` on `release/0.7.0` at `5f596793`;

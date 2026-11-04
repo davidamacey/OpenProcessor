@@ -2,13 +2,13 @@
 
 | Field | Value |
 |---|---|
-| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](03d_stage4_job_families.md) (W2.3a and W2.3b), [program/03d](03b_stage2_control_data.md), [program/03c](03f_stage6_scheduler_scaleout.md), [program/05](05_b4_stateless_api.md) and [program/03g](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00f_research_track.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [03d_stage4_job_families.md](03d_stage4_job_families.md) (W2.3a and W2.3b), [03b_stage2_control_data.md](03b_stage2_control_data.md), [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md), [05_b4_stateless_api.md](05_b4_stateless_api.md) and [06e_w5e_plate_text.md](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([traceability.md](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([v070_rebuild/08_research_prototype_track.md.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
 | Status | **plan only**: nothing implemented, nothing run. Written 2026-11-04 on `research/near-dup` from `origin/main` at `497315954`; every `path:line` below is at that commit |
 | Scope | whole images and crops; burst and sequence duplicates; exact, perceptual and embedding duplicates; the grouping thresholds; group storage and versions; re-score staleness; holdout leakage; dedup at ingest versus as a batch job |
 | Issues | #416 (threshold research), #473 (stale fields, core batch race, holdout check), #346 (research tracker; its 2026-11 comment puts #416 on the ship track) |
 | Absorbs | `docs/design/issue_plans/issue-416-plan.md` (deleted in this commit). Its transform set, bars, traps and corrections are carried into sections 2, 6 and 9 here; where they differ, this file wins |
 | Supersedes for near-duplicates | RQ-2, E-2 and OQ-9 of [09b_research_clustering.md](09b_research_clustering.md); tasks 2D-4, 4A-6, 4A-7 and 4A-4b of the program files are re-cut in section 11 |
-| Owner decision already applied | 2026-11-04 (MQ-5, [program/00a_decision_register.md](reference/decision_register.md) section 6): when a holdout is frozen, a held-out item's whole near-duplicate group goes into the holdout together |
+| Owner decision already applied | 2026-11-04 (MQ-5, [v070_rebuild/reference/decision_register.md.md](reference/decision_register.md) section 6): when a holdout is frozen, a held-out item's whole near-duplicate group goes into the holdout together |
 | Owner direction applied | 2026-11-04: "We need near duplicate, and we can use Immich as a guide or other research papers"; a clean backend rewrite researched to best practice first; prototypes are local-venv GPU scripts (no Docker builds) on set P and public data; plan first, run nothing |
 | Reader | an implementation or research agent with no memory of this session |
 
@@ -300,7 +300,7 @@ spaces are PE and MobileCLIP; numbers do not transfer, C2).
 | D10 | A copy-specialised encoder (SSCD) as a third vector | 🟡 | best documented copy detector; but another Triton model, another decode-sized input (288 px), another vector field. Adopt only if P2 shows a large gain (stop rule 6.9) |
 | D11 | Burst grouping from EXIF capture time and camera | 🟡 candidate signal only | must also pass an embedding floor (the rule in [cluster_search_makemodel_plan.md](../cluster_search_makemodel_plan.md): "no single attribute decides a merge"); P3 |
 | D12 | Groups only as OpenSearch fields (today) | ❌ | no run, version, owner or history; stale fields; positional ids |
-| D13 | **Groups in PostgreSQL runs, OpenSearch as a projection** | ✅ | the control-plane rule: anything with a lifecycle goes to PostgreSQL ([program/02](02_control_plane_database.md) section 3.1); the filter fields stay searchable |
+| D13 | **Groups in PostgreSQL runs, OpenSearch as a projection** | ✅ | the control-plane rule: anything with a lifecycle goes to PostgreSQL ([02_control_plane_database.md](02_control_plane_database.md) section 3.1); the filter fields stay searchable |
 | D14 | **Two cuts per level (`dedup`, `leak`)** | ✅ | DINOv2's self versus relative dedup; FiftyOne's leaky splits |
 | D15 | Exact key: SHA-256 with a PostgreSQL unique constraint | ✅ (J6) | race-free across workers and replicas, which an index lookup is not (#358); a real content identity (C11) |
 
@@ -309,7 +309,7 @@ spaces are PE and MobileCLIP; numbers do not transfer, C2).
 ## 5. Seams the v0.7.0 rebuild must include
 
 **Owning plan file: this file.** Landing lanes are in section 8 (ND-A, ND-B in W2.3; ND-C in W4).
-The tables follow [program/02a](02a_postgres_schema.md) section 1: plural snake_case,
+The tables follow [02a_postgres_schema.md](02a_postgres_schema.md) section 1: plural snake_case,
 `uuidv7()` keys, `timestamptz`, closed sets as `text` + `CHECK`, `jsonb` only for pydantic-validated
 bodies, row-level security on every `project_id` table, `NULL` project = deployment scope (allowed
 only under `deployment` scope, as for `jobs`). One Alembic revision `near_duplicates`, owned by ND-A.
@@ -476,7 +476,7 @@ Rules:
 - **Retention**: keep the current run and the two newest superseded runs per (project, level); a beat
   task prunes older runs (cascade deletes their groups and members). Row for 02a section 9.
 
-### 5.2 Celery job kinds (rows for [program/02b](02b_jobs_locking_events.md) section 2.1)
+### 5.2 Celery job kinds (rows for [02b_jobs_locking_events.md](02b_jobs_locking_events.md) section 2.1)
 
 Module `src/config/job_kinds/near_dup.py`; tasks in `src/tasks/near_dup.py`; handlers in
 `src/services/near_duplicates/`. Every kind shares the exclusive group `near_dup` with scope
@@ -612,7 +612,7 @@ Core: `POST /ingest` stops grouping in the request. Its response's near-duplicat
 kNN candidates above the core cut (`near_duplicate_candidates`: id and cosine), and the group appears
 once `near_dup_core_group` has run (J7). `GET /query/duplicates` and its two siblings read the core
 run unchanged in shape. The `near_duplicate_threshold` form field on the three ingest routes goes
-(the cut is the code default; no per-request grouping), which [program/07d](06d_b5_processing_plans.md)
+(the cut is the code default; no per-request grouping), which [06d_b5_processing_plans.md](06d_b5_processing_plans.md)
 Q1 already plans for the selection flags.
 
 ---
@@ -627,7 +627,7 @@ Q1 already plans for the selection flags.
 | Gitignored scratch scripts | fast, no review | published numbers cannot be reproduced; the scripts drift from the product; violates the research rules |
 
 Recommendation: tracked, exact pins. The two existing research requirements files are unpinned
-today ([program/13](01_package_pins.md) section 3.9 pins them); the new file starts pinned.
+today ([01_package_pins.md](01_package_pins.md) section 3.9 pins them); the new file starts pinned.
 Raw outputs never go in git: `artifacts_local/near_dup/` (gitignored, `.gitignore:421`). Only small
 JSON that backs a published public number goes to `docs/benchmarks/near_duplicate_detection/` with a
 `SHA256SUMS`.
@@ -860,7 +860,7 @@ pins if J6 is accepted.
 |---|---|---|---|---|---|
 | **ND-A** near-duplicate machinery | W2.3 (parallel with 4A-4F) | `b2/near-duplicates` | 7.2 paths; the `near_duplicates` Alembic revision; `src/clients/curation_opensearch/bodies_core.py` and `ensure_overlay_fields.py` (the near-duplicate mapping lines only); `semantic_search.py` and `review_request.py` (the filter fields only); `item_scores/near_dup.py` (deleted; taken from 4A); `frame_dedup.py`, `export_images.py`, `export_single_class.py`, `strategy_builders.py` (the dedup lines only); `env.template` and `retired_env.py` (append rules); `contracts/` | 2C (config store), 2D, 3A, 3B merged | ND-1 schema + RLS; ND-2 profile kind and seeding; ND-3 pending writers in curation ingest, reprocess, region stage, delete, import, combine; ND-4 score, group, rescore tasks; ND-5 projection sync and field deletion; ND-6 routes, wire, contracts; ND-7 export collapse (J8); ND-8 content key (J6) in the curation ingest; ND-9 retire `OP_CROP_DUP_THRESHOLD` (replaces 4A-6); ND-10 the upgrade-step field clear (handed to 2E's owner if 2E is still open, else in this lane) |
 | **ND-B** holdout guard | W2.3, after ND-A merged | `b2/near-dup-holdout` | `src/services/near_duplicates/holdout.py`; the freeze call sites in `holdout_freeze.py` and `holdout.py` (2D merged by then); the training-export gate call | ND-A | ND-B1 closure at freeze (replaces 2D-4); ND-B2 absorption at run flip; ND-B3 export and cohort gate; ND-B4 status route `stale_reasons` read by Cropwright |
-| **ND-C** core path | W4 (inside `b4/bulk-occ`, which rewrites `ingest_batch.py`) | the 4A lane of [program/05](05_b4_stateless_api.md) | `src/services/visual_search/ingest_single.py`, `ingest_batch.py` (the grouping lines), `src/services/duplicate_detection/`, `src/routers/ingest/*.py` (the threshold fields), `src/routers/query_duplicates.py` (reads), the core index mapping | B3 head | ND-C1 core pending rows + `near_dup_core_group` (replaces 4A-4b's "batch-scoped step"); ND-C2 the ingest response candidates (J7); ND-C3 delete the literals, the Immich comment and the swallowed exception; ND-C4 core content key |
+| **ND-C** core path | W4 (inside `b4/bulk-occ`, which rewrites `ingest_batch.py`) | the 4A lane of [05_b4_stateless_api.md](05_b4_stateless_api.md) | `src/services/visual_search/ingest_single.py`, `ingest_batch.py` (the grouping lines), `src/services/duplicate_detection/`, `src/routers/ingest/*.py` (the threshold fields), `src/routers/query_duplicates.py` (reads), the core index mapping | B3 head | ND-C1 core pending rows + `near_dup_core_group` (replaces 4A-4b's "batch-scoped step"); ND-C2 the ingest response candidates (J7); ND-C3 delete the literals, the Immich comment and the swallowed exception; ND-C4 core content key |
 | **ND-D** research | after the owner's go (J1) | `research/near-dup-protocol` | `scripts/research/near_dup/**`, `tests/research_scripts/test_near_dup_*.py`, `scripts/datasets/manifests/near_dup_5000.json`, `docs/research/near_duplicate_detection.md`, `docs/benchmarks/near_duplicate_detection/` | any | P0-P7 |
 | **ND-E** defaults and tiers from evidence | after ND-D results and the owner's yes | `feat/near-dup-defaults` | `src/domain/near_dup.py` defaults; the PDQ tier (edge kind, fields, ingest hash on the decoded frame, reusing the B5 resident frame) only on a P2 pass | ND-A, ND-D | change the seeded defaults (existing projects keep their active revision; a new revision is offered, not forced); add tiers |
 | docs | with each lane | in-lane | `docs/CURATION.md`, `docs/ARCHITECTURE.md`, `docs/opensearch_schema_design.md`, `docs-site/docs/api-reference/core.mdx`, `CHANGELOG.md` | | each lane documents its routes and fields in the same PR |
@@ -916,24 +916,24 @@ files only; the wave's single full sweep runs on the integration branch.
 
 This commit edits only: this file (new), `docs/design/issue_plans/issue-416-plan.md` (deleted),
 `docs/design/README.md` (the index rows), and the one link in
-[program/05_b4_stateless_api.md](05_b4_stateless_api.md) task 4A-4b that pointed at the
+[v070_rebuild/05_b4_stateless_api.md.md](05_b4_stateless_api.md) task 4A-4b that pointed at the
 deleted file (retargeted here so the link check passes). Everything else below is for the
 integration agent:
 
 | File | Change |
 |---|---|
-| [program/00_master_plan.md](00_master_plan.md) W2.2, W2.3, W4 | W2.2: drop 2D-4 from lane 2D's fold-ins (moved, C8). W2.3: add lanes ND-A (`b2/near-duplicates`) and ND-B (`b2/near-dup-holdout`) with the ownership of section 8; `item_scores/near_dup.py` moves from 4A to ND-A; the #473 part a and part c fold-ins point at ND-A and ND-B. W4: 4A-4b becomes ND-C1-C4 inside `b4/bulk-occ`. Add J1 and J14 to the owner questions |
-| [program/00a_decision_register.md](reference/decision_register.md) section 6 | register J1-J15 when answered; MQ-5 gains "applied by ND-B (09d_research_near_duplicates.md section 5.4)"; section 10 scope lists ND-D and ND-E as after the tag unless J1 says otherwise |
-| [program/00b_traceability.md](reference/traceability.md) sections 2-3 | #416: "research plan `09d_research_near_duplicates.md` (ND-D, ND-E)"; #473: part a ND-A (ND-4, ND-5), part b ND-C1, part c ND-B1; F-5..F-8 rows re-pointed; a new F row for the content key (J6) as the structural fix of #358's batch lookup |
-| [program/03b_stage2_control_data.md](03b_stage2_control_data.md) lane 2D | remove 2D-4 and its test (moved to ND-B1, reason C8); 2D-1 notes that `holdout_freezes` gains three columns in the ND-A revision |
-| [program/03d_stage4_job_families.md](03d_stage4_job_families.md) lane 4A | remove `item_scores/near_dup.py` from 4A's ownership; 4A-6 becomes "retired by ND-9" (J14); 4A-7 becomes "superseded by ND-4/ND-5 (run-scoped groups, clear on projection)"; the `item_scores` kind loses the `near_dup` scorer |
-| [program/05_b4_stateless_api.md](05_b4_stateless_api.md) 4A-4b | rewrite as ND-C1: core ingest writes `near_dup_pending` rows; grouping by the `near_dup_core_group` job (single writer); red test `tests/visual_search/test_core_grouping_serialized.py` |
-| [program/02a_postgres_schema.md](02a_postgres_schema.md) | a new section "Near-duplicates" with the tables of 5.1 (or a link here); the `config_documents.kind` and `config_activations.axis` CHECK lists and the axis pair of 5.5; `search_projection_tasks.kind` gains `near_dup_run`; `holdout_freezes` columns; section 9 retention row |
-| [program/02b_jobs_locking_events.md](02b_jobs_locking_events.md) section 2.1 | the five kind rows of 5.2; the beat schedule gains the `near_dup_rescore` tick, the weekly full build and the run pruning |
-| [program/02_control_plane_database.md](02_control_plane_database.md) sections 3.1, 3.2, 4.7 | rows: near-duplicate runs, groups, members, edges, decisions, pending, holdout moves -> PostgreSQL, the `near_dup_*` fields as search projection; the exact key `image_contents`; images lose `imohash` and `phash` |
-| [program/06d_b5_processing_plans.md](06d_b5_processing_plans.md) | the `near_duplicates` branch returns candidates, not groups (J7); Q1 includes the `near_duplicate_threshold` field |
-| [program/01_package_pins.md](01_package_pins.md) section 3.9 | add `scripts/research/near_dup/requirements.txt` with the pins of 6.2; if J6 passes, `imohash` leaves the product manifests; if J9 passes, `pdqhash==0.2.8` (MIT, bundles ThreatExchange PDQ under BSD) joins them in ND-E |
+| [v070_rebuild/00_master_plan.md.md](00_master_plan.md) W2.2, W2.3, W4 | W2.2: drop 2D-4 from lane 2D's fold-ins (moved, C8). W2.3: add lanes ND-A (`b2/near-duplicates`) and ND-B (`b2/near-dup-holdout`) with the ownership of section 8; `item_scores/near_dup.py` moves from 4A to ND-A; the #473 part a and part c fold-ins point at ND-A and ND-B. W4: 4A-4b becomes ND-C1-C4 inside `b4/bulk-occ`. Add J1 and J14 to the owner questions |
+| [v070_rebuild/reference/decision_register.md.md](reference/decision_register.md) section 6 | register J1-J15 when answered; MQ-5 gains "applied by ND-B (09d_research_near_duplicates.md section 5.4)"; section 10 scope lists ND-D and ND-E as after the tag unless J1 says otherwise |
+| [v070_rebuild/reference/traceability.md.md](reference/traceability.md) sections 2-3 | #416: "research plan `09d_research_near_duplicates.md` (ND-D, ND-E)"; #473: part a ND-A (ND-4, ND-5), part b ND-C1, part c ND-B1; F-5..F-8 rows re-pointed; a new F row for the content key (J6) as the structural fix of #358's batch lookup |
+| [v070_rebuild/03b_stage2_control_data.md.md](03b_stage2_control_data.md) lane 2D | remove 2D-4 and its test (moved to ND-B1, reason C8); 2D-1 notes that `holdout_freezes` gains three columns in the ND-A revision |
+| [v070_rebuild/03d_stage4_job_families.md.md](03d_stage4_job_families.md) lane 4A | remove `item_scores/near_dup.py` from 4A's ownership; 4A-6 becomes "retired by ND-9" (J14); 4A-7 becomes "superseded by ND-4/ND-5 (run-scoped groups, clear on projection)"; the `item_scores` kind loses the `near_dup` scorer |
+| [v070_rebuild/05_b4_stateless_api.md.md](05_b4_stateless_api.md) 4A-4b | rewrite as ND-C1: core ingest writes `near_dup_pending` rows; grouping by the `near_dup_core_group` job (single writer); red test `tests/visual_search/test_core_grouping_serialized.py` |
+| [v070_rebuild/02a_postgres_schema.md.md](02a_postgres_schema.md) | a new section "Near-duplicates" with the tables of 5.1 (or a link here); the `config_documents.kind` and `config_activations.axis` CHECK lists and the axis pair of 5.5; `search_projection_tasks.kind` gains `near_dup_run`; `holdout_freezes` columns; section 9 retention row |
+| [v070_rebuild/02b_jobs_locking_events.md.md](02b_jobs_locking_events.md) section 2.1 | the five kind rows of 5.2; the beat schedule gains the `near_dup_rescore` tick, the weekly full build and the run pruning |
+| [v070_rebuild/02_control_plane_database.md.md](02_control_plane_database.md) sections 3.1, 3.2, 4.7 | rows: near-duplicate runs, groups, members, edges, decisions, pending, holdout moves -> PostgreSQL, the `near_dup_*` fields as search projection; the exact key `image_contents`; images lose `imohash` and `phash` |
+| [v070_rebuild/06d_b5_processing_plans.md.md](06d_b5_processing_plans.md) | the `near_duplicates` branch returns candidates, not groups (J7); Q1 includes the `near_duplicate_threshold` field |
+| [v070_rebuild/01_package_pins.md.md](01_package_pins.md) section 3.9 | add `scripts/research/near_dup/requirements.txt` with the pins of 6.2; if J6 passes, `imohash` leaves the product manifests; if J9 passes, `pdqhash==0.2.8` (MIT, bundles ThreatExchange PDQ under BSD) joins them in ND-E |
 | [09b_research_clustering.md](09b_research_clustering.md) | RQ-2, E-2, the RQ-2 rows of its method, data, bars and landing tables, and OQ-9 point here (absorbed as P1 and J10); RQ-6's near-duplicate must-link reads the `leak` groups |
 | [cluster_search_makemodel_plan.md](../cluster_search_makemodel_plan.md) signals table | "Near-duplicate group" row: fields become `near_dup_group_id`, `near_dup_is_representative` |
-| [program/09_github_actions.md](reference/github_actions.md) | comment on #416 with this plan's path (the gist plan is superseded); comment on #473 with the re-cut placement |
+| [v070_rebuild/reference/github_actions.md.md](reference/github_actions.md) | comment on #416 with this plan's path (the gist plan is superseded); comment on #473 with the re-cut placement |
 | `docs/CURATION.md`, `docs/ARCHITECTURE.md`, `docs/opensearch_schema_design.md`, `docs-site/docs/api-reference/core.mdx` | at landing, by ND-A, ND-B and ND-C (not before: docs describe current behaviour) |

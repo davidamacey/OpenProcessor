@@ -1,6 +1,6 @@
 # SPD: `gpu_image_prep` under concurrency, design review (diagnosis first, then code)
 
-Status: partially done (C1, the byte budget, shipped in #392; C2 to C5 are in `program/06b_b5_decode_once.md`,
+Status: partially done (C1, the byte budget, shipped in #392; C2 to C5 are in `v070_rebuild/06b_b5_decode_once.md`,
 v0.7.0 B5b; remove after B5b). Written on a branch (from
 `perf/v070-ingest-speed` at `2d231652`), 2026-10-30. Issues: #392 (the symptom), #40 (epic, SP4 bar),
 #337 (admission charge on fallbacks), #219 (SP3, crop size), #42 (12 GB cards), #391 (health).

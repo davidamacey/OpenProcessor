@@ -2,11 +2,11 @@
 
 | Field | Value |
 |---|---|
-| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](03d_stage4_job_families.md) (W2.3a and W2.3b), [program/03d](03b_stage2_control_data.md), [program/03c](03f_stage6_scheduler_scaleout.md), [program/05](05_b4_stateless_api.md) and [program/03g](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00f_research_track.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [03d_stage4_job_families.md](03d_stage4_job_families.md) (W2.3a and W2.3b), [03b_stage2_control_data.md](03b_stage2_control_data.md), [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md), [05_b4_stateless_api.md](05_b4_stateless_api.md) and [06e_w5e_plate_text.md](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([traceability.md](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([v070_rebuild/08_research_prototype_track.md.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
 | Status | plan, research-first. Written 2026-11-04 on `research/spatial` from `origin/main` at `49731595`. **Nothing was run for this plan.** The only measured fact it relies on is the EXIF census of 2026-11-04 in section 2.3 |
 | Issues | #348 (spatial scene discovery and photogrammetry, parked), #400 (attribute-signal layer, parked); #346 read for how attributes feed clustering |
 | Replaces | the per-issue plans `issue-348-plan.md` and `issue-400-plan.md` (deleted in this commit; their content is carried here and their gists stay the issue announcements) |
-| Reads with | [program/00a_decision_register.md](reference/decision_register.md) (section 2.1, decisions section 6), [program/00_master_plan.md](00_master_plan.md), [program/02_control_plane_database.md](02_control_plane_database.md), [program/02a_postgres_schema.md](02a_postgres_schema.md), [program/02b_jobs_locking_events.md](02b_jobs_locking_events.md), [program/02c_migration_ops_tests.md](02c_migration_ops_tests.md), [09b_research_clustering.md](09b_research_clustering.md), [09h_research_plate_text.md](09h_research_plate_text.md), [the spatial research note](../../research/OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md), [spatial_datasets.md](../../research/spatial_datasets.md), [cluster_types.md](../../research/cluster_types.md) |
+| Reads with | [v070_rebuild/reference/decision_register.md.md](reference/decision_register.md) (section 2.1, decisions section 6), [v070_rebuild/00_master_plan.md.md](00_master_plan.md), [v070_rebuild/02_control_plane_database.md.md](02_control_plane_database.md), [v070_rebuild/02a_postgres_schema.md.md](02a_postgres_schema.md), [v070_rebuild/02b_jobs_locking_events.md.md](02b_jobs_locking_events.md), [v070_rebuild/02c_migration_ops_tests.md.md](02c_migration_ops_tests.md), [09b_research_clustering.md](09b_research_clustering.md), [09h_research_plate_text.md](09h_research_plate_text.md), [the spatial research note](../../research/OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md), [spatial_datasets.md](../../research/spatial_datasets.md), [cluster_types.md](../../research/cluster_types.md) |
 | Audience | a fresh agent with no memory of this session: the integration agent (section 11), a coding lane (section 8), a research session (section 6) |
 | Owner direction | 2026-11-04: a clean backend rewrite; the research "will materially change how we use the spatial attributes", so research it to best practice first; prototypes are local-venv GPU scripts, no Docker builds; plan first, run nothing |
 
@@ -82,7 +82,7 @@ grouping, no reconstruction. Nothing spatial has been measured on our hardware.
   `ImageOps.exif_transpose`. For EXIF orientations 2 to 8 the exported pixels are in sensor
   orientation, while the labels are normalized against the oriented frame that ingest decoded. For
   tags 5 to 8 even the width and height swap, so labels and crops land in the wrong place. The
-  5b-D1 caller list in [program/06b_b5_decode_once.md](06b_b5_decode_once.md) does not name
+  5b-D1 caller list in [v070_rebuild/06b_b5_decode_once.md.md](06b_b5_decode_once.md) does not name
   this file;
 - the no-resize path is `shutil.copyfile`, so exported originals keep their embedded EXIF,
   **GPS included**. That is a location leak today that is independent of any field we store.
@@ -91,8 +91,8 @@ Both go to the integration agent (section 11).
 
 ### 2.2 The control plane this builds on (planned, not merged)
 
-From [program/02a_postgres_schema.md](02a_postgres_schema.md) and
-[program/02b_jobs_locking_events.md](02b_jobs_locking_events.md):
+From [v070_rebuild/02a_postgres_schema.md.md](02a_postgres_schema.md) and
+[v070_rebuild/02b_jobs_locking_events.md.md](02b_jobs_locking_events.md):
 - `uuidv7()` keys, `text` plus `CHECK` for closed sets, `jsonb` only for pydantic-validated
   bodies, `storage_key` relative keys;
 - RLS `FORCE`d on every `project_id` table, plus `op_scope_allows(pid)` for child tables;
@@ -135,7 +135,7 @@ on 2026-11-04 and must be re-checked before anything ships.
 | Immich, reading order ([XMP sidecars](https://docs.immich.app/features/xmp-sidecars/)) | Prioritized date tags: `SubSecDateTimeOriginal`, `DateTimeOriginal`, `SubSecCreateDate`, `CreateDate`, `CreationDate`, `MediaCreateDate`, ..., then file times. Time zones come from ExifTool through exiftool-vendored, whose documented heuristics include the offset tags and the GPS UTC time ([exiftool-vendored dates](https://photostructure.github.io/exiftool-vendored.js/index.html#dates)) |
 | Immich, reverse geocoding ([docs](https://docs.immich.app/features/reverse-geocoding/)) | Offline: GeoNames data loaded into Postgres; city, state and country per asset; no external call |
 | Immich, location leak fixed 2026-10 ([PR #32561](https://github.com/immich-app/immich/pull/32561)) | A new search path served full EXIF, GPS included, through shared links whose "show metadata" was off. The fix moved the check into one asset mapper that every path uses. **Lesson: one visibility helper for location on every read path, plus a test that enumerates the paths** |
-| Pillow 13 (pinned `==13.0.0` in [program/01_package_pins.md](01_package_pins.md)) ([ExifTags](https://pillow.readthedocs.io/en/stable/reference/ExifTags.html), [`Image.Exif`](https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Exif)) | `getexif()` plus `get_ifd(ExifTags.IFD.Exif)` and `get_ifd(ExifTags.IFD.GPSInfo)` read every tag above from the header ingest already opens. Parsing XMP with `getxmp()` needs `defusedxml`, which the stack does not have |
+| Pillow 13 (pinned `==13.0.0` in [v070_rebuild/01_package_pins.md.md](01_package_pins.md)) ([ExifTags](https://pillow.readthedocs.io/en/stable/reference/ExifTags.html), [`Image.Exif`](https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Exif)) | `getexif()` plus `get_ifd(ExifTags.IFD.Exif)` and `get_ifd(ExifTags.IFD.GPSInfo)` read every tag above from the header ingest already opens. Parsing XMP with `getxmp()` needs `defusedxml`, which the stack does not have |
 | ExifTool ([exiftool.org](https://exiftool.org/)), the Perl licence | The de facto reference reader, including maker notes and odd formats. It writes losslessly too (it can strip GPS from a JPEG without re-encoding). Through [PyExifTool 0.5.6](https://pypi.org/project/pyexiftool/) (GPL-3.0-or-later or BSD; last release 2023-10) it is a subprocess plus a system dependency |
 | ExifRead 3.5.1 ([PyPI](https://pypi.org/project/ExifRead/)), BSD-3 | Pure Python, maintained (2025 releases), reads HEIC too. A fallback candidate if P-1 shows Pillow misses formats we ingest |
 | timezonefinder ([repo](https://github.com/jannikmi/timezonefinder)), MIT | Offline IANA zone from coordinates. That is a derived location; see the rules in section 9 |
@@ -266,7 +266,7 @@ Three kinds of seam:
 ### 5.1 (A) Capture metadata, v0.7.0
 
 **Postgres.** The owner chose to store coordinates now (2026-11-04, program RD-51 reversed; see
-[program/02a](02a_postgres_schema.md) section 4), so `project_settings` in
+[02a_postgres_schema.md](02a_postgres_schema.md) section 4), so `project_settings` in
 `0001_control_plane` has:
 
 ```sql
@@ -865,16 +865,16 @@ No lane runs a full suite. The coordinator merges with `--no-ff` and runs one sw
 
 | File | Change | Why |
 |---|---|---|
-| [program/00_master_plan.md](00_master_plan.md) W4 table | add lane "Capture metadata at ingest" `b4/capture-metadata`, order 2 (after 4A merged), owns per section 8 L-C1; merge order 4A, 4D, privacy lane, capture lane, 4B | J1 |
-| [program/05_b4_stateless_api.md](05_b4_stateless_api.md) | a track for L-C1 with the red tests of 5.1; the privacy lane's SECURITY.md text gains the location rules of section 9 (and J5's export statement if not stripped) | J1, J5 |
-| [program/02b_jobs_locking_events.md](02b_jobs_locking_events.md) section 2.1 | kind row `capture_backfill`: project yes, queue `jobs`, `capture_backfill`, '', auto-resume yes, 3 h / 3 h 15 m, 24 h | J4 |
-| [program/02a_postgres_schema.md](02a_postgres_schema.md) section 4 | only if J2 = opt-in now: `project_settings.location_policy` (5.1); otherwise nothing. Add a note that 5.3 and 5.4 here hold the reserved DDL for later revisions | J2 |
-| [program/03a_stage1_foundation.md](03a_stage1_foundation.md) lane 1E | the test `test_delete_prefix_unknown_area.py` (5.2) | door B |
-| [program/03b_stage2_control_data.md](03b_stage2_control_data.md) lanes 2C, 2E, 2F | 2C/2E only if J2 = opt-in now (settings field; the upgrade writes `drop`). 2F: the images body keeps `index.knn = true`, with `test_images_index_knn.py`; the mapping-migration registry is additive and versioned (its first post-baseline user is `capture_fields.py`) | doors B |
-| [program/06b_b5_decode_once.md](06b_b5_decode_once.md) 5b-D1 | add `src/services/curation/export_support.py::_copy_or_resize_one` to "Callers to adapt" (no `exif_transpose` on the resize and crop path: wrong pixels for tags 2-8); the move of `decode_image` to `src/utils/image_decode.py` carries the capture header read and `DecodedImage.capture` | section 2.1 finding; L-X1 |
-| [program/00b_traceability.md](reference/traceability.md) | map #348 and #400 to this plan (research after the tag; L-C1 in W4 if J1 = yes); record the export orientation bug under 5b-D1 and the export GPS item under J5 | traceability |
-| [program/09_github_actions.md](reference/github_actions.md) | issue comments for #348 and #400 pointing at this file (plan only; GitHub is not changed by this pass) | the issues still point at the old gists |
-| [program/10_standards_and_libraries.md](reference/standards_and_libraries.md) section 3 | register rows: capture metadata (Pillow `getexif`/`get_ifd`; ExifTool as the research oracle and the export stripper); place retrieval (MegaLoc via `torch.hub`, measured against PE); verification and SfM (pycolmap); colour (scikit-image Lab and CIEDE2000, Pillow quantize); calibration (scikit-learn `IsotonicRegression`) | library register |
+| [v070_rebuild/00_master_plan.md.md](00_master_plan.md) W4 table | add lane "Capture metadata at ingest" `b4/capture-metadata`, order 2 (after 4A merged), owns per section 8 L-C1; merge order 4A, 4D, privacy lane, capture lane, 4B | J1 |
+| [v070_rebuild/05_b4_stateless_api.md.md](05_b4_stateless_api.md) | a track for L-C1 with the red tests of 5.1; the privacy lane's SECURITY.md text gains the location rules of section 9 (and J5's export statement if not stripped) | J1, J5 |
+| [v070_rebuild/02b_jobs_locking_events.md.md](02b_jobs_locking_events.md) section 2.1 | kind row `capture_backfill`: project yes, queue `jobs`, `capture_backfill`, '', auto-resume yes, 3 h / 3 h 15 m, 24 h | J4 |
+| [v070_rebuild/02a_postgres_schema.md.md](02a_postgres_schema.md) section 4 | only if J2 = opt-in now: `project_settings.location_policy` (5.1); otherwise nothing. Add a note that 5.3 and 5.4 here hold the reserved DDL for later revisions | J2 |
+| [v070_rebuild/03a_stage1_foundation.md.md](03a_stage1_foundation.md) lane 1E | the test `test_delete_prefix_unknown_area.py` (5.2) | door B |
+| [v070_rebuild/03b_stage2_control_data.md.md](03b_stage2_control_data.md) lanes 2C, 2E, 2F | 2C/2E only if J2 = opt-in now (settings field; the upgrade writes `drop`). 2F: the images body keeps `index.knn = true`, with `test_images_index_knn.py`; the mapping-migration registry is additive and versioned (its first post-baseline user is `capture_fields.py`) | doors B |
+| [v070_rebuild/06b_b5_decode_once.md.md](06b_b5_decode_once.md) 5b-D1 | add `src/services/curation/export_support.py::_copy_or_resize_one` to "Callers to adapt" (no `exif_transpose` on the resize and crop path: wrong pixels for tags 2-8); the move of `decode_image` to `src/utils/image_decode.py` carries the capture header read and `DecodedImage.capture` | section 2.1 finding; L-X1 |
+| [v070_rebuild/reference/traceability.md.md](reference/traceability.md) | map #348 and #400 to this plan (research after the tag; L-C1 in W4 if J1 = yes); record the export orientation bug under 5b-D1 and the export GPS item under J5 | traceability |
+| [v070_rebuild/reference/github_actions.md.md](reference/github_actions.md) | issue comments for #348 and #400 pointing at this file (plan only; GitHub is not changed by this pass) | the issues still point at the old gists |
+| [v070_rebuild/reference/standards_and_libraries.md.md](reference/standards_and_libraries.md) section 3 | register rows: capture metadata (Pillow `getexif`/`get_ifd`; ExifTool as the research oracle and the export stripper); place retrieval (MegaLoc via `torch.hub`, measured against PE); verification and SfM (pycolmap); colour (scikit-image Lab and CIEDE2000, Pillow quantize); calibration (scikit-learn `IsotonicRegression`) | library register |
 | [09b_research_clustering.md](09b_research_clustering.md) | RQ-6 row and E-8 link here (E-8 split a-d stands; the view ground truth becomes Pascal3D+ first, person labels second); attribute roles per the table in 7.2 | #400 moved here |
 | [10_v080_platform_breadth.md](10_v080_platform_breadth.md) section 6, the #348 trigger | replace "the clustering research plan reports its place-recall results" with: the v0.7.0 tag exists, a research window has about 4 GPU hours on GPU 0 or 2, and the owner says go (J9); S1 is P-4..P-8 of this plan. Add L-T1 (timeline) as a v0.8.0 candidate under J2/J13 | stale trigger (the former #348 plan, C5) |
 | [09b_research_clustering.md](09b_research_clustering.md) | where it refers to the #348 and #400 plans, point at this file | the plans are deleted |
