@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first |
 | Status | **plan only**: nothing implemented, nothing run. Written 2026-11-04 on `research/near-dup` from `origin/main` at `497315954`; every `path:line` below is at that commit |
 | Scope | whole images and crops; burst and sequence duplicates; exact, perceptual and embedding duplicates; the grouping thresholds; group storage and versions; re-score staleness; holdout leakage; dedup at ingest versus as a batch job |
 | Issues | #416 (threshold research), #473 (stale fields, core batch race, holdout check), #346 (research tracker; its 2026-11 comment puts #416 on the ship track) |
@@ -51,7 +52,7 @@ answer; `imohash` is a sampled hash, not a content identity; the curation images
    run, so a re-score can never leave stale fields behind, and group ids are never reused.
 5. **Two cuts per level**: a `dedup` cut (what review hides and export collapses) and a looser or
    equal `leak` cut (what the holdout pulls in). DINOv2 uses exactly this split: self-dedup at
-   similarity 0.6, the stricter-for-leakage relative dedup at 0.45.
+   similarity 0.6, and relative dedup against evaluation sets at the lower threshold 0.45 (a looser match, so a stricter cleanup).
 6. **Holdout rule** (the owner's decision): at freeze, every member of a held-out item's `leak`
    group goes into the holdout; after the freeze, every run moves new near-duplicates of held-out
    items into the holdout; a freeze on stale near-duplicate state refuses (fail closed).
@@ -137,7 +138,7 @@ Every claim below carries its source; "verified" means read in the source on 202
 ### 3.1 Immich (the owner's named guide)
 
 Read in the Immich repository (`server/src/services/duplicate.service.ts`,
-`server/src/repositories/duplicate.repository.ts`, `server/src/dtos/config.dto.ts`, last change to
+`server/src/repositories/duplicate.repository.ts`, `server/src/dtos/system-config.dto.ts`, last change to
 the service on 2026-10-28; <https://github.com/immich-app/immich>):
 
 - **Exact duplicates** are a SHA-1 checksum of the file (`crypto.repository.ts` `hashFile`), separate
@@ -207,8 +208,8 @@ spaces are PE and MobileCLIP; numbers do not transfer, C2).
 - **DINOv2's data curation** (Oquab et al., [arXiv 2304.07193](https://arxiv.org/abs/2304.07193),
   appendix A.3, verified): SSCD embeddings; **k = 64** nearest neighbours by cosine; edges with
   similarity **> 0.6**; connected components; one representative kept per component
-  (self-deduplication). Then **relative deduplication** against evaluation sets at the stricter
-  **> 0.45**, discarding the whole matching component, so that evaluations stay clean. This is the
+  (self-deduplication). Then **relative deduplication** against evaluation sets at the lower threshold
+  **> 0.45** (a looser match, a stricter cleanup), discarding the whole matching component, so that evaluations stay clean. This is the
   holdout-leak pattern: the leak cut is looser than the dedup cut, and the whole component moves.
 
 ### 3.4 Embedding deduplication at scale

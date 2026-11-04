@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first |
 | Status | plan, research. Nothing here is implemented. Written 2026-11-04 against `origin/main` at `49731595`. Section 5 (the seams) is the only part meant for the v0.7.0 rebuild; every experiment runs after the v0.7.0 tag (MQ-9) except the docs-only registration EP-0 |
 | Depends on | the v0.7.0 foundation: PostgreSQL for control data, Celery and Valkey for every long job, a stateless API ([program/02_control_plane_database.md](program/02_control_plane_database.md), [02a](program/02a_postgres_schema.md), [02b](program/02b_jobs_locking_events.md)); OpenSearch keeps vectors and search (D-40); every service needs PostgreSQL, Valkey, OpenSearch and Triton (D-69); B5's decode-once path for any new image encoder |
 | Issues | #347 (second encoder evaluation), #365 (encoder swap with a dual-field migration), #435 (frame target), #436 (`group_by=image`); results of closed #414 (search latency at 100k and 1M) and #402 (similar, image and box search) |
@@ -634,8 +635,8 @@ end, wall time, peak VRAM, and for CPU rows the thread count and core list.
 
 - GPUs 0 and 2 only (RTX A6000); never GPU 1. `CUDA_DEVICE_ORDER=PCI_BUS_ID` and
   `CUDA_VISIBLE_DEVICES` set explicitly.
-- **One GPU job at a time across both cards**, serialized by one shared lock:
-  `flock "$SCRATCH/locks/gpu_research.lock" <command>` inside `run_gpu.sh`; the wrapper refuses to start
+- **One GPU job at a time per card**, under the program's per-card lock (00b X-14):
+  `flock "$SCRATCH/locks/gpu<N>.lock" <command>` inside `run_gpu.sh`, `<N>` the chosen card; the wrapper refuses to start
   when a process outside the lock holds more than 2 GiB on the chosen card.
 - Before a window: `uptime`, `nvidia-smi`, tell the peer sessions what will run and for how long; pause
   at once when a peer asks. Run under `nice -n 10`. VLM captioning (EP-4 S3) runs before any latency

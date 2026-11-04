@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first |
 | Status | plan, research. Nothing here is implemented or measured by this file. No product code merges from it without its prototype's pass line |
 | Written | 2026-11-04 on `research/gpu-speed` (from `origin/main` at `497315954`), read-only: code, plans, issues and official docs read; no GPU job, no stack, no test suite run |
 | Replaces | the earlier version of this file (post-B5 hypothesis register H-1..H-14, experiments E-1..E-13, windows RW-1..RW-3; in git history). Every hypothesis and experiment of it is carried below, re-ranked against the measured data, and re-mapped to prototypes PR-n (section 6.9 maps old to new IDs) |

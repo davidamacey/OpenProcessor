@@ -770,7 +770,7 @@ Ultralytics train and val: https://docs.ultralytics.com/modes/train/ , https://d
 
 ### 2.9 F9: embedding-model swap (#365), conditional
 
-**Re-scoped by the 0.7.0 research integration (2026-11-04, pending RD-1).** The project setting, the
+**Re-scoped by the 0.7.0 research integration (2026-11-04, approved, RD-1).** The project setting, the
 dual field, the migrate job and the routes exist from v0.7.0 (lanes ES-A, ES-B, ES-C of the 0.7.0
 program: the embedding registry, `embedding_reindex` on Celery and PostgreSQL with no lease, the
 fenced flip). F9 becomes: register the winning model version in the catalog, build its space,
@@ -877,10 +877,13 @@ migrate command.
 ### 2.11 Landings from the post-tag research waves
 
 The 0.7.0 program's research waves RW-1..RW-6 (`docs/design/program/00e_research_track.md`
-section 5) land these into v0.8.0, each only on its prototype's PASS: F9 reduced (RW-2); F2
+section 5) land these into v0.8.0, each only on its prototype's PASS, and each research window only
+on the owner's OK as short tiered runs (owner, 2026-11-04: about 10 GPU hours before the 0.7.0 tag,
+no long sweeps after it either): F9 reduced (RW-2); F2
 `group_by` with `space` (RW-2); F3's review queue and metrics (RW-6); `feat/loop-strategies` and
 `feat/loop-z5i` (RW-6); the faces lane L5 and the verification tables L6 with the Cropwright review
-screens (RW-3); the geo-photo timeline L-T1 (RW-5, under the location policy); the two-card serving
+screens (RW-3); the geo-photo timeline L-T1 (RW-5; it reads the coordinates 0.7.0 already stores under the
+project's `location_policy`, with the purge step already shipped, RD-51 reversed); the two-card serving
 default (RW-1). Each joins the W8.x wave whose files it touches, decided at W8.0.
 
 ### 2.12 Carry-over from v0.7.0

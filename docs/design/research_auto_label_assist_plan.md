@@ -1,5 +1,7 @@
 # Auto-label assist loop: research and the seams for the clean rebuild
 
+**Superseded parts:** the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first.
+
 Status: plan, research. Nothing here is implemented. Written 2026-11-04 against `origin/main` at
 `49731595`. Part A (the seams, section 5) is design input to program B2 and must land in the B2 plan
 files before B2 stage 1 starts coding. Part B (the prototypes, section 6) runs after the v0.7.0 tag
@@ -712,7 +714,7 @@ with the person, then AL5; AL6 runs in its own window when the GPU is free. GPU 
 ### 6.5 GPU etiquette
 
 - GPUs 0 and 2 only; never GPU 1. One GPU job at a time on the host: every GPU command runs under
-  `flock "$SCRATCH/locks/gpu0.lock"` (or the agreed lock for GPU 2).
+  `flock "$SCRATCH/locks/gpu<N>.lock"` for the card it uses (`gpu0.lock` or `gpu2.lock`; 00b X-14).
 - Before each GPU block: `uptime` (a 1-minute load above 16 marks the run noisy and it is repeated)
   and `nvidia-smi`; ask the peer sessions for the card and wait for the reply; stop at once when a
   peer asks.

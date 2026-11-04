@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first |
 | Status | plan (research first, then product). Nothing here is implemented. Written 2026-11-04 against `origin/main` at `497315954` |
 | Issues | #401 (the feature; parked until now), #470 (a neutral security item about stored recognized text, owned by the W4 privacy lane), #220 (OCR on the GPU, B5c) |
 | Absorbs | the former issue-401 plan (deleted in the commit that adds this file; its privacy model, sink inventory, key design, purge and test list are carried into sections 4, 5, 7 and 9 below, corrected where the owner's 2026-11-04 decisions changed them) |
@@ -116,7 +117,7 @@ shape the repo's `both` mode already has.
 
 | Method | Source | Result reported |
 |---|---|---|
-| Per-position majority vote over the frames of one vehicle | Laroca et al. 2018, which introduced UFPR-ALPR (150 vehicles x 30 frames), [arXiv 1802.09567](https://arxiv.org/abs/1802.09567) | their system 64.89 % per frame, 78.33 % with temporal redundancy (47 of 60 test vehicles); OpenALPR 70 % with redundancy |
+| Per-position majority vote over the frames of one vehicle | Laroca et al. 2018, which introduced UFPR-ALPR (150 vehicles x 30 frames), [arXiv 1802.09567](https://arxiv.org/abs/1802.09567) | their system 64.89 % per frame, 78.33 % with temporal redundancy (47 of 60 test vehicles); commercial systems, OpenALPR among them, "below 70 %" (the abstract's wording, quoted instead of a per-system figure; review RR-19) |
 | Temporal redundancy over frames instead of one chosen frame | Gonçalves et al., ITSC 2016, [paper](https://homepages.dcc.ufmg.br/~william/papers/paper_2016_ITSC.pdf) | about +15.3 points vehicle recognition rate |
 | Character-wise temporal combination beyond plain voting | Quiala et al., IWAIPR 2023, [doi 10.1007/978-3-031-49552-6_34](https://doi.org/10.1007/978-3-031-49552-6_34) | beats the majority-vote baseline in every pipeline tested (Cuban plates) |
 | Character time-series matching (Hungarian assignment) | [ResearchGate record](https://www.researchgate.net/publication/365121574) | 96.7 % on UFPR-ALPR (paper) |
@@ -209,7 +210,7 @@ Open Images transcriptions plus set P.
 |---|---|---|
 | C1 | Best frame: the reading with the highest `text_conf_char_min` in the group | ✅ fallback and baseline |
 | C2 | Per-position majority vote (equal lengths only) | 🟡 P3 baseline (the literature method) |
-| C3 | Confidence-weighted aligned vote: align every reading to the medoid with Levenshtein opcodes ([RapidFuzz](https://rapidfuzz.github.io/RapidFuzz/Usage/distance/Levenshtein.html), MIT), vote per slot weighted by per-character probability, allow an empty slot | ✅ if P3 shows it beats C1 by the bar; it is ROVER on characters |
+| C3 | Confidence-weighted aligned vote: align every reading to the medoid with Levenshtein opcodes ([RapidFuzz](https://rapidfuzz.github.io/RapidFuzz/Usage/distance/Levenshtein.html), MIT), vote per slot weighted by per-character probability, allow an empty slot | ✅ if P3 shows it beats C1 by the bar; named the "medoid alignment vote": a star alignment to the medoid, not ROVER's progressive word transition network (review RR-19) |
 | C4 | Hungarian character time-series matching | 🟡 only if C3 falls short |
 | C5 | Multi-reader fusion inside the vote (each reader a voter) | 🟡 P3 arm |
 | C6 | Overwrite every member's text with the consensus and keep nothing else | ❌ the per-frame read is evidence; keep it in `text_frame` |
@@ -603,7 +604,8 @@ n of at least 500 confident test readings per reader that claims the bar.
   images, no example readings.
 - **Plate strings never appear in any committed file**: not in notes, manifests, tests, fixtures,
   issue comments or commit messages. Transcriptions and predictions live only in
-  `artifacts_local/identity_text/`. Tests use made-up canaries that no jurisdiction issues.
+  `artifacts_local/identity_text/`. Tests use canaries that fail every plate format: a character outside `[A-Z0-9]`, or
+  12 characters (review 3.7; [program/03g](program/03g_w5e_plate_text.md)).
 - Per-run JSON, logs and GPU samples stay in `artifacts_local/`; never bulk-deleted.
 
 ## 7. Production design

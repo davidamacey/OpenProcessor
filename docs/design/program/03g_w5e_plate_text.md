@@ -4,16 +4,18 @@
 |---|---|
 | Status | plan, not started; written 2026-11-04 by the research integration pass |
 | Design | [research_plate_text_plan.md](../research_plate_text_plan.md) sections 5 and 7 (the contract; this file only orders the work and fixes file ownership) |
-| Owner direction | plate text is a must (2026-11-04); placement as its own wave is the plan's recommendation, pending owner question RD-3 ([00d](00d_owner_questions.md)); its tables in their own revision is RD-4 |
-| Depends on | W5c merged (track `ocr` adds the `rec_char_min` output, [07c](07c_b5_crops_ocr_faces.md) research amendment); W4 merged (the capture lane writes `capture_taken_utc` on items, which the `capture_window` consensus basis reads; `b4/identity-text-privacy` gives the redaction processor, the mode ceiling parser and the sink test); W2.3 merged (the near-duplicate runs that the `near_dup` basis reads); the plate prototypes P0-P6 read in the prototype windows PW-1..PW-3 ([00e](00e_research_track.md)) |
+| Owner direction | plate text is a must (2026-11-04); its own wave W5e (RD-3, implied by the owner's RD-4 answer) and its tables in their own W5e revision `0004_region_text` (RD-4, approved 2026-11-04; [00d](00d_owner_questions.md)); the plate-text index normalizer stays (Q-A); PP-OCRv6 is one short reader comparison (Q-B); the plate data are freely downloadable sets plus set P, without UFPR-ALPR and LPLC (RD-10) |
+| Depends on | W5c merged (track `ocr` adds the `rec_char_min` output, [07c](07c_b5_crops_ocr_faces.md) research amendment); W4 merged (the capture lane writes `capture_taken_utc` on items, which the `capture_window` consensus basis reads; `b4/identity-text-privacy` gives the redaction processor, the mode ceiling parser and the sink test); W2.3b merged (the near-duplicate runs that the `near_dup` basis reads); the plate prototypes P0-P5 read in PW-2 ([00e](00e_research_track.md); `pt:P6` is cut before the tag, so plate boxes come from the segmenter with the text hint, today's path) |
 | Integration branch | `int/b5e-plate-text`, cut from `main` after the W5d PR merged; one PR |
 | Lanes | store first; then fields and jobs in parallel; then modes; the reader lane only if P1 adopts a dedicated reader |
 | Merge order | `w5e/region-text-store`, `w5e/region-text-fields`, `w5e/region-text-jobs`, `w5e/identity-text-modes`, `w5e/region-text-reader` (conditional), `w5e/frontend-text` (conditional) |
 | GPU | one short gate at the end of GPU window 2 (about 2 h, GPU 0, `-p op-b5e-gpu`): the chosen reader on Triton and a public-sample read |
 | Issues | #401 (closes with the W5e PR on the owner's go; milestone v0.7.0 per 00b section 4.5) |
 
-The private identity data never appears in tracked text: fixtures use synthetic plate strings built by
-the test (for example random characters from the profile's charset), never a real reading.
+The private identity data never appears in tracked text: fixtures use synthetic strings built by the
+test that fail every plate format, never a real reading (review 3.7): sink canaries hold a character
+outside `[A-Z0-9]` (for example `~`), and search fixtures that must survive the alphanumeric
+normalizer are 12 characters long, longer than any plate format.
 
 ---
 
@@ -79,7 +81,8 @@ handler body, the purge script and its CLI entry (`scripts/region_text/purge_ide
 
 The Triton model directory of the reader, its export step, the installer model group (opt-in, off by
 default), `ATTRIBUTION.md` with the provenance gap stated; red: the P5 numbers reproduced on Triton
-within the 2x-spread rule. Without an adoption this lane does not exist and PP-OCRv5 stays the reader.
+within the 2x-spread rule. Without an adoption this lane does not exist and PP-OCRv5 stays the reader
+(or PP-OCRv6, if `pt:P1` and [07c](07c_b5_crops_ocr_faces.md) adopted it in W5c).
 
 ## Lane `w5e/frontend-text` (only if `rg -n "text_engine_version" frontend/src` finds a reader)
 

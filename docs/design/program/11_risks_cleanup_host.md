@@ -59,16 +59,19 @@ Rules for every session and every agent brief:
 8. **Secrets:** pass the HF token and other keys from `.env` without printing or reading them
    into a log; the token-leak grep runs over every evidence directory before a report.
 
-9. **Research prototype windows** (pending RD-2; [00e](00e_research_track.md)): the venv prototypes
+9. **Research prototype windows** (approved by the owner 2026-11-04 as short runs only, RD-2; [00e](00e_research_track.md) section 2.1): the venv prototypes
    run only on idle GPU time (GPU 0, GPU 2 when agreed), never inside a program GPU window or a
    live-harness run, one GPU job at a time on the host under `flock "$SCRATCH/locks/gpu<N>.lock"`
    (one lock file per card, shared by every topic), `CUDA_DEVICE_ORDER=PCI_BUS_ID` always (without
    it `CUDA_VISIBLE_DEVICES=2` selects the 12 GB card), `nice -n 10` or 19 for CPU work with at most
-   8 threads, `uptime` at start and end (a start above load 16 is noisy and repeated), a written
-   GPU-hour cap per session, and a pause the moment the program or a peer asks. No compose stack
+   8 threads, `uptime` at start and end (a start above load 16 is noisy and repeated), each run
+   inside its row's tier-1 budget and the whole track inside about 10 GPU hours before the tag (the
+   coordinator's ledger; more needs the owner's OK), and a pause the moment the program or a peer asks. No compose stack
    unless a prototype names its own `-p`.
-10. **Set P** (the owner's private high-resolution photos, pending RD-8): a seeded sample is copied
-   to local NVMe by a copy script whose manifest lives outside the repository; every dataset root
+10. **Set P** (the owner's private high-resolution photos, approved RD-8): **one** shared seeded
+   sample for every topic is copied to local NVMe by one copy script whose one manifest lives
+   outside the repository (review 3.7: not one copy per topic); the copy is removed after PW-3 and
+   the removal date recorded in the coordinator's ledger; every dataset root
    is a command-line argument or an environment variable, never a path in a tracked file; results
    stay in `artifacts_local/`; public text says only "met / not met on set P" unless the owner says
    yes to an aggregate per note; no set-P image, name, path, location value or plate string in any
