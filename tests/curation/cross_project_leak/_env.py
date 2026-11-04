@@ -64,6 +64,8 @@ def leak_env(
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
+    from cachetools import TTLCache
+
     import src.config.curation_accessors as curation_config_mod
     from src.clients.curation_opensearch import registry as curation_registry, settings_doc
     from src.config.curation_accessors import base_curation_config
@@ -131,8 +133,11 @@ def leak_env(
     monkeypatch.setattr(curation_registry, '_registries', {})
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', set())
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
-    # change which index roles a route reaches between the two passes.
-    monkeypatch.setattr(settings_doc, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)
+    # change which index roles a route reaches between the two passes: a frozen
+    # clock keeps every entry fresh.
+    monkeypatch.setattr(
+        settings_doc, '_settings_cache', TTLCache(maxsize=64, ttl=5.0, timer=lambda: 0.0)
+    )
     # A UMAP fit the fixture's small pool supports (the defaults need
     # more points than the fixture seeds).
     from src.services.curation.clustering import pool_size
