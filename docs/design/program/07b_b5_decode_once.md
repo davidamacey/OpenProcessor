@@ -86,6 +86,11 @@ independent in files; `prep` waits for `profile`'s report.
   does not and make every caller that un-maps boxes use the oriented size.
 - If D-35 chose `scaleup=True`: change `LetterBox(..., scaleup=False)` in
   `src/clients/triton_client.py` in its own commit with a CHANGELOG behaviour-change line.
+- Check before relying on either behaviour: DALI's image decoder now applies EXIF orientation by
+  default (`adjust_orientation=True`), contrary to the older note that DALI ignores EXIF. On the
+  pinned DALI version, decode the eight EXIF-tag fixtures and compare against
+  `ImageOps.exif_transpose` before the GPU path assumes the decoder orients, or sets
+  `adjust_orientation` explicitly. Source: `docs/design/research_gpu_pipeline_plan.md` risk table.
 - Red (audit): for EXIF tags 1-8, `/embed` preprocessing, `/analyze` objects and `/analyze` faces
   all agree on (w, h); red today for tags 5-8. Control: tag 1 output byte-identical to before.
 - Gate: P-box, P-clip and P-face on set A must stay identical for tag-1 images (COCO is mostly
