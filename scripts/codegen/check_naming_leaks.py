@@ -120,10 +120,8 @@ def load_allowlist(path: Path) -> list[AllowlistEntry]:
             raise ValueError(f'{path}:{lineno}: allowlist entry has no path: {raw!r}')
         if not reason:
             raise ValueError(f'{path}:{lineno}: allowlist entry missing a reason: {raw!r}')
-        if ':' in entry_part and not entry_part.endswith('/'):
-            file_path, _, regex_src = entry_part.partition(':')
-        else:
-            file_path, regex_src = entry_part, ''
+        # Split before deciding directory-ness: a regex may itself end in '/' (a URL prefix).
+        file_path, _, regex_src = entry_part.partition(':')
         entries.append(AllowlistEntry(file_path, regex_src or None, reason, lineno))
     return entries
 

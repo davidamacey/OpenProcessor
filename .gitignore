@@ -423,3 +423,6 @@ artifacts_local/
 
 # Claude Code agent worktrees (nested git worktrees; never part of the tree)
 .claude/worktrees/
+
+# Release-script checksum of images.lock; a local artifact, never committed (RELEASE_CHECKLIST step 5)
+images.lock.sha256

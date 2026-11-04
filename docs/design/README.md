@@ -46,6 +46,24 @@ the index; execute one file per batch, lane or procedure.
 | [research_clustering_plan.md](research_clustering_plan.md) | plan (research; after B2/B5) | Clustering for curation on real data: detector-class roots, near-duplicate thresholds, judge calibration, crop preprocessing and encoders, global graph refinement, face grouping; libraries, evaluation protocol, pass bars and stop rules |
 | [v080_platform_breadth_plan.md](v080_platform_breadth_plan.md) | plan (v0.8.0, not started) | Platform breadth after v0.7.0: COCO segmentation import, search by image, model-family training, API authentication, a second segmenter, video files as a source, the wheel example and the embedding swap, in waves with a test and GPU budget |
 
+## Per-issue plans (published as gists on the issues)
+
+The repository copy of each plan gist linked from its GitHub issue. The plan is the reference; the
+gist is the announcement. Each file is deleted with the rest of its batch's plans once the issue
+closes.
+
+| Doc | Issue | What it is |
+|---|---|---|
+| [issue-42-plan.md](issue_plans/issue-42-plan.md) | #42 | Smaller-workspace TensorRT builds and 12 GB GPU guidance |
+| [issue-346-plan.md](issue_plans/issue-346-plan.md) | #346 | Clustering research program, umbrella plan |
+| [issue-347-plan.md](issue_plans/issue-347-plan.md) | #347 | Evaluate a second public embedding model for similarity and text search (the earlier protocol is [`docs/research/embedding_model_eval_plan.md`](../research/embedding_model_eval_plan.md)) |
+| [issue-348-plan.md](issue_plans/issue-348-plan.md) | #348 | Spatial scene discovery and photogrammetry: feasibility study and staged plan |
+| [issue-398-plan.md](issue_plans/issue-398-plan.md) | #398 | Detector-class roots with a hold-back guard as the auto-label loop partition |
+| [issue-400-plan.md](issue_plans/issue-400-plan.md) | #400 | Attribute-signal layer for clustering |
+| [issue-401-plan.md](issue_plans/issue-401-plan.md) | #401 | Registration-plate text as a per-box attribute, with privacy modes |
+| [issue-406-plan.md](issue_plans/issue-406-plan.md) | #406 | Finish the visual-judge calibration, the blind 5 % human re-judge and the label check |
+| [issue-416-plan.md](issue_plans/issue-416-plan.md) | #416 | Evaluate the near-duplicate grouping threshold (default 0.99) |
+
 ## Reference docs
 
 | Doc | Status | Issue | What it is |

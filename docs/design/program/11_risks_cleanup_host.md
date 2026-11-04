@@ -188,7 +188,7 @@ outputs (some back the paper).
 | Docker: the `openprocessor` default-project volumes | the owner's live data | never touch | never | no |
 | The owner's 0.6.0 dev install (stopped; data volumes and images kept) | the owner's | leave; the owner decides when to upgrade it | owner | no |
 | Images `openprocessor-local/*:0.7.0-rc3`, `-rc5`, `latest-rc*`, `:b8` | ledger 18: "old image tags are removed" | re-check with `docker image ls 'openprocessor-local/*'`; remove leftovers | now | safe (local tags only) |
-| Untracked files in the main checkout: two research notes under `docs/` and `images.lock.sha256` (0.6.0 cut) | pre-existing, not from this round | leave; ask the owner whether to commit, move to `artifacts_local/` or delete | owner | ask |
+| Untracked files in the main checkout: two research notes under `docs/` and `images.lock.sha256` (0.6.0 cut) | pre-existing, not from this round | done 2026-11-04: the notes were older copies of files already in `docs/research/` (moved to `artifacts_local/`); `images.lock.sha256` is gitignored (a local release artifact) | owner | done |
 | Budgeted run projects (`op-b1-live` smoke, `op-b2-live` for B1+B2, `op-b3-gpu` with the B0 OCR comparison in the same window, `op-b4-live`, the B5 window's project, `op-rfinal*`) | future | `docker compose -p <name> down -v --remove-orphans` at the end of each run; remove their local tags | after each run | safe |
 | R-final scratch (`<scratch>/rfinal`) and `op-rfinal*` projects | future | uninstall with `--purge-volumes`; keep the report and evidence in `artifacts_local/rfinal/` | after the tag decision | safe |
 | Bake-off outputs | some back the paper | never bulk-delete | never | no |
