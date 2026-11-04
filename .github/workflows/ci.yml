@@ -10,8 +10,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pytest:
-    name: pytest (offline suite)
+  # Sorts the change so docs-only PRs skip the hour-long suite and the weights job. Pattern from
+  # the dorny/paths-filter README: with predicate-quantifier 'every', a file counts as code only
+  # when it matches every pattern, so the '!' lines exclude docs.
+  changes:
+    name: Classify the change
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!docs-site/**'
+              - '!**/*.md'
+              - '!**/*.mdx'
+
+  # Docs-only PRs: the tests that read docs (found by content, so a new one is picked up)
+  # and the docs-vs-code check. A push to main still runs the full suite as the backstop.
+  docs-tests:
+    name: docs tests (docs-only change)
+    needs: changes
+    if: needs.changes.outputs.code != 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -27,7 +56,38 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-          pip install -r requirements-test.txt
+          pip install -r requirements-test.txt pytest-xdist
+
+      - name: Docs vs code (routes, OP_* variables, links)
+        run: python scripts/docs/check_docs_vs_code.py
+
+      - name: Tests that read docs
+        run: |
+          mapfile -t files < <(git grep -lE "\.mdx?['\"]|['\"]docs/|docs-site|README|CHANGELOG|CLAUDE\.md" \
+            -- 'tests/*.py' ':!tests/live/*' ':!*conftest.py')
+          echo "running ${#files[@]} test files"
+          python -m pytest "${files[@]}" -q -n auto --no-cov -m 'not live and not families'
+
+  pytest:
+    name: pytest (offline suite)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements-test.txt
+
+      - name: Install CPU torch/torchvision, then the rest of requirements-test.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install -r requirements-test.txt pytest-xdist
 
       - name: Import sanity
         run: python -c "import src.main"
@@ -35,9 +95,11 @@ jobs:
       # Line coverage of src/ and scripts/ measured 84.95 percent in the full local environment;
       # the floor sits below it because this runner installs fewer packages and so skips more
       # tests. Raise it to the measured value minus one whenever a change raises coverage.
+      # -n auto: one worker per runner core (pytest-xdist, as CONTRIBUTING.md installs it);
+      # serial, this job took about 77 minutes.
       - name: Run offline test suite with the coverage floor
         run: >-
-          python -m pytest tests/ -q -m 'not live and not families'
+          python -m pytest tests/ -q -n auto -m 'not live and not families'
           --cov=src --cov=scripts --cov-report=term --cov-fail-under=80
 
   # Tests that need the official Ultralytics weights and the original-YOLOv5 ONNX exports
@@ -48,6 +110,8 @@ jobs:
   # venv (it pins its own requirements), at a pinned commit.
   families:
     name: families (official weights, CPU)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
