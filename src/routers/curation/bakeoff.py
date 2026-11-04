@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any, Literal, NoReturn
 
 from fastapi import HTTPException
+from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, ValidationError
 
 from src.clients.curation_opensearch.registry import get_class_registry
@@ -71,6 +72,7 @@ from src.schemas.bakeoff.run import (
 from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
 from src.services.training.run_retention import bakeoff_out_dir
 from src.utils.atomic_write import atomic_write_json
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = get_logger(__name__)
@@ -156,15 +158,13 @@ async def bakeoff_trained_models(
 
 
 async def _registry_names_by_id(opensearch: Any) -> dict[int, str]:
-    """Live registry id -> name, best-effort ({} on any load failure)."""
+    """Live registry id -> name. An OpenSearch failure is a 503, never an empty map."""
     try:
-        return {
-            c.class_id: c.class_name
-            for c in (await get_class_registry().snapshot(opensearch)).classes
-        }
-    except Exception as exc:
-        logger.warning('bakeoff_profile_registry_unavailable', error=str(exc))
-        return {}
+        snapshot = await get_class_registry().snapshot(opensearch)
+    except OpenSearchException as exc:
+        logger.warning('bakeoff_registry_unavailable', error=str(exc))
+        raise UpstreamError('opensearch', 'registry_unavailable') from exc
+    return {c.class_id: c.class_name for c in snapshot.classes}
 
 
 def _profile_row(

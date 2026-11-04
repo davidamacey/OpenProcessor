@@ -270,3 +270,22 @@ def test_eval_datasets_unchanged_inputs_return_the_same_record(env: dict[str, Pa
     [b] = eval_datasets.list_eval_datasets()
 
     assert a is b
+
+
+def test_eval_datasets_listing_is_503_when_the_registry_cannot_be_read(
+    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An outage must not read as "no class names": the listing refuses."""
+    from opensearchpy.exceptions import ConnectionError as OsConnectionError
+
+    class _Down(InMemoryRegistry):
+        async def snapshot(self, _client: object = None, **_kw: object) -> object:
+            raise OsConnectionError('N/A', 'opensearch down', Exception('down'))
+
+    down = _Down()
+    monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', lambda: down)
+    make_export(env['exports'], 'e1', nc=1, test_labels={'a': [0]}, names=['cat'])
+
+    r = client.get('/curation/projects/default/bakeoff/eval_datasets')
+
+    assert r.status_code == 503, r.text
