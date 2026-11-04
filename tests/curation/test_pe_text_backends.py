@@ -126,7 +126,14 @@ class _FakeTritonClient:
         self.ready_checks.append(model_name)
         return self.ready
 
-    def infer(self, model_name: str, inputs: list[Any], outputs: list[Any]) -> Any:
+    def infer(
+        self,
+        model_name: str,
+        inputs: list[Any],
+        outputs: list[Any],
+        client_timeout: float | None = None,
+    ) -> Any:
+        assert client_timeout, 'every sync Triton call carries a deadline'
         (inp,) = inputs
         self.infer_calls.append((model_name, inp.shape(), inp.datatype()))
         if self.fail_infer:
