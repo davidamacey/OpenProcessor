@@ -2242,6 +2242,9 @@ do_rollback() {
     # Load this installer's library before the restore swaps scripts/lib/ for the older release's; never re-source after it.
     # shellcheck source=scripts/lib/image_keys.sh
     source "${OP_DIR}/scripts/lib/image_keys.sh"
+    # shellcheck source=scripts/lib/registry_migration.sh
+    source "${OP_DIR}/scripts/lib/registry_migration.sh"
+    registry_migration_reverse || die "could not write the class registry back to class_registry.json; nothing was restored"
     mkdir -p "$undo"
     chmod 700 "${OP_DIR}/.install/rollback-undo" "$undo"
     while IFS= read -r -d '' rel; do
@@ -2510,27 +2513,6 @@ backup_foreign_dir() {
     log_info "backed up the existing files to ${dest}/${ts}-pre-install.tar.gz"
 }
 
-# dry_run_report -- what a real run would change in an existing dir
-dry_run_report() {
-    [[ "$OP_DRY_RUN" == 1 && "$DIR_STATE" != fresh ]] || return 0
-    local rel changed=0 key
-    log_step "Dry-run: changes a real run would make in ${OP_REAL_DIR}"
-    while IFS= read -r rel; do
-        if [[ ! -f "${OP_REAL_DIR}/${rel}" ]]; then
-            echo "  would add    ${rel}"; changed=1
-        elif ! cmp -s "${OP_DIR}/${rel}" "${OP_REAL_DIR}/${rel}"; then
-            echo "  would change ${rel}"; changed=1
-        fi
-    done < <(manifest_installed_files "$OP_DIR")
-    while IFS= read -r key; do
-        [[ -z "$key" ]] && continue
-        if [[ "$(read_env_var "${OP_DIR}/.env" "$key" || true)" != "$(read_env_var "${OP_REAL_DIR}/.env" "$key" || true)" ]]; then
-            echo "  would set    .env ${key}"; changed=1
-        fi
-    done < <(awk -F= '/^[A-Z_][A-Z0-9_]*=/ { print $1 }' "${OP_DIR}/.env" 2>/dev/null | sort -u)
-    (( changed )) || echo "  no file or .env changes"
-}
-
 # select_tiers_interactive REC -> the validated tier list; an invalid answer
 # re-prompts, and three invalid answers exit 2 (never a silent fallback).
 select_tiers_interactive() {
@@ -2673,6 +2655,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/cropwright_auth.sh"
     # shellcheck source=scripts/lib/install_summary.sh
     source "${OP_DIR}/scripts/lib/install_summary.sh"
+    # shellcheck source=scripts/lib/registry_migration.sh
+    source "${OP_DIR}/scripts/lib/registry_migration.sh"
     refuse_retired_env "$ENV_FILE"
 
     env_create_or_merge
@@ -2985,6 +2969,9 @@ YAML
     fi
     local health_rc=0
     run_health || health_rc=1
+    if (( health_rc == 0 && existing )) && [[ "$OP_DRY_RUN" != 1 && "$OP_NO_START" != 1 ]]; then
+        registry_migration_run || exit "$EXIT_HEALTH"
+    fi
     if [[ "$OP_SAMPLE_DATA" == 1 ]]; then
         log_step "Sample data (public COCO subset)"
         if [[ "$OP_DRY_RUN" == 1 || "$health_rc" == 0 ]]; then

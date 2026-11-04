@@ -19,6 +19,7 @@
 #   <service>_container present -> `compose ps -q <service>` prints a container id
 #                       (vlm_container: its `docker top` pids come from own_pids;
 #                       api_container: the running API container)
+#   migrate_fail        present -> a `compose run` of the class registry migration fails
 #   up_hangs            present -> `compose up` creates up_started and blocks (a
 #                       long recreate a test can interrupt)
 # Writes mutations.log: every state-changing call, whether allowed or not.
@@ -245,6 +246,13 @@ JSON
         up)
             refuse compose up
             if [[ -e "${state}/up_hangs" ]]; then : > "${state}/up_started"; sleep 30; fi
+            ;;
+        run)
+            refuse compose run
+            if [[ -e "${state}/migrate_fail" && " ${args[*]:-} " == *" scripts.curation.migrate_class_registry "* ]]; then
+                echo "class registry migration failed (shim)" >&2
+                exit 1
+            fi
             ;;
         images|ls|logs|port|top)
             ;;
