@@ -60,6 +60,7 @@ the master plan; execute one wave at a time from the batch files it links.
 | [research_near_duplicates_plan.md](research_near_duplicates_plan.md) | plan (research and v0.7.0 seams; #416, #473) | Near-duplicate detection for the clean rebuild: literature (Immich, PDQ, DISC21, SSCD, DINOv2, FiftyOne), candidate designs, the PostgreSQL runs and groups, Celery jobs, OpenSearch fields, the holdout rule, per-project profiles, the prototype protocol and stop rules; absorbs the former #416 issue plan |
 | [research_spatial_attributes_plan.md](research_spatial_attributes_plan.md) | plan (research; capture metadata seam in W4, the rest after the tag) | Spatial scenes and attribute signals (#348, #400): capture metadata at ingest as the one v0.7.0 seam, colour and view signals with measured bars, same-place discovery and photogrammetry as registered research, the reserved schema, the prototype protocol and the location-privacy rules |
 | [research_plate_text_plan.md](research_plate_text_plan.md) | plan (research first; product in W5e, #401) | Registration-plate text as a per-box attribute: reader bake-off, per-character confidence, burst consensus, normalized exact/fuzzy/fragment search, identity groups, privacy modes and purge; the seams the v0.7.0 rebuild must include, the prototype protocol and the landing lanes |
+| [research_auto_label_assist_plan.md](research_auto_label_assist_plan.md) | plan (seams for B2 now; research after the tag; features v0.8.0) | The auto-label assist loop on the new foundation: loop tables, pause/resume/cancel and budget control on Celery, events, token budgets, the lock rule, the UI wire; literature review; prototypes AL0-AL6 (label rate, VLM precision, review cost, strategy replay, teacher-student, Z5 from #398) |
 | [v080_platform_breadth_plan.md](v080_platform_breadth_plan.md) | plan (v0.8.0, not started) | Platform breadth after v0.7.0: COCO segmentation import, search by image, model-family training, API authentication, a second segmenter, video files as a source, the wheel example and the embedding swap, in waves with a test and GPU budget |
 
 ## Per-issue plans (published as gists on the issues)
@@ -71,7 +72,6 @@ closes.
 | Doc | Issue | What it is |
 |---|---|---|
 | [issue-42-plan.md](issue_plans/issue-42-plan.md) | #42 | Smaller-workspace TensorRT builds and 12 GB GPU guidance |
-| [issue-398-plan.md](issue_plans/issue-398-plan.md) | #398 | Detector-class roots with a hold-back guard as the auto-label loop partition |
 
 ## Reference docs
 
