@@ -233,8 +233,9 @@ def test_gpu_clustering_overlay_renders_one_pinned_device() -> None:
             'OP_CLUSTER_GPU_DEVICE': '2',
         },
     )
-    if result.returncode != 0:
-        pytest.skip(f'docker compose could not render the files here: {result.stderr[:200]}')
+    if 'docker: unknown command' in result.stderr or 'is not a docker command' in result.stderr:
+        pytest.skip('docker compose plugin unavailable')
+    assert result.returncode == 0, result.stderr
     worker = json.loads(result.stdout)['services']['curation-auto-label-worker']
     (device,) = worker['deploy']['resources']['reservations']['devices']
     assert device['device_ids'] == ['2']
