@@ -80,10 +80,43 @@ async def _start_embedding_viz(client: Any) -> str:
     return 'started'
 
 
+async def _start_region_job(client: Any, which: str) -> str:
+    """The region jobs return a snapshot either way, so a run counts as started when its
+    own body ran in this process."""
+    from src.services.curation.clustering import region_cluster_jobs as jobs
+
+    ran = asyncio.Event()
+
+    async def body(*_: object, **__: object) -> dict[str, object]:
+        ran.set()
+        await asyncio.sleep(60)
+        return {}
+
+    jobs.build_region_fp_centroids = body  # type: ignore[assignment]
+    jobs.cluster_region_residuals = body  # type: ignore[assignment]
+    jobs.count_false_positive_boxes = body  # type: ignore[assignment]
+    if which == 'region_cluster':
+        await jobs.start_region_cluster_job(client, rebuild_fp_centroids=False, auto_fp_threshold=0)
+    else:
+        await jobs.start_region_fp_centroid_job(client)
+    await asyncio.sleep(1.5)
+    return 'started' if ran.is_set() else 'busy'
+
+
+async def _start_region_cluster(client: Any) -> str:
+    return await _start_region_job(client, 'region_cluster')
+
+
+async def _start_region_fp_centroids(client: Any) -> str:
+    return await _start_region_job(client, 'region_fp_centroids')
+
+
 STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'item_scores': (_start_item_scores, {'OP_SCORES_STATE_DIR': 'scores'}),
     'selection': (_start_selection, {'OP_SELECT_JOBS_DIR': 'selection'}),
     'embedding_viz': (_start_embedding_viz, {'OP_VIZ_JOBS_DIR': 'viz'}),
+    'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
+    'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),
 }
 
 
