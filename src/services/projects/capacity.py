@@ -83,10 +83,8 @@ def _format_gb(gb: float) -> str:
 
 
 def per_project_shards() -> int:
-    """The number of distinct index names a brand-new project creates
-    today -- computed from ``resources_for_new`` rather than
-    hardcoded, so this tracks reality as roles are added/folded (a planned fold of two roles into
-    ``configs`` has not landed, so this is currently 7, not 6)."""
+    """The number of distinct index names a brand-new project creates, computed from
+    ``resources_for_new`` rather than hardcoded so it tracks roles as they are added or folded."""
     from src.config.curation_accessors import base_curation_config
     from src.config.projects import resources_for_new
 
