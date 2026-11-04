@@ -152,6 +152,10 @@ next command.
    exists in OpenSearch; a class reconciliation over items reports items whose `class_id` is not in
    the registry or whose `class_name` disagrees with it (report only; the D-47 verifier is the same
    code). Any count or checksum mismatch stops here with the report path; nothing is deleted.
+3a. **analysis_settings** (lane 2F, task 2F-6; review RN-3): the bounded close, settings and reopen of
+   the plate analysis settings on every upgraded `items` index (the table below), run here so that a
+   failure stops the upgrade with the sources still in place. Record
+   `upgrade_runs(analysis_settings)`; step 4 refuses unless it is `completed`.
 4. **delete_sources**: delete the per-project `configs`, `classes`, `umap_state`,
    `labels_confirmed` (and legacy settings) indexes, `op_projects` and `op_global_configs`; rename
    each `class_registry.json` to `class_registry.json.migrated-0.7.0`; delete the migrated state
@@ -177,8 +181,10 @@ W2.3b lanes add their steps as new files without editing 2E's code:
 | `clustering.py` | 4F (W2.3b) | per project, one `ready` partition (`method = 'ivf'`, activation reason `upgrade`) built from the items' existing assignment so the served view does not change at the upgrade; `last_clustering.json` and the region-cluster marker files deleted with the other state files | the partition's member count equals the items with a cluster id |
 | `near_duplicates.py` | ND-A (W2.3b) | one `update_by_query` per 0.6.0 index clearing the `dup_*` and `duplicate_*` values (mappings cannot be dropped without a reindex); the `near_dup_profile` revision 1 per project from the code defaults; the levels marked `rebuild_required`, so a full build runs after the upgrade; the upgrade report offers the pausable `source_backfill` job, whose content step writes `content_sha256` for every carried-over image (review RR-10; the W4 capture step joins the same pass) | no document keeps a non-empty `dup_*` value; after the backfill a re-ingest of an upgraded image is refused as an exact duplicate |
 
-The OpenSearch migrate step (2F, R-7) also adds the registration-plate analysis settings to the
-`items` index of every **upgraded** project (kept by the owner, Q-A of 2026-11-04): analysis
+Step 3a adds the registration-plate analysis settings to the `items` index of every **upgraded**
+project (kept by the owner, Q-A of 2026-11-04). It runs inside `upgrade_from_060`, after verify and
+before `delete_sources` (review RN-3), not in the later `db-migrate` OpenSearch migrate (2F, R-7),
+which only skips indexes that already carry the settings. Analysis
 settings are static, so they need `_close`, `PUT _settings`, `_open`
 ([update settings](https://docs.opensearch.org/latest/api-reference/index-apis/update-settings/)).
 New projects get them in the creation body. The step is safe and bounded (review RR-8, task 2F-6):

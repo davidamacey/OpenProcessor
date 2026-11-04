@@ -398,13 +398,13 @@ workers and replicas.
 | 1 | Request fan-out becomes bulk writes; the ingest data plane as task groups | `b4/bulk-occ` | [05](05_b4_stateless_api.md) track 4A | 05 section 4 | #451, #464 (CC-10 box), #473 (part b) |
 | 2 | Project creation (#439) | `b4/project-create` | 05 track 4D | 05 section 6 | #439 |
 | 3 | The worker knob and the statelessness ratchet | `b4/worker-knob` | 05 track 4B | 05 section 5 | #451 |
-| 2 | Capture metadata and GPS coordinates at ingest under the project's `location_policy` (default `store`; RD-51 reversed), the location purge; exports keep the embedded GPS (RD-54) (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` (after 4A, 4D and the privacy lane merged) | [05](05_b4_stateless_api.md) section 6c | 05 section 6c (CM-1..CM-4) | #348 (the one v0.7.0 slice) |
+| 2 | Capture metadata and GPS coordinates at ingest under the project's `location_policy` (default `store`; RD-51 reversed), the location purge; exports keep the embedded GPS (RD-54) unless the project's policy is `drop` (CM-5) (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` (after 4A, 4D and the privacy lane merged) | [05](05_b4_stateless_api.md) section 6c | 05 section 6c (CM-1..CM-4) | #348 (the one v0.7.0 slice) |
 | 3 | The identity-text privacy baseline (research plate 5.8) | `b4/identity-text-privacy` (after the capture lane merged) | 05 section 6c | 05 section 6c | #401 (privacy baseline) |
 | 1 | Privacy and security items (owner decision 7 of 2026-11-04) | `b4/privacy-hardening` | the files named in the maintainers' private notes; the coordinator checks they are disjoint from 4A, 4B and 4D before the cut and moves any shared file's task into the owning track | the private notes; public text stays neutral (one line per issue); plus one docs task, `SECURITY.md`: a plain statement that, when external use is enabled, external VLM endpoints and the hosted research judge may receive any region kind and contact-sheet image (OI-1, OI-2; the matching `docs/CURATION.md` sentence is in track 4D, which owns that file in W4) | #468, #470, #472 (#469 and #471 close with no code change, 00b section 4) |
 
 Merge order: 4A, 4D, privacy lane, capture lane, identity-text lane, 4B (its ratchet allowlist must
 see the others' final code). The privacy lane owns `SECURITY.md` in W4 and writes all three
-statements (OI-1 and OI-2; the location rules: coordinates stored per `location_policy`, exports keep the embedded GPS; the identity-text section).
+statements (OI-1 and OI-2; the location rules: coordinates stored per `location_policy`, exports keep the embedded GPS unless the project's policy is `drop`; the identity-text section).
 
 **Folded in.** #473 part b, rewritten as ND-C1..ND-C4 (core ingest writes pending rows and the
 single-writer `near_dup_core_group` job groups them; task 4A-4b in 05), in the file 4A-4 already

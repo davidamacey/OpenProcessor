@@ -193,9 +193,9 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 | #398 detector-class roots (Z5) | v0.8.0 | research `al:AL6` in RW-6 (calls RD-80); its seams ship now: the loop reads `(partition_id, cluster_uid)` from `cluster_partitions` (4D, 4F) and `detector_class` is a partition method value |
 | #400 attribute signals | none, parked | `sp:P-2`, `sp:P-3` in RW-5; lane L-A1 only on a PASS (reserved DDL in [02d](02d_research_seam_schema.md) section 5) |
 | #401 plate identity text | none, parked | wave W5e ([03g](03g_w5e_plate_text.md); its revision in W5e approved, RD-4; pending RD-3, RD-61, RD-62); creation-time seams in W2.1 (1C-9) and W2.2 (2F-6, kept by the owner, Q-A), the OCR output in W5c (PP-OCRv6 compared once, Q-B), the privacy baseline in W4; prototypes `pt:P0..P5` as short runs in PW-2 (`pt:P6` cut; UFPR-ALPR and LPLC skipped, RD-10); milestone v0.7.0 on the owner's go |
-| #403 MPS overlay | v0.7.0, parked | W5b conditional row (adopt only on the `gpu:PR-4` evidence); else moved to RW-1 at W6 |
+| #403 MPS overlay | v0.7.0, parked | MPS stays off in v0.7.0 (`gpu:PR-4` cut before the tag, review RN-6); moved to RW-1 at W6, where `PR-4` may run on the owner's OK |
 | #406 judge calibration | v0.8.0 | `clu:CL-1` in RW-3 (protocol file section 5) |
-| #407 GPU-prep staged speed | v0.7.0 | W5b `profile` then `prep`; reads `gpu:PR-2` (CV-CUDA) and `PR-4` (the C++ bar) first |
+| #407 GPU-prep staged speed | v0.7.0 | W5b `profile` then `prep`; reads `gpu:PR-2` (CV-CUDA) first; 5b-G4 (the C++ bar) is not opened, `PR-4` is post-tag in RW-1 (review RN-6) |
 | #411 0.7.0 close-out | v0.7.0 | W6, closes after the tag |
 | #416 near-duplicate threshold | v0.8.0 | the near-duplicate service ships in v0.7.0 with today's 0.98 defaults (ND-A, ND-B in W2.3b; ND-C in W4); `nd:P0..P2` as short runs in PW-1 (P1 may seed the defaults; the SSCD arm cut); `nd:P3..P7` and ND-E in RW-4 on the owner's OK |
 | #435 frame-target search | v0.8.0 | decided by `emb:EP-2` in RW-2 (RD-38: close if the bar fails) |
@@ -491,7 +491,7 @@ change, 5.5).
 | (B) explicit wire fields; coordinates only in the image `capture` block under the location policy | CM-2 (the location canary), CM-4 |
 | (B) queue consumer test covers profiles | already in 02b section 7.3 (kept) |
 | L-X1 export orientation | 5b-D1 (07b amendment) |
-| L-X2 export GPS | **not taken** (owner, RD-54): exports keep the embedded GPS; `SECURITY.md` says so |
+| L-X2 export GPS | exports keep the embedded GPS by default (owner, RD-54); a `drop`-policy project's exports strip it (CM-5, review RN-4) |
 | (C) attribute signals | **reserved** (02d section 5), RW-5 L-A1 |
 | (C) scenes and reconstructions | **reserved** (02d section 5), RW-5 L-SP1 |
 
@@ -548,12 +548,12 @@ The rows of section 2 above are updated for #40, #42, #45, #67, #84, #219, #220,
 | #466 loop pause, events, budgets | W2.3a 4D-2..4D-7, W2.3b 4E | RW-6, v0.8.0 `feat/loop-review` |
 | #473 near-duplicate data quality | part a ND-A, part b ND-C1, part c ND-B1 | - |
 | #84 wheel example | none | RW-6 `al:AL5`, v0.8.0 F8 |
-| #40 decode once | W5b (reads `gpu:PR-1..PR-4`; L-X1 in 5b-D1) | - |
-| #407 GPU-prep speed | W5b (reads `gpu:PR-2`, `PR-4`) | - |
+| #40 decode once | W5b (reads `gpu:PR-1`, `PR-2`; L-X1 in 5b-D1) | RW-1 (`PR-3`, `PR-4`) |
+| #407 GPU-prep speed | W5b (reads `gpu:PR-2`; 5b-G4 not opened) | RW-1 (`PR-4`) |
 | #219 crops at model size | W5c (S-10 key from 1E-4) | - |
 | #220 OCR and faces | W5c (`gpu:PR-6`, `rec_char_min`), W5d (`gpu:PR-5`) | - |
 | #268 Triton follow-ups | W5a | RW-1 remainder |
-| #403 MPS | W5b conditional on `gpu:PR-4` | RW-1 if moved |
+| #403 MPS | off in v0.7.0 | RW-1 (`PR-4`) |
 | #231 serving head-to-head | GPU window 2, its own rule | RW-1 if no room |
 | #42 12 GB card | side track; `build_profile = 'small'` | - |
 | #45 ladders | W5a (reads `JobPerfSummary`) | - |
@@ -568,7 +568,7 @@ The rows of section 2 above are updated for #40, #42, #45, #67, #84, #219, #220,
 | G-2: one long loop holds the only `assist_loop` consumer and starves other projects | auto-label plan section 2 | 3A-13 (`Yield`, slices): `tests/tasks/test_two_project_slices.py`; 4D-6: `tests/curation/test_assist_loop_two_projects.py` |
 | G-3: the loop's durable record cannot live in 24-hour events or in `jobs.params` | auto-label plan section 2 | 1F-1 (the loop tables), 4D-2: `tests/curation/test_assist_loop_record_in_tables.py`, `test_assist_loop_budget_sql.py` |
 | exports ignore EXIF orientation 2-8 on the resize and crop path | spatial plan section 2.1 | 5b-D1 (L-X1): `tests/curation/test_export_orientation.py` |
-| byte-copy exports keep embedded GPS | spatial plan section 9 | **kept as today by the owner** (RD-54, 2026-11-04): no strip task; RF-84 checks the exported copy keeps its GPS block |
+| byte-copy exports keep embedded GPS | spatial plan section 9 | kept as today by default (RD-54, 2026-11-04); stripped only for `drop`-policy projects, W4 CM-5 (review RN-4): `tests/curation/test_export_gps_by_policy.py`; RF-84 checks both |
 | the in-process text encoders are dead code under D-69 | embeddings plan ES-E | B4 4B-7: `tests/curation/test_search_requires_triton_text.py`; retired variables refuse startup |
 | `cluster_id` is overloaded (index assignment, class id below 10000, residual offset, review state) | clustering plan section 1 | 4F-6 splits it into the assigner, the versioned partition and the review state: `tests/test_no_cluster_id_namespace.py`; 4F-2 `tests/clustering/test_carry_over.py` (ARI 1.000 on permuted input, 0.306 today) |
 | a `RESTRICT` foreign key inside one project's cascade can fail the project delete | found by this integration pass | 02a section 1.2: `tests/db/test_profile_fk_cascade.py` (1F-4) |
@@ -599,7 +599,7 @@ rebutted with the reason). The owner's answers of the same day changed the plan 
 | W2.3 split into W2.3a (5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C: ports of today's behaviour) and W2.3b (4F, ND-A, ES-B, then ND-B, then 4E) (RR-13, Q-A) | [03b](03b_b2_w2_job_families.md) header and sections 2-8; [00_master_plan.md](00_master_plan.md) W2.3a and W2.3b | each part closes with its own part check; every W2.3b cross-lane call is against a signature fixed in 03b |
 | the research pieces W2.3a lanes used to call moved to W2.3b: the `near_dup` scorer deletion and every `enqueue_pending` call (ND-A, was 4A-6, 4B-4, 4C), person grouping as a partition (4F-9, was 4C-7), the IVF retrain and the loop's cluster reader (4F-10, was 4D-1, 4D-7) | 03b | `tests/curation/test_no_near_dup_scorer.py`, `tests/test_persons_cluster_partition.py`, `tests/curation/test_assist_loop_reads_partition.py` |
 | every seam kept, the plate normalizer included; its upgrade step safe and bounded (Q-A, RR-8, RR-12 rebutted) | [02c](02c_migration_ops_tests.md) section 2.2; [03d](03d_b2_s2_control_data.md) 2F-6 | `tests/opensearch/test_analysis_settings_failure.py` |
-| GPS coordinates stored now under `project_settings.location_policy` (default `store`; RD-51 reversed); exports keep the embedded GPS (RD-54); the export strip task and ExifTool in the jobs image dropped | [02a](02a_postgres_schema.md) section 4; [02d](02d_research_seam_schema.md) section 1; [05](05_b4_stateless_api.md) CM-2..CM-4; [06](06_release_acceptance.md) RF-84; [08](08_environment_and_setup.md); [10](10_standards_and_libraries.md) | `tests/curation/test_location_policy.py`; the location canary |
+| GPS coordinates stored now under `project_settings.location_policy` (default `store`; RD-51 reversed); exports keep the embedded GPS (RD-54) except for `drop`-policy projects (CM-5, review RN-4, ExifTool in the jobs image for that path only) | [02a](02a_postgres_schema.md) section 4; [02d](02d_research_seam_schema.md) section 1; [05](05_b4_stateless_api.md) CM-2..CM-4; [06](06_release_acceptance.md) RF-84; [08](08_environment_and_setup.md); [10](10_standards_and_libraries.md) | `tests/curation/test_location_policy.py`; the location canary |
 | short tiered prototype runs, about 10 GPU hours before the tag (RD-2, RD-7); cuts: `gpu:PR-3`, `PR-4` (5b-G4 not opened), `PR-7..PR-9`, `pt:P6`, the SSCD arm of `nd:P2`, `nd:P3..P7`, every `emb:`/`clu:` GPU run, `sp:P-2..P-9`, `al:AL1..AL6` | [00e_research_track.md](00e_research_track.md) sections 2-4; [07b](07b_b5_decode_once.md) 5b-G4; [11](11_risks_cleanup_host.md) rules 9, 10 | the coordinator's GPU ledger |
 | datasets: one register; UFPR-ALPR, LPLC and RodoSol skipped (RD-10, Q-C, RR-11) | 00e section 4.1 | each prototype's registration commit records the terms |
 | PP-OCRv6 as one short reader comparison against PP-OCRv5 (Q-B, RR-5) | 00e `pt:P1`; [07c](07c_b5_crops_ocr_faces.md); [03g](03g_w5e_plate_text.md); 10 | `pt:P1`'s registered bar |

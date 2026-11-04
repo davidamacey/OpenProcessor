@@ -265,11 +265,12 @@ Three kinds of seam:
 
 ### 5.1 (A) Capture metadata, v0.7.0
 
-**Postgres.** None needed in v0.7.0 if J2 = "no coordinates in v0.7.0" (the recommendation). If the
-owner chooses opt-in storage now, add to `project_settings` in `0001_control_plane`:
+**Postgres.** The owner chose to store coordinates now (2026-11-04, program RD-51 reversed; see
+[program/02a](program/02a_postgres_schema.md) section 4), so `project_settings` in
+`0001_control_plane` has:
 
 ```sql
-location_policy  text NOT NULL DEFAULT 'drop'
+location_policy  text NOT NULL DEFAULT 'store'   -- owner 2026-11-04: RD-51 reversed, stored now
                  CHECK (location_policy IN ('drop','store_coarse','store'))
 ```
 

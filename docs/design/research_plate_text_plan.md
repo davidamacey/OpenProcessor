@@ -195,6 +195,7 @@ Open Images transcriptions plus set P.
 | R6 | Format-constrained re-decode of the CTC output (top-N per position plus the `text_format` regex) | 🟡 P2 | the OpenALPR pattern; helps where a jurisdiction format is known; US formats vary by state, so gains may be small |
 | R7 | Agreement with the configured VLM (`both`), VLM as fallback on low confidence | ✅ keep | already wired; matches fusion and the BLPR pattern; external endpoints allowed as today (OI-1) |
 | R8 | TrOCR, the 2018 segmentation-free CNN reader, commercial engines | ❌ | too slow, untrained for US plates, or not open-source |
+| R9 | PP-OCRv6 recognition (Apache-2.0, released June 2026) in place of PP-OCRv5 | 🟡 P1 (owner Q-B, review RR-5) | one short comparison against R1 in `pt:P1`; adopted only on a clear win at no more than today's latency, and then for the B5c OCR model too ([program/07c](program/07c_b5_crops_ocr_faces.md)) |
 
 ### 4.2 Confidence and tiers
 

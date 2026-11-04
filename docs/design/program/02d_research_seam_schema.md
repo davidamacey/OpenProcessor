@@ -83,7 +83,8 @@ Reader in 0.7.0: the Triton router of B4 4B (a server whose report lacks the mod
 ### 2.2 Clustering S-core (clustering plan 5.1, with the consistency fixes of X-1 and X-5)
 
 ```sql
-CREATE TABLE cluster_calibrations (           -- immutable (trigger cluster_calibrations_immutable)
+CREATE TABLE cluster_calibrations (           -- immutable (trigger cluster_calibrations_immutable;
+                                              -- DELETE only by cascade or op_project_delete_allows, RN-1)
   id               uuid PRIMARY KEY DEFAULT uuidv7(),
   project_id       uuid NULL REFERENCES projects(id) ON DELETE CASCADE,   -- NULL: deployment default
   target           text NOT NULL CHECK (target IN ('item','region_box','face','image')),
@@ -138,7 +139,8 @@ CREATE TABLE cluster_partitions (             -- one clustering run's output; im
 CREATE INDEX ix_cluster_partitions_recent ON cluster_partitions (project_id, target, level, created_at DESC);
 -- trigger cluster_partitions_ready_immutable: once status = 'ready', only status may change, and
 -- job_id and parent_partition_id may change to NULL (review RR-2: the ON DELETE SET NULL writes of
--- job pruning and of partition retention are UPDATEs that the trigger must let through)
+-- job pruning and of partition retention are UPDATEs that the trigger must let through); a DELETE of a
+-- 'ready' partition passes only by cascade or under op_project_delete_allows (review RN-1)
 
 CREATE TABLE cluster_identities (             -- stable identity of a cluster across partitions
   cluster_uid        uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -188,7 +190,9 @@ CREATE TABLE cluster_memberships (            -- bulk-written with COPY by the r
 );
 CREATE INDEX ix_cluster_memberships_cluster ON cluster_memberships (partition_id, cluster_uid);
 -- trigger cluster_children_ready_immutable on partition_clusters and cluster_memberships:
--- UPDATE or DELETE raises while the parent partition is 'ready' (a DELETE by cascade passes: parent gone)
+-- UPDATE or DELETE raises while the parent partition is 'ready'; a DELETE passes when the parent is
+-- gone (cascade), no longer 'ready' (retention sets 'discarded' first, then deletes in batches), or
+-- op_project_delete_allows(project_id) is true (the project_delete job; 02a section 1.2, review RN-1)
 -- trigger cluster_children_project_from_parent (review RR-18): BEFORE INSERT copies project_id from
 -- the partition, so a project partition can never get a NULL-project membership (the composite key
 -- is MATCH SIMPLE and skips NULLs); one lookup per COPY batch
@@ -431,7 +435,7 @@ listed codes).
 | Test | Asserts |
 |---|---|
 | `tests/db/test_research_schema_matches_plan.py` | every table, unique constraint, partial index, foreign key, trigger and policy of sections 2-4 present after `upgrade head` (sections 3 and 4 entries are added by ND-A and the W5e store lane) |
-| `tests/db/test_cluster_partition_immutable.py` | updating a `ready` partition's memberships or clusters raises; a cascade delete of a discarded partition passes; review RR-2: pruning a `cluster_run` job that a ready partition references passes (the `SET NULL` update is allowed); deleting a ready parent of a ready child passes; deleting a superseded `ready` partition through retention passes (the children trigger); deleting a project that holds ready partitions passes |
+| `tests/db/test_cluster_partition_immutable.py` | updating a `ready` partition's memberships or clusters raises; a cascade delete of a discarded partition passes; review RR-2: pruning a `cluster_run` job that a ready partition references passes (the `SET NULL` update is allowed); deleting a ready parent of a ready child passes; retention of a superseded `ready` partition passes by setting it `discarded` first and then batch-deleting its children (review RN-1); deleting a project that holds ready partitions passes, both through the `project_delete` job's batched delete under `op_project_delete_allows` and by a direct `DELETE FROM projects` (cascade); a child DELETE of a `ready` partition without the setting raises |
 | `tests/db/test_children_project_from_parent.py` (review RR-18) | a membership or near-duplicate member inserted with `project_id` NULL into a project partition or run gets the parent's project |
 | `tests/db/test_cluster_memberships_fk_null_project.py` | a membership of a NULL-project partition that does not exist is refused (the single-column foreign key, X-1) |
 | `tests/db/test_embedding_registry_schema.py` | a second primary for one target is a unique violation; the model-version trigger refuses an `input_spec` update and allows `engine_parity_min_cos` once |

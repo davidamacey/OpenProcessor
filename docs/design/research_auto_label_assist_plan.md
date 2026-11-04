@@ -470,7 +470,7 @@ New and changed transitions (the table in 02b section 1):
 | From | To | Who | Condition |
 |---|---|---|---|
 | `running` | `queued` | wrapper, fenced | **new**: the handler returned `Yield` at a boundary after `slice_s` (kinds with `slice_s` only); attempt outcome `yielded`; no `retry_count` change; dispatched again at once |
-| `queued` | `paused` | pause route | **new**: a queued job can be paused before it runs; best-effort revoke of the message (never `terminate=True`) |
+| `queued` | `paused` | pause route | **new**: a queued job can be paused before it runs; **no revoke** (a revoked id stays in worker memory and would skip the resume; the stale message is acked by the claim; program 02b, review RR-1) |
 | `running` | `paused` | wrapper, fenced | as today, widened: `pause_requested_at` set by the route or by the handler itself (audit, budget, project paused, VLM unavailable); for every kind whose `pausable` is true |
 | `paused` | `queued` | resume route; **reaper** for system reasons | the reaper resumes `project_paused` when `projects.paused_at IS NULL` and `vlm_unavailable` when the VLM is free again (`deployment_settings.vlm_paused_for_training` cleared and the endpoint probe answers); `user`, `audit` and `budget` wait for a person |
 
@@ -506,7 +506,7 @@ the optional `Idempotency-Key` on start (D-58), and are added to the cross-proje
 | Start | same route, `dry_run: false` (exists) | one transaction: `jobs` row `queued` (via `start_job`), `assist_loop_runs`, `assist_loop_budgets` rows, iteration 1; 202; 409 `assist_loop_busy` from `uq_jobs_one_active` | `send_task` after commit (02b section 2.2) |
 | Pause | `{P}/assist/loops/{loop_id}/pause` (new, POST) | `queued` -> `paused` at once; `running` -> `pause_requested_at = now()`, `pause_reason = 'user'`, answer 202 with `control.state = 'pausing'`; `paused` -> 200 no-op; `cancelling` -> 409 `job_cancelling`; terminal -> 409 `job_finished` | none for running (cooperative); revoke for queued |
 | Resume | `POST /curation/projects/{project}/assist/loops/{loop_id}/resume` (exists) | `paused` or `interrupted` -> `queued`, `pause_reason = NULL`; 409 `resume_blocked` with the reason when the project is paused or the VLM is unavailable | dispatch |
-| Cancel | `POST /curation/projects/{project}/assist/loops/{loop_id}/cancel` (exists) | 02b section 3.3 exactly | best-effort revoke for queued/paused; never terminate |
+| Cancel | `POST /curation/projects/{project}/assist/loops/{loop_id}/cancel` (exists) | 02b section 3.3 exactly | revoke only on cancel (terminal, so the id is never reused); never terminate |
 | Edit budget | `{P}/assist/loops/{loop_id}/budget` (new, PATCH) | body `{limits: [{pool, unit, limit_value}]}`; allowed in `queued`, `running`, `paused`; a limit below `spent + reserved` answers 409 `budget_below_spent`; emits `assist_loop.budget`; never resumes by itself | none |
 | Rollback | `POST /curation/projects/{project}/assist/loops/{loop_id}/rollback` (exists) | becomes a label-operation undo over the run's propagation ops (section 5.6); dry run first | the undo kind of 02b (`label_undo`) |
 

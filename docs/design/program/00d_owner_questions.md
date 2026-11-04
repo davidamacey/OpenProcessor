@@ -21,7 +21,7 @@
 | RD-23 | Cluster memberships in PostgreSQL? | **Approved** | 02d section 2.2 |
 | RD-25 | A `cluster` queue and `cluster-worker`, CPU in v0.7.0? | **Decided: yes** (review Q-D) | [03a](03a_b2_w1_queue_infra.md) 1B-8 |
 | RD-51 | Store no GPS coordinates in v0.7.0? | **Reversed: store GPS coordinates now**, behind a per-project `location_policy` (`drop`, `store_coarse`, `store`; default `store`, keep) in the W2.1 schema | [02a](02a_postgres_schema.md) section 4; 02d section 1; 05 CM-2, CM-4 |
-| RD-54 | Strip GPS from exported copies? | **No: exports keep the embedded GPS, as today**; the export GPS-strip task is dropped and `SECURITY.md` says so | 05 CM-4; [06](06_release_acceptance.md) RF-84 |
+| RD-54 | Strip GPS from exported copies? | **No: exports keep the embedded GPS, as today**, by default; a project whose own `location_policy` is `drop` gets GPS-free exports (review RN-4, the project's policy, not a new question) | 05 CM-4, CM-5; [06](06_release_acceptance.md) RF-84 |
 
 Also answered from the review (00e_research_review.md section 4): **Q-A** keep all seams now (above,
 RD-1); **Q-B** add PP-OCRv6 as one short reader comparison against PP-OCRv5 in the plate-text and

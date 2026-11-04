@@ -53,8 +53,10 @@ unique constraint, partial index and row-level-security policy named here.
 
 ### 1.2 Foreign keys and cascades
 
-- A project-scoped row references `projects(id) ON DELETE CASCADE`: deleting the project row
-  removes all its control data in one statement
+- A project-scoped row references `projects(id) ON DELETE CASCADE`. The cascade is the safety net
+  behind the `project_delete` job's batched delete (4C-5), not the delete path itself (review RN-7):
+  a large project is removed table by table in batches first, and the final `DELETE FROM projects`
+  then finds little left
   ([constraints](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK)).
 - A reference to a job from a domain row is `ON DELETE SET NULL` (history survives job pruning).
 - A reference that must not dangle while in use keeps the default `NO ACTION`, not `RESTRICT`
@@ -68,6 +70,24 @@ unique constraint, partial index and row-level-security policy named here.
   in reverse foreign-key order in batches first (RR-7, lane 4C-5), and
   `tests/db/test_profile_fk_cascade.py` (02d section 6) enumerates every referencing pair from the
   catalog; a pair that still fails is declared `DEFERRABLE INITIALLY DEFERRED`.
+- **Guarded deletes (review RN-1).** Every immutability trigger (`config_revisions_immutable`,
+  `cluster_partitions_ready_immutable`, `cluster_children_ready_immutable`,
+  `cluster_calibrations_immutable`, and any later one) allows a DELETE in exactly two cases: the
+  parent row is gone (a cascade), or `op_project_delete_allows(OLD.project_id)` is true. That
+  function (below) is true only inside the transaction of the `project_delete` job for that project:
+  the job sets `set_config('op.project_delete', <project id>, true)` (transaction-local, like
+  `op.scope`) and the project row must already be `deleting` (2A's lifecycle; only the delete route
+  sets it). A role check is not used because every app process runs as the one role `op_app`
+  (section 1.5); the status condition is what a forged setting cannot fake, and
+  `tests/test_project_delete_flag_writers.py` allows the literal `op.project_delete` in one file only,
+  `src/services/projects/delete.py`. So the batched delete may remove children before parents.
+  Retention does not use the flag: it sets a superseded partition to `discarded` first (a status
+  change the partition trigger allows) and then deletes its children in batches, which the children
+  trigger allows because the parent is no longer `ready` (02d section 2.2). Red test:
+  `tests/projects/test_project_delete_guarded.py` (`db`): a project holding a `ready` partition with
+  clusters and memberships, a config document with two revisions and a project calibration deletes
+  through the batched job; controls: the same child DELETE without the setting, with the setting
+  naming another project, or with the project not `deleting`, raises.
   Examples: an activation's revision, a
   promotion's model).
 
@@ -114,7 +134,13 @@ CREATE FUNCTION op_scope_is_core() RETURNS boolean
   LANGUAGE sql STABLE AS $$ SELECT coalesce(current_setting('op.scope', true) = 'core', false) $$;
 -- the EXISTS policies of sections 5 and 7 keep the one-argument form
 CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
-  LANGUAGE sql STABLE AS $$ SELECT op_scope_is_deployment() OR pid = op_scope_project() $$;
+  LANGUAGE sql STABLE AS $$ SELECT op_scope_is_deployment() OR pid = op_scope_project()
+                               OR (pid IS NULL AND op_scope_is_core()) $$;   -- review RN-2
+-- review RN-1: the one exception every immutability trigger honours for DELETE
+CREATE FUNCTION op_project_delete_allows(pid uuid) RETURNS boolean
+  LANGUAGE sql STABLE AS $$ SELECT pid IS NOT NULL
+    AND coalesce(current_setting('op.project_delete', true), '') = pid::text
+    AND EXISTS (SELECT 1 FROM projects p WHERE p.id = pid AND p.status = 'deleting') $$;
 ```
 
 - `src/db/session.py` exposes exactly three ways to open a transaction (the third, `core_tx`, below): `project_tx(session, project)`
@@ -124,7 +150,9 @@ CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
   so a scoped session that commits and auto-begins again keeps its scope instead of silently losing
   it;
   `deployment_tx(session, reason)` sets `op.scope = 'deployment'` and is allowed only in the modules a
-  ratchet lists (the reaper, beat tasks, the project registry, the upgrade step, admin CLIs).
+  ratchet lists (the reaper, beat tasks, the project registry, the upgrade step, admin CLIs, the
+  GPU worker start in `src/tasks/runtime/gpu_app.py` for `gpu_devices` (review RN-8), and the
+  `project_delete` job, which is a deployment-level row).
   `set_config(..., true)` is transaction-local, so it also works behind a transaction pooler.
 - A session that sets neither gets the `scope_not_set` error on its first row-level-secured
   statement: fail closed, and loud (a bug shows up as an error, not as a wrong 404).
@@ -155,7 +183,7 @@ CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
 - Tests: `tests/db/test_row_level_security.py` (a project-scoped transaction cannot read, update or
   insert another project's row in every RLS table; an unscoped statement raises `scope_not_set`; a
   scoped session keeps its scope across commit and auto-begin; review RR-3: project scope cannot see
-  core rows, core scope cannot see project rows, a project-scoped run reads a deployment calibration
+  core rows, core scope cannot see project rows, a core job (project NULL) writes its `job_attempts` and `job_items` rows under `core_tx` (review RN-2), a project-scoped run reads a deployment calibration
   and cannot insert one; `core_tx` outside the allowlist raises).
 
 ### 1.5 Roles
@@ -164,7 +192,7 @@ CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
 |---|---|---|
 | `op_super` (the image's `POSTGRES_USER`: the Docker image creates it "with superuser power", [postgres image](https://hub.docker.com/_/postgres)) | bootstrap only: `db-migrate` creates `op_owner` and `op_app` with it, then never again | everything |
 | `op_owner` | `db-migrate` (DDL), `openprocessor db backup/restore` | owns the schema; not a superuser; `BYPASSRLS` so `pg_dump` sees every row (review fix R-13) |
-| `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_project`, `op_scope_is_deployment` and `op_scope_allows`; no DDL, not a superuser, `NOBYPASSRLS` |
+| `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_project`, `op_scope_is_deployment`, `op_scope_is_core`, `op_scope_allows` and `op_project_delete_allows` (review RN-2); no DDL, not a superuser, `NOBYPASSRLS` |
 
 `db-migrate` connects as `op_super` only to create `op_owner` and `op_app` idempotently (passwords
 from their secret files), then runs `alembic upgrade head` as `op_owner`, and re-applies the grants.
@@ -360,7 +388,8 @@ CREATE TABLE config_revisions (
   PRIMARY KEY (config_id, revision)
 );
 -- trigger config_revisions_immutable: BEFORE UPDATE OR DELETE ... RAISE (a DELETE only by cascade:
--- the trigger allows it when the parent row is gone, checked with NOT EXISTS on config_documents)
+-- the trigger allows it when the parent row is gone, checked with NOT EXISTS on config_documents,
+-- or when op_project_delete_allows(<the document's project_id>) is true: section 1.2, review RN-1)
 
 CREATE TABLE config_activations (
   project_id    uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -618,8 +647,11 @@ CREATE TABLE gpu_reservations (             -- replaces training_gpus.lock (the 
 );
 ```
 
-`gpu_devices` is deployment data (no RLS; upserted under `deployment_tx` by every GPU worker at
-`worker_ready` for every NVML-visible card in its container and on every heartbeat, by
+`gpu_devices` is deployment data with no RLS, so its upsert needs no scope and runs in whichever
+transaction the writer already holds (review RN-8: the worker start writes it under `deployment_tx`
+from `src/tasks/runtime/gpu_app.py`, which is added to the `deployment_tx` allow-list for that, and
+touches only this table and `worker_capabilities`). It is
+upserted by every GPU worker at `worker_ready` for every NVML-visible card in its container and on every heartbeat, by
 `op.periodic.serving_inventory` for every card a Triton server reports (Triton's GPU metrics carry
 the `gpu_uuid` label), and in the same transaction as every `gpu_reservations` insert, so a card
 with no Celery GPU worker can still be reserved; `openprocessor gpu plan` only reads; review RR-9,
@@ -903,7 +935,7 @@ CREATE UNIQUE INDEX uq_upgrade_step_done ON upgrade_runs (from_version, step) WH
 | `ingest_source_files` | one row per discovered file | `done` rows older than 30 days deleted |
 | `config_runtime_reports`, `worker_capabilities`, `serving_reports` | one row per process and host, or per server and model | rows not seen for 1 day deleted |
 | `gpu_devices` | one row per card | `seen_at` refreshed by the worker heartbeat and by `op.periodic.serving_inventory` (review RR-9); `DELETE ... WHERE seen_at < now() - interval '1 day' AND NOT EXISTS (SELECT 1 FROM gpu_reservations r WHERE r.gpu_uuid = gpu_devices.gpu_uuid)`, so a referenced row never fails the batch |
-| `cluster_partitions` and their clusters and memberships ([02d](02d_research_seam_schema.md) 2.2) | about 150 B per membership row, about 150 MB per 1M-item partition | keep the serving, the previous serving and at most 2 `ready` candidates per key; older `discarded` or superseded partitions deleted after 30 days, 10,000 rows per statement |
+| `cluster_partitions` and their clusters and memberships ([02d](02d_research_seam_schema.md) 2.2) | about 150 B per membership row, about 150 MB per 1M-item partition | keep the serving, the previous serving and at most 2 `ready` candidates per key; older `discarded` or superseded partitions deleted after 30 days, 10,000 rows per statement; a superseded `ready` partition is set `discarded` first, then its children go in batches and the partition row last (review RN-1) |
 | `assist_loop_proposals`, `assist_loop_selections` (02d 2.4) | one row per asked item | rows of runs finished more than 90 days ago deleted (the node rows keep the counts); a run and its children stay while one of its label operations can be undone |
 | `vlm_usage_hourly` | one row per project, endpoint, source and hour | 400 days |
 | `near_dup_runs` and their groups and members (02d section 3) | one members row per image and item per run | the current run, the two newest superseded runs per project and level, and every run a `holdout_freezes` row references (review RR-22); older runs deleted by beat |

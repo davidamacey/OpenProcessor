@@ -325,7 +325,7 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | RD-23 | Cluster memberships in PostgreSQL | **approved 2026-11-04** | as recommended | W2.1 | [02d](02d_research_seam_schema.md) section 2.2 |
 | RD-25 | The `cluster` queue and `cluster-worker` | **decided 2026-11-04** (review Q-D) | CPU in v0.7.0 | W2.1 | [03a](03a_b2_w1_queue_infra.md) 1B-8 |
 | RD-51 | GPS coordinates | **reversed 2026-11-04: store them now**, behind a per-project `location_policy` (default `store`) in the W2.1 schema | store, policy per project | W2.1 | [02a](02a_postgres_schema.md) section 4 |
-| RD-54 | Exported copies and their GPS | **approved 2026-11-04: exports keep the embedded GPS, as today**; no strip task | keep | W4 | 05 CM-4 |
+| RD-54 | Exported copies and their GPS | **approved 2026-11-04: exports keep the embedded GPS, as today**, by default; a `drop`-policy project's exports strip it (CM-5, review RN-4) | keep | W4 | 05 CM-4, CM-5 |
 | Q-B (research review) | PP-OCRv6 as a reader candidate | **approved 2026-11-04**: one short comparison against PP-OCRv5 in the plate-text and B5c OCR work | as recommended | PW-2 | [07c](07c_b5_crops_ocr_faces.md) |
 | RD-3, RD-6, RD-9, RD-11..RD-80 (the rest) | The remaining research owner questions | open: 69 rows, none blocks coding | the plan follows each recommendation and marks the place "pending RD-n"; each answer becomes its own row here | at the wave named | [00d_owner_questions.md](00d_owner_questions.md) |
 | MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | approved 2026-11-04 (owner decision 10) | yes | W6 | [07](07_b5_overview.md) section 11 |
