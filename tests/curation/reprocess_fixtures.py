@@ -194,6 +194,7 @@ class _Entry:
         self.class_id = class_id
         self.class_name = class_name
         self.deprecated = False
+        self.group = None
 
 
 class _RegFile:

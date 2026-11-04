@@ -19,6 +19,7 @@ class _FakeClassEntry:
     class_id: int
     class_name: str
     deprecated: bool = False
+    group: str | None = None
 
 
 @dataclass

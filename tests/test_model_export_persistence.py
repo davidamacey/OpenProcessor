@@ -37,7 +37,7 @@ def _make_task(model_export, *, task_id: str = 'abc12345', status=None) -> str:
     tid = model_export.create_export_task(
         filename='my_model.pt',
         triton_name='my_model',
-        model_info={'num_classes': 3, 'class_names': ['a', 'b', 'c'], 'end2end': False},
+        model_info={'num_classes': 3, 'class_names': ['a', 'b', 'c'], 'head_kind': 'nms'},
         formats=['trt'],
     )
     if status is not None:

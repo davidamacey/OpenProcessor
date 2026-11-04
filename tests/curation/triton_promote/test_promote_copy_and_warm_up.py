@@ -205,3 +205,30 @@ async def test_promote_without_overwrite_still_conflicts(
             class_id_to_name=CLASS_MAP,
             overwrite=False,
         )
+
+
+# =============================================================================
+# the served head must be the NMS-free [300, 6] one
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_promote_refuses_a_raw_one_to_many_head(
+    fake_status: TrainJobStatus,
+    fake_checkpoint: Path,
+    scratch_models_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from curation.triton_promote._helpers import write_float_image_onnx
+    from src.services.training.promote_errors import PromoteError
+
+    write_float_image_onnx(fake_checkpoint.with_suffix('.onnx'), out_dims=[84, 'anchors'])
+    monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
+
+    with pytest.raises(PromoteError, match=r'\[84, -1\]') as err:
+        await _promoter(scratch_models_dir).promote(
+            status=fake_status, triton_name='raw_head_v1', class_id_to_name=CLASS_MAP
+        )
+
+    assert err.value.status_code == 422
+    assert not (scratch_models_dir / 'raw_head_v1').exists()

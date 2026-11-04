@@ -336,13 +336,14 @@ addopts = [
     # up; they are deselected by default so the offline gate is unchanged.
     # Run them with: pytest tests/live -q --no-cov -m live
     "-m",
-    "not live",
+    "not live and not families",
 ]
 # Seconds per test: three times the slowest offline test (124 s measured under 6 parallel workers).
 timeout = 400
 markers = [
     "integration: tests that exercise several components together (no live stack required)",
     "live: write-path tests that require the docker/test/ verification harness to be running",
+    "families: tests that need the official Ultralytics weights or the official YOLOv5 ONNX (CI job `families`); run with -m families",
     "unbound: opt out of the autouse `default` project binding (tests/conftest.py)",
 ]
 

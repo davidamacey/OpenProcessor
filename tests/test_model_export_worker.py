@@ -102,7 +102,7 @@ def test_upload_with_a_live_worker_queues_one_job_file(
     async def fake_save(content: bytes, name: str):
         saved.parent.mkdir(parents=True, exist_ok=True)
         saved.write_bytes(content)
-        return saved, {'num_classes': 2, 'class_names': ['a', 'b'], 'end2end': False}
+        return saved, {'num_classes': 2, 'class_names': ['a', 'b'], 'head_kind': 'nms'}
 
     monkeypatch.setattr('src.routers.models_export.save_uploaded_file', fake_save)
     resp = client.post(
@@ -121,7 +121,7 @@ def test_upload_with_a_live_worker_queues_one_job_file(
         'formats': ['onnx_end2end', 'trt_end2end'],
         'normalize_boxes': True,
         'auto_load': False,
-        'end2end': False,
+        'head_kind': 'nms',
     }
     assert model_export.get_export_task(task_id)['status'] == ExportStatus.PENDING.value
     status = client.get(f'/models/export/{task_id}')
@@ -145,7 +145,7 @@ def test_status_route_sees_what_the_worker_wrote_after_the_api_cached_the_task(
 
 def _enqueue(task_dir: Path, **over: object) -> str:
     task_id = model_export.create_export_task(
-        'car.pt', 'car', {'num_classes': 2, 'end2end': bool(over.get('end2end'))}, ['trt']
+        'car.pt', 'car', {'num_classes': 2, 'head_kind': over.get('head_kind', 'nms')}, ['trt']
     )
     model_export.enqueue_export_job(
         task_id,
@@ -176,16 +176,34 @@ def test_build_command_routes_by_architecture() -> None:
         'max_batch': 8,
         'formats': ['onnx_end2end', 'trt_end2end'],
         'normalize_boxes': True,
-        'end2end': False,
+        'head_kind': 'nms',
     }
     legacy = export_worker.build_command(job)
     assert legacy[1].endswith('export_models.py')
     assert legacy[legacy.index('--custom-model') + 1] == '/app/pytorch_models/car.pt:car:8'
     assert '--normalize-boxes' in legacy
     assert '--generate-config' in legacy
-    native = export_worker.build_command({**job, 'end2end': True})
+    native = export_worker.build_command({**job, 'head_kind': 'one2one'})
     assert native[1].endswith('export_yolo26.py')
     assert native[native.index('--formats') + 1 :] == ['trt']
+    assert export_worker.engines_to_load({**job, 'triton_name': 'car', 'head_kind': 'one2one'}) == [
+        'car_trt'
+    ]
+
+
+def test_a_job_queued_before_the_upgrade_fails_closed() -> None:
+    job = {
+        'pt_file': '/app/pytorch_models/car.pt',
+        'triton_name': 'car',
+        'max_batch': 8,
+        'formats': ['trt'],
+        'normalize_boxes': True,
+        'end2end': True,
+    }
+    with pytest.raises(ValueError, match='re-upload the model'):
+        export_worker.build_command(job)
+    with pytest.raises(ValueError, match='re-upload the model'):
+        export_worker.engines_to_load(job)
 
 
 def _stub_export_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> None:

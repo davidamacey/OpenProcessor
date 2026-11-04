@@ -170,11 +170,17 @@ def _summarize_prediction_raw(
 # =============================================================================
 
 
-YOLOV5_OBJ_INPUT_SIZE = 1280
+# Used only when the ONNX declares dynamic spatial dims (the official yolov5 export.py
+# --dynamic); a static export dictates its own size.
+YOLOV5_OBJ_DYNAMIC_INPUT_SIZE = 1280
 YOLOV5_OBJ_LETTERBOX_PAD_VALUE = 114
 
 
-def _letterbox_yolov5_objectness(img: Any, target: int = YOLOV5_OBJ_INPUT_SIZE) -> Any:
+class ProbeModelShapeError(RuntimeError):
+    """The ONNX input or output is not the original-YOLOv5 ``(1, 3, S, S)`` -> ``(1, N, 5 + nc)``."""
+
+
+def _letterbox_yolov5_objectness(img: Any, target: int) -> Any:
     """Letterbox (gray-pad) a PIL image to ``target x target`` -> NCHW
     float32 ``[0, 1]``.
 
@@ -317,6 +323,33 @@ def _onnx_metadata_names(session: Any) -> dict[int, str] | None:
     return None
 
 
+def _probe_input_size(shape: list[Any]) -> int:
+    """The square network input size an ONNX declares for ``(N, 3, H, W)``, or the dynamic
+    fallback when ``H`` and ``W`` are symbolic."""
+    spatial = shape[2:] if len(shape) == 4 else None
+    if spatial is None:
+        raise ProbeModelShapeError(f'expected a 4-D NCHW image input, got shape {shape}')
+    fixed = [d for d in spatial if isinstance(d, int) and d > 0]
+    if not fixed:
+        return YOLOV5_OBJ_DYNAMIC_INPUT_SIZE
+    if len(fixed) != 2 or fixed[0] != fixed[1]:
+        raise ProbeModelShapeError(
+            f'the probe letterboxes to a square, but the model input is {shape}; '
+            'export it with a square --imgsz'
+        )
+    return fixed[0]
+
+
+def _check_probe_output(shape: list[Any], num_names: int) -> None:
+    """Refuse an output that is not ``[.., N, 5 + nc]`` with ``nc`` equal to the number of names."""
+    width = shape[-1] if len(shape) >= 2 else None
+    if isinstance(width, int) and width != 5 + num_names:
+        raise ProbeModelShapeError(
+            f'output width {width} does not match 5 + nc for the {num_names} names in the ONNX '
+            'metadata: this is not an original-YOLOv5 [.., N, 5 + nc] export'
+        )
+
+
 def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, str]:
     """``(predict_fn, default_version_tag)`` for the second (non-ultralytics)
     architecture family.
@@ -334,8 +367,10 @@ def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, st
     import onnxruntime as ort
 
     session = ort.InferenceSession(str(model_path), providers=['CPUExecutionProvider'])
-    input_name = session.get_inputs()[0].name
+    model_input = session.get_inputs()[0]
+    input_name = model_input.name
     output_name = session.get_outputs()[0].name
+    input_size = _probe_input_size(list(model_input.shape))
 
     class_names = _onnx_metadata_names(session)
     if not class_names:
@@ -347,8 +382,10 @@ def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, st
             "must never be used as a stand-in for the model's own dense order."
         )
 
+    _check_probe_output(list(session.get_outputs()[0].shape), len(class_names))
+
     def predict(crop: Any) -> tuple[str | None, float, float, float]:
-        chw = _letterbox_yolov5_objectness(crop, YOLOV5_OBJ_INPUT_SIZE)
+        chw = _letterbox_yolov5_objectness(crop, input_size)
         raw = session.run([output_name], {input_name: chw})[0]
         raw = raw[0] if raw.ndim == 3 else raw  # strip batch dim -> (num_anchors, 85)
         return _summarize_prediction_yolov5_objectness_raw(raw, class_names)

@@ -29,7 +29,7 @@ never index, review depth matched to real risk).
 Create the venv with `python3 -m venv .venv`, then install CPU torch and
 `requirements-test.txt` exactly as CONTRIBUTING.md shows. Do not add
 `requirements.txt` (its `faiss-gpu-cu12` breaks `faiss-cpu`). The offline suite needs no Docker
-and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'`.
+and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'`.
 
 ## Project overview
 
@@ -220,7 +220,7 @@ are still checked.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'   # offline suite
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'   # offline suite
 .venv/bin/python tests/test_full_system.py                     # needs the running stack
 .venv/bin/python tests/validate_visual_results.py              # annotated images in test_results/
 ```

@@ -9,10 +9,13 @@ approach here.
 
 Critical YOLO26 specifics:
 
-* ``end2end=True`` is the default -> a single output tensor of shape
+* The one-to-one (NMS-free) head gives a single output tensor of shape
   ``(N, 300, 6)`` per batch row, where each row is
   ``[x1, y1, x2, y2, score, class_id]``. NMS is INTERNAL to the model
-  forward pass.
+  forward pass. The trainer's pinned 8.4.48 exports that head by default; newer
+  Ultralytics releases export the raw one-to-many head unless ``nms=False`` is passed
+  (https://docs.ultralytics.com/modes/export/). Promote refuses any ONNX whose output is
+  not ``[300, 6]`` (``onnx_head.py``).
 * No ``EfficientNMS_TRT`` plugin (unlike the existing YOLO11 path).
 * ``class_id`` is float-encoded; clients must cast to int. We avoid
   ``half=True`` on export so FP16 doesn't lose integer precision above

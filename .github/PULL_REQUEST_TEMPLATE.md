@@ -16,7 +16,7 @@
 
 - [ ] Commit messages follow this repo's conventional-commit format (`<type>(<scope>): <summary>`, imperative mood) — see `CONTRIBUTING.md`.
 - [ ] `.venv/bin/python -c "import src.main"` passes.
-- [ ] `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'` passes.
+- [ ] `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'` passes.
 - [ ] `.venv/bin/pre-commit run --all-files` passes.
 - [ ] New/changed behavior has test coverage.
 - [ ] Docs updated if this changes user-facing behavior, config, or the API surface (`README.md`, `docs/CURATION.md`, `docs/design/curation_api_contract.md` as applicable).

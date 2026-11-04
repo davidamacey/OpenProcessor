@@ -75,6 +75,23 @@ def _projects_data_root(
         monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path_factory.mktemp('projects')))
 
 
+@pytest.fixture(scope='session')
+def op_weights():
+    """``op_weights('yolo26n.pt')`` -> cached official file; skips locally, fails in CI, when absent."""
+    from _ultralytics_weights import cache_dir, verified_path
+
+    def get(name: str) -> Path:
+        path = verified_path(name)
+        if path is None:
+            reason = f'{name} is not in {cache_dir()} (CI job `families` provides it)'
+            if os.environ.get('CI'):
+                pytest.fail(reason)
+            pytest.skip(reason)
+        return path
+
+    return get
+
+
 @pytest.fixture
 def project_export_root() -> Path:
     """The bound ``default`` project's ``export_root`` (created). Training

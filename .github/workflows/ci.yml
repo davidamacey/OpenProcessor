@@ -37,8 +37,69 @@ jobs:
       # tests. Raise it to the measured value minus one whenever a change raises coverage.
       - name: Run offline test suite with the coverage floor
         run: >-
-          python -m pytest tests/ -q -m 'not live'
+          python -m pytest tests/ -q -m 'not live and not families'
           --cov=src --cov=scripts --cov-report=term --cov-fail-under=80
+
+  # Tests that need the official Ultralytics weights and the original-YOLOv5 ONNX exports
+  # (pytest marker `families`, excluded from the `pytest` job). Runs the exact pinned
+  # Ultralytics from requirements-test.txt on CPU. The weights and the ultralytics/yolov5
+  # repository are AGPL-3.0; they are used for tests only and are not redistributed.
+  # The original-YOLOv5 ONNX files come from that repository's own export.py in a separate
+  # venv (it pins its own requirements), at a pinned commit.
+  families:
+    name: families (official weights, CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      YOLOV5_COMMIT: 0a85386d269bf8b49873a24591491c1a4b7024a8
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements-test.txt
+
+      - name: Install CPU torch/torchvision, then the rest of requirements-test.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install -r requirements-test.txt
+          # export simplify=True needs it; the export image installs it from requirements-export.txt
+          pip install "onnxslim>=0.1.71"
+
+      - name: Cache the official weights and YOLOv5 ONNX exports
+        id: weights-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/op-test-weights
+          key: op-test-weights-${{ hashFiles('requirements-test.txt', 'tests/_ultralytics_weights.py') }}-${{ env.YOLOV5_COMMIT }}
+
+      - name: Fetch the weights (sha256-checked)
+        run: python tests/_ultralytics_weights.py fetch
+
+      - name: Export the original YOLOv5 ONNX files (official export.py, separate venv)
+        if: steps.weights-cache.outputs.cache-hit != 'true'
+        run: |
+          work="$RUNNER_TEMP/yolov5"
+          git clone --filter=blob:none https://github.com/ultralytics/yolov5 "$work/src"
+          git -C "$work/src" checkout "$YOLOV5_COMMIT"
+          python -m venv "$work/venv"
+          "$work/venv/bin/pip" install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          "$work/venv/bin/pip" install -r "$work/src/requirements.txt" onnx onnxslim
+          cache="$HOME/.cache/op-test-weights"
+          cp "$cache/yolov5n.pt" "$work/yolov5n.pt"
+          "$work/venv/bin/python" "$work/src/export.py" --weights "$work/yolov5n.pt" \
+            --include onnx --imgsz 640 --device cpu --simplify
+          mv "$work/yolov5n.onnx" "$cache/yolov5n_640.onnx"
+          "$work/venv/bin/python" "$work/src/export.py" --weights "$work/yolov5n.pt" \
+            --include onnx --imgsz 640 --device cpu --dynamic
+          mv "$work/yolov5n.onnx" "$cache/yolov5n_dynamic.onnx"
+
+      - name: Run the families tests
+        run: python -m pytest tests/ -q -m families --no-cov
 
   pre-commit:
     name: pre-commit (all hooks)
