@@ -29,10 +29,9 @@ updates:
         patterns:
           - "*"
     ignore:
-      # ultralytics is an exact pin everywhere: 8.4.x in requirements.txt,
-      # requirements-test.txt and pyproject.toml (a test keeps them equal), and 8.3.x in
-      # requirements-export-y11.txt for the vendored EfficientNMS patch. The export head
-      # changed inside 8.4.x (#447), so every bump is by hand after the export checks.
+      # ultralytics is an exact pin everywhere (a test keeps requirements.txt,
+      # requirements-test.txt and pyproject.toml equal). The export head changed inside 8.4.x
+      # (#447), so every bump is by hand after the export checks.
       - dependency-name: "ultralytics"
       # tensorrt-cu13 must equal the TensorRT inside the Triton image (engine compatibility,
       # asserted at image build in Dockerfile.triton). Bump both together by hand.
@@ -41,6 +40,10 @@ updates:
       # toolchain cap onnx below 1.22. Lift the cap and this rule together when modelopt does.
       - dependency-name: "onnx"
         versions: [">=1.22.0"]
+      # nvidia-modelopt requires onnxruntime-gpu~=1.24.2, so the cap stays below 1.25. Lift the
+      # cap and this rule together when modelopt does.
+      - dependency-name: "onnxruntime-gpu"
+        versions: [">=1.25"]
       # tokenizers (a transformers dependency) requires huggingface-hub<2, so hub 2.x does not
       # resolve with the current stack (pip check fails). Lift once tokenizers allows 2.x.
       - dependency-name: "huggingface-hub"
@@ -150,6 +153,14 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
+    ignore:
+      # Interpreter moves are owner decisions; digest-only updates for the same tag still arrive.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # The Triton image carries TensorRT, which must equal tensorrt-cu13 (asserted in
+      # Dockerfile.triton); move both together by hand, with an engine rebuild.
+      - dependency-name: "nvcr.io/nvidia/tritonserver"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
     directories:
