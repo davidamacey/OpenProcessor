@@ -150,12 +150,12 @@ Every body ends with the same footer: "Plan: `docs/design/program/<file>`. Task 
 | N8 | `build(ultralytics): one exact Ultralytics version and one fused [batch,300,6] detection contract` | chore, area:gpu-serving, area:training, effort:hard | v0.7.0 | B3 | B3 merges |
 | N9 | `security: harden persisted clustering state` | security, effort:quick | v0.7.0 | B1-1D (SEC-3) | B1 merges |
 | N10 | `security: widen the CLI secret redaction key list` | security, effort:quick | v0.7.0 | B1-1D (SEC-6) | B1 merges |
-| N11 | `security: reduce the privileges of an opt-in monitoring service` | security, effort:quick | v0.7.0 | B2-W3 (SEC-4) | B2 merges |
-| N12 | `security: pin a build input and review per-service container hardening` | security, effort:moderate | v0.7.0 | B2-W3 (SEC-5) | B2 merges |
+| N11 | `security: reduce the privileges of an opt-in monitoring service` | security, effort:quick | v0.7.0 | B2 stage 6, lane 6C (SEC-4) | B2 merges |
+| N12 | `security: pin a build input and review per-service container hardening` | security, effort:moderate | v0.7.0 | B2 stage 6, lane 6C (SEC-5) | B2 merges |
 | N13 | `question(detect): should /detect upscale small images like ingest does` | question, area:gpu-serving | v0.7.0 | B5a (D-35) | B5a decides |
 | N14 | `chore(audit): evidence tasks before acting` | chore, effort:moderate | v0.7.0 | B2, B4, B5c, backlog | every item checked |
 | N15 | `chore(api): typed response models, one router per PR` | chore, effort:hard | v0.7.0 | backlog after B4 | every router typed (a long tail; an open remainder moves to a v0.8.0 issue at the tag) |
-| N16 | `feat(loop): pause control, event stream and token budgets for the assist loop` | enhancement, area:curation, effort:moderate | v0.8.0 | after B2 2E-2 and B4 4C | pause route, event stream and `usage` budgets work |
+| N16 | `feat(loop): pause control, event stream and token budgets for the assist loop` | enhancement, area:curation, effort:moderate | v0.8.0 | after B2 stage 4 lane 4D-2 (the assist loop on Celery, pause and resume through the jobs table) and stage 3 lane 3B (events in Postgres) | pause route, event stream and `usage` budgets work |
 
 Dropped earlier and not to be filed: the separate ratchet issue (folded into N3), a separate
 #447 follow-up (folded into the #447 re-scope), a separate decode issue (folded into the #40
@@ -426,7 +426,7 @@ the `usage` object. The label rate that sizes the budgets was never measured (S0
 - `usage` tokens read from the OpenAI-compatible response.
 - Cropwright pause button and event log.
 
-Depends on: B2 2E-2, B4 4C.
+Depends on: B2 stage 4 lane 4D-2 and stage 3 lane 3B (the former 2E-2 and B4 4C).
 Plan: docs/design/program/03c_b2_w3_beat_reaper_workers.md and 05_b4_stateless_api.md.
 ```
 

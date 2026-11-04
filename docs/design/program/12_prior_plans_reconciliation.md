@@ -34,6 +34,11 @@ and 6.
 
 ## 0. How to read this file
 
+**Old B2 and B4 task IDs.** This file was written before B2 was re-planned on PostgreSQL. Its
+references to `03b` 2A-2C, `03c` 2D-2F and 2E-n, the `2G` lane and B4 `4C` are the former IDs; their
+current lanes are in the table of [03_b2_overview.md](03_b2_overview.md) section 14 and, task by
+task, in [00b_traceability.md](00b_traceability.md) section 1.
+
 **Dispositions** (one per unfinished item):
 
 | Word | Meaning |

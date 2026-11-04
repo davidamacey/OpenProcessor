@@ -52,7 +52,8 @@
 `src/services/curation/selection/**`, `src/services/curation/label_ops/{record,undo}.py`, their
 routers (`rg -ln "reprocess_job|assist\.runner|item_scores|probe_job|selection\.job|embedding_viz|label_ops" src/routers`),
 `src/tasks/jobs_a.py`, `src/config/job_kinds/families_a.py`, `src/config/task_routes/families_a.py`,
-tests under `tests/curation/` for these families.
+tests under `tests/curation/` for these families. `item_scores/near_dup.py` is in 4A too (moved from
+4C with its task, so every near-duplicate change sits in one lane).
 
 | ID | Kind | Notes |
 |---|---|---|
@@ -61,6 +62,8 @@ tests under `tests/curation/` for these families.
 | 4A-3 | `item_scores`, `probe`, `selection` | add `queued`; `k_center_greedy` runs in the worker |
 | 4A-4 | `embedding_viz` | writes `projection_states` and the reducer through the storage seam (stage 2C API); UMAP and cuML import inside the task (trap T-29) |
 | 4A-5 | `label_op`, `label_undo` | inline jobs (`start_inline_job`): exclusivity and history in `jobs`, records already in Postgres (2D); the B1 `LABEL_OP` and `LABEL_UNDO` leases deleted |
+| 4A-6 | fail-closed config (was 4C-8) | `item_scores/near_dup.py::_threshold()` silently uses the default on an invalid `OP_CROP_DUP_THRESHOLD`; validate it in the startup config load and drop the fallback. Red: `abc` raises at load; control: unset gives 0.97 (the clustering plan's N-8 is the same fix) |
+| 4A-7 | #473 part a (folded in, [00b](00b_traceability.md) section 3) | a re-score recomputes the crop `dup_*` fields from the new vectors instead of leaving the old group fields. Red: `tests/curation/test_rescore_refreshes_dup_fields.py` (fake OpenSearch): after a re-score with changed vectors an item leaves its old group; red today. Control: a re-score with unchanged vectors keeps the groups |
 
 **4A done when:** `rg -n "_active_tasks|_tasks\[|file_job|job_lease" src/services/curation/{reprocess_job,probe_job,embedding_viz}.py src/services/curation/{assist,item_scores,selection,label_ops}` is empty.
 
@@ -96,8 +99,7 @@ into a beat task: 4C changes only what the tick launches), `src/services/curatio
 (the finish; 2A owned the lifecycle states), `src/routers/curation/projects.py` (the DELETE route's
 launch only), `src/routers/curation/ingest_sources.py`, `src/routers/curation/ingest.py` (its
 open-vocab call), `src/routers/ingest/directory.py`, `src/routers/persons.py`, the face grouping in
-`src/services/face_identity*`, `src/services/curation/item_scores/near_dup.py` (2C-7 below; 4A owns
-the rest of `item_scores/`, so this one file is listed here and excluded from 4A),
+`src/services/face_identity*`,
 `src/tasks/jobs_c.py`, `src/config/job_kinds/families_c.py`, `src/config/task_routes/families_c.py`,
 `tests/test_no_module_level_async_locks.py`, tests for these families.
 
@@ -110,7 +112,7 @@ the rest of `item_scores/`, so this one file is listed here and excluded from 4A
 | 4C-5 | `project_delete` | deployment-level row (`project_id` NULL, scope slug), idempotent (the project row's status is the claim); `_BACKGROUND_DELETE_TASKS` and `_FINISH_IN_PROGRESS` deleted; drains (cancels and waits for) the project's active jobs before removing indexes and storage (trap T-27) |
 | 4C-6 | `directory_ingest` | D-22a: deployment-level row; `POST /ingest/directory` returns 202 + job id and a `GET` status route; first prove the visual-search ingest is idempotent per image (`rg -n "image_id\|def .*hash" src/services/visual_search/ingest_batch.py`): a re-run must not duplicate documents, else stop and report |
 | 4C-7 | `persons_cluster` | `POST /persons/cluster` returns 202 + job id; the O(n^2) range search and connected components run in the worker; `GET` reads the result |
-| 4C-8 | fail-closed config | `item_scores/near_dup.py::_threshold()` silently uses the default on an invalid `OP_CROP_DUP_THRESHOLD`; validate it in the startup config load and drop the fallback. Red: `abc` raises at load; control: unset gives 0.97 |
+| 4C-8 | (moved to 4A-6 with `near_dup.py`) | - |
 
 Red tests beyond the recipe: `tests/curation/test_ingest_source_files_claim.py` (`db`: two runners
 claim disjoint batches); `tests/curation/test_dispatcher_starts_poll_job.py` (no asyncio task);

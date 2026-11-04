@@ -7,7 +7,7 @@
 | Depends on | B1 merged into `main` (done); the owner's go for B2 |
 | Design | [02_control_plane_database.md](02_control_plane_database.md), [02a](02a_postgres_schema.md) (schema), [02b](02b_jobs_locking_events.md) (jobs, events, queues, pools), [02c](02c_migration_ops_tests.md) (migrations, upgrade, services, storage, tests, traps). This file and the stage files say **who builds what, in which order, proven how** |
 | Decisions applied | approved 2026-11-04: D-17 (Celery 5.6), D-18 (Valkey), D-31 (evaluator on `gpu_eval`), D-39..D-45 (the owner decisions). Recommendations used where still open (stop and ask if the owner answered otherwise): D-19, D-20, D-20a, D-20b, D-22a, D-22b, D-23, D-24, D-25, D-26, D-46..D-63. Register: [00_index.md](00_index.md) section 6 |
-| Packages | named here, pinned in `13_package_pins.md` (written on its own branch): SQLAlchemy (with the `asyncio` extra), Alembic, psycopg 3 (`psycopg[binary]`), Celery, kombu, billiard, redis-py, Flower, testcontainers (`testcontainers[postgres]`); images `postgres:18-alpine`, `valkey/valkey:9-alpine` |
+| Packages | named here, pinned in `13_package_pins.md` (written on its own branch): SQLAlchemy (with the `asyncio` extra), Alembic, psycopg 3 (`psycopg[binary]`), Celery, kombu, billiard, redis-py, Flower, testcontainers (`testcontainers[postgres,redis]`); the Postgres and Valkey images and digests of `13_package_pins.md` section 4 (Postgres base: owner question MQ-2) |
 | Source IDs | `task_queue_plan.md` Phases 2-5 and E1-E26 (task detail where still valid); audit CC-4, CC-5, CC-9, CC-11, OPS-2, SEC-4, SEC-5; ENV-4, ENV-6, ENV-14, ENV-18, ENV-20 of [08](08_environment_and_setup.md) |
 
 Verified against `origin/main` at `7f3453de` on 2026-11-04 (read only).
@@ -174,7 +174,7 @@ container per xdist worker); `make contracts-check`; `.venv/bin/python scripts/d
 the frontend full set (4E changed `frontend/`): `npm ci`, `npm run check`, lint, knip, `npm run test`,
 `npm run build`, `npm run test:e2e`.
 
-**T2 live harness, `-p op-b2-live`, budget 4 h, the one run that covers B1 and B2.** The harness gains
+**T2 live harness, `-p op-b2-live`, budget 4 h 30 min, the one run that covers B1 and B2.** The harness gains
 `postgres`, `valkey`, `db-migrate`, `jobs-worker` (scaled to 2), `periodic-worker`,
 `open-vocab-worker`, `jobs-beat`, the two curation consumers and a fake GPU consumer per GPU queue
 (no GPU: the fake handlers sleep and write progress). Wait with healthchecks or the Monitor tool; no
@@ -196,8 +196,10 @@ sleep loops.
 | 12 | GPU queues with fake handlers: train, export, bake-off start, progress, cancel | each completes or cancels; no file under the old job roots | 20 min |
 | 13 | detection worker replicas: two replicas, three projects | each project claimed by one replica; killing a replica moves its projects within 150 s | 20 min |
 | 14 | per-family smoke (start, progress, completes) for every kind in [02b](02b_jobs_locking_events.md) section 2.1 | each completes | 25 min |
-| 15 | the two B1 checks never scripted (OS-6 filtered-kNN hit count; a blocked event loop does not cost a job its heartbeat), written under `tests/live/` first | both pass | 10 min |
+| 15 | the two B1 checks never scripted (OS-6 filtered-kNN hit count; a blocked event loop does not cost a job its heartbeat), written under `tests/live/` first | both pass; both OS-6 hit counts recorded in `docs/PERFORMANCE.md` and `docs/opensearch_schema_design.md` (carried from the original step 12) | 10 min |
 | 16 | acceptance subset: `acceptance_run.sh --only ingest,cluster,holdout,label_ops,loop,export,train,bakeoff,promote` | PASS | 15 min |
+| 17 | GPU arbiter with the overlay (carried from the original step 9): a training start with the arbiter overlay on `periodic-worker` | one stop per configured container in the Docker events log, not one per API worker | 10 min |
+| 18 | auto-label consumers (carried from the original step 10): two `curation-auto-label-worker` replicas, one job; kill one mid-stage; then cancel a second job at a stage boundary | one run per job; the killed one `interrupted` and resumed or restarted per its kind's auto-resume rule; the cancelled one `cancelled` | 15 min |
 
 A step that overruns stops the run; the coordinator reports instead of extending the budget.
 
@@ -223,7 +225,8 @@ Then one PR from `int/b2-control-plane` against `main`, local CI parity first, C
 | R2-8 | Cropwright misses `queued` or the SSE id format | contracts per family; 4E; the browser check |
 | R2-9 | a secret file unreadable by a container user | spikes S0 and S1 record the ownership rule; installer tests |
 | R2-10 | Celery and kombu versions drift | exact pins, `pip check`, spike S1 on the pins (trap T-17) |
-| R2-11 | the live run overruns 4 h | stop and report |
+| R2-11 | the live run overruns its 4 h 30 min budget | stop and report |
+| R2-12 | projects starve each other on the `jobs` queue (carried from the original E13) | FIFO with `OP_JOBS_CONCURRENCY` (4) plus the per-project exclusive kinds; per-project routing is added only if the live run or a user report measures starvation |
 
 ## 11. What to keep after merge
 

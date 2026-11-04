@@ -86,10 +86,11 @@ B3 does not touch the base images.
 
 | Order | Track | Stage | Scope | Size | Based on |
 |---|---|---|---|---|---|
-| 1 | `stagea` | A | pin `X`; venv and re-exec deleted; patch runs in the main env; trainer on `X` with `nms` by capability; `pytorch_utils.py` deleted | M | `int/b3-ultralytics` |
+| 0 | `deps` (branch `deps/pins-part-b`) | A | pins part B of [13](13_package_pins.md) section 7: the bumps that can change model output (numeric stack with numpy and pandas, OpenCV 5 with Pillow and simplejpeg, the Hugging Face stack, torch and torchvision, the onnx, onnxruntime, modelopt and TensorRT set, CuPy 14, the image-only pins), then the MLflow and Dependabot tail. Owner direction 3 of 2026-11-04: they ride this GPU gate so parity runs once. Skips `requirements-export-y11.txt` (B3-A2 deletes it) | M | `int/b3-ultralytics` (parallel with `frame`) |
+| 1 | `stagea` | A | pin `X`; venv and re-exec deleted; patch runs in the main env; trainer on `X` with `nms` by capability; `pytorch_utils.py` deleted | M | `int/b3-ultralytics` after `deps` merged (both edit the manifests) |
 | 2 | `families` | A | `src/domain/model_families.py` (#368 slice) and its readers; full U-6.1 matrix in `tests/export/`; CI `families` job extended | M | `b3/stagea` (needs the pin) |
 | 3 | `frame` | A | GPU-14 final: each adapter declares its box frame, the `max() > 1.0` guess deleted | S | `int/b3-ultralytics` |
-| - | **Stage A point** | | coordinator records the SHA of the integration head after merges 1-3 in the PR description (no tag) | | |
+| - | **Stage A point** | | coordinator records the SHA of the integration head after merges 0-3 in the PR description (no tag); engine EA therefore carries every pin-series bump and the Ultralytics pin together | | |
 | 4 | `export` | B | U-Step 4: one export module, one worker command, scripts, the fused YOLO11 config, J7 guard, U-C11, formats collapsed, patch deleted, engine stamp recipe | L | Stage A point |
 | 5 | `decoders` | B | U-Step 5 and 6: fused-only adapter, ingest primary fused (U-C9), region detector raw-head path removed, fail closed | M | Stage A point |
 | - | **GPU gate** (section 6) | | U-6.2 once for both stages | 1 GPU day | integration head |
@@ -345,6 +346,10 @@ in the same commit as any wire change; lane checks only (section 9).
   keep the per-profile cap).
 - Fail closed: a region profile whose model declares a raw head gets a clear error naming the
   export command. GPU-15 already decides pixel versus normalised per tensor; keep that.
+- If owner question MQ-8 is answered yes, the GPU-15 leftover joins this task: the region-profile
+  validator (`src/services/config_store/profile_field_checks.py` or the profile schema) refuses a model
+  with an undeclared region head at save time, not only at decode time (audit 4.3 GPU-15 "Left
+  over"). Red: saving such a profile is a 422 naming the head; control: a declared fused head saves.
 - Red: a raw-head declaration yields the fail-closed error (not an empty list); control: a fused
   `[B,N,6]` model gives today's candidates.
 
@@ -372,7 +377,7 @@ Run by the coordinator (or one gate agent) after merges 1-5, on the integration 
 |---|---|
 | Compose project | `-p op-b3-gpu`, own port base, own volumes |
 | GPU | 0 (`TRITON_GPU_ID=0`, `API_GPU_ID=0` in the stack's own env); GPU 2 only if agreed with peers |
-| Budget | GPU window 1 of exactly three ([00_index.md](00_index.md) section 8.1): one GPU day for G0-G9, plus G10 (about 2 h); announce start and end to peer sessions |
+| Budget | GPU window 1 of exactly three ([00_index.md](00_index.md) section 8.1): one GPU day for G0-G9, plus G10 (about 2 h), G11 (about 2 h) and G12 (about 1 h); announce start and end to peer sessions |
 | Images | local-only tags (never `:latest`, Watchtower re-pulls it): `openprocessor-local/<image>:b3-ref` (main before B3), `:b3-stagea` (Stage A point), `:b3-stageb` (integration head) |
 | Data | public only: COCO val2017 (5,000 images, about 1 GB, CC BY 4.0 annotations, per-image Flickr licences), the pinned set A (`coco_bench_2000`), the two Ultralytics sample images |
 | Host record | `/proc/loadavg` at start and end of every run, foreign GPU processes (`nvidia-smi --query-compute-apps`), GPU sampled every 500 ms; a run with 1-minute load above 16 is noisy and repeated |
@@ -394,6 +399,8 @@ Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
 | G8 | original YOLOv5 ONNX as the ingest secondary on a 500-image COCO subset: ingest completes, classes resolved by name (U-C10) | pass |
 | G9 | image audit: export image size before/after (expect about -0.9 GB), `pip check` in each image, `importlib.metadata.version('ultralytics') == X` in API, export and trainer images, Trivy, image-vs-git audit | all pass |
 | G10 | **B0 OCR before/after comparison** (moved out of B0; procedure and pass rule owned by `01_b0_close_out.md` B0-3, run unchanged). "Before" = the pre-B0 tree (`5b95591f`, API and Triton images plus its `models/ocr_pipeline/1/*.py`); "after" = the merged tree at the integration head. Needs: both image sets under local-only tags, the OCR engines built once and shared (B0 changes no engine), compose project `op-ocr-b0` (own ports), GPU 0 (GPU 2 per the host rules), the public image set of B0-3 step 4 (COCO-Text ids, EXIF 6 and 8 copies, RGBA PNGs). Compare boxes, text and `image_size` per image | B0-3's pass rule (boxes overlay the text on 10 opened images, rotated copies match `image_size`, no new errors), about 2 h. Result goes to `docs/PERFORMANCE.md`; a rejected OCR change is reverted by the OCR-only path in `01_b0_close_out.md` |
+| G11 | **pins part B image smokes** ([13](13_package_pins.md) section 6): `pip check` in each built image (builder stage where the runtime has no pip); the API image imports `cv2, faiss, cupy, onnxruntime, torch, transformers, open_clip, huggingface_hub` and lists the CUDA provider; the export image also imports `tensorrt` and both CuPy wheels and runs one ModelOpt AutoCast export; the Triton image prints its numpy version and runs the GPU decode tests on CuPy 14; the segmenter starts and downloads its weights with `huggingface-hub` 2; the PE weight download script runs; MLflow client and server on one minor (checked inside G6's training run) | every import and test passes; a failure names the bump and its fallback from 13 section 8 |
+| G12 | **B2 stage-5 real-GPU smoke** ([03f](03f_b2_s5_gpu_queues.md) "GPU check"): one short training run through `gpu_train`, one export of a small model through `gpu_export`, one 20-image bake-off through `gpu_eval` | each job ends `completed`, its progress reached the SSE stream, its artifacts are under its storage prefix |
 
 **Verdict.**
 - All pass: ship Stage B.
@@ -568,7 +575,14 @@ in tracked files. Deadline: <set by coordinator>. Final report: commits (SHA + s
 output and green output, files touched, anything you could not do and why.
 ```
 
-**`stagea`** (worktree `<repo>-wt-b3-stagea`, branch `b3/stagea` from `int/b3-ultralytics`):
+**`deps`** (worktree `<repo>-wt-b3-deps`, branch `deps/pins-part-b` from `int/b3-ultralytics`):
+"Do the part B commits of `docs/design/program/13_package_pins.md` section 7, in that order, one
+commit each, with the targeted check of section 6 after each (CPU resolver runs; no image build,
+no GPU). Leave `requirements-export-y11.txt` alone (B3-A2 deletes it) and the Ultralytics pin to
+`stagea`. Empty the pin test's part-B allowlist in the last numeric commit that needs it. Record in
+your report the fallback of section 8 for every bump the coordinator's gate step G11 must watch."
+
+**`stagea`** (worktree `<repo>-wt-b3-stagea`, branch `b3/stagea` from `int/b3-ultralytics` after `deps` merged):
 "Do B3-A1..A4 with `X = <pin from D-28>`. Create `src/domain/model_families.py` with only
 `head_kind_of` and `export_kwargs` (stdlib only) for B3-A3; the `families` lane extends it. CPU
 tests needing the pin run in a throwaway `python:3.13-slim` container with `--cpus 8`. No GPU."

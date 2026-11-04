@@ -442,6 +442,30 @@ full sweep runs once at the end of the series.
 The control-plane packages and images (section 4) are added by the B2 queue work, not in this series, so
 that a Celery or database problem never blocks a dependency bump.
 
+### 7.1 Where the series runs (owner direction 3 of 2026-11-04; [00_master_plan.md](00_master_plan.md))
+
+The owner's rule: the bumps that can change model output ride with the B3 GPU gate, so the parity and
+accuracy check runs once for both; the others go where this bisect order puts them. The series is
+therefore cut in two lanes, keeping the order above inside each:
+
+| Part | Wave and lane | Commits | Why there |
+|---|---|---|---|
+| A | W2.1, lane `deps/pins-part-a` (after B2 lane 1-0, before 1D) | 1, 2, 3, 4 without `pillow`, 5 | nothing here decodes images or computes model inputs; they run under the B2 sweep at W2.4 |
+| B | W3, lane `deps/pins-part-b` (B3 track `deps`, first, before `stagea`) | 6, 7 with `pillow` and `simplejpeg` added, 8, 9, 10, 11, then 12 and 13 | 6, 7, 9, 10 and 11 are the owner's list (numpy and pandas with the numeric stack, OpenCV 5, torch, the onnx set, the image pins with CuPy 14); Pillow and simplejpeg decode images, so by the same rule they join commit 7 (owner question MQ-4); 8 (Hugging Face stack) sits inside that run and 12 (MLflow) and 13 (Dependabot, docs) after it in the bisect order; the GPU gate of [04](04_b3_ultralytics_one_version.md) section 6 (step G11) checks them |
+
+Adjustments the split needs (each in the commit named):
+- Commit 1 (part A) adds the "no floor, no unpinned runtime line" check with a **shrink-only allowlist**
+  of the part B packages, so the test is green at every commit; part B removes each package from the
+  allowlist in the commit that pins it, and the last part B commit asserts the allowlist is empty.
+- The CPU torch-pair commands in `CONTRIBUTING.md` and `.github/workflows/ci.yml` (listed in commit 2)
+  move to commit 9, where the torch pin moves; part A does not touch those two files (B2 lane 1D owns
+  them in W2.1).
+- `simplejpeg` (in section 3.1, missing from the list above) is pinned in commit 7.
+- `requirements-export-y11.txt` is skipped by part B: B3-A2 deletes it in the same wave.
+- PR #477 (CI shards) edits `requirements-test.txt` and `pyproject.toml`; it merges before part A starts.
+- Part A also re-applies the open frontend Dependabot PR #474 (frontend dev dependencies) in its own
+  commit, following the deps-lane rule of [09](09_github_actions.md) section 8.
+
 ## 8. Risk register (largest blast radius first)
 
 | # | Bump | What can break | Mitigation / fallback |

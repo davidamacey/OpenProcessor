@@ -87,7 +87,7 @@ tag the release notes say the `small` profile is not yet verified on a 12 GB car
 | M7 | Registry migration of real projects | idempotent CLI, dry run saved, file renamed not deleted, ids preserved, fail-closed 409 until migrated, downgrade note | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M8 | A reader still reads `class_registry.json` after B1 | the B1 done-when greps for it outside export snapshots and the trainer; dead-code and layering ratchets | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M9 | Celery redelivery storms, cold-shutdown ack loss, a queue nothing drains, wedged pools | the claim `UPDATE`, attempt cap 3, the reaper from the `jobs` rows, soft shutdown, the compose consumer test, the pool healthcheck | [02b](02b_jobs_locking_events.md), [03](03_b2_overview.md) |
-| M10 | The `queued` status breaks Cropwright | contracts, the 2G lane, a browser check | [03b](03b_b2_w2_job_families.md) |
+| M10 | The `queued` status breaks Cropwright | contracts, lane 4E (B2 stage 4), a browser check | [03b](03b_b2_w2_job_families.md) |
 | M11 | An upgraded install lacks a Postgres, Valkey or Flower secret | `upgrade` and `repair` create missing ones, never rotate; R-final RF-56 | [03a](03a_b2_w1_queue_infra.md) lane 1C, [06](06_release_acceptance.md) |
 | M12 | Ultralytics ships a breaking patch between the CPU matrix and the image build | exact pin (done in B0); the pin test in CI and in each image; the D-28 freeze rule | [04](04_b3_ultralytics_one_version.md) |
 | M13 | Stage B misses throughput (unrolled NMS at batch 64) | ship Stage A; the owner sees the measurement | [04](04_b3_ultralytics_one_version.md) |

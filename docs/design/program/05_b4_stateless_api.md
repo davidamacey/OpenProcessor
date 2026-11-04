@@ -143,6 +143,12 @@ classified:
   at the boundary (check with `rg -n "ingest_one|IngestBatch" src`).
 - **Document** the exemption in `docs/design/engineering_standards.md`: request-scoped, bounded by
   the batch, awaited before the response, `TaskGroup` only, and the only exemption.
+- **4A-4b, #473 part b (folded in, [00b](00b_traceability.md) section 3):** the core batch near-duplicate
+  grouping in `visual_search/ingest_batch.py` is racy across concurrent batches; while 4A-4 rewrites
+  that file, make the grouping decision inside one batch-scoped step whose result does not depend on
+  another batch's in-flight writes (read [issue-416-plan.md](../issue_plans/issue-416-plan.md) for the case first). Red:
+  `tests/visual_search/test_batch_grouping_race.py`: two concurrent batches with a shared
+  near-duplicate pair give one group, not two; red today. Control: a single batch is unchanged.
 - **Red test (CC-7):** a stubbed `ingest_one` raising for the representative leaves no pending
   follower task after the request fails. **Control:** an all-success batch is unchanged (same
   docs, same timings within noise).
@@ -156,7 +162,9 @@ classified:
 - `resource_links.py`: `op.periodic.resource_reachability` (beat, 30 s) probes the services and
   writes `op:resource_reachability` (Valkey, `SET ... EX 90`; a short-lived cache, the kind of value Valkey owns per [02](02_control_plane_database.md) section 3.1); the routes read it; a missing key
   reads "unknown", never "down". Delete the per-process `_cache.inflight` task. Red: two API
-  processes (two app instances in a test) give the same answer from one fake Valkey.
+  processes (two app instances in a test) give the same answer from one fake Valkey. The beat entry
+  goes into `src/tasks/beat_schedule.py` and `tests/periodic/test_beat_schedule.py` gains its name in
+  the same commit (the B2 stage-6 test lists the stage-6 names).
 
 ### 4A-6 Evaluator
 

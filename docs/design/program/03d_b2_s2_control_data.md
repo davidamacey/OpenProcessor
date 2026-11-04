@@ -86,13 +86,15 @@ and the prompt-pack, region-profile, ingest-profile and keymap routers:
 **Owns:** `src/db/repos/records.py`; `src/services/curation/holdout.py`, `holdout_freeze.py`;
 `src/services/curation/label_ops/store.py` (records and members only: the lease and the in-request
 execution stay until stage 4A); `src/services/curation/region_drain.py`,
-`region_dependency_health.py`, `clustering/last_run.py`; tests under `tests/records/`.
+`region_dependency_health.py`, `clustering/last_run.py`; tests under `tests/records/`. 2D-4 reads the
+items' near-duplicate fields through the existing OpenSearch client (no file of another lane).
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
 | 2D-1 | holdout freezes: freeze, history, current, the "freeze fails closed" rule kept (a database error refuses the freeze); membership stays the items' `test_holdout` flag | `tests/records/test_holdout_pg.py` (`db`): two concurrent freezes -> one current row (partial unique index) | history lists both |
 | 2D-2 | label-operation records and members in Postgres (`label_operations`, `label_operation_members`); the served `interrupted` and `undo_interrupted` states unchanged | `tests/records/test_label_ops_pg.py` (`db`): a 10,000-member op writes in batches of 5,000 (trap T-14); undo reads the prior state from the table | the existing label-op route tests |
 | 2D-3 | `project_state` keys `region_drain`, `region_dependency_health`, `last_clustering` with OCC on `revision` | `tests/records/test_project_state_pg.py` | read after write |
+| 2D-4 | #473 part c (folded in, [00b](00b_traceability.md) section 3): the freeze checks near-duplicates of the held-out items (the items' near-duplicate group fields); the behaviour is owner question MQ-5 (recommended: the whole group goes into the holdout and the freeze record counts the moved items) | `tests/records/test_holdout_near_duplicates.py` (`db` + fake OpenSearch): an item near-duplicate to a held-out item ends on the holdout side; red today (the freeze ignores groups) | an item with no near-duplicate is unchanged |
 
 **2D done when:** `rg -n "test_holdout/|label_ops/.*state.json|members.json|last_clustering.json|dependency_health.json" src` lists only `src/services/upgrade/`.
 
@@ -112,7 +114,7 @@ Uses the ORM models of stage 1 directly (not the stage-2 repositories, which are
 |---|---|---|---|
 | 2E-1 | `make_v060_fixture.py` and the committed fixture ([02c](02c_migration_ops_tests.md) section 2.4) | - | - |
 | 2E-2 | `export_bundle` (unguarded read-only admin client: `GET`, `search` with `search_after`, `_mapping`; files read only); `MANIFEST.json` with counts and sha256 | `tests/upgrade/test_export_bundle.py`: the bundle of the fixture has the expected counts; the client issues no write | - |
-| 2E-3 | `load` in one transaction; `verify`; `delete_sources` (idempotent); `upgrade_runs` bookkeeping; the legacy-repair step per project | `tests/upgrade/test_load_from_060.py`, `test_delete_sources_idempotent.py` (`db`); a forced verify mismatch deletes nothing (trap T-25) | a re-run after a load failure gives the same rows |
+| 2E-3 | `load` in one transaction; `verify`; `delete_sources` (idempotent); `upgrade_runs` bookkeeping; the legacy-repair step per project | `tests/upgrade/test_load_from_060.py`, `test_delete_sources_idempotent.py` (`db`); a forced verify mismatch deletes nothing (trap T-25); `tests/upgrade/test_leftover_job_files_removed.py`: a 0.6.0 fixture with a leftover `trigger.json` and `running.lock` ends with neither (carried from the original 2E-1 step 6) | a re-run after a load failure gives the same rows |
 | 2E-4 | `rollback_to_060.py` (recreate indexes from the bundle mappings, re-index, restore files, rename `class_registry.json.migrated-0.7.0` back) | `tests/upgrade/test_rollback_bundle_roundtrip.py` | - |
 | 2E-5 | installer: `upgrade` from 0.6.0 runs backup -> `db-migrate` -> `upgrade_from_060` -> start; prints the report; `--rollback` runs `rollback_to_060`; the B1 registry hooks and CLI removed | `tests/installer/test_upgrade_060_hook.py`: the order of calls (fake compose); a failed verify stops before `up` with the report path | a fresh install never runs the step |
 | 2E-6 | `openprocessor db verify` ([02c](02c_migration_ops_tests.md) section 6) | `tests/upgrade/test_verify_reports_class_drift.py` | a clean fixture reports nothing |

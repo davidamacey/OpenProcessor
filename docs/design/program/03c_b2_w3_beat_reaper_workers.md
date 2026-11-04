@@ -65,7 +65,8 @@ zero (the baseline file is deleted).
 
 Red tests: `tests/test_lifespan_has_no_side_effects.py` (AST over `src/app/lifespan.py`: none of the
 deleted calls, no `reconcile`, no arbiter); `tests/periodic/test_beat_schedule.py` (exactly the names
-above, each routed to `periodic`, each with `expires`); `tests/codegen/test_file_locks_zero.py`
+above, each routed to `periodic`, each with `expires`; B4 lane 4A adds `op.periodic.resource_reachability`
+and extends this test in the same commit, [05](05_b4_stateless_api.md) 4A-5); `tests/codegen/test_file_locks_zero.py`
 (a planted `fcntl.flock` fails); the done-when `rg` of [03_b2_overview.md](03_b2_overview.md)
 section 1.
 
@@ -133,7 +134,9 @@ survive API recycling; events over SSE with resumable ids), Removed (file protoc
 cluster-refresh service, four index roles, `op_projects`, `op_global_configs`, the registry
 migration CLI), Breaking (new core services and secrets, `queued` status, 202 for upload extraction,
 directory ingest and person grouping, settings writes need `expected_revision`, promote `wait=true`
-gone, removed error codes and the sync route), Security (the two neutral lines).
+gone, removed error codes and the sync route, the GPU-arbiter overlay now mounts the Docker socket
+into `periodic-worker` and must be re-applied by users who enabled it, carried from the original 2D-3
+with a matching INSTALLATION note), Security (the two neutral lines).
 
 Red test: `.venv/bin/python scripts/docs/check_docs_vs_code.py` over every touched doc;
 `tests/test_doc_links.py`.
