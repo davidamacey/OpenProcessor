@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING
 
 from src.core.logging import get_logger
 from src.services.training.class_remap import _NONE_REMAP
+from src.services.training.onnx_head import nms_free_head_problem
 from src.services.training.promote_errors import (
     CheckpointNotFoundError,
     ModelNameConflictError,
@@ -193,6 +194,10 @@ class TritonPromoter(TritonHttpControl):
         if on_phase:
             on_phase('exporting')
         onnx_src = self._locate_onnx(status)
+        head_problem = await asyncio.to_thread(nms_free_head_problem, onnx_src)
+        if head_problem:
+            msg = f'job {status.job_id}: {onnx_src.name} cannot be served as YOLO26: {head_problem}'
+            raise PromoteError(msg, status_code=422)
 
         model_dir = self.triton_models_dir / triton_name
         existing_versions = self._existing_version_dirs(model_dir)
