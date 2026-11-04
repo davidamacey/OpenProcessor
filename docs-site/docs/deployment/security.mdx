@@ -62,21 +62,34 @@ controls. `SECURITY.md` in the repository describes the residual risk.
 
 ## LAN access from the one-line installer
 
-Cropwright is reachable on your LAN by default, for homelab or small-business
-use. The API itself stays bound to 127.0.0.1. There is no login on
-Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
-everything on 127.0.0.1.
+:::warning[Cropwright on your LAN]
+Cropwright is reachable on your LAN by default, for homelab or small-business use. The API itself stays
+bound to 127.0.0.1. On a LAN bind the installer puts a shared HTTP basic-auth login (user `cropwright`) in
+front of Cropwright; the generated password is in `secrets/cropwright/password` and is never printed.
+Pass `--local-only` to keep everything on 127.0.0.1.
+:::
 
-Cropwright's nginx reaches the API over the Docker network, so LAN browsers
-never need the API port. The UI can reach every route above: use it only on a
-network you trust, never port-forward it to the public internet, and put a
-reverse proxy with authentication in front for anything wider. A specific
-`--bind` address also narrows Cropwright to that interface. See the
-[installer page](../getting-started/installer.mdx#network-access).
+- Basic auth is on by default when Cropwright is published beyond loopback. Set
+  `OP_CROPWRIGHT_BASIC_AUTH=false` to skip it (an unattended run reads it from the environment), or change
+  the password with `./openprocessor cropwright password` and restart Cropwright. It is plain HTTP, so the
+  password is not encrypted on the LAN.
+- `--bind <ip>` publishes the API and backend ports on that address, after a warning and a typed `expose`.
+  A specific address (for example `--bind 10.0.0.5`) also narrows Cropwright to that interface;
+  `--local-only` always wins; `--bind 0.0.0.0` leaves Cropwright on all interfaces. A non-loopback address
+  asks you to type `expose` (unattended: `OP_ALLOW_PUBLIC_BIND=1`). A re-run keeps the Cropwright bind you
+  chose last time.
+- `OP_UI_BIND_ADDRESS` (in `.env`, defaults to `OP_BIND_ADDRESS`) publishes only Grafana, Prometheus,
+  OpenSearch Dashboards and MLflow on another address, so LAN browsers can follow resource links while the
+  datastore and model APIs stay local. Change `GF_SECURITY_ADMIN_PASSWORD` first; MLflow and Prometheus have
+  no auth. `OP_GATEWAY_SUBPATHS=true` (with the `cropwright` profile) instead serves the four monitoring UIs
+  under `/grafana/`, `/prometheus/`, `/dashboards/` and `/mlflow/` on Cropwright's one port, so they can stay
+  on loopback; it needs a non-default `GF_SECURITY_ADMIN_PASSWORD`.
+- Cropwright's nginx reaches the API over the Docker network, so LAN browsers never need the API port. The
+  UI can reach every route above: use it only on a network you trust, never port-forward any OpenProcessor
+  port to the public internet, and put a reverse proxy with authentication in front for anything wider.
 
-Release checksums (`SHA256SUMS`, `images.lock`) prove
-integrity, not authenticity: they come from the same origin as the files they
-cover.
+Release checksums (`SHA256SUMS`, `images.lock`) prove integrity, not authenticity: they come from the same
+origin as the files they cover.
 
 ## Other default-open components
 

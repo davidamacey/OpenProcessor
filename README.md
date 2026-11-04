@@ -46,73 +46,29 @@ README is the overview, the install and a first result.
   VLM choice are revisioned documents with activate and roll back.
 - **One or many regions per item.** `region_boxes` is always a list; each box
   has its own state, text, cluster and embedding.
-- **Ingest policy.** The stock detector stores every detection of its label
-  space as an unlabeled proposal. A per-project policy decides what is kept
-  and what gets a vector.
-- **VLM labeling.** A deployment-wide registry of OpenAI-compatible endpoints
-  with a local model catalog; each project activates one. Remote endpoints
-  need an explicit acknowledgement because crops leave the host.
+- **Ingest policy and bulk ingest.** The stock detector stores every detection
+  of its label space as an unlabeled proposal; a per-project policy decides
+  what is kept and what gets a vector. A folder, a manifest or an S3 bucket
+  runs as a background job with a preview first.
+- **VLM labeling and assist.** A deployment-wide registry of OpenAI-compatible
+  endpoints with a local model catalog; each project activates one (a project
+  calls no VLM until it does). Remote endpoints need an explicit
+  acknowledgement because crops leave the host. Selective assist
+  (`POST /curation/projects/{project}/assist/runs`) and the auto-label loop
+  send crops, clusters or filters to the VLM inside a hard budget; see
+  [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx)
+  and [Auto-label loop](docs-site/docs/guides/auto-label-loop.mdx).
 - **Dataset import, combine, export, train, promote.** YOLO, COCO and
   OpenProcessor-export layouts; merge up to eight projects; bake-off model
   comparison; promotion back into Triton.
-- **Selective VLM assist.** `POST /curation/projects/{project}/assist/runs` sends a crop, a box, a
-  selection, a cluster, a sub-cluster or a filter to the VLM, whole or as a
-  representative sample, and proposes a cluster label you apply explicitly
-  (see [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx)).
-  A project calls no VLM until it activates one.
-- **Bulk ingest.** A folder, a manifest or an S3 bucket runs as a background
-  job with a preview first; ingest can also be detection-only.
 - **Class identity by name.** Import, combine, export, train, promote and
   model sharing map classes by name, never by index.
 - **The lock rule.** A human-set or import-validated label or box, and
   anything in the frozen test holdout, is never overwritten by an automated
   writer.
 
-**What's new in 0.6.0.** Faster ingest (images decoded once, uint8 inputs to
-Triton, an FP16 embedding engine, GPU decode for large photos, multi-GPU
-embedding, batched writes; numbers in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)),
-assist runs, bulk and S3 ingest, and a cleaned-up codebase. Upgrading from 0.5.0:
-read the upgrade notes in [`CHANGELOG.md`](CHANGELOG.md) (new projects start
-with the VLM off, `CROPWRIGHT_*` env names are now `OP_CROPWRIGHT_*`, the
-evaluator has its own `evaluator` profile).
-
-**What is new in 0.7.0.**
-
-- **Label operations and undo.** Bulk label and move are recorded; undo any of
-  them from the server, item by item, dry run first. Later human edits are
-  never reverted ([guide](docs-site/docs/guides/label-operations-and-undo.mdx)).
-- **Cluster list sort, filters and flags.** The server sorts and filters the
-  cluster cards, serves `label_agreement` and quality flags, and counts one
-  cluster's members by facet ([guide](docs-site/docs/guides/cluster-list-and-filters.mdx)).
-- **Ingest stage timing.** Per-stage counters inside `gpu_image_prep` and a
-  profile driver ([operations page](docs-site/docs/operations/ingest-stage-timing.mdx)).
-- **Auto-label loop.** Sample each cluster, ask the VLM, and label the rest of
-  a homogeneous cluster inside a hard budget; doubtful clusters are split or
-  left for review, and everything can be rolled back
-  ([guide](docs-site/docs/guides/auto-label-loop.mdx)).
-- **Cluster pass about 8x cheaper to fit.** The IVF fit runs one k-means
-  restart behind an agreement gate (50 s against 388 s on 91,184 real crops, same
-  cluster quality), and a pass that did not cover its pool is `partial`, not
-  `success`.
-- **Ingest load profile and memory budget.** `gpu_image_prep` waits for device
-  memory instead of falling back to the CPU; the opt-in `OP_LOAD_PROFILE=ingest`
-  preloads only the models ingest needs (48.3 against 38.9 img/s on a 48 GB card)
-  ([operations page](docs-site/docs/operations/ingest-load-profile.mdx)).
-  The `full` profile now runs one `gpu_image_prep` instance.
-- **Health readiness.** `/health` and `/ready` report not ready when a required
-  Triton model failed to load.
-- **Acceptance phases.** The scripted release run covers the health, cluster,
-  label-operation, GPU-route and loop features
-  ([release acceptance](docs-site/docs/operations/release-acceptance.mdx)).
-- **Cluster research outcome.** Nothing new ships from the clustering
-  experiments; IVF and PE-Core-L stay
-  ([outcome](docs/research/cluster_program_outcome.md)). What to do next:
-  [`docs/design/program/00_index.md`](docs/design/program/00_index.md).
-- Also: typed `GET /clusters`, detector filters in the item filter, content-hash
-  image ids, per-project crop cache, semantic text search on by default.
-  Full list and upgrade notes in [`CHANGELOG.md`](CHANGELOG.md).
-
-The whole curation surface is in
+What changed in each release, with upgrade notes, is in
+[`CHANGELOG.md`](CHANGELOG.md). The whole curation surface is in
 [`contracts/openapi/curation.json`](contracts/openapi/curation.json); the
 guides are under [`docs-site/docs/guides/`](docs-site/docs/guides/).
 
@@ -127,31 +83,29 @@ curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setu
 ```
 
 This installs the latest published release into `./openprocessor/`: no git
-clone, no local image build, no host Python. The script you pipe in only
-resolves the release, downloads that release's own `setup-openprocessor.sh`
-and `SHA256SUMS`, checks the checksum, and runs the verified copy. Images are
-pinned by digest (`images.lock`) and checked after the pull. It asks which
-tiers you want, picks GPUs, exports the TensorRT engines inside the
-containers, starts everything and runs a health check.
+clone, no local image build, no host Python. The script you pipe in resolves
+the release, downloads that release's own `setup-openprocessor.sh` and
+`SHA256SUMS`, checks the checksum, and runs the verified copy. Images are
+pinned by digest (`images.lock`). It asks which tiers you want, picks GPUs,
+exports the TensorRT engines inside the containers, starts everything and runs
+a health check.
 
 **Needs:** Linux, Docker with Compose v2, an NVIDIA GPU with the NVIDIA
 Container Toolkit, and disk for the tiers you pick (about 50 GB for `core`,
 about 125 GB for everything). First install takes 30-60 minutes, mostly image
-pulls and TensorRT export.
+pulls and TensorRT export. Full prerequisites:
+[INSTALLATION.md](INSTALLATION.md#prerequisites).
 
 ### Tiers
 
-| Tier | What you get | Extra images | Needs |
-|---|---|---|---|
-| `core` | Triton, the API (port 4603), OpenSearch | ~42 GB | ~16 GB VRAM (`--profile minimal` for 6-8 GB cards) |
-| `curation` | curation workers, PE-Core embeddings, evaluator | + ~0.3 GB | + ~2 GB VRAM; implies `core` |
-| `segmenter` | SAM 3 segmenter | + ~8 GB | 2-8 GB VRAM; a HuggingFace token with SAM 3 access (gated); implies `curation` |
-| `vlm` | local vLLM serving a model from the VLM catalog | + ~19 GB | ~23 GB VRAM for the default; implies `curation` |
-| `trainer` | training service + MLflow | + ~9 GB | >= 16 GB free VRAM while training; implies `curation` |
-| `cropwright` | the Cropwright web UI (a profile of the same compose project) | + ~65 MB | implies `curation` |
-
-Monitoring (Prometheus, Grafana, Loki) is not a tier: add `--with-monitoring`.
-Its dashboards are default-open, so it is off unless you ask.
+Six tiers, chosen by the installer or `--tiers`: `core` (Triton, the API on
+port 4603, OpenSearch), `curation`, `segmenter`, `vlm`, `trainer` and
+`cropwright`. Each adds images and needs VRAM; `core` needs about 50 GB of disk
+and a 16 GB card (`--profile minimal` for 6-8 GB cards). The size and VRAM
+table per tier is in
+[the installer walkthrough](docs-site/docs/getting-started/installer.mdx), the
+flags in [INSTALLATION.md](INSTALLATION.md#installer-flags). Monitoring is not
+a tier: add `--with-monitoring`.
 
 ### Unattended install
 
@@ -164,7 +118,7 @@ curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setu
 and a step that needs consent (a non-loopback `--bind`, an external VLM, a
 purge) fails unless its consent variable is set. Use `--all` for every tier,
 `--version vX.Y.Z` to pin a release, `--dry-run` to see every command without
-running any. All flags: [INSTALLATION.md](INSTALLATION.md#installer-flags).
+running any.
 
 ### Verify the download yourself
 
@@ -177,25 +131,17 @@ bash setup-openprocessor.sh --version "$V"
 ```
 
 `SHA256SUMS` comes from the same place as the files it covers. It proves
-**integrity** (the download is complete and uncorrupted), **not authenticity**:
-anyone who could replace the release files could replace `SHA256SUMS` too. The
-same holds for `images.lock` (it pins exact digests
-and is covered by `SHA256SUMS`). Signed releases are follow-up work.
+**integrity**, **not authenticity**: anyone who could replace the release files
+could replace `SHA256SUMS` too (the same holds for `images.lock`). Signed
+releases are follow-up work.
 
-### Network access: Cropwright on your LAN
+### Network access
 
-**Cropwright is reachable on your LAN by default, for homelab or
-small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
-installer puts a shared HTTP basic-auth login in front of Cropwright (password
-in `secrets/cropwright/password`). Pass `--local-only` to opt out and keep
-everything on 127.0.0.1.**
-
-Do not port-forward Cropwright (or any OpenProcessor port) to the public
-internet. If you need access beyond a trusted network, put a reverse proxy
-with authentication in front. `--bind <ip>` publishes the API ports on that
-address instead (with a warning and a typed confirmation), and a specific
-address also narrows Cropwright to that interface. See
-[SECURITY.md](SECURITY.md).
+The API stays bound to 127.0.0.1. Cropwright is reachable on your LAN by
+default (homelab or small-business use), behind a shared HTTP basic-auth login;
+`--local-only` keeps everything on loopback. Never port-forward any
+OpenProcessor port to the public internet. Policy: [SECURITY.md](SECURITY.md);
+how-to: [Security and network exposure](docs-site/docs/deployment/security.mdx).
 
 ### After the install
 
@@ -209,15 +155,8 @@ cd openprocessor
 ./setup-openprocessor.sh --repair      # also --rollback and --uninstall
 ```
 
-```bash
-curl http://127.0.0.1:4603/health
-curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
-```
-
-Every subcommand of the `openprocessor` CLI is listed in
-[INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli). The installer sizes
-the OpenSearch heap from your RAM (half of it, 2 to 30 GB) and prints it in the
-summary; see [INSTALLATION.md](INSTALLATION.md#opensearch-heap-sizing).
+Every subcommand is listed in
+[INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli).
 
 ### Install from source
 
@@ -228,25 +167,17 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor &
 ```
 
 `scripts/setup.sh` detects your GPU, picks a profile, downloads the models,
-exports them to TensorRT and starts the services. Add `--yes` for no prompts,
-or `--profile=standard --gpu=0 --yes` to choose explicitly. In a checkout,
-manage the stack with `make up`, `make curation-up`, `make status` and
-`make down`. The `./openprocessor` CLI also works there; without a
-`COMPOSE_PROJECT_NAME` in `.env` it falls back to project `openprocessor` and
-warns. See
-[INSTALLATION.md](INSTALLATION.md#install-from-source) for manual steps.
+exports them to TensorRT and starts the services (`--yes` for no prompts, or
+`--profile=standard --gpu=0 --yes`). In a checkout, manage the stack with
+`make up`, `make curation-up`, `make status` and `make down`; `make dev-up`,
+`make dev-ps` and `make dev-down` run a dev deployment with every profile.
+Set `COMPOSE_PROJECT_NAME`, `OP_IMAGE_REPO` and `OP_IMAGE_TAG` in `.env` to
+keep locally built images separate from published ones. Manual steps:
+[INSTALLATION.md](INSTALLATION.md#install-from-source).
 
-### Docker Hub
-
-Images are published on Docker Hub under versioned tags. The installer never
-uses `:latest`; it runs the digests in the release's `images.lock`:
-
-```bash
-docker pull davidamacey/openprocessor:<version>         # FastAPI service
-docker pull davidamacey/openprocessor-triton:<version>  # Triton server
-```
-
-`<version>` is the release number without the leading `v` (the `VERSION` file).
+Images are on Docker Hub under versioned tags
+(`davidamacey/openprocessor:<version>`, `davidamacey/openprocessor-triton:<version>`;
+`<version>` is the `VERSION` file); the installer never uses `:latest`.
 
 ---
 
@@ -281,38 +212,34 @@ curl -X POST $API/projects/cars/classes -H 'Content-Type: application/json' \
   -d '{"name": "car"}'
 ```
 
-Try it with a public sample. No dataset ships in this repo (nothing
-proprietary is bundled anywhere). Fetch a small, license-filtered COCO 2017
-subset instead:
+No dataset ships in this repo. Fetch a small, license-filtered public COCO 2017
+subset (200 images, 20 per class, about 1-2 minutes):
 
 ```bash
-make sample-coco-readme   # 200 images, 20 per class, ~1-2 min on a fast link
-# or, from an installed deployment: ./openprocessor sample coco
+make sample-coco-readme   # or, from an installed deployment: ./openprocessor sample coco
 ```
 
-This writes `data/samples/coco_va_readme/` (images + `ATTRIBUTION.csv` +
-`coco_gt.json`), gitignored, from a pinned, deterministic selection filtered to
-Flickr licenses safe to redistribute crops of (Attribution,
-Attribution-ShareAlike, "No known copyright restrictions", "United States
-Government Work"; never NonCommercial or NoDerivs). Then, in a source checkout:
+It writes `data/samples/coco_va_readme/` (images, `ATTRIBUTION.csv`,
+`coco_gt.json`; gitignored) from a pinned selection filtered to Flickr licenses
+safe to redistribute crops of (never NonCommercial or NoDerivs).
+`make sample-coco`, `make sample-plates` and `make sample-clean` use the same
+tool. Then, in a source checkout:
 
 ```bash
 # 1. The stock detector stores every detection of its whole label space (all
-#    80 COCO classes) as an unlabeled proposal, and you choose what to keep
-#    later. To store or embed less, set the per-project ingest policy
-#    (PUT /curation/projects/{project}/ingest/policy); the old
-#    OP_INGEST_PRIMARY_CLASS_IDS env var is retired and ignored.
+#    80 COCO classes) as an unlabeled proposal. To store or embed less, set the
+#    per-project ingest policy (PUT /curation/projects/{project}/ingest/policy).
 # 2. Point OP_SOURCE_ROOT_HOST at data/samples in .env (the compose mount
-#    target is fixed at /data/source), set the ingest detector (ingest
-#    answers 503 until it is set), then recreate the services that mount
-#    it: api, curation-detection-worker, curation-auto-label-worker.
+#    target is fixed at /data/source), set the ingest detector (ingest answers
+#    503 until it is set), then recreate the services that mount it: api,
+#    curation-detection-worker, curation-auto-label-worker,
+#    curation-assist-loop-worker.
 cat >> .env <<'EOF'
 OP_INGEST_PRIMARY_DETECTOR_MODEL=yolov11_small_trt_end2end
 OP_SOURCE_ROOT_HOST=./data/samples
 EOF
 make up && make curation-up
-# 3. --folder is a container path under the /data/source mount, not a
-#    host-relative one:
+# 3. --folder is a container path under the /data/source mount:
 docker compose -p openprocessor exec api python scripts/curation/bulk_ingest.py \
   --folder /data/source/coco_va_readme/images --project cars
 ```
@@ -321,13 +248,6 @@ An installed directory already has `OP_SOURCE_ROOT_HOST=./data`, so skip step 2
 and use `--folder /data/source/samples/coco_va_readme/images`. The full
 walkthrough, with the expected result after each step, is the
 [Quick start](docs-site/docs/getting-started/quick-start.mdx).
-
-`make sample-coco` (800 images plus side sets), `make sample-plates` (300 Open
-Images V7 images) and `make sample-clean` use the same tool. For a dev
-deployment with every profile, `make dev-up` builds and starts it, `make dev-ps`
-inspects it and `make dev-down` stops it (volumes are kept). Set
-`COMPOSE_PROJECT_NAME`, `OP_IMAGE_REPO` and `OP_IMAGE_TAG` in `.env` to keep
-locally built images separate from published ones.
 
 ### Example: cars and wheels
 
@@ -341,142 +261,60 @@ make sample-coco-cars      # 60 CC BY car images into data/samples/coco_car
   --container-dir /data/source/coco_car/images
 ```
 
-The script creates the project, creates and activates
-`examples/region_profiles/vehicle_wheel.json` (`max_regions_per_item: 4`,
-text-free) and `examples/prompt_packs/vehicle_wheel.json`, ingests the images,
-waits for the detection worker and exports the wheel boxes. It needs the live
-stack with the segmenter and an activated VLM. The same walk runs offline in
-`tests/integration/test_wheel_example_e2e.py`.
-
----
-
-## GPU Compatibility
-
-| Profile | VRAM | GPUs |
-|---------|------|------|
-| minimal | 6-8GB | RTX 3060, RTX 4060 |
-| standard | 12-24GB | RTX 3080, RTX 4090 |
-| full | 40GB+ | A6000, A100 |
-
-Choose the profile at install time (`--profile` on the installer, or
-`scripts/setup.sh --profile=NAME`). Measured throughput is in
-[docs/PERFORMANCE.md](docs/PERFORMANCE.md); size your own card with
-[GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx). Engines are compiled
-once and cached, so only the first start is slow.
-
-**Dual YOLO families.** One Triton instance and one API serve YOLO11 and
-YOLO26.
-
-- YOLO11 exports through the EfficientNMS end2end toolchain
-  (`export/export_models.py`, GPU-NMS engines, the default path).
-- YOLO26 exports through the stock Ultralytics toolchain
-  (`export/export_yolo26.py`, natively NMS-free engines):
-
-  ```bash
-  docker compose -p openprocessor run --rm model-export python /app/export/export_yolo26.py --models small
-  curl -X POST http://localhost:4603/models/yolo26_small_trt/load
-  ```
-
-- The API reads each model's output format from Triton metadata, so
-  `/detect?model_name=yolo26_small_trt` and the YOLO11 default work
-  interchangeably. Set `YOLO_MODEL=yolo26_small_trt` to change the default
-  detector. Models load and unload at runtime with `POST /models/{name}/load`
-  and `POST /models/{name}/unload`.
-- `POST /models/upload` and `POST /models/{model_name}/export` queue the
-  TensorRT build for the `model-export-worker` service (the export image; the
-  API image has no TensorRT). Start it with
-  `docker compose --profile export up -d model-export-worker`; while it is down
-  both routes answer 503 naming it.
+The script creates the project, activates
+`examples/region_profiles/vehicle_wheel.json` and
+`examples/prompt_packs/vehicle_wheel.json`, ingests the images, waits for the
+detection worker and exports the wheel boxes. It needs the live stack with the
+segmenter and an activated VLM. Walkthrough:
+[Wheel example](docs-site/docs/guides/wheel-example.mdx).
 
 ---
 
 ## API Endpoints
 
 All endpoints are on port **4603**. The routes below are also under `/v1`.
+Inputs and returns per route: [Core routes](docs-site/docs/api-reference/core.mdx).
 
-### Object Detection
+| Group | Endpoint | Method | Description |
+|---|---|---|---|
+| Detection | `/detect` | POST | YOLO object detection |
+| | `/detect/batch` | POST | Batch detection (up to 64 images) |
+| Faces | `/faces/detect` | POST | Face detection with landmarks (SCRFD) |
+| | `/faces/recognize` | POST | Detection + ArcFace 512-dim embeddings |
+| | `/faces/verify` | POST | 1:1 face comparison (two images) |
+| | `/faces/search` | POST | Find similar faces in the index |
+| | `/faces/identify` | POST | 1:N face identification |
+| Embeddings | `/embed/image`, `/embed/text` | POST | MobileCLIP 512-dim embeddings |
+| | `/embed/batch` | POST | Batch image embeddings |
+| | `/embed/boxes` | POST | Per-box crop embeddings |
+| Search | `/search/image` | POST | Image-to-image similarity |
+| | `/search/text` | POST | Text-to-image search |
+| | `/search/face` | POST | Face similarity |
+| | `/search/ocr` | POST | Images by recognized text |
+| | `/search/object` | POST | Object-level search |
+| Ingest | `/ingest` | POST | Ingest one image (indexes faces, OCR, objects) |
+| | `/ingest/batch` | POST | Batch ingest (up to 64 images) |
+| | `/ingest/directory` | POST | Bulk ingest from a server directory |
+| OCR | `/ocr/predict` | POST | Extract text (PP-OCRv5) |
+| | `/ocr/batch` | POST | Batch OCR |
+| Analysis | `/analyze` | POST | Detection + faces + CLIP + OCR in one call |
+| | `/analyze/batch` | POST | Batch analysis |
+| Clusters | `/clusters/train/{index}` | POST | Train FAISS clustering for an index |
+| | `/clusters/stats/{index}` | GET | Cluster statistics |
+| | `/clusters/{index}/{cluster_id}` | GET | Cluster members |
+| | `/clusters/albums` | GET | Auto-generated albums |
+| Query | `/query/image/{image_id}` | GET | Stored image data |
+| | `/query/stats` | GET | Statistics for every index |
+| | `/query/duplicates` | GET | Duplicate groups |
+| Models | `/models` | GET | Models in the Triton repository |
+| | `/models/{model_name}/load`, `/unload` | POST | Runtime load and unload |
+| Health | `/health` | GET | Service health |
+| | `/ready` | GET | Readiness: Triton, its required models and OpenSearch; `503` names any model not `READY` |
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/detect` | POST | YOLO object detection (single image) |
-| `/detect/batch` | POST | Batch detection (up to 64 images) |
-
-### Face Recognition
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/faces/detect` | POST | Face detection with landmarks (SCRFD) |
-| `/faces/recognize` | POST | Detection + ArcFace 512-dim embeddings |
-| `/faces/verify` | POST | 1:1 face comparison (two images) |
-| `/faces/search` | POST | Find similar faces in index |
-| `/faces/identify` | POST | 1:N face identification |
-
-With `OP_FACES_ENABLED=false` the face and person routes answer `400` with `error: faces_disabled`; see [SECURITY.md](SECURITY.md#privacy-face-data).
-
-### Embeddings
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/embed/image` | POST | MobileCLIP image embedding (512-dim) |
-| `/embed/text` | POST | MobileCLIP text embedding (512-dim) |
-| `/embed/batch` | POST | Batch image embeddings |
-| `/embed/boxes` | POST | Per-box crop embeddings |
-
-### Visual Search
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/search/image` | POST | Image-to-image similarity search |
-| `/search/text` | POST | Text-to-image search |
-| `/search/face` | POST | Face similarity search |
-| `/search/ocr` | POST | Search images by text content |
-| `/search/object` | POST | Object-level search (vehicles, people) |
-
-### Data Ingestion
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/ingest` | POST | Ingest image (auto-indexes faces, OCR, objects) |
-| `/ingest/batch` | POST | Batch ingest (up to 64 images) |
-| `/ingest/directory` | POST | Bulk ingest from server directory |
-
-### OCR (Text Extraction)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/ocr/predict` | POST | Extract text from image (PP-OCRv5) |
-| `/ocr/batch` | POST | Batch OCR processing |
-
-### Combined Analysis
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/analyze` | POST | All models on single image (YOLO + faces + CLIP + OCR) |
-| `/analyze/batch` | POST | Batch combined analysis |
-
-### Clustering & Albums
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/clusters/train/{index}` | POST | Train FAISS clustering for an index |
-| `/clusters/stats/{index}` | GET | Get cluster statistics |
-| `/clusters/{index}/{id}` | GET | Get cluster members |
-| `/clusters/albums` | GET | List auto-generated albums |
-
-### Data Retrieval
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/query/image/{id}` | GET | Get stored image data/metadata |
-| `/query/stats` | GET | Index statistics for all indexes |
-| `/query/duplicates` | GET | List duplicate groups |
-
-### Health & Monitoring
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Service health check |
-| `/ready` | GET | Readiness probe: Triton, its required models and OpenSearch; `503` names any model not `READY` |
+Persons, model upload and export, and the remaining query routes are in
+[Core routes](docs-site/docs/api-reference/core.mdx). With
+`OP_FACES_ENABLED=false` the face and person routes answer `400` with
+`error: faces_disabled`; see [SECURITY.md](SECURITY.md#privacy-face-data).
 
 The `/curation` routes are **not** mounted under `/v1`; they exist only at
 `/curation` (the prefix is `OP_API_PREFIX`). Every curation route is listed in
@@ -485,173 +323,67 @@ and explained in
 [docs/design/curation_api_contract.md](docs/design/curation_api_contract.md),
 and the TypeScript item types are in [`contracts/`](contracts/).
 
-### Security: local tool, no authentication
+**No authentication.** The core API and the curation subsystem have no
+authentication, authorization or rate limiting. Run them on a trusted machine
+or private network behind your own reverse proxy, never on the public internet.
+See **[SECURITY.md](SECURITY.md)**.
 
-**This service, the core API and the curation subsystem alike, has no
-authentication, authorization, or rate limiting.** It is built to run on a
-trusted machine or private network behind your own reverse proxy, never
-exposed directly to a network you don't trust (and never to the public
-internet). See **[SECURITY.md](SECURITY.md)** for the routes that are dangerous
-without access control and the other default-open components (Grafana,
-OpenSearch) you should lock down before wider deployment.
+### Usage examples
 
----
-
-## Usage Examples
-
-### Python
-
-```python
-import requests
-
-# Object Detection
-with open('image.jpg', 'rb') as f:
-    resp = requests.post('http://localhost:4603/detect', files={'image': f})
-result = resp.json()
-# {"detections": [{"x1": 0.1, "y1": 0.2, "x2": 0.3, "y2": 0.4, "confidence": 0.95, "class_id": 0, "class_name": "person"}], ...}
-
-# Face Recognition
-with open('photo.jpg', 'rb') as f:
-    resp = requests.post('http://localhost:4603/faces/recognize', files={'image': f})
-print(resp.json())
-# {"num_faces": 2, "faces": [...], "embeddings": [[...512 floats...], ...]}
-
-# Image Embedding
-with open('image.jpg', 'rb') as f:
-    resp = requests.post('http://localhost:4603/embed/image', files={'image': f})
-embedding = resp.json()['embedding']  # 512-dim vector
-
-# Text-to-Image Search (query params, not a JSON body -- `text`, not `query`)
-resp = requests.post('http://localhost:4603/search/text',
-                    params={'text': 'a red sports car', 'top_k': 10})
-results = resp.json()['results']
-
-# Image Ingestion (auto-indexes everything)
-with open('photo.jpg', 'rb') as f:
-    resp = requests.post('http://localhost:4603/ingest',
-                        files={'image': f},
-                        data={'image_id': 'photo_001'})
-print(resp.json())
-# {"status": "indexed", "image_id": "photo_001", "indexed": {"global": true, "faces": 2, "vehicles": 1}}
-
-# OCR
-with open('document.jpg', 'rb') as f:
-    resp = requests.post('http://localhost:4603/ocr/predict', files={'image': f})
-print(resp.json())
-# {"num_texts": 5, "texts": ["Invoice", "Total: $100"], ...}
-
-# Combined Analysis (everything in one call)
-with open('scene.jpg', 'rb') as f:
-    resp = requests.post('http://localhost:4603/analyze', files={'image': f})
-result = resp.json()
-# {"detections": [...], "faces": [...], "global_embedding": [...], "ocr": {...}}
-```
-
-### cURL
+Coordinates are normalized `0.0-1.0`. Python examples and more response shapes:
+[Core routes](docs-site/docs/api-reference/core.mdx#response-shapes).
 
 ```bash
 # Detection
 curl -X POST http://localhost:4603/detect -F "image=@photo.jpg"
+# {"detections": [{"x1": 0.09, "y1": 0.28, "x2": 0.87, "y2": 0.99, "confidence": 0.92,
+#   "class": 0, "class_name": "person"}], "num_detections": 1, "status": "success",
+#   "image": {"width": 1920, "height": 1080}, "total_time_ms": 12.5}
 
-# Face Recognition
+# Faces: box is [x1, y1, x2, y2]; landmarks is a flat list of 10 floats
 curl -X POST http://localhost:4603/faces/recognize -F "image=@face.jpg"
+# {"num_faces": 1, "faces": [{"box": [0.30, 0.10, 0.50, 0.40], "score": 0.98,
+#   "landmarks": [0.35, 0.20, 0.45, 0.20, 0.40, 0.28, 0.36, 0.35, 0.44, 0.35]}],
+#   "embeddings": [[...512 floats...]]}
 
-# Text Search (query params, not a JSON body -- `text`, not `query`)
+# Embedding
+curl -X POST http://localhost:4603/embed/image -F "image=@photo.jpg"
+# {"embedding": [...512 floats...], "embedding_norm": 1.0, "indexed": false, "status": "success"}
+
+# Text search (query parameters, not a JSON body: `text`, not `query`)
 curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
+# {"status": "success", "query_type": "text", "results": [{"image_id": "...", "image_path": "...",
+#   "score": 0.31}], "total_results": 1, "search_time_ms": 8.2}
 
-# Ingestion
-curl -X POST http://localhost:4603/ingest \
-    -F "image=@photo.jpg" \
-    -F "image_id=my_photo_001"
+# Ingest
+curl -X POST http://localhost:4603/ingest -F "image=@photo.jpg" -F "image_id=photo_001"
+# {"status": "success", "image_id": "photo_001", "num_detections": 1, "num_faces": 2,
+#   "indexed": {"global": true, "vehicles": 1, "people": 0, "faces": 2}}
+
+# OCR
+curl -X POST http://localhost:4603/ocr/predict -F "image=@document.jpg"
+# {"status": "success", "texts": ["Invoice", "Total: $100"], "num_texts": 2, "regions": [...]}
+
+# Combined analysis (no indexing)
+curl -X POST http://localhost:4603/analyze -F "image=@scene.jpg"
+# {"detections": [...], "faces": [...], "ocr": {...}, "num_detections": 3, "num_faces": 1}
 ```
 
 ---
 
-## Response Formats
+## Hardware and models
 
-### Detection Response
-
-```json
-{
-  "detections": [
-    {
-      "x1": 0.094, "y1": 0.278, "x2": 0.870, "y2": 0.989,
-      "confidence": 0.918,
-      "class_id": 0,
-      "class_name": "person"
-    }
-  ],
-  "image": {"width": 1920, "height": 1080},
-  "inference_time_ms": 12.5
-}
-```
-
-**Note:** Coordinates are normalized (0.0-1.0). Multiply by image width/height for pixels.
-
-### Face Recognition Response
-
-```json
-{
-  "num_faces": 2,
-  "faces": [
-    {
-      "box": {"x1": 0.30, "y1": 0.10, "x2": 0.50, "y2": 0.40},
-      "confidence": 0.98,
-      "landmarks": [0.35, 0.20, 0.45, 0.20, 0.40, 0.28, 0.36, 0.35, 0.44, 0.35]
-    }
-  ],
-  "embeddings": [[...512 floats...]],
-  "inference_time_ms": 25.3
-}
-```
-
-The search, ingest and curation response shapes are in the API schema
-(`http://localhost:4603/docs`) and in
-[docs/design/curation_api_contract.md](docs/design/curation_api_contract.md).
-
----
-
-## Architecture
-
-```
-Client (Port 4603)
-       |
-       v
-  +----------+     +-----------------------------+
-  | api |---->| curation workers (profile)  |
-  +----------+     | detection, VLM, auto-label, |
-       |           | cluster refresh, evaluator  |
-       v           +-----------------------------+
-  +--------------+     +------------+
-  | triton-server|     | opensearch |
-  | (GPU)        |     | (k-NN)     |
-  +--------------+     +------------+
-```
-
-**Services** (compose profile in brackets):
-
-- `api` (4603): FastAPI service handling all requests.
-- `triton-server` (4600-4602): Triton with TensorRT models.
-- `opensearch` (4607): vector database and the curation datastore.
-- `curation-detection-worker`, `curation-vlm-worker`,
-  `curation-auto-label-worker`, `curation-cluster-refresh` [`curation`];
-  `curation-evaluator` [`evaluator`, on demand].
-- `segmenter` (4611) [`segmenter`], `vlm` (4612) [`vlm`].
-- `curation-trainer`, `curation-mlflow` (4609) [`training`].
-- Prometheus (4604), Grafana (4605), Loki (4606), OpenSearch Dashboards (4608),
-  DCGM exporter (4610), Alloy [`monitoring`]. Opt in with `make up-monitoring`
-  or `--with-monitoring`; `make up` does not start them. `make dev-monitoring-up`
-  adds them to the dev stack.
-
-More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
----
-
-## Models
+An NVIDIA GPU with 8 GB or more VRAM (Ampere or newer; 16 GB+ recommended),
+16 GB RAM, 16 CPU cores and Docker with the NVIDIA Container Toolkit are the
+minimum. The installer picks one of four profiles (`minimal`, `small`,
+`standard`, `full`) from the free VRAM of the Triton card. Profiles, memory
+numbers and sizing: [GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx);
+prerequisites: [INSTALLATION.md](INSTALLATION.md#prerequisites); measured
+throughput: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 | Model | Purpose | Backend |
-|-------|---------|---------|
-| YOLO11 / YOLO26 | Object detection | TensorRT |
+|---|---|---|
+| YOLO11 / YOLO26 | Object detection (both served by one Triton and one API) | TensorRT |
 | SCRFD-10G | Face detection + landmarks | TensorRT |
 | ArcFace | Face embeddings (512-dim) | TensorRT |
 | MobileCLIP | Image/text embeddings (512-dim) | TensorRT |
@@ -660,131 +392,54 @@ More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Segmenter | Region proposals from a text prompt (optional) | HTTP service |
 | VLM | Class labels and region verdicts (optional) | OpenAI-compatible endpoint |
 
-Core models use FP16 with dynamic batching. Export steps: [export/README.md](export/README.md).
+Core models run FP16 with dynamic batching. Exporting YOLO26, switching the
+default detector (`YOLO_MODEL`) and uploading your own checkpoint:
+[Model export](docs-site/docs/getting-started/model-export.mdx) and
+[export/README.md](export/README.md).
 
----
+## Architecture
 
-## System Requirements
+A FastAPI `api` service (port 4603) calls Triton for GPU inference and
+OpenSearch for k-NN search and the curation datastore; optional curation
+workers run the region cascade, VLM loop, auto-label driver and clustering
+refresh. Services, compose profiles and ports:
+[Compose profiles](docs-site/docs/getting-started/compose-profiles.mdx); roles
+and data flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#services-and-compose-profiles).
+Monitoring is opt in (`make up-monitoring` or `--with-monitoring`).
 
-**Minimum:**
-- NVIDIA GPU with 8GB+ VRAM (Ampere or newer)
-- 16GB RAM, 16 CPU cores
-- Docker with NVIDIA Container Toolkit
+## Configuration, testing and benchmarking
 
-**Recommended:**
-- NVIDIA A100/A6000/RTX 4090 (16GB+)
-- 64GB RAM, 48+ CPU cores
-- NVMe SSD for image storage
-
----
-
-## Configuration
-
-Every setting is in `.env` (template: [`env.template`](env.template)). The
-"Curation quick-config" block lists the keys the curation tiers need. The
-documented reference is
+Every setting is in `.env` (template: [`env.template`](env.template), with a
+"Curation quick-config" block). Reference:
 [Configuration (basic)](docs-site/docs/configuration/basic.mdx) and
-[Configuration (advanced)](docs-site/docs/configuration/advanced.mdx).
-
-- **GPU placement.** `TRITON_GPU_ID`, `API_GPU_ID`, `SEGMENTER_GPU_ID`,
-  `EVALUATOR_GPU_ID` and `VLM_GPU_ID` pick a GPU per service;
-  `./openprocessor gpu plan` prints them. `TRITON_GPU_ID=0,2` also runs the PE
-  image encoder on GPU 2; see
-  [INSTALLATION.md](INSTALLATION.md#spreading-the-pe-encoder-over-gpus).
-- **Image source.** `OP_SOURCE_ROOT_HOST` is the host folder the API and the
-  workers read images from, mounted read-only at `/data/source`. Recreate
-  `api`, `curation-detection-worker` and `curation-auto-label-worker` after
-  changing it (`./openprocessor start`); a restart does not re-read `.env`.
-- **Workers.** The API runs `uvicorn --workers=32` (see `docker-compose.yml`).
-- **Triton instance counts** live in each model's `config.pbtxt`. Raise a
-  count when a hot path needs it and the card has room; check `nvidia-smi`
-  after loading.
-- **Segmenter VRAM.** `SEGMENTER_INSTANCES` (default 2) and
-  `SEGMENTER_SHARED_WEIGHTS` (default 1) trade VRAM for throughput.
-
----
-
-## Testing
-
-Run the offline suite (no Docker, no GPU needed):
-
-```bash
-.venv/bin/python -m pytest tests/ -q
-```
-
-Create the venv first (`python3 -m venv .venv`, then the install steps in
-[CONTRIBUTING.md](CONTRIBUTING.md)).
-
-`tests/test_full_system.py` and `tests/validate_visual_results.py` hit the
-running stack over HTTP, so they read their target ports from the environment
-(`API_PORT`, `TRITON_HTTP_PORT`, `OPENSEARCH_PORT`; defaults 4603/4600/4607):
-
-```bash
-# Full system test (all endpoints) — host venv path
-mkdir -p test_results
-.venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
-
-# Visual validation (draws bounding boxes on test images)
-.venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
-```
-
-**Docker-only path.** The production `api` image installs only
-`requirements.txt` (no `pytest`, no `requirements-test.txt`), so a bare
-`docker compose exec api pytest ...` fails with `executable file not
-found`. Install the test deps into the running container first (not persisted
-across a recreate):
-
-```bash
-docker compose -p openprocessor cp requirements-test.txt api:/tmp/requirements-test.txt
-docker compose -p openprocessor exec api pip install -r /tmp/requirements-test.txt
-docker compose -p openprocessor exec api python -m pytest tests/ -q --ignore=tests/live
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the live write-path harness and the
-pre-commit hooks.
-
----
-
-## Benchmarking
-
-```bash
-make bench-quick    # single-request latency check
-```
-
-Load-test and scale-ladder tools are described in
-[benchmarks/README.md](benchmarks/README.md) and
-[docs/PERFORMANCE.md](docs/PERFORMANCE.md).
-
-See [benchmarks/README.md](benchmarks/README.md) and
-[docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+[(advanced)](docs-site/docs/configuration/advanced.mdx). Tests and dev setup:
+[CONTRIBUTING.md](CONTRIBUTING.md). Benchmarks:
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md#benchmarking).
 
 ---
 
 ## Documentation
 
-- **User and operator docs:** [published site](https://davidamacey.github.io/OpenProcessor/), source in [`docs-site/docs/`](docs-site/docs/), a Docusaurus
-  site (`make docs-build` builds it).
+- **[Published docs site](https://davidamacey.github.io/OpenProcessor/)**, source in [`docs-site/docs/`](docs-site/docs/) (`make docs-build`)
   - [Choose your path](docs-site/docs/getting-started/choose-your-path.mdx)
   - [Quick start](docs-site/docs/getting-started/quick-start.mdx)
   - [One-line installer](docs-site/docs/getting-started/installer.mdx)
   - [Configuration](docs-site/docs/configuration/basic.mdx)
+  - [API reference](docs-site/docs/api-reference/overview.mdx)
   - [Curation workflow](docs-site/docs/operations/curation-workflow.mdx)
   - [Cropwright user guide](docs-site/docs/cropwright/getting-started/introduction.md)
-- **Maintainer docs:** [docs/](docs/README.md)
-  - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data model, runtime topology
-  - [docs/design/curation_api_contract.md](docs/design/curation_api_contract.md): route and wire-model reference
-  - [docs/VISION_AND_GOALS.md](docs/VISION_AND_GOALS.md): scope and standards
-  - [docs/PERFORMANCE.md](docs/PERFORMANCE.md): measurement log
-  - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): index schemas
-  - [docs/OCR.md](docs/OCR.md): OCR model setup
-  - [docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md): face recognition details
-- **[contracts/](contracts/)**: generated API schema (OpenAPI and TypeScript types), regenerated by `scripts/codegen/generate_contracts.py`
 - **[INSTALLATION.md](INSTALLATION.md)**: installer, CLI and source install
-- **[export/README.md](export/README.md)**: model export
-- **[scripts/README.md](scripts/README.md)**: scripts and curation tooling
-- **[benchmarks/README.md](benchmarks/README.md)**: benchmark tool
-- **[SECURITY.md](SECURITY.md)**: read before exposing the API beyond a trusted network
 - **[CONTRIBUTING.md](CONTRIBUTING.md)**: dev setup, tests, commit conventions
+- **[SECURITY.md](SECURITY.md)**: read before exposing the API beyond a trusted network
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: components, data model, runtime topology
+- **[docs/CURATION.md](docs/CURATION.md)**: curation user guide
+- **[docs/PERFORMANCE.md](docs/PERFORMANCE.md)**: measurement log and benchmarking
+- **[docs/design/program/00_index.md](docs/design/program/00_index.md)**: what to do next (clustering research outcome and plans)
+- **[docs/design/curation_api_contract.md](docs/design/curation_api_contract.md)**: route and wire-model reference
+- **[docs/VISION_AND_GOALS.md](docs/VISION_AND_GOALS.md)**: scope and standards
+- **[docs/opensearch_schema_design.md](docs/opensearch_schema_design.md)**, **[docs/OCR.md](docs/OCR.md)**, **[docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md)**: index schemas, OCR and face details
+- **[contracts/](contracts/)**: generated OpenAPI and TypeScript types
+- **[export/README.md](export/README.md)**, **[scripts/README.md](scripts/README.md)**, **[benchmarks/README.md](benchmarks/README.md)**: model export, scripts, benchmark tools
 - **[CLAUDE.md](CLAUDE.md)**: orientation for AI coding agents
 - **[CHANGELOG.md](CHANGELOG.md)**: release history
 

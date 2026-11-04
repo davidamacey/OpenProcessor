@@ -30,17 +30,23 @@ Extracted from [levipereira/ultralytics](https://github.com/levipereira/ultralyt
 
 Original implementation by Levi Pereira for YOLOv7/v8/v9 with TensorRT EfficientNMS support.
 
-## Installation
+## Scope
 
-No installation needed! The patch is already in your repo at `src/ultralytics_patches/`.
+The patch targets the Ultralytics **8.3.x** exporter API. Ultralytics 8.4 changed the end2end
+property and breaks it, so it runs only in the export image's isolated venv (`/opt/venv-y11`,
+`ultralytics==8.3.253`, from `requirements-export-y11.txt`). `export/export_models.py`
+re-execs into that venv and refuses to run on 8.4. YOLO26 does not use the patch: it
+exports natively NMS-free through `export/export_yolo26.py`. The repository pins
+`ultralytics==8.4.197` for everything else.
 
 ## Usage
 
 ### Quick Start
 
 ```python
-# Auto-apply on import (default behavior)
+# Apply the patch before importing ultralytics
 from ultralytics_patches import apply_end2end_patch
+apply_end2end_patch()
 from ultralytics import YOLO
 
 # Export YOLOv11 with embedded NMS
@@ -56,20 +62,6 @@ model.export(
 )
 
 # Output: yolo11n-trt.onnx (with NMS embedded)
-```
-
-### Manual Patch Application
-
-```python
-from ultralytics_patches import apply_end2end_patch
-
-# Apply patch manually
-apply_end2end_patch()
-
-# Now use YOLO as normal
-from ultralytics import YOLO
-model = YOLO("yolo11n.pt")
-model.export(format="onnx_trt", ...)
 ```
 
 ### Export Script Example
@@ -120,33 +112,7 @@ print("✅ NMS plugin successfully embedded!")
 
 After export, deploy to Triton with `platform: "onnxruntime_onnx"` or convert to TensorRT engine.
 
-Example config: `models/yolov11_small_trt_end2end/config.pbtxt`
-
-```protobuf
-name: "yolov11_small_trt_end2end"
-platform: "tensorrt_plan"
-max_batch_size: 64
-
-input [
-  { name: "images", data_type: TYPE_FP32, dims: [3, 640, 640] }
-]
-
-output [
-  { name: "num_dets", data_type: TYPE_INT32, dims: [1] },
-  { name: "det_boxes", data_type: TYPE_FP32, dims: [300, 4] },
-  { name: "det_scores", data_type: TYPE_FP32, dims: [300] },
-  { name: "det_classes", data_type: TYPE_INT32, dims: [300] }
-]
-
-dynamic_batching {
-  preferred_batch_size: [8, 16, 32, 64]
-  max_queue_delay_microseconds: 5000
-}
-
-instance_group [
-  { count: 2, kind: KIND_GPU }
-]
-```
+The served config is `models/yolov11_small_trt_end2end/config.pbtxt` (outputs `num_dets`, `det_boxes`, `det_scores`, `det_classes`; 300 detections per image).
 
 ## Supported Models
 
@@ -254,7 +220,7 @@ print('✅ Export successful')
 
 ## Version Compatibility
 
-- **Ultralytics:** ≥8.3.0 (tested with 8.3.228)
+- **Ultralytics:** 8.3.x only (validated on 8.3.253; not 8.4)
 - **PyTorch:** ≥1.13.0
 - **ONNX:** ≥1.12.0
 - **TensorRT:** ≥8.5.0 (8.6+ for class-agnostic NMS)
@@ -266,7 +232,6 @@ AGPL-3.0 (same as Ultralytics)
 ## Credits
 
 - Original implementation: [Levi Pereira](https://github.com/levipereira/ultralytics)
-- Extraction and packaging: Claude Code Analysis
 - Based on NVIDIA TensorRT EfficientNMS plugin
 
 ## References

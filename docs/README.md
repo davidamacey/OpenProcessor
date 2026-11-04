@@ -28,9 +28,9 @@ Build the site with `make docs-build`.
 
 | Document | What it covers |
 |---|---|
-| [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.6.0 scope and the standards the code is held to (canonical) |
+| [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.6.0 scope, what comes next and the standards the code is held to (canonical) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Services, project isolation, data model, the multi-box region cascade, config store, workers |
-| [WHITEPAPER.md](WHITEPAPER.md) | Public systems whitepaper for the 0.7.0 work: GPU image prep, embedding and clustering research, auto-label loop, isolation; public-data numbers only |
+| [WHITEPAPER.md](WHITEPAPER.md) | Public systems whitepaper draft: GPU image prep, embedding and clustering research, auto-label loop, isolation; public-data numbers only |
 | [opensearch_schema_design.md](opensearch_schema_design.md) | Global and per-project index schemas, `region_boxes`, clustering |
 | [design/curation_api_contract.md](design/curation_api_contract.md) | Route table and wire models for `/curation` |
 | [design/curation_design_rationale.md](design/curation_design_rationale.md) | Why the subsystem is built the way it is |
@@ -44,8 +44,10 @@ Build the site with `make docs-build`.
 
 | Folder | What it holds |
 |---|---|
-| [design/](design/README.md) | Design docs and plans with status and issue numbers |
-| [research/](research/) | Measured snapshots and external-reference research (clustering, VLM sizing, GPU decode, quantization). Indexed in [design/README.md](design/README.md) |
+| [design/](design/README.md) | Reference design docs, open plans and their status and issue numbers |
+| [design/program/](design/program/00_index.md) | The v0.7.0 program plan (batches B0 to B5, release acceptance). Start at `00_index.md`; files are removed as batches close |
+| [research/](research/README.md) | Measured snapshots and external-reference research (clustering, VLM sizing, GPU decode, quantization, ingest write path, storage sizing, vector database and serving backend studies) |
+| [reviews/](reviews/) | Review records of past work (historical) |
 | [market/](market/README.md) | Market research and competitive analysis, as of 2026-10-04 |
 
 ---
@@ -60,7 +62,7 @@ Build the site with `make docs-build`.
 | [MIGRATION_TRITON_26.md](MIGRATION_TRITON_26.md) | Re-exporting engines for Triton 26.06 and TensorRT 11 |
 | [Technical/TRITON_BEST_PRACTICES.md](Technical/TRITON_BEST_PRACTICES.md) | Triton batching, instance groups, tuning |
 | [security/triton_cve_hardening.md](security/triton_cve_hardening.md) | Triton image CVE posture |
-| [image_size_audit.md](image_size_audit.md) | Docker image size audit and plan (not implemented) |
+| [image_size_audit.md](image_size_audit.md) | Docker image size audit (historical) and the #41 result |
 
 ---
 
@@ -70,7 +72,7 @@ Build the site with `make docs-build`.
 |---|---|
 | [PERFORMANCE.md](PERFORMANCE.md) | The measurement log: setup, hardware, method and results for every benchmark. Cite it for any number |
 | [benchmarks/](benchmarks/) | Raw result JSON and parity references behind `PERFORMANCE.md` |
-| [../benchmarks/README.md](../benchmarks/README.md) | The `triton_bench` tool |
+| [../benchmarks/README.md](../benchmarks/README.md) | Benchmark tools: Go ingest benchmarks, `make bench-*`, wrk and httpx scripts |
 
 ---
 

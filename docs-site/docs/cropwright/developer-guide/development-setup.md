@@ -7,7 +7,7 @@ title: Development setup
 
 ```bash
 npm install
-cp .env.example .env   # point PUBLIC_TRITON_API_URL at your backend
+cp .env.example .env   # run from frontend/; point PUBLIC_TRITON_API_URL at your backend
 npm run dev              # http://localhost:5173
 ```
 
@@ -19,7 +19,7 @@ there is no local database or mock-data mode.
 
 `docker-compose.yml` only pulls the published image. To run your own
 build instead, add the build overlay (it tags the result
-`cropwright-dev:local`, so it never overwrites a pulled image):
+`openprocessor-cropwright:dev` unless `OP_CROPWRIGHT_IMAGE` is set, so it never overwrites a pulled image):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cropwright up -d --build cropwright

@@ -227,7 +227,7 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 - **Model weights:** pulled from HuggingFace at first run (gated; requires `HF_TOKEN`)
 
 ### Usage in This Project
-- `docker/segmenter/Dockerfile` pip-installs SAM 3 from a pinned upstream commit; no SAM 3 source is vendored into this repository
+- `docker/segmenter/Dockerfile` pip-installs SAM 3 from an upstream checkout (`SAM3_SHA`, default `main`; pass a commit to pin it); no SAM 3 source is vendored into this repository
 - `docker/segmenter/sam3_backend.py` imports `sam3.model_builder.build_sam3_image_model` and `sam3.model.sam3_image_processor.Sam3Processor`
 - Service-local attribution detail: [`docker/segmenter/NOTICE`](docker/segmenter/NOTICE)
 
@@ -396,6 +396,7 @@ propagates to the combined work.
 | Meta Perception Encoder (PE-Core) | Apache 2.0 | ✓ Yes (this file) |
 | OpenSearch | Apache 2.0 | ✓ Yes |
 | OpenCLIP | MIT | ✓ Yes |
+| pyclipper (Clipper polygon offset, OCR box unclip) | MIT (Clipper: Boost Software License 1.0) | ✓ Yes (this file) |
 | Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | COCO 2017 (annotations) | CC BY 4.0 (COCO Consortium) | ✓ Yes (this file) |
@@ -429,4 +430,4 @@ For questions about attribution or licensing:
 
 ---
 
-**Last Updated:** January 2026
+**Last Updated:** November 2026

@@ -108,15 +108,87 @@ curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 | DELETE | `/models/{model_name}` | Remove from the repository. Refused (403, even with `force`) for the configured detector and OCR models, and 409 for other core pipeline models unless `?force=true`; nothing is deleted when refused |
 | POST | `/models/{model_name}/test` | Run a test image through a model |
 
-## Example response
+## Response shapes
+
+All coordinates are normalized `0.0-1.0`; multiply by the `image` width and
+height for pixels.
+
+`POST /detect` (a detection is an object with `x1`, `y1`, `x2`, `y2`):
 
 ```json
 {
   "detections": [
     {"x1": 0.094, "y1": 0.278, "x2": 0.870, "y2": 0.989,
-     "confidence": 0.918, "class_id": 0, "class_name": "person"}
+     "confidence": 0.918, "class": 0, "class_name": "person"}
   ],
+  "num_detections": 1,
+  "status": "success",
   "image": {"width": 1920, "height": 1080},
-  "inference_time_ms": 12.5
+  "total_time_ms": 12.5
 }
+```
+
+`POST /faces/recognize` (`/faces/detect` is the same without `embeddings`; `box`
+is a flat `[x1, y1, x2, y2]` list and `landmarks` is a flat list of 10 floats,
+five x/y pairs):
+
+```json
+{
+  "num_faces": 1,
+  "faces": [
+    {"box": [0.30, 0.10, 0.50, 0.40], "score": 0.98,
+     "landmarks": [0.35, 0.20, 0.45, 0.20, 0.40, 0.28, 0.36, 0.35, 0.44, 0.35]}
+  ],
+  "embeddings": [[0.012, -0.034, "... 512 floats"]],
+  "status": "success"
+}
+```
+
+`POST /embed/image`: `{"embedding": [...512 floats], "embedding_norm": 1.0, "indexed": false, "status": "success"}`.
+
+`POST /search/text` and the other search routes: `{"status": "success", "query_type": "text",
+"results": [{"image_id": "...", "image_path": "...", "score": 0.31}], "total_results": 1, "search_time_ms": 8.2}`.
+
+`POST /ingest`: `{"status": "success", "image_id": "photo_001", "num_detections": 1,
+"num_faces": 2, "indexed": {"global": true, "vehicles": 1, "people": 0, "faces": 2}}`;
+`status` is `duplicate` when the image is already stored.
+
+`POST /ocr/predict`: `texts`, `full_text`, `num_texts` and `regions[]` (`text`,
+`box`, `box_normalized`, `det_score`, `rec_score`).
+
+`POST /analyze`: `detections`, `faces`, `num_detections`, `num_faces`, `ocr`,
+`global_embedding` (with `include_embedding`) and `total_time_ms` in one body.
+
+Search, ingest and curation schemas in full: the running API's `/docs` and
+`docs/design/curation_api_contract.md`.
+
+## Python client
+
+```python
+import requests
+
+API = 'http://localhost:4603'
+
+with open('image.jpg', 'rb') as f:
+    detections = requests.post(f'{API}/detect', files={'image': f}).json()['detections']
+
+with open('photo.jpg', 'rb') as f:
+    faces = requests.post(f'{API}/faces/recognize', files={'image': f}).json()
+
+with open('image.jpg', 'rb') as f:
+    embedding = requests.post(f'{API}/embed/image', files={'image': f}).json()['embedding']
+
+# search/text takes query parameters, not a JSON body: `text`, not `query`
+results = requests.post(
+    f'{API}/search/text', params={'text': 'a red sports car', 'top_k': 10}
+).json()['results']
+
+with open('photo.jpg', 'rb') as f:
+    requests.post(f'{API}/ingest', files={'image': f}, data={'image_id': 'photo_001'})
+
+with open('document.jpg', 'rb') as f:
+    texts = requests.post(f'{API}/ocr/predict', files={'image': f}).json()['texts']
+
+with open('scene.jpg', 'rb') as f:
+    analysis = requests.post(f'{API}/analyze', files={'image': f}).json()
 ```

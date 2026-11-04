@@ -289,6 +289,45 @@ check at 1440 and 430 px happens in the batch sweep.
   asserts exit 0 (fails today). Keep it as a regression test (it takes seconds).
 - Control: each of the three files alone passes.
 
+### 1D-21 DOC-1: `./openprocessor bench` needs tools that are not in the repository (S)
+
+- Files: `scripts/lib/cli_dev.sh` (the `bench` subcommand), `INSTALLATION.md` CLI table,
+  `docs/PERFORMANCE.md` "Benchmarking", `benchmarks/README.md`, `CLAUDE.md` and `README.md` command lists.
+- Defect: the subcommand runs `benchmarks/triton_bench`, built by `benchmarks/build.sh`; neither exists.
+- Fix: delete the subcommand and every doc line that names it (recommended; no shim). The maintained
+  alternatives are the `make bench-*` targets and Triton's `perf_analyzer` in the `triton-sdk`
+  service (`docker-compose.yml`, profile `benchmark`); the docs point there. Restore a tool only if the
+  owner asks.
+- Red: a test that runs `./openprocessor help` (or reads the dispatch table) and asserts `bench` is
+  absent, plus a test that every path a CLI subcommand execs exists (fails today for `bench`).
+- Control: the other subcommands still dispatch.
+
+### 1D-22 BA-9: two routes search the same OCR index (S)
+
+- Files: `src/routers/ocr.py` (`POST /ocr/search`), `src/routers/search/ocr.py` (`POST /search/ocr`),
+  their schemas, `contracts/`, docs that name either route.
+- Defect: both search `visual_search_ocr` with different parameters.
+- Fix: keep one route (the `/search/ocr` family beside the other search routes, unless the owner
+  prefers otherwise), fold any parameter the other has into it, delete the other in the same change
+  (no shim), run `make contracts`.
+- Red: a test that asserts exactly one OCR text-search route is mounted (two today), and a request
+  test on the kept route for the folded parameter.
+- Control: `POST /ocr/predict` and `POST /ocr/batch` are unchanged.
+
+### 1D-23 CFG-1: `OP_REGION_PROFILE_PATH` is read by no code (S)
+
+- Files: `docker-compose.yml`, `env.template` (lines near 285 and 437), `docker/test/compose.yml`,
+  `tests/conftest.py` (`reference_region_profile` sets it), `src/config/retired_env.py`,
+  `frontend/examples/README.md`. A comment in `src/routers/curation/keymap.py` also names it.
+- Defect: only compose and `env.template` mention it; `rg OP_REGION_PROFILE_PATH src scripts` finds no
+  reader, so a user who sets it gets a config that does nothing.
+- Fix: verify with `rg` once more, remove it everywhere (including the test fixture's `setenv` and the
+  stale comments) and add it to `RETIRED_ENV` with a "removed:" message naming the region-profile
+  activation (`docs-site/docs/guides/region-profiles.mdx`), because a user may have it set.
+- Red: a test that sets `OP_REGION_PROFILE_PATH` and expects `reject_retired_env` to raise (passes
+  nothing today), and an env-audit test that every `env.template` key is read by code.
+- Control: the unset environment starts normally.
+
 ## 6. Gate for this lane
 
 - Backend: targeted pytest per task, `.venv/bin/pre-commit run --files <touched files>`.
@@ -352,6 +391,7 @@ behaviour).
 - BA-5: `error_type` is also in the Triton 503 body (`src/core/error_handlers.py`), and two tests
   assert it (`tests/test_response_serialization.py`, `tests/test_triton_unavailable_503.py`).
 - FE-5's component is at `frontend/src/lib/components/train/TrainDatasetSection.svelte`.
+- 1D-21 to 1D-23 came from the 2026-11-03 docs scrub (the docs said what the code does not do).
 
 ## 13. Lane agent brief (paste as is)
 

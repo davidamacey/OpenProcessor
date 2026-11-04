@@ -97,37 +97,13 @@ The panel refreshes on the interval the backend serves.
 
 <Screenshot name="cropwright/ingest-source-card-1600.png" alt="A source card with counts, watch and schedule times, the webhook path and event counts, and the last run" caption="A source card as the backend serves it" />
 
-**Verified live.** On the dev stack with a real MinIO and public COCO images: adding an S3
-source (bucket `op-s3-test`, prefix `ui/`), **Save** and **Run now** ended with
-"Last run completed · ingested 5 · duplicates 0 · failed 0" and counts `pending 0,
-ingested 5, retrying 0, gave up 0`. **Remove** asked for confirmation and the 5 images
-stayed in the project. With the allow-list narrowed to another bucket the card showed
-**Run now** disabled with "This bucket or prefix is outside OP_S3_ALLOWED" and the watch
-error with its retry time. The Ingest page at 430 px wide had no horizontal overflow
-(`scrollWidth` 430, `clientWidth` 430; 1600/1600 at desktop width). The server-side
-checks (idempotent re-run, webhook, poll, cron, a rejected credential, project isolation)
-are in [Verified on a live stack](../../guides/ingest-sources.mdx#verified-on-a-live-stack).
-On a second pass: a **Server folder** source (path under a source root, watch every 10 s)
-ingested its files, picked up a file added later without a click and ingested 0 on **Run now**
-again. For objects that gave up (a text file named `.jpg`, an empty file), the card showed **Retry the 2
-that gave up**; after the click it read `pending 2, gave up 0` and the button disappeared (the
-button only queues them, so a source with no trigger needs **Run now**), and **Run now** ended with
-`ingested 2`. The button is not shown when nothing gave up. With S3 off on the deployment the S3
-sources show **Run now** disabled with "S3 is off on this deployment: OP_S3_ALLOWED is empty" and
-the form offers only **Server folder**; if the list cannot be loaded the panel shows "Could not load
-sources: ..." and no cards, and recovers by itself.
+The server-side checks are in [Verified on a live stack](../../guides/ingest-sources.mdx#verified-on-a-live-stack).
 
 <Screenshot name="cropwright/ingest-source-gave-up-1300.png" alt="A source card with gave up 2 and the Retry the 2 that gave up button" caption="A source with objects that gave up: the Retry button" />
 
 <Screenshot name="cropwright/ingest-source-folder-1300.png" alt="A Server folder source card watching every 10 seconds" caption="A Server folder source" />
 
 <Screenshot name="cropwright/ingest-source-s3-off-1300.png" alt="The add source form with S3 off: only Server folder is offered" caption="S3 off on the deployment: the form offers only Server folder" />
-
-## Server-path batch ingest
-
-Points at a folder the backend already has mounted (for example,
-OpenProcessor's sample-data output) rather than uploading bytes through the
-browser.
 
 ## Importing an already-labeled dataset
 

@@ -8,8 +8,10 @@ title: Dashboard
 Pipeline health at a glance.
 
 - **Live dataset stats**, polled every 10 seconds.
-- **Run Clustering Now** — starts an auto-label run with stage progress,
-  shared with the backend's own scheduled run.
+- **Quick actions**: the VLM assist link (below), **Export Dataset (YOLO)**
+  (behind a confirmation) and **Refresh**.
+- **Recluster now** — starts an auto-label run with stage progress,
+  shared with the backend's own scheduled run. It asks for confirmation.
 - **Assist scope** (`AssistScopeBar`) — when the backend advertises a usable
   VLM prompt pack, an optional per-class scope lets you point the
   VLM-assisted sweep at a single class instead of the whole pool. Absent
@@ -18,7 +20,8 @@ Pipeline health at a glance.
   cluster, sub-cluster, selection, crop or box is started from there with
   **Assist…** (see [Assist](./assist.md)). With no VLM active for the project
   it links to the Models settings instead.
-- With a served region profile, a detections panel shows region coverage.
+- Below the stats: the class balance chart, the last 20 recent labels and,
+  with a served region profile, a detections panel with region coverage.
 
 <Screenshot name="cropwright/dashboard-1600.png" alt="Cropwright dashboard" caption="Dashboard — live stats and the clustering/assist trigger" />
 

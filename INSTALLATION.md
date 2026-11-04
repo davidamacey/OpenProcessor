@@ -39,7 +39,7 @@ State lives in `<dir>/.install/` (`state.json`, `install.log`, mode 600).
 ### Prerequisites
 
 - Linux with Docker Engine and Docker Compose v2.
-- An NVIDIA GPU with the
+- An NVIDIA GPU and driver, with the
   [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
   The installer never installs packages or changes the Docker daemon config;
   it tells you what is missing and stops.
@@ -51,6 +51,38 @@ State lives in `<dir>/.install/` (`state.json`, `install.log`, mode 600).
   fail: it drops the segmenter from the recommended tiers and logs a warning, and
   an explicit `--tiers ...,segmenter` then stops at the missing token. For
   scripted installs always set `HF_TOKEN_FILE` (a file with mode 600) and name the tier.
+
+Hardware (the same table as [Deployment and GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx#hardware),
+which also has the profile table):
+
+| | Minimum | Recommended |
+|---|---|---|
+| GPU | NVIDIA, 8 GB+ VRAM, Ampere or newer | A100 / A6000 / RTX 4090 class, 16 GB+ |
+| RAM | 16 GB | 64 GB |
+| CPU | 16 cores | 48+ cores |
+| Storage | | NVMe SSD for image storage |
+
+<details>
+<summary>Installing the NVIDIA Container Toolkit (Ubuntu/Debian)</summary>
+
+```bash
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+# Configure Docker
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+# Verify the toolkit is configured
+docker info | grep -i nvidia
+nvidia-smi
+```
+
+</details>
 
 ### Verifying the download
 
@@ -114,41 +146,12 @@ Other variables: `OP_GH_REPO` (the GitHub `org/repo` to install from),
 
 ### Network access
 
-**Cropwright is reachable on your LAN by default, for homelab or
-small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
-installer puts a shared HTTP basic-auth login in front of Cropwright (user
-`cropwright`, password in `secrets/cropwright/password`, never printed).
-Pass `--local-only` to opt out and keep
-everything on 127.0.0.1.**
-
-- Basic auth is on by default when Cropwright is published beyond loopback and
-  off otherwise. Override with `OP_CROPWRIGHT_BASIC_AUTH=true|false` in the
-  installer's environment (for an unattended run) or in `.env`; the interactive
-  installer asks. Change the password with `./openprocessor cropwright password`
-  and `./openprocessor restart cropwright`. Details: [SECURITY.md](SECURITY.md).
-
-- Cropwright's nginx reaches the API over the Docker network, so LAN browsers
-  never need the API port.
-- Do not port-forward any of these ports to the public internet. For access
-  beyond a trusted network, put a reverse proxy with authentication in front.
-- `--bind <ip>` publishes the API and backend ports on that address. A
-  non-loopback address asks you to type `expose` (unattended:
-  `OP_ALLOW_PUBLIC_BIND=1`).
-- A specific `--bind` address (for example `--bind 10.0.0.5`) also narrows
-  Cropwright to that interface. `--bind 0.0.0.0` leaves Cropwright on all
-  interfaces, and `--local-only` always wins.
-- `OP_UI_BIND_ADDRESS` (in `.env`, defaults to `OP_BIND_ADDRESS`) publishes only
-  Grafana, Prometheus, OpenSearch Dashboards and MLflow on another address, e.g.
-  `0.0.0.0`, so LAN browsers can follow resource links while the datastore and
-  model APIs stay local. Change `GF_SECURITY_ADMIN_PASSWORD` first; MLflow and
-  Prometheus have no auth.
-- `OP_GATEWAY_SUBPATHS=true` (in `.env`, with the `cropwright` profile) serves the
-  four monitoring UIs under `/grafana/`, `/prometheus/`, `/dashboards/` and
-  `/mlflow/` on Cropwright's one port, so the UIs can stay on loopback; it needs a
-  non-default `GF_SECURITY_ADMIN_PASSWORD`. See the monitoring guide.
-- A re-run keeps the Cropwright bind you chose last time.
-
-Details: [SECURITY.md](SECURITY.md).
+Cropwright is reachable on your LAN by default behind a shared basic-auth login (user `cropwright`, password
+in `secrets/cropwright/password`); the API stays on 127.0.0.1. `--local-only` keeps everything on loopback,
+`--bind <ip>` publishes the backend ports after a typed `expose` (unattended: `OP_ALLOW_PUBLIC_BIND=1`).
+The login, the bind rules, `OP_UI_BIND_ADDRESS` and `OP_GATEWAY_SUBPATHS` are in
+[Security and network exposure](docs-site/docs/deployment/security.mdx#lan-access-from-the-one-line-installer);
+the policy is [SECURITY.md](SECURITY.md). Do not port-forward any of these ports to the public internet.
 
 ### Control-plane-only mode (optional, not the default)
 
@@ -163,29 +166,9 @@ install requires a GPU and builds the full stack for the tiers you pick.
 
 ### OpenSearch heap sizing
 
-The installer sets `OPENSEARCH_HEAP` in `.env` from the host's RAM:
-`clamp(floor(RAM_GiB / 2), 2, 30)` GB (half of RAM, 2 GB minimum, 30 GB cap). `docker-compose.yml` passes it as
-`-Xms`/`-Xmx`.
-
-| Host RAM | Heap | Soft shard budget (20 per heap GB) |
-|---|---|---|
-| under 6 GiB | 2g | 40 |
-| 8 GiB | 4g | 80 |
-| 16 GiB | 8g | 160 |
-| 32 GiB | 16g | 320 |
-| 60 GiB and up | 30g (cap) | 600 |
-
-Why half with a cap of 30 GB: OpenSearch guidance is about half of memory as
-heap (the rest is page cache), below the ~31 GB compressed-pointer limit. See
-[Memory, disk and storage](docs-site/docs/deployment/sizing-and-storage.mdx). A heap you set yourself in `.env` is never overwritten, on a
-re-run or by `scripts/setup.sh --force`.
-
-The **soft shard budget** is heap GB x `OP_SHARDS_PER_HEAP_GB` (advanced,
-default 20, commented out in `env.template`). It is not a cap: going past it
-only warns (a hard refusal comes only at `cluster.max_shards_per_node`). The installer summary prints both, for example
-`OpenSearch  : heap 4g, soft shard budget 80 (20 shards per heap GB)`. To make
-room for more, raise `OPENSEARCH_HEAP` (about 1 GB per 20 shards) and
-`./openprocessor restart opensearch`.
+The installer sets `OPENSEARCH_HEAP` in `.env` to half of host RAM (2 to 30 GB) and never overwrites a value
+you set. The table, the shard budget and the kernel setting are in
+[Memory, disk and storage](docs-site/docs/deployment/sizing-and-storage.mdx#opensearch-heap-and-shards).
 
 ### Curation quick-config
 
@@ -200,19 +183,10 @@ for 800) into `data/samples/`. Details: [docs/CURATION.md](docs/CURATION.md).
 
 #### Where your images live (the source root)
 
-The API and the workers read images from one **source root**, mounted
-read-only at `/data/source`. Its host side is `OP_SOURCE_ROOT_HOST`. The
-installer writes `OP_SOURCE_ROOT_HOST=./data`; a source checkout that never
-ran the installer gets the compose default, `./data/source`. Three services
-mount it: `api`, `curation-detection-worker` and `curation-auto-label-worker`.
-Without the worker mounts, thumbnails 404 and the VLM stage labels nothing.
-
-To change it, edit `.env`, then recreate the three services with
-`./openprocessor start` (or `make up && make curation-up` in a checkout).
-`./openprocessor restart` does not re-read `.env`. Paths you pass to ingest are
-container paths under `/data/source`. `OP_SOURCE_PATH_ALIASES` adds more named
-roots, but compose does not mount them for you: bind-mount each one into the
-same three services in your own `docker-compose.local.yml` (next).
+The API and the workers read images from one source root, mounted read-only at `/data/source`; its host side is
+`OP_SOURCE_ROOT_HOST` (the installer writes `./data`). Which services mount it, how to change it and the
+aliases are in [Basic configuration](docs-site/docs/configuration/basic.mdx). Second roots need your own
+`docker-compose.local.yml` (next).
 
 ### More than one source root and your own compose overrides
 
@@ -266,14 +240,15 @@ directory created. Run `./openprocessor help` for the list.
 | `curation [up\|down\|logs\|status]` | start, stop, follow or list the curation workers (`status` is the default) |
 | `sample coco [--full]` | fetch the public COCO sample into `data/samples/` using the export image |
 | `config show` | print `.env` with every token, key, secret and password redacted |
+| `cropwright password` | set the Cropwright basic-auth login (an empty answer generates one) |
 | `gpu plan` | print the GPU keys from `.env`, then where the PE image encoder runs and whether this host can honour it (see [Spreading the PE encoder over GPUs](#spreading-the-pe-encoder-over-gpus)) |
 | `vlm ...` | local VLM catalog and switching, see [Choosing a VLM](#choosing-a-vlm) |
 | `train-mode on\|off` | stop (and later restart) the local VLM, plus the segmenter when it shares the training GPU, around a training run |
 | `upgrade [--version vX.Y.Z]`, `repair`, `uninstall [...]` | run this install's own `setup-openprocessor.sh` against this directory (installed directories only) |
 | `update` | in a checkout: pull images and rebuild; in an install directory: same as `upgrade` |
-| `profile [minimal\|standard\|full] [gpu_id]` | show the Triton instance profile in `.env` (checkout only). Switching does not work on an existing install: it leaves `GPU_PROFILE` in `.env` unchanged, so choose the profile with `scripts/setup.sh --profile=NAME --force` or the installer's `--profile` |
+| `profile [minimal\|small\|standard\|full] [gpu_id]` | show the Triton instance profile in `.env`, or switch to one: rewrites `models/*/config.pbtxt` and sets `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` in `.env` (checkout only; restart `triton-server` after; see [GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx#switching-profile-later)) |
 | `test [quick\|full\|visual]` | smoke test, `tests/test_full_system.py`, or visual validation (checkout only; `full` and `visual` need `.venv`) |
-| `bench [quick\|full]` | build and run `benchmarks/triton_bench` (checkout only) |
+| `bench [quick\|full]` | not available yet: it needs `benchmarks/triton_bench` and `benchmarks/build.sh`, which are not in the repository (tracked in `docs/design/program/02d_b1_api_frontend_tests.md`). Use the `make bench-*` targets in [benchmarks/README.md](benchmarks/README.md), or Triton's `perf_analyzer` in the `triton-sdk` container (`docker compose --profile benchmark up -d triton-sdk`) |
 | `clean [cache\|models\|exports\|all]` | remove caches, downloaded weights, or TensorRT plans (asks first) |
 | `setup [flags]` | run `scripts/setup.sh` (checkout only) |
 | `version` | print the CLI version |
@@ -318,56 +293,6 @@ that was made without it, re-run `./setup-openprocessor.sh --tiers <your
 tiers>,vlm`, or set `OP_LOCAL_VLM_ENDPOINT=env` in `.env`, keep `vlm` in
 `COMPOSE_PROFILES` and run `docker compose --profile vlm up -d vlm`.
 
-### Upgrade, repair, rollback, uninstall
-
-Run these from the install directory.
-
-```bash
-./openprocessor upgrade                   # latest release
-./openprocessor upgrade --version vX.Y.Z  # a specific release
-./setup-openprocessor.sh --repair
-./setup-openprocessor.sh --rollback
-./setup-openprocessor.sh --uninstall [--purge-volumes] [--purge-data] [--remove-images]
-```
-
-- **Upgrade** (or re-running the installer in the same dir): backs up the
-  current release files, `.env` and state to `backups/<UTC timestamp>/`,
-  installs the new release, adds new `.env` keys without touching yours,
-  updates the image pins, re-runs the model groups that need it, restarts and
-  checks health. Changing version asks once (`--yes` to skip the prompt). A
-  re-run with no `--tiers` keeps the installed tiers.
-- **Upgrading from a release with the single API image (0.6.x and earlier)**: the
-  model export toolchain moved out of the `openprocessor` image into the new
-  `openprocessor-export` image. The upgrade pulls and digest-verifies it,
-  `OP_EXPORT_IMAGE` appears in `.env`, and `docker compose exec api python
-  /app/export/...` no longer works: use `./openprocessor models install|repair`,
-  `./openprocessor export <model>` or `docker compose run --rm model-export
-  python /app/export/...`. Engines built before stay valid (same TensorRT, same
-  Triton image). The upgrade does not remove the old images; `docker image rm`
-  the previous `openprocessor*` tags to reclaim their disk space.
-- **Repair**: the same at the installed version. Re-verifies files,
-  re-pulls missing images, re-runs failed or missing model groups.
-- **Rollback**: restores the **newest backup of a different version** than
-  the one installed, and re-pins its images. Same-version backups (from a
-  re-run or a repair) are skipped, so after upgrading v1 to v2 and re-running
-  v2, rollback lands on v1. With no other version on record it restores the
-  newest backup (a config rollback). The files it replaces are kept in
-  `.install/rollback-undo/`. It restarts the stack unless you add
-  `--no-start`. If the Triton image changed, rebuild engines with
-  `./openprocessor models install`.
-- **Uninstall**: stops and removes the containers of this install only.
-  Volumes, `data/`, models and caches are kept unless you add
-  `--purge-volumes` (the named volumes), `--purge-data` (`models/`,
-  `pytorch_models/`, `cache/`, `data/`; a source root outside the install dir
-  is never touched) or `--remove-images` (only this install's pinned images
-  that nothing else uses). Every purge makes you type the project name
-  (unattended: `OP_CONFIRM_PURGE=<project>`).
-
-Only one installer run works in a directory at a time; a second one exits
-with code 3. All of these act only on a directory this installer created, and
-only on its own compose project; a git checkout or another install's dir is
-refused.
-
 ### Offline installs from a local bundle
 
 `scripts/release/build_deploy_bundle.sh vX.Y.Z [SRC] [OUT]` builds the release
@@ -377,38 +302,6 @@ unless they are already present locally (use `--image-tag` for local builds).
 A later re-run, `repair` or `./openprocessor upgrade` of that install needs only
 `--release-dir OUT`: the installed version is reused, and `--version` is for an
 upgrade to another release.
-
-### Troubleshooting
-
-Exit codes:
-
-| Code | Meaning | What to do |
-|---|---|---|
-| 1 | general failure | read the last `[ERROR]` line and `.install/install.log` |
-| 2 | usage | check the flags (`--help`); a port conflict you declined also exits 2: use `--port-base N` |
-| 3 | project or container-name collision | another compose project already uses the name, or the dir is a checkout / another install: pass `--project NAME` or `--dir` |
-| 4 | no usable GPU, or the GPU plan was refused | fix the driver / Container Toolkit, adjust `--gpu-plan`, or `--force` |
-| 5 | Docker unreachable | start Docker; add your user to the `docker` group |
-| 6 | HuggingFace token missing or rejected | for `segmenter`, accept the SAM 3 license on HuggingFace, then pass the token (`HF_TOKEN_FILE`) or `--reset-hf-token` |
-| 7 | verification failed | a checksum, digest or `images.lock` check failed (including a lock line whose image repo does not match its key). Re-download; if it persists the release itself is inconsistent: report it |
-| 8 | health check or model setup failed | `./openprocessor logs <service>`, fix, then `./setup-openprocessor.sh --repair` |
-| 9 | consent not given | re-run with `--yes`, or set the matching consent variable |
-
-Common cases:
-
-- **"a container cannot see GPU N"**: the NVIDIA Container Toolkit is missing or
-  not configured for Docker. On WSL2 this usually means GPU passthrough is off.
-  The installer never falls back to CPU silently.
-- **Port in use**: interactively the installer offers the next free port;
-  unattended it takes it and warns. `--port-base N` moves the whole block.
-- **No GPU**: there is no CPU inference path (every model except the text
-  encoder is a TensorRT engine). `--cpu --control-plane-only` gives you
-  OpenSearch, the API and Cropwright for browsing an existing index or using a
-  remote VLM; the API reports `degraded`.
-- **Failed model groups**: the summary lists them with
-  `./openprocessor models install --only <group>` to retry each one.
-- **Disk**: the installer warns if it cannot check free space; the Triton
-  image alone is about 30 GB.
 
 ### Spreading the PE encoder over GPUs
 
@@ -461,426 +354,170 @@ For development, or to build the images yourself.
 git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh
 ```
 
-In a checkout, manage the stack with `make` (`make up`, `make curation-up`,
-`make down`, `make status`). The `./openprocessor` CLI (and its shim
+`setup.sh` flags (`./scripts/setup.sh --help` prints them):
+
+| Flag | Meaning |
+|---|---|
+| `--yes`, `-y` | skip confirmation prompts and accept the defaults |
+| `--profile=NAME` | force a GPU profile: `minimal`, `small`, `standard` or `full` (see [GPU profiles](docs-site/docs/deployment/gpu-sizing.mdx#gpu-profiles)) |
+| `--gpu=ID` | use this GPU (default 0) |
+| `--skip-export` | skip the TensorRT export (models already exported) |
+| `--skip-download` | skip the model download |
+| `--skip-start` | do not start the services |
+| `--force` | overwrite an existing `.env` (otherwise setup never touches one) |
+| `--curation` | print the curation next steps at the end |
+
+```bash
+./scripts/setup.sh --yes                              # accept all defaults
+./scripts/setup.sh --profile=standard --gpu=0 --yes   # choose profile and GPU
+```
+
+### What setup does
+
+1. Checks Docker, Docker Compose, the NVIDIA driver and Docker's GPU runtime.
+2. Detects your GPU and selects a profile from its free VRAM.
+3. Creates the working directories.
+4. Downloads the model weights from public sources (about 500 MB for all, about
+   250 MB for the essential set). A failed download is a warning; export retries it.
+5. Pulls the `api` and `triton-server` images from Docker Hub. If the pull fails
+   it builds them from the Dockerfiles instead.
+6. Generates the Triton model configs and `.env` (the OpenSearch heap is sized
+   from host RAM, as for the installer; see [OpenSearch heap sizing](#opensearch-heap-sizing)).
+7. Exports the models to TensorRT (the `minimal` profile exports the essential
+   set only). The script estimates 45 to 60 minutes for all models, once; the
+   engines are cached on disk.
+8. Starts the services and runs a smoke test.
+
+### Working in a checkout
+
+Manage the stack with `make` (`make up`, `make curation-up`, `make down`,
+`make status`). The `./openprocessor` CLI (and its shim
 `./scripts/openprocessor.sh`) uses the project `openprocessor` and warns when `.env` has no
 `COMPOSE_PROJECT_NAME` line (the `.env` that `setup.sh` writes has none); set the line to
-choose another name. When you run `docker compose`
-by hand, pass `-p <project>` so you never act on another stack that uses the
-default name.
-
-### Interactive Setup
-
-```bash
-git clone https://github.com/davidamacey/OpenProcessor.git
-cd OpenProcessor
-./scripts/setup.sh
-```
-
-### Non-Interactive Setup
-
-```bash
-# Accept all defaults
-./scripts/setup.sh --yes
-
-# Specify profile and GPU
-./scripts/setup.sh --profile=standard --gpu=0 --yes
-
-# Skip TensorRT export (if models already exported)
-./scripts/setup.sh --skip-export --yes
-```
-
-### What Setup Does
-
-The setup script will:
-1. Check prerequisites (Docker, NVIDIA drivers)
-2. Detect your GPU and select the optimal profile
-3. Pull the API and Triton images from Docker Hub (tens of GB); if the pull
-   fails it builds them from the Dockerfiles instead
-4. Download required models (~500MB)
-5. Export models to TensorRT (~30-60 minutes, **one-time only**)
-6. Generate configuration files (the OpenSearch heap is sized from host RAM,
-   as for the installer; see [OpenSearch heap sizing](#opensearch-heap-sizing))
-7. Start all services
-8. Run smoke tests
-
-**First-time setup takes ~30-60 minutes** (mostly TensorRT compilation).
-Subsequent starts take ~30 seconds since compiled engines are cached on disk.
-
----
-
-## Prerequisites
-
-### Required Software
-
-| Software | Minimum Version | Installation |
-|----------|-----------------|--------------|
-| Docker | 20.10+ | [docs.docker.com](https://docs.docker.com/engine/install/) |
-| Docker Compose | v2.0+ | Included with Docker Desktop |
-| NVIDIA Driver | 535+ | [nvidia.com/drivers](https://www.nvidia.com/drivers) |
-| NVIDIA Container Toolkit | Latest | [See below](#nvidia-container-toolkit) |
-
-### Hardware Requirements
-
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| GPU VRAM | 6GB | 12GB+ |
-| GPU Architecture | Ampere (30-series) | Ampere or newer |
-| System RAM | 16GB | 32GB+ |
-| CPU Cores | 8 | 16+ |
-| Storage | 20GB free | 50GB+ (SSD recommended) |
-
-### NVIDIA Container Toolkit
-
-Install the NVIDIA Container Toolkit to enable GPU access in Docker:
-
-```bash
-# Ubuntu/Debian
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-
-# Configure Docker
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-
-# Verify toolkit is configured
-docker info | grep -i nvidia
-nvidia-smi
-```
-
----
-
-## GPU Profiles
-
-`setup.sh` and the installer pick a profile from your GPU's VRAM. A profile is a set of
-Triton model settings: instances per model, batch sizes and OCR pipeline instances. It does
-not choose which models exist.
-
-| Profile | VRAM Range | Triton instances per model | Max batch | `ocr_pipeline` instances | Example GPUs |
-|---------|------------|----------------------------|-----------|--------------------------|--------------|
-| **minimal** | under 12GB | 1 | 16 | 1 | RTX 3060 8GB, RTX 4060 |
-| **small** | 12-15GB | 1 | 16 | 1 | RTX 3080 Ti, RTX 3060 12GB |
-| **standard** | 16-39GB | 2 | 32 | 2 | RTX 4080, RTX 4090 |
-| **full** | 40GB+ | 4 | 64 | 4 | A6000, A100 |
-
-The values come from `config_templates/profiles/*.json`. No per-profile throughput has
-been measured; measured numbers (one RTX A6000) are in `docs/PERFORMANCE.md`.
-
-The profile also decides the GPU decode (about 8.5 GB more on the Triton card per `gpu_image_prep`
-instance; every profile runs one, 8,704 MiB; two need `OP_LOAD_PROFILE=ingest`, see [the ingest load profile](docs-site/docs/operations/ingest-load-profile.mdx)):
-`setup.sh` and the installer write `OP_INGEST_GPU_DECODE=1` for **full** and `0` for **minimal**
-, **small** and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan` shows the result.
-
-### 12 GB cards (the small profile)
-
-A card with 12 to 15 GB free gets `small` automatically: every model, one Triton instance each,
-a max batch of 16, and engines built with the **small TensorRT target** (a 2 GB workspace and half
-the engine max batch, never below 16). Engine memory at serve time is dominated by each engine's
-max-batch profile times the instance count, so the small profile lowers both; the workspace limit
-only caps the scratch memory of the build itself. The GPU decode stays off, and a segmenter or
-local VLM does not fit next to Triton on such a card (the plan says so).
-
-- The profile is chosen by the installer and written to `GPU_PROFILE`; force one with `--profile`.
-- Engine stamps (`.install/precision.tsv`) record the build target and workspace, so
-  `./openprocessor models install` rebuilds only the engines whose target changed (for example
-  after moving from `standard` to `small`); switching between `standard` and `full` rebuilds nothing.
-- Build the small engines on any profile with `./openprocessor models install --build-target small`,
-  or set a workspace with `--workspace GB`. The flags win over `.env`; `.env` keys are
-  `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`, which the `model-export-worker` (API model upload) also reads.
-- An engine build that runs out of memory (`permanent:oom`) names this option in its hint.
-
-### What a profile does and does not do
-
-- It rewrites `models/<name>/config.pbtxt` for the YOLO, SCRFD, ArcFace, MobileCLIP and
-  PaddleOCR models and `ocr_pipeline`. Triton reads them at start.
-- The Triton load list is fixed in `docker-compose.yml`. A model that was never exported stays
-  unloaded and Triton keeps running. `scripts/setup.sh --profile=minimal` exports the
-  essential models only, with no OCR.
-- The API runs 32 uvicorn workers and each service has `shm_size: 8g` in `docker-compose.yml`,
-  whatever the profile says. To change either, use your own `docker-compose.local.yml` (see
-  [More than one source root and your own compose overrides](#more-than-one-source-root-and-your-own-compose-overrides)).
-
-### Selecting a Profile
-
-```bash
-# During setup
-./scripts/setup.sh --profile=minimal
-```
-
-Switch later with `./openprocessor profile <name>` (a checkout only). It rewrites the Triton
-configs and sets `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` in the existing `.env`, leaving every
-other line alone:
-
-```bash
-./openprocessor profile standard      # rewrites models/*/config.pbtxt, updates .env
-./openprocessor restart triton-server
-```
-
-Do not pass the optional second argument (a GPU id); it is written into every `config.pbtxt`.
-In a checkout, a `.env` without `COMPOSE_PROJECT_NAME` runs the default project `openprocessor`
-and says so; set `COMPOSE_PROJECT_NAME` to use another (see
-[Configure the environment](#4-configure-environment)). An install directory still refuses to run
-without it.
-See [Deployment and GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx) for the details.
-
----
-
-## Manual Installation
-
-If you prefer to run steps individually:
-
-### 1. Clone Repository
-
-```bash
-git clone https://github.com/davidamacey/OpenProcessor.git
-cd OpenProcessor
-```
-
-### 2. Create Directories
-
-```bash
-mkdir -p pytorch_models logs cache/huggingface outputs test_results
-```
-
-### 3. Download Models
-
-Models are downloaded from public sources (no authentication required):
-
-```bash
-# All models (~500MB)
-./scripts/openprocessor.sh download all
-
-# Or essential only (~250MB)
-./scripts/openprocessor.sh download essential
-
-# Check download status
-./scripts/openprocessor.sh download status
-```
-
-### 4. Configure Environment
-
-Copy and edit the environment template:
-
-```bash
-cp env.template .env
-# Edit .env to adjust settings
-```
-
-To name the compose project yourself (the `./openprocessor` CLI otherwise uses `openprocessor`):
+choose another name:
 
 ```bash
 echo 'COMPOSE_PROJECT_NAME=openprocessor' >> .env
 ```
 
-### 5. Start Containers (for export)
+When you run `docker compose` by hand, pass `-p <project>` so you never act on
+another stack that uses the default name.
 
-```bash
-make up
-```
+### Manual installation
 
-`make up` and `./openprocessor start` add the dev overlay for you and start
-the whole core stack.
+To run the steps yourself instead of `setup.sh`:
 
-### 6. Export to TensorRT
-
-This step converts models to optimized TensorRT format:
-
-```bash
-# All models (45-60 minutes)
-./scripts/openprocessor.sh export all
-
-# Or essential only (25-35 minutes)
-./scripts/openprocessor.sh export essential
-
-# Check export status
-./scripts/openprocessor.sh export status
-```
-
-### 7. Start All Services
-
-```bash
-make up              # or: ./openprocessor start
-make curation-up     # optional: the curation workers
-```
-
-### 8. Verify Installation
-
-```bash
-# Check status
-./scripts/openprocessor.sh status
-
-# Run smoke tests
-./scripts/openprocessor.sh test quick
-
-# Test API directly
-curl http://localhost:4603/health
-```
+1. Clone the repository and create the directories:
+   `mkdir -p pytorch_models logs cache/huggingface outputs test_results`.
+2. `./openprocessor download all` (or `essential`; `download status` checks it).
+3. `cp env.template .env` and edit it.
+4. `./openprocessor start` (or `make up`): the `triton-server` container must be
+   running for the export. This also starts the rest of the core stack.
+5. `./openprocessor export all` (or `essential`; `export status` checks it). Commands are in
+   the [CLI table](#the-openprocessor-cli).
+6. `./openprocessor start` again, then `make curation-up` if you want the curation workers.
+7. Verify: `./openprocessor status`, `./openprocessor test quick`,
+   `curl http://localhost:4603/health`.
 
 ---
 
 ## Troubleshooting
 
-### GPU Out of Memory (OOM)
+Exit codes of the installer:
 
-**Symptoms:** Services crash, "CUDA out of memory" errors
+| Code | Meaning | What to do |
+|---|---|---|
+| 1 | general failure | read the last `[ERROR]` line and `.install/install.log` |
+| 2 | usage | check the flags (`--help`); a port conflict you declined also exits 2: use `--port-base N` |
+| 3 | project or container-name collision | another compose project already uses the name, or the dir is a checkout / another install: pass `--project NAME` or `--dir` |
+| 4 | no usable GPU, or the GPU plan was refused | fix the driver / Container Toolkit, adjust `--gpu-plan`, or `--force` |
+| 5 | Docker unreachable | start Docker; add your user to the `docker` group |
+| 6 | HuggingFace token missing or rejected | for `segmenter`, accept the SAM 3 license on HuggingFace, then pass the token (`HF_TOKEN_FILE`) or `--reset-hf-token` |
+| 7 | verification failed | a checksum, digest or `images.lock` check failed (including a lock line whose image repo does not match its key). Re-download; if it persists the release itself is inconsistent: report it |
+| 8 | health check or model setup failed | `./openprocessor logs <service>`, fix, then `./setup-openprocessor.sh --repair` |
+| 9 | consent not given | re-run with `--yes`, or set the matching consent variable |
 
-**Solutions:**
-1. Reinstall with a smaller profile (`--profile minimal` on the installer, or
-   `scripts/setup.sh --profile=minimal --force` in a checkout).
+Common cases:
 
-2. Move other GPU services to another card: set `SEGMENTER_GPU_ID`,
-   `VLM_GPU_ID` and `API_GPU_ID` in `.env`, then run `./openprocessor gpu plan`
-   and `./openprocessor start`.
-
-3. Stop other GPU processes:
-   ```bash
-   nvidia-smi  # Check what's using GPU
-   ```
-
-### TensorRT Export Fails
-
-**Symptoms:** Export hangs or errors during `trtexec`
-
-**Solutions:**
-1. Check GPU memory is available:
-   ```bash
-   nvidia-smi  # Need 4GB+ free
-   ```
-
-2. The export needs the `triton-server` container running (it builds the
-   engines with `trtexec` there) and frees GPU memory by unloading models
-   first. Stop other GPU processes, then retry:
-   ```bash
-   ./scripts/openprocessor.sh start
-   ./scripts/openprocessor.sh export all
-   ```
-
-3. Check CUDA version compatibility:
-   ```bash
-   nvidia-smi  # Driver version
-   docker compose exec triton-server nvidia-smi  # Container CUDA version
-   ```
-
-### Models Not Loading
-
-**Symptoms:** Triton shows "UNAVAILABLE" for models
-
-**Solutions:**
-1. Check if exports exist:
-   ```bash
-   ./scripts/openprocessor.sh export status
-   ```
-
-2. Check Triton logs:
-   ```bash
-   ./scripts/openprocessor.sh logs triton-server
-   ```
-
-3. Verify model configs:
-   ```bash
-   ls -la models/*/config.pbtxt
-   ```
-
-### Docker Permission Errors
-
-**Symptoms:** "Permission denied" when running Docker commands
-
-**Solutions:**
-1. Add user to docker group:
-   ```bash
-   sudo usermod -aG docker $USER
-   # Log out and back in
-   ```
-
-2. Check Docker socket permissions:
-   ```bash
-   ls -la /var/run/docker.sock
-   ```
-
-### Services Won't Start
-
-**Symptoms:** `docker compose up` fails
-
-**Solutions:**
-1. Check port conflicts:
-   ```bash
-   lsof -i :4603  # API port
-   lsof -i :4600  # Triton port
-   ```
-
-2. Check disk space:
-   ```bash
-   df -h
-   ```
-
-3. View detailed errors:
-   ```bash
-   docker compose up  # Without -d to see output
-   ```
+- **"a container cannot see GPU N"**: the NVIDIA Container Toolkit is missing or
+  not configured for Docker. On WSL2 this usually means GPU passthrough is off.
+  The installer never falls back to CPU silently.
+- **Port in use**: interactively the installer offers the next free port;
+  unattended it takes it and warns. `--port-base N` moves the whole block.
+- **No GPU**: there is no CPU inference path (every model except the text
+  encoder is a TensorRT engine). `--cpu --control-plane-only` gives you
+  OpenSearch, the API and Cropwright for browsing an existing index or using a
+  remote VLM; the API reports `degraded`.
+- **Failed model groups**: the summary lists them with
+  `./openprocessor models install --only <group>` to retry each one.
+- **Disk**: the installer warns if it cannot check free space; the Triton
+  image alone is about 30 GB.
+- **GPU out of memory ("CUDA out of memory", services crash)**: use a smaller
+  profile (`--profile minimal` on the installer; in a checkout
+  `./openprocessor profile minimal`, or `scripts/setup.sh --profile=minimal --force`).
+  Or move other GPU services to another card: set `SEGMENTER_GPU_ID`,
+  `VLM_GPU_ID` and `API_GPU_ID` in `.env`, run `./openprocessor gpu plan`, then
+  `./openprocessor start`. `nvidia-smi` shows what else holds the GPU.
+- **TensorRT export hangs or fails**: the export needs the `triton-server`
+  container running (it builds the engines with `trtexec` there) and frees GPU
+  memory by unloading models first. Stop other GPU processes, then
+  `./openprocessor start` and `./openprocessor export all`. Compare the driver
+  (`nvidia-smi`) with the container's
+  (`docker compose -p <project> exec triton-server nvidia-smi`).
+- **Triton shows "UNAVAILABLE" for models**: `./openprocessor export status`
+  shows which exports exist, `./openprocessor logs triton-server` the reason,
+  and `ls -la models/*/config.pbtxt` confirms the configs are there.
+- **"Permission denied" from Docker**: `sudo usermod -aG docker $USER`, then log
+  out and back in. `ls -la /var/run/docker.sock` shows the socket permissions.
+- **Services will not start** (`docker compose up` fails): check port conflicts
+  (`lsof -i :4603` for the API, `lsof -i :4600` for Triton) and disk space
+  (`df -h`). Run `docker compose -p <project> up` without `-d` to see the output.
 
 ---
 
-## Upgrading
+## Upgrade, repair, rollback, uninstall
 
-### Pulling Latest Version
+Run these from the install directory:
+
+```bash
+./openprocessor upgrade [--version vX.Y.Z]
+./setup-openprocessor.sh --repair
+./setup-openprocessor.sh --rollback
+./setup-openprocessor.sh --uninstall [--purge-volumes] [--purge-data] [--remove-images]
+```
+
+What each step does, the backups it makes, the 0.6.x image-split note and the data backup are in
+[Upgrade, repair and back up](docs-site/docs/operations/upgrade-and-backup.mdx). The flags are in the
+[table above](#installer-flags).
+
+### From a checkout
 
 ```bash
 git pull
-./openprocessor update      # pull images and rebuild (a checkout)
+./openprocessor update      # pull images and rebuild
 make up                     # recreate the services whose configuration changed
 make curation-up            # same, for the curation workers
 make dev-restart            # reload the source in api and the workers
 ```
 
 The processes import their source once at start, so restart them after every
-pull. An installed directory upgrades with `./openprocessor upgrade` instead
-(see [Upgrade, repair, rollback, uninstall](#upgrade-repair-rollback-uninstall)).
+pull. `make rebuild` rebuilds the containers without cache. After major updates
+you may need to re-export the TensorRT models (`./openprocessor export all`, then
+`./openprocessor restart`).
 
-### Rebuilding After Updates
-
-```bash
-make rebuild
-make up
-```
-
-### Re-exporting Models
-
-After major updates, you may need to re-export TensorRT models:
+To remove a checkout's stack:
 
 ```bash
-./scripts/openprocessor.sh export all
-./scripts/openprocessor.sh restart
-```
-
----
-
-## Uninstallation
-
-### Stop and Remove Containers
-
-```bash
-./openprocessor stop                              # keeps volumes
+./openprocessor stop                             # keeps volumes
 docker compose -p openprocessor down -v          # -v removes volumes
+docker compose -p openprocessor down --rmi all   # also remove the images
 ```
 
 Use your own project name in place of `openprocessor` if you set
 `COMPOSE_PROJECT_NAME`. Without `-p`, `docker compose` picks the project from
-`.env` or the directory name, which may be a different stack.
-
-### Remove Images
+`.env` or the directory name, which may be a different stack. To clean up files:
 
 ```bash
-docker compose down --rmi all
-```
-
-### Clean Up Files
-
-```bash
-# Remove generated files
 rm -rf pytorch_models/*.pt pytorch_models/*.onnx
 rm -rf models/*/1/model.plan
 rm -rf .env docker-compose.local.yml
@@ -889,78 +526,8 @@ rm -rf cache/ logs/ outputs/ test_results/
 
 ---
 
-## Docker Image Building
-
-### Production Dockerfiles
-
-The project includes production-optimized Dockerfiles:
-
-| File | Purpose | Base Image |
-|------|---------|------------|
-| `Dockerfile` | FastAPI service | `python:3.13-slim-trixie` |
-| `Dockerfile.triton` | Triton server | `nvcr.io/nvidia/tritonserver:26.06-py3` |
-
-### Building Images
-
-```bash
-# Build and push to Docker Hub
-./scripts/docker-build-push.sh all
-
-# Build locally without pushing
-./scripts/docker-build-push.sh local
-
-# Build with specific version
-VERSION=v1.0.0 ./scripts/docker-build-push.sh all
-```
-
-### Security Scanning
-
-The project includes comprehensive security scanning using free, open-source tools:
-
-**Tools Used:**
-- **Hadolint** - Dockerfile linting
-- **Dockle** - CIS Docker Benchmark compliance
-- **Trivy** - Vulnerability scanning
-- **Grype** - Fast vulnerability scanning
-- **Syft** - SBOM (Software Bill of Materials) generation
-
-```bash
-# Install security scanning tools
-./scripts/security-scan.sh install
-
-# Scan all images
-./scripts/security-scan.sh all
-
-# Scan specific image
-./scripts/security-scan.sh api
-
-# View reports
-ls -la security-reports/
-```
-
-**Reports Generated:**
-- `*-hadolint.txt` - Dockerfile linting results
-- `*-dockle.json` - CIS best practices check
-- `*-sbom.json` - Software Bill of Materials (CycloneDX)
-- `*-trivy.json/txt` - Vulnerability scan results
-- `*-grype.json/txt` - Additional vulnerability scan
-
-### CI/CD Integration
-
-For automated builds in CI/CD pipelines:
-
-```bash
-# Fail on security issues
-FAIL_ON_SECURITY_ISSUES=true FAIL_ON_CRITICAL=true ./scripts/docker-build-push.sh all
-
-# Skip scanning for faster builds
-SKIP_SECURITY_SCAN=true ./scripts/docker-build-push.sh all
-```
-
----
-
 ## Getting Help
 
 - **Documentation:** See [README.md](README.md) and [CLAUDE.md](CLAUDE.md)
+- **Building and scanning release images:** see [CONTRIBUTING.md](CONTRIBUTING.md#building-and-scanning-images)
 - **Issues:** Report bugs at [GitHub Issues](https://github.com/davidamacey/OpenProcessor/issues)
-- **Logs:** Check `./scripts/openprocessor.sh logs` for debugging

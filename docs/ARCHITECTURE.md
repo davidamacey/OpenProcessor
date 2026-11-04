@@ -76,7 +76,7 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | Serves the TensorRT models. Explicit model control; loads the list in the compose command; a missing engine leaves that model unloaded instead of killing the server |
-| `api` | none | 4603 | FastAPI, uvicorn with 32 worker processes |
+| `api` | none | 4603 | FastAPI, uvicorn with 32 worker processes, each recycled after about 10,000 requests (limit 10,000 with 1,000 jitter) |
 | `opensearch` | none | 4607 | k-NN indexes and every curation document |
 | `curation-detection-worker` | `curation` | | Region cascade over pending items, every active project in turn |
 | `curation-vlm-worker` | `curation` | | VLM class and verification loop |
@@ -90,6 +90,7 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | `curation-trainer` | `training` | | Runs training jobs from `job.json` files, `docker/trainer/` |
 | `curation-mlflow` | `training` | 4609 | Experiment tracking, optional |
 | `vlm` | `vlm` | 4612 | Local vLLM serving one catalog model |
+| `cropwright` | `cropwright` | 5184 (`OP_CROPWRIGHT_PORT`) | The Cropwright web UI (nginx serving `frontend/`); proxies the API, and with `OP_GATEWAY_SUBPATHS=true` the monitoring UIs, so that one port is the only one published beyond loopback |
 | Prometheus, Grafana, Loki, Alloy, DCGM exporter, node exporter, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4608 | Opt in only |
 | `triton-sdk` | `benchmark` | | Benchmark client |
 
@@ -110,7 +111,8 @@ host; read its header before using it.
 - **Triton models** (`models/`): `yolov11_small_trt_end2end` (GPU NMS),
   `yolo26_small_trt` (NMS-free), `scrfd_10g_bnkps`, `arcface_w600k_r50`,
   `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder`,
-  `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a BLS pipeline) and
+  `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a BLS pipeline;
+  see [OCR.md](OCR.md)), `gpu_image_prep` (decode-once ingest, loaded on first use) and
   the curation encoders `pe_image_encoder` (TensorRT) and `pe_text_encoder`
   (CPU). Dynamic batching is on; preferred sizes and instance counts are in each
   `config.pbtxt`. The API reads a detector's output format from Triton
@@ -120,7 +122,11 @@ host; read its header before using it.
   code takes the shared client, never builds its own.
 - **Preprocessing** (letterbox, normalization) runs in the API on CPU before
   the request. Keep the API layer to validation and decoding; the models own the
-  rest.
+  rest. The exception is photo ingest: with `OP_INGEST_GPU_DECODE` on, a photo at or
+  above `OP_INGEST_GPU_MIN_MEGAPIXELS` goes to the `gpu_image_prep` model, which
+  decodes it once on the GPU and builds the detector input, the PE vectors, the blur
+  scores and the crop JPEGs there. A file it declines falls back to the CPU path.
+  Details and numbers: [PERFORMANCE.md](PERFORMANCE.md).
 - **Thread safety.** Ultralytics model objects keep internal state. The code
   creates a thin client wrapper per request rather than sharing one instance
   across threads. The wrapper is only a gRPC front, not a loaded model.
@@ -395,9 +401,9 @@ them), activation is **per project**.
 **Dataset import** (`/datasets/*`): upload an archive
 (`POST /curation/projects/{project}/datasets/uploads`) or name a server path,
 preview it (`POST /curation/projects/{project}/datasets/preview`), then start a
-job (`POST /curation/projects/{project}/datasets/imports`). Formats: YOLO, COCO
-and the OpenProcessor export (which round-trips labels, splits and the frozen
-test set). The mapping is a list of `{dataset_class, action}` with `action` one
+job (`POST /curation/projects/{project}/datasets/imports`). The formats (YOLO, COCO,
+the OpenProcessor export that round-trips labels, splits and the frozen test set,
+and six more) are listed in [Dataset import](../docs-site/docs/guides/dataset-import.mdx). The mapping is a list of `{dataset_class, action}` with `action` one
 of `map`, `create`, `skip`, `region`; matching is by name, and every class that
 has boxes needs a decision. Options include `label_trust` (`validated` or
 `suggestion`), `processing` (`none` or `propose`), `missing_label` and
@@ -407,7 +413,7 @@ labels, regions, negatives and the labels a human lock refused.
 
 **Reprocess** (`POST /curation/projects/{project}/reprocess`) re-runs pipeline
 scopes over chosen targets (`image_ids`, `crop_ids` or a `filter`). Scopes:
-`detect`, `region`, `vlm`, `embed`; region mode is `redetect` or `reverify`.
+`detect`, `open_vocab`, `region`, `vlm`, `embed`; region mode is `redetect` or `reverify`.
 `dry_run` defaults to true. Locked items and boxes are never written and are
 reported as `locked_skipped`. Large detect or embed runs become a job
 (`GET /curation/projects/{project}/reprocess/jobs/{job_id}`); only one runs at a

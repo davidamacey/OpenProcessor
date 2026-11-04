@@ -1,7 +1,9 @@
 # OpenProcessor 0.7.0: a systems whitepaper
 
-Status: written 2026-10-31 from the 0.7.0 measurement log, research notes and review documents, after the
-0.7.0 release candidate was merged (#408, #409). Issue #412. This paper reports nothing new: every number
+Status: draft, written 2026-10-31 from the 0.7.0 measurement log, research notes and review documents, after the
+0.7.0 release candidate was merged (#408, #409). Issue #412. Release 0.6.0 is the latest published release; the
+"0.7.0" work described here is on `main` and in `[Unreleased]` in the changelog, and 0.7.0 is tagged only after the
+program in [design/program/00_index.md](design/program/00_index.md) is implemented and tested. This paper reports nothing new: every number
 below is copied from the document cited next to it, which holds the method, the raw data and the caveats.
 Where the source and this paper disagree, the source is right.
 
@@ -15,7 +17,7 @@ card) do not depend on any image set; they are quoted as such.
 
 OpenProcessor is an open, domain-agnostic backend for computer-vision dataset curation and training. It
 sits on a fast inference API served by NVIDIA Triton. Cropwright, a separate web frontend, renders what the
-backend decides. Release 0.7.0 brought three main pieces of work, and this paper covers each. (1) **GPU
+backend decides. The 0.7.0 work has three main pieces, and this paper covers each. (1) **GPU
 image preparation.** A decode-once Triton model, `gpu_image_prep`, lost throughput under load. The cause
 turned out to be device-memory exhaustion: photos silently fell back to CPU decoding. It was not CUDA-call
 overhead or the Python GIL, as first suspected. The fix is a memory budget reserved when the model loads,
@@ -59,7 +61,7 @@ a class registry, a region profile, a prompt pack and a VLM endpoint, each store
 The pipeline runs ingest, primary detection, a region stage (zero, one or many boxes per item), embedding
 and clustering, human and AI review, import of labelled datasets, export, YOLO26 training, bake-off and
 promotion back into serving ([VISION_AND_GOALS.md](VISION_AND_GOALS.md)). Long work runs in workers under
-the `curation` compose profile. Release 0.7.0 adds a dedicated `curation-assist-loop-worker` for the
+the `curation` compose profile. The 0.7.0 work adds a dedicated `curation-assist-loop-worker` for the
 auto-label loop ([../CHANGELOG.md](../CHANGELOG.md), Unreleased).
 
 ### 1.3 Cropwright
@@ -88,7 +90,7 @@ the API. Every route is counted in `op_ingest_decode_total`. Release 0.6.0 built
 (12 to 24 MP Commons photos) it moved detect-plus-embed ingest from 27.0 to 35.0 images/s and host CPU per
 photo from 1.12 to 0.34 CPU-s ([PERFORMANCE.md](PERFORMANCE.md), summary table).
 
-Release 0.7.0 added stage timing inside the model. The Triton counters `op_gpu_prep_stage_seconds` and
+The 0.7.0 work added stage timing inside the model. The Triton counters `op_gpu_prep_stage_seconds` and
 `op_gpu_prep_stage_observations` cover the queue, decode, letterbox, detect, embedding, copy, JPEG and blur
 stages. `STAGE_SYNC=1` attributes asynchronous kernel time during profiling runs
 ([../CHANGELOG.md](../CHANGELOG.md), Added). On set B the counters cost nothing measurable: the throughput
@@ -201,7 +203,7 @@ repeat them. The public set A and set B rows were not re-run after the memory bu
 
 ### 2.4 The embed reprocess pass and vector consistency
 
-Release 0.7.0 changed how stored vectors are recomputed (#259, #360). Crops that touch the right or bottom
+The 0.7.0 work changed how stored vectors are recomputed (#259, #360). Crops that touch the right or bottom
 image edge used to be embedded from a zero-padded crop. Every route now embeds the stored, image-clamped
 box. On 1,500 public COCO images (9,666 crops, 1,193 of them on an edge), ingest and the reprocess pass now
 agree on edge crops with minimum cosine 0.9993. The 0.6.0 documentation recorded 0.93 to 0.97. Interior

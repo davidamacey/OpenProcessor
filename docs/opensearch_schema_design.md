@@ -112,7 +112,7 @@ and never more than `n`.
 A rebalance is recommended when the largest non-empty cluster is more than 10
 times the smallest, more than 10% of clusters are empty, or the vectors added
 since training exceed the rebalance threshold fraction of the training set.
-Face identities have their own routes under `/persons` (`POST /persons/cluster`,
+With `OP_FACES_ENABLED=false` ingest writes no faces and the face, person and `faces` cluster routes answer `400 faces_disabled`. Face identities have their own routes under `/persons` (every face gets a person and re-runs keep ids stable; see [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md)) (`POST /persons/cluster`,
 `GET /persons`, `GET /persons/{person_id}`, `PUT /persons/{person_id}/name`,
 `POST /persons/merge`, `DELETE /persons/{person_id}`).
 
@@ -271,7 +271,7 @@ The config store, one document per row, discriminated by `doc_type`
 `kind` (`prompt_pack`, `region_profile`, ...), `name`, `revision`, `body`
 (stored, not indexed), `description`, `created_at`, `updated_at`, `updated_by`,
 `cloned_from`, `axis`, `previous`, `config_revision`, `process`, `applied_at`.
-The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `detector` parts and a revision counter, addressed by id `default`; the cluster-refresh daemon's growth state sits beside it under `cluster_refresh`) and the
+The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `clustering` parts and a revision counter; the detector is an ingest profile in the config store, not a policy part, addressed by id `default`; the cluster-refresh daemon's growth state sits beside it under `cluster_refresh`) and the
 UMAP projection state (id `current`: `projection_version`, `scope`, `n_points`,
 `fitted_at`, ...) are stored in this same index, by fixed id and never searched,
 so a project needs six indexes rather than eight.

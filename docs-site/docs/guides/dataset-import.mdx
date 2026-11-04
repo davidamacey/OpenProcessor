@@ -56,10 +56,18 @@ index. A dataset's class order is not trusted across the boundary.
   boxes are centre-based pixels and LabelMe boxes are `rectangle` shapes.
   The class is always the label text. An image with no object is a verified
   negative; rotated boxes, polygons, masks and other non-box shapes are
-  skipped (`shape_not_box_skipped`). The layout table is in `docs/CURATION.md`, section "Importing other formats".
+  skipped (`shape_not_box_skipped`).
+  In the pixel formats (CVAT, KITTI, CreateML, LabelMe) the image size comes from the image; a declared
+  size that disagrees with it skips the image (`image_size_mismatch`). Label Studio coordinates are
+  percentages. An image with no annotation in Label Studio is unlabeled; one annotation with no box is a
+  negative. YOLO rows with more than five columns (segmentation, oriented boxes) are imported as their
+  bounding box. An image reference that leaves the dataset (`..`, an absolute path, a link out) or names a
+  remote URL is never followed (`image_file_missing`). The Label Studio `JSON_MIN` export, CVAT video
+  (track) exports and COCO segmentation-only files are not read: convert them or export the full JSON.
 - **YOLO names files.** A YOLO dataset may name its classes in `classes.txt`
   (or `obj.names`, `names.txt`), one per line, beside `images/` and `labels/`.
-  With no `data.yaml` and no names file the dataset is refused.
+  With no `data.yaml` and no names file the dataset is refused (`format_undetected`); a names file with a blank
+  or repeated name is a blocking `yolo_names_file_invalid`.
 - **Allowed paths.** `source.path` must be absolute and, after symlinks are
   resolved, sit under a configured image source root (`OP_SOURCE_ROOT` and
   `OP_SOURCE_PATH_ALIASES`), the project's upload root, or the project's

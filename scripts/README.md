@@ -19,22 +19,7 @@ with no git clone and no host Python. Flags and behavior:
 The management CLI. `scripts/openprocessor.sh` is a three-line shim that
 `exec`s the root `openprocessor` script, so `./scripts/openprocessor.sh status`
 works from a checkout. Every subcommand is listed in
-[INSTALLATION.md](../INSTALLATION.md#the-openprocessor-cli); the ones you use
-most:
-
-```bash
-./openprocessor status                 # containers, health, GPU memory
-./openprocessor logs api -f       # follow one service
-./openprocessor restart api
-./openprocessor models                 # Triton model states
-./openprocessor models install --only pe   # export and load one model group
-./openprocessor curation up            # start the curation workers
-./openprocessor sample coco            # public COCO sample
-./openprocessor vlm list               # local VLM catalog
-./openprocessor vlm use <id>           # switch the local VLM model
-./openprocessor vlm key set <slug>     # store a VLM API key under secrets/vlm/
-./openprocessor help
-```
+[INSTALLATION.md](../INSTALLATION.md#the-openprocessor-cli); `./openprocessor help` prints the list.
 
 ### `setup.sh`
 
@@ -51,7 +36,7 @@ services and runs smoke tests. Not for installed directories.
 | Flag | Meaning |
 |---|---|
 | `--yes`, `-y` | accept defaults |
-| `--profile=NAME` | `minimal`, `standard` or `full` |
+| `--profile=NAME` | `minimal`, `small`, `standard` or `full` |
 | `--gpu=ID` | GPU to use (default 0) |
 | `--skip-export` | keep existing TensorRT engines |
 | `--skip-download` | keep existing weights |
@@ -93,6 +78,8 @@ helpers: `setup_prereq.sh` and `setup_services.sh` (`setup.sh` steps) and
 | Script | Purpose |
 |---|---|
 | `build_and_publish.sh` | Builds every published image, gates on a Trivy scan, and with `--push` pushes digest-pinned tags and writes `images.lock`. `--dry-run` pushes nothing (`make release-dry-run`, `make release`) |
+| `acceptance_run.sh` (with `acceptance_lib.sh`, `acceptance_phases.sh`, `acceptance_phases_review.sh`) | The scripted clean-install-to-uninstall release acceptance run (`make acceptance`) |
+| `verify_release_assets.sh`, `audit_image_files.py` | Check the published release assets, and audit an image's files against git |
 | `build_deploy_bundle.sh` | Builds the installer's release assets (`SHA256SUMS`, the file list from `release-manifest.txt`): `build_deploy_bundle.sh vX.Y.Z [SRC] [OUT]` |
 
 ## `scripts/codegen/`
@@ -106,6 +93,7 @@ helpers: `setup_prereq.sh` and `setup_services.sh` (`setup.sh` steps) and
 | `check_layering.py` | Import-direction contracts between routers, services and clients |
 | `check_ruff_ratchet.py` | Per-function complexity and per-file broad-except ratchets |
 | `check_process_ids.py` | No work-package ids or history names in comments, docstrings or file names |
+| `check_cited_paths.py` | Comments and docstrings cite files that exist |
 | `check_vulture.py` | No new unused code; reviewed false positives in `vulture_whitelist.py` |
 
 The ratchets read `baselines/*.txt` (see [CONTRIBUTING.md](../CONTRIBUTING.md#guards-and-baselines)).
@@ -118,9 +106,14 @@ Public, license-filtered sample data. No dataset ships in the repo.
 |---|---|
 | `fetch_coco_subset.py` | Pinned, seeded COCO 2017 subsets (`make sample-coco-readme`, `sample-coco`, `sample-coco-cars`). Manifests in `manifests/` |
 | `fetch_openimages_plates.py` | Pinned Open Images V7 region sample (`make sample-plates`) |
+| `fetch_test_images.py` | Two public COCO val2017 images for the demo targets and the smoke test (`make download-test-images`) |
 | `build_import_fixture.py` | Builds the four dataset-import layouts (`yolo`, `coco`, `yolo_region`, `yolo_region_only`) and `FIXTURE.json` from a COCO subset (`make sample-coco-import`) |
 
 `make sample-clean` removes everything fetched.
+
+## `scripts/bench/`, `scripts/research/`, `scripts/validation/`
+
+Measurement and research tools, not part of the product. `bench/` holds the baseline and ingest profile drivers (`run_baseline.py`, `ingest_profile.py`), the cluster evaluation harness, `gpu_prep_parity.py` and the retrieval evaluation; `research/` the clustering research scripts behind [`docs/research/`](../docs/research/README.md); `validation/` the model validation CLI (`validate_models.py`). Each script has a usage header.
 
 ## `scripts/examples/`
 
@@ -151,6 +144,7 @@ before touching OpenSearch.
 | `worker/` | `curation-detection-worker` | Region cascade over pending items, for every active project in turn |
 | `vlm_worker.py` | `curation-vlm-worker` | Long-lived VLM labeling and verification loop |
 | `auto_label_worker.py` | `curation-auto-label-worker` | Drives the `POST /curation/projects/{project}/pipeline/auto_label` job protocol |
+| `assist_loop_worker.py` | `curation-assist-loop-worker` | Runs the cluster-sampled auto-label loop jobs (`POST /curation/projects/{project}/assist/loops`) |
 | `cluster_refresh_daemon.py` | `curation-cluster-refresh` | Triggers residual-clustering refresh as the item count grows |
 | `bakeoff/` | `curation-evaluator` | Model-comparison harness: scores models per class on an eval dataset's test split, aggregates comparisons; domain examples under `examples/bakeoff/` |
 
@@ -202,21 +196,10 @@ make sample-coco-readme
 |---|---|
 | [export/](../export/) | Model export scripts (ONNX, TensorRT) |
 | [tests/](../tests/) | Offline test suite and utilities |
-| [benchmarks/](../benchmarks/) | Go-based benchmarking tool |
+| [benchmarks/](../benchmarks/) | Go ingest benchmarks, `make bench-*` scripts; see [PERFORMANCE.md](../docs/PERFORMANCE.md#benchmarking) |
 | [docker/test/](../docker/test/) | Live write-path verification harness |
 
 ## Port reference
 
-| Service | Port |
-|---------|------|
-| API | 4603 |
-| Triton HTTP / gRPC / metrics | 4600 / 4601 / 4602 |
-| Prometheus | 4604 |
-| Grafana | 4605 |
-| Loki | 4606 |
-| OpenSearch | 4607 |
-| OpenSearch Dashboards | 4608 |
-| MLflow | 4609 |
-| DCGM exporter | 4610 |
-| Segmenter | 4611 |
-| Local VLM | 4612 |
+All ports are listed in [Compose profiles](../docs-site/docs/getting-started/compose-profiles.mdx#ports).
+

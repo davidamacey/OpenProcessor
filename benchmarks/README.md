@@ -1,17 +1,30 @@
 # Benchmarks
 
-This directory contains benchmarking tools and results for OpenProcessor.
+This directory contains benchmarking tools and results for OpenProcessor. The `./openprocessor bench` subcommand is not available yet because `triton_bench` and `benchmarks/build.sh` are not in the repository; use the tools below. This page is the tool list; method and measurements are in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md#benchmarking).
 
 ## Directory Structure
 
 ```
 benchmarks/
-├── README.md           # This file
-├── results/            # Benchmark result files (timestamped)
-└── scripts/            # Benchmark scripts
-    ├── benchmark.py    # Python httpx-based benchmark
-    └── detect.lua      # wrk script for /detect endpoint
+├── README.md                   # This file
+├── go.mod                      # Module for the two Go ingest benchmarks
+├── ingest_benchmark.go         # Parallel single-image ingest (build tag `single`)
+├── ingest_benchmark_batch.go   # Parallel batch ingest to /ingest/batch (build tag `batch`)
+├── results/                    # Benchmark result files (timestamped)
+└── scripts/
+    ├── benchmark.py            # Python httpx-based benchmark
+    └── detect.lua              # wrk script for /detect endpoint
 ```
+
+### Go ingest benchmarks
+
+```bash
+cd benchmarks
+go run -tags single ingest_benchmark.go -dir /path/to/images -workers 64 -clear
+go run -tags batch ingest_benchmark_batch.go -dir /path/to/images -workers 16 -batch 32 -clear
+```
+
+The `-dir` argument is a host folder of images; `-clear` empties the visual-search indexes first.
 
 ## Running Benchmarks
 
@@ -106,19 +119,9 @@ BENCH_REQUESTS=5000 make bench-ingest
 TEST_IMAGE=test_images/faces/sample.jpg make bench-faces
 ```
 
-## Example Results
+## Results
 
-Typical throughput on RTX A6000:
-
-| Endpoint | Latency (p50) | Throughput |
-|----------|---------------|------------|
-| /detect | ~15ms | ~60 RPS |
-| /faces/recognize | ~25ms | ~40 RPS |
-| /embed/image | ~10ms | ~100 RPS |
-| /ingest | ~50ms | ~20 RPS |
-| /search/image | ~30ms | ~35 RPS |
-
-Results vary based on image size, batch size, and GPU utilization.
+Measured numbers, with the hardware and method for each, are in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md). Results vary with image size, batch size and GPU utilization.
 
 ## Saving Results
 

@@ -452,7 +452,7 @@ sub-batch (R-3); the statuses of the survivors are set in `docs/design/README.md
 | `ship_track_plan.md` (2026-10-29) | **superseded**. Its waves shipped on `main` (the earlier "batch" merges) or are re-planned here (speed items in B5) |
 | `v070_wave_plan.md` (2026-10-28) | **superseded**. Its performance waves are B5 (#45, #40, #219, #268); the rest shipped |
 | `v060_execution_path.md` (2026-10-14) | **historical** (0.6.0 shipped); not a plan for this program. Mark "implemented in 0.6.0" |
-| `docs/handoff/0.7.0-next-steps.md` | **superseded**: its steps are done (R1, R2) or re-planned here |
+| `docs/handoff/0.7.0-next-steps.md` | superseded and removed: its steps are done (R1, R2) or re-planned here |
 | the former master plan (rev 4) | **replaced** by this set and deleted in the plan-set commit (in git history) |
 
 Not superseded, still used by reference: `task_queue_plan.md`, `codebase_audit_plan.md`,

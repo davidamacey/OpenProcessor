@@ -6,7 +6,9 @@ Complete guide for optimizing FastAPI and Triton Inference Server performance.
 > Triton pipeline optimization milestone (summary table below; plan in
 > [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md)),
 > and the benchmark protocol. The scale ladder at 10k and 100k images is in
-> [Scale ladder: 10k and 100k](#scale-ladder-10k-and-100k); the 1M step is planned for the next release.
+> [Scale ladder: 10k and 100k](#scale-ladder-10k-and-100k); the 1M step is a goal, not a result.
+> Later measurements (the 0.7.0 work, unreleased) are in sections further down and in
+> [research/v070_measurement_log.md](research/v070_measurement_log.md).
 
 ---
 
@@ -61,12 +63,14 @@ the pinned Commons photos (12 to 24 MP). Ranges and the host conditions are in t
 The system includes several production-grade optimizations:
 
 1. **High-Performance JSON** (orjson) - 2-3x faster serialization
-2. **Optimized Image Processing** (pillow-simd) - 4-10x faster operations
+2. **Image Processing** - OpenCV and Pillow, with the decode-once GPU path for large photos
 3. **Request Validation** - Early rejection of invalid/oversized requests
 4. **Performance Monitoring** - Automatic request timing and metrics
 5. **Optimized Uvicorn Configuration** - Tuned worker and connection settings
 
 ### Expected Performance Impact
+
+Estimates from the first API-layer tuning pass (January 2026); they were not re-measured. The measured results are in the summary table above and the sections it links.
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
@@ -102,80 +106,26 @@ in-process request, 30 runs; the old path is the former orjson response class):
 
 Bodies are byte-identical in every case.
 
-### 2. Optimized Image Processing (pillow-simd)
+### 2. Image Processing
 
-**Implementation**:
-- Replaced standard `Pillow` with `pillow-simd` in requirements.txt
-- SIMD-accelerated (AVX2, SSE4) image operations
-- Drop-in replacement, no code changes required
-
-**Impact**: 4-10x faster image operations (resize, decode, color conversion)
-
-**Affected operations**:
-- Image decoding from bytes
-- Resizing operations
-- Color space conversions
+The API uses standard `Pillow` (installed with `ultralytics`) and OpenCV. `pillow-simd` is not used.
+Decode cost is addressed by the decode-once GPU path, not by a faster Pillow: see
+[Decode once and the GPU decode](#decode-once-and-the-gpu-decode-217).
 
 ### 3. Request Validation and Size Limits
 
-**Implementation**:
-Performance middleware in `src/app/factory.py`:
-
-```python
-MAX_FILE_SIZE_MB = 50  # Adjust based on requirements
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-
-@app.middleware("http")
-async def performance_middleware(request: Request, call_next):
-    # Early validation - reject oversized files before processing
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_FILE_SIZE_BYTES:
-        return JSONResponse(
-            status_code=413,
-            content={"error": f"File too large. Max size: {MAX_FILE_SIZE_MB}MB"}
-        )
-
-    # Request timing
-    start_time = time.time()
-    response = await call_next(request)
-    process_time = (time.time() - start_time) * 1000
-    response.headers["X-Process-Time"] = f"{process_time:.2f}ms"
-
-    return response
-```
-
-**Impact**:
-- Prevents DoS attacks
-- Fast-fail for invalid requests
-- Reduces memory exhaustion risk
+`performance_middleware` in `src/app/factory.py` refuses a POST whose declared body exceeds the
+largest upload the server accepts (the larger of `MAX_FILE_SIZE_MB` and
+`OP_UPLOAD_MAX_BYTES_PER_REQUEST`) with 413 before reading it. The per-file cap is enforced where the
+upload is parsed (`src/core/upload_limits.py`). See [File Size Limit](#file-size-limit).
 
 ### 4. Performance Monitoring Middleware
 
-**Implementation**:
-Automatic request timing and slow request detection:
+The same middleware times every request: it sets `X-Process-Time` on each response, adds the timing
+to the JSON body of the inference routes, and logs a warning for a request slower than
+`slow_request_threshold_ms` (default 100).
 
-```python
-slow_request_threshold_ms = 100  # settings value; log requests slower than this
-
-@app.middleware("http")
-async def performance_middleware(request: Request, call_next):
-    start = time.time()
-    response = await call_next(request)
-    duration_ms = (time.time() - start) * 1000
-
-    # Add timing header
-    response.headers["X-Process-Time"] = f"{duration_ms:.2f}ms"
-
-    # Log slow requests
-    if duration_ms > settings.slow_request_threshold_ms:
-        logger.warning(f"Slow request: {request.url.path} took {duration_ms:.2f}ms")
-
-    return response
-```
-
-**Usage**:
 ```bash
-# Check response time in headers
 curl -I http://localhost:4603/detect
 # Response includes: X-Process-Time: 23.45ms
 ```
@@ -3996,170 +3946,29 @@ the endpoint check: [Ingest load profile and GPU memory](../docs-site/docs/opera
 
 ## Benchmarking
 
-### Using the Go Benchmark Tool
+The tools are listed in [benchmarks/README.md](../benchmarks/README.md): the Go ingest benchmarks,
+`make bench-detect|bench-faces|bench-embed|bench-ingest|bench-search|bench-quick`, the Python httpx
+script and the `wrk` script. The ingest and cluster measurements in this file use
+`scripts/bench/` (`run_baseline.py`, `ingest_profile.py`, `cluster_ladder.py` and others), and every
+number's method is in the section that reports it. Keep a result only with its setup: record a
+baseline before a change, run the same command after it, and compare latency (average, p95, p99),
+throughput and error rate. The shared rules are in [Baseline protocol](#baseline-protocol).
 
-The repository includes `benchmarks/triton_bench.go` for testing.
-
-#### 1. Baseline (Before Optimization)
-
-```bash
-# Record baseline metrics
-cd benchmarks
-go run triton_bench.go \
-    --url http://localhost:4603/detect \
-    --clients 50 \
-    --requests 1000 \
-    --image ../test_images/sample.jpg \
-    > baseline_results.txt
-```
-
-#### 2. Rebuild with Optimizations
-
-```bash
-# Rebuild containers with new requirements
-docker compose down
-docker compose build --no-cache api
-docker compose up -d
-
-# Wait for warmup (~30 seconds)
-sleep 30
-```
-
-#### 3. Optimized Benchmark
-
-```bash
-# Run same benchmark
-cd benchmarks
-go run triton_bench.go \
-    --url http://localhost:4603/detect \
-    --clients 50 \
-    --requests 1000 \
-    --image ../test_images/sample.jpg \
-    > optimized_results.txt
-```
-
-#### 4. Compare Results
-
-```bash
-# Compare latency metrics
-echo "=== BASELINE ==="
-grep -A 5 "Latency" baseline_results.txt
-
-echo "=== OPTIMIZED ==="
-grep -A 5 "Latency" optimized_results.txt
-```
-
-### Recommended Test Matrix
-
-Test with various concurrency levels:
-
-```bash
-for clients in 1 10 50 100 256; do
-    echo "Testing with $clients concurrent clients..."
-    go run triton_bench.go \
-        --url http://localhost:4603/detect \
-        --clients $clients \
-        --requests 1000 \
-        --image ../test_images/sample.jpg \
-        > results_${clients}_clients.txt
-done
-```
-
-### Key Metrics to Track
-
-1. **Average Latency**: Should decrease 10-15%
-2. **P95 Latency**: Should decrease 15-25% (better consistency)
-3. **P99 Latency**: Should decrease 20-35% (fewer spikes)
-4. **Throughput**: Should increase 15-20% (requests/sec)
-5. **Error Rate**: Should remain 0%
+`./openprocessor bench` is not available yet: the `triton_bench` tool and `benchmarks/build.sh` it needs are not in the repository. For model-level load tests use Triton's `perf_analyzer` from the `triton-sdk` service (compose profile `benchmark`).
 
 ---
 
 ## Profiling
 
-### Using py-spy (Flamegraph Analysis)
-
-#### Install py-spy in Container
-
-Add to `requirements.txt`:
-```
-py-spy>=0.3.14
-```
-
-Rebuild:
-```bash
-docker compose build api
-docker compose up -d
-```
-
-#### Run Profiling Script
-
-```bash
-# Profile for 60 seconds (recommended during load test)
-./scripts/profile_api.sh 60 profile_optimized.svg
-```
-
-#### Analyze Flamegraph
-
-1. Open `profile_optimized.svg` in browser
-2. Look for wide bars (expensive operations)
-3. Check for:
-   - ✅ Less time in JSON serialization
-   - ✅ Less time in image decoding
-   - ⚠️ Most time should be in GPU inference (expected)
-
-#### Generate Load During Profiling
-
-```bash
-# Terminal 1: Start profiler
-./scripts/profile_api.sh 60 profile.svg
-
-# Terminal 2: Generate load
-cd benchmarks
-go run triton_bench.go \
-    --url http://localhost:4603/detect \
-    --clients 50 \
-    --requests 500 \
-    --image ../test_images/sample.jpg
-```
-
-### Using triton_bench (Comprehensive Load Testing)
-
-Quick start:
-```bash
-cd benchmarks
-
-# Quick validation (30 seconds, 16 clients)
-./triton_bench --mode quick
-
-# Full benchmark (60 seconds, 64 clients)
-./triton_bench --mode full --clients 64 --duration 60
-
-# High concurrency test (256 clients)
-./triton_bench --mode full --clients 256 --duration 120
-
-# Sustained throughput (auto-finds optimal client count)
-./triton_bench --mode sustained
-```
+Per-stage ingest timing needs no profiler: `op_pipeline_stage_seconds` and
+`op_pipeline_stage_bytes_total` (see [Ingest cost per image](#ingest-cost-per-image)) and, for the
+GPU decode, the [0.7.0 stage profile](#070-stage-profile). For a flamegraph, `py-spy` is not
+installed in the API image; install it into a running container (`pip install py-spy`, which does
+not survive a recreate) and attach with `py-spy record -o profile.svg -d 60 -p <worker pid>`
+(the container needs `SYS_PTRACE`). `scripts/bench/ingest_micro_profile.py` measures the
+single-thread cost of the ingest primitives inside the `api` container.
 
 ---
-
-### MobileCLIP image encoder FP16
-
-One RTX 3080 Ti (12 GB, no foreign load during the runs), TensorRT 11.1, dynamic batch 1/8/32 at
-256 x 256, engine-only `trtexec` timings (no Triton, no preprocessing):
-
-| Engine | Size | Build | Batch 8 GPU compute | Batch 8 images/s | Batch 32 GPU compute | Batch 32 images/s |
-|---|---:|---:|---:|---:|---:|---:|
-| FP32 | 146.6 MB | 62 s | 12.7 ms | 627 | 41.5 ms | 771 |
-| FP16 (4 convs FP32) | 75.1 MB | 65 s | 8.3 ms | 966 | 19.9 ms | 1604 |
-
-Parity of the FP16 engine against the FP32 engine on the first 200 images of the pinned COCO
-benchmark set (hashes verified): cosine similarity min 0.99986, mean 0.99998; top-1 nearest
-neighbour agrees for 98.5 percent of images and the top-5 neighbour overlap is 99.1 percent. The
-engine built by `export_mobileclip_image_encoder.py` itself (71.5 MB, 72 s, no fallback) measures
-cosine min 0.99984, mean 0.99998, top-1 99.5 percent, top-5 99.3 percent. Per-model Triton
-`perf_analyzer` runs were not made; the engine-only figures above are the speedup bound.
 
 ## Tuning Parameters
 
@@ -4182,7 +3991,7 @@ Triton.
 
 ### Worker Count Optimization
 
-Current: **32 workers** (assumes 16-core CPU)
+Current: **32 workers** (fixed in `docker-compose.yml`; the installer does not change it)
 
 **How to tune**:
 
@@ -4218,19 +4027,10 @@ docker compose restart api
 
 ### File Size Limit
 
-Current: **50MB** maximum upload size
+Current: **50MB** per uploaded file (`max_file_size_mb`; the `MAX_FILE_SIZE_MB` key in `.env`, see
+`env.template`). A larger file answers 413.
 
-**To adjust**:
-
-Edit `src/app/factory.py`:
-```python
-MAX_FILE_SIZE_MB = 100  # Increase to 100MB
-```
-
-Restart:
-```bash
-docker compose restart api
-```
+**To adjust**: set `MAX_FILE_SIZE_MB=100` in `.env`, then `docker compose restart api`.
 
 ### Slow Request Threshold
 
@@ -4264,9 +4064,6 @@ slow_request_threshold_ms=50  # More aggressive logging
    ```bash
    # Verify orjson is installed
    docker exec api python -c "import orjson; print('orjson OK')"
-
-   # Verify pillow-simd is installed
-   docker exec api python -c "from PIL import features; print(features.check_feature('libjpeg_turbo'))"
    ```
 
 ### Issue: Increased Memory Usage
@@ -4296,10 +4093,7 @@ docker stats api
 docker compose logs -f api | grep "Slow request"
 ```
 
-2. Profile during slow requests:
-```bash
-./scripts/profile_api.sh 30 slow_profile.svg
-```
+2. Profile during slow requests: see [Profiling](#profiling).
 
 3. Check if GPU is the bottleneck:
 ```bash
@@ -4333,37 +4127,24 @@ nvidia-smi dmon -s u
 
 ### Health Endpoint
 
-Use the `/health` endpoint for monitoring:
+Use the `/health` endpoint (an alias of `/ready`) for monitoring:
 
 ```bash
 # Quick check
 curl -s http://localhost:4603/health | python -m json.tool
 
 # Monitor memory over time
-watch -n 5 'curl -s http://localhost:4603/health | jq ".performance.memory_mb"'
+watch -n 5 'curl -s http://localhost:4603/health | jq ".resources.memory_mb"'
 
-# Check optimization status
-curl -s http://localhost:4603/health | jq ".performance.optimizations"
+# Readiness detail per dependency
+curl -s http://localhost:4603/health | jq .
 ```
 
 ### Integration with Prometheus/Grafana
 
-Your Prometheus + Grafana setup can scrape these metrics:
-
-1. Create `/metrics` endpoint (optional enhancement):
-```python
-from prometheus_client import Counter, Histogram, generate_latest
-
-request_count = Counter('api_requests_total', 'Total requests')
-request_duration = Histogram('api_request_duration_seconds', 'Request duration')
-```
-
-2. Add to Prometheus config:
-```yaml
-- job_name: 'api'
-  static_configs:
-    - targets: ['api:4603']
-```
+The API serves `GET /metrics` (multiprocess: every worker's `op_*` and request metrics), and
+`monitoring/prometheus.yml` scrapes it with Triton, the workers and the exporters. Start the stack with
+`make up-monitoring`. See [monitoring/README.md](../monitoring/README.md).
 
 ---
 
@@ -4373,7 +4154,6 @@ request_duration = Histogram('api_request_duration_seconds', 'Request duration')
 
 ✅ **Optimizations Applied**:
 - orjson for JSON (2-3x faster)
-- pillow-simd for images (4-10x faster)
 - Request size limits (prevents DoS)
 - Performance monitoring (tracks latency)
 - Optimized Uvicorn config (better throughput)
@@ -4383,9 +4163,9 @@ request_duration = Histogram('api_request_duration_seconds', 'Request duration')
 - Run baseline benchmark
 - Rebuild containers
 - Run optimized benchmark
-- Compare results (expect 10-15% improvement)
+- Compare results
 - Profile with py-spy
-- Load test with triton_bench
+- Load test with the tools in benchmarks/README.md
 
 ✅ **Tuning**:
 - Adjust worker count for your CPU
@@ -4393,16 +4173,5 @@ request_duration = Histogram('api_request_duration_seconds', 'Request duration')
 - Configure slow request threshold
 - Monitor memory usage
 
-### Expected Results
-
-- ✅ **10-15% latency reduction** (total end-to-end)
-- ✅ **15-20% throughput increase**
-- ✅ **Better P99 latency** (fewer spikes)
-- ✅ **Lower memory usage**
-
 Remember: **GPU inference is still the bottleneck** (60-70% of total time). These optimizations maximize API efficiency!
 
----
-
-**Last Updated**: 2026-01-26
-**Version**: 2.0 (Consolidated documentation)

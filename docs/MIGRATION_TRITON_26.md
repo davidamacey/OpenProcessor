@@ -10,14 +10,15 @@ TensorRT serialized engines (`.plan`) are **not portable across TensorRT
 major versions**. Every engine built under 25.10 (TRT 10.x) fails to load
 on 26.06 (TRT 11.x) with a serialization-version error.
 
-```bash
-# Rebuild images first
-docker compose build
+`./openprocessor models repair` does this for every engine Triton refuses to load. By hand,
+from a checkout (the export scripts run in the `model-export` container, not the API
+container; pull or build its image first):
 
+```bash
 # Start only what exports need
 docker compose up -d triton-server api
 
-# Re-export every model (runs inside the API container)
+# Re-export every model
 docker compose run --rm model-export python /app/export/export_models.py --formats onnx_end2end trt_end2end
 docker compose run --rm model-export python /app/export/export_scrfd.py
 docker compose run --rm model-export python /app/export/export_face_recognition.py
@@ -32,9 +33,9 @@ docker compose restart triton-server
 
 Notes:
 
-- The client-side `tensorrt-cu13==11.1.0.106` pin **must** match the TRT
-  bundled in the Triton image. Do not bump it independently; upgrade it
-  together with the Triton base tag.
+- The `tensorrt-cu13==11.1.0.106` pin in `requirements-export.txt` **must**
+  match the TRT bundled in the Triton image. Do not bump it independently;
+  upgrade it together with the Triton base tag in `Dockerfile.triton`.
 - GPU requirements: driver R570+ (CUDA 13.x) and compute capability >= 7.5
   (Turing or newer). Volta/Pascal are no longer supported by this Triton
   release line.
@@ -70,7 +71,7 @@ docker run --rm -v $(pwd)/monitoring:/cfg grafana/alloy:v1.17.1 \
 
 ultralytics moved to the 8.4 line (YOLO26). The YOLO11 EfficientNMS export
 toolchain keeps its exact production pin in an isolated venv inside the
-image (`/opt/venv-y11`) — `export_models.py` re-execs into it
+export image (`/opt/venv-y11`) — `export_models.py` re-execs into it
 automatically, so existing export commands are unchanged.
 
 To serve YOLO26 alongside YOLO11:
@@ -89,7 +90,7 @@ handled transparently (adapter resolved from Triton model metadata).
 
 - `/live` — process liveness only (new; used by the container HEALTHCHECK).
 - `/ready` — actively probes Triton (gRPC `is_server_live`), that its required
-  models are `READY` (since 0.7.0), and OpenSearch;
+  models are `READY`, and OpenSearch;
   returns **503 with per-service detail** while any dependency is down.
 - `/health` — now an alias of `/ready`. If you previously treated `/health`
   as an always-200 liveness signal, point that consumer at `/live`.

@@ -47,10 +47,10 @@ The OCR pipeline consists of three Triton models working together:
 
 ### Data Flow
 
-1. **Input**: Raw image bytes (JPEG/PNG)
-2. **Preprocessing**: Resize, normalize (x/127.5 - 1), pad to 32-boundary
+1. **Input**: Raw image bytes (JPEG/PNG), decoded once by the API; the same oriented frame is sent to Triton and reported as `image_size`
+2. **Preprocessing**: Decode with EXIF orientation applied (transparency composited onto white), scale so the long side is 640 to 960 px, then stretch each axis to its own multiple of 32 (no padding, as PaddleOCR's `DetResizeForTest`); the BLS normalizes (x/127.5 - 1)
 3. **Detection**: Probability map identifying text regions
-4. **Post-processing**: Threshold, contour detection, box expansion (unclip)
+4. **Post-processing**: Threshold, contour detection, box expansion (unclip) with `pyclipper`, which is required: the `ocr_pipeline` model fails to load without it (`Dockerfile.triton` installs it)
 5. **Cropping**: Perspective transform to extract text crops
 6. **Recognition**: CTC decoder produces text strings
 7. **Output**: Text strings with bounding boxes and confidence scores
@@ -107,7 +107,7 @@ The recognition model uses `ppocrv5_dict.txt` with 18383 characters:
 ### Software Requirements
 
 - Docker with NVIDIA Container Toolkit
-- NVIDIA GPU with TensorRT 10.x support
+- NVIDIA GPU with TensorRT 11 support (Triton 26.06)
 - Python 3.10+ with the following packages:
   - `onnx`, `onnxruntime-gpu`
 
@@ -115,76 +115,22 @@ The recognition model uses `ppocrv5_dict.txt` with 18383 characters:
 
 ## Setup and Deployment
 
-### Step 1: Download Models
+### Step 1: Download and export
 
-#### Option A: Use Pre-converted ONNX Models
-
-```bash
-# From the api container:
-docker compose run --rm model-export python /app/export/download_paddleocr.py
-
-# Or run the convenience script:
-./scripts/export_paddleocr.sh download
-```
-
-This downloads:
-- `ppocr_det_v5_mobile.onnx` (~5MB) - Detection model
-- `ppocr_rec_v5_mobile.onnx` (~16MB) - Multilingual recognition model
-- Character dictionaries
-
-### Step 2: Export to TensorRT
-
-**CRITICAL**: TensorRT requires sufficient workspace memory. Use correct syntax for TensorRT 10+:
+Engines are built inside the `model-export` container. `./openprocessor models install`
+does this for a normal install. To build the OCR engines by hand:
 
 ```bash
-# CORRECT syntax:
---memPoolSize=workspace:4G
-
-# INCORRECT (will cause "Cudnn Error: CUDNN_STATUS_NOT_SUPPORTED"):
---workspace=4096    # Old deprecated syntax
---memPoolSize=4096  # Missing workspace: prefix and unit
+./scripts/export_paddleocr.sh all        # download, build both engines, place the dictionary
+./scripts/export_paddleocr.sh download   # ONNX files only (also: trt, det, rec, status, clean)
 ```
 
-#### Export Detection Model
-
-```bash
-docker compose exec triton-server /usr/src/tensorrt/bin/trtexec \
-    --onnx=/models/ppocr_det_v5_mobile.onnx \
-    --saveEngine=/models/paddleocr_det_trt/1/model.plan \
-    --fp16 \
-    --minShapes=x:1x3x32x32 \
-    --optShapes=x:1x3x736x736 \
-    --maxShapes=x:4x3x960x960 \
-    --memPoolSize=workspace:4G
-```
-
-#### Export Recognition Model
-
-```bash
-docker compose exec triton-server /usr/src/tensorrt/bin/trtexec \
-    --onnx=/models/ppocr_rec_v5_mobile.onnx \
-    --saveEngine=/models/paddleocr_rec_trt/1/model.plan \
-    --fp16 \
-    --minShapes=x:1x3x48x48 \
-    --optShapes=x:32x3x48x320 \
-    --maxShapes=x:64x3x48x2048 \
-    --memPoolSize=workspace:4G
-```
-
-#### Automated Export Script
-
-Use the provided script for complete export:
-
-```bash
-./scripts/export_paddleocr.sh all
-```
-
-This handles:
-1. Model download (if needed)
-2. GPU memory management (unloads other models)
-3. TensorRT conversion with correct parameters
-4. Dictionary file placement
-5. Triton config generation
+or run the Python exporters directly, as in [export/README.md](../export/README.md#pp-ocrv5-text-recognition).
+The builds use TensorRT 11 strongly-typed mode and the `--memPoolSize`-style workspace
+(`export/trt_build_settings.py`: detection 4 GB, recognition 8 GB). The dynamic shapes are
+detection `1x3x32x32` to `4x3x960x960` (opt `736x736`) and recognition `1x3x48x48` to
+`64x3x48x2048` (opt `32x3x48x320`). The old `--workspace=<MB>` flag causes
+`Cudnn Error: CUDNN_STATUS_NOT_SUPPORTED`.
 
 ### Step 3: Setup Dictionary
 
@@ -228,169 +174,29 @@ Expected output:
 #### Run Tests
 
 ```bash
-# Test via API endpoint
-python scripts/test_ocr_pipeline.py
+make test-ocr
 
-# Or use curl
-curl -X POST http://localhost:4603/ocr/predict \
-    -F "image=@test_images/ocr-synthetic/hello_world.jpg"
+# Or use curl with any image of text
+curl -X POST http://localhost:4603/ocr/predict -F "image=@your_image.jpg"
 ```
 
 ---
 
 ## Configuration
 
-### Detection Model Config
+The Triton configs are the source of truth; read them rather than a copy here.
 
-File: `models/paddleocr_det_trt/config.pbtxt`
+The batch size, instance count, GPU and queue delay of each model are in its file:
+`models/paddleocr_det_trt/config.pbtxt` and `models/paddleocr_rec_trt/config.pbtxt` (`tensorrt_plan`, dynamic
+batching) and `models/ocr_pipeline/config.pbtxt` (`python` BLS, `max_batch_size: 0` because the BLS batches
+itself, no dynamic batching). The recognizer ships one instance as a baseline for 12 GB cards.
 
-```protobuf
-name: "paddleocr_det_trt"
-platform: "tensorrt_plan"
-max_batch_size: 4
-
-input [
-  {
-    name: "x"
-    data_type: TYPE_FP32
-    dims: [ 3, -1, -1 ]  # Dynamic H, W (multiples of 32)
-  }
-]
-
-output [
-  {
-    name: "fetch_name_0"
-    data_type: TYPE_FP32
-    dims: [ 1, -1, -1 ]  # Same H, W as input
-  }
-]
-
-instance_group [
-  {
-    count: 2
-    kind: KIND_GPU
-    gpus: [0]
-  }
-]
-
-dynamic_batching {
-  preferred_batch_size: [ 1, 2, 4 ]
-  max_queue_delay_microseconds: 5000
-}
-```
-
-### Recognition Model Config
-
-File: `models/paddleocr_rec_trt/config.pbtxt`
-
-```protobuf
-name: "paddleocr_rec_trt"
-platform: "tensorrt_plan"
-max_batch_size: 64
-
-input [
-  {
-    name: "x"
-    data_type: TYPE_FP32
-    dims: [ 3, 48, -1 ]  # Dynamic width: 48-2048
-  }
-]
-
-output [
-  {
-    name: "fetch_name_0"
-    data_type: TYPE_FP32
-    dims: [ -1, 18385 ]  # Dynamic timesteps, 18385 characters (multilingual)
-  }
-]
-
-instance_group [
-  {
-    count: 2
-    kind: KIND_GPU
-    gpus: [0]
-  }
-]
-
-dynamic_batching {
-  preferred_batch_size: [ 16, 32, 64 ]
-  max_queue_delay_microseconds: 10000
-}
-```
-
-### OCR Pipeline Config
-
-File: `models/ocr_pipeline/config.pbtxt`
-
-```protobuf
-name: "ocr_pipeline"
-backend: "python"
-max_batch_size: 0  # BLS handles batching
-
-input [
-  {
-    name: "ocr_images"
-    data_type: TYPE_UINT8
-    dims: [ 3, -1, -1 ]  # BGR pixels; the BLS normalizes (x/127.5 - 1) for detection
-  },
-  {
-    name: "original_image"
-    data_type: TYPE_UINT8
-    dims: [ 3, -1, -1 ]  # For text crop extraction
-  },
-  {
-    name: "orig_shape"
-    data_type: TYPE_INT32
-    dims: [ 2 ]  # [H, W]
-  }
-]
-
-output [
-  {
-    name: "num_texts"
-    data_type: TYPE_INT32
-    dims: [ 1 ]
-  },
-  {
-    name: "text_boxes"
-    data_type: TYPE_FP32
-    dims: [ 128, 8 ]  # Quadrilateral coordinates
-  },
-  {
-    name: "text_boxes_normalized"
-    data_type: TYPE_FP32
-    dims: [ 128, 4 ]  # Axis-aligned [x1, y1, x2, y2]
-  },
-  {
-    name: "texts"
-    data_type: TYPE_STRING
-    dims: [ 128 ]
-  },
-  {
-    name: "text_scores"
-    data_type: TYPE_FP32
-    dims: [ 128 ]  # Detection confidence
-  },
-  {
-    name: "rec_scores"
-    data_type: TYPE_FP32
-    dims: [ 128 ]  # Recognition confidence
-  }
-]
-
-instance_group [
-  {
-    count: 2
-    kind: KIND_GPU
-    gpus: [0]
-  }
-]
-
-parameters: {
-  key: "FORCE_CPU_ONLY_INPUT_TENSORS"
-  value: { string_value: "no" }
-}
-```
+The pipeline takes `ocr_images` (the resized UINT8 BGR frame), `original_image` (the full-size UINT8
+frame the crops are cut from) and `orig_shape`. It returns up to 128 texts per image:
+`num_texts`, `text_boxes` (`[128, 8]` quadrilaterals), `text_boxes_normalized` (`[128, 4]`),
+`texts`, `text_scores` (detection) and `rec_scores` (recognition). An FP32 pipeline config is
+refused at request time with the `./openprocessor models repair` hint
+(`src/clients/triton_ocr.py`). The installer GPU profiles set the instance counts.
 
 ---
 
@@ -431,9 +237,7 @@ curl -X POST http://localhost:4603/ocr/batch \
 ### Search Images by Text
 
 ```bash
-curl -X POST http://localhost:4603/search/ocr \
-    -H "Content-Type: application/json" \
-    -d '{"query": "invoice", "top_k": 10}'
+curl -X POST "http://localhost:4603/search/ocr?text=invoice&top_k=10"
 ```
 
 ### Python Client
@@ -452,7 +256,7 @@ def extract_text(image_path: str, api_url: str = "http://localhost:4603") -> dic
     return response.json()
 
 # Usage
-result = extract_text("test_images/ocr-synthetic/invoice.jpg")
+result = extract_text("your_image.jpg")
 print(f"Found {result['num_texts']} text regions:")
 for text, score in zip(result['texts'], result['rec_scores']):
     print(f"  '{text}' (confidence: {score:.2f})")
@@ -464,28 +268,28 @@ for text, score in zip(result['texts'], result['rec_scores']):
 
 ### Optimizing Detection
 
-| Parameter | Default | Tuning |
-|-----------|---------|--------|
-| `max_batch_size` | 4 | Increase for batch processing |
-| `instance_count` | 2 | Match to GPU utilization |
-| `max_queue_delay` | 5ms | Lower for latency, higher for throughput |
+| Parameter | Tuning |
+|-----------|--------|
+| `max_batch_size` | Increase for batch processing |
+| `instance_count` | Match to GPU utilization |
+| `max_queue_delay` | Lower for latency, higher for throughput |
 
 ### Optimizing Recognition
 
-| Parameter | Default | Tuning |
-|-----------|---------|--------|
-| `max_batch_size` | 64 | Increase for batch processing |
-| `instance_count` | 2 | Increase for parallel crops |
-| Dynamic width | 48-2048 | Narrow range if text length is known |
+| Parameter | Tuning |
+|-----------|--------|
+| `max_batch_size` | Increase for batch processing |
+| `instance_count` | Increase on 24 GB+ cards for parallel crops |
+| Dynamic width | Narrow the range (set in the engine build) if text length is known |
 
 ### Memory Optimization
 
 1. **Reduce max shapes** if you know image sizes:
    ```bash
-   --maxShapes=x:4x3x640x640  # Instead of 960x960
+   --maxShapes=x:4x3x640x640  # Instead of 960x960 (the client scales up to 960 px)
    ```
 
-2. **Use FP16** (already enabled by default)
+2. **Precision** follows the ONNX dtypes (TensorRT 11 builds are strongly typed; there is no `--fp16` switch)
 
 3. **Enable CUDA graphs** for repeated inference:
    ```protobuf
@@ -496,10 +300,11 @@ for text, score in zip(result['texts'], result['rec_scores']):
    }
    ```
 
-### Throughput Benchmarks
+### Throughput
 
-| Configuration | Throughput | Latency (p50) |
-|--------------|------------|---------------|
+Measured `/ocr/predict` throughput and latency are in [PERFORMANCE.md](PERFORMANCE.md); this page holds no numbers.
+
+--------------|------------|---------------|
 | Single image | 15-20 RPS | 50-70ms |
 | Batch (4 images) | 40-50 RPS | 100-150ms |
 
@@ -523,7 +328,7 @@ the analysis and set `ocr_error` when OCR failed. `POST /ocr/batch` lists a fail
 
 **Solution**: Use correct syntax for workspace allocation:
 ```bash
-# TensorRT 10+ syntax:
+# TensorRT 10 and 11 syntax:
 --memPoolSize=workspace:4G
 
 # Not:
@@ -572,7 +377,7 @@ rm models/paddleocr_rec_trt/1/model.plan
 2. Check preprocessing:
    - Input should be BGR, not RGB
    - Normalization: (x / 127.5) - 1 = range [-1, 1]
-   - Image padded to 32-pixel boundary
+   - Each axis stretched to a multiple of 32 (boxes are mapped back as original size over map size, so the map must cover the whole image)
 
 #### GPU Out of Memory
 
@@ -584,7 +389,6 @@ rm models/paddleocr_rec_trt/1/model.plan
    curl -X POST localhost:4600/v2/repository/models/yolov11_small_trt/unload
    ```
 2. Reduce instance count in config.pbtxt
-3. Use TensorRT FP16 mode (already default)
 
 ---
 
@@ -600,7 +404,7 @@ models/
 ├── paddleocr_rec_trt/
 │   ├── 1/model.plan              # TensorRT recognition engine
 │   ├── config.pbtxt              # Triton config
-│   └── ppocrv5_dict.txt           # Character dictionary (18383 chars, multilingual)
+│   └── ppocrv5_dict.txt          # Character dictionary (18383 chars, multilingual)
 └── ocr_pipeline/
     ├── 1/model.py                # Python BLS orchestrator
     └── config.pbtxt              # Triton config
@@ -615,8 +419,7 @@ export/
 └── export_paddleocr_rec.py       # Export recognition to TRT
 
 scripts/
-├── export_paddleocr.sh           # Automated export script
-└── test_ocr_pipeline.py          # OCR testing script
+└── export_paddleocr.sh           # Automated export script
 
 src/
 ├── services/ocr_service.py       # OCR service wrapper

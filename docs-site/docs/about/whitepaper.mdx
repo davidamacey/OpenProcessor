@@ -1,20 +1,21 @@
 ---
 sidebar_position: 2
-title: Systems whitepaper (0.7.0)
+title: Systems whitepaper
 ---
 
-# Systems whitepaper (0.7.0)
+# Systems whitepaper
 
 The full text is
 [`docs/WHITEPAPER.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/WHITEPAPER.md)
-in the repository. Every number in it comes from public data (COCO, Open Images, the pinned Commons
+in the repository. It describes the work on `main` toward 0.7.0, which is not
+released; the latest release is 0.6.0. Every number in it comes from public data (COCO, Open Images, the pinned Commons
 photo set, CARS196, CUB-200-2011, Stanford Online Products) and cites the measurement note it was
 copied from. This page lists what it covers.
 
 ## What it covers
 
 - **System overview.** The Triton inference API, the curation subsystem and Cropwright.
-- **GPU image preparation.** The 0.7.0 stage profile, and the finding that throughput under load fell
+- **GPU image preparation.** The stage profile on `main`, and the finding that throughput under load fell
   because GPU memory ran out and photos fell back to the CPU decode, not because of CUDA-call overhead.
   It covers the device-memory budget, the opt-in ingest load profile (27.7 GB freed on a 48 GB card)
   and why the `full` profile ships one `gpu_image_prep` instance.
@@ -28,7 +29,7 @@ copied from. This page lists what it covers.
   A visual-judge study found that a hosted judge's "same" is reliable on COCO crops and a small local
   VLM is near chance on pairs.
 - **Data isolation and safety.** The per-project OpenSearch guard, the lock rule, class identity by
-  name, and the 0.7.0 fail-closed changes.
+  name, and the fail-closed changes.
 - **Limitations, future work (with issue numbers) and how to reproduce every result.**
 
 The measurement sources are the
