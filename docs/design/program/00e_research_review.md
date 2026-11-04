@@ -640,3 +640,42 @@ Each wave's lanes and their owned paths (03a, 03d, 03e, 03b, 03f, 03c Owns lines
 
 - `.venv/bin/python scripts/codegen/check_naming_leaks.py`: pass.
 - `.venv/bin/python scripts/docs/check_docs_vs_code.py`: pass.
+
+## 6. Planner responses (2026-11-04, final pass on `research/master`)
+
+Every finding was checked against the tree and the plan files before the fix. The owner rejected
+the review's scope cuts (Q-A: "keep all seams now and ensure the plans are updated accordingly to
+do in the right order and waves"); its correctness findings all apply. Owner answers of the same
+day are recorded in [00d](00d_owner_questions.md) section 0 and the [00_index.md](00_index.md)
+register; the plan changes are mapped in [00b](00b_traceability.md) section 5.6.
+
+| Finding | Verdict | Fix (file, lane, test) |
+|---|---|---|
+| RR-1 pause revokes, resume reuses the id | fixed | pause never revokes (revoke only on cancel; a stale message is acked by the claim): [02b](02b_jobs_locking_events.md) state table and pause text; [03e](03e_b2_s3_job_runtime.md) 3A-13; [03a](03a_b2_w1_queue_infra.md) spike S1 item 10. Test `tests/tasks/test_pause_resume_after_revoke_registry.py` |
+| RR-2 immutability trigger vs `SET NULL` | fixed | `cluster_partitions_ready_immutable` lets `job_id` and `parent_partition_id` go to NULL and nothing else: [02d](02d_research_seam_schema.md) section 2.2; 03a 1F-1; four test cases in 02d section 6 |
+| RR-3 NULL-project rows invisible in request or project scope | fixed | a third RLS scope `core` (`op_scope_is_core()`, `core_tx` with a ratchet allowlist) for core near-duplicate rows; a read-only `FOR SELECT` policy for the default calibrations: [02a](02a_postgres_schema.md) section 1.4; 03a 1A-13; ND-C writes under `core_tx` ([05](05_b4_stateless_api.md) 4A-4b). RLS test cases added |
+| RR-4 later lanes would edit `app.py` | fixed | 1B pre-creates every planned research task module, its `include=` entry and both aggregator entries (`clustering`, `embedding_reindex`, `near_dup`, `near_dup_core`, `source_backfill`, `region_text`; `b4_fanout`, `b4_project`): 03a 1B Owns, 1B-8. Test `tests/tasks/test_planned_modules_included.py` |
+| RR-5 PP-OCRv6 missing | fixed (owner Q-B) | one short PP-OCRv6 arm against PP-OCRv5 in `pt:P1` (PW-2), also deciding the B5c OCR model: [00e_research_track.md](00e_research_track.md) section 3; [07c](07c_b5_crops_ocr_faces.md) research amendments; [03g](03g_w5e_plate_text.md); [10](10_standards_and_libraries.md) |
+| RR-6 X-1b reason misstated | fixed | the reason now says the documented difference is deferrability; the project delete no longer relies on one cascade (RR-7) and the catalog-enumerated test decides: 02a section 1.2; 00b X-1b |
+| RR-7 one-statement cascading project delete | fixed | 4C-5 deletes per table in reverse foreign-key order read from the catalog, 10,000 rows per transaction, the `projects` row last: [03b](03b_b2_w2_job_families.md) 4C-5. Test `tests/projects/test_project_delete_batched.py` (200,000 rows under a 30 s statement timeout, resume after a kill) |
+| RR-8 the normalizer forces close and reopen | **rebutted on scope (owner Q-A keeps it); the safety part fixed** | the step is per index with a dry run and stated downtime, progress per index, a `try/finally` reopen with a wait for yellow, an `_analyze` check, stop-and-report rollback and an idempotent re-run: [02c](02c_migration_ops_tests.md) section 2.2; [03d](03d_b2_s2_control_data.md) 2F-6. Test `tests/opensearch/test_analysis_settings_failure.py` |
+| RR-9 `gpu_devices` rows expire, some cards never get one | fixed | `seen_at` refreshed by every GPU worker heartbeat and by `op.periodic.serving_inventory` (every card Triton reports); a worker registers every NVML-visible card; every reservation upserts its card in the same transaction; retention skips referenced rows: 02a sections 5 and 9; 03a 1B-8; [03c](03c_b2_w3_beat_reaper_workers.md) beat table; [03f](03f_b2_s5_gpu_queues.md) 5A-6. `openprocessor gpu plan` stays a reader (bash, no database client; 00b section 5.5). Tests in 1B-8 and `tests/training/test_reserve_card_without_worker.py` |
+| RR-10 the exact key covers only new images | fixed | one pausable `source_backfill` job (02b) with a content step (ND-A, ND-11) and the W4 capture step in the same pass; ND-8 first proves stored bytes equal uploaded bytes: 03b ND-A; 02c section 2.2; 05 CM-3; [06](06_release_acceptance.md) RF-82. Tests `tests/near_duplicates/test_stored_bytes_equal_upload.py`, `test_backfill_then_reingest_refused.py` |
+| RR-11 the dataset list | fixed (owner RD-10, Q-C) | one dataset register, 00e_research_track section 4.1; UFPR-ALPR, LPLC and RodoSol skipped, so no request is needed; post-tag sets get their row before their window |
+| RR-12 defer seams without a 0.7.0 reader | **rebutted** | the owner keeps every seam now (Q-A, RD-1). Each kept seam has a writer and a red test in its lane (00b section 5.2); the re-index job is time-sliced (RR-20) |
+| RR-13 W2.3 too large | fixed (owner Q-A) | W2.3a = 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C (ports, one cross-lane signature); W2.3b = 4F, ND-A, ES-B, then ND-B, then 4E. Every research call W2.3a lanes made moved to W2.3b (the `near_dup` scorer deletion and the `enqueue_pending` calls to ND-A; person grouping as a partition to 4F-9; the IVF retrain and the loop's cluster reader to 4F-10). ES-B is kept, not cut: 03b header and sections 2-8; [00_master_plan.md](00_master_plan.md) sections 2-4 |
+| RR-14 ES-A owns none of `_knn_field`'s callers | fixed | ES-A owns the call sites in `bodies_core.py` and `ensure_fields.py`; 2F cuts from the head that includes them: 03d ES-A |
+| RR-15 RD-1 bundled; RD-25 unmarked | fixed by the answers | the owner approved RD-1 for every topic and decided RD-25 (Q-D); no row blocks coding now: 00d sections 0 and Count |
+| RR-16 research plans contradict the program | fixed | a "Superseded parts" header in all eight research plan files (lanes, waves, lock, GPU hours point to the program); the embeddings and auto-label lock lines use `gpu<N>.lock` (00b X-14) |
+| RR-17 schema conventions | fixed | `cluster_activations.id` primary key; `target` and `level` `CHECK`s on identities and activations; named `ck_` constraints for every `CHECK` a later revision alters: 02a, 02d; 03a 1A-13, 1F-1 |
+| RR-18 NULL-project membership | fixed | `BEFORE INSERT` trigger `cluster_children_project_from_parent` (and the same on near-duplicate groups and members): 02d; test `tests/db/test_children_project_from_parent.py` |
+| RR-19 wording slips | fixed | near-duplicates 3.3 (the 0.45 cut is the lower threshold: a looser match, a stricter cleanup) and 3.1 (`system-config.dto.ts`); plate 3.2 quotes "below 70 %"; plate C3 is named the "medoid alignment vote" |
+| RR-20 `embedding_reindex` without slices | fixed | `slice_s` 600 with a 30 / 35 minute limit: 02b kind table; 03b ES-B1 |
+| RR-21 beat details | fixed | `cluster_refresh` reads a fresh `worker_capabilities` row instead of `inspect()`; `near_dup_rescore` has its own advisory-lock class `NEAR_DUP_RESCORE`: 03c beat table; 02b section 4 |
+| RR-22 prune orphans a freeze's link | fixed | the prune keeps every run a freeze references: 02a section 9 |
+| RR-23 T-6 stale | fixed | T-6 now raises `scope_not_set`: 02c |
+| RR-24 `pt:P2` waits for W5c | fixed | the script computes the per-character minimum from the recognition logits in its own venv: 00e_research_track `pt:P2` |
+| 3.5 ES-C's file list | fixed | recomputed on the merged W2.3b head: 03c ES-C |
+| 3.6 capture reason | fixed | restated as the capture-date filter and the plate consensus basis: 05 section 6c |
+| 3.7 seven set-P copies; plate canaries | fixed | one shared seeded copy and manifest, removal recorded ([11](11_risks_cleanup_host.md) rule 10); canaries fail every plate format (03g, plate plan 6.8) |
+| 3.5 the prototype GPU time | superseded by the owner | RD-2 as answered: short tiered runs, about 10 GPU hours before the tag (was 31), post-tag windows only on the owner's OK: 00e_research_track sections 2-4 |

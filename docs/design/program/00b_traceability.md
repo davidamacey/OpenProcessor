@@ -173,7 +173,7 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 | Issue | Milestone | Wave and lane, or deferral |
 |---|---|---|
 | #8 video analytics epic | none, parked | parked: a separate product; v0.8.0 plan F7 takes the first video-file slice ([v080](../v080_platform_breadth_plan.md) section 6) |
-| #40 decode once | v0.7.0 | W5b (`decode`, `prep`, `routes`, `codec`); its choices read `gpu:PR-1..PR-4` (PW-1, PW-2) first; the export orientation fix L-X1 rides 5b-D1 |
+| #40 decode once | v0.7.0 | W5b (`decode`, `prep`, `routes`, `codec`); its choices read `gpu:PR-1`, `PR-2` (PW-1) first (`PR-3`, `PR-4` cut before the tag: today's instance shape and backend stay, 5b-G4 not opened); the export orientation fix L-X1 rides 5b-D1 |
 | #42 12 GB card | v0.7.0 | side track on GPU 1; owner-approved judgment calls (2026-11-02) already shipped in #441; only the acceptance run remains; MQ-10; its build is a `model_engines` row with `build_profile = 'small'` (GPU S-3) |
 | #45 benchmark ladders | v0.7.0 | W5a `ladders`; the ladders read `JobPerfSummary` from `jobs.result` (GPU S-8, lane 3A-15) and record DCGM profiling fields |
 | #67 processing plans | v0.7.0 | W5d; the resolved plan in `jobs.params.plan` (GPU S-9) and `op_plan_branch_total` (S-21) |
@@ -182,22 +182,22 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 | #220 OCR and faces | v0.7.0 | W5c `ocr` (with `rec_char_min` for W5e; reads `gpu:PR-6` first); faces alignment in W5d `gpu` (reads `gpu:PR-5`) |
 | #231 serving head-to-head | v0.7.0 | GPU window 2 after the 5b gate, under the owner gate of 2026-10-10, or recorded and moved to RW-1 ([07](07_b5_overview.md) section 10) |
 | #268 Triton follow-ups | v0.7.0 | W5a `sweeps`; the two-card and priority rows are RW-1 (`gpu:PR-7`, `PR-8`) |
-| #346 clustering research tracker | none, parked | seams in v0.7.0: the partition tables (1F) and the clustering family on partitions (W2.3 lane 4F); experiments `clu:CL-0..CL-9` and landings L3-L6 in RW-3 (pending RD-1, RD-6) |
+| #346 clustering research tracker | none, parked | seams in v0.7.0: the partition tables (1F) and the clustering family on partitions (W2.3b lane 4F); experiments `clu:CL-0..CL-9` and landings L3-L6 in RW-3 (approved, RD-1, RD-6) |
 | #347 embedding-model research | v0.8.0 | research after the tag as `emb:EP-4` in RW-2 under the embeddings plan (RD-37); the registry it needs ships in v0.7.0 (ES-A..ES-C) |
-| #348 spatial research | none, parked | the one v0.7.0 slice is capture metadata at ingest (W4 lane `b4/capture-metadata`, pending RD-5); place discovery and reconstruction are `sp:P-4..P-9` in RW-5, product work only on an S1 GO |
-| #365 embedding swap | v0.8.0, blocked | the machinery ships in v0.7.0 (ES-A in W2.2, ES-B in W2.3, ES-C in W2.4); v0.8.0 F9 shrinks to register, build, evaluate, flip, still conditional on RW-2 naming an encoder |
+| #348 spatial research | none, parked | the one v0.7.0 slice is capture metadata and GPS coordinates at ingest under the per-project location policy (W4 lane `b4/capture-metadata`; RD-5 approved, RD-51 reversed, exports keep GPS per RD-54); place discovery and reconstruction are `sp:P-4..P-9` in RW-5, product work only on an S1 GO |
+| #365 embedding swap | v0.8.0, blocked | the machinery ships in v0.7.0 (ES-A in W2.2, ES-B in W2.3b, ES-C in W2.4); v0.8.0 F9 shrinks to register, build, evaluate, flip, still conditional on RW-2 naming an encoder |
 | #367 second segmenter | v0.8.0 | v0.8.0 F6 |
 | #368 model-family registry | v0.8.0 | first slice in W3 (B3-F1); the rest v0.8.0 F4 |
 | #369 API authentication | v0.8.0, blocked | v0.8.0 F5 (re-base its storage on Postgres before starting) |
 | #370 importers | v0.8.0 | v0.8.0 F1 (only COCO segmentation-only boxes remain) |
 | #398 detector-class roots (Z5) | v0.8.0 | research `al:AL6` in RW-6 (calls RD-80); its seams ship now: the loop reads `(partition_id, cluster_uid)` from `cluster_partitions` (4D, 4F) and `detector_class` is a partition method value |
 | #400 attribute signals | none, parked | `sp:P-2`, `sp:P-3` in RW-5; lane L-A1 only on a PASS (reserved DDL in [02d](02d_research_seam_schema.md) section 5) |
-| #401 plate identity text | none, parked | wave W5e ([03g](03g_w5e_plate_text.md); pending RD-3, RD-61, RD-62); creation-time seams in W2.1 (1C-9) and W2.2 (2F-6), the OCR output in W5c, the privacy baseline in W4; prototypes `pt:P0..P6` in PW-1..PW-3; milestone v0.7.0 on the owner's go |
+| #401 plate identity text | none, parked | wave W5e ([03g](03g_w5e_plate_text.md); its revision in W5e approved, RD-4; pending RD-3, RD-61, RD-62); creation-time seams in W2.1 (1C-9) and W2.2 (2F-6, kept by the owner, Q-A), the OCR output in W5c (PP-OCRv6 compared once, Q-B), the privacy baseline in W4; prototypes `pt:P0..P5` as short runs in PW-2 (`pt:P6` cut; UFPR-ALPR and LPLC skipped, RD-10); milestone v0.7.0 on the owner's go |
 | #403 MPS overlay | v0.7.0, parked | W5b conditional row (adopt only on the `gpu:PR-4` evidence); else moved to RW-1 at W6 |
 | #406 judge calibration | v0.8.0 | `clu:CL-1` in RW-3 (protocol file section 5) |
 | #407 GPU-prep staged speed | v0.7.0 | W5b `profile` then `prep`; reads `gpu:PR-2` (CV-CUDA) and `PR-4` (the C++ bar) first |
 | #411 0.7.0 close-out | v0.7.0 | W6, closes after the tag |
-| #416 near-duplicate threshold | v0.8.0 | the near-duplicate service ships in v0.7.0 with today's 0.98 defaults (ND-A, ND-B in W2.3; ND-C in W4); `nd:P0..P2` in PW-1 and PW-3 (P1 may seed the defaults); `nd:P3..P7` and ND-E in RW-4 |
+| #416 near-duplicate threshold | v0.8.0 | the near-duplicate service ships in v0.7.0 with today's 0.98 defaults (ND-A, ND-B in W2.3b; ND-C in W4); `nd:P0..P2` as short runs in PW-1 (P1 may seed the defaults; the SSCD arm cut); `nd:P3..P7` and ND-E in RW-4 on the owner's OK |
 | #435 frame-target search | v0.8.0 | decided by `emb:EP-2` in RW-2 (RD-38: close if the bar fails) |
 | #436 `group_by=image` | v0.8.0 | v0.8.0 F2, composing with the search `space` parameter of ES-C |
 | #439 project create 13-20 s | v0.7.0 | W4 lane `b4/project-create` |
@@ -209,13 +209,13 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 | #463 `/detect` upscaling (N13) | v0.7.0 | W5a `recall`, D-35 |
 | #464 evidence tasks (N14) | v0.7.0 | OPS-2 in W2.1 (1B-0) and W2.4 (6A-4); CC-10 in W4 (4A-0); GPU-19 in W5c (`ocrnorm`); OS-8, FE-6, T-6 to a v0.8.0 follow-up per the issue body |
 | #465 typed response models (N15) | v0.7.0 | CPU lanes `api/typed-responses-<n>` in W5a-W5c, the 5d routers inside 5d (owner decision 2026-11-04); closes with the 5d PR |
-| #466 assist-loop pause, events, budgets (N16) | v0.8.0 | pause, resume, budgets with token reservations, usage capture, slices and the event log now ship in W2.3 (4D-2..4D-7, 4E; gaps G-1..G-3, pending RD-1); what remains for v0.8.0 is the review queue and metrics routes (`feat/loop-review`, RW-6) |
+| #466 assist-loop pause, events, budgets (N16) | v0.8.0 | pause, resume, budgets with token reservations, usage capture, slices and the event log now ship in W2.3a (4D-2..4D-7) and W2.3b (4E; gaps G-1..G-3, approved, RD-1); what remains for v0.8.0 is the review queue and metrics routes (`feat/loop-review`, RW-6) |
 | #468 labeler log contents | v0.7.0 | W4 lane `b4/privacy-hardening` (owner decision 2026-11-04) |
 | #469 region kinds to external endpoints | v0.7.0 | decided 2026-11-04: keep current behaviour (OI-1); closes with no code change; the SECURITY.md statement is a task of W4 lane `b4/privacy-hardening` |
 | #470 stored recognized text access | v0.7.0 | W4 lane `b4/privacy-hardening` |
 | #471 research judge refusal by provenance | v0.7.0 | decided 2026-11-04: keep current behaviour (OI-2); closes with no code change; covered by the same SECURITY.md statement |
 | #472 core text index isolation and purge | v0.7.0 | W4 lane `b4/privacy-hardening` |
-| #473 near-duplicate data quality | v0.7.0 | part a W2.3 ND-A (run-scoped groups, the projection clears stale fields); part b W4 ND-C1 (single-writer core grouping); part c W2.3 ND-B1 (moved from 2D-4, finding C8; the group goes into the holdout together, MQ-5) |
+| #473 near-duplicate data quality | v0.7.0 | part a W2.3b ND-A (run-scoped groups, the projection clears stale fields); part b W4 ND-C1 (single-writer core grouping); part c W2.3b ND-B1 (moved from 2D-4, finding C8; the group goes into the holdout together, MQ-5) |
 
 Open issues without a plan home before the master-plan pass: #465, #468, #469, #470, #471, #472,
 #473. After the owner's answers of 2026-11-04 every one has a wave and lane, except #469 and #471,
@@ -315,7 +315,7 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 | #466 | "The queue rewrite (#451) already delivers pause and resume through the job rows and the events as database rows. What remains here: the Cropwright pause control, token budgets read from the endpoint's usage reports, and the label-rate measurement. Milestone stays v0.8.0." |
 | #468, #470, #472 | (the same text on each) "Scheduled in wave W4 (owner decision of 2026-11-04). Details stay in the maintainers' private notes." |
 | #469, #471 | (the same text on each, posted with the close) "Decided by the owner on 2026-11-04: keep the current behaviour. When external use is enabled, this data may be sent as it is today, and the existing opt-out stays. No code change; the security policy will say this plainly in 0.7.0." |
-| #473 | "Placement: the stale near-duplicate fields after a re-score are fixed in W2.3; the batch grouping race in W4; the holdout check in W2.2. Owner decision of 2026-11-04: when a holdout is frozen, a held-out item's whole near-duplicate group goes into the holdout together. Each fix gets a red test first." |
+| #473 | "Placement: the stale near-duplicate fields after a re-score are fixed in W2.3b; the batch grouping race in W4; the holdout check in W2.3b. Owner decision of 2026-11-04: when a holdout is frozen, a held-out item's whole near-duplicate group goes into the holdout together. Each fix gets a red test first." |
 
 ### 4.3 Milestone moves (at W6)
 
@@ -338,7 +338,7 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 | #465 | with the W5d PR | - |
 | #401 | with the W5e PR (closing keyword), on the owner's go (RD-3) | - |
 
-### 4.5 Research comments (drafted 2026-11-04; **not yet approved**: post only after the owner answers RD-1 and RD-2)
+### 4.5 Research comments (drafted 2026-11-04; RD-1 and RD-2 answered the same day; **not yet approved for posting**: post on the owner's go)
 
 Same rules as above. One comment per issue; the plan path is the only link.
 
@@ -346,7 +346,7 @@ Same rules as above. One comment per issue; the plan path is the only link.
 |---|---|
 | #346 | "Plan: `docs/design/research_clustering_plan.md` and its protocol file. The rebuild records every clustering run as a versioned partition with stable cluster identities and a served pointer, so a better method later is a configuration change. The experiments run after the 0.7.0 tag with registered bars and a blind human check." |
 | #347, #365, #435 | "Plan: `docs/design/research_embeddings_search_plan.md`. The 0.7.0 rebuild adds an embedding registry (models, per-project spaces, a re-index job with pause and resume, a fenced switch), so a later encoder change is a data operation. The encoder evaluation and the whole-frame search question are decided by the experiments after the tag." |
-| #348, #400 | "Plan: `docs/design/research_spatial_attributes_plan.md`. 0.7.0 stores capture time, camera and lens at ingest (no coordinates). Colour and view tags, place grouping and reconstruction are research after the tag, with product work only on a go." |
+| #348, #400 | "Plan: `docs/design/research_spatial_attributes_plan.md`. 0.7.0 stores capture time, camera, lens and GPS coordinates at ingest, under a per-project location policy (default keep). Colour and view tags, place grouping and reconstruction are research after the tag, with product work only on a go." |
 | #401 | "Plan: `docs/design/research_plate_text_plan.md`. Proposed for 0.7.0 as its own wave after the speed work: per-box readings with a calibrated confidence, burst consensus, exact, fuzzy and fragment search, and privacy modes with a purge." |
 | #406 | "Plan: section 5 of `docs/design/research_clustering_plan_b_protocol.md`. Runs after the 0.7.0 tag." |
 | #416, #473 | "Plan: `docs/design/research_near_duplicates_plan.md`. 0.7.0 replaces the three separate near-duplicate paths with one service (whole images and crops), run-scoped groups in the database, an exact-content key, a single writer per project, and the holdout rule (a held-out item's whole group goes into the holdout). Thresholds stay at today's values until the measurements; they become a per-project setting. #473: part a and c are fixed by the new service in the queue wave, part b by the single-writer core grouping in the stateless-API wave." |
@@ -379,34 +379,36 @@ The seven research plans (`docs/design/research_*_plan.md`) each listed the seam
 include (their section 5), landing lanes (8), owner questions (10) and edits for other plan files
 (11). This section records how they were folded: one consistent design where two plans touch the
 same thing (5.1), every seam with its lane (5.2), every research issue with its wave (5.3), the
-findings turned into lanes with red tests (5.4), and the seams changed or rejected (5.5). Every row
-is pending owner question RD-1 of [00d](00d_owner_questions.md) unless it names another.
+findings turned into lanes with red tests (5.4), the seams changed or rejected (5.5), and the
+review and owner-answer changes of the final pass (5.6). Every seam was approved by the owner on
+2026-11-04 (RD-1 of [00d](00d_owner_questions.md), every seam now; review Q-A); a row that names
+another RD-n follows that open question's recommendation.
 
 ### 5.1 Cross-topic resolutions
 
 | # | Overlap | Resolution | Reason |
 |---|---|---|---|
 | X-1 | grouping records: clustering partitions, near-duplicate runs, plate consensus groups, auto-label selections (and later scenes) | **distinct tables, one shared pattern.** Each is a run record (params validated by pydantic, the profile pinned as `(config_id, revision)` referencing `config_revisions` with `NO ACTION`, `job_id ... ON DELETE SET NULL`), membership bulk-written with `COPY`, one served or current pointer guarded by a partial unique index or an OCC activation, and an OpenSearch projection through the `search_projection_tasks` outbox (kinds `cluster_partition`, `near_dup_run`, later `scene_membership`) with the reaper re-creating a lost sync job (rule i). Large membership tables (`cluster_memberships`, `partition_clusters`, `near_dup_groups`, `near_dup_members`) carry a denormalized `project_id` with a composite foreign key **and** the single-column one (a composite key is not checked when `project_id` is NULL); budget-bounded children (the loop tables) keep the `EXISTS` policy. One Jaccard lineage helper `src/domain/group_lineage.py` (4F) serves clustering carry-over and near-duplicate lineage. Near-duplicate `leak` groups are must-link input to clustering (S-later `cluster_constraints.source = 'near_dup'`); plate identity links enter as `source = 'identity_text'`; plate consensus may read the near-duplicate image groups as its basis | the lifecycles differ (human-gated activation; a current flip with holdout absorption; replace-in-place with no history; a per-run audit with 90-day retention), so one table would need a type column and nullable fields for each; the shared pattern keeps each simple and the same to review |
-| X-1b | `ON DELETE RESTRICT` between two rows that one project delete cascades to | **`NO ACTION` everywhere for such pairs** (02a section 1.2; also fixes the existing `config_activations`, `promotions` and `training_runs` references) | PostgreSQL checks `RESTRICT` at once and `NO ACTION` at the end of the statement, so only `NO ACTION` lets one cascading delete pass whatever order the triggers fire in; `tests/db/test_profile_fk_cascade.py` proves it |
+| X-1b | `ON DELETE RESTRICT` between two rows that one project delete cascades to | **`NO ACTION` everywhere for such pairs** (02a section 1.2; also fixes the existing `config_activations`, `promotions` and `training_runs` references) | the documented difference is that `NO ACTION` can be deferred and `RESTRICT` cannot (review RR-6 corrected the earlier wording); the project delete does not rely on one cascade (the batched per-table delete of 4C-5, RR-7), the catalog-enumerated test decides, and a pair that still fails is declared `DEFERRABLE INITIALLY DEFERRED`; `tests/db/test_profile_fk_cascade.py` proves it |
 | X-2 | config kinds | v0.7.0 adds `serving_profile` (deployment), `cluster_profile` (project; a deployment variant only with the faces lane L5), `assist_loop_preset` (project), `near_dup_profile` (project, ND-A's revision). `attribute_profile` and `spatial_profile` are two distinct kinds, both reserved (02d section 5). The plate fields are `region_profile` body fields owned by W5e (not a new kind; the privacy mode is a table, not a document, because it holds a salt). The deployment serving profile is activated through `deployment_settings('active_serving_profile')`, not `config_activations` | `config_activations` is project-scoped by design; a deployment document needs a deployment pointer, like `local_vlm_desired` |
 | X-3 | queues | v0.7.0: `cluster` (W2.1, `cluster-worker`, CPU) and `text_read` (W5e, `text-read-worker`, no GPU); no GPU-prep queue (GPU S-11); device-scoped queues only when a family declares itself so (RW-1); `gpu_spatial` reserved | each new queue exists because a long job must not hold a `jobs` slot that request-started work needs; a queue is declared only with its consumer (no dead route) |
-| X-4 | OpenSearch fields and index-creation settings | families each in their own mapping module registered additively by 2F's registry: `cluster_*` (4F), `near_dup_*` and `content_sha256` (ND-A), `vec_<space_key>` and `boxvec_<space_key>` (ES), `capture.*` on images and `capture_taken_*` on items (W4), the plate `text_*` keys of a region box (W5e); `attr_*`, `scene_ids`, `place_embedding`, `capture.location` reserved. Creation-time settings: the plate normalizer `op_text_compact` in the items body, added to **upgraded** indexes by close, settings, open inside the upgrade window (2F-6); `index.knn = true` on images guarded by a door test (2F-7); k-NN method per field from `KnnMethodSpec` (ES-A3). `imohash` and the writer-less `phash` leave images (pending RD-43) | analysis settings are static, so a later addition would need a close and reopen or a reindex of every project; one module per family keeps W2.3 lanes file-disjoint |
+| X-4 | OpenSearch fields and index-creation settings | families each in their own mapping module registered additively by 2F's registry: `cluster_*` (4F), `near_dup_*` and `content_sha256` (ND-A), `vec_<space_key>` and `boxvec_<space_key>` (ES), `capture.*` on images and `capture_taken_*` on items (W4), the plate `text_*` keys of a region box (W5e); `attr_*`, `scene_ids`, `place_embedding`, `capture.location` reserved. Creation-time settings: the plate normalizer `op_text_compact` in the items body, added to **upgraded** indexes by close, settings, open inside the upgrade window (2F-6); `index.knn = true` on images guarded by a door test (2F-7); k-NN method per field from `KnnMethodSpec` (ES-A3). `imohash` and the writer-less `phash` leave images (pending RD-43) | analysis settings are static, so a later addition would need a close and reopen or a reindex of every project; one module per family keeps W2.3b lanes file-disjoint |
 | X-5 | the model registry: the GPU plan's engine contracts vs the embeddings plan's `embedding_model_versions` | **two grains, one contract.** `model_engines` is one built Triton engine (physical facts, `input_contract`, `output_contract`, build profile, measured memory); `embedding_model_versions` is the logical encoder catalog (weights, modalities, dimensions, text prefixes, licence). `EncoderInputSpec.image` **is** an `EngineInputContract` (one pydantic class in `src/schemas/models.py`) and must equal the ready engine's contract (ES-A1 test). Clustering and near-duplicate runs record `embedding_model = space_key` and `preprocess_id = input_spec_sha256`, not free text. The W3 gate G7 writes `engine_parity_min_cos`; a lower parity makes a new model version | one definition of every pixel input for the CPU route, the GPU route, the registry and the research; a contract diff is a gated change, not a hidden edit in two files |
-| X-6 | `gpu_devices` vs GPU reservations | `gpu_devices` (inventory by NVML UUID, written by the GPU workers at `worker_ready`) is referenced by `gpu_reservations(gpu_uuid)`; `training_runs.gpu_uuids text[]`; serving-profile servers name UUIDs; research scripts set `CUDA_DEVICE_ORDER=PCI_BUS_ID` | CUDA numbers cards fastest first, so an index is ambiguous across processes (the measured 12 GB-card trap) |
-| X-7 | job control across topics | pausable kinds: `assist_loop`, `autolabel` (pending RD-69), `embedding_reindex`; `slice_s` only for `assist_loop`; `retry_count` and cancel-is-terminal apply to every kind | G-1 is a generic claim bug, not a loop bug; pause means the same thing everywhere (RD-70) |
+| X-6 | `gpu_devices` vs GPU reservations | `gpu_devices` (inventory by NVML UUID, written by the GPU workers at start and on every heartbeat, by `serving_inventory` and by the reservation insert; review RR-9) is referenced by `gpu_reservations(gpu_uuid)`; `training_runs.gpu_uuids text[]`; serving-profile servers name UUIDs; research scripts set `CUDA_DEVICE_ORDER=PCI_BUS_ID` | CUDA numbers cards fastest first, so an index is ambiguous across processes (the measured 12 GB-card trap) |
+| X-7 | job control across topics | pausable kinds: `assist_loop`, `autolabel` (pending RD-69), `embedding_reindex`, `source_backfill`; `slice_s` for `assist_loop`, `embedding_reindex` and `source_backfill` (review RR-20); pause never revokes the task id (review RR-1); `retry_count` and cancel-is-terminal apply to every kind | G-1 is a generic claim bug, not a loop bug; pause means the same thing everywhere (RD-70) |
 | X-8 | holdout | one rule source (`occ_locks.py`): the loop never selects held-out items; clustering pools exclude them; ND-B owns the near-duplicate closure (replacing 2D-4) | one owner per rule |
 | X-9 | durable records vs events | every topic's record lives in its own tables; the 24-hour `events` rows are the UI feed only (G-3) | a 24-hour table cannot be an audit log |
-| X-10 | the 0.6.0 upgrade for research data | a step registry (2E-8): W2.3 lanes add `clustering.py` and `near_duplicates.py` as new files | file-disjoint lanes across waves |
+| X-10 | the 0.6.0 upgrade for research data | a step registry (2E-8): W2.3b lanes add `clustering.py` and `near_duplicates.py` as new files; the `source_backfill` job (ND-A, capture step W4) back-fills the exact key and the capture data of upgraded images (review RR-10) | file-disjoint lanes across waves |
 | X-11 | `project_state` keys the clustering plan removes | `region_cluster_*` markers and `last_clustering` are never ported (they become partitions); **`cluster_refresh` stays**, redefined by 4F as the beat's scheduling clock (deferral start, last attempt, backoff) with the trained count read from the serving partition | overrides one line of the clustering plan's section 11: the refresh rule's deferral and backoff need a durable per-project clock that no partition row holds, and 2F deletes the settings index that holds it today in W2.2 |
 | X-12 | prototype IDs (three plans use `P0`) | topic prefixes in program text: `gpu:`, `clu:`, `emb:`, `nd:`, `sp:`, `pt:`, `al:` ([00e](00e_research_track.md) section 1) | unambiguous references across files |
-| X-13 | set P | one rule (RD-8): a seeded local copy; public text "met / not met"; aggregates only with the owner's yes per note; never to a hosted model (RD-9) | the plans differed (met/not met, aggregates allowed, per note); the strictest common rule wins until the owner says otherwise |
-| X-14 | GPU windows and locks | prototype windows PW-1..PW-3 on idle GPU during W2-W4, research windows RG-1..RG-6 after the tag, never overlapping a program window or a live run; one lock file per card `$SCRATCH/locks/gpu<N>.lock` shared by every topic | the plans named three different lock files, which would let two topics share a card |
+| X-13 | set P | one rule (RD-8, approved): one shared seeded local copy under one manifest, removed after PW-3; public text "met / not met"; aggregates only with the owner's yes per note; never to a hosted model (RD-9) | the plans differed (met/not met, aggregates allowed, per note); the strictest common rule wins until the owner says otherwise |
+| X-14 | GPU windows and locks | short prototype runs in PW-1..PW-3 on idle GPU during W2-W4, about 10 GPU hours in total (RD-2 as answered), research windows RG-1..RG-6 after the tag only on the owner's OK, never overlapping a program window or a live run; one lock file per card `$SCRATCH/locks/gpu<N>.lock` shared by every topic | the plans named three different lock files, which would let two topics share a card |
 | X-15 | research pins | each topic's `scripts/research/<topic>/requirements*.txt` with a lock, never the product manifests; GPL packages never in a product manifest ([13](13_package_pins.md) section 3.9) | reproducibility without changing the product |
 | X-16 | capture time | the spatial plan's `capture.*` (W4) is the one capture time; the plate plan's `captured_at` (its J13) is replaced by `capture_taken_utc` on items (RD-68); the clustering signals table's `capture_time` and `burst_key` are not added | one owner per value |
-| X-17 | privacy text across W4 lanes | `b4/privacy-hardening` owns `SECURITY.md` in W4 and writes the three statements (external endpoints, location and export GPS, identity text); the capture and identity-text lanes hand their text in the plan | one writer per file per wave |
-| X-18 | VLM usage capture across W2.3 lanes | 4D owns `vlm_client.py` and makes `usage_source` a required keyword; 4D merges before the other VLM callers, which add the keyword in their own files against the fixed signature | every VLM call is counted (`vlm_usage_hourly`) with no shared file |
-| X-19 | the IVF retrain | removed from `autolabel`, the `IVF_RETRAIN` lock and the `ivf_retrain_check` beat task deleted; it is a `cluster_run(method='ivf')`; `cluster_refresh` starts `cluster_run` | one mechanism for every clustering run |
-| X-20 | the embedding re-index decode | ES-B reuses 4A's reprocess decode path (merges after 4A) and is `gpu_affinity = 'any_card'` | one decode per image (the B5 rule) |
+| X-17 | privacy text across W4 lanes | `b4/privacy-hardening` owns `SECURITY.md` in W4 and writes the three statements (external endpoints; location stored per `location_policy` and exports keeping the embedded GPS; identity text); the capture and identity-text lanes hand their text in the plan | one writer per file per wave |
+| X-18 | VLM usage capture across W2.3a lanes | 4D owns `vlm_client.py` and makes `usage_source` a required keyword; 4D merges before the other VLM callers, which add the keyword in their own files against the fixed signature | every VLM call is counted (`vlm_usage_hourly`) with no shared file |
+| X-19 | the IVF retrain | ported unchanged into `autolabel/ivf_check.py` by 4D (W2.3a), then deleted by 4F-10 (W2.3b) with the `IVF_RETRAIN` lock and the `ivf_retrain_check` beat task; it is a `cluster_run(method='ivf')`; `cluster_refresh` starts `cluster_run` | one mechanism for every clustering run |
+| X-20 | the embedding re-index decode | ES-B reuses 4A's reprocess decode path (4A merged in W2.3a) and is `gpu_affinity = 'any_card'` | one decode per image (the B5 rule) |
 
 ### 5.2 Every research seam and its lane
 
@@ -479,17 +481,17 @@ change, 5.5).
 
 | Seam | Lane |
 |---|---|
-| (A) capture metadata at ingest | W4 `b4/capture-metadata` CM-1..CM-3 |
+| (A) capture metadata at ingest, and the coordinates under `location_policy` (RD-51 reversed) | W4 `b4/capture-metadata` CM-1..CM-4 |
 | (B) `jobs.kind` without a `CHECK` | already in 02a (kept) |
 | (B) images `index.knn = true` door | 2F-7 |
 | (B) delete removes an unlisted area | 1E-5 |
 | (B) `op_scope_allows` for child tables | already in 02a (kept) |
 | (B) additive, versioned mapping registry | 2F-8 (its first post-baseline user is `capture_fields.py`) |
 | (B) fixed region-box keys in one dataclass | kept; `tests/test_no_legacy_region_scalars.py` |
-| (B) explicit wire fields, location never serialized | CM-2 (the location canary) |
+| (B) explicit wire fields; coordinates only in the image `capture` block under the location policy | CM-2 (the location canary), CM-4 |
 | (B) queue consumer test covers profiles | already in 02b section 7.3 (kept) |
 | L-X1 export orientation | 5b-D1 (07b amendment) |
-| L-X2 export GPS | CM-4 (pending RD-54) |
+| L-X2 export GPS | **not taken** (owner, RD-54): exports keep the embedded GPS; `SECURITY.md` says so |
 | (C) attribute signals | **reserved** (02d section 5), RW-5 L-A1 |
 | (C) scenes and reconstructions | **reserved** (02d section 5), RW-5 L-SP1 |
 
@@ -499,7 +501,7 @@ change, 5.5).
 |---|---|
 | 5.1 per-box fields | W5e `w5e/region-text-fields` PT-F1, PT-F4 |
 | 5.1 index analysis settings (creation time) | 2F-6 (with the upgraded-index close and open, X-4) |
-| 5.2 tables | W5e store lane PT-S1 (`0004_region_text`, pending RD-4) |
+| 5.2 tables | W5e store lane PT-S1 (`0004_region_text`, approved, RD-4) |
 | 5.3 job kinds and the `text_read` queue | W5e jobs lane PT-J1..PT-J3 |
 | 5.4 queries | PT-F3 |
 | 5.5 `region_profile` fields | **moved** from 2C to the W5e fields lane (5.5) |
@@ -532,18 +534,18 @@ The rows of section 2 above are updated for #40, #42, #45, #67, #84, #219, #220,
 
 | Issue | v0.7.0 (wave and lane) | After the tag |
 |---|---|---|
-| #346 clustering | 1F (tables), W2.3 4F | RW-3 (`clu:CL-0..CL-9`, L3-L6) |
+| #346 clustering | 1F (tables), W2.3b 4F | RW-3 (`clu:CL-0..CL-9`, L3-L6) |
 | #347 encoder evaluation | ES-A..ES-C (the registry it lands on) | RW-2 `emb:EP-4` |
 | #348 spatial | W4 `b4/capture-metadata` | RW-5 (`sp:P-4..P-9`, L-SP1 on a GO) |
-| #365 embedding swap | ES-A (W2.2), ES-B (W2.3), ES-C (W2.4) | RW-2, v0.8.0 F9 reduced |
+| #365 embedding swap | ES-A (W2.2), ES-B (W2.3b), ES-C (W2.4) | RW-2, v0.8.0 F9 reduced |
 | #398 Z5 roots | the partition seam (1F, 4F) and the loop's partition reader (4D) | RW-6 `al:AL6`, `feat/loop-z5i` |
 | #400 attribute signals | none (reserved DDL) | RW-5 L-A1 |
 | #401 plate text | 1C-9, 2F-6, W4 identity-text lane, W5c `rec_char_min`, **W5e** | - |
 | #406 judge calibration | none | RW-3 `clu:CL-1` |
-| #416 near-duplicates | ND-A, ND-B (W2.3), ND-C (W4); `nd:P0..P2` in PW-1, PW-3 | RW-4 (`nd:P3..P7`, ND-E) |
+| #416 near-duplicates | ND-A, ND-B (W2.3b), ND-C (W4); `nd:P0..P2` in PW-1 | RW-4 (`nd:P3..P7`, ND-E) |
 | #435 frame target | none | RW-2 `emb:EP-2` decides |
 | #436 `group_by=image` | the `space` parameter it composes with (ES-C3) | v0.8.0 F2 |
-| #466 loop pause, events, budgets | W2.3 4D-2..4D-7, 4E | RW-6, v0.8.0 `feat/loop-review` |
+| #466 loop pause, events, budgets | W2.3a 4D-2..4D-7, W2.3b 4E | RW-6, v0.8.0 `feat/loop-review` |
 | #473 near-duplicate data quality | part a ND-A, part b ND-C1, part c ND-B1 | - |
 | #84 wheel example | none | RW-6 `al:AL5`, v0.8.0 F8 |
 | #40 decode once | W5b (reads `gpu:PR-1..PR-4`; L-X1 in 5b-D1) | - |
@@ -561,16 +563,16 @@ The rows of section 2 above are updated for #40, #42, #45, #67, #84, #219, #220,
 
 | Finding | Source | Lane and red test |
 |---|---|---|
-| lane 2D-4 cannot work: today's crop groups never contain a validated or held-out item, so a freeze that reads the group fields moves nothing | near-duplicates plan C8 | moved to W2.3 ND-B1: `tests/near_duplicates/test_holdout_near_duplicates.py` (a validated item whose near-duplicate crop is in the cohort's leak group ends held out and counted) |
+| lane 2D-4 cannot work: today's crop groups never contain a validated or held-out item, so a freeze that reads the group fields moves nothing | near-duplicates plan C8 | moved to W2.3b ND-B1: `tests/near_duplicates/test_holdout_near_duplicates.py` (a validated item whose near-duplicate crop is in the cohort's leak group ends held out and counted) |
 | G-1: pause and resume spend attempts (the claim refuses at `attempt >= 3`) | auto-label plan section 2 | 3A-12: `tests/db/test_pause_resume_cycles.py`; end to end `tests/curation/test_assist_loop_pause_cycles.py` (4D) |
 | G-2: one long loop holds the only `assist_loop` consumer and starves other projects | auto-label plan section 2 | 3A-13 (`Yield`, slices): `tests/tasks/test_two_project_slices.py`; 4D-6: `tests/curation/test_assist_loop_two_projects.py` |
 | G-3: the loop's durable record cannot live in 24-hour events or in `jobs.params` | auto-label plan section 2 | 1F-1 (the loop tables), 4D-2: `tests/curation/test_assist_loop_record_in_tables.py`, `test_assist_loop_budget_sql.py` |
 | exports ignore EXIF orientation 2-8 on the resize and crop path | spatial plan section 2.1 | 5b-D1 (L-X1): `tests/curation/test_export_orientation.py` |
-| byte-copy exports keep embedded GPS | spatial plan section 9 | W4 CM-4 (L-X2, pending RD-54): `tests/curation/test_export_strips_gps.py` |
+| byte-copy exports keep embedded GPS | spatial plan section 9 | **kept as today by the owner** (RD-54, 2026-11-04): no strip task; RF-84 checks the exported copy keeps its GPS block |
 | the in-process text encoders are dead code under D-69 | embeddings plan ES-E | B4 4B-7: `tests/curation/test_search_requires_triton_text.py`; retired variables refuse startup |
 | `cluster_id` is overloaded (index assignment, class id below 10000, residual offset, review state) | clustering plan section 1 | 4F-6 splits it into the assigner, the versioned partition and the review state: `tests/test_no_cluster_id_namespace.py`; 4F-2 `tests/clustering/test_carry_over.py` (ARI 1.000 on permuted input, 0.306 today) |
 | a `RESTRICT` foreign key inside one project's cascade can fail the project delete | found by this integration pass | 02a section 1.2: `tests/db/test_profile_fk_cascade.py` (1F-4) |
-| the plate normalizer must exist on upgraded indexes too (analysis settings are static) | found by this integration pass | 2F-6: `tests/opensearch/test_items_text_normalizer.py` (the 0.6.0 fixture closes, updates and reopens each items index once) |
+| the plate normalizer must exist on upgraded indexes too (analysis settings are static) | found by this integration pass | 2F-6, kept by the owner (Q-A) and made safe and bounded (review RR-8: per index, dry run, progress, `try/finally` reopen, stated downtime): `tests/opensearch/test_items_text_normalizer.py`, `tests/opensearch/test_analysis_settings_failure.py` |
 | a deployment-wide serving profile cannot use the project-scoped activation table | found by this integration pass | 2C-7: `deployment_settings('active_serving_profile')` with `expected_revision`; `tests/config_store/test_research_kinds.py` |
 | a composite foreign key with a NULL `project_id` checks nothing, so core-face memberships could dangle | found by this integration pass | 1F-4: `tests/db/test_cluster_memberships_fk_null_project.py` |
 
@@ -579,9 +581,27 @@ The rows of section 2 above are updated for #40, #42, #45, #67, #84, #219, #220,
 | Seam | Decision | Reason |
 |---|---|---|
 | GPU S-12: device-scoped queue names derived from `gpu_devices` | not in 0.7.0; `make_app` takes the UUID and records it | no family is device-scoped in 0.7.0, so derivation code would have no reader (no dead code); RW-1's two-card lane adds it |
-| GPU S-6: `openprocessor gpu plan` as a second writer of `gpu_devices` | not taken; the GPU workers are the writer, `gpu plan` reads | one writer per table; the CLI is bash and would need its own database client |
+| GPU S-6: `openprocessor gpu plan` as a second writer of `gpu_devices` (also review RR-9's suggestion) | not taken; the writers are the GPU workers (every NVML-visible card at start, `seen_at` on every heartbeat), `op.periodic.serving_inventory` (every card Triton reports) and the reservation insert (its own card, same transaction); `gpu plan` reads | the CLI is bash and would need its own database client; the three Python writers cover RR-9's two gaps (a long-lived worker, a card with no worker) |
 | plate 5.5: "room in the `region_profile` body model in 2C now" | moved to the W5e fields lane | fields with no reader until W5e would be dead code in W2.2; W5e owns the model then |
 | plate J13: a separate `captured_at` field | replaced by the W4 capture fields (X-16, RD-68) | one owner per value |
 | clustering 11: drop `project_state('cluster_refresh')` | kept as the beat's clock (X-11) | deferral and backoff need a per-project clock no partition row holds |
 | near-duplicates 5.1: `EXISTS` RLS on groups and members | denormalized `project_id` (X-1) | members grow with every image and item per run; the constant-InitPlan policy keeps a 1M-row `COPY` cheap |
 | auto-label 5.1 and plate 5.2: profile references `ON DELETE SET NULL` to `config_documents` | composite reference to `config_revisions`, `NO ACTION` (X-1, X-1b) | a run must name the exact revision that drove it, and one project delete must pass |
+
+### 5.6 The final pass: the research review and the owner answers (2026-11-04)
+
+The independent review [00e_research_review.md](00e_research_review.md) found RR-1..RR-24; every
+finding is answered in its "Planner responses" section (fixed with the file, lane and test, or
+rebutted with the reason). The owner's answers of the same day changed the plan as follows.
+
+| Change | Where | Test or check |
+|---|---|---|
+| W2.3 split into W2.3a (5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C: ports of today's behaviour) and W2.3b (4F, ND-A, ES-B, then ND-B, then 4E) (RR-13, Q-A) | [03b](03b_b2_w2_job_families.md) header and sections 2-8; [00_master_plan.md](00_master_plan.md) W2.3a and W2.3b | each part closes with its own part check; every W2.3b cross-lane call is against a signature fixed in 03b |
+| the research pieces W2.3a lanes used to call moved to W2.3b: the `near_dup` scorer deletion and every `enqueue_pending` call (ND-A, was 4A-6, 4B-4, 4C), person grouping as a partition (4F-9, was 4C-7), the IVF retrain and the loop's cluster reader (4F-10, was 4D-1, 4D-7) | 03b | `tests/curation/test_no_near_dup_scorer.py`, `tests/test_persons_cluster_partition.py`, `tests/curation/test_assist_loop_reads_partition.py` |
+| every seam kept, the plate normalizer included; its upgrade step safe and bounded (Q-A, RR-8, RR-12 rebutted) | [02c](02c_migration_ops_tests.md) section 2.2; [03d](03d_b2_s2_control_data.md) 2F-6 | `tests/opensearch/test_analysis_settings_failure.py` |
+| GPS coordinates stored now under `project_settings.location_policy` (default `store`; RD-51 reversed); exports keep the embedded GPS (RD-54); the export strip task and ExifTool in the jobs image dropped | [02a](02a_postgres_schema.md) section 4; [02d](02d_research_seam_schema.md) section 1; [05](05_b4_stateless_api.md) CM-2..CM-4; [06](06_release_acceptance.md) RF-84; [08](08_environment_and_setup.md); [10](10_standards_and_libraries.md) | `tests/curation/test_location_policy.py`; the location canary |
+| short tiered prototype runs, about 10 GPU hours before the tag (RD-2, RD-7); cuts: `gpu:PR-3`, `PR-4` (5b-G4 not opened), `PR-7..PR-9`, `pt:P6`, the SSCD arm of `nd:P2`, `nd:P3..P7`, every `emb:`/`clu:` GPU run, `sp:P-2..P-9`, `al:AL1..AL6` | [00e_research_track.md](00e_research_track.md) sections 2-4; [07b](07b_b5_decode_once.md) 5b-G4; [11](11_risks_cleanup_host.md) rules 9, 10 | the coordinator's GPU ledger |
+| datasets: one register; UFPR-ALPR, LPLC and RodoSol skipped (RD-10, Q-C, RR-11) | 00e section 4.1 | each prototype's registration commit records the terms |
+| PP-OCRv6 as one short reader comparison against PP-OCRv5 (Q-B, RR-5) | 00e `pt:P1`; [07c](07c_b5_crops_ocr_faces.md); [03g](03g_w5e_plate_text.md); 10 | `pt:P1`'s registered bar |
+| the `cluster` queue and worker decided (RD-25, Q-D) | [03a](03a_b2_w1_queue_infra.md) 1B-8, 1C-8 | `tests/tasks/test_planned_modules_included.py` |
+| owner answers recorded | [00d](00d_owner_questions.md) section 0; [00_index.md](00_index.md) section 6 | 69 questions stay open; none blocks coding |

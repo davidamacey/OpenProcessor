@@ -130,7 +130,7 @@ The audit codes used most often in the table above:
 | OS-n | An OpenSearch query or index fix |
 | U-Step n | A step of the Ultralytics upgrade |
 | Q-Phase n | A phase of the job-queue move |
-| W0..W6 | The program's waves: one integration branch and one full test sweep each; B2's wave W2 has four parts W2.1-W2.4, each closed by a short part check ([00_master_plan.md](00_master_plan.md)) |
+| W0..W6 | The program's waves: one integration branch and one full test sweep each; B2's wave W2 has five parts W2.1, W2.2, W2.3a, W2.3b and W2.4, each closed by a short part check ([00_master_plan.md](00_master_plan.md)) |
 
 Approved by the owner on 2026-11-04: Celery 5.6 (D-17); Valkey as the broker (D-18); PostgreSQL
 for all control data (D-39); OpenSearch for search data (D-40); every long job on Celery, training
@@ -314,8 +314,20 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | MQ-7 | #465 typed response models (BA-6): CPU lanes during W5a-W5c, merged into the B5 sub-batch PRs | approved 2026-11-04 (owner decision 7) | CPU lanes during W5a-W5c | before W5a | [05](05_b4_stateless_api.md) section 13 |
 | MQ-8 | Fold the GPU-15 leftover (refuse an undeclared region head at profile validation) into B3-D3 | approved 2026-11-04 (owner) | yes: part of B3-D3 | W3 | [04](04_b3_ultralytics_one_version.md) B3-D3 |
 | Q-3 / ENV-18 | Flower: loopback port 4613, the gateway subpath, or both? | approved 2026-11-04 (owner) | both: port 4613 on loopback and the gateway subpath, only when the `monitoring` profile runs | B2 stage 1 | [08](08_environment_and_setup.md) ENV-18 |
-| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | approved 2026-11-04 (owner decision 9); **an amendment is proposed** by RD-2 (the decision-feeding prototypes on idle GPU during W2-W4) | after the tag; their already-decided items stay folded into the rewrite | before W5a | [00_master_plan.md](00_master_plan.md) section 10 |
-| RD-1..RD-80 | The research plans' owner questions, de-duplicated (112 raw, 80 after merging); eight to answer before coding (RD-1, RD-2, RD-4, RD-7, RD-8, RD-10, RD-23, RD-51) | open (asked 2026-11-04) | as in the list; the plan follows each recommendation and marks the place "pending RD-n"; each answer becomes its own row here | RD-1, RD-2, RD-4, RD-7, RD-8, RD-10, RD-23, RD-51 before W2.1; the rest at the wave named | [00d_owner_questions.md](00d_owner_questions.md) |
+| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | approved 2026-11-04 (owner decision 9); **amended 2026-11-04 by RD-2**: short decision-feeding prototype runs on idle GPU during W2-W4, about 10 GPU hours in total | after the tag for everything else, each post-tag window on the owner's OK; their already-decided items stay folded into the rewrite | before W5a | [00_master_plan.md](00_master_plan.md) section 10; [00e_research_track.md](00e_research_track.md) |
+| RD-1 | Build every research seam into the rebuild now | **approved 2026-11-04** (owner), as recommended; the review's deferrals rejected (Q-A), the plate-text index normalizer included, its upgrade close and reopen made safe and bounded; W2.3 split into W2.3a and W2.3b "to do in the right order and waves" | every seam now | W2.1 | [00d](00d_owner_questions.md) section 0; [03b](03b_b2_w2_job_families.md) |
+| RD-2 | Prototypes on idle GPU during W2-W4 | **approved 2026-11-04, modified**: "we want to implement what we can of the research and prototypes, but we do not want long GPU hours"; short tiered runs on small seeded samples with early stop, no long sweeps, today's approach the default, about 10 GPU hours in total before the tag, more only on the owner's OK | short runs only | W2.1 | [00e_research_track.md](00e_research_track.md) section 2.1 |
+| RD-4 | Plate tables in their own revision | **approved 2026-11-04**: `0004_region_text` in W5e | as recommended | W2.1 | [03g](03g_w5e_plate_text.md) |
+| RD-5 | Capture metadata at ingest in W4 | **approved 2026-11-04** with every seam (RD-1) | as recommended | W4 | [05](05_b4_stateless_api.md) section 6c |
+| RD-7 | Prototype code tracked with exact pins and a lock file | **approved 2026-11-04** | as recommended | PW-1 | 00e |
+| RD-8 | Set P local only, "met / not met" in public text | **approved 2026-11-04**; one shared seeded copy | as recommended | PW-1 | [11](11_risks_cleanup_host.md) rule 10 |
+| RD-10 | The research datasets, local only, aggregates with citations | **approved 2026-11-04, but skip UFPR-ALPR and LPLC** (freely downloadable plate sets plus set P; no academic request, review Q-C) | the dataset register | PW-1 | 00e section 4.1 |
+| RD-23 | Cluster memberships in PostgreSQL | **approved 2026-11-04** | as recommended | W2.1 | [02d](02d_research_seam_schema.md) section 2.2 |
+| RD-25 | The `cluster` queue and `cluster-worker` | **decided 2026-11-04** (review Q-D) | CPU in v0.7.0 | W2.1 | [03a](03a_b2_w1_queue_infra.md) 1B-8 |
+| RD-51 | GPS coordinates | **reversed 2026-11-04: store them now**, behind a per-project `location_policy` (default `store`) in the W2.1 schema | store, policy per project | W2.1 | [02a](02a_postgres_schema.md) section 4 |
+| RD-54 | Exported copies and their GPS | **approved 2026-11-04: exports keep the embedded GPS, as today**; no strip task | keep | W4 | 05 CM-4 |
+| Q-B (research review) | PP-OCRv6 as a reader candidate | **approved 2026-11-04**: one short comparison against PP-OCRv5 in the plate-text and B5c OCR work | as recommended | PW-2 | [07c](07c_b5_crops_ocr_faces.md) |
+| RD-3, RD-6, RD-9, RD-11..RD-80 (the rest) | The remaining research owner questions | open: 69 rows, none blocks coding | the plan follows each recommendation and marks the place "pending RD-n"; each answer becomes its own row here | at the wave named | [00d_owner_questions.md](00d_owner_questions.md) |
 | MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | approved 2026-11-04 (owner decision 10) | yes | W6 | [07](07_b5_overview.md) section 11 |
 | OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [07](07_b5_overview.md) section 9 |
 | OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
@@ -437,10 +449,11 @@ Config added or removed per batch (env keys, compose services, installer steps) 
   before B2); CC-10 (measured before B4) (N14).
 - #369 API authentication stays blocked; B2 adds no public surface (the broker has no published
   port).
-- Research and platform breadth: the research **seams** are in this program (pending RD-1:
+- Research and platform breadth: the research **seams** are in this program (approved, RD-1:
   [02d](02d_research_seam_schema.md), the lanes listed in [00b](00b_traceability.md) section 5.2),
-  registration-plate text lands as wave W5e (#401, pending RD-3), and the decision-feeding
-  prototypes run on idle GPU in W2-W4 (pending RD-2). The **experiments and their landings** are
+  registration-plate text lands as wave W5e (#401, pending RD-3; its revision approved, RD-4), and
+  the decision-feeding prototypes run as short runs on idle GPU in W2-W4, about 10 GPU hours in
+  total (approved as short runs, RD-2). The **experiments and their landings** are
   the post-tag research waves RW-1..RW-6 ([00e](00e_research_track.md)): #346, #347, #348, #365,
   #398, #400, #406, #416, #435, #436, #466 (remainder), #84, #231, #403. Still out of this program:
   #8 (parked), #366 (done), #367, #370, #402 (v0.8.0 features)
@@ -614,6 +627,7 @@ lives now:
 | program set 5 (review fixes) | 2026-11-04 | the independent review [00c_plan_review.md](00c_plan_review.md) applied (R-1..R-38; planner responses in its section 5); the owner's answers of 2026-11-04 recorded (D-64..D-68, the open B2 recommendations as a block, MQ-1, 2, 5, 6, 7, 9, 10); OI-1, OI-2 opened; pins part A became its own wave W2.0 |
 | program set 6 (re-check fixes) | 2026-11-04 | the re-check of [00c_plan_review.md](00c_plan_review.md) section 6 applied (RC-1..RC-13; responses in its section 5.1); D-64 replaced by D-69 (every service requires PostgreSQL, Valkey and OpenSearch, no degraded mode); OI-1, OI-2, MQ-3, MQ-4, MQ-8 and Q-3 answered by the owner; the open list reduced to the B3, B4, B5 and tag kick-off questions |
 | research integration | 2026-11-04 | the seven research plans folded into the program on `research/master`: [02d](02d_research_seam_schema.md) (research-seam tables), [03g](03g_w5e_plate_text.md) (wave W5e), [00d](00d_owner_questions.md) (80 owner questions), [00e](00e_research_track.md) (prototype track and research waves); new lanes 1F, ES-A, ES-B, ES-C, 4F, ND-A, ND-B, ND-C, `b4/capture-metadata`, `b4/identity-text-privacy`, `tools/make-gate`, `b2/frontend-spaces`; 2D-4 moved to ND-B; the `NO ACTION` foreign-key rule (02a 1.2); resolutions X-1..X-20 and the issue map in [00b](00b_traceability.md) section 5; F10 (S3 storage) in the v0.8.0 plan |
+| research final pass | 2026-11-04 | the research review [00e_research_review.md](00e_research_review.md) merged and every finding answered in its Planner responses (RR-1..RR-24); the owner answers of 2026-11-04 recorded (section 6: RD-1, RD-2, RD-4, RD-5, RD-7, RD-8, RD-10, RD-23, RD-25, RD-51, RD-54, review Q-A..Q-D); W2.3 split into W2.3a and W2.3b; GPS stored per `location_policy`; prototypes cut to short runs, about 10 GPU hours before the tag ([00b](00b_traceability.md) section 5.6) |
 
 ## 16. Corrections found while splitting
 
