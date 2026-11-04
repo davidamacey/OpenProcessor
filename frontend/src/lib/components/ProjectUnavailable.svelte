@@ -69,6 +69,7 @@
     >
     {#if fallback}
       <a
+        data-sveltekit-preload-data="tap"
         href={resolve(projectHref('/dashboard', fallback.slug))}
         class="rounded border border-zinc-700 px-3 py-1.5 text-sm hover:border-zinc-500"
         >Open {fallback.display_name}</a
