@@ -159,7 +159,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
 def test_process_chunk_reports_which_crop_gave_which_answer(world: World) -> None:
     ids = sorted(world.truth)
     vlm = FakeVlm(world.truth, answers={ids[0]: None})
-    ctx = class_context(vlm, ClassWriteGuard('assist_run'), revision=None)
+    ctx = asyncio.run(class_context(vlm, ClassWriteGuard('assist_run'), revision=None))
     meta = RunMeta('run1', CREATED_AT, 'fake-vlm@1', 'fake-vlm', 'generic', None)
 
     out = asyncio.run(
