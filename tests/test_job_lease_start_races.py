@@ -32,10 +32,10 @@ def _widen_check(module: Any, name: str = '_is_busy') -> None:
     all eight see an idle job and only the lease decides who starts."""
     real = getattr(module, name)
 
-    def slow() -> bool:
+    def slow() -> Any:
         busy = real()
         time.sleep(0.5)
-        return bool(busy)
+        return busy
 
     setattr(module, name, slow)
 
@@ -94,6 +94,17 @@ async def _start_probe(client: Any) -> str:
     return 'started'
 
 
+async def _start_reprocess(client: Any) -> str:
+    from src.services.curation import reprocess_job
+
+    _widen_check(reprocess_job, 'running_job_ids')
+    try:
+        await reprocess_job.create_job(client, request={}, scopes=['embed'], image_ids=['a'])
+    except reprocess_job.ReprocessBusyError:
+        return 'busy'
+    return 'started'
+
+
 async def _start_region_job(client: Any, which: str) -> str:
     """The region jobs return a snapshot either way, so a run counts as started when its
     own body ran in this process."""
@@ -129,6 +140,7 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'item_scores': (_start_item_scores, {'OP_SCORES_STATE_DIR': 'scores'}),
     'selection': (_start_selection, {'OP_SELECT_JOBS_DIR': 'selection'}),
     'embedding_viz': (_start_embedding_viz, {'OP_VIZ_JOBS_DIR': 'viz'}),
+    'reprocess': (_start_reprocess, {'OP_REPROCESS_JOBS_DIR': 'reprocess'}),
     'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),
     'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
     'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),
