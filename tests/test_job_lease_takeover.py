@@ -6,10 +6,10 @@ import threading
 
 import pytest
 from _fake_lease_opensearch import FakeLeaseOpenSearch
-from opensearchpy.exceptions import ConnectionError as OSConnectionError
 
 from src.clients import job_lease
 from src.domain.job_lease import Acquired, Busy, HeldLease, Lost, Renewed
+from src.utils.upstream_errors import UpstreamError
 
 
 pytestmark = pytest.mark.real_lease_io
@@ -97,9 +97,9 @@ async def test_takeover_expired_leaves_a_fresh_lease_alone() -> None:
 @pytest.mark.asyncio
 async def test_a_transport_error_on_get_raises_instead_of_proceeding() -> None:
     client = _client()
-    client.fail_get = OSConnectionError('N/A', 'down', Exception('down'))
+    client.fail_get = ConnectionError('down')
 
-    with pytest.raises(OSConnectionError):
+    with pytest.raises(UpstreamError):
         await job_lease.acquire(client, 'probe', None, 'j1')
 
 

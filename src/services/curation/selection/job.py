@@ -41,7 +41,9 @@ from src.config.curation_accessors import get_curation_config
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
+from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
 
 
 logger = get_logger(__name__)
@@ -120,7 +122,7 @@ def get_state() -> dict[str, Any]:
     return state.to_dict()
 
 
-def start_job(
+async def start_job(
     opensearch: AsyncOpenSearch,
     *,
     index: str,
@@ -130,20 +132,31 @@ def start_job(
     scope: dict[str, Any],
     max_n: int,
 ) -> dict[str, Any]:
-    """Write 'running' state synchronously, then schedule the background
-    task. Raises ``RuntimeError`` if a run is already in flight — the
-    router surfaces this as HTTP 409 (same contract as
-    ``crop_scores.job.start_job``).
+    """Take the selection lease, write 'running' state, then schedule the background task.
+    Raises ``RuntimeError`` if a run is already in flight -- the router surfaces this as
+    HTTP 409 (same contract as ``item_scores.job.start_job``).
     """
+    busy = RuntimeError('selection job already in progress')
     if _is_busy():
-        raise RuntimeError('selection job already in progress')
-    _job().clear_signals()
-
+        raise busy
     job_id = uuid.uuid4().hex
-    state = _JobState(job_id=job_id, status='running', k=k, scope=scope, started_at=time.time())
-    _job().write(state.to_dict())
+    beat = await acquire_heartbeat(
+        opensearch, LeaseKind.SELECTION, None, job_id, job=_job(), busy=lambda _holder: busy
+    )
+    try:
+        _job().clear_signals()
+        state = _JobState(job_id=job_id, status='running', k=k, scope=scope, started_at=time.time())
+        _job().write(state.to_dict())
+    except BaseException:
+        await beat.release(opensearch)
+        raise
+    beat.start()
     _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
-        run_selection_job(job_id, opensearch, index, query, k, seed_crop_id, max_n)
+        run_leased(
+            beat,
+            opensearch,
+            run_selection_job(job_id, opensearch, index, query, k, seed_crop_id, max_n),
+        )
     )
     return state.to_dict()
 

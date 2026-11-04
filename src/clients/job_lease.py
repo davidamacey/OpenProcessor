@@ -11,8 +11,9 @@ by id needs no refresh (https://docs.opensearch.org/latest/api-reference/documen
 a lease is never read with ``search``.
 
 Only the three ``_get`` / ``_create`` / ``_replace`` functions touch the client. A 409 on
-acquire is an answer (:class:`Busy`), never a retry case; any other error propagates, so a
-start whose OpenSearch is down refuses instead of proceeding without a lease.
+acquire is an answer (:class:`Busy`), never a retry case; any other OpenSearch error becomes
+an :class:`~src.utils.upstream_errors.UpstreamError` (HTTP 503), so a start whose OpenSearch
+is down refuses instead of proceeding without a lease.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from opensearchpy.exceptions import NotFoundError
+from opensearchpy.exceptions import NotFoundError, OpenSearchException
 
 from src.config.curation_accessors import idx
 from src.config.curation_roles import IndexRole
@@ -42,6 +43,7 @@ from src.domain.job_lease import (
     next_generation,
     owner_id,
 )
+from src.utils.upstream_errors import UpstreamError
 
 
 if TYPE_CHECKING:
@@ -130,7 +132,10 @@ async def _claim(
     did = doc_id(kind, scope)
     who = owner or owner_id()
     now = time.time()
-    found = await _get(client, did)
+    try:
+        found = await _get(client, did)
+    except (OpenSearchException, OSError) as exc:
+        raise UpstreamError('opensearch', 'opensearch_unavailable') from exc
     try:
         if found is None:
             doc = _document(str(kind), scope, job_id, who, 1, now, ttl_s)
@@ -144,9 +149,9 @@ async def _claim(
             generation = next_generation(current)
             doc = _document(str(kind), scope, job_id, who, generation, now, ttl_s)
             seq_no, term = await _replace(client, did, doc, cur_seq, cur_term)
-    except Exception as exc:
+    except (OpenSearchException, OSError) as exc:
         if not is_conflict(exc):
-            raise
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from exc
         return Busy(None, None)
     return Acquired(HeldLease(str(kind), scope, job_id, who, generation, seq_no, term, now, ttl_s))
 

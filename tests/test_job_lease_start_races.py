@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import multiprocessing as mp
 import os
+import time
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -26,6 +27,19 @@ pytestmark = pytest.mark.real_lease_io
 PROCS = 8
 
 
+def _widen_check(module: Any, name: str = '_is_busy') -> None:
+    """Hold every process between its busy check and its claim, as a slow request would, so
+    all eight see an idle job and only the lease decides who starts."""
+    real = getattr(module, name)
+
+    def slow() -> bool:
+        busy = real()
+        time.sleep(0.5)
+        return bool(busy)
+
+    setattr(module, name, slow)
+
+
 async def _idle(*_: object, **__: object) -> None:
     await asyncio.sleep(60)
 
@@ -34,6 +48,7 @@ async def _start_item_scores(client: Any) -> str:
     from src.services.curation.item_scores import job
 
     job.run_scoring_job = _idle  # type: ignore[assignment]
+    _widen_check(job)
     try:
         await job.start_job(client, ['x'])
     except RuntimeError:
@@ -41,8 +56,34 @@ async def _start_item_scores(client: Any) -> str:
     return 'started'
 
 
+async def _start_selection(client: Any) -> str:
+    from src.services.curation.selection import job
+
+    job.run_selection_job = _idle  # type: ignore[assignment]
+    _widen_check(job)
+    try:
+        await job.start_job(client, index='i', query={}, k=1, seed_crop_id=None, scope={}, max_n=10)
+    except RuntimeError:
+        return 'busy'
+    return 'started'
+
+
+async def _start_embedding_viz(client: Any) -> str:
+    from src.services.curation import embedding_viz
+
+    embedding_viz.run_projection_job = _idle  # type: ignore[assignment]
+    _widen_check(embedding_viz)
+    try:
+        await embedding_viz.start_job(client, scope='residual')
+    except RuntimeError:
+        return 'busy'
+    return 'started'
+
+
 STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'item_scores': (_start_item_scores, {'OP_SCORES_STATE_DIR': 'scores'}),
+    'selection': (_start_selection, {'OP_SELECT_JOBS_DIR': 'selection'}),
+    'embedding_viz': (_start_embedding_viz, {'OP_VIZ_JOBS_DIR': 'viz'}),
 }
 
 

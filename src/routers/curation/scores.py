@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from src.config.env import env_bool
 from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation.index_bootstrap import ensure_indexes
+from src.utils.upstream_errors import UpstreamError
 
 
 def _scores_enabled() -> bool:
@@ -60,6 +61,8 @@ async def scores_compute(
 
     try:
         state = await scores_job.start_job(opensearch, requested)
+    except UpstreamError:
+        raise
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return state

@@ -26,6 +26,7 @@ from src.services.curation.selection.pool_fetch import (
     fetch_pool_embeddings,
     l2_normalize,
 )
+from src.utils.upstream_errors import UpstreamError
 
 
 # =============================================================================
@@ -159,7 +160,7 @@ async def select_diverse(
     from src.services.curation.selection import job as select_job
 
     try:
-        state = select_job.start_job(
+        state = await select_job.start_job(
             opensearch,
             index=items_index(),
             query=query,
@@ -168,6 +169,8 @@ async def select_diverse(
             scope=payload.scope.model_dump(),
             max_n=job_max_n(),
         )
+    except UpstreamError:
+        raise
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return JSONResponse(status_code=202, content=state)
