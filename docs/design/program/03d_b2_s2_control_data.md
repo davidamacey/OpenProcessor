@@ -5,8 +5,9 @@
 | Status | plan, not started |
 | Depends on | stage 1 merged into `int/b2-control-plane` ([03a](03a_b2_w1_queue_infra.md)) |
 | Design | [02](02_control_plane_database.md) sections 3-4, [02a](02a_postgres_schema.md) sections 2-4 and 6, [02c](02c_migration_ops_tests.md) sections 2-3 |
-| Lanes | 2A, 2B, 2C, 2D, 2E in parallel; then 2F |
-| Merge order | 2A, 2B, 2C, 2D, 2E, 2F |
+| Lanes | 2A, 2B, 2C, 2D, 2E and ES-A in parallel; then 2F |
+| Merge order | 2A, 2B, 2C, 2D, 2E, ES-A, 2F |
+| Research seams | folded 2026-11-04, pending owner question RD-1 ([00d](00d_owner_questions.md)): 2A-7, 2C-7, 2D-5, 2E-8, 2F-6..2F-8, the new lane ES-A (embedding registry), and **2D-4 moved out** to lane ND-B in W2.3 (reason below) |
 | Runs alongside | stage 3 lanes code from the stage-1 head in parallel (disjoint files) and merge after this stage |
 | Compose project | none in the lanes (unit and `db` tests only) |
 
@@ -37,6 +38,7 @@ tests where they check a constraint, R-14).
 | 2A-4 | lifecycle routes over the repository: create (Postgres first, then the OpenSearch indexes; `building` until both exist; a failure leaves `failed`), rename and describe, archive, delete (dry run, confirm; the finish still launched as today until stage 4C) | `tests/projects/test_lifecycle_routes_pg.py`: create then GET; a concurrent PATCH with a stale revision is 409 | the existing lifecycle tests |
 | 2A-5 | pause: `POST .../pause` and `.../resume` write `projects.paused_at`; the workers (`fairness.py`) read the project row; `pipeline_paused.flag` deleted | `tests/projects/test_pause_pg.py`: pause makes the worker skip the project; no flag file written | resume clears it |
 | 2A-6 | `project_context.py`: storage prefix from `projects.storage_prefix` (stage 1's storage keys); the `.project` marker stamping of directories kept only where a directory is still created | `tests/projects/test_project_context_pg.py` | - |
+| 2A-7 | research embeddings 5.2: the create transaction inserts the three `pe_core_l14_336_v1` spaces (`item` on `pe_embedding` with state `embedding_state`; `box` nested `region_box_embeddings`, leaf `embedding`; `frame` on the images `pe_embedding`, no state field), all `primary` and `ready`, through 1F's ORM model (ES-A's repository reads them; no ordering between the two lanes) | `tests/projects/test_create_default_spaces.py` (`db`): a created project has exactly three primary ready spaces | the existing create test |
 
 **2A done when:** `rg -n "op_projects|OP_PROJECTS_INDEX|projects_revision'|bind_registry_admin|pipeline_paused" src scripts` lists only `src/services/upgrade/`; tests green.
 
@@ -82,7 +84,8 @@ and the prompt-pack, region-profile, ingest-profile and keymap routers:
 | 2C-3 | VLM endpoints deployment-wide (`project_id` NULL), probes per `name@revision`, `local_vlm_desired` in `deployment_settings`; keys still referenced as `secret:<slug>` (never stored) | `tests/config_store/test_vlm_endpoints_pg.py` | the probe-cap behaviour unchanged |
 | 2C-4 | polling: `store_poll.py` reads `projects.config_epoch` and `global_config_epoch`; runtime reports go to `config_runtime_reports` | `tests/config_store/test_poll_epoch.py`: an activation in one session reloads a second process's store within one poll; no OpenSearch call | an unchanged epoch reloads nothing |
 | 2C-5 | settings (`defaults`, `ingest_policy`, `vlm_policy`, `vlm_scope_reps`) and keymap with `expected_revision` on every write; the `defaults` write that had no OCC (`settings_doc.py:122-129`) answers 409 on a stale revision (contracts: the route gains `expected_revision` where it lacked it) | `tests/config_store/test_settings_occ.py` (`db`): two `PUT /settings` with the same revision: one 409. Red today (last write wins) | a single write succeeds |
-| 2C-6 | cluster-refresh state in `project_state`; UMAP view state in `projection_states`, the reducer bytes through the storage seam (`projects/<slug>/umap/<state_id>.bin`); the `umap_state` reader and writer deleted | `tests/config_store/test_projection_state_pg.py` | the viz read route returns the same shape |
+| 2C-6 | cluster-refresh state in `project_state` (interim body: today's `RefreshState`; lane 4F re-defines it as the beat's scheduling clock in W2.3, research X-11); UMAP view state in `projection_states`, the reducer bytes through the storage seam (`projects/<slug>/umap/<state_id>.bin`); the `umap_state` reader and writer deleted | `tests/config_store/test_projection_state_pg.py` | the viz read route returns the same shape |
+| 2C-7 | research config kinds ([02d](02d_research_seam_schema.md) section 1): the pydantic bodies and routes of the `serving_profile` (deployment, GPU S-5: servers with GPU UUIDs and NUMA node, load list per server, instances per model, image-prep limits, priorities), `cluster_profile` (clustering 5.4; `method` `ivf` or `minibatch_kmeans` in 0.7.0) and `assist_loop_preset` (auto-label 5.7) kinds on the existing config-store shapes; the two clustering axes and the preset axis; the deployment activation of a serving profile as `deployment_settings('active_serving_profile')` with `expected_revision` (X-2). The plate plan's `region_profile` fields are **not** added here: their first reader is W5e, which owns them (no unused fields now); [02a](02a_postgres_schema.md) section 4 | `tests/config_store/test_research_kinds.py` (`db`): a `serving_profile` with a `project_id` is refused; a `cluster_profile` activated on the `vlm` axis is refused; a stale `expected_revision` on the serving activation is 409; an `assist_loop_preset` without `max_vlm_crops` fails validation | the existing kinds' tests |
 
 **2C done when:** `rg -n "doc_type|meta:config_revision|activation_event:|runtime:|keymap:default|op_global_configs|OP_GLOBAL_CONFIGS_INDEX" src` lists only `src/services/upgrade/`; contracts regenerated.
 
@@ -91,17 +94,18 @@ and the prompt-pack, region-profile, ingest-profile and keymap routers:
 **Owns:** `src/db/repos/records.py`; `src/services/curation/holdout.py`, `holdout_freeze.py`;
 `src/services/curation/label_ops/store.py` (records and members only: the lease and the in-request
 execution stay until stage 4A); `src/services/curation/region_drain.py`,
-`region_dependency_health.py`, `clustering/last_run.py`; tests under `tests/records/`. 2D-4 reads the
-items' near-duplicate fields through the existing OpenSearch client (no file of another lane).
+`region_dependency_health.py`; tests under `tests/records/`. (`clustering/last_run.py` is no longer
+2D's: it stays a file until lane 4F deletes it in W2.3, research X-11.)
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
-| 2D-1 | holdout freezes: freeze, history, current, the "freeze fails closed" rule kept (a database error refuses the freeze); membership stays the items' `test_holdout` flag | `tests/records/test_holdout_pg.py` (`db`): two concurrent freezes -> one current row (partial unique index) | history lists both |
+| 2D-1 | holdout freezes: freeze, history, current, the "freeze fails closed" rule kept (a database error refuses the freeze); membership stays the items' `test_holdout` flag. `holdout_freezes` gains three columns in ND-A's revision `0003_near_duplicates` (W2.3); 2D writes none of them | `tests/records/test_holdout_pg.py` (`db`): two concurrent freezes -> one current row (partial unique index) | history lists both |
 | 2D-2 | label-operation records and members in Postgres (`label_operations`, `label_operation_members`); the served `interrupted` and `undo_interrupted` states unchanged | `tests/records/test_label_ops_pg.py` (`db`): a 10,000-member op writes in batches of 5,000 (trap T-14); undo reads the prior state from the table | the existing label-op route tests |
-| 2D-3 | `project_state` keys `region_drain`, `region_dependency_health`, `last_clustering` with OCC on `revision` | `tests/records/test_project_state_pg.py` | read after write |
-| 2D-4 | #473 part c (folded in, [00b](00b_traceability.md) section 3): the freeze checks near-duplicates of the held-out items (the items' near-duplicate group fields); owner decision 2026-11-04: the whole near-duplicate group goes into the holdout together, and the freeze record counts the moved items | `tests/records/test_holdout_near_duplicates.py` (`db` + fake OpenSearch): an item near-duplicate to a held-out item ends on the holdout side; red today (the freeze ignores groups) | an item with no near-duplicate is unchanged |
+| 2D-3 | `project_state` keys `region_drain`, `region_dependency_health` with OCC on `revision` (`last_clustering` is replaced by `cluster_partitions` in W2.3, research X-11) | `tests/records/test_project_state_pg.py` | read after write |
+| 2D-4 | **moved to lane ND-B, task ND-B1 (W2.3)**, research near-duplicates plan section 5.4, finding C8: today's crop groups never contain a validated or held-out item (the `near_dup` scorer runs on the residual pool inside IVF buckets), so a freeze that reads the items' group fields finds no group for any held-out item and moves nothing; the closure needs the run-scoped `leak` groups that ND-A builds. The owner decision (MQ-5: the whole group goes into the holdout together) is unchanged | - | - |
+| 2D-5 | research auto-label 5.6: label-operation kinds `assist_loop_propagate` and `assist_loop_review` in the kind vocabulary of `label_operations` (the loop's propagation and rollback become label operations, CQ3) | `tests/records/test_label_op_loop_kinds.py` (`db`): an op of each kind records members and undoes them | the existing kinds |
 
-**2D done when:** `rg -n "test_holdout/|label_ops/.*state.json|members.json|last_clustering.json|dependency_health.json" src` lists only `src/services/upgrade/`.
+**2D done when:** `rg -n "test_holdout/|label_ops/.*state.json|members.json|dependency_health.json" src` lists only `src/services/upgrade/`.
 
 ## Lane 2E `b2/upgrade-060`: the one-step upgrade and its rollback
 
@@ -125,12 +129,13 @@ Uses the ORM models of stage 1 directly (not the stage-2 repositories, which are
 | 2E-5 | installer: `upgrade` from 0.6.0 runs backup -> `db-migrate` -> `upgrade_from_060` -> `db-migrate` again (its OpenSearch step now finds the loaded projects and stamps their indexes, RC-1) -> start; prints the report; `--rollback` runs `rollback_to_060`; the B1 registry hooks and CLI removed | `tests/installer/test_upgrade_060_hook.py`: the order of calls (fake compose); a failed verify stops before `up` with the report path | a fresh install never runs the step |
 | 2E-6 | `openprocessor db verify` ([02c](02c_migration_ops_tests.md) section 6) | `tests/upgrade/test_verify_reports_class_drift.py` | a clean fixture reports nothing |
 | 2E-7 | the start gate (R-9a): `src/db/schema_check.py::check_control_plane()` (1A's module; 2E owns it in this wave) also refuses with `upgrade_incomplete` while `upgrade_state` is `in_progress` or `op_projects` still exists | `tests/upgrade/test_upgrade_gate.py` | a completed upgrade starts |
+| 2E-8 | research seams ([02c](02c_migration_ops_tests.md) section 2.2): the load becomes a registry of step modules under `src/services/upgrade/from_060/steps/` (`ORDER`, `run(ctx)`, discovered with `pkgutil.iter_modules`), so the W2.3 lanes add `clustering.py` and `near_duplicates.py` as new files; 2E writes `serving_profile.py` (the default deployment profile from `config_templates/profiles/*.json` and `config.pbtxt`) and `embedding_spaces.py` (catalog rows and three spaces per project, `knn_method` read from the live mapping); [pkgutil.iter_modules](https://docs.python.org/3/library/pkgutil.html#pkgutil.iter_modules) | `tests/upgrade/test_research_steps.py`: steps run in `ORDER` and are idempotent; the generated serving profile equals today's values; an upgraded faiss project records `engine: faiss` and a Lucene one `engine: lucene` | the fixture round trip |
 
 **2E done when:** the four upgrade tests and the installer test are green; `rg -n "migrate-registry|registry_migration|migrate_class_registry|legacy_repair" src scripts setup-openprocessor.sh openprocessor` lists only `src/services/upgrade/`.
 
 ## Lane 2F `b2/opensearch-control-removal` (cut after 2A-2E merged)
 
-**Owns:** `src/clients/curation_opensearch/{bodies_other.py,lifecycle.py}`,
+**Owns:** `src/clients/curation_opensearch/{bodies_other.py,lifecycle.py,bodies_core.py}` (the last for 2F-6 and 2F-8 only),
 `src/config/curation_roles.py`, `src/services/curation/index_bootstrap.py`, the capacity and shard
 code (`rg -ln "shards_after_create|shard_budget" src`), the remaining readers of the deleted roles
 (`rg -ln "labels_confirmed_index|classes_index|umap_state_index|configs_index|settings_index" src`),
@@ -146,6 +151,24 @@ has merged), tests under `tests/opensearch/`.
 | 2F-3 | retire `OP_PROJECTS_INDEX`, `OP_GLOBAL_CONFIGS_INDEX` and every env var only the deleted code read (`removed:` entries naming the replacement) | `tests/config/test_retired_env.py` additions | `tests/test_env_surface.py` |
 | 2F-4 | review fix R-7: index creation, mapping migrations and the kNN warm-up leave the API lifespan (they ran in every uvicorn worker of every replica, and again after each `--limit-max-requests` recycle: `src/core/dependencies.py:140-158`) and run once in the one-shot `db-migrate` step after Alembic (`scripts/opensearch/migrate.py`, idempotent; re-check RC-1 under D-69: every service already waits on `db-migrate`, so one migrate step serves both stores): it reads the projects from the Postgres `projects` table, does only the global indexes while the 0.6.0 data is not loaded (`upgrade_state` `in_progress` or `op_projects` present), and stamps each mapping's `_meta` with the existing `SCHEMA_META_KEY` fingerprint of `src/services/curation/index_bootstrap.py` ([02c](02c_migration_ops_tests.md) section 1.2); the API lifespan reads every stamp in one `_mapping` call with `filter_path` and refuses to start with `opensearch_mapping_not_current` naming the index when one is wrong or missing; the check replaces the bootstrap inside `src/core/dependencies.py` (the function the lifespan already calls), so 2F does not edit `src/app/lifespan.py`, which 3B owns in this wave | `tests/opensearch/test_lifespan_no_bootstrap.py` (AST: no `create_all_indexes`, `ensure_indexes` or warm-up call in the lifespan); `tests/opensearch/test_migrate_idempotent.py` (fake OpenSearch: two runs, the second issues no write); `tests/opensearch/test_migrate_waits_for_upgrade.py` (with `op_projects` present only the global indexes are touched; after the load the project indexes are stamped); `tests/opensearch/test_mapping_gate.py` (a project index with a stale stamp refuses the start naming the index) | a fresh run creates the global and project indexes |
 | 2F-5 | review fix R-18: 2E's `load` switches from the ORM models to the stage-2 repositories (so class names get their one normalization path, R-3) | `tests/upgrade/test_load_from_060.py` stays green; an AST test that `src/services/upgrade/` writes `project_classes` only through `src/db/repos/classes.py` | the fixture round trip |
+| 2F-6 | research plate 5.1 (creation-time seam): the items index body gains `analysis.char_filter.op_alnum_only` and `analysis.normalizer.op_text_compact` (`asciifolding`, `uppercase`); the migrate step adds them to every **upgraded** items index with `_close`, `PUT _settings`, `_open` inside the upgrade window (analysis settings are static: [update settings](https://docs.opensearch.org/latest/api-reference/index-apis/update-settings/), [normalizers](https://docs.opensearch.org/latest/analyzers/normalizers/)) | `tests/opensearch/test_items_text_normalizer.py`: a new items body carries the normalizer; on the 0.6.0 fixture the migrate step closes, updates and reopens each items index once and a second run issues no write | the mapping fingerprint test |
+| 2F-7 | research spatial door B: `tests/opensearch/test_images_index_knn.py`: the images body sets `index.knn = true` (a final setting, so a later place vector is a mapping addition); 2F also calls ES-A's `sync_catalog(session)` from `scripts/db/migrate.py` after Alembic | red if the setting is dropped | - |
+| 2F-8 | the mapping-migration registry is additive and versioned, and `bodies_core.py`'s field groups move unchanged into per-concern modules (`cluster_fields.py`, `near_dup_fields.py`, beside the existing `assist_fields.py`), so in W2.3 lane 4F owns one and ND-A the other with no shared file | `tests/opensearch/test_body_split_identity.py`: the union of the modules equals today's body field for field | the mapping fingerprint is unchanged |
+
+## Lane ES-A `b2/embedding-registry`: the embedding catalog and spaces (research embeddings plan 8.1; pending RD-1)
+
+**Owns:** new `src/domain/embedding_spaces.py` (names, regexes, `Target`, `Role`, `Status`, pure),
+new `src/db/repos/embedding_spaces.py`, new `src/services/embedding_spaces/{__init__,catalog,spaces,flip}.py`,
+new `examples/embedding/catalog.tsv` (the reader shape of `examples/vlm/catalog.tsv`),
+`src/clients/curation_opensearch/base.py` (`knn_field_body(spec, dim)` replaces `_knn_field`),
+tests under `tests/embedding_spaces/`. The readers move in W2.4 (lane ES-C), the re-index job in W2.3
+(lane ES-B).
+
+| ID | Task | Docs | Red test | Control |
+|---|---|---|---|---|
+| ES-A1 | catalog: `catalog.tsv` with `pe_core_l14_336` v1 and `mobileclip2_s2` v1 (weights refs and sha256 from the export scripts), `sync_catalog(session)` under `deployment_tx`; a model whose Triton models are not installed is listed `unavailable` and cannot back a space (fail closed); the image part of `input_spec` must equal the `input_contract` of the ready engine of its Triton model (X-5) | [OpenSearch k-NN vector](https://docs.opensearch.org/latest/field-types/supported-field-types/knn-vector/) | `tests/embedding_spaces/test_catalog.py`: a row whose Triton model is missing is `unavailable`; an `input_spec` that differs from the engine contract is refused | the two shipped models are `available` |
+| ES-A2 | spaces repository and service: register (`pending`), the `put_mapping` on `pending -> building`, `building -> ready`, the fenced flip (`promote`) with 409 `embedding_space_not_ready` and `embedding_evaluation_missing` (`force=true` waives, RD-35), retire; at most 3 live spaces per (project, target) (`embedding_space_limit`) | [PostgreSQL partial unique indexes](https://www.postgresql.org/docs/current/indexes-partial.html) | `tests/embedding_spaces/test_spaces.py` (`db`): a second primary for one target is a unique violation; promote of a `building` space answers 409; the flip bumps `config_epoch` | register and read back |
+| ES-A3 | `knn_field_body(spec, dim)` builds every vector field from `KnnMethodSpec`; `_knn_field` deleted | - | `tests/embedding_spaces/test_knn_field_body.py`: today's two fields render byte-identical | the mapping fingerprint test |
 
 ## Stage 2 exit criteria
 

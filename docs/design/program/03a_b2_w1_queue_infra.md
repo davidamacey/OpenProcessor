@@ -5,8 +5,9 @@
 | Status | plan, not started |
 | Depends on | [03_b2_overview.md](03_b2_overview.md) section 2; pins part A merged to `main` as its own PR (wave W2.0, owner decision 2026-11-04); `int/b2-control-plane` cut from `main` after it |
 | Design | [02a](02a_postgres_schema.md) (the whole schema), [02b](02b_jobs_locking_events.md) sections 7-8 (Celery, Valkey, queues, pools), [02c](02c_migration_ops_tests.md) sections 1, 4-7 (Alembic, services, storage, backup, tests) |
-| Lanes | 1-0 (coordinator), then 1A, 1B, 1C, 1E in parallel, then 1D |
-| Merge order | 1-0, 1A, 1E, 1B, 1C, 1D ([00_master_plan.md](00_master_plan.md) W2.1). Review fix R-18: the calls that need 1A's code while 1A is still coding (the worker-start schema check, the connection-budget test) are 1D tasks, cut after 1A and 1B merged |
+| Lanes | 1-0 (coordinator), then 1A, 1B, 1C, 1E in parallel, then 1D and 1F |
+| Merge order | 1-0, 1A, 1E, 1B, 1C, 1F, 1D ([00_master_plan.md](00_master_plan.md) W2.1). Review fix R-18: the calls that need 1A's code while 1A is still coding (the worker-start schema check, the connection-budget test) are 1D tasks, cut after 1A and 1B merged |
+| Research seams | folded 2026-11-04, pending owner question RD-1 ([00d](00d_owner_questions.md)): 1A-13 (the in-place changes of [02d](02d_research_seam_schema.md) section 1), 1B-8, 1C-8, 1C-9, 1E-4, 1E-5, and the new lane 1F (revision `0002_research_seams`); the seam-to-lane map is [00b](00b_traceability.md) section 5.2 |
 | Compose projects | `-p op-b2-s0` (spike S0, lane 1C), `-p op-b2-s1` (spike S1, lane 1B); CPU only; `down -v` after each |
 
 No job family moves in stage 1. At the end of it the stack starts with Postgres at head, Valkey, idle
@@ -37,7 +38,7 @@ workers and beat, and the API checks the schema head at startup.
 
 ## Lane 1A `b2/db-core`: the schema and the database layer
 
-**Owns:** `src/db/**` (except `src/db/repos/*.py` other than `__init__.py`), `alembic.ini`,
+**Owns:** `src/db/**` (except `src/db/repos/*.py` other than `__init__.py`, and the lane-1F files listed there), `alembic.ini`,
 `scripts/db/__init__.py`, `scripts/db/migrate.py`, `src/config/database.py`,
 `src/domain/job_states.py`, `src/core/db_session.py`, `src/app/lifespan.py` (schema check and engine
 disposal only), `scripts/codegen/check_layering.py`, `tests/conftest.py` (plugin registration),
@@ -57,6 +58,7 @@ disposal only), `scripts/codegen/check_layering.py`, `tests/conftest.py` (plugin
 | 1A-10 | `src/core/db_session.py`: `DbSessionDep = Annotated[AsyncSession, Depends(get_db, scope="function")]` (review fix R-1: the default `"request"` scope runs the exit code after the response is sent; `scope` is in `fastapi.Depends` of the pinned FastAPI). The dependency only opens and closes the session; writes commit explicitly in `project_tx` / `deployment_tx` (`async with session.begin()`) before the handler returns; SSE and streaming routes never declare it | [dependencies with yield: early exit and scope](https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#early-exit-and-scope) | `tests/core/test_db_session_dep.py`: a commit failure (a forced serialization error) turns into a 5xx, not a 2xx; an exception in a handler rolls back and re-raises; two concurrent requests get two sessions; `tests/core/test_sse_holds_no_pool_connection.py`: an open SSE stream holds no pooled connection between reads | a normal request commits |
 | 1A-11 | layering contracts ([02](02_control_plane_database.md) section 6) in `check_layering.py`, plus the two clauses of the original W1-12: nothing under `scripts/` imports `src.tasks`, and `src/tasks` imports no `src.routers`, `fastapi` or `starlette` | CONTRIBUTING (ratchets) | a planted `src/db` module importing `src.services` fails; a planted `src/domain` module importing `src.db` fails; a planted `scripts/` module importing `src.tasks` fails; a planted `src/tasks` module importing `fastapi` fails; a planted `src/tasks/runtime` module importing `src.services` (even inside a function) fails (R-2); re-check RC-2: `src.tasks.runtime` is a leaf layer, so a planted module in `src/services/jobs/`, `docker/trainer/`, `export/` or `scripts/curation/bakeoff/` importing `src.tasks.runtime` passes while the same module importing `src.tasks.families_a` (or any other `src.tasks` module outside `runtime`) fails; a planted `src/routers` module importing `src.db.repos` fails (review section 3.4) | the real tree passes |
 | 1A-12 | test fixtures: `tests/fixtures/postgres.py` (one testcontainers container per session, started by the xdist controller and shared by every worker, or `OP_TEST_DATABASE_URL`; each worker migrates its own `op_template_<worker>` once (review fix R-14); a fresh database per module; `two_sessions`; fails, never skips, when `-m db` is selected and no database is reachable), registered in `tests/conftest.py`; the `db` marker | [testcontainers Postgres](https://testcontainers-python.readthedocs.io/en/latest/modules/postgres/README.html) | `tests/db/test_fixture_policy.py`: with `OP_TEST_DATABASE_URL` pointing at a closed port the fixture raises `DatabaseUnavailable` (not skip) | the fixture yields a migrated database |
+| 1A-13 | research seams in 0001 ([02d](02d_research_seam_schema.md) section 1, edited in place in [02a](02a_postgres_schema.md)): the `config_documents` kinds `serving_profile`, `cluster_profile`, `assist_loop_preset` and the new scope `CHECK`; the three activation axes and pairs; `deployment_settings('active_serving_profile')`; `project_settings.search`; the reduced `project_state` key list; the `cluster_partition` projection kind; `jobs.retry_count`, `jobs.pause_reason` and its `CHECK`; the `yielded` attempt outcome; `gpu_devices` and `gpu_reservations` by `gpu_uuid`; `training_runs.gpu_uuids`; the `model_engines` contract and build columns and the four-part unique key; the `NO ACTION` rule of 02a section 1.2 on the existing references; `src/domain/job_states.py` gains `running -> queued` (yield), `queued -> paused` and the reaper's `paused -> queued` | [row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html), [foreign keys](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK) | 1A-4 and 1A-5 extended: a `paused` job without `pause_reason` is refused; a `serving_profile` with a `project_id` is refused; `('clustering_item','region_profile')` is refused; a reservation of an unknown `gpu_uuid` is refused; an engine row without `input_contract` is refused; the transition test covers the three new pairs and refuses `cancelled -> queued` | 02a's own rows unchanged |
 
 **Done when:** every 1A test green with `-m db`; the Docker-free command still collects and passes
 without Docker (`-m 'not live and not families and not db'`).
@@ -85,6 +87,7 @@ batch kinds of [05](05_b4_stateless_api.md) 4A, which also get empty `src/config
 | 1B-5 | `src/tasks/infra.py`: `op.infra.noop` (a plain task, for the live check); routes in `task_routes/infra.py`; `tests/live/test_queue_infra.py` (starts `op.infra.noop` and waits for `completed`; `live` marker, run only in the B2 sweep) | - | `tests/tasks/test_task_routes_complete.py`: every registered task has a route and a kind; no decorator passes `queue=` (OpenTranscribe `tests/unit/test_task_routes_complete.py`) | - |
 | 1B-6 | `scripts/healthcheck/celery_pool_healthcheck.py`, ported from OpenTranscribe `backend/scripts/celery_pool_healthcheck.py` with an attribution header (AGPL to AGPL, public project): dead pool; respawn storm (pid set replaced while the task counter is frozen); pool type from `pool.implementation`; `inspect stats` is sent with `destination=[<own hostname>]`, so a probe never fans out to every replica (R-38) | - | `tests/healthcheck/test_celery_pool_healthcheck.py` (fake `inspect stats` replies) | a steady pool is healthy |
 | 1B-7 | `tests/test_no_revoke_terminate.py`: AST scan of `src/` and `scripts/` for a `terminate=` keyword in any `revoke` call | [revoking](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks) | a planted fixture fails | the real tree passes |
+| 1B-8 | research seams ([02b](02b_jobs_locking_events.md) sections 2.1 and 7.3): `TaskQueues` gains `cluster` (consumer `cluster-worker`, profile `curation`); the `JobKind` dataclass gains `pausable` (default false), `slice_s` (default none) and `gpu_affinity` (`none` or `any_card`, default `none`); `gpu_app.make_app(include, device_uuid)` upserts the card's `gpu_devices` row (NVML through `pynvml`, in the child after fork, never the parent) and names the UUID in `worker_capabilities` (GPU S-6, S-12). `text_read` is **not** declared here: it lands with its consumer in W5e | [NVML API](https://docs.nvidia.com/deploy/nvml-api/), [worker signals](https://docs.celeryq.dev/en/stable/userguide/signals.html#worker-process-init) | `tests/config/test_job_kind_fields.py`: a kind with `slice_s` whose soft limit is not above `slice_s` plus one VLM timeout fails; a kind with an unknown `gpu_affinity` fails; `tests/tasks/test_gpu_app_inventory.py` (fake NVML): one worker start writes one `gpu_devices` row keyed by UUID and the parent never imports `pynvml` | `ALL` still equals the routed plus declared queues |
 
 **Done when:** all 1B tests green; S1 items 1-6 recorded in the PR notes (a failure of 2, 3 or 6 stops
 the lane and goes to the coordinator).
@@ -110,6 +113,8 @@ new `scripts/lib/cli_db.sh`, `tests/compose/test_control_plane_services.py`,
 | 1C-5 | env keys in `env.template` (advanced tier): the `OP_DB_*` set of 1A-1, `OP_PG_MAX_CONNECTIONS`, `OP_PG_SHARED_BUFFERS`, `OP_QUEUE_URL`, `OP_QUEUE_PASSWORD_FILE`, `OP_JOBS_CONCURRENCY`, `OP_JOBS_MAX_MEMORY_PER_CHILD_KB`, `OP_VALKEY_MAXMEMORY`, `OP_PG_MEM_LIMIT`, `OP_JOBS_MEM_LIMIT`, `OP_PERIODIC_MEM_LIMIT`, `OP_BEAT_MEM_LIMIT` (compose-only, R-19), `OP_API_REPLICAS` (R-6), `OP_STOP_GRACE_JOBS` (compose-only), `OP_DB_BACKUP_KEEP`, `OP_DB_BACKUP_INTERVAL_H` | `tests/test_env_surface.py` | the env-surface test fails until the template lines exist | - |
 | 1C-6 | CLI: `openprocessor status/health` list the new services; `openprocessor db backup [--out]`, `db restore <file> [--yes]` (`scripts/lib/cli_db.sh`, [02c](02c_migration_ops_tests.md) section 6); `upgrade` takes a backup first when Postgres exists; `uninstall` removes the new volumes with the others (existing confirmation rules) | - | `tests/installer/test_cli_db.py` (a fake `docker compose exec` records the `pg_dump -Fc` and `pg_restore --clean --if-exists` argv and the keep-7 pruning); `tests/installer/test_cli_status_lists_new_services.py` | the existing CLI tests |
 | 1C-7 | (moved to 1D-6, review R-18: the test reads 1A's `DatabaseSettings`) | - | - | - |
+| 1C-8 | research clustering 5.2 (pending RD-25): the `cluster-worker` service of [02c](02c_migration_ops_tests.md) section 4 (api image, `-Q cluster -c 1 --max-tasks-per-child=1`, profile `curation`, CPU only) | [compose profiles](https://docs.docker.com/compose/how-tos/profiles/) | `tests/compose/test_control_plane_services.py` gains: `cluster-worker` consumes only `cluster`, carries no GPU reservation, waits on `db-migrate` | the existing render tests |
+| 1C-9 | research plate 5.5 (creation-time seam): the shared env generator creates `secrets/identity_text/master` (32 random bytes, mode 600, never printed) on fresh install, `upgrade` and `repair`, never rotating; compose mounts it read-only into `api` and `curation-detection-worker` (the W5e jobs lane adds `text-read-worker`); its first reader is the W4 lane `b4/identity-text-privacy` | the existing `secrets/vlm` pattern | `tests/installer/test_identity_text_secret.py`: the file exists with mode 600 and 32 bytes after install and upgrade; a re-run keeps it; it is absent from argv and the log | the Cropwright secret test |
 
 **Done when:** all 1C tests green; S0 recorded; `docker compose config` renders for the default, dev
 and arbiter overlays (offline render only in the lane).
@@ -124,6 +129,27 @@ and arbiter overlays (offline render only in the lane).
 | 1E-1 | `BlobStore` protocol and `LocalFsStore` over `src/utils/atomic_write.py`; roots of [02c](02c_migration_ops_tests.md) section 5 mapped from the existing settings (`OP_SOURCE_ROOT`, `OP_PROJECTS_DATA_ROOT`, `OP_STATE_DIR`, the models path, the crop cache) | `tests/clients/storage/test_local_store.py`: atomic write (a crash mid-write leaves the old file), `list_prefix`, `delete_prefix`, `local_path` | read after write |
 | 1E-2 | `keys.py`: `make_key(root, *parts)` and `parse_key`; refuses `..`, a leading `/`, a backslash, an empty part | `tests/clients/storage/test_keys.py` | round trip |
 | 1E-3 | `tests/test_no_absolute_paths_in_db.py`: AST scan of `src/db/repos/` for an assignment to a column whose name ends in `_storage_key`, `_prefix` or `_key` that is not the result of `make_key` | a planted fixture fails | the real tree passes |
+| 1E-4 | research GPU S-10: `keys.crop_key(slug, item, box, max_side)` gives `projects/<slug>/crops/<item>/<box>/<max_side>.jpg` (`0` = source size) | `tests/clients/storage/test_crop_key_variant.py`: a capped and an uncapped crop of one box get different keys | round trip through `parse_key` |
+| 1E-5 | research spatial door B: `delete_prefix(projects/<slug>/)` removes an area no code lists yet | `tests/clients/storage/test_delete_prefix_unknown_area.py`: a file under an unlisted `spatial/` area is removed | the listed areas are removed as before |
+
+## Lane 1F `b2/db-research-seams` (cut after 1A merged; pending owner question RD-1)
+
+**Owns:** new `src/db/models/{serving,clustering,embeddings,assist_loop}.py` and their import lines
+in `src/db/models/__init__.py` (1A has merged); new `src/db/migrations/versions/0002_research_seams.py`
+(`down_revision = '0001_control_plane'`, rev id fixed by [02d](02d_research_seam_schema.md)
+section 0); new `src/domain/clustering_vocab.py`; `src/schemas/models.py` for the contract models
+only (`EngineInputContract`, `EngineOutputContract`, `EncoderInputSpec`; lane 5B owns the file in
+W2.3); the tests of 02d section 6 except `tests/db/test_row_level_security.py`; new
+`tests/schemas/test_engine_contracts.py`.
+
+| ID | Task | Docs | Red test | Control |
+|---|---|---|---|---|
+| 1F-1 | the SQLAlchemy models and the revision for 02d section 2 (serving reports, clustering S-core, the embedding registry, the auto-label loop record), the triggers `cluster_partitions_ready_immutable`, `cluster_children_ready_immutable`, `cluster_calibrations_immutable`, `embedding_model_versions_immutable` (the `config_revisions_immutable` pattern) | [Alembic operations](https://alembic.sqlalchemy.org/en/latest/ops.html), [CREATE TRIGGER](https://www.postgresql.org/docs/current/sql-createtrigger.html) | `tests/db/test_research_schema_matches_plan.py` lists every table, index, foreign key, trigger and policy of 02d section 2 (red before the revision) | `tests/db/test_migrations.py`: one head; downgrade to `0001_control_plane` and up again |
+| 1F-2 | `src/domain/clustering_vocab.py` (`TARGETS`, `LEVELS`, `METHODS`, `MEMBERSHIP_STATES`, `TRANSITIONS`; pure) | 02a section 1.1 (one Python source per closed list) | `tests/domain/test_clustering_vocab_matches_check.py` | - |
+| 1F-3 | contract models: `EngineInputContract` (`dtype`, `layout`, `size` or `{min, opt, max}`, `color`, `normalize`, `resize`, `interpolation`, `fill`, `pad_split`, `max_side`), `EngineOutputContract`, `EncoderInputSpec` embedding the image contract (X-5), all `extra='forbid'` | [pydantic models](https://docs.pydantic.dev/latest/concepts/models/) | `tests/schemas/test_engine_contracts.py`: an unknown `resize` value fails; a `size` with `min > opt` fails | today's detector, PE and OCR inputs validate |
+| 1F-4 | the immutability, NULL-project foreign-key, registry and loop schema tests and `tests/db/test_profile_fk_cascade.py` of 02d section 6 | 02d section 6 | each red before 1F-1 | the owning project's rows are visible |
+
+**Done when:** every 1F test green with `-m db`; `alembic check` clean on the merged head.
 
 ## Lane 1D `b2/health-ci` (starts after 1A and 1B are merged)
 
@@ -143,8 +169,8 @@ and arbiter overlays (offline render only in the lane).
 
 ## Stage 1 exit criteria
 
-- every lane's tests green on the merged integration branch; `-m db` green; `make contracts-check`
-  green (1D may change the health model: `make contracts` in that commit);
+- every lane's tests green on the merged integration branch; `-m db` green (1F's tables included);
+  `make contracts-check` green (1D may change the health model: `make contracts` in that commit);
 - `docker compose -p op-b2-s1check config` renders; a short CPU bring-up on the merged branch
   (coordinator, `-p op-b2-s1check`, 15 min cap): `db-migrate` exits 0, the API starts and reports
   `database: ok`, `queue: ok`; `op.infra.noop` runs; `down -v`;
