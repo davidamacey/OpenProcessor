@@ -43,10 +43,6 @@ class PromoteJsonBusyError(RuntimeError):
     """Another process is writing this model's ``promote.json`` right now."""
 
 
-def _write_atomic(path: Path, payload: dict[str, Any]) -> None:
-    atomic_write_json(path, payload, indent=2, sort_keys=True)
-
-
 @contextlib.asynccontextmanager
 async def _writing(path: Path) -> AsyncIterator[None]:
     """The ``promote_json:<model_name>`` lease for one read-compare-write."""
@@ -85,7 +81,7 @@ async def update_sharing(path: Path, *, shared: bool, expected_revision: int) ->
                 raise SharingRevisionConflictError(current)
             raw['shared'] = shared
             raw['sharing_revision'] = current + 1
-            _write_atomic(path, raw)
+            atomic_write_json(path, raw, indent=2, sort_keys=True)
     except PromoteJsonBusyError:
         raise SharingRevisionConflictError(
             sharing_revision(json.loads(path.read_text('utf-8')))
@@ -105,7 +101,9 @@ async def write_promote_backpointer(path: Path, backpointer: dict[str, Any]) -> 
         carried = {k: prior[k] for k in _SHARING_FIELDS if k in prior}
         if 'shared' in carried:
             carried['shared'] = bool(carried['shared'])
-        _write_atomic(path, {**backpointer, 'shared': False, **carried})
+        atomic_write_json(
+            path, {**backpointer, 'shared': False, **carried}, indent=2, sort_keys=True
+        )
 
 
 __all__ = [

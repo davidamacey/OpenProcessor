@@ -213,3 +213,23 @@ async def leased(
         yield beat
     finally:
         await beat.release(client)
+
+
+@contextlib.asynccontextmanager
+async def short_lease(
+    client: Any,
+    kind: LeaseKind,
+    scope: str | None,
+    job_id: str,
+    *,
+    busy: Callable[[str | None], Exception],
+) -> AsyncIterator[None]:
+    """Hold a lease across a critical section far shorter than one renew tick (a check
+    then a state write): no heartbeat thread, released on exit."""
+    result = await job_lease.acquire(client, kind, scope, job_id)
+    if isinstance(result, Busy):
+        raise busy(result.job_id)
+    try:
+        yield
+    finally:
+        await job_lease.release(client, result.lease)

@@ -7,6 +7,7 @@ sources' deliberate emptiness) must never leak into the inventory.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 import time
@@ -525,9 +526,11 @@ def test_a_live_auto_label_loop_makes_only_its_own_project_busy(tmp_path, monkey
     monkeypatch.setenv('OP_ASSIST_LOOP_JOBS_DIR', str(tmp_path / 'loops'))
     alpha, beta = _record('alpha', tmp_path), _record('beta', tmp_path)
     with bind_project(alpha):
-        live = job.create_loop(state={'status': 'queued'}, request={}).directory.name
+        live = asyncio.run(
+            job.create_loop(object(), state={'status': 'queued'}, request={})
+        ).directory.name
     with bind_project(beta):
-        done = job.create_loop(state={'status': 'queued'}, request={})
+        done = asyncio.run(job.create_loop(object(), state={'status': 'queued'}, request={}))
         done.update(status='completed')
 
     assert JobRef(kind='assist_loop', job_id=live) in running_jobs(alpha)

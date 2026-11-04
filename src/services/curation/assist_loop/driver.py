@@ -19,7 +19,6 @@ record and the budget after every node step.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import heapq
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -29,6 +28,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.domain.loop_tree import best_first_key
 from src.services.curation.assist.scope import membership_digest
 from src.services.curation.assist_loop.budget import VLM
@@ -46,7 +46,7 @@ from src.services.curation.assist_loop.progress import level_rows, totals
 from src.services.curation.assist_loop.rollback import rollback_loop
 from src.services.curation.assist_loop.store import replay
 from src.services.curation.assist_loop.vlm_failure import STOP_REASON as VLM_FAILED, VlmFailedError
-from src.services.curation.file_job import heartbeat_ticker
+from src.services.curation.lease_heartbeat import acquire_heartbeat
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.utils.timeutil import now_iso
 
@@ -366,7 +366,15 @@ async def run_loop(
         error=None,
         finished_at=None,
     )
-    ticker = asyncio.create_task(heartbeat_ticker(store.job))
+    beat = await acquire_heartbeat(
+        deps.opensearch,
+        LeaseKind.ASSIST_LOOP,
+        None,
+        store.loop_id,
+        job=store.job,
+        busy=lambda holder: RuntimeError(f'an auto-label loop already holds the lease: {holder}'),
+    )
+    beat.start()
     try:
         run = await _prepare(store, params, deps, budget, scope)
         outcome = await schedule(run)
@@ -380,9 +388,7 @@ async def run_loop(
         outcome = LoopOutcome('failed', error=str(exc))
         store.job.update(**_final_fields(outcome), updated_at=now_iso())
     finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
+        await beat.release(deps.opensearch)
     return outcome
 
 

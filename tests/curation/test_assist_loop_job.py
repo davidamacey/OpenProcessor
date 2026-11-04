@@ -3,6 +3,7 @@ the worker claims, resume, and the repair of a loop whose worker died."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -28,7 +29,7 @@ def loops_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _queued() -> FileJob:
-    return job.create_loop(state={'status': 'queued'}, request=REQUEST)
+    return asyncio.run(job.create_loop(object(), state={'status': 'queued'}, request=REQUEST))
 
 
 def _age_heartbeat(loop: FileJob) -> None:
@@ -137,7 +138,7 @@ def test_resume_requeues_a_stopped_loop_and_clears_its_flags(status: str) -> Non
     loop.touch_heartbeat()
     (loop.directory / 'pause.flag').touch()
 
-    job.resume_loop(loop.directory.name)
+    asyncio.run(job.resume_loop(object(), loop.directory.name))
 
     state = loop.read()
     assert state['status'] == 'queued'
@@ -154,7 +155,7 @@ def test_a_loop_in_any_other_state_cannot_be_resumed(status: str) -> None:
     loop.touch_heartbeat()
 
     with pytest.raises(RequestRejectedError) as refused:
-        job.resume_loop(loop.directory.name)
+        asyncio.run(job.resume_loop(object(), loop.directory.name))
 
     assert refused.value.detail['error'] == 'assist_loop_not_resumable'
     assert loop.read()['status'] == status
@@ -165,7 +166,7 @@ def test_a_loop_that_stopped_on_a_vlm_outage_can_be_resumed() -> None:
     loop.update(status='failed', stop_reason='vlm_failed', error='every VLM call failed')
     loop.touch_heartbeat()
 
-    job.resume_loop(loop.directory.name)
+    asyncio.run(job.resume_loop(object(), loop.directory.name))
 
     assert loop.read()['status'] == 'queued'
     assert loop.read()['stop_reason'] is None
@@ -177,7 +178,7 @@ def test_resume_is_refused_while_another_loop_is_live() -> None:
     live = _queued()
 
     with pytest.raises(RequestRejectedError) as busy:
-        job.resume_loop(old.directory.name)
+        asyncio.run(job.resume_loop(object(), old.directory.name))
 
     assert busy.value.detail['error'] == 'assist_loop_busy'
     assert busy.value.detail['loop_id'] == live.directory.name
@@ -220,6 +221,6 @@ def test_cancelling_a_loop_the_worker_has_not_claimed_cancels_it_at_once() -> No
 
 def test_resuming_an_unknown_loop_is_a_404() -> None:
     with pytest.raises(RequestRejectedError) as missing:
-        job.resume_loop('alp_unknown')
+        asyncio.run(job.resume_loop(object(), 'alp_unknown'))
 
     assert missing.value.status_code == 404
