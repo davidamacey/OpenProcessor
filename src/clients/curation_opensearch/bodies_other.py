@@ -61,6 +61,16 @@ def _classes_body() -> dict[str, Any]:
     }
 
 
+# Object keys stored on the SETTINGS-role index (folded configs index or a legacy settings
+# index): job lease documents (src/clients/job_lease.py) and the class-registry document.
+# ``enabled: False`` keeps them out of the mapping, so a dynamic legacy settings index never
+# maps their fields on its own.
+SETTINGS_OBJECT_KEYS_MAPPING: dict[str, dict[str, Any]] = {
+    'lease': {'type': 'object', 'enabled': False},
+    'class_registry': {'type': 'object', 'enabled': False},
+}
+
+
 def _settings_body() -> dict[str, Any]:
     """Curation-strategy shared-defaults document (one row, doc id
     :data:`CURATION_SETTINGS_DOC_ID`) -- backs ``GET/PUT /curation/settings``
@@ -82,6 +92,7 @@ def _settings_body() -> dict[str, Any]:
             'properties': {
                 'defaults': {'type': 'object', 'enabled': False},
                 **POLICY_DOC_MAPPING,
+                **SETTINGS_OBJECT_KEYS_MAPPING,
                 'updated_at': {'type': 'date'},
                 'updated_by': {'type': 'keyword'},
             }
@@ -176,6 +187,7 @@ def _configs_body() -> dict[str, Any]:
                 # -- folded SETTINGS (op_curation_settings doc `default`) --
                 'defaults': {'type': 'object', 'enabled': False},
                 **POLICY_DOC_MAPPING,
+                **SETTINGS_OBJECT_KEYS_MAPPING,
                 # -- folded UMAP_VIZ_STATE (doc `current`) --
                 'state_id': {'type': 'keyword'},
                 'projection_version': {'type': 'keyword'},
