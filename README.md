@@ -352,7 +352,7 @@ curl -X POST http://localhost:4603/faces/recognize -F "image=@face.jpg"
 curl -X POST http://localhost:4603/embed/image -F "image=@photo.jpg"
 # {"embedding": [...512 floats...], "embedding_norm": 1.0, "indexed": false, "status": "success"}
 
-# Text search (query parameters, not a JSON body: `text`, not `query`)
+# Text Search (query parameters, not a JSON body: `text`, not `query`)
 curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 # {"status": "success", "query_type": "text", "results": [{"image_id": "...", "image_path": "...",
 #   "score": 0.31}], "total_results": 1, "search_time_ms": 8.2}
