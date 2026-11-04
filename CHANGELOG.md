@@ -13,6 +13,11 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Breaking: error bodies no longer carry `error_type`.** The 500 body and the Triton-unavailable 503 body hold `detail` and `request_id`; use `request_id` and the server log (which still records the exception class).
+- **Breaking: `/curation` JSON bodies no longer carry `total_time_ms` and `request_id`.** The `X-Process-Time` and `X-Request-ID` headers remain; core inference routes and their `/v1` aliases are unchanged.
+- **Breaking: `POST /ocr/search` is removed.** Use `POST /search/ocr`, which now also takes `page` (0-indexed, `top_k` results per page) and `fuzzy`; its `total_results` counts matching images across all pages.
+- **Breaking: `./openprocessor bench` is removed.** Its tool was never in the repository. Use the `make bench-*` targets or Triton's `perf_analyzer` in the `triton-sdk` service.
+- **`cachetools` is now a declared dependency** (bounded TTL and LRU caches), so the images rebuild. Saved clustering index metadata is now `<index>.meta.json`; an old `<index>.meta.npy` is ignored (it only held training counts and a timestamp).
 - **Breaking: the model export toolchain moved out of the API image into a new `openprocessor-export` image** (#41). The `openprocessor` image (API and curation workers) no longer holds TensorRT, ModelOpt, `/opt/venv-y11`, `/app/export` or the model-repo seed: it is 9.4 GB instead of 21.2 GB. The new image (`davidamacey/openprocessor-export`, `OP_EXPORT_IMAGE`, compose service `model-export`, profile `setup`) is the `export` target of the root `Dockerfile` and shares the runtime layers with the API, so a host pulls them once.
   - `docker compose exec api python /app/export/...` no longer works. Use `./openprocessor models install|repair`, `./openprocessor export <model>`, the `make` export targets, or `docker compose run --rm model-export python /app/export/...`. Every script, doc and Makefile target was moved.
   - `POST /models/upload` and `POST /models/{model_name}/export` still work, through a job-file hand-off: the API queues `/jobs/model_export/queue/<id>.job.json`, the new `model-export-worker` service (profile `export`, `docker compose --profile export up -d model-export-worker`) builds the engine and loads it into Triton. While the worker is down both routes answer 503 naming it, before anything is saved. Export tasks are no longer reconciled by the API at startup; the worker fails what a dead worker left claimed.
@@ -113,6 +118,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- The class-name cache is keyed by the `labels.txt` version, so every API worker sees a promote at once (no cross-process invalidation call).
+- Per-process caches no longer serve stale or cached-error results: a failed settings read raises instead of caching an empty document, the diverse-order and outlier caches are bounded and expire, and the eval-dataset listing follows registry renames, new test images and `data.yaml` edits.
+- Thumbnail and source-image renders run off the event loop, so a large image no longer stalls other requests on the worker.
+- The VLM probe cap (two at a time) is documented and worded as per API worker process.
 - **OCR box expansion uses pyclipper, and its absence is an error.** The detection post-processing imported `pyclipper` inside a `try` and, on `ImportError`, silently scaled each box about its centre instead of offsetting it by `area * ratio / perimeter` as PaddleOCR's DB unclip does (a 200x20 line at ratio 1.5 came out 300x30 instead of 227x47). Nothing installed it, so every OCR request used the fallback. `Dockerfile.triton` now installs `pyclipper==1.4.0` (the Triton Python backend runs the pipeline), the import is a plain top-level import so the `ocr_pipeline` model fails to load when it is missing, and the fallback is deleted. `requirements-test.txt` gains it so the offline BLS tests import the module. The Triton image needs a rebuild.
 - **`/ocr` reads the same frame it reports.** The service decoded with EXIF orientation applied and reported that `image_size`, but the Triton client decoded the bytes again with `IMREAD_UNCHANGED`, which ignores EXIF, so a phone photo with orientation 5-8 was recognised sideways and its normalised boxes did not match the reported size. The service now hands its single oriented decode to the client. Images with transparency are decoded with Pillow (`ImageOps.exif_transpose`, then `Image.alpha_composite` onto white), so transparent pixels stay white rather than black (`IMREAD_COLOR` alone would drop alpha) and the float64 numpy compositing is gone.
 - **`/ocr` boxes are no longer shifted up and left.** The client zero-padded the detector input to a multiple of 32, while the pipeline maps boxes back by dividing by the (padded) map size, so any image whose resized side was not a multiple of 32 got boxes and recognition crops cut from the wrong place (about 9 px high on a 427 px image). Each axis is now stretched to its own multiple of 32 with no padding, as PaddleOCR's `DetResizeForTest` does.
@@ -178,6 +187,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Security
 
+- Saved clustering index metadata is stored as JSON instead of a pickle-capable format; `SECURITY.md` notes the trust boundary of the stored reducer state.
+- `openprocessor config show` masks more credential-style names (`PASSWD`, `CREDENTIAL`, `AUTH`).
 - Search routes answer an unavailable backend with a generic 503 message; the cause is logged server-side.
 - Error responses (500, 502, 503) no longer include the underlying exception text in the body on any route; the status codes are unchanged and the cause is logged server-side. A test scans the routers so it cannot come back.
 - The open-vocabulary target test upload refuses an image whose longest side is over the 16384-pixel cap other image paths use, before decoding it.
