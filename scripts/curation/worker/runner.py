@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.cascade import SegmenterClient
+from scripts.curation.worker.crash import log_drain_results, spawn_critical
 from scripts.curation.worker.crop_gate import CropGate
 from scripts.curation.worker.fairness import FairnessScheduler, liveness_loop
 from scripts.curation.worker.flow import metrics_reporter, producer, writer
@@ -430,26 +431,29 @@ async def run(args: argparse.Namespace) -> int:
     )
 
     try:
-        prod_task = asyncio.create_task(producer(ctx, _sync_project_runtime))
+        prod_task = spawn_critical(producer(ctx, _sync_project_runtime), name='producer')
         # Stage A.primary pool: primary-detector + pending_verification
         # routing only. Sized to keep the primary-detector Triton
         # instances saturated; secondary-segmenter work has moved to
         # its own pool below.
         stage_a_tasks = [
-            asyncio.create_task(stage_a_consumer(ctx, i)) for i in range(args.concurrency)
+            spawn_critical(stage_a_consumer(ctx, i), name=f'stage-a-{i}')
+            for i in range(args.concurrency)
         ]
         # Stage A.vlm_visible pool: batched yes/no region-visibility
         # filter for primary-miss / secondary-shape crops. Sized
         # smaller than the combined pool because the visibility prompt
         # is cheap.
         stage_a_visible_tasks = [
-            asyncio.create_task(stage_a_vlm_visible(ctx, i)) for i in range(vlm_visible_concurrency)
+            spawn_critical(stage_a_vlm_visible(ctx, i), name=f'stage-a-visible-{i}')
+            for i in range(vlm_visible_concurrency)
         ]
         # Stage A.secondary pool: secondary-segmenter run on every crop
         # the visibility filter said could contain a region. Sized to
         # keep the secondary-segmenter deployment saturated.
         stage_a_sam_tasks = [
-            asyncio.create_task(stage_a_sam_consumer(ctx, i)) for i in range(args.concurrency)
+            spawn_critical(stage_a_sam_consumer(ctx, i), name=f'stage-a-sam-{i}')
+            for i in range(args.concurrency)
         ]
         # Stage B pool: batched combined VLM call (COMBINED_CHUNK
         # crops per upstream call). vlm_concurrency x COMBINED_CHUNK
@@ -457,9 +461,10 @@ async def run(args: argparse.Namespace) -> int:
         # ONE combined VLM round-trip here (plus at most ONE yes/no
         # call up in the visibility stage = ≤ 2 per crop total).
         stage_b_tasks = [
-            asyncio.create_task(stage_b_combined(ctx, i)) for i in range(vlm_concurrency)
+            spawn_critical(stage_b_combined(ctx, i), name=f'stage-b-{i}')
+            for i in range(vlm_concurrency)
         ]
-        writer_task = asyncio.create_task(writer(ctx))
+        writer_task = spawn_critical(writer(ctx), name='writer')
         metrics_task = asyncio.create_task(metrics_reporter(ctx))
         liveness_task = asyncio.create_task(
             liveness_loop(
@@ -508,20 +513,24 @@ async def run(args: argparse.Namespace) -> int:
         # combined_q or vlm_visible_q before exiting.
         for _ in range(args.concurrency):
             await in_q.put(None)
-        await asyncio.gather(*stage_a_tasks, return_exceptions=True)
+        log_drain_results('stage_a', await asyncio.gather(*stage_a_tasks, return_exceptions=True))
         # Drain Stage A.vlm_visible: pushes to sam_q or out_q.
         for _ in range(vlm_visible_concurrency):
             await vlm_visible_q.put(None)
-        await asyncio.gather(*stage_a_visible_tasks, return_exceptions=True)
+        log_drain_results(
+            'stage_a_visible', await asyncio.gather(*stage_a_visible_tasks, return_exceptions=True)
+        )
         # Drain Stage A.secondary: pushes to combined_q or out_q.
         for _ in range(args.concurrency):
             await sam_q.put(None)
-        await asyncio.gather(*stage_a_sam_tasks, return_exceptions=True)
+        log_drain_results(
+            'stage_a_sam', await asyncio.gather(*stage_a_sam_tasks, return_exceptions=True)
+        )
         # Drain Stage B: poison pills to combined_q, wait for consumers
         # to exit; they route their results to out_q.
         for _ in range(vlm_concurrency):
             await combined_q.put(None)
-        await asyncio.gather(*stage_b_tasks, return_exceptions=True)
+        log_drain_results('stage_b', await asyncio.gather(*stage_b_tasks, return_exceptions=True))
         # Now tell writer to flush + exit.
         await out_q.put(None)
         await writer_task

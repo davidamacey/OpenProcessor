@@ -1,4 +1,4 @@
-"""Seed/validate class_registry.json from a detector's embedded class names."""
+"""Seed/validate the class registry document from a detector's embedded class names."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 import onnx
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from onnx import TensorProto, helper
 
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
-from src.clients.curation_opensearch.registry import ClassRegistry
 
 
 if TYPE_CHECKING:
@@ -38,17 +38,28 @@ def _onnx_with_names(path: Path, names: str | None) -> Path:
     return path
 
 
-def _registry(path: Path, entries: list[tuple[int, str, bool]]) -> Path:
-    reg = ClassRegistryFile(
-        classes=[RegistryClassEntry(class_id=i, class_name=n, deprecated=d) for i, n, d in entries]
-    )
-    path.write_text(reg.model_dump_json(indent=2), encoding='utf-8')
-    return path
+def _registry(entries: list[tuple[int, str, bool]]) -> InMemoryRegistry:
+    reg = InMemoryRegistry()
+    reg.seed_rows([{'class_id': i, 'class_name': n, 'deprecated': d} for i, n, d in entries])
+    return reg
 
 
-def _ids_names(path: Path) -> list[tuple[int, str]]:
-    reg = ClassRegistry(path).load()
-    return [(c.class_id, c.class_name) for c in reg.classes]
+def _ids_names(reg: InMemoryRegistry) -> list[tuple[int, str]]:
+    return [(c.class_id, c.class_name) for c in reg.load().classes]
+
+
+class _Closable:
+    async def close(self) -> None:
+        return None
+
+
+def _main(
+    mod: ModuleType, monkeypatch: pytest.MonkeyPatch, reg: InMemoryRegistry, *argv: str
+) -> int:
+    """Run the script's CLI against ``reg`` (its document store stands in for OpenSearch)."""
+    monkeypatch.setattr(mod, 'get_class_registry', lambda: reg)
+    monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_k: _Closable())
+    return mod.main(list(argv))
 
 
 class TestReadNames:
@@ -85,42 +96,53 @@ class TestReadNames:
 
 
 class TestSeedAndExtend:
-    def test_seeds_fresh_registry_in_model_order(self, mod: ModuleType, tmp_path: Path) -> None:
+    def test_seeds_fresh_registry_in_model_order(
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog'}")
-        reg = tmp_path / 'reg' / 'class_registry.json'
-        assert mod.main(['--model', str(model), '--registry', str(reg)]) == 0
+        reg = InMemoryRegistry()
+        assert _main(mod, monkeypatch, reg, '--model', str(model)) == 0
         assert _ids_names(reg) == [(0, 'cat'), (1, 'dog')]
-        assert mod.main(['--model', str(model), '--registry', str(reg), '--check']) == 0
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--check') == 0
 
-    def test_appends_new_model_classes_only(self, mod: ModuleType, tmp_path: Path) -> None:
-        model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog', 2: 'bird'}")
-        reg = _registry(tmp_path / 'r.json', [(0, 'cat', False), (1, 'dog', False)])
-        assert mod.main(['--model', str(model), '--registry', str(reg), '--check']) == 1
-        assert mod.main(['--model', str(model), '--registry', str(reg)]) == 0
-        assert _ids_names(reg) == [(0, 'cat'), (1, 'dog'), (2, 'bird')]
-        # The pre-write file was snapshotted next to the canonical one.
-        assert list(tmp_path.glob('r.*.json'))
-
-    def test_dry_run_writes_nothing(self, mod: ModuleType, tmp_path: Path) -> None:
+    def test_seeding_twice_is_a_no_op(
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog'}")
-        reg = _registry(tmp_path / 'r.json', [(0, 'cat', False)])
-        before = reg.read_text()
-        assert mod.main(['--model', str(model), '--registry', str(reg), '--dry-run']) == 0
-        assert reg.read_text() == before
+        reg = InMemoryRegistry()
+        assert _main(mod, monkeypatch, reg, '--model', str(model)) == 0
+        revision = reg.load().registry_revision
+        assert _main(mod, monkeypatch, reg, '--model', str(model)) == 0
+        assert reg.load().registry_revision == revision
+        assert _ids_names(reg) == [(0, 'cat'), (1, 'dog')]
+
+    def test_appends_new_model_classes_only(
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog', 2: 'bird'}")
+        reg = _registry([(0, 'cat', False), (1, 'dog', False)])
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--check') == 1
+        assert _main(mod, monkeypatch, reg, '--model', str(model)) == 0
+        assert _ids_names(reg) == [(0, 'cat'), (1, 'dog'), (2, 'bird')]
+
+    def test_dry_run_writes_nothing(
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog'}")
+        reg = _registry([(0, 'cat', False)])
+        before = reg.load().model_dump()
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--dry-run') == 0
+        assert reg.load().model_dump() == before
 
     def test_extra_class_appended_after_model_and_never_reuses_ids(
-        self, mod: ModuleType, tmp_path: Path
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog'}")
         # id 2 is a deprecated post-model class; the new extra must get id 3.
-        reg = _registry(
-            tmp_path / 'r.json', [(0, 'cat', False), (1, 'dog', False), (2, 'old', True)]
-        )
-        rc = mod.main(
-            ['--model', str(model), '--registry', str(reg), '--extra-class', 'misc:special']
-        )
+        reg = _registry([(0, 'cat', False), (1, 'dog', False), (2, 'old', True)])
+        rc = _main(mod, monkeypatch, reg, '--model', str(model), '--extra-class', 'misc:special')
         assert rc == 0
-        loaded = ClassRegistry(reg).load()
+        loaded = reg.load()
         assert [(c.class_id, c.class_name, c.group) for c in loaded.classes][-1] == (
             3,
             'misc',
@@ -129,61 +151,58 @@ class TestSeedAndExtend:
         # Idempotent: re-running with the same extra adds nothing.
         n = len(loaded.classes)
         assert (
-            mod.main(
-                ['--model', str(model), '--registry', str(reg), '--extra-class', 'misc:special']
-            )
+            _main(mod, monkeypatch, reg, '--model', str(model), '--extra-class', 'misc:special')
             == 0
         )
-        assert len(ClassRegistry(reg).load().classes) == n
+        assert len(reg.load().classes) == n
 
-    def test_group_map_applies_to_appended(self, mod: ModuleType, tmp_path: Path) -> None:
+    def test_group_map_applies_to_appended(
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog'}")
         groups = tmp_path / 'groups.json'
         groups.write_text(json.dumps({'pets': ['cat', 'dog']}))
-        reg = tmp_path / 'r.json'
-        assert (
-            mod.main(['--model', str(model), '--registry', str(reg), '--group-map', str(groups)])
-            == 0
-        )
-        assert {c.group for c in ClassRegistry(reg).load().classes} == {'pets'}
+        reg = InMemoryRegistry()
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--group-map', str(groups)) == 0
+        assert {c.group for c in reg.load().classes} == {'pets'}
 
 
 class TestDrift:
     def test_name_mismatch_fails_check_and_refuses_write(
-        self, mod: ModuleType, tmp_path: Path
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'dog', 1: 'cat'}")
-        reg = _registry(tmp_path / 'r.json', [(0, 'cat', False), (1, 'dog', False)])
-        before = reg.read_text()
-        assert mod.main(['--model', str(model), '--registry', str(reg), '--check']) == 1
-        assert mod.main(['--model', str(model), '--registry', str(reg)]) == 1
-        assert reg.read_text() == before
+        reg = _registry([(0, 'cat', False), (1, 'dog', False)])
+        before = reg.load().model_dump()
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--check') == 1
+        assert _main(mod, monkeypatch, reg, '--model', str(model)) == 1
+        assert reg.load().model_dump() == before
 
-    def test_model_emitting_deprecated_id_is_drift(self, mod: ModuleType, tmp_path: Path) -> None:
+    def test_model_emitting_deprecated_id_is_drift(
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog'}")
-        reg = _registry(tmp_path / 'r.json', [(0, 'cat', False), (1, 'dog', True)])
-        assert mod.main(['--model', str(model), '--registry', str(reg), '--check']) == 1
+        reg = _registry([(0, 'cat', False), (1, 'dog', True)])
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--check') == 1
 
-    def test_registry_only_classes_ok_unless_strict(self, mod: ModuleType, tmp_path: Path) -> None:
+    def test_registry_only_classes_ok_unless_strict(
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog'}")
-        reg = _registry(
-            tmp_path / 'r.json', [(0, 'cat', False), (1, 'dog', False), (2, 'extra', False)]
-        )
-        assert mod.main(['--model', str(model), '--registry', str(reg), '--check']) == 0
-        assert mod.main(['--model', str(model), '--registry', str(reg), '--check', '--strict']) == 1
+        reg = _registry([(0, 'cat', False), (1, 'dog', False), (2, 'extra', False)])
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--check') == 0
+        assert _main(mod, monkeypatch, reg, '--model', str(model), '--check', '--strict') == 1
 
     def test_model_growth_blocked_by_registry_only_ids(
-        self, mod: ModuleType, tmp_path: Path
+        self, mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Registry added a post-model class at id 2; a retrained model that now
         also has 3 classes must not be silently merged at mismatching ids."""
         model = _onnx_with_names(tmp_path / 'm.onnx', "{0: 'cat', 1: 'dog', 2: 'bird'}")
-        reg = _registry(
-            tmp_path / 'r.json', [(0, 'cat', False), (1, 'dog', False), (2, 'extra', False)]
-        )
-        before = reg.read_text()
-        assert mod.main(['--model', str(model), '--registry', str(reg)]) == 1
-        assert reg.read_text() == before
+        reg = _registry([(0, 'cat', False), (1, 'dog', False), (2, 'extra', False)])
+        before = reg.load().model_dump()
+        assert _main(mod, monkeypatch, reg, '--model', str(model)) == 1
+        assert reg.load().model_dump() == before
 
     def test_reconcile_reports_append_blocked(self, mod: ModuleType) -> None:
         existing = ClassRegistryFile(

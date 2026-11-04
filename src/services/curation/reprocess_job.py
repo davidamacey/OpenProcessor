@@ -4,7 +4,7 @@ State lives under ``<OP_REPROCESS_JOBS_DIR>/projects/<slug>/<job_id>/`` on
 the shared ``/jobs`` volume (:class:`~src.services.curation.file_job.FileJob`):
 every API worker process sees the same ``state.json`` / heartbeat / cancel
 flag, so status and cancel work whichever process a request lands on, and
-one job per project runs at a time (``start.lock`` + a live-job check).
+one job per project runs at a time (the ``reprocess`` lease + a live-job check).
 
 ``request.json`` is everything the run needs: the resolved image ids, the
 scopes, and the index names the request was planned against.
@@ -16,7 +16,6 @@ the bound project's indexes are not the ones the request was planned for.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import uuid
 from datetime import UTC, datetime
@@ -31,8 +30,9 @@ from src.config.project_context import (
     project_jobs_dir,
 )
 from src.core.logging import get_logger
-from src.services.curation.file_job import FileJob, heartbeat_ticker
-from src.services.curation.job_lock import exclusive_start_lock
+from src.domain.job_lease import LeaseKind
+from src.services.curation.file_job import FileJob
+from src.services.curation.lease_heartbeat import LeaseHeartbeat, acquire_heartbeat, run_leased
 from src.services.curation.reprocess_embed_spec import EmbedSpec
 from src.services.curation.reprocess_images import process_images
 from src.services.curation.reprocess_models import ReprocessJobInfo, ReprocessScope
@@ -106,7 +106,7 @@ def read_job(job_id: str) -> ReprocessJobInfo | None:
     state = job.read()
     if not state:
         return None
-    state = job.repair_if_stale(ACTIVE, error_prefix='reprocess job')
+    state = job.served_state(ACTIVE, error_prefix='reprocess job')
     for key in ('started_at', 'updated_at', 'finished_at'):
         # Startup reconciliation stamps ``finished_at`` as an epoch number.
         if isinstance(state.get(key), int | float):
@@ -118,23 +118,33 @@ def read_job(job_id: str) -> ReprocessJobInfo | None:
     )
 
 
-def create_job(
+async def create_job(
+    opensearch: AsyncOpenSearch,
     *,
     request: dict[str, Any],
     scopes: list[ReprocessScope],
     image_ids: list[str],
     embed: EmbedSpec | None = None,
-) -> FileJob:
-    """Claim the per-project singleton and persist ``request.json`` plus a
-    ``queued`` state. Raises :class:`ReprocessBusyError` when a job is
-    already live (or another process is mid-claim). Nothing runs yet."""
-    root = ensure_marked_dir(jobs_root())
-    with exclusive_start_lock(root / 'start.lock') as acquired:
-        live = running_job_ids()
-        if not acquired or live:
-            raise ReprocessBusyError(live[0][0] if live else 'starting')
-        job_id = f'rp_{datetime.now(UTC):%Y%m%dT%H%M%S}_{uuid.uuid4().hex[:6]}'
-        job = _job(job_id)
+) -> tuple[FileJob, LeaseHeartbeat]:
+    """Claim the per-project singleton (the ``reprocess`` lease) and persist
+    ``request.json`` plus a ``queued`` state. Raises :class:`ReprocessBusyError` when a
+    job is live. Nothing runs yet: :func:`run_job` starts the heartbeat and releases the
+    lease."""
+    ensure_marked_dir(jobs_root())
+    live = running_job_ids()
+    if live:
+        raise ReprocessBusyError(live[0][0])
+    job_id = f'rp_{datetime.now(UTC):%Y%m%dT%H%M%S}_{uuid.uuid4().hex[:6]}'
+    job = _job(job_id)
+    beat = await acquire_heartbeat(
+        opensearch,
+        LeaseKind.REPROCESS,
+        None,
+        job_id,
+        job=job,
+        busy=lambda holder: ReprocessBusyError(holder or 'starting'),
+    )
+    try:
         job.directory.mkdir(parents=True)
         cfg = get_curation_config()
         (job.directory / 'request.json').write_text(
@@ -164,10 +174,13 @@ def create_job(
             }
         )
         job.touch_heartbeat()
-    return job
+    except BaseException:
+        await beat.release(opensearch)
+        raise
+    return job, beat
 
 
-def start_job(
+async def start_job(
     opensearch: AsyncOpenSearch,
     service: CurationIngestService,
     *,
@@ -177,8 +190,10 @@ def start_job(
     embed: EmbedSpec | None = None,
 ) -> str:
     """:func:`create_job`, then schedule :func:`run_job` in this process."""
-    job = create_job(request=request, scopes=scopes, image_ids=image_ids, embed=embed)
-    _tasks[job.directory.name] = asyncio.create_task(run_job(job, opensearch, service))
+    job, beat = await create_job(
+        opensearch, request=request, scopes=scopes, image_ids=image_ids, embed=embed
+    )
+    _tasks[job.directory.name] = asyncio.create_task(run_job(job, opensearch, service, beat))
     return job.directory.name
 
 
@@ -195,10 +210,18 @@ def cancel_job(job_id: str) -> bool:
 
 
 async def run_job(
+    job: FileJob, opensearch: AsyncOpenSearch, service: CurationIngestService, beat: LeaseHeartbeat
+) -> None:
+    """Execute the job persisted at ``job.directory`` under the lease ``beat`` holds, and
+    release it at the end. Needs nothing but the files there and the dependencies passed
+    in."""
+    beat.start()
+    await run_leased(beat, opensearch, _execute(job, opensearch, service))
+
+
+async def _execute(
     job: FileJob, opensearch: AsyncOpenSearch, service: CurationIngestService
 ) -> None:
-    """Execute the job persisted at ``job.directory``. Needs nothing but the
-    files there and the dependencies passed in."""
     try:
         payload = json.loads((job.directory / 'request.json').read_text(encoding='utf-8'))
         cfg = get_curation_config()
@@ -210,7 +233,6 @@ async def run_job(
         job.update(status='failed', error=str(exc), finished_at=now_iso(), updated_at=now_iso())
         return
     job.update(status='running', updated_at=now_iso())
-    ticker = asyncio.create_task(heartbeat_ticker(job))
 
     def _progress(done: int, failed: int) -> None:
         job.update(images_done=done, images_failed=failed, updated_at=now_iso())
@@ -240,10 +262,6 @@ async def run_job(
     except Exception as exc:
         logger.error('reprocess_job_failed', job=job.directory.name, error=str(exc))
         job.update(status='failed', error=str(exc), finished_at=now_iso(), updated_at=now_iso())
-    finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
 
 
 __all__ = [

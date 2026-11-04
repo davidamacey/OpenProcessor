@@ -52,7 +52,7 @@ async def prepare_loop(opensearch: AsyncOpenSearch, request: AssistLoopRequest) 
             'invalid_request',
             'budget.max_vlm_crops is required to start a loop: it has no default',
         )
-    require_item_classes()
+    await require_item_classes()
     pack_name, pack_revision = await resolve_run_prompt_pack(opensearch, request.prompt_pack)
     pack = resolve_pack(pack_name, pack_revision)
     vlm = await resolve_run_vlm(

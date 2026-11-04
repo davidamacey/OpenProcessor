@@ -9,7 +9,6 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.project_context import current_project
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
@@ -109,9 +108,9 @@ async def project_stats(client: Any) -> dict[str, Any]:
         client, items_idx, 'region_status', RegionStatus.PENDING_DETECTION.value
     )
     holdout_items = await _term_count(client, items_idx, 'test_holdout', True)
-    classes_count = len(
-        ClassRegistry(path=bound.record.resources.class_registry_path).load().classes
-    )
+    from src.services.curation.registry_access import project_registry
+
+    classes_count = len((await project_registry(client, bound.record)).classes)
 
     indexes = []
     for role, name in bound.record.resources.indexes.items():

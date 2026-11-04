@@ -16,11 +16,11 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from _registry_doc_fake import InMemoryRegistry, use_registry
 from PIL import Image
 
 from curation.conftest import SCOPED, HybridOpenSearch, VlmApi, good_probe
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 
 
@@ -96,7 +96,7 @@ class Stack:
     api: VlmApi
     items: QueryFakeOpenSearch
     upstream: Upstream
-    registry: ClassRegistry
+    registry: InMemoryRegistry
     tmp_path: Path
     image_path: str
     seeded: list[str] = field(default_factory=list)
@@ -167,10 +167,11 @@ def build_stack(vlm_api: VlmApi, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv('OP_CROP_CACHE_DIR', str(tmp_path / 'crop_cache'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
-    registry.add_class('widget')
-    registry.add_class('gadget')
+    registry = InMemoryRegistry()
+    registry.add('widget')
+    registry.add('gadget')
     monkeypatch.setattr(config_test_mod, 'get_class_registry', lambda: registry)
+    use_registry(registry)
 
     items = QueryFakeOpenSearch({ITEMS: {}})
     hybrid = HybridOpenSearch(vlm_api.fake_os, items)

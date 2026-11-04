@@ -61,7 +61,7 @@ async def test_ocr_reads_raise(client: OpenSearchClient) -> None:
     with pytest.raises(UpstreamError):
         await client.search_by_text('plate')
     with pytest.raises(UpstreamError):
-        await client.search_ocr('plate')
+        await client.search_ocr_page('plate')
 
 
 @pytest.mark.asyncio
@@ -91,7 +91,9 @@ def test_an_outage_reaches_the_caller_as_a_503_with_a_stable_reason(
     class _Service:
         class opensearch:  # noqa: N801 - attribute stand-in for the service's client
             @staticmethod
-            async def search_ocr(**_: object) -> list[dict[str, object]]:
+            async def search_ocr_page(
+                *_: object, **__: object
+            ) -> tuple[list[dict[str, object]], int]:
                 raise UpstreamError('opensearch', 'opensearch_unavailable')
 
     app.dependency_overrides[get_visual_search_service] = _Service

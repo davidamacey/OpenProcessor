@@ -34,15 +34,16 @@ from __future__ import annotations
 
 import io
 import os
-from collections import OrderedDict
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
+from cachetools import LRUCache
 from PIL import Image, ImageOps
 
 from src.config import CurationConfig, get_curation_config
 from src.core.exceptions import RequestRejectedError
+from src.utils.cpu_pool import run_cpu
 
 
 if TYPE_CHECKING:
@@ -285,35 +286,6 @@ def source_media_type(path: Path) -> str:
 # =============================================================================
 
 
-# Try cachetools (preferred), fall back to a small thread-safe
-# ``OrderedDict`` LRU. The fallback is enough for unit tests when the
-# package is not installed in a slim test env.
-try:
-    from cachetools import LRUCache as _CachetoolsLRU
-
-    _HAS_CACHETOOLS = True
-except ImportError:  # pragma: no cover - fallback path
-    _HAS_CACHETOOLS = False
-
-    class _CachetoolsLRU(OrderedDict):  # type: ignore[no-redef]
-        """Tiny stand-in mimicking ``cachetools.LRUCache`` semantics."""
-
-        def __init__(self, maxsize: int) -> None:
-            super().__init__()
-            self.maxsize = maxsize
-
-        def __getitem__(self, key: Any) -> Any:
-            value = super().__getitem__(key)
-            self.move_to_end(key)
-            return value
-
-        def __setitem__(self, key: Any, value: Any) -> None:
-            super().__setitem__(key, value)
-            self.move_to_end(key)
-            while len(self) > self.maxsize:
-                self.popitem(last=False)
-
-
 THUMBNAIL_CACHE_MAX_ENTRIES = 2000  # ~50MB at 128x128 JPEG q=85.
 
 
@@ -326,7 +298,7 @@ class ThumbnailCache:
     """
 
     def __init__(self, maxsize: int = THUMBNAIL_CACHE_MAX_ENTRIES) -> None:
-        self._cache: Any = _CachetoolsLRU(maxsize=maxsize)
+        self._cache: Any = LRUCache(maxsize=maxsize)
         self._lock = Lock()
         self._hits = 0
         self._misses = 0
@@ -362,10 +334,7 @@ class ThumbnailCache:
         """
         key = (str(image_path), self._normalize_bbox(bbox_norm), int(size))
         with self._lock:
-            cached = self._cache.get(key) if _HAS_CACHETOOLS else None
-            if cached is None and not _HAS_CACHETOOLS and key in self._cache:
-                # OrderedDict fallback path — use ``in`` instead of get.
-                cached = self._cache[key]
+            cached = self._cache.get(key)
             if cached is not None:
                 self._hits += 1
                 typed: bytes = cached
@@ -379,6 +348,23 @@ class ThumbnailCache:
             self._cache[key] = thumb_bytes
             self._misses += 1
         return thumb_bytes
+
+    async def get_or_compute_offloaded(
+        self,
+        image_path: Path,
+        bbox_norm: tuple[float, ...] | list[float],
+        size: int = 128,
+    ) -> bytes:
+        """:meth:`get_or_compute` for async handlers: a hit is served in place, a miss
+        decodes on the CPU pool. Concurrent misses for one key may each compute it once
+        (a per-process cache; the last write wins)."""
+        key = (str(image_path), self._normalize_bbox(bbox_norm), int(size))
+        with self._lock:
+            cached: bytes | None = self._cache.get(key)
+            if cached is not None:
+                self._hits += 1
+                return cached
+        return await run_cpu(self.get_or_compute, image_path, bbox_norm, size)
 
     @staticmethod
     def _render_thumbnail(
@@ -464,6 +450,12 @@ async def render_source_image(
     image_path: Path,
     max_dim: int | None = None,
 ) -> bytes:
+    """Render the clean source image as JPEG bytes on the CPU pool (see
+    :func:`_render_source_image`)."""
+    return await run_cpu(_render_source_image, image_path, max_dim)
+
+
+def _render_source_image(image_path: Path, max_dim: int | None) -> bytes:
     """Render the clean source image as JPEG bytes: EXIF-transpose,
     RGB-convert, optionally downscale, re-encode. No box, label or other
     overlay is ever drawn — the frontend draws every box itself from

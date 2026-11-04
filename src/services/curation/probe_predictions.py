@@ -68,11 +68,11 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
+from src.clients.opensearch.bulk import failed_bulk_items
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.probe_models import (  # noqa: F401 - re-exported for callers and tests
     PROBE_ARCHITECTURES,
-    YOLOV5_OBJ_INPUT_SIZE,
     _build_predictor,
     _build_raw_predictor,
     _PredictFn,
@@ -98,12 +98,12 @@ logger = get_logger(__name__)
 # =============================================================================
 
 
-def _registry_class_ids(cfg: CurationConfig) -> dict[str, int]:
-    """Active class name -> id from the configured registry ({} when absent; an
-    unreadable registry raises, so a probe never runs with no class names)."""
-    from src.clients.curation_opensearch.registry import ClassRegistry
+async def _registry_class_ids(opensearch: AsyncOpenSearch) -> dict[str, int]:
+    """Active class name -> id from the bound project's registry (an unreadable registry
+    raises, so a probe never runs with no class names)."""
+    from src.clients.curation_opensearch.registry import get_class_registry
 
-    reg = ClassRegistry(path=cfg.class_registry_path).load()
+    reg = await get_class_registry().snapshot(opensearch)
     from src.services.curation.region_class import item_classes
 
     return {c.class_name: c.class_id for c in item_classes(reg.classes)}
@@ -199,7 +199,7 @@ async def run_probe_inference(
 
     cfg = config or get_curation_config()
     if class_ids is None:
-        class_ids = _registry_class_ids(cfg)
+        class_ids = await _registry_class_ids(opensearch)
 
     logger.info('probe_init', model=str(model_path), architecture=architecture)
     predict_fn, default_version = _build_predictor(model_path, architecture)
@@ -235,7 +235,7 @@ async def run_probe_inference(
             for hit in hits:
                 if max_crops is not None and processed >= max_crops:
                     if bulk_body:
-                        await opensearch.bulk(body=bulk_body, refresh=False)
+                        processed -= await _flush_bulk(opensearch, bulk_body)
                     return processed
                 src = hit.get('_source') or {}
                 crop_id = src.get('crop_id') or hit.get('_id')
@@ -276,11 +276,7 @@ async def run_probe_inference(
                 )
                 processed += 1
             if bulk_body:
-                bulk_resp = await opensearch.bulk(body=bulk_body, refresh=False)
-                if isinstance(bulk_resp, dict) and bulk_resp.get('errors'):
-                    logger.warning(
-                        'probe_bulk_partial_errors', sample=bulk_resp.get('items', [])[:3]
-                    )
+                processed -= await _flush_bulk(opensearch, bulk_body)
             if should_cancel is not None and should_cancel():
                 logger.info('probe_cancelled', processed=processed)
                 return processed
@@ -295,6 +291,16 @@ async def run_probe_inference(
                 logger.warning('probe_clear_scroll_failed', err=str(exc))
     logger.info('probe_done', processed=processed)
     return processed
+
+
+async def _flush_bulk(opensearch: Any, bulk_body: list[dict[str, Any]]) -> int:
+    """Send one bulk page; returns how many items OpenSearch refused so the caller does not
+    count them as probed."""
+    resp = await opensearch.bulk(body=bulk_body, refresh=False)
+    failed = failed_bulk_items(resp) if isinstance(resp, dict) else []
+    if failed:
+        logger.warning('probe_bulk_item_errors', failed=len(failed), sample=failed[:3])
+    return len(failed)
 
 
 def probe_candidate_query(*, skip_version: str | None = None) -> dict[str, Any]:

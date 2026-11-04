@@ -23,11 +23,11 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _combined_class_update
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project
 from src.config.vlm_class_attempt import (
@@ -214,9 +214,9 @@ async def _run_label_batch(
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('widget')
-    reg.add_class('gadget')
+    reg = InMemoryRegistry()
+    reg.add('widget')
+    reg.add('gadget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
     monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=None))
     docs = {cid: (_proposal(cid) if cid.startswith('p') else _item(cid)) for cid in preds}
@@ -317,7 +317,6 @@ async def test_label_batch_real_answers_snapshot_history_and_clear_reason(
 async def test_pipeline_vlm_stage_empty_answer_keeps_class(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
     from src.routers.curation.pipeline_public import pipeline_auto_label
     from src.services.curation import auto_label_run, image_serving
     from src.services.curation.autolabel import selection, vlm_stage
@@ -345,9 +344,10 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
         auto_label_run, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None))
     )
     monkeypatch.setattr(auto_label_run, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': 7, 'class_name': 'sportscar'}])
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry',
-        lambda: _FakeRegistry([_FakeClassEntry(7, 'sportscar')]),
+        'src.services.curation.registry_access.get_class_registry', lambda: registry
     )
     monkeypatch.setattr(
         'src.services.labeling.vlm_class_names.format_class_catalog', lambda *_a, **_k: ''

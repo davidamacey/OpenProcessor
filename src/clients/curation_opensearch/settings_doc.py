@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import time
 from datetime import UTC, datetime
 from typing import Any
+
+from cachetools import TTLCache
 
 from src.clients.curation_opensearch.base import config, logger
 from src.clients.optional_doc import get_doc_or_none
@@ -32,7 +33,9 @@ single-tenant fallback."""
 # Keyed by index name so a caller passing a non-default cfg doesn't share
 # another deployment's cached doc.
 _SETTINGS_CACHE_TTL_SECONDS = 5.0
-_settings_cache: dict[str, tuple[dict[str, Any], float]] = {}
+_settings_cache: TTLCache[str, dict[str, Any]] = TTLCache(
+    maxsize=64, ttl=_SETTINGS_CACHE_TTL_SECONDS
+)
 
 
 def _invalidate_settings_cache(index: str) -> None:
@@ -53,15 +56,17 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
     filtered out here so a cleared axis simply doesn't appear in
     ``defaults``, identical to "never had an override."
 
-    Cached for :data:`_SETTINGS_CACHE_TTL_SECONDS`, invalidated
-    immediately by :func:`update_curation_settings` on write.
+    Cached for :data:`_SETTINGS_CACHE_TTL_SECONDS` per process; another
+    worker process may serve the previous value for up to that long after a
+    write. :func:`update_curation_settings` invalidates this process's entry
+    immediately. A failed read raises and is never cached.
     """
     active_cfg = cfg or config
     index = index_name(active_cfg, IndexRole.SETTINGS)
 
     cached = _settings_cache.get(index)
-    if cached is not None and time.monotonic() < cached[1]:
-        return cached[0]
+    if cached is not None:
+        return cached
 
     source: dict[str, Any] = {}
     try:
@@ -75,13 +80,14 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
         msg = str(exc).lower()
         if not ('notfound' in msg or 'not found' in msg or '404' in msg):
             logger.warning('curation_settings_get_failed', error=str(exc))
+            raise
     raw_defaults = source.get('defaults') or {}
     result = {
         'defaults': {k: v for k, v in raw_defaults.items() if v is not None},
         'updated_at': source.get('updated_at'),
         'updated_by': source.get('updated_by'),
     }
-    _settings_cache[index] = (result, time.monotonic() + _SETTINGS_CACHE_TTL_SECONDS)
+    _settings_cache[index] = result
     return result
 
 

@@ -24,7 +24,7 @@ record; changing them later does not move an existing project. The
 |---|---|---|
 | `OP_PROJECTS_INDEX` | `op_projects` | Index holding the project records |
 | `OP_PROJECT_INDEX_PREFIX` | `op_prj_` | Prefix of every project index |
-| `OP_PROJECTS_DATA_ROOT` | `./data/projects` | Parent of each project's class registry, exports and bake-off eval sets |
+| `OP_PROJECTS_DATA_ROOT` | `./data/projects` | Parent of each project's exports, bake-off eval sets and (until migrated) legacy `class_registry.json` |
 | `OP_SHARDS_PER_HEAP_GB` | `20` | Shards per GB of OpenSearch heap, for the soft shard budget. Past the budget, creating a project only warns; it is not a cap |
 | `OP_CURATION_PROJECT` | `default` | The project a worker or script binds when it has no `--project`. Not meant to be set for the API server |
 
@@ -33,7 +33,7 @@ What a project owns, resolved from those variables and the roots below:
 | Resource | Location |
 |---|---|
 | OpenSearch indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` for `images`, `items`, `labels_confirmed`, `classes`, `umap_state` and `configs`. Settings and projection state share the `configs` index |
-| Class registry | `{OP_PROJECTS_DATA_ROOT}/{slug}/class_registry.json` |
+| Class registry | the `class_registry` document in the project's settings index (a legacy `{OP_PROJECTS_DATA_ROOT}/{slug}/class_registry.json` is moved there by `curation migrate-registry`) |
 | Exports | `{OP_PROJECTS_DATA_ROOT}/{slug}/exports/` |
 | Bake-off eval sets | `{OP_PROJECTS_DATA_ROOT}/{slug}/bakeoff_eval/{curated,public,sample}` |
 | Uploads, state, bake-off job queue | `{OP_STATE_DIR}/projects/{slug}/` (`uploads/`, `bakeoff_jobs/`) |
@@ -155,6 +155,25 @@ them for that project.
 | `OP_INGEST_PRIMARY_LETTERBOX_FILL` | `114,114,114` |
 | `OP_INGEST_SECONDARY_DETECTOR_MODEL` | unset (off) |
 | `OP_INGEST_SECONDARY_DETECTOR_VERSION` / `_INPUT_SIZE` / `_CONFIDENCE_FLOOR` / `_NAME` | `1` / `640` / `0.4` / `secondary` |
+
+Both detectors map a detection to a registry class **by name**: the model's
+own name for its output (its `labels.txt`), then the active registry class of
+that name. A registry that is not in the model's output order labels
+correctly; a name with no active registry class leaves the item unlabeled (the
+secondary leaves the primary's class unchanged) and is logged as
+`detector_class_unmapped`.
+
+The secondary detector takes an original-YOLOv5 ONNX that you export
+yourself with the official `ultralytics/yolov5` repository (bring your own;
+Ultralytics' library cannot load original-YOLOv5 checkpoints, and YOLOv5u is
+the model to serve on the GPU):
+
+```bash
+python export.py --weights yolov5n.pt --include onnx --imgsz 640 --device cpu --simplify
+```
+
+A static export (any square `--imgsz`) is read at its own size; a `--dynamic`
+export runs at 1280.
 
 ## Region detection profile
 

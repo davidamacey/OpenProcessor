@@ -6,6 +6,7 @@ import time
 from fastapi import File, HTTPException, Query, UploadFile, status
 
 from src.core.dependencies import VisualSearchDep
+from src.core.exceptions import RequestRejectedError
 from src.routers._errors import server_error
 from src.routers.search._router import router
 from src.routers.search.models import ObjectSearchResponse, ObjectSearchResult
@@ -58,7 +59,8 @@ async def search_by_object(
     3. Auto-route to appropriate index based on class:
        - Vehicles (car, truck, motorcycle, bus, boat) -> visual_search_vehicles
        - People -> visual_search_people
-       - Other classes -> visual_search_global (fallback)
+       - Other classes -> 422 object_class_not_indexed (the global index holds whole-image
+         vectors, not box vectors)
     4. k-NN search and return top-k results
 
     Use cases:
@@ -82,12 +84,13 @@ async def search_by_object(
 
     Raises:
         HTTPException 400: No objects detected or invalid box_index
+        HTTPException 422: The detected class has no per-object index (object_class_not_indexed)
         HTTPException 500: Detection or search failed
     """
     start_time = time.perf_counter()
 
     try:
-        image_bytes = image.file.read()
+        image_bytes = await image.read()
         if not image_bytes:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -145,7 +148,7 @@ async def search_by_object(
             search_time_ms=round(search_time_ms, 2),
         )
 
-    except (HTTPException, UpstreamError):
+    except (HTTPException, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Object search failed: {e}')

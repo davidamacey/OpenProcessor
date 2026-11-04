@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from _registry_doc_fake import InMemoryRegistry
+
 from curation.bakeoff_router._helpers import LIVE_REMAP, _live_export, make_export, make_run
 from scripts.curation.bakeoff.freeze import test_sha as freeze_test_sha
 from src.services.curation.export_support import frozen_test_sha_of
@@ -60,7 +62,6 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
     """``registry_class_name`` is looked up by ``registry_class_id`` -- never
     assumed equal to the eval dataset's own class name -- and stays null
     for a registry id that has a gap (deprecated/removed) at that slot."""
-    from src.services.curation import eval_datasets
 
     class _Cls:
         def __init__(self, class_id: int, class_name: str) -> None:
@@ -72,7 +73,7 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
             self.classes = classes
 
     class _FakeRegistry:
-        def load(self) -> _Loaded:
+        async def snapshot(self, _client: object) -> _Loaded:
             # LIVE_EXPORT_ID_MAP maps registry r -> export r-1, so the
             # export's 5 test classes (eval ids 37/38/43/51/78) carry
             # registry ids 38/39/44/52/79. Registry id 38 is gone here --
@@ -88,7 +89,7 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
                 ]
             )
 
-    monkeypatch.setattr(eval_datasets, 'get_class_registry', _FakeRegistry)
+    monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', _FakeRegistry)
 
     _live_export(env, background=('bg_0',))
     body = client.get(
@@ -220,3 +221,71 @@ def test_trained_models_for_dataset(env: dict[str, Path], client: TestClient) ->
 
 
 # =============================================================================
+
+
+def _bump(path: Path, seconds: int) -> None:
+    import os
+
+    st = path.stat()
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + seconds * 10**9))
+
+
+def test_eval_datasets_listing_follows_registry_and_dataset_edits(
+    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A registry rename, a new test image and an edited data.yaml all show on
+    the next listing: the cache key covers every input, and registry names are
+    resolved when the wire row is built, not baked into the cached record."""
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': 1, 'class_name': 'cat'}])
+    monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', lambda: registry)
+    d = make_export(
+        env['exports'], 'e1', nc=1, test_labels={'a': [0]}, export_id_map={1: 0}, names=['cat']
+    )
+
+    def row() -> dict:
+        [r] = client.get('/curation/projects/default/bakeoff/eval_datasets').json()['datasets']
+        return r
+
+    first = row()
+    assert (first['classes'][0]['registry_class_name'], first['n_images']) == ('cat', 1)
+
+    registry.rename_class(1, 'feline')
+    (d / 'images' / 'test' / 'extra.jpg').write_bytes(b'img')
+    _bump(d / 'images' / 'test', 5)
+    (d / 'data.yaml').write_text('nc: 1\nnames:\n  0: tabby\n')
+    _bump(d / 'data.yaml', 5)
+
+    second = row()
+    assert second['classes'][0]['registry_class_name'] == 'feline'
+    assert second['classes'][0]['name'] == 'tabby'
+    assert second['n_images'] == 2
+
+
+def test_eval_datasets_unchanged_inputs_return_the_same_record(env: dict[str, Path]) -> None:
+    from src.services.curation import eval_datasets
+
+    make_export(env['exports'], 'e1', nc=1, test_labels={'a': [0]})
+    [a] = eval_datasets.list_eval_datasets()
+    [b] = eval_datasets.list_eval_datasets()
+
+    assert a is b
+
+
+def test_eval_datasets_listing_is_503_when_the_registry_cannot_be_read(
+    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An outage must not read as "no class names": the listing refuses."""
+    from opensearchpy.exceptions import ConnectionError as OsConnectionError
+
+    class _Down(InMemoryRegistry):
+        async def snapshot(self, _client: object = None, **_kw: object) -> object:
+            raise OsConnectionError('N/A', 'opensearch down', Exception('down'))
+
+    down = _Down()
+    monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', lambda: down)
+    make_export(env['exports'], 'e1', nc=1, test_labels={'a': [0]}, names=['cat'])
+
+    r = client.get('/curation/projects/default/bakeoff/eval_datasets')
+
+    assert r.status_code == 503, r.text

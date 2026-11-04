@@ -142,12 +142,14 @@ async def test_default_promote_name_is_unprefixed(
         assert cfg.model_prefix == ''
         triton_name = f'{cfg.model_prefix}detector_v3'
 
-    result = await promoter.promote(
-        status=fake_status,
-        triton_name=triton_name,
-        class_id_to_name={0: 'car'},
-        project=DEFAULT_SLUG,
-    )
+    with bind_project(new_project_record('default', base_curation_config())):
+        # the promote.json write takes a lease in the bound (owning) project's index
+        result = await promoter.promote(
+            status=fake_status,
+            triton_name=triton_name,
+            class_id_to_name={0: 'car'},
+            project=DEFAULT_SLUG,
+        )
     assert result.triton_name == 'detector_v3'
 
 

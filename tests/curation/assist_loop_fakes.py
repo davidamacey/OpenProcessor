@@ -17,9 +17,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from _registry_doc_fake import InMemoryRegistry, use_registry
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.assist_loop.audit import AuditJudge, Auditor, AuditParams
@@ -132,7 +132,7 @@ class FakeVlm:
 class World:
     """Items in candidate clusters, each with a true class and an embedding near its class."""
 
-    registry: ClassRegistry
+    registry: InMemoryRegistry
     os: QueryFakeOpenSearch = field(default_factory=lambda: QueryFakeOpenSearch({ITEMS: {}}))
     truth: dict[str, str] = field(default_factory=dict)
 
@@ -188,12 +188,10 @@ class World:
 def make_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     """A world whose registry holds :data:`CLASSES`, installed as the bound project's. The
     job files skip ``fsync``: durability is the store's own test, not these."""
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+    registry = InMemoryRegistry()
     for name in CLASSES:
-        registry.add_class(name)
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry', lambda: registry
-    )
+        registry.add(name)
+    use_registry(registry)
     monkeypatch.setattr(os, 'fsync', lambda _fd: None)
     return World(registry)
 
@@ -251,7 +249,7 @@ async def drive(
         audit_max_crops=audit_max_crops,
     )
     budget = LoopBudget(store, limits, **({'clock': clock} if clock else {}))
-    ctx = class_context(vlm, ClassWriteGuard('assist_run'), revision=None)
+    ctx = await class_context(vlm, ClassWriteGuard('assist_run'), revision=None)
     meta = RunMeta(
         run_id=store.loop_id,
         created_at=CREATED_AT,
@@ -277,7 +275,7 @@ async def drive(
             budget,
             AuditJudge(
                 world.os,  # type: ignore[arg-type]
-                class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None),
+                await class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None),
                 images_per_call=lp.images_per_call,
                 semaphore=asyncio.Semaphore(vlm_concurrency),
             ),

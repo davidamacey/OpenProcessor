@@ -49,7 +49,7 @@ export interface ConfigEditorBackend<
   ) => Promise<ValidationReport>;
   /** `E` is the event type of the stream the resource follows (the scoped
    *  `CurationEvent`, or the VLM registry's global events). */
-  subscribe: (onEvent: (e: E) => void) => { close(): void };
+  subscribe: (onEvent: (e: E) => void, onResync?: () => void) => { close(): void };
   /** True for the events this resource follows. */
   isEvent: (e: E) => boolean;
 }
@@ -199,7 +199,10 @@ export class ConfigEditor<
 
   start(): void {
     void this.load();
-    this.#sub = this.backend.subscribe((e) => void this.#onEvent(e));
+    this.#sub = this.backend.subscribe(
+      (e) => void this.#onEvent(e),
+      () => void this.#refresh(),
+    );
   }
 
   stop(): void {
@@ -215,6 +218,18 @@ export class ConfigEditor<
     await this.active.load();
     const name = (e as { name?: string | null }).name;
     if (name !== this.name) return;
+    await this.#reread();
+  }
+
+  /** After the event stream reconnects: events may have been missed, so
+   *  re-read the activation and this doc. */
+  async #refresh(): Promise<void> {
+    await this.active.load();
+    await this.#reread();
+  }
+
+  /** Re-reads this doc; a draft with unsaved edits is flagged, not replaced. */
+  async #reread(): Promise<void> {
     if (this.dirty) {
       this.remoteChanged = true;
       return;

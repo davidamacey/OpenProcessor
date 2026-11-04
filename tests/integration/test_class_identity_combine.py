@@ -24,7 +24,8 @@ from integration.test_class_identity_e2e import (
     step_real_export,
     step_stub_train_manifest,
 )
-from src.clients.curation_opensearch.registry import ClassRegistry
+from src.clients.curation_opensearch.registry import get_class_registry
+from src.config.project_context import bind_project
 from src.services.projects.combine import service
 
 
@@ -67,11 +68,10 @@ async def test_class_identity_holds_through_a_combine(tmp_path: Path, monkeypatc
         p: [r.model_dump(exclude_none=True) for r in rows]
         for p, rows in preview.suggested_mapping.items()
     })  # fmt: skip
-    store, target = await run_job(world, request)
+    store, _target = await run_job(world, request)
     assert store.job.read()['status'] == 'completed'
 
-    registry = ClassRegistry(path=target.resources.class_registry_path)
-    names_by_id = {c.class_id: c.class_name for c in registry.load().classes}
+    names_by_id = {cid: name for name, cid in world.registry_ids('combined').items()}
     assert set(names_by_id.values()) == {'car', 'truck', 'bus'}  # one class per name
 
     # Combine hop: tie each SPECIFIC box's geometry to its SPECIFIC class name
@@ -90,6 +90,8 @@ async def test_class_identity_holds_through_a_combine(tmp_path: Path, monkeypatc
             items_index=world.items_index('combined'), images_index=world.images_index('combined')
         ),
     )
+    with bind_project(world.records['combined']):
+        registry = get_class_registry()
     export_dir, dense_mapping = await step_real_export(h, registry, tmp_path)  # type: ignore[arg-type]
     assert_exported_labels_match_fixture_geometry(export_dir, expected)
 
@@ -97,7 +99,10 @@ async def test_class_identity_holds_through_a_combine(tmp_path: Path, monkeypatc
     for registry_id, dense_id in dense_mapping.items():
         dense_names[dense_id] = names_by_id[registry_id]
     manifest = step_stub_train_manifest(dense_mapping, dense_names)
-    class_id_to_name, promote = step_promote_labels(manifest, registry)
+    snapshot = await registry.snapshot(world.fake)
+    class_id_to_name, promote = step_promote_labels(  # type: ignore[arg-type]
+        manifest, SimpleNamespace(load=lambda: snapshot)
+    )
     remap = promote['remap']
     labels = promote['labels_text'].splitlines()
     for registry_id, dense_id in remap.mapping.items():

@@ -173,6 +173,11 @@ others end `interrupted` for a manual restart. "New `queued` wire" means the sta
 | 16 | project delete finish (`op.jobs.project_delete_finish`) | `rg -n "_BACKGROUND_DELETE_TASKS|create_task" src/routers/curation/projects.py`; `rg -n "_FINISH_IN_PROGRESS" src/services/projects/delete.py` | none: the project record OCC is the claim (plain task) | `jobs` | W2 / 2C | n/a (re-DELETE retries) | no |
 | 17 | directory ingest (`op.jobs.directory_ingest`) | `POST /ingest/directory` in `src/routers/ingest/directory.py` (inline `rglob` + `read_bytes`, CC-5) | none: not project-bound (D-22a) | `jobs` | W2 / 2C | no | 202 + job id (wire change) |
 
+| 18 | **person grouping** (`op.jobs.persons_cluster`), **new in this inventory** (research finding, `docs/design/research_clustering_plan.md` N-1) | `POST /persons/cluster` in `src/routers/persons.py` runs an O(n^2) exact FAISS range search and connected components inside the request (about 4 min at 200k faces) | `persons_cluster` (global scope; faces are core-only) | `jobs` | W2 / 2C | no | 202 + job id (wire change) |
+
+The family count above is 17 plus this row; counts elsewhere in this file that say "17 families"
+read as 18 for the person-grouping family.
+
 Not moved (stay in process, allowlisted in B4's ratchet with a reason):
 
 | Site | Why it stays |
@@ -519,7 +524,7 @@ time; it never overlaps B3's GPU window (`11_risks_cleanup_host.md`). Budget rul
 
 **T2 live harness: the one run that covers B1 and B2 together, `-p op-b2-live`, budget 3 h.**
 Because B1 had only a 30-minute lease/registry smoke check, this run first executes the full
-`tests/live` set plus the B1 live scenarios of `02_b1_overview.md` section 7.1 (lease race,
+`tests/live` set plus the B1 live scenarios of B1 (merged; see CHANGELOG.md) section 7.1 (lease race,
 registry race and HTTP sequence, OS-6 hit count, blocked-loop check), then the B2 steps below; it
 is the only live run between the B1 smoke check and B4's 1-vs-32 run. The harness needs no GPU
 (the arbiter step uses the overlay, not a model). `docker/test/compose.yml` gains
@@ -540,7 +545,24 @@ Wait with healthchecks or the Monitor tool; no sleep loops.
 | 9 | GPU arbiter with the overlay: training start | one stop per configured container in the Docker events log, not 32 | 15 min |
 | 10 | two auto-label consumers (harness only) + one job; kill mid-stage; cancel at a stage boundary | one run; `interrupted` and manual restart; `cancelled` | 20 min |
 | 11 | per-family smoke (start, progress, completes) for the 17 families | each completes | 20 min |
-| 12 | acceptance subset: `acceptance_run.sh --only ingest,cluster,holdout,label_ops,loop,export,train,bakeoff,promote` on this stack | PASS | 15 min |
+| 12 | two B1 scenarios that were never scripted, written as `tests/live/` tests before this run (see the two tasks after this table) | both pass | 10 min |
+| 13 | acceptance subset: `acceptance_run.sh --only ingest,cluster,holdout,label_ops,loop,export,train,bakeoff,promote` on this stack | PASS | 15 min |
+
+**Live-test gap carried from B1 (tasks for the B2 live-run lane).** B1 merged with two of its
+planned live checks never scripted as tests. Write both under `tests/live/` (harness rules in
+`docker/test/README.md`; red first where a pre-fix state is reproducible) and run them as step 12:
+
+- **OS-6 filtered-kNN hit count.** On a legacy visual-search index with more than `k`
+  documents of which a restrictive class filter matches only a few, a filtered
+  `/search/objects` query returns `k` hits. The filter sits inside the `knn` clause now
+  (`src/clients/opensearch/search.py`); the same query with the filter wrapped in `bool.filter`
+  beside the `knn` clause returns fewer. Record both hit counts in `docs/PERFORMANCE.md` and
+  `docs/opensearch_schema_design.md`.
+- **Blocked-loop lease heartbeat.** Start an API-hosted leased job (a reprocess or an item
+  score), then block the API event loop with a large dataset upload; the lease document's
+  `heartbeat_at` keeps advancing during the block (the heartbeat thread has its own loop and
+  client, `src/services/curation/lease_heartbeat.py`) and the job is not marked `interrupted`.
+  Also record the lease p50 and p99 acquire latency in `docs/PERFORMANCE.md`.
 
 Total 3 h. A step that overruns stops the sweep; the coordinator reports it instead of extending
 the budget silently.

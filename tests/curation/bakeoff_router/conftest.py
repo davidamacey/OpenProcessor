@@ -64,4 +64,14 @@ def client() -> TestClient:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
+    # The registry-reading routes take the OpenSearch dependency; the in-memory registry
+    # needs no cluster behind it.
+    from src.routers.curation import _raw_opensearch_dep
+
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: None
+    # The handler create_app registers: a backing-service failure is a 503.
+    from src.core.error_handlers import upstream_unavailable_response
+    from src.utils.upstream_errors import UpstreamError
+
+    app.exception_handler(UpstreamError)(upstream_unavailable_response)
     return TestClient(app)

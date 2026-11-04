@@ -121,6 +121,20 @@ surfaces raise a typed body:
 `force_allowed`; an issue has `code`, `severity`, `message`, `field`, `detail`,
 `bypassable`).
 
+Error bodies carry no exception class name: a 500 and the Triton-unavailable 503 hold
+`detail` and `request_id` only (the server log records the class). `/curation` JSON bodies
+carry no `total_time_ms` or `request_id`; the `X-Process-Time` and `X-Request-ID` response
+headers remain, and core inference routes and their `/v1` aliases keep the body keys.
+
+A singleton job that is already running answers `409` with the family's busy code
+(`reprocess_busy`, `import_busy`, `assist_busy`, `assist_loop_busy`, `label_op_busy`, or a
+plain 409 for scores, selection and projection). If OpenSearch cannot be reached to take the
+job lease the start answers `503`. The class routes of a project whose registry is not yet
+migrated answer `409 registry_not_migrated`; a class write that loses five compare-and-set
+races in a row answers `409 registry_conflict`, and one past 10000 classes
+`409 registry_full`. `POST /search/object` (a core route) answers
+`422 object_class_not_indexed` for a box whose class is neither a vehicle nor a person.
+
 Older routes (crops, classes, review, export, training, clusters) raise
 `{"detail": "<string>"}` or `{"detail": {"error": "<code>", ...}}`. Validation
 failures of a request body are the standard FastAPI `422` list.
@@ -129,7 +143,7 @@ failures of a request body are the standard FastAPI `422` list.
 |---|---|
 | `404` | `project_not_found`, `not_found`, `ingest_source_not_found`, `unknown_revision`, `model_not_found`, `crop_not_found`, `image_not_found`, `import_not_found`, `combine_not_found`, an export artifact that is not whitelisted or not present, `unknown_box_id` |
 | `403` | `read_only` (a non-stored pack, profile or endpoint), region-detector models in `DELETE /models/{model_name}` |
-| `409` | `crop_not_embedded`, `box_not_embedded` (`GET /search/similar`), `project_archived`, `project_read_only`, `project_building`, `project_deleting`, `project_failed`, `project_busy`, `project_protected`, `slug_taken`, `slug_retired`, `last_active_project`, `shard_budget_exceeded`, `invalid_transition`, `target_not_empty`, `clone_source_not_ready`, `in_use`, `name_conflict`, `revision_conflict`, `active_conflict`, `no_previous`, `previous_deleted`, `no_active_profile`, `preview_stale`, `assist_loop_running`, `audit_no_candidates`, `detector_in_use`, `project_owned_model`, `webhook_disabled`, `combine_not_resumable`, `import_busy`, `import_resumable`, `import_not_resumable`, `import_not_undoable`, `dataset_changed`, `reprocess_busy`, `class_hotkey_conflict`, `hotkey_taken`, `region_conflict`, `vlm_not_configured`, `vlm_endpoint_unavailable`, `no_local_vlm`, `finish_in_progress`, `no_classes` |
+| `409` | `crop_not_embedded`, `box_not_embedded` (`GET /search/similar`), `project_archived`, `project_read_only`, `project_building`, `project_deleting`, `project_failed`, `project_busy`, `project_protected`, `slug_taken`, `slug_retired`, `last_active_project`, `shard_budget_exceeded`, `invalid_transition`, `target_not_empty`, `clone_source_not_ready`, `in_use`, `name_conflict`, `revision_conflict`, `active_conflict`, `no_previous`, `previous_deleted`, `no_active_profile`, `preview_stale`, `assist_loop_running`, `audit_no_candidates`, `detector_in_use`, `project_owned_model`, `webhook_disabled`, `combine_not_resumable`, `import_busy`, `import_resumable`, `import_not_resumable`, `import_not_undoable`, `dataset_changed`, `reprocess_busy`, `class_hotkey_conflict`, `hotkey_taken`, `registry_not_migrated`, `registry_full`, `registry_conflict`, `region_conflict`, `vlm_not_configured`, `vlm_endpoint_unavailable`, `no_local_vlm`, `finish_in_progress`, `no_classes` |
 | `413` | `upload_too_large` (also `POST /search/image`: over `OP_SEARCH_IMAGE_MAX_BYTES` or `OP_SEARCH_IMAGE_MAX_PIXELS`), an upload or batch over its per-request limit |
 | `422` | `validation_failed`, `slug_invalid`, `confirm_mismatch`, `combine_invalid`, `class_mapping_incomplete`, `class_mapping_invalid`, `import_blocked`, `format_undetected`, `dataset_path_not_allowed`, `archive_invalid`, `reprocess_targets_invalid`, `region_profile_required`, `unknown_pack`, `unknown_profile`, `unknown_detector_names`, `ingest_source_invalid`, `too_few_items`, `unknown_vlm`, `vlm_external_not_acknowledged`, `unknown_catalog_id`, `vlm_catalog_does_not_fit`, `export_outside_project`, `pack_invalid`, `profile_invalid`, `no_box_to_verify`, `too_many_crops`, `too_many_crop_ids`, `too_many_boxes`, `region_text_disabled`, `box_id_in_batch`, `box_id_required` |
 | `429` | `probe_busy` (VLM endpoint probe), `test_busy` (test-on-crop) |
@@ -1401,7 +1415,7 @@ Cluster ids partition into ranges:
 |---|---|---|
 | GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class` (repeatable), `min_size`, `max_size`, `validation_state`, `flag` (repeatable, any of), `needs_review` |
 | GET | `/clusters/{cluster_id}/facets` | counts of one cluster's members for filter chips, typed `ClusterFacets`: `detector_classes` (top 20), `class_sources`, `validation`, `review_tabs`, `detector_confidence` (ten bins of 0.1, the last open-ended) and `detector_confidence_missing`. Each count is the `total` of the matching filtered `GET /crops` call; the test holdout and excluded items are not members. A cluster with no members answers zeros |
-| GET | `/clusters/representatives` | `per_cluster`, `max_clusters`, `class_id`, `offset` |
+| GET | `/clusters/representatives` | `per_cluster`, `max_clusters` (max 1000), `class_id`, `offset` (max 64535, so `offset + max_clusters` stays within OpenSearch `search.max_buckets`; above it `422`) |
 | POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`, `promote_min_precision` (default 0.95), `force`. Validates classifier-labelled members of pure clusters. Refused with `409 audit_required` / `audit_precision_low` (and `classes`) unless every class it would promote has enough audited crops at the required detector precision, or `force=true`; a dry run is never gated |
 | POST | `/clusters/refine/{cluster_id}` | AHC refine of one cluster. `distance_threshold`, `max_members`. Writes `cluster_subid` |
 | POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool and re-cluster it. Returns the clustering summary |

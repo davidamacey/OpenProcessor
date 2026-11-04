@@ -82,9 +82,9 @@ if TYPE_CHECKING:
 # ---- shared resolution ---------------------------------------------------------
 
 
-def _registry() -> tuple[list[str], dict[str, int]]:
+async def _registry(opensearch: Any) -> tuple[list[str], dict[str, int]]:
     """The labelable class names and ``name -> class_id`` of the bound project."""
-    labelable = item_classes(get_class_registry().load().classes)
+    labelable = item_classes((await get_class_registry().snapshot(opensearch)).classes)
     return [c.class_name for c in labelable], {c.class_name: int(c.class_id) for c in labelable}
 
 
@@ -108,7 +108,9 @@ async def _resolve_pack(
         raise api_error(422, 'validation_failed', 'give a saved pack or a draft, not both')
     if draft is not None:
         data = {**draft.model_dump(), 'name': 'draft'}
-        report = validate_pack(None, data, profile=profile, class_names=frozenset(_registry()[0]))
+        report = validate_pack(
+            None, data, profile=profile, class_names=frozenset((await _registry(opensearch))[0])
+        )
         if not report.ok:
             raise api_error(422, 'pack_invalid', 'the draft pack has errors', report=report)
         return PromptPack.from_dict(data), None, True
@@ -244,7 +246,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
         raise api_error(
             409, 'no_active_profile', 'combined needs a region profile (active or profile_name)'
         )
-    class_names, name_to_id = _registry()
+    class_names, name_to_id = await _registry(opensearch)
     if body.class_names is not None:
         class_names = body.class_names
     crops = await _load_crops(opensearch, body.crop_ids)
@@ -313,7 +315,10 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
             for r in run.results
         ],
         validation=validate_pack(
-            None, pack.to_dict(), profile=profile, class_names=frozenset(_registry()[0])
+            None,
+            pack.to_dict(),
+            profile=profile,
+            class_names=frozenset((await _registry(opensearch))[0]),
         ),
     )
 
@@ -366,7 +371,7 @@ async def _resolve_profile(
         name,
         data,
         segmenter_health=configured_segmenter_health,
-        class_names=frozenset(_registry()[0]),
+        class_names=frozenset((await _registry(opensearch))[0]),
         project_slug=get_curation_config().project_slug,
     )
     if not report.ok:
@@ -420,7 +425,7 @@ async def test_region_profile(
             profile=profile,
         )
         labeler = await _labeler(endpoint, pack)
-        class_names, name_to_id = _registry()
+        class_names, name_to_id = await _registry(opensearch)
         verify = VerifyContext(
             labeler=labeler,
             pack_stamp=prompt_pack_stamp(pack, revision=pack_revision),

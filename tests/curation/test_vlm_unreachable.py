@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation import vlm_cli, vlm_worker
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.worker_liveness import check_heartbeat, write_heartbeat
 from src.services.labeling.vlm_client import VlmIdentity
@@ -56,8 +56,8 @@ async def _call_route(
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('widget')
+    reg = InMemoryRegistry()
+    reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
     async def _no_pack(_os: Any) -> None:
@@ -142,7 +142,7 @@ class _Env:
         m.setattr(vlm_worker, 'fetch_pending_ids', self._fetch)
         m.setattr(vlm_worker, 'label_batch', self._label)
         m.setattr(vlm_worker, 'heartbeat_loop', self._heartbeat)
-        m.setattr(vlm_worker, 'project_has_item_classes', lambda _r: True)
+        m.setattr(vlm_worker, 'project_has_item_classes', self._has_classes)
         m.setattr(vlm_worker, 'bind_project', lambda _r: __import__('contextlib').nullcontext())
         real_sleep = asyncio.sleep
 
@@ -157,6 +157,9 @@ class _Env:
 
     async def close(self) -> None:
         return None
+
+    async def _has_classes(self, _os: Any, _record: Any) -> bool:
+        return True
 
     async def _projects(self, *_a: Any) -> list[Any]:
         return [SimpleNamespace(slug='alpha')]

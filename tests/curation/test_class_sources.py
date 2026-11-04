@@ -302,6 +302,7 @@ def test_no_suggestion(doc: dict[str, Any]) -> None:
 def test_every_catalog_entry_has_a_short_badge_label() -> None:
     from src.services.curation.class_sources import class_source_catalog
 
+    assert class_source_catalog()
     for entry in class_source_catalog():
         assert entry['short_label'], entry
         assert len(entry['short_label'].split()) <= 2, entry

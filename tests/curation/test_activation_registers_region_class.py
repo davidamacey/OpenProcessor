@@ -7,9 +7,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
 from curation.test_region_profiles_router import PREFIX, _body, _reset_caches, app_client  # noqa: F401
-from src.clients.curation_opensearch.registry import ClassRegistry
 
 
 if TYPE_CHECKING:
@@ -19,21 +19,21 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ClassRegistry:
+def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> InMemoryRegistry:
     import src.services.curation.region_class as mod
 
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
+    reg = InMemoryRegistry()
     monkeypatch.setattr(mod, 'get_class_registry', lambda: reg)
     return reg
 
 
-def _classes(reg: ClassRegistry) -> list[tuple[str, str]]:
+def _classes(reg: InMemoryRegistry) -> list[tuple[str, str]]:
     return [(c.class_name, c.group) for c in reg.load().classes]
 
 
 def test_activation_registers_the_region_class_once_and_deactivation_keeps_it(
     app_client: TestClient,  # noqa: F811
-    registry: ClassRegistry,
+    registry: InMemoryRegistry,
 ) -> None:
     app_client.post(PREFIX, json={'name': 'wheels', 'body': _body(region_class_name='wheel')})
     assert _classes(registry) == []

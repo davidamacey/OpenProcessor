@@ -236,7 +236,7 @@ cancelled and resumed. Undoing a combine is deleting the target project.
 | `images` | One document per ingested source image | `image_id`, `image_path`, `imohash`, `phash`, `embedding` (512-d), `pe_embedding` (1024-d) |
 | `items` | One document per crop (item) | see below |
 | `labels_confirmed` | Mapping kept, nothing writes it in this release | `label_id`, `crop_id`, `class_id`, `class_name`, `confirmed_at` |
-| `classes` | The class registry mirror | `class_id`, `class_name`, `group`, `deprecated`, `sample_count`, `validated_count` |
+| `classes` | The class registry mirror (the registry itself is one document, below) | `class_id`, `class_name`, `group`, `deprecated`, `sample_count`, `validated_count` |
 | `umap_state` | Fitted reducer cache for clustering | `state_id`, `reducer_b64` |
 | `configs` | Config store plus folded settings and projection state | `doc_type`, `kind`, `name`, `revision`, `body` |
 
@@ -247,11 +247,22 @@ provenance (`vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`), import and combine
 provenance, and the region fields described next. The exact wire keys are in
 [`contracts/json/item_wire.json`](../contracts/json/item_wire.json).
 
-**Class identity is the name.** The class registry
-(`class_registry.json` per project) assigns indexes, but every boundary maps by
+**The class registry is one OpenSearch document per project** (id `class_registry` in
+the settings index), written with optimistic concurrency: every change is one versioned
+read-modify-write that re-reads and re-applies on a conflict, so two users, an import, a
+combine and the open-vocabulary pass can add classes at once without losing one or giving
+two classes one id. `ensure_class` is idempotent by name for the automated writers. A 0.6.0
+`class_registry.json` is moved by `openprocessor curation migrate-registry` (run by
+`upgrade` and `repair`); until then the class routes answer 409 `registry_not_migrated`.
+The file is now only an export snapshot, the training pin and what a rollback writes back.
+See [opensearch_schema_design.md](opensearch_schema_design.md#the-class-registry-document).
+
+**Class identity is the name.** The class registry assigns indexes, but every boundary maps by
 name: dataset import and export, combine, training, promotion and sharing a
 trained model with another project. An index is only a position inside one
-registry at one moment.
+registry at one moment. The ingest secondary detector, and the primary when
+`OP_INGEST_PRIMARY_ASSIGNS_CLASS` is set, resolve the registry class named like the model's
+output, never the output index.
 
 The global indexes (`visual_search_global`, `_vehicles`, `_people`, `_faces`,
 `_ocr`) belong to the inference API and are described in
@@ -425,6 +436,28 @@ time. Single-target forms:
 
 ## Workers, jobs and events
 
+- **Job leases.** A singleton job is claimed by an OpenSearch lease document
+  (`lease:<kind>[:<scope>]` in the project's settings-role index), written create-only and
+  with `if_seq_no`/`if_primary_term`. A holder renews it every 15 s on a thread with its own
+  event loop and client (a blocked request loop cannot cost a live job its lease); the lease
+  expires 120 s after the last renew, and a holder stops writing state 90 s after its last
+  good renew. Startup reconcile is a lease takeover, so a sibling's live job is never marked
+  `interrupted`. No file lock guards cross-process state (`scripts/codegen/check_file_locks.py`
+  lists the few left). The trainer claims a job with create-only generation claim files.
+- **Per-process caches.** Each API worker process keeps its own caches, so a rule must not
+  depend on another process noticing a change. The class-name cache
+  (`src/utils/class_names.py`) is keyed by the `(st_mtime_ns, st_size)` of the model's
+  `labels.txt`, one `stat` per lookup, so every worker sees a promote on its next request and a
+  missing file is never cached. The settings document cache holds a value for 5 s and raises
+  on a failed read instead of caching an empty document. The diverse-order and outlier caches
+  are bounded `cachetools` TTL caches. The eval-dataset listing resolves class names at read
+  time, and its cache key includes the mtimes of `data.yaml` and `images/test`. The VLM probe
+  cap (two at a time) is per API worker process.
+- **OCR detector input size.** `/ocr` (`src/clients/triton_ocr.py`) follows PaddleOCR
+  `DetResizeForTest`: long side scaled into 640-960, each side rounded to a multiple of 32.
+  The region cascade (`ocr_det_input_size`) sizes crops to 320-960 per side. The two stay
+  separate on purpose: the default detector engine profile is 32x32 to 960x960
+  (`scripts/export_paddleocr.sh`), so `/ocr` cannot send a thin image the engine refuses.
 - **File protocols.** The API and the workers share the state volumes. Training
   and auto-label jobs are JSON files the API writes and the long-lived worker
   claims; status flows back as files. A heartbeat marks a live claim; a job

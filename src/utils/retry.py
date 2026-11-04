@@ -11,19 +11,24 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 
 import grpc
+from tritonclient.utils import InferenceServerException
 
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
-# Triton gRPC error codes that are retryable
-RETRYABLE_GRPC_CODES = {
-    grpc.StatusCode.UNAVAILABLE,  # Server overloaded
-    grpc.StatusCode.RESOURCE_EXHAUSTED,  # Queue full
-    grpc.StatusCode.DEADLINE_EXCEEDED,  # Timeout
-    grpc.StatusCode.ABORTED,  # Request aborted
-}
+# ``InferenceServerException.status()`` carries ``str(grpc.StatusCode)`` for a gRPC failure
+# (tritonclient ``get_error_grpc``). DEADLINE_EXCEEDED is not retried: the caller's deadline
+# already passed, and INVALID_ARGUMENT never succeeds on a second try.
+RETRYABLE_STATUSES = frozenset(
+    str(code)
+    for code in (
+        grpc.StatusCode.UNAVAILABLE,
+        grpc.StatusCode.RESOURCE_EXHAUSTED,
+        grpc.StatusCode.ABORTED,
+    )
+)
 
 
 class RetryExhaustedError(Exception):
@@ -34,32 +39,16 @@ class RetryExhaustedError(Exception):
         self.last_error = last_error
 
 
-def is_retryable_error(error: Exception) -> bool:
+class TritonDeadlineError(RetryExhaustedError):
+    """A Triton call missed its ``client_timeout``. Never retried; the API answers 504.
+
+    A ``RetryExhaustedError`` so the route handlers that already re-raise it pass it through.
     """
-    Check if an error is retryable.
 
-    Args:
-        error: The exception to check
 
-    Returns:
-        True if the error is retryable
-    """
-    # Check for gRPC errors
-    if hasattr(error, 'code') and callable(error.code):
-        return error.code() in RETRYABLE_GRPC_CODES
-
-    # Check error message for common retryable patterns
-    error_str = str(error).lower()
-    retryable_patterns = [
-        'queue full',
-        'resource exhausted',
-        'unavailable',
-        'timeout',
-        'deadline exceeded',
-        'connection refused',
-        'server overloaded',
-    ]
-    return any(pattern in error_str for pattern in retryable_patterns)
+def is_retryable_error(error: BaseException) -> bool:
+    """Whether a Triton client error is transient: its ``status()`` is in ``RETRYABLE_STATUSES``."""
+    return isinstance(error, InferenceServerException) and error.status() in RETRYABLE_STATUSES
 
 
 def retry_sync[T](

@@ -85,7 +85,7 @@ class BulkStore:
     def repaired_state(self) -> dict[str, Any]:
         """The job state, with a run left active by a dead worker rewritten to
         ``interrupted`` first (so it can be resumed)."""
-        return self.job.repair_if_stale(ACTIVE_STATUSES, error_prefix='bulk ingest')
+        return self.job.served_state(ACTIVE_STATUSES, error_prefix='bulk ingest')
 
     def write_request(self, payload: dict[str, Any]) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)

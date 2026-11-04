@@ -222,8 +222,9 @@ def test_docker_compose_renders_the_same_command(tmp_path: Path) -> None:
         text=True,
         env={'PATH': '/usr/bin:/bin:/usr/local/bin', 'HOME': str(REPO_ROOT)},
     )
-    if result.returncode != 0:
-        pytest.skip(f'docker compose could not render the file here: {result.stderr[:200]}')
+    if 'docker: unknown command' in result.stderr or 'is not a docker command' in result.stderr:
+        pytest.skip('docker compose plugin unavailable')
+    assert result.returncode == 0, result.stderr
     rendered = json.loads(result.stdout)['services']['vlm']
     assert rendered['entrypoint'] == ['/bin/sh', '-c']
     (script,) = rendered['command']

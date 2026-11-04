@@ -6,8 +6,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _lease_hold import aheld
 
-from src.services.curation.job_lock import exclusive_start_lock
 from src.services.projects import legacy_repair
 
 
@@ -23,6 +23,11 @@ class _Client:
         self.legacy = legacy
         self.failures = failures
         self.updates = 0
+        self.done = 0
+        self.tasks = self
+
+    async def get(self, **_kw: Any) -> dict[str, Any]:
+        return {'completed': True, 'response': {'updated': self.done}}
 
     async def count(self, **_kw: Any) -> dict[str, Any]:
         return {'count': self.legacy}
@@ -32,8 +37,8 @@ class _Client:
             self.failures -= 1
             raise _BusyError('rejected_execution_exception')
         self.updates += 1
-        done, self.legacy = self.legacy, 0
-        return {'updated': done}
+        self.done, self.legacy = self.legacy, 0
+        return {'task': 'node:1'}
 
 
 @pytest.fixture(autouse=True)
@@ -59,28 +64,26 @@ def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
 
 @pytest.mark.asyncio
-async def test_a_second_process_skips_while_the_first_holds_the_lock(tmp_path) -> None:
-    lock = tmp_path / 'legacy_repair.lock'
+async def test_a_second_process_skips_while_the_first_holds_the_lease(tmp_path) -> None:
     client = _Client()
-    with exclusive_start_lock(lock) as mine:
-        assert mine
-        await legacy_repair.repair_bound_project(client, 'p', lock, 'items')
+    async with aheld('legacy_repair'):
+        await legacy_repair.repair_bound_project(client, 'p', 'items')
     assert client.updates == 0
-    await legacy_repair.repair_bound_project(client, 'p', lock, 'items')
+    await legacy_repair.repair_bound_project(client, 'p', 'items')
     assert client.updates == 1
 
 
 @pytest.mark.asyncio
 async def test_rerun_with_nothing_legacy_starts_no_task(tmp_path) -> None:
     client = _Client(legacy=0)
-    await legacy_repair.repair_bound_project(client, 'p', tmp_path / 'l', 'items')
+    await legacy_repair.repair_bound_project(client, 'p', 'items')
     assert client.updates == 0
 
 
 @pytest.mark.asyncio
 async def test_429_is_retried_with_backoff_not_dropped(tmp_path, slept: list[float]) -> None:
     client = _Client(failures=2)
-    await legacy_repair.repair_bound_project(client, 'p', tmp_path / 'l', 'items')
+    await legacy_repair.repair_bound_project(client, 'p', 'items')
     assert client.updates == 1
     assert slept == [2.0, 4.0]
 
@@ -88,7 +91,7 @@ async def test_429_is_retried_with_backoff_not_dropped(tmp_path, slept: list[flo
 @pytest.mark.asyncio
 async def test_a_persistent_failure_is_logged_not_raised(tmp_path) -> None:
     client = _Client(failures=99)
-    await legacy_repair.repair_bound_project(client, 'p', tmp_path / 'l', 'items')
+    await legacy_repair.repair_bound_project(client, 'p', 'items')
     assert client.updates == 0
     assert client.legacy == 5
 
@@ -99,7 +102,7 @@ async def test_a_non_429_error_is_not_retried(tmp_path, slept: list[float]) -> N
         async def update_by_query(self, **_kw: Any) -> dict[str, Any]:
             raise ValueError('bad request')
 
-    await legacy_repair.repair_bound_project(_Broken(), 'p', tmp_path / 'l', 'items')
+    await legacy_repair.repair_bound_project(_Broken(), 'p', 'items')
     assert slept == []
 
 
@@ -112,7 +115,7 @@ async def test_region_class_failure_does_not_stop_the_backfill(
 
     monkeypatch.setattr(legacy_repair, '_ensure_active_region_class', _boom)
     client = _Client()
-    await legacy_repair.repair_bound_project(client, 'p', tmp_path / 'l', 'items')
+    await legacy_repair.repair_bound_project(client, 'p', 'items')
     assert client.updates == 1
 
 
@@ -129,7 +132,7 @@ async def test_active_region_class_is_registered_after_the_snapshot_loads(
 
     monkeypatch.setattr('src.services.config_store.get_config_store', _Store)
 
-    def _ensure() -> int:
+    async def _ensure(_client: Any) -> int:
         order.append('ensure')
         return 7
 
@@ -158,7 +161,7 @@ async def test_a_repair_that_changed_nothing_is_not_logged_at_info(
 ) -> None:
     rec = _Recorder()
     monkeypatch.setattr(legacy_repair, 'logger', rec)
-    await legacy_repair.repair_bound_project(_Client(legacy=0), 'p', tmp_path / 'l', 'items')
+    await legacy_repair.repair_bound_project(_Client(legacy=0), 'p', 'items')
     assert ('info', 'legacy_project_repair') not in rec.calls
 
 
@@ -168,5 +171,5 @@ async def test_a_repair_that_backfilled_rows_is_logged_at_info(
 ) -> None:
     rec = _Recorder()
     monkeypatch.setattr(legacy_repair, 'logger', rec)
-    await legacy_repair.repair_bound_project(_Client(legacy=5), 'p', tmp_path / 'l', 'items')
+    await legacy_repair.repair_bound_project(_Client(legacy=5), 'p', 'items')
     assert ('info', 'legacy_project_repair') in rec.calls

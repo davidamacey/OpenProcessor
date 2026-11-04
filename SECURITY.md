@@ -113,6 +113,9 @@ the files it covers. Release signing is follow-up work.
   in production)"). There is no authentication on the OpenSearch or
   OpenSearch Dashboards ports either. Enable OpenSearch's security
   plugin before any production or multi-tenant deployment.
+- **Saved clustering state.** The saved FAISS index and its metadata (JSON) are plain
+  data. The stored UMAP reducer is a Python serialized object, so treat write access to
+  the OpenSearch settings index and to the saved-state directory as trusted.
 
 ### VLM endpoints and server-side requests
 

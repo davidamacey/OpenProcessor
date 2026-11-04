@@ -85,8 +85,9 @@ from __future__ import annotations
 
 import json
 import math
-import time
 from typing import Any
+
+from cachetools import TTLCache
 
 from src.config.env import env_bool, env_float, env_int
 from src.services.curation.selection import k_center_greedy
@@ -139,8 +140,8 @@ def _get_diverse_inline_max() -> int:
     return max(1, min(max_n(), math.isqrt(sync_max_ops())))
 
 
-_ORDER_CACHE: dict[str, dict[str, Any]] = {}
 _CACHE_TTL_S = env_float('OP_SELECT_CACHE_TTL_S', 600)
+_ORDER_CACHE: TTLCache[str, dict[str, Any]] = TTLCache(maxsize=256, ttl=_CACHE_TTL_S)
 
 
 def _cache_key(index: str, query: dict[str, Any], k: int | None = None) -> str:
@@ -170,13 +171,8 @@ async def compute_diverse_order(
 
     inline_max = _get_diverse_inline_max()
     key = _cache_key(index, query, k)
-    now = time.monotonic()
     cached = _ORDER_CACHE.get(key)
-    if (
-        cached is not None
-        and (now - cached['at']) < _CACHE_TTL_S
-        and (current_count is None or cached['count'] == current_count)
-    ):
+    if cached is not None and (current_count is None or cached['count'] == current_count):
         typed: list[str] | None = cached['order']
         return typed
 
@@ -195,5 +191,5 @@ async def compute_diverse_order(
     n_pick = len(ids) if k is None else min(k, len(ids))
     order_idx = k_center_greedy(l2_normalize(embeddings), n_pick)
     order = [ids[i] for i in order_idx.tolist()]
-    _ORDER_CACHE[key] = {'order': order, 'count': pool_count, 'at': now}
+    _ORDER_CACHE[key] = {'order': order, 'count': pool_count}
     return order

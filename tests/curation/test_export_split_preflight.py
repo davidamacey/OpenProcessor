@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -118,19 +119,14 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
-    class _Reg:
-        def load(self) -> Any:
-            class _Snap:
-                classes: list[Any] = []
+    empty_registry = InMemoryRegistry()
 
-            return _Snap()
+    def _registry() -> InMemoryRegistry:
+        return empty_registry
 
-        def get(self, _cid: int) -> Any:
-            return None
+    monkeypatch.setattr('src.services.training.preflight_run.get_class_registry', _registry)
 
-    monkeypatch.setattr('src.services.training.preflight_run.get_class_registry', _Reg)
-
-    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
+    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _registry)
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'hits': {'hits': [], 'total': {'value': 0}}})
     fake.count = AsyncMock(return_value={'count': 0})

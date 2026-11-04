@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.clients.opensearch.tasks import run_update_by_query_polled
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
-from src.services.curation.clustering.id_normalize import run_update_by_query_polled
 
 
 if TYPE_CHECKING:

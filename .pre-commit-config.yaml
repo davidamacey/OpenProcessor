@@ -27,7 +27,7 @@ repos:
 
   # Ruff: Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.1
+    rev: v0.17.3
     hooks:
       - id: ruff-check
         args: [--fix, --show-fixes]
@@ -135,6 +135,13 @@ repos:
       - id: check-process-ids
         name: No work-package ids or history names in comments, docstrings or file names
         entry: python3 scripts/codegen/check_process_ids.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-file-locks
+        name: No file locks guard cross-process state (use a job lease)
+        entry: python3 scripts/codegen/check_file_locks.py
         language: system
         pass_filenames: false
         always_run: true

@@ -28,13 +28,10 @@ use, resolved fresh per call from ``OP_PROBE_JOBS_DIR`` (default
 process mounts, consistent with ``item_scores``' ``/jobs/scores`` and
 ``embedding_viz``'s ``/jobs/viz``).
 
-Singleton start is additionally guarded by an ``fcntl.flock`` lock file
-(:mod:`src.services.curation.job_lock`) so the check-is-busy +
-write-'running' sequence is atomic across processes, not just within one
--- see that module's docstring. The same cross-process gap existed in
-``item_scores.job.start_job`` (a bare ``_is_busy()`` check with no lock at
-all) and is fixed there too, in the same change that introduced this
-module's rewrite.
+Singleton start is guarded by the ``probe`` job lease
+(:mod:`src.clients.job_lease`), so the check-is-busy + write-'running'
+sequence is atomic across processes, not just within one; a heartbeat thread
+keeps the lease and the file heartbeat alive for the whole run.
 
 GPU: this module never decides whether to use one -- the caller passes
 ``gpu`` (a ``cuda_visible_devices`` string) or ``None`` for CPU. When a
@@ -59,7 +56,9 @@ from src.config.curation_accessors import get_curation_config
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
-from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob, heartbeat_ticker
+from src.domain.job_lease import LeaseKind
+from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
+from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
 from src.utils.timeutil import now_iso
 
 
@@ -92,10 +91,6 @@ def _jobs_dir() -> Path:
 
 def _job() -> FileJob:
     return FileJob(_jobs_dir())
-
-
-def _lock_file() -> Path:
-    return _jobs_dir() / 'start.lock'
 
 
 @dataclass
@@ -181,7 +176,6 @@ async def _run(
         # someone else's run.
         return
     _job().touch_heartbeat()
-    ticker = asyncio.create_task(heartbeat_ticker(_job()))
     try:
         updated = await run_probe_inference(
             model_path,
@@ -214,9 +208,6 @@ async def _run(
         state.finished_at = now_iso()
         _job().write(state.to_dict())
     finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
         if gpu is not None:
             from src.services.training.gpu_arbiter import release_gpus_after_training
 
@@ -248,23 +239,24 @@ async def start_probe_job(
     :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`, rather
     than letting the background task fail after the caller already got a
     200."""
-    from src.services.curation.job_lock import exclusive_start_lock
     from src.services.curation.probe_models import PROBE_ARCHITECTURES
 
     if architecture not in PROBE_ARCHITECTURES:
         msg = f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
         raise ValueError(msg)
 
-    with exclusive_start_lock(_lock_file()) as acquired:
-        if not acquired:
-            msg = 'a probe job start is already in progress on another worker'
-            raise ProbeJobBusyError(msg)
-
-        if _is_busy():
-            busy_state = _read_state()
-            msg = f'a probe job is already running: {busy_state.job_id!r}'
-            raise ProbeJobBusyError(msg)
-
+    if _is_busy():
+        msg = f'a probe job is already running: {_read_state().job_id!r}'
+        raise ProbeJobBusyError(msg)
+    beat = await acquire_heartbeat(
+        opensearch,
+        LeaseKind.PROBE,
+        None,
+        job_id,
+        job=_job(),
+        busy=lambda holder: ProbeJobBusyError(f'a probe job is already running: {holder!r}'),
+    )
+    try:
         if gpu is not None:
             from src.services.training.gpu_arbiter import claim_gpus_for_training
 
@@ -281,8 +273,14 @@ async def start_probe_job(
             started_at=now_iso(),
         )
         _job().write(state.to_dict())
-
-        _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
+    except BaseException:
+        await beat.release(opensearch)
+        raise
+    beat.start()
+    _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
+        run_leased(
+            beat,
+            opensearch,
             _run(
                 job_id,
                 train_job_id,
@@ -292,8 +290,9 @@ async def start_probe_job(
                 gpu=gpu,
                 architecture=architecture,
                 resume=resume,
-            )
+            ),
         )
+    )
     return state.to_dict()
 
 
@@ -320,8 +319,6 @@ def _reset_for_tests() -> None:
     with contextlib.suppress(FileNotFoundError):
         job.state_file.unlink()
     job.clear_signals()
-    with contextlib.suppress(FileNotFoundError):
-        _lock_file().unlink()
 
 
 __all__ = [

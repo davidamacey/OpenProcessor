@@ -5,6 +5,7 @@ and its trigger is withdrawn."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 
@@ -38,7 +39,7 @@ def clock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Clock:
 
 
 def test_a_queued_job_reports_its_age_and_the_limit(clock: _Clock) -> None:
-    job.start_job(_pipeline, {})
+    asyncio.run(job.start_job(object(), _pipeline, {}))
     clock.now += 120
 
     state = job.get_state()
@@ -49,7 +50,7 @@ def test_a_queued_job_reports_its_age_and_the_limit(clock: _Clock) -> None:
 
 
 def test_a_job_queued_past_the_limit_fails_with_the_reason(clock: _Clock) -> None:
-    started = job.start_job(_pipeline, {})
+    started = asyncio.run(job.start_job(object(), _pipeline, {}))
     clock.now += job.QUEUE_MAX_AGE_S + 1
 
     state = job.get_state()
@@ -62,17 +63,17 @@ def test_a_job_queued_past_the_limit_fails_with_the_reason(clock: _Clock) -> Non
 
 
 def test_the_failure_is_persisted_and_a_new_job_can_start(clock: _Clock) -> None:
-    job.start_job(_pipeline, {})
+    asyncio.run(job.start_job(object(), _pipeline, {}))
     clock.now += job.QUEUE_MAX_AGE_S + 1
     job.get_state()
 
     assert json.loads(job._job().state_file.read_text())['status'] == 'failed'
-    again = job.start_job(_pipeline, {})
+    again = asyncio.run(job.start_job(object(), _pipeline, {}))
     assert again['status'] == 'queued'
 
 
 def test_a_job_just_under_the_limit_is_still_queued(clock: _Clock) -> None:
-    job.start_job(_pipeline, {})
+    asyncio.run(job.start_job(object(), _pipeline, {}))
     clock.now += job.QUEUE_MAX_AGE_S - 1
 
     assert job.get_state()['status'] == 'queued'
@@ -82,7 +83,7 @@ def test_a_job_just_under_the_limit_is_still_queued(clock: _Clock) -> None:
 def test_a_claimed_job_is_not_failed_by_its_queue_age(clock: _Clock) -> None:
     """The worker unlinks the trigger when it claims the job; until it writes
     ``running`` the state still says queued, which is the worker's, not a queue wait."""
-    job.start_job(_pipeline, {})
+    asyncio.run(job.start_job(object(), _pipeline, {}))
     job._trigger_file().unlink()
     clock.now += job.QUEUE_MAX_AGE_S * 2
 
@@ -94,4 +95,4 @@ def test_a_corrupt_state_blocks_a_new_start(clock: _Clock) -> None:
     job._job().state_file.write_text('{not json')
 
     with pytest.raises(RuntimeError, match='already in progress'):
-        job.start_job(_pipeline, {})
+        asyncio.run(job.start_job(object(), _pipeline, {}))

@@ -74,12 +74,12 @@ async def test_a_human_edit_between_plan_and_write_still_wins(tmp_path: Path, mo
     from src.services.curation.dataset_import.item_labels import ItemPlan
 
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.4 0.4']})
     prepared = h.prepare(h.request(root, map_all(h.registry, 'car')))
     request = h.request(root, map_all(h.registry, 'car'))
-    store, _ = runner.claim_import(request, prepared)
+    store, _ = await runner.claim_import(object(), request, prepared)
     ctx = h.context(store, request, prepared)
     machine = _doc(class_source='vlm', label_source='vlm', class_validated=False)
     h.items[machine['crop_id']] = dict(machine)
@@ -100,7 +100,7 @@ async def test_region_boxes_are_never_written_over_a_human_box_or_verdict(
 ) -> None:
     activate_region_profile(parent_classes=('car',))
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('car')
+    h.registry.add('car')
     mapping = [
         *map_all(h.registry, 'car'),
         ClassMappingEntry(dataset_class='wheel', action='region'),

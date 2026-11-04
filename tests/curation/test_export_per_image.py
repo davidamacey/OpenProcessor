@@ -22,11 +22,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 
@@ -90,17 +90,17 @@ class _FilteringOpenSearch:
         return {'docs': docs}
 
 
-def _registry(base_dir: Path) -> ClassRegistry:
+def _registry(base_dir: Path) -> InMemoryRegistry:
     """Registry ids 0/1/2 with id 0 deprecated, so dense export ids (alpha=0,
     beta=1) differ from registry ids (alpha=1, beta=2)."""
-    reg = ClassRegistry(path=base_dir / 'class_registry.json')
+    reg = InMemoryRegistry()
     for name in CLASS_NAMES:
-        reg.add_class(name)
+        reg.add(name)
     loaded = reg.load()
     for c in loaded.classes:
         if c.class_id == 0:
             c.deprecated = True
-    reg._atomic_write(loaded)
+    reg.store(loaded)
     return reg
 
 

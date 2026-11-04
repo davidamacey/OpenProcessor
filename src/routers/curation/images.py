@@ -183,7 +183,9 @@ async def crop_thumbnail(
     image_path = _resolve_image_for_crop(crop)
 
     try:
-        jpeg = THUMBNAIL_CACHE.get_or_compute(image_path, tuple(bbox_norm), size=size)
+        jpeg = await THUMBNAIL_CACHE.get_or_compute_offloaded(
+            image_path, tuple(bbox_norm), size=size
+        )
     except ValueError as exc:
         # Bad bbox / corrupt geometry → 400 (client visible).
         logger.warning('crop_thumbnail_invalid_bbox', crop_id=crop_id, error=str(exc))
@@ -279,7 +281,9 @@ async def crop_region_thumbnail(
         return Response(status_code=304, headers=headers)
 
     try:
-        jpeg = THUMBNAIL_CACHE.get_or_compute(image_path, tuple(region_bbox), size=size)
+        jpeg = await THUMBNAIL_CACHE.get_or_compute_offloaded(
+            image_path, tuple(region_bbox), size=size
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:

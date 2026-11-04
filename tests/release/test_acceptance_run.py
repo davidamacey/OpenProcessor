@@ -407,6 +407,8 @@ def test_list_prints_every_phase():
         'model_delete',
         'metrics',
         'log_noise',
+        'dataset_import',
+        'combine',
         'vlm_switch',
         'installer_rerun',
         'installer_repair',

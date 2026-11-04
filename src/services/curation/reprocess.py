@@ -377,7 +377,7 @@ async def apply_reprocess(
             raise ReprocessTargetsError('detect and embed need an ingest service')
         service = await service_factory()
         if len(plan.image_ids) > reprocess_sync_max():
-            job_id = start_job(
+            job_id = await start_job(
                 opensearch,
                 service,
                 request=request.model_dump(),

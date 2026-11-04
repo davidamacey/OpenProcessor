@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `/export` takes its source chips from the same stats request as the class table, so Refresh updates them (it used to make a second raw request that never re-ran).
+- The diverse review page loads its items with one `GET /crops?ids=` request instead of one request per item.
+- Links to another project preload on tap, not hover, so hovering no longer binds that project in the background.
+- After the event stream reconnects, the keymap and the pack, region-profile, open-vocabulary and VLM pages re-read their state (missed `config.changed` events are not replayed); an editor with unsaved edits flags the change instead of replacing the draft.
 - `/projects` at phone width: the table becomes stacked rows (counts under the project, actions below) instead of needing sideways scrolling to reach Embedded and the Open/Edit/Archive buttons. The count labels are real text ("Images 0"), not CSS-generated content that read as "Images0".
 
 - Ingest policy page: with no active ingest profile the card now says ingest uses the deployment's default detector (naming it from `GET /ingest/config`) instead of claiming ingest is refused (#411).
@@ -22,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auto-label loop run view: a loop that stopped because every VLM call of a node failed shows the served `vlm_failed` reason and error, and offers Resume for that case only (other failed loops stay non-resumable) (#286).
 
 ### Changed
+
+- Dev dependency bumps (dependabot #433, re-applied by hand): `@sveltejs/adapter-static` 4.0.1, `@sveltejs/kit` 3.1.1, `@types/node` 26.6.6, `knip` 6.44.0; the `node` and `nginx-unprivileged` image digests (#423).
 
 - Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
 

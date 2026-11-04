@@ -232,6 +232,19 @@ def test_config_show_redacts_every_secret(shimmed: Shimmed, inst: Path) -> None:
     assert 'API_PORT=4603' in result.stdout
 
 
+def test_config_show_redacts_credential_style_names(shimmed: Shimmed, inst: Path) -> None:
+    env = inst / '.env'
+    env.write_text(
+        env.read_text()
+        + 'DB_PASSWD=leak-one\nSVC_CREDENTIALS=leak-two\nREGISTRY_AUTH=leak-three\nAPI_PORT=4603\n'
+    )
+    result = cli(shimmed, inst, 'config', 'show')
+    assert result.returncode == 0, result.stderr
+    for leaked in ('leak-one', 'leak-two', 'leak-three'):
+        assert leaked not in result.stdout, leaked
+    assert 'API_PORT=4603' in result.stdout
+
+
 def test_vlm_key_slug_cannot_escape_secrets(shimmed: Shimmed, inst: Path) -> None:
     result = cli(shimmed, inst, 'vlm', 'key', 'set', '../../.bashrc')
     assert result.returncode == 2

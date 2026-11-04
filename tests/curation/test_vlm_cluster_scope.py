@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
+from curation.test_pipeline import install_registry
 from src.config.curation_accessors import base_curation_config
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
@@ -82,10 +82,7 @@ def pipeline_env(monkeypatch: pytest.MonkeyPatch) -> _Labeler:
         auto_label_run, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None))
     )
     monkeypatch.setattr(auto_label_run, 'pipeline_health_snapshot', AsyncMock(return_value={}))
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry',
-        lambda: _FakeRegistry([_FakeClassEntry(3, 'thing')]),
-    )
+    install_registry((3, 'thing'))
     monkeypatch.setattr(
         'src.services.labeling.vlm_class_names.format_class_catalog', lambda *_a, **_k: ''
     )

@@ -29,7 +29,7 @@ never index, review depth matched to real risk).
 Create the venv with `python3 -m venv .venv`, then install CPU torch and
 `requirements-test.txt` exactly as CONTRIBUTING.md shows. Do not add
 `requirements.txt` (its `faiss-gpu-cu12` breaks `faiss-cpu`). The offline suite needs no Docker
-and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'`.
+and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'`.
 
 ## Project overview
 
@@ -121,12 +121,12 @@ The management CLI works in a checkout (`./openprocessor`, or the shim
 `./scripts/openprocessor.sh`) and in an installed directory. Subcommands:
 `start`, `stop`, `restart [service]`, `logs [service] [-f]`, `status`,
 `health`, `models [status|install [--only GROUP]|repair]`, `export`,
-`download`, `profile`, `test`, `curation [up|down|logs|status]`, `faces purge [--dry-run|--yes]`,
+`download`, `profile`, `test`, `curation [up|down|logs|status|migrate-registry]`, `faces purge [--dry-run|--yes]`,
 `clean`, `update`, `sample coco [--full]`, `config show`, `cropwright password`, `gpu plan`,
 `vlm list|status|use <id>|apply|probe|key set <slug>`, `train-mode on|off`,
 `upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`
-and `setup` need a checkout. `bench` exists in the CLI but is broken (its tool is not in the repo; task 1D-21 in
-`docs/design/program/02d_b1_api_frontend_tests.md`). Details:
+and `setup` need a checkout. Benchmarks run through the `make bench-*`
+targets and Triton's `perf_analyzer`. Details:
 [INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli).
 
 Python source is mounted into `api` in a checkout, so most edits are live;
@@ -181,6 +181,9 @@ body. The core route list is in [README.md](README.md#api-endpoints).
   import-validated class or box, or an item in the frozen test holdout
   (`src/clients/occ_locks.py`). Use the OCC read/merge/write helpers, not a
   blind update.
+- **Singleton jobs.** The cross-process claim is the OpenSearch job lease
+  (`src/clients/job_lease.py`, kept alive by `services/curation/lease_heartbeat.py`), never a
+  file lock: `scripts/codegen/check_file_locks.py` ratchets the few that remain.
 - **Class identity is the name.** Never carry a raw class index across a
   boundary (import, combine, export, train, promote, model sharing).
 - **Config store.** Prompt packs, region profiles and the VLM activation are
@@ -220,7 +223,7 @@ are still checked.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'   # offline suite
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'   # offline suite
 .venv/bin/python tests/test_full_system.py                     # needs the running stack
 .venv/bin/python tests/validate_visual_results.py              # annotated images in test_results/
 ```

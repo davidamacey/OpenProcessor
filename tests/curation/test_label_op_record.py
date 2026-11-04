@@ -7,6 +7,8 @@ import json
 import shutil
 from typing import TYPE_CHECKING, Any
 
+from _lease_hold import held
+
 from curation.label_ops_env import build_env, proposal
 from src.domain.history import find_undo_snapshot
 from src.domain.label_ops import LABEL_OP_ID_RE
@@ -153,14 +155,13 @@ def test_interrupted_and_writing_operations_are_served_and_not_undoable(
 
     path.write_text(json.dumps({**record, 'status': 'writing'}))
     item = env.list_ops().json()['items'][0]
-    assert item['status'] == 'interrupted'  # nothing holds write.lock
+    assert item['status'] == 'interrupted'  # no live lease guards the write
     assert item['undoable'] is True
 
-    with store.write_lock(op_id) as got:
-        assert got
-        held = env.list_ops().json()['items'][0]
-    assert held['status'] == 'writing'
-    assert held['undoable'] is False
+    with held('label_op', op_id):
+        live = env.list_ops().json()['items'][0]
+    assert live['status'] == 'writing'
+    assert live['undoable'] is False
 
 
 def test_retention_keeps_the_newest_200_and_never_prunes_a_live_op(
@@ -172,21 +173,18 @@ def test_retention_keeps_the_newest_200_and_never_prunes_a_live_op(
     first_dir = env.state() / first
     record = json.loads((first_dir / 'state.json').read_text())
     (first_dir / 'state.json').write_text(json.dumps({**record, 'status': 'undoing'}))
-    with store.write_lock(first):  # any lock alone does not make it live: the undo lock does
-        pass
-    with store.undo_lock() as got:
-        assert got
-        for _ in range(7):
-            env.label('gadget', crop_ids=['c1'])
-        kept = sorted(p.name for p in env.state().iterdir() if p.is_dir())
-        assert first in kept, 'an operation that is undoing is never pruned'
-    assert len(kept) == 6  # the live one plus the newest five
+    for _ in range(7):
+        env.label('gadget', crop_ids=['c1'])
+    kept = sorted(p.name for p in env.state().iterdir() if p.is_dir())
+    assert first in kept, 'an operation that is undoing is never pruned'
+    assert len(kept) == 6  # the undoing one plus the newest five
 
     for _ in range(2):
         env.label('gadget', crop_ids=['c1'])
     kept = sorted(p.name for p in env.state().iterdir() if p.is_dir())
-    assert first not in kept, 'a dead undoing record is prunable once the undo lock is free'
-    assert len(kept) == 5
+    assert first in kept, (
+        'an undoing record is not pruned, even a dead one: its next undo cleans it'
+    )
     ids = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
     assert ids == sorted(ids, reverse=True)
 

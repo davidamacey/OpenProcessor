@@ -93,7 +93,7 @@ class Harness:
         )
         self.ctx.rt_for = self._rt_for  # type: ignore[method-assign]
         monkeypatch.setattr(stage_b, 'bind_task_project', lambda t: self.bound.append(t.crop_id))
-        monkeypatch.setattr(stage_b, 'bound_class_catalog', lambda: (['car', 'bus'], {'car': 7}))
+        monkeypatch.setattr(stage_b, 'bound_class_catalog', self._class_catalog)
         monkeypatch.setattr(stage_b, 'resolve_combined_reply', self._resolve)
         monkeypatch.setattr(
             stage_b,
@@ -106,6 +106,9 @@ class Harness:
             },
         )
         monkeypatch.setattr(stage_b, 'OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS', self.metric)
+
+    async def _class_catalog(self, _opensearch: Any) -> tuple[list[str], dict[str, int]]:
+        return ['car', 'bus'], {'car': 7}
 
     def _rt_for(self, _t: _ItemTask) -> Any:
         if self.rt_error is not None:

@@ -38,8 +38,8 @@ SAME_SCOPE_JACCARD = 0.9
 WRITER = 'human:assist_apply'
 
 
-def _registry_class(class_name: str) -> tuple[int, str]:
-    found = registry_item_class(class_name)
+async def _registry_class(class_name: str) -> tuple[int, str]:
+    found = await registry_item_class(class_name)
     if found is not None:
         return found
     raise rejection(
@@ -74,7 +74,7 @@ async def apply_proposal(
             'this run has no cluster or sub-cluster scope to apply a class to',
             run_id=run_id,
         )
-    class_id, class_name = _registry_class(body.class_name)
+    class_id, class_name = await _registry_class(body.class_name)
     now = await scope_now(opensearch, run_id, state.request, members=members)
     if now is None:
         raise rejection(409, 'run_has_no_scope', 'this run kept no scope members', run_id=run_id)

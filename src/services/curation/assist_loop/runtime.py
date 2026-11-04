@@ -99,7 +99,7 @@ def _budget(store: LoopStore, request: AssistLoopRequest, images_per_call: int) 
     )
 
 
-def _auditor(
+async def _auditor(
     opensearch: AsyncOpenSearch,
     store: LoopStore,
     budget: LoopBudget,
@@ -113,7 +113,9 @@ def _auditor(
         budget,
         AuditJudge(
             opensearch,
-            class_context(judge.labeler, ClassWriteGuard('assist_loop_audit'), revision=revision),
+            await class_context(
+                judge.labeler, ClassWriteGuard('assist_loop_audit'), revision=revision
+            ),
             images_per_call=judge.images_per_call,
             semaphore=asyncio.Semaphore(request.vlm_concurrency),
         ),
@@ -127,7 +129,7 @@ def _auditor(
     )
 
 
-def _asker(
+async def _asker(
     opensearch: AsyncOpenSearch,
     store: LoopStore,
     request: AssistLoopRequest,
@@ -146,7 +148,7 @@ def _asker(
     )
     return VlmAsker(
         opensearch,
-        class_context(primary.labeler, ClassWriteGuard('assist_loop'), revision=revision),
+        await class_context(primary.labeler, ClassWriteGuard('assist_loop'), revision=revision),
         meta,
         images_per_call=primary.images_per_call,
         semaphore=asyncio.Semaphore(request.vlm_concurrency),
@@ -177,9 +179,9 @@ async def run_job(opensearch: AsyncOpenSearch, loop_id: str) -> LoopOutcome:
         deps = LoopDeps(
             opensearch=opensearch,
             reader=ClusterFieldPartition(opensearch),
-            asker=_asker(opensearch, store, request, primary, pack),
+            asker=await _asker(opensearch, store, request, primary, pack),
             auditor=(
-                _auditor(opensearch, store, budget, request, judge, pack.get('revision'))
+                await _auditor(opensearch, store, budget, request, judge, pack.get('revision'))
                 if judge is not None
                 else None
             ),

@@ -43,6 +43,12 @@ async def search_by_ocr(
         ge=0.0,
         description='Minimum text relevance score (BM25, unbounded)',
     ),
+    page: int = Query(0, ge=0, description='Page number (0-indexed); each page holds top_k images'),
+    fuzzy: bool = Query(
+        True,
+        description='Match on any word of the query (prefix/substring); false matches the '
+        'whole recognised line verbatim',
+    ),
 ) -> OCRSearchResponse:
     """
     Search for images containing specific text using OCR index.
@@ -64,11 +70,14 @@ async def search_by_ocr(
 
     Args:
         text: Text to search for in images (supports partial matching)
-        top_k: Maximum number of results to return (1-100)
+        top_k: Results per page (1-100)
         min_score: Minimum text relevance score (BM25, unbounded)
+        page: Page number (0-indexed)
+        fuzzy: Match on any word of the query; false matches the whole line verbatim
 
     Returns:
-        OCRSearchResponse with images containing matching text.
+        OCRSearchResponse with one result per matching image on the page (its best-matching
+        text line) and ``total_results``, the number of matching images across all pages.
 
     Raises:
         HTTPException 400: Empty query text
@@ -84,10 +93,12 @@ async def search_by_ocr(
             )
 
         # Search OCR index via OpenSearch
-        results = await search_service.opensearch.search_ocr(
-            query_text=text.strip(),
-            top_k=top_k,
+        results, total = await search_service.opensearch.search_ocr_page(
+            text.strip(),
+            offset=page * top_k,
+            size=top_k,
             min_score=min_score,
+            exact=not fuzzy,
         )
 
         search_time_ms = (time.perf_counter() - start_time) * 1000
@@ -110,7 +121,7 @@ async def search_by_ocr(
             query_type='ocr',
             query_text=text.strip(),
             results=formatted_results,
-            total_results=len(formatted_results),
+            total_results=total,
             search_time_ms=round(search_time_ms, 2),
         )
 

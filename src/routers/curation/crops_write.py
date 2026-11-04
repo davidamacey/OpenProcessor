@@ -46,7 +46,7 @@ async def label_crop(
     registry: RegistryDep,
 ) -> dict[str, Any]:
     """Set the validated class on a single item."""
-    reg = registry
+    reg = await registry.snapshot(opensearch)
     if not reg.validate_id(payload.class_id):
         raise HTTPException(status_code=400, detail=f'unknown class_id {payload.class_id}')
     entry = reg.get(payload.class_id)
@@ -95,7 +95,7 @@ async def batch_label_crops(
     ``{updated, conflicts: [{crop_id, current_source}]}`` — conflicts
     list crops whose OCC retries were exhausted.
     """
-    reg = get_class_registry()
+    reg = await get_class_registry().snapshot(opensearch)
     if not reg.validate_id(payload.class_id):
         raise HTTPException(status_code=400, detail=f'unknown class_id {payload.class_id}')
     entry = reg.get(payload.class_id)
@@ -172,7 +172,7 @@ async def move_crops(
             detail=f'cannot move into unassigned cluster {target_id}; use exclude or discard',
         )
     if kind == 'class':
-        target = get_class_registry().get(target_id)
+        target = (await get_class_registry().snapshot(opensearch)).get(target_id)
         if target is None:
             raise HTTPException(status_code=400, detail=f'unknown class_id {target_id}')
     if kind == 'candidate':

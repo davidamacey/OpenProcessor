@@ -55,8 +55,8 @@ curl -X POST "http://localhost:4603/detect?confidence=0.3" -F "image=@photo.jpg"
 | POST | `/search/image` | `image`; `top_k`, `min_score` | Global image embeddings |
 | POST | `/search/text` | query `text`, `top_k`, `min_score` | Text-to-image via CLIP |
 | POST | `/search/face` | `image`; `face_index`, `top_k`, `min_score` | Face embeddings |
-| POST | `/search/ocr` | query `text`, `top_k`, `min_score` | Images by recognized text |
-| POST | `/search/object` | `image`; `box_index`, `top_k`, `min_score`, `class_filter` | Object-crop embeddings |
+| POST | `/search/ocr` | query `text`, `top_k`, `min_score`, `page`, `fuzzy` | Images by recognized text |
+| POST | `/search/object` | `image`; `box_index`, `top_k`, `min_score`, `class_filter` | Object-crop search over the vehicle and people indexes; a box of any other class answers `422` with `object_class_not_indexed` |
 
 ```bash
 curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
@@ -78,7 +78,6 @@ curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 |---|---|---|---|
 | POST | `/ocr/predict` | `image`; `min_det_score`, `min_rec_score`, `filter_by_score` | PP-OCRv5 text boxes, strings, scores |
 | POST | `/ocr/batch` | `images`; `min_det_score`, `min_rec_score`, `max_workers` | Batch OCR |
-| POST | `/ocr/search` | query `text`, `page`, `size`, `fuzzy` | Search indexed OCR text |
 
 ## Clustering, albums and queries
 

@@ -21,10 +21,10 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 from src.services.curation.export_split import stratified_split
@@ -52,9 +52,9 @@ class _FakeOpenSearch:
 
 def _service(tmp_path: Path, docs: list[dict[str, Any]]) -> GenericYoloExportService:
     cfg = CurationConfig(export_root=tmp_path / 'exports')
-    registry = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
+    registry = InMemoryRegistry()
     for name in CLASS_NAMES:
-        registry.add_class(name)
+        registry.add(name)
     return GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=registry)
 
 

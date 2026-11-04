@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 from typing import TYPE_CHECKING, Any
 
@@ -41,7 +42,7 @@ def _url(slug: str, path: str) -> str:
 def alpha_loop(leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch) -> str:
     monkeypatch.setenv('OP_ASSIST_LOOP_JOBS_DIR', str(leak_env.root / 'loops'))
     with bind_project(leak_env.records['alpha']):
-        return job.create_loop(state=_state(), request={}).directory.name
+        return asyncio.run(job.create_loop(object(), state=_state(), request={})).directory.name
 
 
 def test_a_loop_is_served_to_its_own_project_only(leak_env: LeakEnv, alpha_loop: str) -> None:

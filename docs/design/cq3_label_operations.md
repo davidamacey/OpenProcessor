@@ -85,7 +85,7 @@ Consequences, all deliberate:
 |---|---|---|---|
 | Op record (`state.json`) | `<project_state_dir>/label_ops/<op_id>/state.json`, written through `FileJob` (`src/services/curation/file_job.py`: atomic temp and rename) | under 4 KB | newest 200 ops per project (`LABEL_OPS_KEEP`), pruned on create; an op that is writing or undoing is never pruned |
 | Members (the ids the op wrote) | `<op dir>/members.json`, written atomically after the bulk write returns | at most `MAX_BULK_SELECTION` = 20,000 ids (about 0.9 MB) for a selection, 5,000 for explicit ids | with the record |
-| Locks | `<op dir>/write.lock` (held while the op writes), `label_ops/undo.lock` (held while any undo of the project runs); `fcntl.flock` through `exclusive_start_lock` (`src/services/curation/job_lock.py`) | empty files | with the dir |
+| Leases | `label_op:<op_id>` (held while the op writes), `label_undo` (held while any undo of the project runs); OpenSearch job leases (`src/clients/job_lease.py`), kept alive by the heartbeat thread | empty files | with the dir |
 | Item tag | new top-level items field `label_op_id` (keyword, indexed) | one keyword | until the next human class write or an undo |
 | Per-item history | `class_id_history` entries gain `op_id` (the op that made the write, or whose write an undo entry cancels); `label_op_id` joins `CLASS_STATE_FIELDS`, so every snapshot carries the pre-write tag and every restore puts it back | about 40 bytes per entry | existing cap (32, none once validated) |
 
@@ -121,8 +121,8 @@ finds what was written).
 | `status` | `writing`, `written`, `undoing`, `undone` | stored state |
 | `undo_passes` | list, newest 10 kept | `{at, restored, already_undone, kept_changed, kept_holdout, kept_stale_class, conflicts}` |
 
-Served status adds two derived values: `interrupted` (stored `writing` and `write.lock` free: the
-writer died) and `undo_interrupted` (stored `undoing` and `undo.lock` free).
+Served status adds two derived values: `interrupted` (stored `writing` and the `label_op` lease expired or
+absent: the writer died, shown up to 120 s after its last renew) and `undo_interrupted` (stored `undoing` and no live `label_undo` lease).
 
 ## 4. Write path of the op (batch label and move)
 
@@ -142,13 +142,13 @@ async def recorded_relabel(
 1. `create_op` writes `state.json` with `status='writing'` **before** any item write. A refused
    create (read-only binding: 409 `read_only`; disk error: 503) writes nothing. No item write
    without a record.
-2. Inside `write_lock(op_id)`: `occ_bulk_human_relabel(opensearch, ids, merger_for(op_id),
+2. Inside the `label_op:<op_id>` lease: `occ_bulk_human_relabel(opensearch, ids, merger_for(op_id),
    writer_id=op.writer)` (unchanged helper, `src/services/curation/crop_bulk.py`).
 3. `write_members(op_id, result['updated_ids'])`, then `save_op(status='written', count, conflicts,
    finished_at)`.
 4. Return the existing response plus `op_id`. `updated_ids` stays for now (section 10).
 
-A crash or exception in step 2 leaves `status='writing'` with the lock released: served
+A crash or exception in step 2 leaves `status='writing'` with the lease expired: served
 `interrupted`, undoable through the tag scan. No exception handling is added to make that happen.
 
 Merger changes (the single class-label writer stays the single writer, see
@@ -286,8 +286,8 @@ Undo route flow:
 
 1. `read_op(op_id)`: `LABEL_OP_ID_RE` first (a `../` or any other shape is 404 before a path is
    joined), then the bound project's `label_ops` dir; missing or pruned: 404 `label_op_not_found`.
-2. Dry run skips locks. A real run takes `undo_lock()` non-blocking (busy: 409 `label_op_busy`)
-   and `write_lock(op_id)` non-blocking (busy: 409 `label_op_in_progress`).
+2. Dry run takes no lease. A real run takes the `label_undo` lease (busy: 409 `label_op_busy`)
+   and the `label_op:<op_id>` lease (busy: 409 `label_op_in_progress`).
 3. Stored `undone` and the `current_query` count is 0: 409 `already_undone`, nothing written (dry
    run answers the same 409, so the UI learns it before confirming).
 4. `save_op(status='undoing')` only after the members are known (an OpenSearch failure before that
@@ -305,7 +305,7 @@ after any failure is always safe and restores exactly the remainder.
 ### 6.2 Resumable at 20k and beyond
 
 - Crash during the op write: served `interrupted`; the tag scan recovers the members.
-- Crash during an undo: served `undo_interrupted`; a new POST resumes (the flock died with the
+- Crash during an undo: served `undo_interrupted`; a new POST resumes (the lease expired with the
   process).
 - OCC conflicts that outlast the retries stay tagged; `current` stays above 0 and the op stays
   undoable; the response lists them (`conflict_ids`, at most 100, sorted) and counts all of them.
@@ -322,8 +322,8 @@ could restore (the `current_query` count). Undoing a later op can bring items ba
 
 | Path | Bound |
 |---|---|
-| Op undo | at most one undo per project at a time across all API workers (`undo.lock`); inside it, one `_mget` or one `_bulk` in flight, pages of `OCC_BULK_PAGE_SIZE` (500), `mget_crops` chunks of 256 |
-| Op undo against its own write | refused while the op is writing (`write.lock`) |
+| Op undo | at most one undo per project at a time across all API workers (`label_undo` lease); inside it, one `_mget` or one `_bulk` in flight, pages of `OCC_BULK_PAGE_SIZE` (500), `mget_crops` chunks of 256 |
+| Op undo against its own write | refused while the op is writing (`label_op` lease) |
 | `POST /crops/label/undo_batch` | moves onto `occ_bulk_rounds` (same paging; no per-item `refresh='wait_for'`), 5,000-id cap kept |
 | `POST /crops/discard_batch` | moves onto `occ_update_bulk` (its merger is already pure) |
 | `POST /crops/region/undo_batch` | `asyncio.Semaphore(32)` around `undo_edit` (edit history has no bulk merger yet) |
@@ -541,8 +541,8 @@ holdout, relabelled and merged items and no renamed class).
 17. `test_dry_run_writes_nothing_and_predicts_the_real_run`.
 18. `test_undo_keeps_one_request_in_flight` (instrumented fake: max concurrent `mget`/`bulk` is 1,
     no single-doc `update`, every bulk at most `OCC_BULK_PAGE_SIZE` actions).
-19. `test_a_second_undo_in_the_project_is_409_busy` (hold `undo.lock`).
-20. `test_undo_while_writing_is_409_and_an_interrupted_op_is_undoable` (hold `write.lock`; then a
+19. `test_a_second_undo_in_the_project_is_409_busy` (hold the `label_undo` lease).
+20. `test_undo_while_writing_is_409_and_an_interrupted_op_is_undoable` (hold the `label_op` lease; then a
     write that raises after half the pages: record `writing`, served `interrupted`, undo restores the
     written half, `members_known=false`).
 21. `test_unknown_malformed_or_pruned_op_id_is_404` (includes a `..%2F` id; asserts no file outside
@@ -583,7 +583,7 @@ Elsewhere:
 | conflicts counted as restored | 16, 25 |
 | dry run calls `bulk` | 17 |
 | bulk loop replaced by `asyncio.gather` of `occ_update_one` | 18 |
-| `undo.lock` not taken | 19 |
+| `label_undo` lease not taken | 19 |
 | record written after the bulk instead of before | 20 |
 | op id joined to the path before the regex check | 21 |
 | store dir built from the path slug instead of the bound project | 27 |
@@ -630,8 +630,7 @@ mapping and migration (section 4), combine field. Run `tests/curation` touched f
 
 **Step 2: op store, recording and the list route.** Tests 7, 22, 23 and the list half of 27 first.
 New package `src/services/curation/label_ops/` (`store.py`: `LabelOpRecord`, `label_ops_root`,
-`create_op`, `read_op`, `save_op`, `list_ops`, `write_members`, `read_members`, `write_lock`,
-`undo_lock`, `served_status`, `LABEL_OPS_KEEP`; `record.py`: `recorded_relabel`; `views.py`:
+`create_op`, `read_op`, `save_op`, `list_ops`, `write_members`, `read_members`, `served_status`, `LABEL_OPS_KEEP`; `record.py`: `recorded_relabel`; `views.py`:
 `current_counts`, `label_op_wire`), `src/schemas/curation/label_ops.py`, the four error codes,
 `crops_write.py` (`batch_label_crops`, `move_crops` through `recorded_relabel`),
 `BatchRelabelResponse.op_id`, new router `src/routers/curation/label_ops.py` with the list route,

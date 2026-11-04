@@ -115,10 +115,10 @@ def test_error_handlers_emit_no_deprecation_warning() -> None:
     r503 = client.get('/__t503')
     assert r503.status_code == 503
     assert r503.headers['retry-after'] == '5'
-    assert set(r503.json()) == {'detail', 'request_id', 'error_type'}
+    assert set(r503.json()) == {'detail', 'request_id'}
     r500 = client.get('/__t500')
     assert r500.status_code == 500
-    assert set(r500.json()) == {'detail', 'request_id', 'error_type'}
+    assert set(r500.json()) == {'detail', 'request_id'}
 
 
 @NO_DEPRECATION

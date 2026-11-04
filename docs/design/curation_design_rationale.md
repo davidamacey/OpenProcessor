@@ -38,8 +38,8 @@ restarting.
 
 Holds index names, filesystem roots, and API-surface constants: which
 OpenSearch indexes back images/items/labels/classes/clusters, where the
-class registry and exported datasets live on disk, the crop-cache
-directory, the API mount prefix, and embedding-dimension/HNSW tuning.
+exported datasets live on disk (the class registry is an OpenSearch document per project;
+`class_registry.json` is an export snapshot), the crop-cache directory, the API mount prefix, and embedding-dimension/HNSW tuning.
 
 Before genericization, these were a hardcoded, company-prefixed index
 enum and a scatter of module-level path constants. Two deployments never share
@@ -517,7 +517,8 @@ invalidates every evaluation that used it.
 
 ## 12. Class identity is the name
 
-A class id is a dense index into one project's registry at one moment. It is
+A class id is a dense index into one project's registry (an OpenSearch document written
+with optimistic concurrency, never a file) at one moment. It is
 not stable across projects, datasets, exports or models, and treating it as
 identity is a silent-corruption bug: two YOLO datasets that agree on class
 names but disagree on index order, merged by index, swap labels without an

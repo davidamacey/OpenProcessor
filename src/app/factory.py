@@ -17,6 +17,7 @@ from src.config.faces import FacesDisabledError
 from src.core.cors import add_lan_cors
 from src.core.error_handlers import (
     faces_disabled_response,
+    triton_deadline_response,
     triton_unavailable_response,
     upstream_unavailable_response,
 )
@@ -46,7 +47,7 @@ from src.routers import (
 )
 from src.routers.api_docs import install_api_docs
 from src.routers.curation._mounting import mount_all_curation_routers
-from src.utils.retry import RetryExhaustedError
+from src.utils.retry import RetryExhaustedError, TritonDeadlineError
 from src.utils.upstream_errors import UpstreamError
 
 
@@ -112,9 +113,10 @@ def create_app() -> FastAPI:
         # Add timing header (always)
         response.headers['X-Process-Time'] = f'{duration_ms:.2f}ms'
 
-        # Inject timing into JSON response body for inference endpoints
+        # Inject timing into JSON response body for core inference endpoints. Curation
+        # has its own serializer and wire names, and no /v1 twin.
         content_type = response.headers.get('content-type', '')
-        is_inference_endpoint = any(
+        is_inference_endpoint = not request.url.path.startswith('/curation') and any(
             path in request.url.path
             for path in [
                 '/detect',
@@ -210,6 +212,7 @@ def create_app() -> FastAPI:
         )
 
     application.exception_handler(RetryExhaustedError)(triton_unavailable_response)
+    application.exception_handler(TritonDeadlineError)(triton_deadline_response)
     application.exception_handler(UpstreamError)(upstream_unavailable_response)
     application.exception_handler(FacesDisabledError)(faces_disabled_response)
 
@@ -232,7 +235,6 @@ def create_app() -> FastAPI:
             content={
                 'detail': 'Internal server error',
                 'request_id': req_id,
-                'error_type': type(exc).__name__,
             },
             headers={'X-Request-ID': req_id},
         )

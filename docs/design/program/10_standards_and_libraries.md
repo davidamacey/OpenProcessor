@@ -2,9 +2,9 @@
 
 Status: plan, not started. Nothing in this file has been implemented.
 Depends on: [00_index.md](00_index.md) and the batch files: B0 [01_b0_close_out.md](01_b0_close_out.md);
-B1 tracks 1A [02a_b1_job_leases.md](02a_b1_job_leases.md), 1B [02b_b1_class_registry.md](02b_b1_class_registry.md),
-1C [02c_b1_inference_search.md](02c_b1_inference_search.md), 1D [02d_b1_api_frontend_tests.md](02d_b1_api_frontend_tests.md),
-1E [02e_b1_ultralytics_live_bugs.md](02e_b1_ultralytics_live_bugs.md); B2 [03_b2_overview.md](03_b2_overview.md)
+B1 tracks 1A B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), 1B B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)),
+1C B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)), 1D B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)),
+1E B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)); B2 [03_b2_overview.md](03_b2_overview.md)
 (W1 [03a_b2_w1_queue_infra.md](03a_b2_w1_queue_infra.md), W2 [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md),
 W3 [03c_b2_w3_beat_reaper_workers.md](03c_b2_w3_beat_reaper_workers.md)); B3
 [04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md); B4 [05_b4_stateless_api.md](05_b4_stateless_api.md);

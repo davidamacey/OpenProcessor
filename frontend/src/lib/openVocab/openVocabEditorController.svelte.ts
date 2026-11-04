@@ -19,7 +19,7 @@ import {
   validateOpenVocab,
 } from '$lib/api_openVocab';
 import { ConfigEditor } from '$lib/config/configEditor.svelte';
-import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
+import { subscribeConfigEvents, type CurationEvent } from '$lib/sse';
 import type { ValidationReport } from '$lib/types_config';
 import type {
   OpenVocabBody,
@@ -42,7 +42,10 @@ export interface OpenVocabEditorDeps extends OpenVocabActiveDeps {
   getOpenVocabRevision: typeof getOpenVocabRevision;
   updateOpenVocab: typeof updateOpenVocab;
   validateOpenVocab: typeof validateOpenVocab;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
+  subscribe: (
+    onEvent: (e: CurationEvent) => void,
+    onResync?: () => void,
+  ) => { close(): void };
 }
 
 export class OpenVocabEditor extends ConfigEditor<
@@ -73,9 +76,7 @@ export class OpenVocabEditor extends ConfigEditor<
         update: (n, body) => (deps.updateOpenVocab ?? updateOpenVocab)(n, body),
         validate: (body, signal) =>
           (deps.validateOpenVocab ?? validateOpenVocab)(body, false, signal),
-        subscribe:
-          deps.subscribe ??
-          ((onEvent) => subscribeCurationEvents({ topic: 'config', onEvent })),
+        subscribe: deps.subscribe ?? subscribeConfigEvents,
         isEvent: isOpenVocabConfigEvent,
       },
       new OpenVocabActive(deps),

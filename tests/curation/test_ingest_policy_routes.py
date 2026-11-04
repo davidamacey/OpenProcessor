@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import SettingsFakeOpenSearch
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import IndexRole, get_curation_config, index_name
 
 
@@ -41,7 +41,7 @@ def fake() -> SettingsFakeOpenSearch:
 
 @pytest.fixture
 def client(fake: SettingsFakeOpenSearch, tmp_path: Any, monkeypatch: pytest.MonkeyPatch):
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+    registry = InMemoryRegistry()
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     monkeypatch.setattr('src.routers.curation.ingest_policy.get_class_registry', lambda: registry)
 

@@ -58,7 +58,7 @@ async def seed_from_detector(
             'no ingest detector labels available; activate an ingest profile or set OP_INGEST_PRIMARY_DETECTOR_MODEL',
         )
     reg = get_class_registry()
-    existing = class_name_deprecation_index(reg.load().classes)
+    existing = class_name_deprecation_index((await reg.snapshot(opensearch)).classes)
     plan = plan_seed(labels, existing, payload.names)
     if plan.unknown:
         raise api_error(
@@ -76,12 +76,14 @@ async def seed_from_detector(
         class_id: int | None = None
         if not payload.dry_run:
             try:
-                class_id = create_registry_class(
+                created_class = await create_registry_class(
                     reg,
+                    opensearch,
                     name=label.slug,
                     group=payload.group,
                     notes=f'detector label: {label.name}',
-                )['class_id']
+                )
+                class_id = created_class['class_id']
             except ClassRegistryError:
                 # Lost a race with another writer of the same name.
                 skipped.append(

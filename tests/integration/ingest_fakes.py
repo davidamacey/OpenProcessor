@@ -97,19 +97,23 @@ class FakeClassEntry:
 
 
 class FakeRegistryFile:
+    """A registry document snapshot: ``classes`` and ``get``."""
+
     def __init__(self) -> None:
         self.classes = [FakeClassEntry(0, 'widget')]
 
-
-class FakeRegistry:
-    def load(self) -> FakeRegistryFile:
-        return FakeRegistryFile()
-
     def get(self, class_id: int) -> FakeClassEntry | None:
-        for c in self.load().classes:
+        for c in self.classes:
             if c.class_id == class_id:
                 return c
         return None
+
+
+class FakeRegistry:
+    """The class registry store: the ingest service factory asks it for a snapshot."""
+
+    async def snapshot(self, *_a: Any, **_k: Any) -> FakeRegistryFile:
+        return FakeRegistryFile()
 
 
 class FakeOpenSearch:

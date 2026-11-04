@@ -37,7 +37,9 @@ def _record(slug: str) -> ProjectRecord:
 
 def _queue(record: ProjectRecord) -> str:
     with bind_project(record):
-        return job.create_loop(state={'status': 'queued'}, request={}).directory.name
+        return asyncio.run(
+            job.create_loop(object(), state={'status': 'queued'}, request={})
+        ).directory.name
 
 
 class Runs:
@@ -106,7 +108,9 @@ def test_a_trigger_for_a_cancelled_loop_is_never_run(monkeypatch: pytest.MonkeyP
     runs = Runs(monkeypatch)
     alpha = _record('alpha')
     with bind_project(alpha):
-        loop_id = job.create_loop(state={'status': 'queued'}, request={}).directory.name
+        loop_id = asyncio.run(
+            job.create_loop(object(), state={'status': 'queued'}, request={})
+        ).directory.name
         job.cancel_loop(loop_id)
 
     assert _cycle([alpha]) is False
@@ -139,7 +143,7 @@ def test_startup_repairs_loops_a_dead_worker_left_running_in_every_project() -> 
     made = []
     for record in projects:
         with bind_project(record):
-            loop = job.create_loop(state={'status': 'queued'}, request={})
+            loop = asyncio.run(job.create_loop(object(), state={'status': 'queued'}, request={}))
             loop.update(status='running')
             loop.touch_heartbeat()
             old = time.time() - HEARTBEAT_STALE_S - 5

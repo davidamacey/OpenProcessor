@@ -5,6 +5,7 @@ endpoint registry and the VLM; the loop, the budget and the job files are the re
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -62,13 +63,16 @@ class Registry:
 def _queue(world: World, *, pinned: dict[str, Any] | None = None, **request: Any) -> str:
     body: dict[str, Any] = {'budget': {'max_vlm_crops': 5000}, 'dry_run': False, **request}
     parsed = AssistLoopRequest.model_validate(body)
-    loop = job.create_loop(
-        state={
-            'status': 'queued',
-            'created_at': '2026-10-28T00:00:00+00:00',
-            'pinned': pinned or PINNED,
-        },
-        request=parsed.model_dump(mode='json'),
+    loop = asyncio.run(
+        job.create_loop(
+            object(),
+            state={
+                'status': 'queued',
+                'created_at': '2026-10-28T00:00:00+00:00',
+                'pinned': pinned or PINNED,
+            },
+            request=parsed.model_dump(mode='json'),
+        )
     )
     return loop.directory.name
 

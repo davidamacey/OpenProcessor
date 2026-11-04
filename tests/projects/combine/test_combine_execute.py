@@ -223,13 +223,11 @@ async def test_the_sources_are_unchanged(world: World) -> None:
     slugs = ['cars-a', 'cars-b']
     before = snapshot_indexes(world, slugs)
     dirs = {s: tree_hash(world.records[s].resources.upload_root) for s in slugs}
-    registries = {s: world.records[s].resources.class_registry_path.read_bytes() for s in slugs}
+    registries = {s: world.registry_json(s) for s in slugs}
     await run_job(world, world.request(slugs, MAPPING))
     assert snapshot_indexes(world, slugs) == before  # docs and per-doc versions
     assert {s: tree_hash(world.records[s].resources.upload_root) for s in slugs} == dirs
-    assert {
-        s: world.records[s].resources.class_registry_path.read_bytes() for s in slugs
-    } == registries
+    assert {s: world.registry_json(s) for s in slugs} == registries
 
 
 @pytest.mark.asyncio

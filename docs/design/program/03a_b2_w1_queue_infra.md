@@ -143,7 +143,7 @@ family moves in W1.
 - **Contract:** overview section 9.1-9.3 and 9.6. Implement exactly those steps.
 - **Files:** `src/tasks/job_task.py` (`JobTask` base and a `register_job(kind, handler, *,
   resumable, soft_time_limit=None, time_limit=None)` helper used by W2), `src/clients/job_lease.py`
-  and `src/domain/job_lease.py` (B1's signatures per `02a_b1_job_leases.md`:
+  and `src/domain/job_lease.py` (B1's signatures per B1 1A (merged; see ARCHITECTURE.md):
   `acquire(client, kind, scope, job_id, owner, ttl_s=LEASE_TTL_S)` already takes `ttl_s`; add a
   keyword `state='running'` that the start path passes as `'queued'`;
   `transfer(client, lease, new_owner)` gains keywords `state` and `ttl_s`),

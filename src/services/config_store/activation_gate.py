@@ -145,7 +145,7 @@ async def run_activation_gate(
             pack_body,
             profile=profile,
             for_activation=True,
-            class_names=registry_class_names(),
+            class_names=await registry_class_names(),
         )
     else:
         from src.services.config_store.profile_issues import BYPASSABLE_CODES
@@ -178,7 +178,7 @@ async def run_activation_gate(
             for_activation=True,
             segmenter_health=configured_segmenter_health,
             active_pack=active_pack,
-            class_names=registry_class_names(),
+            class_names=await registry_class_names(),
             project_slug=get_curation_config().project_slug,
         )
 
@@ -285,7 +285,7 @@ async def _run_open_vocab_gate(
         if record.read_only and record.source == 'template':
             raise rejection(403, 'read_only', f'{name!r} is a template; clone it first')
         body = record.body
-    report = await validate_open_vocab(name, body, for_activation=True, **validation_inputs())
+    report = await validate_open_vocab(name, body, for_activation=True, **await validation_inputs())
     blocking = [e for e in report.errors if not (force and e.code in BYPASSABLE_CODES)]
     if blocking:
         raise rejection(

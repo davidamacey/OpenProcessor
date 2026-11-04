@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry, use_registry
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env_active')
@@ -65,22 +66,11 @@ class TestPipelineSkipFilter:
         assert 'range' in src[max(0, marker_idx - 100) : marker_idx + 200] or 'gte' in nearby
 
 
-class _FakeClassEntry:
-    def __init__(self, class_id: int, class_name: str) -> None:
-        self.class_id = class_id
-        self.class_name = class_name
-        self.group = None
-        self.deprecated = False
-
-
-class _FakeRegistry:
-    """Stands in for ``get_class_registry()`` -- ``.load()`` returns self."""
-
-    def __init__(self, classes: list[_FakeClassEntry]) -> None:
-        self.classes = classes
-
-    def load(self) -> _FakeRegistry:
-        return self
+def install_registry(*classes: tuple[int, str]) -> None:
+    """Make a registry holding ``(class_id, class_name)`` the bound project's."""
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': i, 'class_name': n} for i, n in classes])
+    use_registry(registry)
 
 
 class _FakeOpenSearch:
@@ -151,18 +141,16 @@ class TestPipelineClassIdScoping:
     cohort query to a single registry class."""
 
     @staticmethod
-    def _registry() -> _FakeRegistry:
-        return _FakeRegistry([_FakeClassEntry(3, 'wooden_pallet'), _FakeClassEntry(7, 'forklift')])
+    def _registry() -> None:
+        install_registry((3, 'wooden_pallet'), (7, 'forklift'))
 
     @pytest.mark.asyncio
-    async def test_class_id_unset_behavior_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_class_id_unset_behavior_unchanged(self) -> None:
         """No ``class_id`` -> the scroll query carries no class_id filter
         and every class's items are in scope (pre-existing behavior)."""
         from src.routers.curation.pipeline_public import pipeline_auto_label
 
-        monkeypatch.setattr(
-            'src.clients.curation_opensearch.registry.get_class_registry', self._registry
-        )
+        self._registry()
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline_auto_label(
@@ -194,17 +182,13 @@ class TestPipelineClassIdScoping:
         assert summary['stages']['unvalidated_after_promote'] == 3
 
     @pytest.mark.asyncio
-    async def test_class_id_set_scopes_query_and_cohort(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_class_id_set_scopes_query_and_cohort(self) -> None:
         """``class_id=3`` -> the scroll query carries a term filter on
         class_id=3, and only that class's two items are in scope --
         the other class's item never appears."""
         from src.routers.curation.pipeline_public import pipeline_auto_label
 
-        monkeypatch.setattr(
-            'src.clients.curation_opensearch.registry.get_class_registry', self._registry
-        )
+        self._registry()
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline_auto_label(
@@ -264,21 +248,15 @@ class TestVlmStageExplainsEmptySelection:
         )
 
     @pytest.mark.asyncio
-    async def test_fresh_project_reports_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            'src.clients.curation_opensearch.registry.get_class_registry',
-            lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
-        )
+    async def test_fresh_project_reports_reason(self) -> None:
+        install_registry((3, 'x'))
         vlm = (await self._run(_FakeOpenSearch({}), True))['stages']['vlm']
         assert vlm['skipped'] is True
         assert 'no unvalidated items' in vlm['reason']
 
     @pytest.mark.asyncio
-    async def test_unembedded_items_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            'src.clients.curation_opensearch.registry.get_class_registry',
-            lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
-        )
+    async def test_unembedded_items_reason(self) -> None:
+        install_registry((3, 'x'))
 
         class _Os(_FakeOpenSearch):
             async def count(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
@@ -289,10 +267,7 @@ class TestVlmStageExplainsEmptySelection:
         assert 'none embedded' in vlm['reason']
 
     @pytest.mark.asyncio
-    async def test_run_vlm_false_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            'src.clients.curation_opensearch.registry.get_class_registry',
-            lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
-        )
+    async def test_run_vlm_false_reason(self) -> None:
+        install_registry((3, 'x'))
         vlm = (await self._run(_FakeOpenSearch({}), False))['stages']['vlm']
         assert 'run_vlm=false' in vlm['reason']

@@ -45,7 +45,9 @@ def _loops(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _live_loop() -> str:
-    return job.create_loop(state={'status': 'queued'}, request={}).directory.name
+    return asyncio.run(
+        job.create_loop(object(), state={'status': 'queued'}, request={})
+    ).directory.name
 
 
 # ---- the schedule ---------------------------------------------------------
@@ -213,7 +215,7 @@ def test_the_synchronous_chain_is_held_too(http: TestClient) -> None:
 
 @pytest.mark.usefixtures('packs', 'job_dir')
 def test_a_start_goes_through_once_the_loop_has_ended(http: TestClient) -> None:
-    loop = job.create_loop(state={'status': 'queued'}, request={})
+    loop = asyncio.run(job.create_loop(object(), state={'status': 'queued'}, request={}))
     loop.update(status='completed')
 
     assert http.post(START).status_code == 200

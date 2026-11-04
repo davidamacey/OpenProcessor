@@ -480,16 +480,16 @@ async def _run_class_merge_case_with_os(
     import src.routers.curation.classes_merge as classes_mod
     from src.routers.curation._class_models import ClassMergeRequest
 
-    fake_reg = SimpleNamespace(
-        merge_class=lambda source_id, target_id: {
+    async def _merge_class(_client, source_id, target_id):
+        return {
             'source_id': source_id,
             'target_id': target_id,
             'deprecated': True,
             'source_name': 'sedan',
             'target_name': 'coupe',
-        },
-        get=lambda class_id: SimpleNamespace(class_name='coupe'),  # noqa: ARG005
-    )
+        }
+
+    fake_reg = SimpleNamespace(merge_class=_merge_class)
     monkeypatch.setattr(classes_mod, 'get_class_registry', lambda: fake_reg)
 
     fake_os = _FakeMergeOS(source_validated=source_validated)

@@ -37,8 +37,10 @@ import numpy as np
 
 from src.clients.model_adapters import END2END_OUTPUTS
 from src.clients.triton_pool_core import images_input
-from src.config.ingest_profiles import proposer_label
+from src.config.ingest_profiles import model_class_name, proposer_label
 from src.core.logging import get_logger
+from src.services.curation.detector_class_map import registry_class_for
+from src.services.curation.ingest_policy import registry_name_index
 from src.services.curation.item_doc import DetectedItem
 from src.services.detection.geometry import iou as _iou_fn, letterbox_to_square, undo_letterbox
 from src.utils.class_names import normalize_class_name
@@ -48,7 +50,7 @@ from src.utils.cpu_pool import run_cpu
 if TYPE_CHECKING:
     from PIL import Image
 
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import DetectionProfile
 
@@ -85,7 +87,7 @@ class WholeImageDetector:
         self,
         *,
         triton_pool: AsyncTritonPool | Any,
-        registry: ClassRegistry | Any,
+        registry: ClassRegistryFile,
         profile: DetectionProfile,
         secondary_profile: DetectionProfile | None = None,
     ) -> None:
@@ -210,10 +212,13 @@ class WholeImageDetector:
         and raw score are kept for lineage. A non-empty
         ``profile.class_ids`` drops detections of any other class. With
         ``profile.assigns_class`` false every detection is an unlabeled
-        ``{name}_proposal`` carrying the proposer's own label.
+        ``{name}_proposal`` carrying the proposer's own label. With it true the registry class is
+        the active one named like the model's output (never the output index); a model name
+        with no such class stays an unlabeled ``{name}_low_conf`` proposal.
         """
         num_dets = int(num_dets_row[0])
         floor = self.profile.confidence_floor
+        by_name = registry_name_index(self.registry) if self.profile.assigns_class else {}
 
         out: list[DetectedItem] = []
         for box, score, cls in zip(
@@ -250,23 +255,25 @@ class WholeImageDetector:
                     )
                 )
                 continue
-            entry = self.registry.get(cls_id)
-            class_name = entry.class_name if entry is not None else None
-            confident = conf >= floor
+            model_name = model_class_name(self.profile, cls_id)
+            found = registry_class_for(self.profile, cls_id, by_name)
+            registry_id, class_name = found if found is not None else (None, None)
+            confident = conf >= floor and found is not None
             out.append(
                 DetectedItem(
                     bbox_pixel=full,
                     score=conf,
-                    class_id=cls_id if confident else None,
+                    class_id=registry_id if confident else None,
                     class_name=class_name if confident else None,
                     class_source=(
                         f'{self.profile.name}_model'
                         if confident
                         else f'{self.profile.name}_low_conf'
                     ),
-                    proposal_name=class_name,
-                    detector_class_name=normalize_class_name(class_name or '') or None,
-                    detector_class_id=cls_id if entry is not None else None,
+                    proposal_name=class_name or model_name,
+                    detector_class_name=normalize_class_name(model_name or class_name or '')
+                    or None,
+                    detector_class_id=registry_id,
                     detector_confidence=conf,
                     class_detector=self.profile.detector_model or self.profile.name,
                     class_detector_version=self.profile.detector_version,
@@ -364,6 +371,7 @@ class WholeImageDetector:
             conf_thres=profile.confidence_floor,
         )
         detections = per_image[0] if per_image else []
+        by_name = registry_name_index(self.registry)
         secondary_boxes: list[tuple[tuple[float, float, float, float], float, int]] = []
         for det in detections:
             full = undo_letterbox(tuple(det['box']), scale, pad)
@@ -380,9 +388,10 @@ class WholeImageDetector:
             if best is None or best_iou < SECONDARY_IOU_MATCH:
                 continue
             _, sec_score, sec_cls = best
-            entry = self.registry.get(sec_cls)
-            item.class_id = sec_cls
-            item.class_name = entry.class_name if entry is not None else None
+            found = registry_class_for(profile, sec_cls, by_name)
+            if found is None:
+                continue
+            item.class_id, item.class_name = found
             item.class_source = f'{profile.name}_model'
             item.class_detector = profile.detector_model or profile.name
             item.class_detector_version = profile.detector_version

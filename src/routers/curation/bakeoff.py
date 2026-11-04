@@ -46,12 +46,13 @@ from pathlib import Path
 from typing import Any, Literal, NoReturn
 
 from fastapi import HTTPException
+from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, ValidationError
 
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
-from src.routers.curation._common import router
+from src.routers.curation._common import OpenSearchDep, router
 from src.schemas.bakeoff.datasets import EvalDataset, EvalDatasetList
 from src.schemas.bakeoff.models import (
     BakeoffProfileList,
@@ -71,6 +72,7 @@ from src.schemas.bakeoff.run import (
 from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
 from src.services.training.run_retention import bakeoff_out_dir
 from src.utils.atomic_write import atomic_write_json
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = get_logger(__name__)
@@ -125,6 +127,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 @router.get('/bakeoff/eval_datasets', response_model=EvalDatasetList)
 async def bakeoff_eval_datasets(
+    opensearch: OpenSearchDep,
     source: Literal['export', 'external'] | None = None,
 ) -> EvalDatasetList:
     """Eval datasets: every export with a labelled test split, plus frozen external sets.
@@ -132,7 +135,8 @@ async def bakeoff_eval_datasets(
     Class counts and test-split hashes are computed from the files; see
     ``src/services/curation/eval_datasets.py``.
     """
-    rows = [EvalDataset(**r.to_wire()) for r in eval_datasets.list_eval_datasets(source)]
+    names = await _registry_names_by_id(opensearch)
+    rows = [EvalDataset(**r.to_wire(names)) for r in eval_datasets.list_eval_datasets(source)]
     return EvalDatasetList(datasets=rows, count=len(rows))
 
 
@@ -153,20 +157,24 @@ async def bakeoff_trained_models(
     return TrainedModelList(models=models, count=len(models))
 
 
-def _registry_names_by_id() -> dict[int, str]:
-    """Live registry id -> name, best-effort ({} on any load failure)."""
+async def _registry_names_by_id(opensearch: Any) -> dict[int, str]:
+    """Live registry id -> name. An OpenSearch failure is a 503, never an empty map."""
     try:
-        return {c.class_id: c.class_name for c in get_class_registry().load().classes}
-    except Exception as exc:
-        logger.warning('bakeoff_profile_registry_unavailable', error=str(exc))
-        return {}
+        snapshot = await get_class_registry().snapshot(opensearch)
+    except OpenSearchException as exc:
+        logger.warning('bakeoff_registry_unavailable', error=str(exc))
+        raise UpstreamError('opensearch', 'registry_unavailable') from exc
+    return {c.class_id: c.class_name for c in snapshot.classes}
 
 
 def _profile_row(
-    prof: Any, kind: Literal['registered', 'configured'], *, default: bool
+    prof: Any,
+    kind: Literal['registered', 'configured'],
+    *,
+    default: bool,
+    names_by_id: dict[int, str],
 ) -> BakeoffProfileRow:
     d = prof.to_dict()
-    names_by_id = _registry_names_by_id()
     context_class_ids = d.get('context_class_ids', [])
     context_class_names = [names_by_id.get(cid, str(cid)) for cid in context_class_ids]
     return BakeoffProfileRow(
@@ -178,7 +186,7 @@ def _profile_row(
 
 
 @router.get('/bakeoff/profiles', response_model=BakeoffProfileList)
-async def bakeoff_profiles() -> BakeoffProfileList:
+async def bakeoff_profiles(opensearch: OpenSearchDep) -> BakeoffProfileList:
     """Registered profiles, flagging the default a job gets when it names none.
 
     ``kind``: ``registered`` (in code) or ``configured`` (the default,
@@ -190,7 +198,11 @@ async def bakeoff_profiles() -> BakeoffProfileList:
     """
     from scripts.curation.bakeoff.profile import registered_profiles, resolve_profile
 
-    rows = [_profile_row(p, 'registered', default=False) for p in registered_profiles().values()]
+    names_by_id = await _registry_names_by_id(opensearch)
+    rows = [
+        _profile_row(p, 'registered', default=False, names_by_id=names_by_id)
+        for p in registered_profiles().values()
+    ]
     try:
         default = resolve_profile(None)
     except (OSError, ValueError, TypeError) as exc:
@@ -200,9 +212,9 @@ async def bakeoff_profiles() -> BakeoffProfileList:
         )
     idx = next((i for i, r in enumerate(rows) if r.name == default.name), None)
     if idx is None:
-        rows.append(_profile_row(default, 'configured', default=True))
+        rows.append(_profile_row(default, 'configured', default=True, names_by_id=names_by_id))
     else:
-        rows[idx] = _profile_row(default, 'registered', default=True)
+        rows[idx] = _profile_row(default, 'registered', default=True, names_by_id=names_by_id)
     return BakeoffProfileList(profiles=rows, count=len(rows), default_profile=default.name)
 
 

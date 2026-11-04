@@ -6,10 +6,9 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from src.clients.curation_opensearch.registry import ClassRegistry
 
 
 URL = '/curation/projects/default/classes/seed_from_detector'
@@ -17,8 +16,8 @@ CONFIG_URL = '/curation/projects/default/ingest/config'
 
 
 @pytest.fixture
-def registry(tmp_path: Any) -> ClassRegistry:
-    return ClassRegistry(path=tmp_path / 'class_registry.json')
+def registry(tmp_path: Any) -> InMemoryRegistry:
+    return InMemoryRegistry()
 
 
 @pytest.fixture
@@ -31,7 +30,7 @@ def labels_file(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def client(registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch):
+def client(registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     from _curation_app import mount_curation_routers
 
@@ -46,12 +45,12 @@ def client(registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch):
         yield c
 
 
-def _names(registry: ClassRegistry) -> list[str]:
+def _names(registry: InMemoryRegistry) -> list[str]:
     return [c.class_name for c in registry.load().classes]
 
 
 def test_dry_run_is_the_default_and_writes_nothing(
-    client: TestClient, registry: ClassRegistry, labels_file: None
+    client: TestClient, registry: InMemoryRegistry, labels_file: None
 ) -> None:
     r = client.post(URL, json={})
     assert r.status_code == 200, r.text
@@ -68,7 +67,7 @@ def test_dry_run_is_the_default_and_writes_nothing(
 
 
 def test_apply_creates_slugs_in_group_detector_and_is_idempotent(
-    client: TestClient, registry: ClassRegistry, labels_file: None
+    client: TestClient, registry: InMemoryRegistry, labels_file: None
 ) -> None:
     r = client.post(URL, json={'dry_run': False})
     assert r.status_code == 200, r.text
@@ -82,9 +81,9 @@ def test_apply_creates_slugs_in_group_detector_and_is_idempotent(
 
 
 def test_existing_hand_made_class_is_skipped_and_ids_append(
-    client: TestClient, registry: ClassRegistry, labels_file: None
+    client: TestClient, registry: InMemoryRegistry, labels_file: None
 ) -> None:
-    registry.add_class('car', group='vehicle')
+    registry.add('car', group='vehicle')
     body = client.post(URL, json={'dry_run': False}).json()
     assert [s['name'] for s in body['skipped']] == ['car']
     assert [c['class_id'] for c in body['created']] == [1, 2, 3]
@@ -92,7 +91,7 @@ def test_existing_hand_made_class_is_skipped_and_ids_append(
 
 
 def test_names_subset_and_group(
-    client: TestClient, registry: ClassRegistry, labels_file: None
+    client: TestClient, registry: InMemoryRegistry, labels_file: None
 ) -> None:
     body = client.post(
         URL, json={'names': ['traffic light'], 'group': 'street', 'dry_run': False}
@@ -104,7 +103,7 @@ def test_names_subset_and_group(
 
 
 def test_unknown_name_is_422_and_writes_nothing(
-    client: TestClient, registry: ClassRegistry, labels_file: None
+    client: TestClient, registry: InMemoryRegistry, labels_file: None
 ) -> None:
     r = client.post(URL, json={'names': ['person', 'unicorn'], 'dry_run': False})
     assert r.status_code == 422
@@ -128,7 +127,7 @@ def test_no_detector_configured_is_503(client: TestClient, monkeypatch: pytest.M
 
 
 def test_seeding_never_touches_items(
-    client: TestClient, registry: ClassRegistry, labels_file: None
+    client: TestClient, registry: InMemoryRegistry, labels_file: None
 ) -> None:
     from src.routers.curation import _raw_opensearch_dep
 

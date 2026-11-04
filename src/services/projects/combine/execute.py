@@ -12,21 +12,19 @@ the sources' current classes, so a resumed run copies what the preview showed.
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import uuid
 from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.clients.curation_opensearch.registry import ClassRegistry
+from src.clients.curation_opensearch.registry import get_class_registry
 from src.config.env import env_int
 from src.config.project_context import bind_project
 from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
-from src.services.curation.dataset_import.mapping import MapTarget, norm_class_name
+from src.services.curation.dataset_import.mapping import MapTarget
 from src.services.curation.dataset_import.project_source import class_names_by_id, iter_source_pages
-from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.next_steps import recluster_items
 from src.services.projects.combine import holdout
 from src.services.projects.combine.image_copy import CopyContext, copy_page
@@ -128,19 +126,16 @@ def load_plan(store: ImportStore) -> Plan:
     )
 
 
-def build_target_registry(target: ProjectRecord, names: list[str]) -> dict[str, int]:
+async def build_target_registry(
+    client: Any, target: ProjectRecord, names: list[str]
+) -> dict[str, int]:
     """Create the target's classes in order (a name already there keeps its
     id, so a resume is a no-op) and return ``name -> class_id``."""
-    registry = ClassRegistry(path=target.resources.class_registry_path)
-    have = {
-        norm_class_name(c.class_name): c.class_id
-        for c in registry.load().classes
-        if not c.deprecated
-    }
     ids: dict[str, int] = {}
-    for name in names:
-        norm = norm_class_name(name)
-        ids[name] = have[norm] if norm in have else registry.add_class(name)
+    with bind_project(target):
+        registry = get_class_registry()
+        for name in names:
+            ids[name], _created = await registry.ensure_class(client, name)
     return ids
 
 
@@ -200,13 +195,12 @@ async def run_combine(
     job_id = store.import_id
     claim = uuid.uuid4().hex
     job.touch_heartbeat()
-    ticker = asyncio.create_task(heartbeat_ticker(job))
     try:
         done = store.chunks_done()
         job.update(
             status='running', phase='registry', total=plan.images_total, error=None, claim=claim
         )
-        ids = build_target_registry(target, plan.mapping.target_classes)
+        ids = await build_target_registry(client, target, plan.mapping.target_classes)
         saved = store.read_mapping()
         saved['target_class_ids'] = ids
         store.write_mapping(saved)
@@ -218,7 +212,7 @@ async def run_combine(
             target=target,
             mapping=plan.mapping,
             target_ids=ids,
-            names=[class_names_by_id(r) for r in sources],
+            names=[await class_names_by_id(client, r) for r in sources],
             fields=get_region_fields(),
             embedding_dim=embedding_dim,
             now=now_iso(),
@@ -245,9 +239,6 @@ async def run_combine(
                 error = f'{error}; could not fail the target: {settle_exc}'[:300]
         job.update(status='failed', error=error, finished_at=now_iso())
     finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
         _publish(job_id, target.slug, job.read())
     return True
 

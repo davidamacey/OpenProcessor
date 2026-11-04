@@ -69,6 +69,7 @@ dependencies = [
     "hdbscan",
     "joblib",
     "einops",
+    "cachetools>=7.2",
     "regex",
     "docker>=7,<8",
 ]
@@ -91,8 +92,8 @@ pe = [
 ]
 dev = [
     "pre-commit>=4.0.0",
-    "ruff==0.17.1",
-    "mypy==2.4.0",
+    "ruff==0.17.3",
+    "mypy==2.4.1",
     "vulture==2.16",
     "bandit[toml]>=1.9.4",
     "pytest>=8.0.0",
@@ -336,14 +337,16 @@ addopts = [
     # up; they are deselected by default so the offline gate is unchanged.
     # Run them with: pytest tests/live -q --no-cov -m live
     "-m",
-    "not live",
+    "not live and not families",
 ]
 # Seconds per test: three times the slowest offline test (124 s measured under 6 parallel workers).
 timeout = 400
 markers = [
     "integration: tests that exercise several components together (no live stack required)",
     "live: write-path tests that require the docker/test/ verification harness to be running",
+    "families: tests that need the official Ultralytics weights or the official YOLOv5 ONNX (CI job `families`); run with -m families",
     "unbound: opt out of the autouse `default` project binding (tests/conftest.py)",
+    "real_lease_io: opt out of the in-memory lease store (tests/conftest.py); the test supplies its own lease client",
 ]
 
 # =============================================================================

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.clients.curation_opensearch.registry import ClassRegistry
+from _registry_doc_fake import make_registry
+
 from src.config import CurationConfig
 from src.config.region_fields import RegionFields
 from src.services.curation.export import GenericYoloExportService
@@ -77,13 +78,6 @@ class FakeOpenSearch:
 
 
 FIELDS = RegionFields()
-
-
-def make_registry(base_dir: Path, names: list[str]) -> ClassRegistry:
-    reg = ClassRegistry(path=base_dir / 'class_registry.json')
-    for name in names:
-        reg.add_class(name)
-    return reg
 
 
 def generic_service(

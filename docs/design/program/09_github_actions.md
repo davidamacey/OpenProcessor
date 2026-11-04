@@ -227,7 +227,7 @@ worker reads, changes and writes back.
   is a no-op; a conflicting document is an error.
 - Release acceptance upgrades a real 0.6.0 install with classes and finds the ids equal.
 
-Plan: docs/design/program/02b_b1_class_registry.md. Task detail: docs/design/codebase_audit_plan.md CC-2.
+Plan: B1 1B (merged; see ARCHITECTURE.md). Task detail: docs/design/codebase_audit_plan.md CC-2.
 ```
 
 ### N3 body
@@ -256,7 +256,7 @@ job, and a blocked event loop can cost a live job its liveness.
 - No caller of the file-lock helpers remains outside the module except the sites scheduled for
   the Celery and event-log work.
 
-Plan: docs/design/program/02a_b1_job_leases.md. Task detail: docs/design/task_queue_plan.md
+Plan: B1 1A (merged; see ARCHITECTURE.md). Task detail: docs/design/task_queue_plan.md
 Q-D2, Q-D4, Q-D7, Q-D9, Q-D12; docs/design/codebase_audit_plan.md OS-3.
 ```
 
@@ -279,7 +279,7 @@ CC-5 (thumbnail and render handlers offload their blocking work once per request
 Each item's red test fails on the base and passes after, with a paired control; contracts and
 the API contract doc updated in the same commits.
 
-Plan: docs/design/program/02d_b1_api_frontend_tests.md. Task detail: docs/design/codebase_audit_plan.md section 4.
+Plan: B1 1D (merged; see CHANGELOG.md). Task detail: docs/design/codebase_audit_plan.md section 4.
 ```
 
 ### N5 body
@@ -300,7 +300,7 @@ query), OS-7, OS-9, OS-10; CC-6; CC-8.
 Each item's red test and control from the audit plan; a live check that a filtered search
 returns k hits.
 
-Plan: docs/design/program/02c_b1_inference_search.md (OS-3 in 02a_b1_job_leases.md). Task
+Plan: B1 1C (merged; see CHANGELOG.md) (OS-3 in B1 1A (merged; see ARCHITECTURE.md)). Task
 detail: docs/design/codebase_audit_plan.md section 4.
 ```
 
@@ -324,7 +324,7 @@ the red test).
 Each item's red test and control; browser check of the export and diverse review pages at 1440
 and 430 px with the screenshots viewed.
 
-Plan: docs/design/program/02d_b1_api_frontend_tests.md. Task detail: docs/design/codebase_audit_plan.md section 4.
+Plan: B1 1D (merged; see CHANGELOG.md). Task detail: docs/design/codebase_audit_plan.md section 4.
 ```
 
 ### N7 body
@@ -348,7 +348,7 @@ static export fails.
 A registry with a gap gives the right class by name (red today); a real 640 static official
 export runs through the probe (red today).
 
-Plan: docs/design/program/02e_b1_ultralytics_live_bugs.md. Task detail:
+Plan: B1 1E (merged; see CHANGELOG.md). Task detail:
 docs/design/model_family_versions_plan.md Step 3, C8, C10, J3.
 ```
 
@@ -390,7 +390,7 @@ docs/design/model_family_versions_plan.md Steps 4-9, sections 6.1 and 6.2.
 Hardening item from the 0.7.0 audit. Details are in the maintainers' private notes, not in this
 issue. It is fixed in batch <B1 | B2> of the 0.7.0 program, and the PR references this issue.
 
-Plan: docs/design/program/<02d_b1_api_frontend_tests.md | 03c_b2_w3_beat_reaper_workers.md>.
+Plan: docs/design/program/<B1 1D (merged; see CHANGELOG.md) | 03c_b2_w3_beat_reaper_workers.md>.
 ```
 
 N9 and N10 use 02d (B1); N11 and N12 use 03c (B2).
@@ -480,7 +480,7 @@ reproduce. Also in scope: a YOLO26 upload is routed to the YOLO11 toolchain, bec
 Fix (B1, track 1E of the 0.7.0 program): export with `nms=False` and refuse any output that is
 not `[300,6]`; route uploads by head kind (the one-to-one branch), not by `end2end`. The
 trainer's export moves with the single-version work (B3). Milestone v0.7.0.
-Plan: docs/design/program/02e_b1_ultralytics_live_bugs.md.
+Plan: B1 1E (merged; see CHANGELOG.md).
 ```
 
 **C-439:**
@@ -666,7 +666,7 @@ Rules (owner decision 9):
 - No dependabot PR is merged on GitHub straight into `main` during the program: it would move
   `main` under the open integration branches without a batch sweep.
 - Bumps land through **the separate deps lane `b1/deps`** (brief in
-  [02_b1_overview.md](02_b1_overview.md) section 4.1; a later batch gets one only when PRs are
+  B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) section 4.1; a later batch gets one only when PRs are
   open): the lane re-applies each PR's manifest change on its own branch, one commit per PR
   (`build(deps): ...`), runs targeted checks, and the coordinator merges it into the batch's
   integration branch like any lane, so the batch sweep tests it. Then the PR is closed with a
@@ -704,7 +704,7 @@ the exact pin moves only by the single-version rule (D-28).
 ### The deps lane brief
 
 The lane `b1/deps` is its own lane in B1; its brief, branch, checks and merge position live in
-[02_b1_overview.md](02_b1_overview.md) section 4.1 (this file keeps only the per-PR decisions above
+B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) section 4.1 (this file keeps only the per-PR decisions above
 and the GitHub side). The lane runs only the targeted checks of the
 [Test and GPU budget](00_index.md); the full suite runs once in the B1 sweep.
 

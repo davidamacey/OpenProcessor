@@ -24,6 +24,7 @@ from _region_profile_fixture import (
     REFERENCE_REGION_DETECTOR_MODEL,
 )
 
+from curation.region_cascade_helpers import class_group_answer
 from scripts.curation.worker import runner as runner_mod
 from scripts.curation.worker.__main__ import parse_args
 from scripts.curation.worker.runner import run
@@ -338,7 +339,8 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
     mocks['SegmenterClient'].assert_called_once_with('', text_prompt='', source_name='sam3')
 
 
-def test_secondary_shape_routing_follows_env_groups(
+@pytest.mark.asyncio
+async def test_secondary_shape_routing_follows_env_groups(
     region_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Group resolution comes from the class registry
@@ -354,13 +356,14 @@ def test_secondary_shape_routing_follows_env_groups(
         region_status=None,
         class_name='audi',
     )
-    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'tall_things')
-    assert _is_secondary_shape(task)
-    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'unrelated_group')
-    assert not _is_secondary_shape(task)
+    monkeypatch.setattr(worker_state, '_class_group', class_group_answer('tall_things'))
+    assert await _is_secondary_shape(task, None)
+    monkeypatch.setattr(worker_state, '_class_group', class_group_answer('unrelated_group'))
+    assert not await _is_secondary_shape(task, None)
 
 
-def test_no_secondary_shape_routing_when_profile_has_no_groups(
+@pytest.mark.asyncio
+async def test_no_secondary_shape_routing_when_profile_has_no_groups(
     region_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import scripts.curation.worker.state as worker_state
@@ -373,8 +376,8 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
         region_status=None,
         class_name='class_b',
     )
-    monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
-    assert not _is_secondary_shape(task)
+    monkeypatch.setattr(worker_state, '_class_group', class_group_answer(None))
+    assert not await _is_secondary_shape(task, None)
 
 
 def test_retired_empty_class_ids_is_dropped_on_read() -> None:

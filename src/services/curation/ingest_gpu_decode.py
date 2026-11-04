@@ -95,7 +95,7 @@ _READY: dict[tuple[str, int, tuple[int, int, int]], bool] = {}
 async def gpu_decode_ready(service: CurationIngestService) -> bool:
     """Whether photos go to the GPU decode: enabled, no secondary detector, and the loaded model
     built for the ingest profile's detector input. The model check runs once per profile
-    shape per process; a mismatch or a missing model is logged and keeps the CPU path."""
+    shape per process; a failed probe is retried; a mismatch or a missing model is logged and keeps the CPU path."""
     if not service.config.ingest_gpu_decode or service.detector.secondary_profile is not None:
         return False
     profile = service.profile
@@ -103,7 +103,6 @@ async def gpu_decode_ready(service: CurationIngestService) -> bool:
     cached = _READY.get(key)
     if cached is not None:
         return cached
-    ready = False
     try:
         if not await service.triton_pool.is_model_ready(GPU_IMAGE_PREP_MODEL):
             # Not in Triton's default load list: it holds GPU memory only where it is used.
@@ -121,7 +120,9 @@ async def gpu_decode_ready(service: CurationIngestService) -> bool:
                 'ingest_gpu_decode_profile_mismatch', mismatch=mismatch, fill=profile.letterbox_fill
             )
     except Exception as exc:
+        # A failed call is not a verdict on the model: do not pin the worker to the CPU path.
         logger.warning('ingest_gpu_decode_unavailable', error=str(exc))
+        return False
     _READY[key] = ready
     return ready
 

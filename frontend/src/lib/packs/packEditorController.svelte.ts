@@ -15,7 +15,7 @@ import {
 } from '$lib/api_packs';
 import { ConfigEditor } from '$lib/config/configEditor.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
-import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
+import { subscribeConfigEvents, type CurationEvent } from '$lib/sse';
 import type { PromptPackBody, PromptPackDoc, PromptPackSchema } from '$lib/types_packs';
 import { PackActive, type PackActiveDeps } from './packActive.svelte';
 
@@ -26,7 +26,10 @@ export interface PackEditorDeps extends PackActiveDeps {
   getPromptPackRevision: typeof getPromptPackRevision;
   updatePromptPack: typeof updatePromptPack;
   validatePromptPack: typeof validatePromptPack;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
+  subscribe: (
+    onEvent: (e: CurationEvent) => void,
+    onResync?: () => void,
+  ) => { close(): void };
 }
 
 export class PackEditor extends ConfigEditor<
@@ -47,9 +50,7 @@ export class PackEditor extends ConfigEditor<
         update: (n, body) => (deps.updatePromptPack ?? updatePromptPack)(n, body),
         validate: (body, signal) =>
           (deps.validatePromptPack ?? validatePromptPack)(body, signal),
-        subscribe:
-          deps.subscribe ??
-          ((onEvent) => subscribeCurationEvents({ topic: 'config', onEvent })),
+        subscribe: deps.subscribe ?? subscribeConfigEvents,
         isEvent: (e) => isConfigAxisEvent(e, 'prompt_pack'),
       },
       new PackActive(deps),

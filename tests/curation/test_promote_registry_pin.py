@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _project_paths import default_train_jobs_dir
+from _registry_doc_fake import InMemoryRegistry, use_registry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -64,24 +65,12 @@ def app_client(
         yield client
 
 
-def _renamed_live_registry():
-    """A live ClassRegistry stand-in reflecting a rename that happened
-    AFTER the job was submitted — class_id=5 is now 'suv_renamed'."""
-
-    class _Entry:
-        def __init__(self, class_id: int, class_name: str) -> None:
-            self.class_id = class_id
-            self.class_name = class_name
-            self.deprecated = False
-
-    class _Snapshot:
-        classes = [_Entry(5, 'suv_renamed')]
-
-    class _Reg:
-        def load(self) -> _Snapshot:
-            return _Snapshot()
-
-    return _Reg()
+def _renamed_live_registry() -> InMemoryRegistry:
+    """The live registry after a rename that happened AFTER the job was submitted:
+    class_id=5 is now 'suv_renamed'."""
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': 5, 'class_name': 'suv_renamed'}])
+    return use_registry(registry)
 
 
 def test_labels_txt_uses_pinned_registry_not_live(
@@ -118,10 +107,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
 
     # 3. The LIVE registry has since been renamed — class_id=5 is now
     #    'suv_renamed'. Before the fix, promote would follow this rename.
-    monkeypatch.setattr(
-        'src.services.training.promote_gate.get_class_registry',
-        _renamed_live_registry,
-    )
+    _renamed_live_registry()
 
     from src.services.training.job_models import TrainJobStatus
 
@@ -185,10 +171,7 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
         json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/x'})
     )
 
-    monkeypatch.setattr(
-        'src.services.training.promote_gate.get_class_registry',
-        _renamed_live_registry,
-    )
+    _renamed_live_registry()
 
     from src.services.training.job_models import TrainJobStatus
 

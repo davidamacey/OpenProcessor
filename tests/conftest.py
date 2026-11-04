@@ -75,6 +75,23 @@ def _projects_data_root(
         monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path_factory.mktemp('projects')))
 
 
+@pytest.fixture(scope='session')
+def op_weights():
+    """``op_weights('yolo26n.pt')`` -> cached official file; skips locally, fails in CI, when absent."""
+    from _ultralytics_weights import cache_dir, verified_path
+
+    def get(name: str) -> Path:
+        path = verified_path(name)
+        if path is None:
+            reason = f'{name} is not in {cache_dir()} (CI job `families` provides it)'
+            if os.environ.get('CI'):
+                pytest.fail(reason)
+            pytest.skip(reason)
+        return path
+
+    return get
+
+
 @pytest.fixture
 def project_export_root() -> Path:
     """The bound ``default`` project's ``export_root`` (created). Training
@@ -85,6 +102,25 @@ def project_export_root() -> Path:
     root = Path(get_curation_config().export_root)
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+@pytest.fixture(autouse=True)
+def _in_memory_class_registries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every project's class registry is an in-memory document store unless a test installs its
+    own (the registry is an OpenSearch document; unit tests have no cluster).
+
+    ``registry_access`` reaches the registry through the shared client; here it needs none."""
+    from _registry_doc_fake import InMemoryRegistries
+
+    from src.clients.curation_opensearch import registry as registry_module
+
+    async def _no_client() -> None:
+        return None
+
+    monkeypatch.setattr(registry_module, '_registries', InMemoryRegistries())
+    monkeypatch.setattr(
+        'src.services.curation.registry_access.make_curation_opensearch', _no_client
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -108,6 +144,29 @@ def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
         # A script entry point run in-process binds the whole process;
         # never let that leak into the next test.
         bind_process_project(None)
+
+
+@pytest.fixture(autouse=True)
+def _in_memory_leases(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Job leases (``src/clients/job_lease.py``) live in OpenSearch; offline tests run the
+    real lease logic against an in-memory store by swapping the client the three I/O
+    functions use. A test of the lease client itself opts out with ``real_lease_io``."""
+    if request.node.get_closest_marker('real_lease_io') is not None:
+        return
+    import threading
+
+    from _fake_lease_opensearch import FakeLeaseOpenSearch
+
+    from src.clients import job_lease
+
+    fake = FakeLeaseOpenSearch({}, threading.Lock())
+    for name in ('_get', '_create', '_replace'):
+        real = getattr(job_lease, name)
+
+        def _bound(client: object, *args: object, _real: object = real, **kw: object) -> object:
+            return _real(fake, *args, **kw)  # type: ignore[operator]
+
+        monkeypatch.setattr(job_lease, name, _bound)
 
 
 @pytest.fixture(autouse=True)
@@ -180,6 +239,16 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         registry_mod.set_project_registry(None)
 
 
+@pytest.fixture(scope='session', autouse=True)
+def _bind_real_keymap_functions() -> None:
+    """Import the keymap router before any test patches the keymap service by dotted path.
+
+    The router binds ``get_keymap_doc`` and ``save_keymap_doc`` with ``from ... import`` at
+    import time; if the first import happened inside a patched test it would keep the fakes
+    for every later test in the process."""
+    import src.routers.curation.keymap  # noqa: F401 - bind the real functions first
+
+
 # Module-level TTL caches (module, attribute). Production keys each by
 # project, but every unit test binds the same ``default`` record, so a cache
 # one test fills would answer the next test's first request.
@@ -191,6 +260,7 @@ _PROCESS_CACHES = (
     ('src.clients.curation_opensearch.ensure_overlay_fields', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
+    ('src.services.projects.stats', '_disk_cache'),
     # Config-store snapshots: one ConfigStore per project, keyed by
     # slug in a module-level dict -- every test binds the same ``default``
     # project, so a store one test mutates would leak into the next.

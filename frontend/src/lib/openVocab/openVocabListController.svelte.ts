@@ -15,7 +15,7 @@ import {
 import { apiErrorText } from '$lib/api_errors';
 import { ConfigList } from '$lib/config/configList.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
-import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
+import { subscribeConfigEvents, type CurationEvent } from '$lib/sse';
 import type {
   OpenVocabCloneRequest,
   OpenVocabDoc,
@@ -36,7 +36,10 @@ export interface OpenVocabListDeps extends OpenVocabActiveDeps {
   createOpenVocab: typeof createOpenVocab;
   cloneOpenVocab: typeof cloneOpenVocab;
   deleteOpenVocab: typeof deleteOpenVocab;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
+  subscribe: (
+    onEvent: (e: CurationEvent) => void,
+    onResync?: () => void,
+  ) => { close(): void };
 }
 
 export class OpenVocabListState extends ConfigList<
@@ -63,9 +66,7 @@ export class OpenVocabListState extends ConfigList<
             source: body.source as OpenVocabCloneRequest['source'],
           }),
         remove: (name, rev) => (deps.deleteOpenVocab ?? deleteOpenVocab)(name, rev),
-        subscribe:
-          deps.subscribe ??
-          ((onEvent) => subscribeCurationEvents({ topic: 'config', onEvent })),
+        subscribe: deps.subscribe ?? subscribeConfigEvents,
         isEvent: isOpenVocabConfigEvent,
       },
       new OpenVocabActive(deps),

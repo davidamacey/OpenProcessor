@@ -185,12 +185,15 @@ def test_api_default_profile_from_example_path(monkeypatch: pytest.MonkeyPatch) 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from src.routers.curation import router as curation_router
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
+    # The profile rows resolve class names through the registry document; the autouse
+    # in-memory registry answers, the client is never used.
+    app.dependency_overrides[_raw_opensearch_dep] = object
     monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(PROFILE))
     body = TestClient(app).get('/curation/projects/default/bakeoff/profiles').json()
     by_name = {p['name']: p for p in body['profiles']}

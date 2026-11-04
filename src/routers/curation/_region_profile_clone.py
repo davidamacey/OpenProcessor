@@ -80,7 +80,7 @@ async def clone_region_profile(
         source.body,
         existing_names=existing,
         segmenter_health=configured_segmenter_health,
-        class_names=registry_class_names(),
+        class_names=await registry_class_names(),
         project_slug=target_slug,
     )
     reject_invalid_clone_name(
@@ -96,7 +96,7 @@ async def clone_region_profile(
         None,
         new_body,
         segmenter_health=configured_segmenter_health,
-        class_names=registry_class_names(),
+        class_names=await registry_class_names(),
         project_slug=target_slug,
     )
     if not report.ok:

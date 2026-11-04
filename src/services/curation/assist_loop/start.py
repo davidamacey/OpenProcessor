@@ -53,10 +53,11 @@ def dry_run_state(prepared: PreparedLoop) -> AssistLoopState:
     )
 
 
-def start_loop(prepared: PreparedLoop) -> dict[str, Any]:
+async def start_loop(opensearch: Any, prepared: PreparedLoop) -> dict[str, Any]:
     """Queue the loop (409 ``assist_loop_busy`` while another is live); its state."""
     request = prepared.request.model_dump(mode='json')
-    loop = job.create_loop(
+    loop = await job.create_loop(
+        opensearch,
         state={
             'status': 'queued',
             'created_at': now_iso(),

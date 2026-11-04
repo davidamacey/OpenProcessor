@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import os
 import signal
 import sys
@@ -54,6 +53,7 @@ from scripts.curation._vlm_activity import (
 )
 from scripts.curation.vlm_cli import parse_args
 from scripts.curation.vlm_pending import _filter_fresh_ids, fetch_pending_ids
+from scripts.curation.worker.crash import crash_on_unhandled_exception
 from src.config.project_context import bind_project
 from src.services.curation.ops_metrics import start_worker_metrics_server
 from src.services.curation.vlm_scope import ScopeCache
@@ -248,12 +248,12 @@ class _StreamWorker:
         )
         return False
 
-    def _labelable(self, projects: list[Any]) -> list[Any]:
+    async def _labelable(self, projects: list[Any]) -> list[Any]:
         """The projects that have a class to label as. A project without one is not
         fetched, so its crops are never claimed in flight and cannot starve the rest."""
         labelable = []
         for record in projects:
-            if project_has_item_classes(record):
+            if await project_has_item_classes(self.opensearch, record):
                 if record.slug in self.classless:
                     self.classless.discard(record.slug)
                     print(f'[vlm-worker] project={record.slug} has classes now; labeling it')
@@ -314,7 +314,7 @@ class _StreamWorker:
             # In-flight ids are excluded server-side (must_not ids), so a
             # fetch only needs to refill the queue.
             fetch_n = min(args.vlm_batch_size * args.concurrency * 2, 9000)  # OS hits cap
-            labelable = self._labelable(projects)
+            labelable = await self._labelable(projects)
             share = max(1, fetch_n // max(1, len(labelable)))
             if not await self._fetch_cycle(labelable, share):
                 if await self._idle_cycle(projects):
@@ -425,13 +425,13 @@ class _StreamWorker:
         )
         async with httpx.AsyncClient() as client:
             prod_task = asyncio.create_task(self.producer(), name='producer')
-            prod_task.add_done_callback(_crash_on_unhandled_exception)
+            prod_task.add_done_callback(crash_on_unhandled_exception)
             cons_tasks = [
                 asyncio.create_task(self.consumer(i, client), name=f'consumer-{i}')
                 for i in range(args.concurrency)
             ]
             for t in cons_tasks:
-                t.add_done_callback(_crash_on_unhandled_exception)
+                t.add_done_callback(crash_on_unhandled_exception)
             metrics_task = asyncio.create_task(self.metrics_reporter())
             heartbeat_task = asyncio.create_task(
                 heartbeat_loop(
@@ -470,25 +470,6 @@ class _StreamWorker:
             f'updated={self.metrics["total_updated"]} chunks={self.metrics["total_chunks"]} '
             f'elapsed={elapsed_total:.1f}s avg_rate={rate_total:.1f} cps'
         )
-
-
-def _crash_on_unhandled_exception(task: asyncio.Task) -> None:
-    """A task dying silently (e.g. an import error inside the
-    producer coroutine) previously left the worker reporting
-    `session=0 chunks=0` forever with a passing healthcheck. Any
-    task that finishes with an exception other than cancellation is
-    fatal — log the traceback and exit so the container restart
-    policy recovers the worker.
-    """
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is None:
-        return
-    logging.getLogger('vlm-worker').critical(
-        'fatal: task %s exited with an unhandled exception', task.get_name(), exc_info=exc
-    )
-    os._exit(1)
 
 
 async def run(args: argparse.Namespace) -> int:

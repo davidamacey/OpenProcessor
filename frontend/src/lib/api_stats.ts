@@ -156,6 +156,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
     total_crops: ds.total_crops ?? 0,
     validated_crops: ds.validated ?? 0,
     test_holdout_crops: ds.test_holdout ?? 0,
+    by_source: ds.by_source ?? [],
     per_class: cls.classes.map((c) => ({
       class_id: c.class_id,
       class_name: c.class_name,

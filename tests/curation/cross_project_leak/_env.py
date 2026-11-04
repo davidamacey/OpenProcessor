@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import numpy as np
 import pytest
+from _registry_doc_fake import registry_doc_source
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from opensearchpy import AsyncOpenSearch
 
+from curation.cross_project_leak._constants import CLASS_NAMES
 from curation.cross_project_leak._seeded_files import _docs, _seed_files, _vec
 from curation.cross_project_leak._seeders import _seed_vlm
 from curation.cross_project_leak._transport import (
@@ -62,6 +64,8 @@ def leak_env(
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
+    from cachetools import TTLCache
+
     import src.config.curation_accessors as curation_config_mod
     from src.clients.curation_opensearch import registry as curation_registry, settings_doc
     from src.config.curation_accessors import base_curation_config
@@ -129,8 +133,11 @@ def leak_env(
     monkeypatch.setattr(curation_registry, '_registries', {})
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', set())
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
-    # change which index roles a route reaches between the two passes.
-    monkeypatch.setattr(settings_doc, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)
+    # change which index roles a route reaches between the two passes: a frozen
+    # clock keeps every entry fresh.
+    monkeypatch.setattr(
+        settings_doc, '_settings_cache', TTLCache(maxsize=64, ttl=5.0, timer=lambda: 0.0)
+    )
     # A UMAP fit the fixture's small pool supports (the defaults need
     # more points than the fixture seeds).
     from src.services.curation.clustering import pool_size
@@ -163,6 +170,10 @@ def leak_env(
     for slug, record in records.items():
         for role_value, docs in _docs(slug).items():
             store[record.resources.indexes[IndexRole(role_value)]] = docs
+    for slug, record in records.items():
+        store.setdefault(record.resources.indexes[IndexRole.SETTINGS], {})['class_registry'] = (
+            registry_doc_source([CLASS_NAMES[slug], f'{slug}_second'], ids=[1, 2])
+        )
     own_dirs = {slug: _seed_files(record, tmp_path) for slug, record in records.items()}
 
     # M6: seed the shared op_projects registry doc for every project, so
@@ -207,6 +218,15 @@ def leak_env(
     # with an AttributeError. Give it the same sync-from-store behavior.
     monkeypatch.setattr(ProjectRegistry, 'refresh_strict', _fresh)
     registry_mod.set_project_registry(registry)
+
+    # The sweep drives the real registry store through the fake transport (not the in-memory
+    # stand-in every other test gets), so the document's reads and writes are recorded and
+    # checked against the bound project like any other index access.
+    from src.services.curation import registry_access
+    from src.services.projects.guard import make_curation_opensearch
+
+    monkeypatch.setattr(curation_registry, '_registries', {})
+    monkeypatch.setattr(registry_access, 'make_curation_opensearch', make_curation_opensearch)
 
     accesses: list[tuple[str | None, str, str, str]] = []
     fake = _FakeTransport(store)

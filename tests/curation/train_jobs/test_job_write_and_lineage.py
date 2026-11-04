@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry, use_registry
 
 from src.config import GpuArbiterConfig
 from src.services.training import job_manifest, jobs as train_jobs
@@ -207,37 +208,9 @@ async def test_write_job_pins_registry_snapshot(
     so promote can use the registry as it was at submit time instead of
     always following a later rename."""
 
-    class _FakeEntry:
-        def __init__(self, class_id: int, class_name: str) -> None:
-            self.class_id = class_id
-            self.class_name = class_name
-            self.deprecated = False
-
-    class _FakeRegistrySnapshot:
-        def __init__(self) -> None:
-            self.version = 1
-            self.updated_at = '2026-09-11T00:00:00Z'
-            self.classes = [_FakeEntry(0, 'sedan')]
-
-        def model_dump_json(self, **_kwargs: object) -> str:
-            return json.dumps(
-                {
-                    'version': self.version,
-                    'updated_at': self.updated_at,
-                    'classes': [
-                        {'class_id': c.class_id, 'class_name': c.class_name, 'deprecated': False}
-                        for c in self.classes
-                    ],
-                }
-            )
-
-    class _FakeRegistry:
-        def load(self) -> _FakeRegistrySnapshot:
-            return _FakeRegistrySnapshot()
-
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry', _FakeRegistry
-    )
+    registry = InMemoryRegistry()
+    registry.seed_rows([{'class_id': 0, 'class_name': 'sedan'}])
+    use_registry(registry)
 
     spec = TrainJobSpec(job_id='pin_test', dataset_export_dir='/data/exports/x')
     await train_jobs.write_job(spec)

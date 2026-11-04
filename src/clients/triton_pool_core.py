@@ -25,6 +25,7 @@ import tritonclient.grpc as grpcclient
 import tritonclient.grpc.aio as grpcclient_aio
 
 from src.clients.model_residency import ensure_loaded
+from src.utils.retry import is_retryable_error
 from src.utils.stage_timing import stage_timer
 
 
@@ -314,6 +315,8 @@ class AsyncTritonPool:
 
                 except Exception as e:
                     last_error = e
+                    if not is_retryable_error(e):
+                        break
                     if attempt < retries:
                         # Exponential backoff: 10ms, 20ms, 40ms...
                         await asyncio.sleep(0.01 * (2**attempt))

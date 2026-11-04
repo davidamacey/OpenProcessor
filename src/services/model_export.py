@@ -34,6 +34,7 @@ from typing import Any
 
 from src.config.env import env_path
 from src.schemas.models import ExportStatus
+from src.services.checkpoint_inspect import YOLOV5_ORIGINAL_MESSAGE, head_kind, is_original_yolov5
 from src.utils.atomic_write import atomic_write_json
 
 
@@ -144,7 +145,12 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
         # Restricted load: torch.load(weights_only=True) plus the Ultralytics
         # allow-list of model classes, requested per call (not via the
         # ULTRALYTICS_SAFE_LOAD env var alone). Anything else in the file is refused.
-        ckpt, _ = torch_safe_load(file_path, safe_only=True)
+        try:
+            ckpt, _ = torch_safe_load(file_path, safe_only=True)
+        except TypeError:
+            if is_original_yolov5(file_path):
+                return False, YOLOV5_ORIGINAL_MESSAGE, {}
+            raise
         model = ckpt.get('model') if isinstance(ckpt, dict) else None
         if model is None or not hasattr(model, 'names'):
             return False, 'Not an Ultralytics model checkpoint', {}
@@ -154,10 +160,10 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
             'task': getattr(model, 'task', 'detect'),
             'num_classes': len(names),
             'class_names': list(names.values()) if isinstance(names, dict) else [],
-            # End-to-end (NMS-free) architectures — YOLO26 — export through
-            # the native toolchain; classic YOLO11-family models go through
-            # the EfficientNMS toolchain. run_export() routes on this flag.
-            'end2end': bool(getattr(model, 'end2end', False)),
+            # The NMS-free head (YOLO26, YOLOv10) exports through the native toolchain; the
+            # other heads go through the EfficientNMS toolchain. The export worker routes on it.
+            'head_kind': head_kind(model),
+            'ultralytics_version': ckpt.get('version'),
         }
 
         if model_info['task'] != 'detect':
@@ -229,7 +235,7 @@ def create_export_task(
         'formats_pending': formats,
         'num_classes': model_info.get('num_classes'),
         'class_names': model_info.get('class_names'),
-        'end2end': model_info.get('end2end', False),
+        'head_kind': model_info.get('head_kind'),
         'triton_loaded': False,
     }
     persist_task(task_id)
@@ -314,7 +320,7 @@ def enqueue_export_job(
         'formats': formats,
         'normalize_boxes': normalize_boxes,
         'auto_load': auto_load,
-        'end2end': bool(task.get('end2end', False)),
+        'head_kind': task.get('head_kind'),
     }
     queue = queue_dir()
     queue.mkdir(parents=True, exist_ok=True)

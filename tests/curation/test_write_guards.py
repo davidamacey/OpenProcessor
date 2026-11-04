@@ -226,14 +226,15 @@ class TestAutomatedClassWritersExcludeTestHoldout:
         assert {'term': {'test_holdout': True}} in must_not
 
     @pytest.mark.asyncio
-    async def test_classes_merge_query_has_holdout_must_not(self, tmp_path: Any) -> None:
+    async def test_classes_merge_query_has_holdout_must_not(self) -> None:
+        from _registry_doc_fake import InMemoryRegistry
+
         import src.routers.curation.classes_merge as classes_mod
-        from src.clients.curation_opensearch.registry import ClassRegistry
         from src.routers.curation._class_models import ClassMergeRequest
 
-        registry = ClassRegistry(path=tmp_path / 'class_registry.json')
-        registry.add_class('sedan', group='vehicle')
-        registry.add_class('suv', group='vehicle')
+        registry = InMemoryRegistry()
+        registry.add('sedan', group='vehicle')
+        registry.add('suv', group='vehicle')
         classes = registry.load().classes
         source_id, target_id = classes[0].class_id, classes[1].class_id
 
@@ -399,7 +400,7 @@ class TestVlmLabelBatchHumanGuard:
         fake_reg = MagicMock()
         # One class, so the route gets past its no-classes refusal and the
         # human-owned guard is what keeps the crop from the VLM.
-        fake_reg.load = MagicMock(
+        fake_reg.snapshot = AsyncMock(
             return_value=MagicMock(classes=[MagicMock(class_name='widget', deprecated=False)])
         )
         monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: fake_reg)

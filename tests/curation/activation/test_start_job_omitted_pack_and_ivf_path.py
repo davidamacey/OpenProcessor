@@ -13,7 +13,7 @@ import pytest
 
 from curation.activation.constants import PREFIX, pack_body
 from curation.test_auto_label_selection import _run_kwargs, job_dir, labeler_spy, packs  # noqa: F401 - fixtures
-from curation.test_pipeline import _FakeClassEntry, _FakeOpenSearch, _FakeRegistry
+from curation.test_pipeline import _FakeOpenSearch, install_registry
 from src.services.curation.auto_label_run import run_auto_label
 from src.services.curation.item_filter import ItemFilter
 
@@ -163,7 +163,7 @@ async def test_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_omit
 
     captured: dict[str, Any] = {}
 
-    def _fake_start(_fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'args': {k: v for k, v in kwargs.items() if k != 'opensearch'}}
 
@@ -210,7 +210,7 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
 
     captured: dict[str, Any] = {}
 
-    def _fake_start(_fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'job_id': 'x'}
 
@@ -229,10 +229,7 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
     args = {k: v for k, v in captured.items() if k != 'opensearch'}
     args['train_clusters'] = False
     args['run_vlm'] = True
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry',
-        lambda: _FakeRegistry([_FakeClassEntry(3, 'wooden_pallet')]),
-    )
+    install_registry((3, 'wooden_pallet'))
     # `ensure_fresh` (prompt_pack_resolved=True) is a no-op here -- the
     # config-store snapshot was just written < 1s ago by the activate
     # calls above -- so this items-search-only client (distinct from

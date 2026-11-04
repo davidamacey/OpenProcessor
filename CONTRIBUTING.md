@@ -36,18 +36,30 @@ binary path.
 
 ```bash
 # Everything except the `live` marker (needs no Docker, no GPU)
-.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'
 
 # With coverage (also run in CI)
-.venv/bin/python -m pytest tests/ -q -m 'not live' --cov=src --cov=scripts \
+.venv/bin/python -m pytest tests/ -q -m 'not live and not families' --cov=src --cov=scripts \
     --cov-report=term-missing:skip-covered
 
 # Import sanity — the loudest, cheapest check; run this first when debugging
 .venv/bin/python -c "import src.main"
 ```
 
-`pyproject.toml`'s `addopts` deselects the `live` marker by default, so
-a plain `pytest tests/` never touches Docker.
+`pyproject.toml`'s `addopts` deselects the `live` and `families` markers by default, so
+a plain `pytest tests/` never touches Docker or the network.
+
+The `families` tests run against the official Ultralytics weights and the original-YOLOv5 ONNX
+exports. Their files live in `~/.cache/op-test-weights` (`$XDG_CACHE_HOME` when set), are never
+committed, and a missing file skips the test locally and fails it under `CI`. The CI job
+`families` fills the cache (`python tests/_ultralytics_weights.py fetch`, sha256-checked) and
+builds the YOLOv5 ONNX files with the official `ultralytics/yolov5` `export.py` in a separate venv
+at the commit pinned in `.github/workflows/ci.yml`. To run them locally, fetch the weights with
+that command, export the ONNX once
+(`python export.py --weights yolov5n.pt --include onnx --imgsz 640 --device cpu --simplify`, and
+with `--dynamic`) as `yolov5n_640.onnx` and `yolov5n_dynamic.onnx` in the cache, then
+`.venv/bin/python -m pytest tests/ -q --no-cov -m families`. The weights and the YOLOv5 repository
+are AGPL-3.0 and used for tests only.
 
 `tests/test_full_system.py` and `tests/validate_visual_results.py` hit the running stack over HTTP and read
 their ports from the environment (`API_PORT`, `TRITON_HTTP_PORT`, `OPENSEARCH_PORT`; defaults 4603/4600/4607):
@@ -89,6 +101,13 @@ Use a **distinct Compose project name** (`-p op-live-verify` above) and
 never run this against the repo-root `docker-compose.yml` from a
 worktree that might collide with a real deployment's container names or
 ports (4600–4610).
+
+## Parallel lanes and worktrees
+
+When several agents or people work in git worktrees of one repository, each uses its own
+worktree on its own branch, and no two writers share a worktree. Never use `git stash` there:
+the stash is shared by every worktree of a repository, so one lane can pop another's work.
+Commit work in progress to your own branch instead and amend or rework it before the merge.
 
 ## Contracts
 
@@ -174,9 +193,10 @@ Never add a line to hide a new finding; fix it.
 
 | Guard | Rule |
 |---|---|
-| `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400); a file in the 640-700 band is split by concern when you touch it, never by collapsing lines |
+| `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400) is a guide, not a target. A file in the 640-700 band is split by concern when you touch it, never by collapsing lines and never to dodge the number. A file that is one cohesive concern may exceed it with a `cohesive: <reason>` entry in `scripts/codegen/baselines/file_size.txt`, reviewed at merge; existing baselines otherwise only shrink |
 | `check_layering.py` | routers import services and clients, never the reverse; clients never import services; `src/domain`, `config`, `utils` and `schemas` import neither; only routers import `fastapi`. No baseline: the one permanent exception (the guarded OpenSearch client factory) is listed with its reason in the script |
 | `check_ruff_ratchet.py` | no function above complexity 15, no new `except Exception` |
+| `check_file_locks.py` | no `fcntl.flock`, `exclusive_*_lock` or `filelock` guarding cross-process state: claim it with an OpenSearch job lease (`src/clients/job_lease.py`) |
 | `check_process_ids.py` | no wave, round or work-package ids, and no history names, in comments, docstrings or file names |
 | `check_cited_paths.py` | a comment or docstring that cites a `docs/`, `scripts/` or similar file cites one that exists |
 | `check_vulture.py` | no unused code; a reviewed false positive goes in `vulture_whitelist.py` with a reason |

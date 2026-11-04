@@ -209,6 +209,7 @@ def test_no_sort_clause_ever_references_cluster_id_fields() -> None:
     cluster *assignment* fields. cluster_distance (a metric, not an id) is
     fine; cluster_id/cluster_subid must never appear in any sort clause."""
     forbidden = {'cluster_id', 'cluster_subid'}
+    assert review_sorts.get_review_sorts()
     for rs in review_sorts.get_review_sorts().values():
         for entry in rs.clause:
             assert not (set(entry.keys()) & forbidden), rs.id
@@ -216,6 +217,7 @@ def test_no_sort_clause_ever_references_cluster_id_fields() -> None:
 
 def test_every_review_sort_id_matches_dataclass_id_key() -> None:
     registry = review_sorts.get_review_sorts()
+    assert registry
     for key, rs in registry.items():
         assert key == rs.id
 

@@ -44,7 +44,7 @@ PHASES=(
     health:1 resource_links:1 docs_selfhosted:1 project_create:1 ingest:1
     detect_embed:1 cluster:1 vlm_label:1 confirm_labels:1 holdout:1 label_ops:1
     loop:0 export:1 train:1 bakeoff:0 promote:1 infer:1 model_delete:1 metrics:1 log_noise:1
-    vlm_switch:0 installer_rerun:0 installer_repair:0 installer_upgrade:0
+    dataset_import:0 combine:0 vlm_switch:0 installer_rerun:0 installer_repair:0 installer_upgrade:0
     installer_uninstall:0 teardown:1
 )
 
@@ -199,6 +199,8 @@ source "${_ACC_DIR}/acceptance_lib.sh"
 source "${_ACC_DIR}/acceptance_phases.sh"
 # shellcheck source=scripts/release/acceptance_phases_review.sh
 source "${_ACC_DIR}/acceptance_phases_review.sh"
+# shellcheck source=scripts/release/acceptance_phases_import.sh
+source "${_ACC_DIR}/acceptance_phases_import.sh"
 
 
 # ===========================================================================

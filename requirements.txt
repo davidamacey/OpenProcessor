@@ -1,5 +1,5 @@
 # Core Web Framework
-fastapi==0.143.3  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
+fastapi==0.162.0  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
 uvicorn[standard]>=0.41.0
 python-multipart
 orjson  # 2-3x faster JSON encoding/decoding vs stdlib json
@@ -50,6 +50,7 @@ tabulate
 pyyaml
 
 # Structured Logging
+cachetools>=7.2  # Bounded TTL/LRU per-process caches (src/services/curation/, settings_doc.py)
 structlog>=24.1.0  # Structured logging with context and JSON output
 tenacity>=8.2  # Retry/backoff for src/services/labeling/vlm_client.py (VLM HTTP calls)
 

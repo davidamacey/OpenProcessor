@@ -74,9 +74,15 @@ embedding only. `GET /query/stats` returns counts for every index and
 | Route | Index searched |
 |---|---|
 | `POST /search/image`, `POST /search/text` | `visual_search_global` |
-| `POST /search/object` | `visual_search_vehicles` or `visual_search_people`, falling back to `visual_search_global` |
+| `POST /search/object` | `visual_search_vehicles` or `visual_search_people`; a box of any other class is refused with `422 object_class_not_indexed` (the global index holds whole-image vectors) |
 | `POST /search/face`, `POST /faces/search`, `POST /faces/identify` | `visual_search_faces` |
 | `POST /search/ocr` | `visual_search_ocr` |
+
+A class or cluster filter on a legacy visual-search query sits inside the `knn` clause
+(`knn[field].filter`), so the k nearest are taken from the matching documents and a
+restrictive filter still returns `k` hits. Wrapped in `bool.filter` beside the `knn` clause,
+the filter runs after the k nearest are chosen and returns fewer
+([filtering in k-NN search](https://docs.opensearch.org/latest/vector-search/filter-search-knn/)).
 
 ### FAISS IVF clustering
 
@@ -254,9 +260,10 @@ their own ledger on disk.
 
 The class registry mirror: `class_id` (integer), `class_name` (keyword),
 `group` (keyword), `sample_count`, `validated_count`, `added_at`, `deprecated`,
-`notes`. The registry file `class_registry.json` under the project's data root is
-the source of record; `POST /curation/projects/{project}/classes/sync_to_opensearch`
-refreshes the mirror. Class identity across datasets is the name, not
+`notes`. The registry document (below) is the source of record, and every write to
+it upserts the changed classes here (a failed mirror write is logged and the next
+index bootstrap re-syncs); `POST /curation/projects/{project}/classes/sync_to_opensearch`
+refreshes the whole mirror. Class identity across datasets is the name, not
 `class_id`.
 
 ### `umap_state`
@@ -271,10 +278,38 @@ The config store, one document per row, discriminated by `doc_type`
 `kind` (`prompt_pack`, `region_profile`, ...), `name`, `revision`, `body`
 (stored, not indexed), `description`, `created_at`, `updated_at`, `updated_by`,
 `cloned_from`, `axis`, `previous`, `config_revision`, `process`, `applied_at`.
+Two object keys with `enabled: false` (stored, never indexed) share this index by fixed id,
+on a legacy project's separate settings index as well: `lease` (a job lease document, id
+`lease:<kind>` or `lease:<kind>:<scope>`, with `kind`, `scope`, `job_id`, `owner`,
+`generation`, `acquired_at`, `heartbeat_at`, `ttl_s`, `state` (`held` or `released`)) and
+`class_registry`. Leases are read by id with a realtime `get`, never searched.
 The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `clustering` parts and a revision counter; the detector is an ingest profile in the config store, not a policy part, addressed by id `default`; the cluster-refresh daemon's growth state sits beside it under `cluster_refresh`) and the
 UMAP projection state (id `current`: `projection_version`, `scope`, `n_points`,
 `fitted_at`, ...) are stored in this same index, by fixed id and never searched,
 so a project needs six indexes rather than eight.
+
+#### The class registry document
+
+The class registry is one document per project, id `class_registry`, in the project's
+settings index (the `configs` index on a folded project), under the object key
+`class_registry` (`enabled: false`: stored, not indexed). It holds the classes
+(`class_id`, `class_name`, `group`, `deprecated`, `merged_into`, `hotkey_letter`,
+`sample_count`, `validated_count`, `added_at`, `notes`), `next_class_id`,
+`registry_revision`, `updated_at`, `migrated_from_file_at` and `reversed_to_file_at`.
+
+Every write is one versioned read-modify-write (`if_seq_no` and `if_primary_term`,
+`op_type=create` for the first write); a 409 re-reads and re-applies, at most five
+times, then answers `registry_conflict`. Ids come from `next_class_id` and are never
+reused. The document holds at most 10,000 classes (`registry_full`), about 1-2 MB of
+`_source`, far below the default `http.max_content_length`. `ensure_class` is
+idempotent by name and is what the automated writers (import, combine, the VLM and
+open-vocabulary passes) call; `add_class` keeps the route's 409 on a duplicate name.
+
+A process caches the document by `_seq_no` and `_primary_term`, checked with a
+`_source=false` get. A project that still has `class_registry.json` and no document
+answers `registry_not_migrated` on every class route until
+`openprocessor curation migrate-registry` has run. `class_registry.json` is otherwise
+only an export snapshot, the training pin and what a rollback writes back.
 
 ---
 

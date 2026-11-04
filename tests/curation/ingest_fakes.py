@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -19,24 +19,17 @@ class _FakeClassEntry:
     class_id: int
     class_name: str
     deprecated: bool = False
-
-
-@dataclass
-class _FakeRegistryFile:
-    classes: list[_FakeClassEntry] = field(default_factory=list)
+    group: str | None = None
 
 
 class FakeClassRegistry:
-    """Minimal stand-in for src.clients.curation_opensearch.registry.ClassRegistry."""
+    """The registry snapshot the ingest service is handed: ``classes`` and ``get``."""
 
     def __init__(self, entries: list[_FakeClassEntry] | None = None) -> None:
-        self._file = _FakeRegistryFile(entries or [])
-
-    def load(self) -> _FakeRegistryFile:
-        return self._file
+        self.classes = entries or []
 
     def get(self, class_id: int) -> _FakeClassEntry | None:
-        for c in self._file.classes:
+        for c in self.classes:
             if c.class_id == class_id:
                 return c
         return None

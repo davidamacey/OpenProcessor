@@ -13,6 +13,25 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Breaking: error bodies no longer carry `error_type`.** The 500 body and the Triton-unavailable 503 body hold `detail` and `request_id`; use `request_id` and the server log (which still records the exception class).
+- **Breaking: `/curation` JSON bodies no longer carry `total_time_ms` and `request_id`.** The `X-Process-Time` and `X-Request-ID` headers remain; core inference routes and their `/v1` aliases are unchanged.
+- **Breaking: `POST /ocr/search` is removed.** Use `POST /search/ocr`, which now also takes `page` (0-indexed, `top_k` results per page) and `fuzzy`; its `total_results` counts matching images across all pages.
+- **Breaking: `./openprocessor bench` is removed.** Its tool was never in the repository. Use the `make bench-*` targets or Triton's `perf_analyzer` in the `triton-sdk` service.
+- **`cachetools` is now a declared dependency** (bounded TTL and LRU caches), so the images rebuild. Saved clustering index metadata is now `<index>.meta.json`; an old `<index>.meta.npy` is ignored (it only held training counts and a timestamp).
+- **Breaking: singleton jobs start under an OpenSearch lease** (B1 job leases). A crashed job blocks a new start of the same kind for up to 120 s after its last renew (it was 30 s); OpenSearch must be reachable to start a job (503 otherwise, never a start without a lease).
+  - Covered: reprocess, assist run, assist loop (start, resume and the worker run), dataset import (start, resume, undo), item scores, selection, embedding projection, region-cluster and FP-centroid jobs, probe, promote (per run), combine (per job, in the target project), label operations (`label_op`, `label_undo`), `promote.json` writes, the legacy-project repair and the auto-label start. The bulk-ingest runner, the source scan, the ingest dispatcher, the open-vocabulary sweeper, the image cache and the event hub keep a file lock until B2 and B4 (`scripts/codegen/check_file_locks.py` lists them).
+  - A label operation that died is served `interrupted` / `undo_interrupted` once its lease expires (up to 120 s, was instant). A record that is `writing` or `undoing` is no longer pruned, dead or not.
+  - A job's heartbeat now runs on a thread of its own, so a blocked event loop no longer costs a live job its liveness. A holder that cannot renew for 90 s stops writing its state.
+  - Startup reconcile is a lease takeover: a sibling's freshly started job is left alone; a pre-lease or dead holder's stale record is repaired. Status reads never write job state (a dead run is reported `interrupted` in the response only).
+  - New index keys `lease` and `class_registry` (`enabled: false`) on the configs index, and on a legacy project's separate settings index; the bootstrap adds them on first start.
+  - A sharing write that finds `promote.json` being written answers the `revision_conflict` 409 (refresh and retry) instead of waiting.
+  - A multi-host deployment is not supported: lease times are compared on one host's clock.
+- **A trainer replica claims a job create-only**: `<job_id>.claim.g<N>` files (`O_EXCL`), a stale holder replaced by exactly one reclaimer, and the API writes the job spec create-only. A 0.6.0 job file with no claim is claimed `g1` by the new trainer.
+- **Breaking: the class registry is an OpenSearch document, not `class_registry.json`** (B1 1B). Each project's registry is one document (`class_registry`, in its settings index) written with optimistic concurrency, so two API workers or a worker and a request can no longer overwrite each other's class adds, merges or hotkey changes. The file is now an export snapshot and a migration input only.
+  - A project that still has the file and no document answers `409 registry_not_migrated` on every class route, and the ingest, import, combine and training paths refuse to start, until it is migrated. `./openprocessor upgrade` migrates every project after the health check; by hand: `./openprocessor curation migrate-registry [--dry-run]`. Class ids are preserved and `next_class_id` is `max(id) + 1`. The file is renamed to `class_registry.json.migrated`, never deleted.
+  - Rollback: `./openprocessor curation migrate-registry --reverse` writes the document back to `class_registry.json` (classes added after the upgrade are kept); the installer's rollback runs it before restoring the old version.
+  - New error codes `registry_not_migrated`, `registry_full` (10000 classes) and `registry_conflict` (five lost races in a row; retry). `contracts/` is regenerated.
+  - Scripts that read the registry (`seed_class_registry.py`, `repair_merged_active_classes.py`, `reclassify_after_registry_growth.py`) read the document. A registry backup now means exporting the document with the migrate script's `--reverse`, not copying the file.
 - **Breaking: the model export toolchain moved out of the API image into a new `openprocessor-export` image** (#41). The `openprocessor` image (API and curation workers) no longer holds TensorRT, ModelOpt, `/opt/venv-y11`, `/app/export` or the model-repo seed: it is 9.4 GB instead of 21.2 GB. The new image (`davidamacey/openprocessor-export`, `OP_EXPORT_IMAGE`, compose service `model-export`, profile `setup`) is the `export` target of the root `Dockerfile` and shares the runtime layers with the API, so a host pulls them once.
   - `docker compose exec api python /app/export/...` no longer works. Use `./openprocessor models install|repair`, `./openprocessor export <model>`, the `make` export targets, or `docker compose run --rm model-export python /app/export/...`. Every script, doc and Makefile target was moved.
   - `POST /models/upload` and `POST /models/{model_name}/export` still work, through a job-file hand-off: the API queues `/jobs/model_export/queue/<id>.job.json`, the new `model-export-worker` service (profile `export`, `docker compose --profile export up -d model-export-worker`) builds the engine and loads it into Triton. While the worker is down both routes answer 503 naming it, before anything is saved. Export tasks are no longer reconciled by the API at startup; the worker fails what a dead worker left claimed.
@@ -48,6 +67,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 
+- `scripts/codegen/check_file_locks.py`: a shrink-only guard against file locks guarding cross-process state, and a live lease race test (`tests/live/test_job_lease_live.py`).
 - **A `small` GPU profile for 12 GB cards** (#42). The installer and `setup.sh` pick it for a Triton card with 12 to 15 GB free (`standard` is now 16 GB and up, `minimal` under 12 GB): all models, one instance each, max batch 16. It builds engines with the new small TensorRT target (2 GB workspace, engine max batch halved, floor 16). `./openprocessor models install|repair` take `--build-target default|small` and `--workspace GB`; `.env` keys `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`. `standard` is unchanged. See INSTALLATION.md, "12 GB cards".
 - Engine build stamps record the build target and workspace, so a changed target rebuilds only the affected engines and a switch between `standard` and `full` rebuilds nothing. Stamps written before this release count as the default target and workspace, so an upgrade rebuilds nothing.
 
@@ -86,6 +106,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
+- Dependency bumps (dependabot #423, #433, #434 re-applied by hand): ruff 0.17.3 (with the `ruff-pre-commit` hook), mypy 2.4.1, pydantic 2.14.2, fastapi 0.162.0 (the segmenter image pin follows), the e2e `pytest` 9.2.0, and the `node` and `nginx-unprivileged` image digests. `onnxruntime-gpu` stays below 1.25 (`nvidia-modelopt` requires `~=1.24.2`); `.github/dependabot.yml` now ignores that cap, interpreter minor/major moves and Triton minor/major moves.
+- **YOLOv10 uploads use the NMS-free export path** (`[batch, 300, 6]`), like YOLO26, instead of the EfficientNMS toolchain.
 - **Ultralytics is pinned to one exact release, 8.4.197**, in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (it was `>=8.4.174,<8.5`), the release the current images already resolve. The detection export head changed inside 8.4.x without notice (#447), so a range let two builds export different heads. A test keeps the three files on one `==` pin. The isolated YOLO11 export venv keeps its own pin until the single-version move.
 - **TensorRT workspace and engine max batch are decided in one module** (`export/trt_build_settings.py`, `scripts/lib/trt_settings.sh`) instead of ten literals; the defaults are the old values. The unconditional 8 GB workspace of `scripts/export_paddleocr.sh` is gone: det builds with 4 GB and rec with 8 GB like the Python exporters.
 - The engine stamp's compute capability is read from the card that built the engine (`API_GPU_ID` for the export container, `TRITON_GPU_ID` for the PE trtexec) instead of always the Triton card.
@@ -104,6 +126,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - `POST /crops/label/undo_batch` is typed (`CropUndoBatchResponse`) and writes in paged conditional bulks instead of one update per id; `POST /crops/discard_batch` does the same.
 - `GET /clusters` no longer serves `label_purity`; read `label_agreement` (same value). Test-holdout items are no longer counted in cluster cards.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
+- **`/search/object` answers 422 `object_class_not_indexed` for a box of a class that is neither a vehicle nor a person.** It used to query the whole-image index with a box vector (two different vector spaces). Use `/search/image` for whole-image similarity.
+- **`/embed/image` and `TritonClient.encode_image` share one MobileCLIP preprocessor** (`center_crop_cpu`, cv2 bilinear instead of Pillow). Vectors can differ slightly from earlier ones, and a 300x187 image no longer loses a row to truncation; stored vectors are not recomputed.
 
 ### Removed
 
@@ -113,6 +137,31 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **#447: YOLO26 uploads export the NMS-free `[batch, 300, 6]` head.** `export_yolo26.py` passes the documented `nms=False`, and both the export and `POST /curation/projects/{project}/train/promote/{job_id}` refuse an ONNX whose output is not `[300, 6]` (promote answers 422 naming the dims) instead of serving the raw one-to-many head.
+- **A YOLO26 upload is no longer routed to the YOLO11 toolchain.** Uploads route by head kind (`one2one` for YOLO26 and YOLOv10, `nms` for the rest) instead of `model.end2end`, which is `False` for a loaded YOLO26 checkpoint on Ultralytics 8.4.197. Export jobs queued before the upgrade fail with "re-upload the model". An original YOLOv5 checkpoint is refused with a message naming YOLOv5u.
+- **Ingest detectors map classes by name.** The secondary detector, and the primary when `OP_INGEST_PRIMARY_ASSIGNS_CLASS` is set, resolve the registry class named like the model's output instead of using the output index as a class id, so a registry that is not in the model's output order labels correctly. A model name with no active registry class leaves the item unlabeled (the secondary leaves the primary's class) and is logged as `detector_class_unmapped`.
+- **The YOLOv5 objectness probe reads its input size from the ONNX.** A static export of any square size works (the official `export.py` default is 640; the probe assumed 1280), a `--dynamic` export runs at 1280, and an output that is not `[.., N, 5 + nc]` with `nc` equal to the metadata names is refused when the probe is built.
+- **A hung Triton no longer holds a worker forever.** The sync Triton client, the face client, the PE text backend and the MobileCLIP embedding calls now pass a 30 s `client_timeout`; a missed deadline answers 504 and is never retried.
+- **Triton retries follow the error status.** `RESOURCE_EXHAUSTED` and `ABORTED` are retried (the old check read a `code()` that `InferenceServerException` does not have), and `INVALID_ARGUMENT` and `DEADLINE_EXCEEDED` are not.
+- **A huge-dimension image is refused from its header.** `decode_image` checks the 16384 bound before allocating the bitmap.
+- **A sliver crop no longer allocates up to 3 GB.** `center_crop_cpu` samples only the 256x256 centre window of a crop whose resize would exceed four times the output.
+- **A transient failure no longer pins ingest to the CPU decode.** `gpu_decode_ready` caches only a verdict, not an error from a Triton restart.
+- **Model readiness is read from Triton on every use** under `OP_LOAD_PROFILE=ingest`, so a model unloaded by hand or lost to a restart is loaded again.
+- **Filtered visual search returns `k` hits.** The class and cluster filters now sit inside the `knn` clause (efficient filtering) instead of post-filtering the global top k.
+- **`/audit/queue` answers 422, not 503, for a page past the OpenSearch result window**, and `/clusters/representatives` bounds `offset` (422 above 64535, so the aggregation stays within `search.max_buckets`).
+- **The embedded-state backfill runs as a polled OpenSearch task** instead of a blocking `update_by_query`.
+- **Scroll contexts are cleared on the error path** in the class merge and the cluster embedding extraction.
+- **A failed PIT slice cancels its siblings** in the clustering scans (no orphan searches against a deleted point-in-time view).
+- **The detection worker exits when a stage task dies** instead of reporting healthy and doing nothing.
+- **`/search/object` no longer blocks the event loop.** The detect-and-embed call and the other visual-search encoders run in a worker thread, and the upload is read asynchronously.
+- The class-name cache is keyed by the `labels.txt` version, so every API worker sees a promote at once (no cross-process invalidation call).
+- Per-process caches no longer serve stale or cached-error results: a failed settings read raises instead of caching an empty document, the diverse-order and outlier caches are bounded and expire, and the eval-dataset listing follows registry renames, new test images and `data.yaml` edits.
+- Thumbnail and source-image renders run off the event loop, so a large image no longer stalls other requests on the worker.
+- The VLM probe cap (two at a time) is documented and worded as per API worker process.
+- Two requests can no longer start one singleton job twice; a reconcile never flips a sibling's live job; a blocked event loop no longer loses a job's liveness (B1 job leases).
+- Two trainer replicas can no longer run one job, and a second export worker no longer fails the first one's running export at start.
+- The item-score, projection and probe writers counted every item as written even when OpenSearch refused some in the bulk response; they now count the refused items and fail a job that wrote nothing (OS-3).
+- Class adds, merges, renames, deprecations and hotkey changes no longer lose updates between API workers or against the VLM and detection workers: every registry write is a compare-and-set on the registry document and retries on a lost race. Dataset import and combine create their classes idempotently by name, so a resumed or concurrent run adopts a class instead of duplicating it.
 - **OCR box expansion uses pyclipper, and its absence is an error.** The detection post-processing imported `pyclipper` inside a `try` and, on `ImportError`, silently scaled each box about its centre instead of offsetting it by `area * ratio / perimeter` as PaddleOCR's DB unclip does (a 200x20 line at ratio 1.5 came out 300x30 instead of 227x47). Nothing installed it, so every OCR request used the fallback. `Dockerfile.triton` now installs `pyclipper==1.4.0` (the Triton Python backend runs the pipeline), the import is a plain top-level import so the `ocr_pipeline` model fails to load when it is missing, and the fallback is deleted. `requirements-test.txt` gains it so the offline BLS tests import the module. The Triton image needs a rebuild.
 - **`/ocr` reads the same frame it reports.** The service decoded with EXIF orientation applied and reported that `image_size`, but the Triton client decoded the bytes again with `IMREAD_UNCHANGED`, which ignores EXIF, so a phone photo with orientation 5-8 was recognised sideways and its normalised boxes did not match the reported size. The service now hands its single oriented decode to the client. Images with transparency are decoded with Pillow (`ImageOps.exif_transpose`, then `Image.alpha_composite` onto white), so transparent pixels stay white rather than black (`IMREAD_COLOR` alone would drop alpha) and the float64 numpy compositing is gone.
 - **`/ocr` boxes are no longer shifted up and left.** The client zero-padded the detector input to a multiple of 32, while the pipeline maps boxes back by dividing by the (padded) map size, so any image whose resized side was not a multiple of 32 got boxes and recognition crops cut from the wrong place (about 9 px high on a 427 px image). Each axis is now stretched to its own multiple of 32 with no padding, as PaddleOCR's `DetResizeForTest` does.
@@ -178,6 +227,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Security
 
+- Saved clustering index metadata is stored as JSON instead of a pickle-capable format; `SECURITY.md` notes the trust boundary of the stored reducer state.
+- `openprocessor config show` masks more credential-style names (`PASSWD`, `CREDENTIAL`, `AUTH`).
 - Search routes answer an unavailable backend with a generic 503 message; the cause is logged server-side.
 - Error responses (500, 502, 503) no longer include the underlying exception text in the body on any route; the status codes are unchanged and the cause is logged server-side. A test scans the routers so it cannot come back.
 - The open-vocabulary target test upload refuses an image whose longest side is over the 16384-pixel cap other image paths use, before decoding it.
@@ -1147,7 +1198,7 @@ detector without `force=true`. Cropwright 0.1.1 requires this backend.
 - The detection, VLM and auto-label workers are now scraped by Prometheus, and
   Alloy ships the worker and segmenter container logs (`job="worker"`).
 - Overview, Ingest and API dashboards gain panels for the new series.
-- `POST /train/promote/{job_id}` now returns `202` with a `promote_id` and runs the
+- `POST /curation/projects/{project}/train/promote/{job_id}` now returns `202` with a `promote_id` and runs the
   export/load/warm-up as a background job; poll the new
   `GET /train/promote/{job_id}/jobs/{promote_id}` for its phase. `?wait=true` keeps
   the previous synchronous `200` response. A repeat promote of a run with an active

@@ -26,9 +26,10 @@ Every model -- stock or promoted -- resolves through its own
 model's vocabulary (class identity invariant). An unresolvable id
 renders as ``class_{id}``.
 
-The cache is invalidated on promote/unload so a freshly promoted or
-removed model's labels are picked up on its very first request
-afterward, not stale for the lifetime of the process.
+The cache entry is keyed by the ``labels.txt`` ``(st_mtime_ns, st_size)``
+(one ``stat`` per lookup), so a promote that rewrites the file is seen by
+every API worker process on its next request, with no cross-process
+invalidation. A model without a ``labels.txt`` is never cached.
 """
 
 from __future__ import annotations
@@ -53,7 +54,7 @@ _DEFAULT_TRITON_MODELS_DIR = Path('/app/models')
 _LABEL_FILENAME_RE = re.compile(r'label_filename\s*:\s*"([^"]*)"')
 
 _cache_lock = threading.Lock()
-_class_name_cache: dict[str, dict[int, str]] = {}
+_class_name_cache: dict[str, tuple[tuple[int, int], dict[int, str]]] = {}
 
 
 def _triton_models_dir() -> Path:
@@ -118,15 +119,20 @@ def _load_class_names(model_name: str) -> dict[int, str]:
 
 
 def get_class_names(model_name: str) -> dict[int, str]:
-    """Class-id -> name map for ``model_name``, loaded once and cached."""
+    """Class-id -> name map for ``model_name``, cached per ``labels.txt`` version."""
+    try:
+        st = (_triton_models_dir() / model_name / 'labels.txt').stat()
+    except OSError:
+        return _load_class_names(model_name)
+    version = (st.st_mtime_ns, st.st_size)
     with _cache_lock:
         cached = _class_name_cache.get(model_name)
-    if cached is not None:
-        return cached
+    if cached is not None and cached[0] == version:
+        return cached[1]
 
     names = _load_class_names(model_name)
     with _cache_lock:
-        _class_name_cache[model_name] = names
+        _class_name_cache[model_name] = (version, names)
     return names
 
 
@@ -137,18 +143,6 @@ def resolve_class_name(model_name: str, class_id: int) -> str:
     when the id has no resolvable name.
     """
     return get_class_names(model_name).get(class_id, f'class_{class_id}')
-
-
-def invalidate_class_names(model_name: str) -> None:
-    """Drop the cached mapping for ``model_name``.
-
-    Call after promoting or unloading a model so the very next request
-    re-reads its (possibly just-written or just-removed) ``labels.txt``
-    instead of serving a stale cached mapping for the rest of the
-    process's life.
-    """
-    with _cache_lock:
-        _class_name_cache.pop(model_name, None)
 
 
 def clear_class_name_cache() -> None:
@@ -237,7 +231,6 @@ __all__ = [
     'class_name_deprecation_index',
     'clear_class_name_cache',
     'get_class_names',
-    'invalidate_class_names',
     'normalize_class_name',
     'resolve_class_by_name',
     'resolve_class_name',

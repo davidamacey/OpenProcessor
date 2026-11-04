@@ -26,6 +26,7 @@ from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import confident_class_sources
 from src.services.curation.clustering.page_rows import hits_to_rows, stack_pages
+from src.services.curation.clustering.slice_group import run_slices
 
 
 if TYPE_CHECKING:
@@ -359,8 +360,8 @@ async def fetch_residual_embeddings_parallel(
 
     emit_progress = _SliceProgress(progress, total_estimate)
     try:
-        slice_results = await asyncio.gather(
-            *(
+        slice_results = await run_slices(
+            [
                 _fetch_one_slice(
                     client,
                     slice_id,
@@ -371,7 +372,7 @@ async def fetch_residual_embeddings_parallel(
                     emit_progress=emit_progress,
                 )
                 for slice_id in range(n_slices)
-            ),
+            ]
         )
     finally:
         try:

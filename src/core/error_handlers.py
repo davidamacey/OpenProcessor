@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from src.config.faces import FacesDisabledError
     from src.core.exceptions import RequestRejectedError
-    from src.utils.retry import RetryExhaustedError
+    from src.utils.retry import RetryExhaustedError, TritonDeadlineError
     from src.utils.upstream_errors import UpstreamError
 
 
@@ -47,6 +47,7 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
         request_id=req_id,
         method=request.method,
         path=request.url.path,
+        error_type=type(exc).__name__,
         error=str(exc),
     )
     return JSONResponse(
@@ -54,12 +55,32 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
         content={
             'detail': 'Inference backend (Triton) is temporarily unavailable; retry shortly',
             'request_id': req_id,
-            'error_type': type(exc).__name__,
         },
         headers={
             'X-Request-ID': req_id,
             'Retry-After': str(TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS),
         },
+    )
+
+
+async def triton_deadline_response(request: Request, exc: TritonDeadlineError) -> JSONResponse:
+    """Triton accepted the call but did not answer within the client deadline -> 504."""
+    req_id = get_request_id()
+    logger.warning(
+        'triton_deadline_exceeded',
+        request_id=req_id,
+        method=request.method,
+        path=request.url.path,
+        error=str(exc),
+    )
+    return JSONResponse(
+        status_code=504,
+        content={
+            'detail': 'Inference backend (Triton) did not answer in time',
+            'request_id': req_id,
+            'error_type': type(exc).__name__,
+        },
+        headers={'X-Request-ID': req_id},
     )
 
 

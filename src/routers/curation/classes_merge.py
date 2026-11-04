@@ -8,6 +8,7 @@ from fastapi import HTTPException, Query
 from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.registry import ClassRegistryError
+from src.clients.opensearch.scroll import scroll_ids
 from src.routers.curation._class_models import ClassMergeRequest  # noqa: TC001 - FastAPI
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -21,7 +22,7 @@ from src.utils.timeutil import now_iso
 
 
 async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[str, Any]:
-    reg = get_class_registry()
+    reg = await get_class_registry().snapshot(opensearch)
     for cid in (payload.source_id, payload.target_id):
         if reg.get(cid) is None:
             raise HTTPException(status_code=400, detail=f'class_id {cid} not found')
@@ -105,11 +106,10 @@ async def merge_class(
         )
     reg = get_class_registry()
     try:
-        result = reg.merge_class(payload.source_id, payload.target_id)
+        result = await reg.merge_class(opensearch, payload.source_id, payload.target_id)
     except ClassRegistryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    target = reg.get(payload.target_id)
-    target_name = target.class_name if target is not None else ''
+    target_name = result['target_name']
     now = now_iso()
     relabel_doc = {
         'class_id': payload.target_id,
@@ -162,24 +162,6 @@ async def merge_class(
     from src.clients.occ import occ_skip_on_conflict_bulk
     from src.domain.history import record_class_history
 
-    async def _scroll_merge_ids() -> list[str]:
-        ids: list[str] = []
-        body = {'size': 500, 'query': merge_query, '_source': False}
-        resp = await opensearch.search(index=items_index(), body=body, scroll='2m')
-        scroll_id = resp.get('_scroll_id')
-        hits = resp['hits']['hits']
-        while hits:
-            ids.extend(h['_id'] for h in hits)
-            resp = await opensearch.scroll(scroll_id=scroll_id, scroll='2m')
-            scroll_id = resp.get('_scroll_id')
-            hits = resp['hits']['hits']
-        if scroll_id:
-            try:
-                await opensearch.clear_scroll(scroll_id=scroll_id)
-            except OpenSearchException as exc:  # nosec B110 — advisory cleanup only
-                logger.debug('merge_clear_scroll_failed', error=str(exc))
-        return ids
-
     def _merge_crop(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
         update = dict(relabel_doc)
         update['cluster_id'] = payload.target_id
@@ -196,7 +178,7 @@ async def merge_class(
         return update
 
     try:
-        crop_ids = await _scroll_merge_ids()
+        crop_ids = await scroll_ids(opensearch, index=items_index(), query=merge_query)
         if crop_ids:
             # Refresh once after every page instead of forcing a
             # refresh=True on each of occ_skip_on_conflict_bulk's

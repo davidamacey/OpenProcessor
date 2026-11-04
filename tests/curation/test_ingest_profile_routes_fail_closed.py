@@ -7,11 +7,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation._ingest_profile_world import Pool, WorldOpenSearch, body
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.services.config_store.store import reset_config_stores
 from src.services.curation import index_bootstrap
 
@@ -41,7 +41,7 @@ def _reset_caches():
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any):
     fake = _ConfigsDown()
-    registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+    registry = InMemoryRegistry()
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'env_model')
     monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})

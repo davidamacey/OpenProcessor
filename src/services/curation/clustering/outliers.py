@@ -18,10 +18,10 @@ cheap member-count check invalidates the cache when membership changes
 from __future__ import annotations
 
 import json
-import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from cachetools import TTLCache
 from opensearchpy.exceptions import OpenSearchException
 
 from src.config.env import env_float, env_int
@@ -41,8 +41,8 @@ _MAX_MEMBERS = env_int('OP_OUTLIER_MAX_MEMBERS', 20000)
 _TTL_S = env_float('OP_OUTLIER_CACHE_TTL_S', 600)
 _SCROLL_PAGE = 2000
 
-# cache_key -> {'order': list[str], 'count': int, 'at': float}
-_CACHE: dict[str, dict[str, Any]] = {}
+# cache_key -> {'distances': dict, 'count': int}; bounded, expires after _TTL_S
+_CACHE: TTLCache[str, dict[str, Any]] = TTLCache(maxsize=256, ttl=_TTL_S)
 
 
 def make_cache_key(index: str, query: dict[str, Any], embedding_field: str) -> str:
@@ -66,13 +66,8 @@ async def compute_centroid_distances(
     fall back to its default sort).
     """
     key = make_cache_key(index, query, embedding_field)
-    now = time.monotonic()
     cached = _CACHE.get(key)
-    if (
-        cached is not None
-        and (now - cached['at']) < _TTL_S
-        and (current_count is None or cached['count'] == current_count)
-    ):
+    if cached is not None and (current_count is None or cached['count'] == current_count):
         typed: dict[str, float] | None = cached['distances']
         return typed
 
@@ -129,7 +124,7 @@ async def compute_centroid_distances(
     dist = 1.0 - (xn @ centroid)
     distances = {doc_id: float(d) for doc_id, d in zip(ids, dist.tolist(), strict=True)}
 
-    _CACHE[key] = {'distances': distances, 'count': len(distances), 'at': now}
+    _CACHE[key] = {'distances': distances, 'count': len(distances)}
     return distances
 
 

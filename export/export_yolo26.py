@@ -87,6 +87,8 @@ DEFAULT_MODELS: dict[str, dict[str, Any]] = {
 }
 
 IMG_SIZE = 640
+# Detections per image of the NMS-free head (Ultralytics ``max_det`` default).
+MAX_DET = 300
 MODELS_DIR = Path('/app/models')
 EXPORT_DIR = Path('/app/pytorch_models')
 
@@ -118,7 +120,12 @@ def resolve_model(pt_file: str) -> YOLO:
 
 
 def export_fused_onnx(model: YOLO, config: dict[str, Any]) -> Path:
-    """Export the fused NMS-free ONNX (single output tensor)."""
+    """Export the fused NMS-free ONNX (single output tensor).
+
+    ``nms=False`` selects the NMS-free one-to-one head, the documented export argument
+    (https://docs.ultralytics.com/modes/export/): without it 8.4.x exports the raw
+    one-to-many ``[batch, 4 + nc, anchors]`` head for these models.
+    """
     logger.info(f'Exporting fused ONNX (imgsz={IMG_SIZE}, dynamic batch)...')
     exported = model.export(
         format='onnx',
@@ -127,6 +134,7 @@ def export_fused_onnx(model: YOLO, config: dict[str, Any]) -> Path:
         batch=config['max_batch'],
         device='cpu',
         simplify=True,
+        nms=False,
     )
     onnx_path = Path(exported)
 
@@ -143,7 +151,8 @@ def inspect_fused_output(onnx_path: Path) -> tuple[str, list[int]]:
 
     YOLO26 fused export emits exactly one output shaped
     ``(batch, max_det, 6)``; the per-item dims (without the batch axis)
-    feed straight into config.pbtxt.
+    feed straight into config.pbtxt. Anything else is refused: the raw
+    one-to-many head would be served and decoded as if it were NMS-free.
     """
     graph = onnx.load(str(onnx_path)).graph
     outputs = list(graph.output)
@@ -154,6 +163,11 @@ def inspect_fused_output(onnx_path: Path) -> tuple[str, list[int]]:
         )
     out = outputs[0]
     dims = [d.dim_value if d.dim_value > 0 else -1 for d in out.type.tensor_type.shape.dim[1:]]
+    if dims != [MAX_DET, 6]:
+        raise RuntimeError(
+            f'Output {out.name!r} has per-item dims {dims}, expected [{MAX_DET}, 6]: raw '
+            'one-to-many head: the export did not select the NMS-free head (nms=False)'
+        )
     logger.info(f'Fused output: name={out.name} per-item dims={dims}')
     return out.name, dims
 

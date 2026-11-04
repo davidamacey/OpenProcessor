@@ -490,17 +490,56 @@ ph_installer_repair() {
     ev "repair exited 0; API healthy"
 }
 
+# The project's classes as stable JSON (id, name, deprecated, hotkey): what a registry migration or a
+# rollback must carry over unchanged.
+registry_state() {
+    api GET "${PROJECT_API}/classes"; expect 200
+    jq -S -c '[.classes[] | {class_id, class_name, deprecated, hotkey_letter}] | sort_by(.class_id)' "$BODY"
+}
+
+# Classes shaped like a long-lived install: an id gap (one class deprecated), and a hotkey.
+seed_registry_shapes() {
+    local a b k
+    api_json POST "${PROJECT_API}/classes" '{"name":"acc_reg_a","group":"acceptance"}'; expect 201
+    a="$(jqb '.class_id')"
+    api_json POST "${PROJECT_API}/classes" '{"name":"acc_reg_b","group":"acceptance"}'; expect 201
+    b="$(jqb '.class_id')"
+    api_json POST "${PROJECT_API}/classes" '{"name":"acc_reg_c","group":"acceptance"}'; expect 201
+    api POST "${PROJECT_API}/classes/${b}/deprecate"; expect 200
+    for k in q j z x; do
+        api_json PUT "${PROJECT_API}/classes/${a}" "$(jq -nc --arg k "$k" '{hotkey_letter:$k}')"
+        [[ "$HTTP_CODE" == 200 ]] && { ev "class ${a} carries hotkey ${k}; class ${b} is deprecated (an id gap)"; return 0; }
+    done
+    fail "no free hotkey letter for the registry fixture: HTTP ${HTTP_CODE} $(snippet)"
+}
+
 ph_installer_upgrade() {
     need_install_dir
     [[ -n "$UPGRADE_VERSION" ]] || skip "pass --upgrade-version vX.Y.Z to enable upgrade/rollback"
+    local before after legacy
+    seed_registry_shapes
+    before="$(registry_state)"
     op_cli upgrade --yes "${INSTALLER_ARGS_ARR[@]}" --version "$UPGRADE_VERSION" >> "$WORKDIR/installer.log" 2>&1 \
         || fail "upgrade to ${UPGRADE_VERSION} failed: $(tail -c 300 "$WORKDIR/installer.log")"
     api GET /health; expect 200
     ev "upgraded to ${UPGRADE_VERSION}; API healthy"
+    after="$(registry_state)"
+    [[ "$before" == "$after" ]] || fail "class registry changed across the upgrade (before: ${before} after: ${after})"
+    ev "class ids, names, deprecation and hotkeys identical after the upgrade"
+    legacy="${INSTALL_DIR}/data/projects/${SLUG}/class_registry.json"
+    if [[ -e "${legacy}.migrated" ]]; then
+        [[ ! -e "$legacy" ]] || fail "class_registry.json still present next to its .migrated copy"
+        ev "class_registry.json was kept as class_registry.json.migrated"
+    else
+        ev "no class_registry.json.migrated at ${legacy} (the old version already kept the registry in OpenSearch)"
+    fi
     "${INSTALL_DIR}/setup-openprocessor.sh" --dir "$INSTALL_DIR" --rollback --yes >> "$WORKDIR/installer.log" 2>&1 \
         || fail "rollback failed: $(tail -c 300 "$WORKDIR/installer.log")"
     api GET /health; expect 200
     ev "rolled back; API healthy"
+    after="$(registry_state)"
+    [[ "$before" == "$after" ]] || fail "the rolled-back version serves different classes (before: ${before} after: ${after})"
+    ev "the rolled-back version serves the same classes"
 }
 
 ph_installer_uninstall() {

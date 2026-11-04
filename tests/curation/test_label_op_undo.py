@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _lease_hold import held
 
 from curation.label_ops_env import build_env, proposal
 from src.clients.occ import OCC_BULK_PAGE_SIZE
@@ -282,12 +283,11 @@ def test_a_second_undo_in_the_project_is_409_busy(
     env = _env(monkeypatch, tmp_path)
     op = env.label('widget', crop_ids=_ids(0, 1))
     writes = env.fake.write_calls
-    with store.undo_lock() as got:
-        assert got
+    with held('label_undo'):
         resp = env.undo(op['op_id'], dry_run=False)
         assert resp.status_code == 409
         assert resp.json()['detail']['error'] == 'label_op_busy'
-        assert env.undo(op['op_id'], dry_run=True).status_code == 200, 'a dry run takes no lock'
+        assert env.undo(op['op_id'], dry_run=True).status_code == 200, 'a dry run takes no lease'
     assert env.fake.write_calls == writes
     assert env.undo(op['op_id'], dry_run=False).status_code == 200
 
@@ -297,8 +297,7 @@ def test_undo_while_writing_is_409_and_an_interrupted_op_is_undoable(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
     op = env.label('widget', crop_ids=_ids(0, 1))
-    with store.write_lock(op['op_id']) as got:
-        assert got
+    with held('label_op', op['op_id']):
         resp = env.undo(op['op_id'], dry_run=False)
         assert resp.status_code == 409
         assert resp.json()['detail']['error'] == 'label_op_in_progress'

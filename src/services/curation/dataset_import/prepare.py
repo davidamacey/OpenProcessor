@@ -34,12 +34,12 @@ from src.services.curation.dataset_import.regions import (
     parents_mode,
 )
 from src.services.curation.dataset_import.scan import scan_dataset, source_sha
-from src.utils.class_names import resolve_class_by_name
 
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.clients.curation_opensearch.registry import ClassRegistry
     from src.services.curation.dataset_import.options import DatasetPreviewRequest
     from src.services.curation.dataset_import.paths import PathGuard
@@ -84,8 +84,7 @@ class ProjectView:
     export_root: Path | None
 
 
-def registry_class_views(registry: ClassRegistry) -> list[RegistryClassView]:
-    reg = registry.load()
+def registry_class_views(reg: ClassRegistryFile) -> list[RegistryClassView]:
     return [
         RegistryClassView(
             class_id=c.class_id,
@@ -131,7 +130,7 @@ def _pack_synonyms() -> dict[str, str]:
     return {norm_class_name(k): v for k, v in pack.synonyms.items()}
 
 
-def pin_project_view(registry: ClassRegistry) -> ProjectView:
+def pin_project_view(registry: ClassRegistryFile) -> ProjectView:
     """Read the bound project's classes, synonyms, region profile and export
     root once."""
     from src.config.curation_accessors import get_curation_config
@@ -391,19 +390,19 @@ def _reuse_key(
     return compute_import_key(view.project, sha, again, request.options.key_fields())
 
 
-def materialize_created_classes(
+async def materialize_created_classes(
     resolved: ResolvedMapping,
     registry: ClassRegistry,
+    client: Any,
     *,
     new_groups: dict[str, str | None] | None = None,
-    adopt_existing: bool = False,
 ) -> None:
     """Create every ``create`` target in the registry BEFORE any item write
     , patching the assigned id into ``resolved``.
 
-        ``adopt_existing`` (a resume): a non-deprecated class with exactly the
-        target's name was created by the interrupted run, so its id is adopted
-        instead of failing as a duplicate.
+        A non-deprecated class with exactly the target's name (a resumed run's
+        earlier attempt, or a concurrent writer) is adopted, never duplicated: the
+        add is ``ensure_class``, idempotent by name.
     """
     groups = new_groups or {}
     for dataset_class in list(resolved.created_classes):
@@ -411,12 +410,9 @@ def materialize_created_classes(
         if target.class_id is not None:
             continue
         name = target.class_name or dataset_class
-        new_id: int | None = None
-        if adopt_existing:
-            adopted = resolve_class_by_name(registry.load().classes, name)
-            new_id = adopted.active.class_id if adopted.active is not None else None
-        if new_id is None:
-            new_id = registry.add_class(name, group=groups.get(dataset_class) or 'unknown')
+        new_id, _created = await registry.ensure_class(
+            client, name, group=groups.get(dataset_class) or 'unknown'
+        )
         resolved.targets[dataset_class] = dataclasses.replace(target, class_id=new_id)
         resolved.created_classes[dataset_class] = new_id
 

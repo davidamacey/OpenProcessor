@@ -211,5 +211,6 @@ async def test_only_the_worker_that_owns_the_job_settles_the_target(
 
     monkeypatch.setattr(svc, 'run_combine', worker)
     monkeypatch.setattr(svc.lifecycle, 'finish_building', finish_building)
-    await svc._run(world.fake, store, [], target)
+    beat = await svc.lease.take(world.fake, target, store.import_id, busy=svc._not_resumable_busy)
+    await svc._run(world.fake, store, [], target, beat)
     assert len(finished) == settled

@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
 from src.services.curation.export_support import (
@@ -40,10 +40,10 @@ class _FakeOpenSearch:
 
 
 def test_build_export_id_map_is_contiguous_and_skips_deprecated(tmp_path):
-    reg = ClassRegistry(path=tmp_path / 'class_registry.json')
-    reg.add_class('car')  # id 0
-    reg.add_class('truck')  # id 1
-    reg.add_class('bus')  # id 2
+    reg = InMemoryRegistry()
+    reg.add('car')  # id 0
+    reg.add('truck')  # id 1
+    reg.add('bus')  # id 2
     reg.rename_class(1, 'truck')  # no-op, keep id stable
 
     # Deprecate the middle class by writing it back with deprecated=True.
@@ -51,7 +51,7 @@ def test_build_export_id_map_is_contiguous_and_skips_deprecated(tmp_path):
     for c in loaded.classes:
         if c.class_id == 1:
             c.deprecated = True
-    reg._atomic_write(loaded)
+    reg.store(loaded)
 
     id_map = _build_export_id_map(reg.load().classes)
 
@@ -88,9 +88,9 @@ def test_remap_rows_drops_unmapped_classes_and_sets_export_id():
 
 @pytest.mark.asyncio
 async def test_label_files_on_disk_use_dense_ids_not_registry_ids(tmp_path):
-    reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
-    reg.add_class('car')  # registry id 0
-    reg.add_class('truck')  # registry id 1
+    reg = InMemoryRegistry()
+    reg.add('car')  # registry id 0
+    reg.add('truck')  # registry id 1
     reg.rename_class(0, 'car')
 
     # Deprecate registry id 0 so registry id 1 ("truck") gets dense id 0,
@@ -99,7 +99,7 @@ async def test_label_files_on_disk_use_dense_ids_not_registry_ids(tmp_path):
     for c in loaded.classes:
         if c.class_id == 0:
             c.deprecated = True
-    reg._atomic_write(loaded)
+    reg.store(loaded)
 
     docs = [
         {
@@ -128,10 +128,10 @@ async def test_label_files_on_disk_use_dense_ids_not_registry_ids(tmp_path):
 
 @pytest.mark.asyncio
 async def test_manifest_export_id_map_is_invertible(tmp_path):
-    reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
-    reg.add_class('car')
-    reg.add_class('truck')
-    reg.add_class('bus')
+    reg = InMemoryRegistry()
+    reg.add('car')
+    reg.add('truck')
+    reg.add('bus')
 
     docs = [
         {
@@ -163,8 +163,8 @@ async def test_manifest_counts_rows_dropped_for_unregistered_class_ids(tmp_path)
     """A validated item carrying a class id the registry doesn't have (e.g.
     a candidate cluster id written as a class) must never become a label,
     and the drop must be visible in the manifest, not only in a log line."""
-    reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
-    reg.add_class('car')
+    reg = InMemoryRegistry()
+    reg.add('car')
     docs = [
         {
             'crop_id': cid,

@@ -3954,7 +3954,7 @@ number's method is in the section that reports it. Keep a result only with its s
 baseline before a change, run the same command after it, and compare latency (average, p95, p99),
 throughput and error rate. The shared rules are in [Baseline protocol](#baseline-protocol).
 
-`./openprocessor bench` is not available yet: the `triton_bench` tool and `benchmarks/build.sh` it needs are not in the repository. For model-level load tests use Triton's `perf_analyzer` from the `triton-sdk` service (compose profile `benchmark`).
+For model-level load tests use Triton's `perf_analyzer` from the `triton-sdk` service (compose profile `benchmark`).
 
 ---
 

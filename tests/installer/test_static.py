@@ -180,6 +180,7 @@ def test_installer_sources_only_verified_install_files() -> None:
         'source "${OP_DIR}/scripts/lib/retired_env.sh"',
         'source "${OP_DIR}/scripts/lib/cropwright_auth.sh"',
         'source "${OP_DIR}/scripts/lib/install_summary.sh"',
+        'source "${OP_DIR}/scripts/lib/registry_migration.sh"',
     }
     body = text[text.index('\ndo_install() {') :]
     assert body.index('install_staged "${OP_DIR}/.install/staging"') < body.index(

@@ -9,7 +9,7 @@ oldest.
 The API creates a loop as ``queued`` and writes the project's ``trigger.json`` naming it;
 the worker claims the trigger by unlinking it and runs the loop. A resume re-queues a
 stopped loop the same way. One loop per project is live at a time (``queued`` or
-``running`` with a fresh heartbeat); the check and the claim happen under one start lock.
+``running`` with a fresh heartbeat); the check and the claim happen under the ``assist_loop`` lease.
 A queued loop has no heartbeat yet, which counts as live: it waits for the worker as long
 as the worker takes.
 """
@@ -24,8 +24,9 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_path
 from src.config.project_context import ensure_marked_dir, mark_project_dir, project_jobs_dir
+from src.domain.job_lease import LeaseKind
 from src.services.curation.file_job import FileJob
-from src.services.curation.job_lock import exclusive_start_lock
+from src.services.curation.lease_heartbeat import short_lease
 from src.services.rejections import rejection
 from src.utils.atomic_write import atomic_write_json
 from src.utils.timeutil import now_iso
@@ -122,7 +123,7 @@ def read_state(loop_id: str) -> dict[str, Any] | None:
         return None
     if not loop.read():
         return None
-    return loop.repair_if_stale(ACTIVE, error_prefix='assist loop')
+    return loop.served_state(ACTIVE, error_prefix='assist loop')
 
 
 def _write_trigger(loop_id: str) -> None:
@@ -164,16 +165,28 @@ def _busy(live: list[str]) -> Any:
     )
 
 
-def create_loop(*, state: dict[str, Any], request: dict[str, Any]) -> FileJob:
+async def create_loop(
+    opensearch: Any, *, state: dict[str, Any], request: dict[str, Any]
+) -> FileJob:
     """Claim the project's loop slot, persist the loop as queued and trigger the worker.
     ``state`` is the ``queued`` state without ``loop_id``. Raises the 409
-    ``assist_loop_busy`` refusal when a loop is live."""
-    root = ensure_marked_dir(jobs_root())
-    with exclusive_start_lock(root / 'start.lock') as acquired:
+    ``assist_loop_busy`` refusal when a loop is live. The start holds the ``assist_loop``
+    lease only across this check and write; the worker takes it for the run."""
+    ensure_marked_dir(jobs_root())
+    live = live_loop_ids()
+    if live:
+        raise _busy(live)
+    loop_id = f'alp_{datetime.now(UTC):%Y%m%dT%H%M%S%f}_{uuid.uuid4().hex[:6]}'
+    async with short_lease(
+        opensearch,
+        LeaseKind.ASSIST_LOOP,
+        None,
+        loop_id,
+        busy=lambda holder: _busy([holder] if holder else []),
+    ):
         live = live_loop_ids()
-        if not acquired or live:
+        if live:
             raise _busy(live)
-        loop_id = f'alp_{datetime.now(UTC):%Y%m%dT%H%M%S%f}_{uuid.uuid4().hex[:6]}'
         loop = open_job(loop_id)
         loop.directory.mkdir(parents=True)
         (loop.directory / 'request.json').write_text(json.dumps(request), encoding='utf-8')
@@ -183,12 +196,18 @@ def create_loop(*, state: dict[str, Any], request: dict[str, Any]) -> FileJob:
     return loop
 
 
-def resume_loop(loop_id: str) -> FileJob:
+async def resume_loop(opensearch: Any, loop_id: str) -> FileJob:
     """Re-queue an ``interrupted``, ``paused`` or ``cancelled`` loop (or a ``failed`` one that stopped ``vlm_failed``) and trigger the worker;
     the loop replays its log and continues where it stopped."""
     loop = _existing(loop_id)
-    root = ensure_marked_dir(jobs_root())
-    with exclusive_start_lock(root / 'start.lock') as acquired:
+    ensure_marked_dir(jobs_root())
+    async with short_lease(
+        opensearch,
+        LeaseKind.ASSIST_LOOP,
+        None,
+        loop_id,
+        busy=lambda holder: _busy([holder] if holder else []),
+    ):
         state = read_state(loop_id) or {}
         outage = state.get('status') == 'failed' and state.get('stop_reason') == VLM_FAILED
         if state.get('status') not in RESUMABLE and not outage:
@@ -199,7 +218,7 @@ def resume_loop(loop_id: str) -> FileJob:
                 loop_id=loop_id,
             )
         others = [i for i in live_loop_ids() if i != loop_id]
-        if not acquired or others:
+        if others:
             raise _busy(others)
         loop.clear_signals()
         with contextlib.suppress(FileNotFoundError):

@@ -20,12 +20,6 @@ the index; execute one file per batch, lane or procedure.
 |---|---|
 | [program/00_index.md](program/00_index.md) | Read first: mission, waves, decision register, branch and lane model, test and GPU budget, legends, superseded plans |
 | [program/01_b0_close_out.md](program/01_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
-| [program/02_b1_overview.md](program/02_b1_overview.md) | B1 correctness: overview of the five tracks plus the deps lane, merge order and sweep |
-| [program/02a_b1_job_leases.md](program/02a_b1_job_leases.md) | B1 track 1A: OpenSearch job leases replace every start lock |
-| [program/02b_b1_class_registry.md](program/02b_b1_class_registry.md) | B1 track 1B: class registry document with OCC and the upgrade migration |
-| [program/02c_b1_inference_search.md](program/02c_b1_inference_search.md) | B1 track 1C: inference and search hygiene |
-| [program/02d_b1_api_frontend_tests.md](program/02d_b1_api_frontend_tests.md) | B1 track 1D: API correctness, frontend, test integrity, two security items |
-| [program/02e_b1_ultralytics_live_bugs.md](program/02e_b1_ultralytics_live_bugs.md) | B1 track 1E: minimal Ultralytics live-bug fixes on the pinned version |
 | [program/03_b2_overview.md](program/03_b2_overview.md) | B2: jobs off the API on Celery, three stages |
 | [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | B2 stage 1: queue infrastructure |
 | [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | B2 stage 2: move the request-started job families |
@@ -43,6 +37,14 @@ the index; execute one file per batch, lane or procedure.
 | [program/10_standards_and_libraries.md](program/10_standards_and_libraries.md) | Cross-cutting: code standards and the "no hand-rolling" library register |
 | [program/11_risks_cleanup_host.md](program/11_risks_cleanup_host.md) | Risk register, cleanup, host, GPU and peer rules |
 | [program/12_prior_plans_reconciliation.md](program/12_prior_plans_reconciliation.md) | What was unfinished in the older plans and where it went; the removal waves |
+
+## Plans after v0.7.0 (research and the next release)
+
+| Doc | Status | What it is |
+|---|---|---|
+| [research_gpu_pipeline_plan.md](research_gpu_pipeline_plan.md) | plan (research; after B5) | Where image-processing time goes per stage, a hypothesis register (batched GPU decode, per-card replicas, native resident-frame backend, faces in-graph, a last INT8 round), experiments in three GPU windows, the target architecture and stop rules |
+| [research_clustering_plan.md](research_clustering_plan.md) | plan (research; after B2/B5) | Clustering for curation on real data: detector-class roots, near-duplicate thresholds, judge calibration, crop preprocessing and encoders, global graph refinement, face grouping; libraries, evaluation protocol, pass bars and stop rules |
+| [v080_platform_breadth_plan.md](v080_platform_breadth_plan.md) | plan (v0.8.0, not started) | Platform breadth after v0.7.0: COCO segmentation import, search by image, model-family training, API authentication, a second segmenter, video files as a source, the wheel example and the embedding swap, in waves with a test and GPU budget |
 
 ## Reference docs
 

@@ -59,7 +59,7 @@ export interface VlmModelsDeps extends VlmActiveDeps {
   selectLocalVlm: typeof selectLocalVlm;
   clearLocalVlmSelection: typeof clearLocalVlmSelection;
   getConfigVocabulary: typeof getConfigVocabulary;
-  subscribe: (onEvent: (e: VlmEvent) => void) => { close(): void };
+  subscribe: (onEvent: (e: VlmEvent) => void, onResync?: () => void) => { close(): void };
 }
 
 export class VlmModels extends ConfigList<
@@ -138,11 +138,14 @@ export class VlmModels extends ConfigList<
     this.#stopped = false;
     void this.load();
     void this.loadModelChoices();
-    this.#events = (this.#deps.subscribe ?? subscribeVlmEvents)((e) => {
-      if (isVlmRegistryEvent(e)) void this.loadRegistry();
-      else if (isVlmLocalEvent(e)) void this.loadCatalog();
-      else if (isVlmActiveEvent(e)) void this.active.load();
-    });
+    this.#events = (this.#deps.subscribe ?? subscribeVlmEvents)(
+      (e) => {
+        if (isVlmRegistryEvent(e)) void this.loadRegistry();
+        else if (isVlmLocalEvent(e)) void this.loadCatalog();
+        else if (isVlmActiveEvent(e)) void this.active.load();
+      },
+      () => void this.load(),
+    );
   }
 
   override stop(): void {

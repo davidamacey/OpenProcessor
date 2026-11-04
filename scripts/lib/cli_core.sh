@@ -230,6 +230,34 @@ cmd_download() {
 # `evaluator`, so a bare `curation up` leaves it alone).
 CURATION_SERVICES="curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh curation-evaluator"
 
+# `curation migrate-registry [--project SLUG | --all] [--dry-run] [--reverse]`: move each
+# project's class registry between class_registry.json and its OpenSearch document (0.7.0 keeps it
+# in OpenSearch). Needs OpenSearch up; `upgrade`/`repair` run it themselves.
+_curation_migrate_registry() {
+    local usage="usage: openprocessor curation migrate-registry [--project SLUG | --all] [--dry-run] [--reverse]"
+    local -a flags=()
+    while (( $# > 0 )); do
+        case "$1" in
+            --all|--dry-run|--reverse) flags+=("$1"); shift ;;
+            --project)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--project needs a slug; ${usage}"
+                    return 2
+                fi
+                flags+=("$1" "$2"); shift 2 ;;
+            *)
+                log_error "unknown option '$1'; ${usage}"
+                return 2
+                ;;
+        esac
+    done
+    if [[ -z "$(dc ps --status running -q opensearch 2>/dev/null)" ]]; then
+        log_error "OpenSearch is not running: start the stack first (./openprocessor start)"
+        return 1
+    fi
+    dc run --rm --no-deps -T -w /app api python -m scripts.curation.migrate_class_registry "${flags[@]}"
+}
+
 cmd_curation() {
     local subcommand="${1:-status}"
     shift 2>/dev/null || true
@@ -272,6 +300,9 @@ cmd_curation() {
                 curation-detection-worker curation-vlm-worker \
                 curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh curation-evaluator
             ;;
+        migrate-registry)
+            _curation_migrate_registry "$@"
+            ;;
         seed)
             log_warn "curation seed: not yet implemented."
             echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
@@ -279,7 +310,7 @@ cmd_curation() {
             ;;
         *)
             log_error "Unknown curation subcommand: $subcommand"
-            echo "Available: up [service...], down, logs, status, seed"
+            echo "Available: up [service...], down, logs, status, migrate-registry, seed"
             return 1
             ;;
     esac
@@ -347,8 +378,6 @@ Configuration:
 Testing:
   test [type]         Run tests
                       Options: quick (default), full, visual
-  bench [mode]        Run benchmarks
-                      Options: quick (default), full
 
 Face data (OP_FACES_ENABLED):
   faces purge [--dry-run] [--yes]
@@ -441,9 +470,9 @@ cmd_config() {
         show)
             local env_file="${PROJECT_DIR}/.env"
             [[ -f "$env_file" ]] || { log_error "no .env at ${env_file}"; return 1; }
-            # Redact every token/key/secret/password value, with or
+            # Redact every token/key/secret/password/credential/auth value, with or
             # without a leading `export`.
-            sed -E 's/^([[:space:]]*(export[[:space:]]+)?[A-Z0-9_]*(TOKEN|KEY|SECRET|PASSWORD)[A-Z0-9_]*)=.*/\1=***/' "$env_file"
+            sed -E 's/^([[:space:]]*(export[[:space:]]+)?[A-Z0-9_]*(TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)[A-Z0-9_]*)=.*/\1=***/' "$env_file"
             ;;
         *)
             log_error "unknown config subcommand: $sub"

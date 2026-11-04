@@ -150,11 +150,11 @@ def test_a_resume_that_crashes_before_its_worker_runs_leaves_the_import_as_it_wa
 def test_the_claim_stays_live_through_a_rescan_longer_than_the_stale_window(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.curation import file_job
+    from src.services.curation import file_job, lease_heartbeat
 
     import_id = _interrupted_import(client, tmp_path)
     monkeypatch.setattr(file_job, 'HEARTBEAT_STALE_S', 0.4)
-    monkeypatch.setattr(file_job, 'HEARTBEAT_TICK_S', 0.05)
+    monkeypatch.setattr(lease_heartbeat, 'HEARTBEAT_TICK_S', 0.05)
     entered, release = _hold_the_rescan(monkeypatch)
     thread, first = _resume_in_background(client, import_id)
     assert entered.wait(10)

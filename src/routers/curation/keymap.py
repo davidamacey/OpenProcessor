@@ -74,8 +74,8 @@ def _resolve_expected_revision(body_revision: int | None, if_match: str | None) 
     return resolved
 
 
-def _classes_payload() -> list[dict[str, Any]]:
-    reg = get_class_registry().load()
+async def _classes_payload(opensearch: Any) -> list[dict[str, Any]]:
+    reg = await get_class_registry().snapshot(opensearch)
     return [
         {
             'class_id': c.class_id,
@@ -98,7 +98,11 @@ def _region_profile_available() -> bool:
 
 
 def _build_response(
-    doc: KeymapDoc, *, project: str, extra_issues: list[Any] | None = None
+    doc: KeymapDoc,
+    *,
+    project: str,
+    classes: list[dict[str, Any]],
+    extra_issues: list[Any] | None = None,
 ) -> KeymapGetResponse:
     registry = load_registry()
     has_region = _region_profile_available()
@@ -136,7 +140,6 @@ def _build_response(
         )
         for a in registry.actions.values()
     ]
-    classes = _classes_payload()
     from src.services.curation.keymap_validator import shadowed_conflicts
 
     issues = list(extra_issues or []) or shadowed_conflicts(project, classes, doc.overrides)
@@ -161,7 +164,9 @@ async def get_keymap(opensearch: OpenSearchDep) -> KeymapGetResponse:
 
     cfg = get_curation_config()
     doc = await get_keymap_doc(opensearch, cfg.configs_index)
-    return _build_response(doc, project=cfg.project_slug)
+    return _build_response(
+        doc, project=cfg.project_slug, classes=await _classes_payload(opensearch)
+    )
 
 
 @router.post('/keymap/validate', response_model=KeymapValidateResponse)
@@ -177,7 +182,7 @@ async def validate_keymap_route(
     cfg = get_curation_config()
     current = await get_keymap_doc(opensearch, cfg.configs_index)
     proposed = dict(body.overrides)
-    classes = _classes_payload()
+    classes = await _classes_payload(opensearch)
     from src.services.curation.keymap_validator import validate_keymap
 
     report, class_conflicts, resolved, class_conflict_issues = validate_keymap(
@@ -205,51 +210,43 @@ async def validate_keymap_route(
     )
 
 
-async def _unbind_classes(class_conflicts: list[Any]) -> tuple[list[dict[str, Any]], Any]:
-    """Clear each conflicting class's ``hotkey_letter`` in one operation
-    (CW-K §3.2). Returns ``(unbound, snapshot)`` where ``snapshot`` is a
-    deep copy of the registry *before* mutation, for the caller to
-    restore with :func:`_restore_classes` if the keymap save that must
-    follow this fails (B1) -- ``_atomic_write`` here is not undone by
-    itself."""
+async def _unbind_classes(
+    opensearch: Any, class_conflicts: list[Any]
+) -> tuple[list[dict[str, Any]], dict[int, str | None]]:
+    """Clear each conflicting class's ``hotkey_letter`` in one versioned write (CW-K §3.2).
+    Returns ``(unbound, cleared)`` where ``cleared`` maps class id to the letter it had, for
+    :func:`_restore_classes` if the keymap save that must follow this fails (B1)."""
     if not class_conflicts:
-        return [], None
-    registry_obj = get_class_registry()
-    reg = registry_obj.load()
-    snapshot = reg.model_copy(deep=True)
+        return [], {}
+    registry = get_class_registry()
+    current = await registry.snapshot(opensearch)
+    was_by_id = {c.class_id: c.hotkey_letter for c in current.classes}
     unbound: list[dict[str, Any]] = []
     seen_ids: set[int] = set()
     for conflict in class_conflicts:
-        if conflict.class_id in seen_ids:
+        if conflict.class_id in seen_ids or conflict.class_id not in was_by_id:
             continue
         seen_ids.add(conflict.class_id)
-        for c in reg.classes:
-            if c.class_id == conflict.class_id:
-                was = c.hotkey_letter
-                c.hotkey_letter = None
-                unbound.append(
-                    {
-                        'project': conflict.project,
-                        'class_id': conflict.class_id,
-                        'class_name': conflict.class_name,
-                        'was': was,
-                    }
-                )
-                break
-    if unbound:
-        registry_obj._atomic_write(reg)
-    return unbound, snapshot
+        unbound.append(
+            {
+                'project': conflict.project,
+                'class_id': conflict.class_id,
+                'class_name': conflict.class_name,
+                'was': was_by_id[conflict.class_id],
+            }
+        )
+    await registry.set_hotkeys(opensearch, dict.fromkeys(seen_ids))
+    return unbound, {u['class_id']: u['was'] for u in unbound}
 
 
-def _restore_classes(snapshot: Any) -> None:
-    """B1 rollback: put the class registry back exactly as it was before
-    ``_unbind_classes`` mutated it, because the keymap save that was
-    supposed to follow it failed."""
-    if snapshot is None:
+async def _restore_classes(opensearch: Any, cleared: dict[int, str | None]) -> None:
+    """B1 rollback: give back only the letters :func:`_unbind_classes` cleared, and only where
+    the class still has none, because the keymap save that was supposed to follow failed. A
+    class added or re-bound in between is left alone."""
+    if not cleared:
         return
-    registry_obj = get_class_registry()
-    registry_obj._atomic_write(snapshot)
-    logger.warning('keymap_unbind_rolled_back', class_ids=[c.class_id for c in snapshot.classes])
+    await get_class_registry().set_hotkeys(opensearch, cleared, only_if_unset=True)
+    logger.warning('keymap_unbind_rolled_back', class_ids=sorted(cleared))
 
 
 async def _publish_classes_changed() -> None:
@@ -308,7 +305,7 @@ async def _write_keymap(
     class registry is rolled back to its pre-unbind state before the
     error propagates, so an operator never loses a class hotkey to a
     keymap write that didn't actually happen."""
-    classes = _classes_payload()
+    classes = await _classes_payload(opensearch)
     from src.services.curation.keymap_validator import validate_keymap
 
     report, class_conflicts, _resolved, class_conflict_issues = validate_keymap(
@@ -326,9 +323,9 @@ async def _write_keymap(
         raise _class_hotkey_conflict_error(class_conflicts, class_conflict_issues, current_revision)
 
     unbound: list[dict[str, Any]] = []
-    snapshot: Any = None
+    cleared: dict[int, str | None] = {}
     if unbind_conflicting_class_hotkeys and class_conflicts:
-        unbound, snapshot = await _unbind_classes(class_conflicts)
+        unbound, cleared = await _unbind_classes(opensearch, class_conflicts)
 
     try:
         new_doc = await save_keymap_doc(
@@ -338,8 +335,7 @@ async def _write_keymap(
             expected_revision=expected_revision,
         )
     except RevisionConflictError as exc:
-        if snapshot is not None:
-            _restore_classes(snapshot)
+        await _restore_classes(opensearch, cleared)
         raise api_error(
             409,
             'revision_conflict',
@@ -347,15 +343,16 @@ async def _write_keymap(
             current_revision=exc.current_revision,
         ) from exc
     except Exception:
-        if snapshot is not None:
-            _restore_classes(snapshot)
+        await _restore_classes(opensearch, cleared)
         raise
 
     if unbound:
         await _publish_classes_changed()
     await publish_keymap_changed(new_doc, cfg.configs_index, opensearch)
     logger.info(event, project=cfg.project_slug, revision=new_doc.revision)
-    response = _build_response(new_doc, project=cfg.project_slug)
+    response = _build_response(
+        new_doc, project=cfg.project_slug, classes=await _classes_payload(opensearch)
+    )
     return KeymapPutResponse(**response.model_dump(), unbound_class_hotkeys=unbound)
 
 

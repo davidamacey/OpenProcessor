@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
 from src.services.training import preflight_scan
@@ -51,10 +51,10 @@ class _FakeOpenSearch:
 
 @pytest.mark.asyncio
 async def test_include_classes_filter_actually_applies_to_a_real_export(tmp_path):
-    reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
-    car_id = reg.add_class('car')
-    truck_id = reg.add_class('truck')
-    bus_id = reg.add_class('bus')
+    reg = InMemoryRegistry()
+    car_id = reg.add('car')
+    truck_id = reg.add('truck')
+    bus_id = reg.add('bus')
 
     # 10 cars, 10 trucks, 10 buses, one item per image so an empty-after-
     # filter image is easy to reason about.

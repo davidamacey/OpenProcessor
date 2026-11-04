@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING
 
 from src.core.logging import get_logger
 from src.services.training.class_remap import _NONE_REMAP
+from src.services.training.onnx_head import nms_free_head_problem
 from src.services.training.promote_errors import (
     CheckpointNotFoundError,
     ModelNameConflictError,
@@ -193,6 +194,10 @@ class TritonPromoter(TritonHttpControl):
         if on_phase:
             on_phase('exporting')
         onnx_src = self._locate_onnx(status)
+        head_problem = await asyncio.to_thread(nms_free_head_problem, onnx_src)
+        if head_problem:
+            msg = f'job {status.job_id}: {onnx_src.name} cannot be served as YOLO26: {head_problem}'
+            raise PromoteError(msg, status_code=422)
 
         model_dir = self.triton_models_dir / triton_name
         existing_versions = self._existing_version_dirs(model_dir)
@@ -309,7 +314,7 @@ class TritonPromoter(TritonHttpControl):
                 'sha256': None,
             },
         }
-        await asyncio.to_thread(write_promote_backpointer, promote_json_path, backpointer)
+        await write_promote_backpointer(promote_json_path, backpointer)
 
         # Copy the resolved remap into the served model dir too, alongside
         # config.pbtxt/labels.txt, so an operator inspecting the served
@@ -350,14 +355,6 @@ class TritonPromoter(TritonHttpControl):
         warmed = loaded and await self._warm_up(
             triton_name, input_size, max_batch_size, on_phase=on_phase
         )
-
-        # drop any
-        # cached class-name mapping for this model name so the very next
-        # detection response reads the labels.txt just written above,
-        # not a stale mapping from a prior promote under the same name.
-        from src.utils.class_names import invalidate_class_names
-
-        invalidate_class_names(triton_name)
 
         logger.info(
             'train_promote_ok',
@@ -455,13 +452,6 @@ class TritonPromoter(TritonHttpControl):
 
         await asyncio.to_thread(shutil.rmtree, model_dir, ignore_errors=False)
         logger.info('train_unload_ok', triton_name=triton_name, model_dir=str(model_dir))
-
-        # same cache-invalidation as promote() -- an unloaded
-        # model's labels must not linger in memory either (harmless if
-        # the name is never reused, but stale otherwise).
-        from src.utils.class_names import invalidate_class_names
-
-        invalidate_class_names(triton_name)
 
         return UnloadResult(
             triton_name=triton_name,

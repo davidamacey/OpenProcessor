@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# install_summary.sh - the installer's closing summary (print_summary)
+# install_summary.sh - the installer's closing summary (print_summary, dry_run_report)
 # =============================================================================
 # Sourced by setup-openprocessor.sh after the release files are installed, so
 # it runs with the installer's globals (ENV_FILE, INSTALL_REF, SELECTED_TIERS,
@@ -93,4 +93,25 @@ print_summary() {
     echo "          ./setup-openprocessor.sh --repair   (also --rollback, --uninstall)"
     [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo ", then ./openprocessor models install")"
     return 0
+}
+
+# dry_run_report -- what a real run would change in an existing dir
+dry_run_report() {
+    [[ "$OP_DRY_RUN" == 1 && "$DIR_STATE" != fresh ]] || return 0
+    local rel changed=0 key
+    log_step "Dry-run: changes a real run would make in ${OP_REAL_DIR}"
+    while IFS= read -r rel; do
+        if [[ ! -f "${OP_REAL_DIR}/${rel}" ]]; then
+            echo "  would add    ${rel}"; changed=1
+        elif ! cmp -s "${OP_DIR}/${rel}" "${OP_REAL_DIR}/${rel}"; then
+            echo "  would change ${rel}"; changed=1
+        fi
+    done < <(manifest_installed_files "$OP_DIR")
+    while IFS= read -r key; do
+        [[ -z "$key" ]] && continue
+        if [[ "$(read_env_var "${OP_DIR}/.env" "$key" || true)" != "$(read_env_var "${OP_REAL_DIR}/.env" "$key" || true)" ]]; then
+            echo "  would set    .env ${key}"; changed=1
+        fi
+    done < <(awk -F= '/^[A-Z_][A-Z0-9_]*=/ { print $1 }' "${OP_DIR}/.env" 2>/dev/null | sort -u)
+    (( changed )) || echo "  no file or .env changes"
 }

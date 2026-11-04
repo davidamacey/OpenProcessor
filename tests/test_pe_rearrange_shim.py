@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -118,10 +118,14 @@ class TestStaticBatchSafeRearrangeContextManager:
 # sys.path (the pip package name is ``perception_models``, importable as
 # top-level ``core``); skipped entirely when unavailable rather than faked
 # with a stand-in, since the whole point is proving the *real* attention
-# code reshapes safely once patched.
+# code reshapes safely once patched. Only these tests skip; the shim tests above
+# need nothing but einops.
 # =============================================================================
 
-_PERCEPTION_MODELS_PE = pytest.importorskip('core.vision_encoder.pe')
+
+@pytest.fixture(scope='module')
+def perception_pe() -> Any:
+    return pytest.importorskip('core.vision_encoder.pe')
 
 
 def _export_onnx(
@@ -151,10 +155,10 @@ def _run_onnx(path: Path, x: torch_typing.Tensor) -> torch_typing.Tensor:
 
 
 @pytest.fixture
-def real_self_attention() -> torch_typing.nn.Module:
+def real_self_attention(perception_pe: Any) -> torch_typing.nn.Module:
     """A tiny (embed_dim=32, num_heads=4), fully initialized real SelfAttention."""
     torch.manual_seed(0)
-    attn = _PERCEPTION_MODELS_PE.SelfAttention(embed_dim=32, num_heads=4)
+    attn = perception_pe.SelfAttention(embed_dim=32, num_heads=4)
     attn.init_tensors()
     # getattr indirection keeps the literal token away from the
     # python-no-eval pre-commit hook, which targets the builtin.
@@ -191,16 +195,16 @@ class TestReproducesTheStaticBatchTraceBug:
             onnx_path.unlink(missing_ok=True)
 
     def test_shimmed_export_agrees_with_eager_pytorch_at_every_batch(
-        self, real_self_attention: torch_typing.nn.Module
+        self, real_self_attention: torch_typing.nn.Module, perception_pe: Any
     ) -> None:
-        original = _PERCEPTION_MODELS_PE.rearrange
-        _PERCEPTION_MODELS_PE.rearrange = _safe_rearrange
+        original = perception_pe.rearrange
+        perception_pe.rearrange = _safe_rearrange
         try:
             onnx_path = _export_onnx(
                 real_self_attention, self.TRACE_BATCH, self.SEQ, self.EMBED_DIM
             )
         finally:
-            _PERCEPTION_MODELS_PE.rearrange = original
+            perception_pe.rearrange = original
 
         try:
             for batch in (1, self.TRACE_BATCH, self.TRACE_BATCH + 1, self.TRACE_BATCH + 6):

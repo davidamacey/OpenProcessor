@@ -20,10 +20,10 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
 from src.services.curation.export_readiness import (
@@ -73,8 +73,8 @@ class _FakeOpenSearch:
 
 def _service(tmp_path: Path, docs: list[dict[str, Any]]) -> GenericYoloExportService:
     cfg = CurationConfig(export_root=tmp_path / 'exports')
-    reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
-    reg.add_class('sedan')
+    reg = InMemoryRegistry()
+    reg.add('sedan')
     return GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=reg)
 
 
@@ -189,6 +189,9 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
     class _Reg:
+        async def snapshot(self, *_a: Any, **_k: Any) -> Any:
+            return self.load()
+
         def load(self) -> Any:
             class _Snap:
                 classes: list[Any] = []
@@ -284,8 +287,8 @@ async def test_single_class_export_with_no_matching_item_refuses(tmp_path: Path)
     from src.services.curation.export_single_class import SingleClassExportService
 
     cfg = CurationConfig(export_root=tmp_path / 'exports', source_root=tmp_path / 'images')
-    reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
-    reg.add_class('car')
+    reg = InMemoryRegistry()
+    reg.add('car')
     service = SingleClassExportService(
         _FakeOpenSearch([]),
         profile=SingleClassExportProfile(name='cars', class_ids=(0,)),

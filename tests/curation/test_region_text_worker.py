@@ -23,6 +23,7 @@ from curation.region_cascade_helpers import (
     _item,
     _jpeg,
     _profile,
+    class_group_answer,
 )
 from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
@@ -111,14 +112,10 @@ async def _drive(
     )
     vlm_cls = MagicMock(return_value=vlm)
     monkeypatch.setattr(runner_mod, 'build_vlm_labeler', vlm_cls)
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.ClassRegistry',
-        MagicMock(side_effect=RuntimeError('no registry in test')),
-    )
     # Stage A resolves the class group through the process-wide registry
     # singleton; without this the test depends on another test having
     # loaded it first.
-    monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
+    monkeypatch.setattr('scripts.curation.worker.state._class_group', class_group_answer())
 
     if vlm_url:
         monkeypatch.setenv('OP_VLM_URL', vlm_url)

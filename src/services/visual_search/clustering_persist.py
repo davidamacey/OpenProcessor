@@ -5,6 +5,7 @@
 index cache, the training metadata, ``index_dir`` and the lazily imported ``faiss``.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, Protocol
@@ -38,9 +39,9 @@ def index_files(index_dir: Path, index_name: ClusterIndex) -> tuple[Path, ...]:
     name = index_name.value
     return (
         index_dir / f'{name}.index',
-        index_dir / f'{name}.meta.npy',
+        index_dir / f'{name}.meta.json',
         index_dir / f'{name}.index.tmp',
-        index_dir / f'{name}.meta.tmp.npy',
+        index_dir / f'{name}.meta.tmp.json',
     )
 
 
@@ -62,7 +63,7 @@ class IndexPersistenceMixin:
 
         index_path, metadata_path, tmp_index, tmp_meta = index_files(self.index_dir, index_name)
 
-        np.save(tmp_meta, np.asarray(self._training_metadata.get(index_name, {}), dtype=object))
+        tmp_meta.write_text(json.dumps(self._training_metadata.get(index_name, {})))
         self.faiss.write_index(index, str(tmp_index))
         tmp_meta.replace(metadata_path)
         tmp_index.replace(index_path)
@@ -102,7 +103,7 @@ class IndexPersistenceMixin:
                 )
             metadata: dict = {}
             if metadata_path.exists():
-                metadata = np.load(metadata_path, allow_pickle=True).item()
+                metadata = json.loads(metadata_path.read_text())
         except Exception as e:
             logger.error(f'Failed to load {index_name} index from {index_path}: {e}')
             self._unloadable.add(index_name)

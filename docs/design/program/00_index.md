@@ -26,7 +26,7 @@ task text that file cites by ID. Where a source plan and this set disagree, this
 |---|---|
 | `00_index.md` (this) | mission, schedule (waves), decision register, branch/lane model, test tiers, the test and GPU budget (section 8.1), legends, section map, superseded plans |
 | [01_b0_close_out.md](01_b0_close_out.md) | B0: gate cycle, push, merge |
-| [02_b1_overview.md](02_b1_overview.md), [02a](02a_b1_job_leases.md), [02b](02b_b1_class_registry.md), [02c](02c_b1_inference_search.md), [02d](02d_b1_api_frontend_tests.md), [02e](02e_b1_ultralytics_live_bugs.md) | B1 correctness: leases, class registry, inference and search, API/frontend/tests, Ultralytics live bugs |
+| B1 (merged; plan files removed, the lasting facts are in the permanent docs and `CHANGELOG.md`) | B1 correctness: leases, class registry, inference and search, API/frontend/tests, Ultralytics live bugs. **Done.** |
 | [03_b2_overview.md](03_b2_overview.md), [03a](03a_b2_w1_queue_infra.md), [03b](03b_b2_w2_job_families.md), [03c](03c_b2_w3_beat_reaper_workers.md) | B2 jobs on Celery, three internal stages |
 | [04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md) | B3 one Ultralytics version, one detection contract |
 | [05_b4_stateless_api.md](05_b4_stateless_api.md) | B4 stateless API |
@@ -68,7 +68,7 @@ Speed is measured once the stack it is measured on stops changing. See
 | Batch | Milestone | Size | Depends on | Scope | Correct | Fast | File |
 |---|---|---|---|---|---|---|---|
 | **B0** close-out | v0.7.0 | M | plan approval; host all-clear | CPU gate cycle, push, merge of the R2 round, the B0 small fixes and the exact Ultralytics pin (code done, `d1c6bab0`) | OCR boxes on the text and in the reported frame; real DB unclip; holdout freeze fails closed; create-only first config writes; status polls stop answering 500; outages stop reading as "not found"; Ultralytics stops floating | recycle jitter stops 32 workers restarting together | [01](01_b0_close_out.md) |
-| **B1** correctness | v0.7.0 | XL (L, L, M, M, S-M, deps S) | B0 merged; D-8..D-12, D-15 | 1A leases, 1B class registry and upgrade migration, 1C inference/search hygiene, 1D API/frontend/tests and SEC-3/SEC-6, 1E Ultralytics live bugs, the deps lane | duplicate class ids end; one start per singleton; a sibling's live job is never flipped; a blocked loop keeps its lease; stale per-worker caches end; YOLO26 uploads build the right engine; class by name on the secondary | GPU-5/GPU-9 drop multi-GB allocations; GPU-8 stops retrying deterministic errors; OS-6 filtered kNN returns k hits | [02](02_b1_overview.md) |
+| **B1** correctness (done, merged) | v0.7.0 | XL (L, L, M, M, S-M, deps S) | B0 merged; D-8..D-12, D-15 | 1A leases, 1B class registry and upgrade migration, 1C inference/search hygiene, 1D API/frontend/tests and SEC-3/SEC-6, 1E Ultralytics live bugs, the deps lane | duplicate class ids end; one start per singleton; a sibling's live job is never flipped; a blocked loop keeps its lease; stale per-worker caches end; YOLO26 uploads build the right engine; class by name on the secondary | GPU-5/GPU-9 drop multi-GB allocations; GPU-8 stops retrying deterministic errors; OS-6 filtered kNN returns k hits | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | **B2** jobs on Celery | v0.7.0 | XL (3 stages) | B1 merged; D-17..D-26 | Q-Phase 2-5: Redis and five core containers, every API-hosted job family (17, listed in [03](03_b2_overview.md)), beat, the periodic worker and the lease reaper, trigger workers; OPS-2; SEC-4, SEC-5 | jobs survive API recycling (CC-4); periodic side effects run once; claims hold with several workers | heavy work leaves the request processes | [03](03_b2_overview.md) |
 | **B3** one Ultralytics | v0.7.0 | L + about 1 GPU day | B1 merged; D-27, D-28 (D-38) | U-Step 4-9, trainer `nms` by capability, full U-6.1 matrix in CI, GPU-14 final, GPU-18 docs, U-C11, first #368 slice | one version, one fused `[b,300,6]` contract, no monkey-patched fork, no deprecated plugin | at least 95 % of today's detector throughput, or Stage A ships alone | [04](04_b3_ultralytics_one_version.md) |
 | **B4** stateless API | v0.7.0 | L | B2, B3 merged; D-29..D-33 | Q-Phase 6-7 (bulk OCC, `API_WORKERS`), Redis Streams events after a spike, #439, the last file lock deleted | same answers with 1 and 32 workers | worker count is a tuning knob, benchmarked on the B3 engine | [05](05_b4_stateless_api.md) |
@@ -122,7 +122,7 @@ Common exit criteria, required by every wave ("PQ" gates):
 | Wave | Batch | Lanes (branch -> brief in) | Codes in parallel / overlaps | Sweep that closes the wave | Exit criteria (in addition to PQ-1..PQ-9) |
 |---|---|---|---|---|---|
 | **W0** | B0 on `fix/411-r2-round` | none: the code is done; the coordinator commits the plan set (B0-1) | GH-0..GH-12 after the owner's D-36 go; W1 lanes may start coding from the frozen B0 head once the plan set is approved | B0 gate cycle: pre-commit `--all-files`, offline suite `-n 8`, contracts-check, docs check, frontend full set with e2e, changelog rules: CPU gates only, no GPU run (the OCR before/after comparison moved to GPU window 1, the B3 gate; [01](01_b0_close_out.md) B0-2, B0-3) | merge commit on `main`; `main` fast-forwarded; #437, #440, #442, #443, #445 and #366 closed; VERSION still 0.6.0; no tag |
-| **W1** | B1 on `int/b1-correctness` | `b1/deps` -> [09](09_github_actions.md) section 8; `b1/ultralytics` -> [02e](02e_b1_ultralytics_live_bugs.md); `b1/inference` -> [02c](02c_b1_inference_search.md); `b1/api-frontend` -> [02d](02d_b1_api_frontend_tests.md); `b1/leases` -> [02a](02a_b1_job_leases.md); `b1/registry` -> [02b](02b_b1_class_registry.md). Merge order: deps, 1E, 1C, 1D, 1A, 1B ([02](02_b1_overview.md)) | all six code in parallel; 1B rebases on 1A before its merge; during W1's sweep, B2 stage W1 (`b2/queue-infra`, spike S1 first) and the B3 CPU lanes start from the frozen `int/b1` head | B1 sweep: T1 + frontend full set + browser check of the export and diverse review pages + a short lease/registry smoke on the live harness (`-p op-b1-live`, cap 30 min; the full live run is the single B1+B2 run at the end of B2) + the `families` CI job; spawn races run 10x locally | file-lock ratchet lists only the B2/B4 sites and `job_lock.py`; no `class_registry.json` read outside export snapshots and the trainer; `registry_not_migrated` tested; lease p50/p99 acquire latency recorded; N2-N7, N9, N10, #447 closed on merge. PQ-7: no GPU gate in B1 by design; the lease round-trip cost is the recorded number |
+| **W1** | B1 on `int/b1-correctness` | `b1/deps` -> [09](09_github_actions.md) section 8; `b1/ultralytics` (merged); `b1/inference` (merged); `b1/api-frontend` (merged); `b1/leases` (merged); `b1/registry` (merged). Merge order: deps, 1E, 1C, 1D, 1A, 1B (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md))) | all six code in parallel; 1B rebases on 1A before its merge; during W1's sweep, B2 stage W1 (`b2/queue-infra`, spike S1 first) and the B3 CPU lanes start from the frozen `int/b1` head | B1 sweep: T1 + frontend full set + browser check of the export and diverse review pages + a short lease/registry smoke on the live harness (`-p op-b1-live`, cap 30 min; the full live run is the single B1+B2 run at the end of B2) + the `families` CI job; spawn races run 10x locally | file-lock ratchet lists only the B2/B4 sites and `job_lock.py`; no `class_registry.json` read outside export snapshots and the trainer; `registry_not_migrated` tested; lease p50/p99 acquire latency recorded; N2-N7, N9, N10, #447 closed on merge. PQ-7: no GPU gate in B1 by design; the lease round-trip cost is the recorded number |
 | **W2** | B2 on `int/b2-celery` | stage B2-W1: `b2/queue-infra` -> [03a](03a_b2_w1_queue_infra.md); stage B2-W2: `b2/families-a`, `b2/families-b`, `b2/families-c`, then `b2/frontend-queued` -> [03b](03b_b2_w2_job_families.md); stage B2-W3: `b2/beat-reaper`, `b2/trigger-workers`, `b2/hardening` -> [03c](03c_b2_w3_beat_reaper_workers.md) | stages run in order; the coordinator merges each stage and runs targeted tests and static checks on it (not a full sweep); B3 lanes code throughout W2 on `int/b3-ultralytics`; 4C's spike plan and 4D's timing script may be drafted | B2 sweep after stage W3: T1 + frontend full set + the one live run covering B1 and B2 together (`-p op-b2-live`: B1 lease/registry checks plus race, kill mid-job, cancel, API recycle, arbiter, two auto-label workers; about 3 h) + `acceptance_run.sh --only` the job phases + image audit and Trivy for changed images | no job family runs in an API worker; lifespan creates per-process resources only; file-lock ratchet lists only the event-hub site and `job_lock.py`; OPS-2 measured first; Redis licence row; N11, N12 closed. PQ-7: request latency of `/detect` and `/ingest` under a running job recorded against the B1 numbers |
 | **W3** | B3 on `int/b3-ultralytics` | `b3/stagea` first, then `b3/families`, `b3/frame`, `b3/export`, `b3/decoders`, `b3/docs` as [04](04_b3_ultralytics_one_version.md) orders them | codes during all of W2 (CPU only); rebases on `main` after B2 merges; during W3's sweep, B4's 4C spike (on the merged B2 stack) and 4D's measurement start | B3 sweep: T1 + U-6.1 matrix at the pin X + **GPU window 1**: the U-6.2 gate once for Stage A and Stage B plus the B0 OCR before/after comparison (`-p op-b3-gpu`, GPU 0, one GPU day; never overlapping a B2 live run) + `pip check`, image audit, Trivy | one Ultralytics version in every image and requirements file; pin test green in CI and in each image; N8 closed. PQ-7: |delta mAP50-95| <= 0.3, >= 99 % detection agreement, throughput >= 95 % at batch 1/8/32/64 with p99 within +10 %, embedding cosine >= 0.999, export image about -0.9 GB, all recorded |
 | **W4** | B4 on `int/b4-stateless` | `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/events` (4C, spike first, D-30 after it), `b4/project-create` (4D) -> [05](05_b4_stateless_api.md) | 4C spike and 4D timing during W3's sweep; release-prep drafting (release notes) may start during W4's sweep | B4 sweep: T1 + frontend full set + the third and last live run (1-vs-32 worker diff) (no GPU in B4: the installer default `API_WORKERS` is provisionally `min(nproc, 32)`; the T5 32-worker ingest and search benchmark on the B3 engine runs in GPU window 2, the B5 window, per 05 step 4B-5, and 5a retakes the same baseline) | `rg -n "fcntl" src` empty; file-lock ratchet baseline zero; the 1-vs-32 diff empty; no lifespan side effects; N1, #439 closed. PQ-7: the `API_WORKERS` default is confirmed or corrected by the GPU window 2 benchmark before R-final |
@@ -150,7 +150,7 @@ Common exit criteria, required by every wave ("PQ" gates):
 | GH-1 (#38) | GitHub actions | before W1 | to do, on the owner's go (D-36) |
 | #31, #34 | audit plan, Ultralytics plan | - | done (committed, D-14) |
 | B1-0 | commit the source plans | - | done (D-14); the header pointers of the three source plans are repointed to this set in the plan-set commit |
-| B1-1A..1E, deps | B1 lanes | W1 | to do |
+| B1-1A..1E, deps | B1 lanes | W1 | done (merged) |
 | R-B1 | 0.8.0 acceptance subset | - | dropped (owner decision 3); its checks are in R-final section 4.3 |
 | B2-W1..W3 | B2 stages | W2 | to do |
 | B3 | B3 | W3 | to do |
@@ -196,14 +196,14 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-5 | #42 timing | approved | runs when GPU 1 frees; never a tag blocker; release notes say so if unrun | side | [07](07_b5_overview.md) section 11 |
 | D-6 | Known-issue lines for #447, CC-2, CC-4 | dropped | no release ships before B1-B4 fix them | - | |
 | D-7 | Release train (early v0.8.0 after B1) | replaced | by owner decisions 2-3 and D-37: one release v0.7.0 after B5 and R-final | - | [06](06_release_acceptance.md) |
-| D-8 | J-LEASE | approved | OpenSearch lease docs in the SETTINGS role, thread heartbeat 15 s, TTL 120 s, cooperative fencing | B1 | [02a](02a_b1_job_leases.md) |
-| D-9 | J-REG and its upgrade path | approved | registry doc with OCC (5 attempts, 10,000 classes), 409 `registry_not_migrated`, `upgrade` hook, `.migrated` rename, downgrade note. Only 0.6.0 -> 0.7.0 is tested (no 0.7.0 install exists) | B1 | [02b](02b_b1_class_registry.md) |
-| D-10 | B1-1E scope | approved | minimal in B1; trainer `nms`, export module and full matrix in B3 | B1 | [02e](02e_b1_ultralytics_live_bugs.md) |
-| D-11 | U-J3 YOLOv5 scope | approved, option b | bring-your-own original-YOLOv5 ONNX for probe and secondary; YOLOv5u for serving | B1 | [02e](02e_b1_ultralytics_live_bugs.md) |
-| D-12 | U-J4 `nms` by capability | approved | `nms=False` with `one2one_cv2`, else `nms=True`, class-agnostic | B1 (export), B3 (trainer) | [02e](02e_b1_ultralytics_live_bugs.md), [04](04_b3_ultralytics_one_version.md) |
+| D-8 | J-LEASE | approved | OpenSearch lease docs in the SETTINGS role, thread heartbeat 15 s, TTL 120 s, cooperative fencing | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| D-9 | J-REG and its upgrade path | approved | registry doc with OCC (5 attempts, 10,000 classes), 409 `registry_not_migrated`, `upgrade` hook, `.migrated` rename, downgrade note. Only 0.6.0 -> 0.7.0 is tested (no 0.7.0 install exists) | B1 | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| D-10 | B1-1E scope | approved | minimal in B1; trainer `nms`, export module and full matrix in B3 | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
+| D-11 | U-J3 YOLOv5 scope | approved, option b | bring-your-own original-YOLOv5 ONNX for probe and secondary; YOLOv5u for serving | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
+| D-12 | U-J4 `nms` by capability | approved | `nms=False` with `one2one_cv2`, else `nms=True`, class-agnostic | B1 (export), B3 (trainer) | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)), [04](04_b3_ultralytics_one_version.md) |
 | D-13 | Order (Q-J8) | approved; amended by D-37 | B0, B1, B2, B3, B4, B5, then R-final last | - | section 3 |
 | D-14 | Commit the plans | done | committed on `fix/411-r2-round` | - | |
-| D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | [02a](02a_b1_job_leases.md) |
+| D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
 | D-17 | Q-J1 Celery 5.6 | open per decision 6 | the owner already chose Celery (task plan J1); confirm the 5.6 line at B2 kick-off | B2 | [03](03_b2_overview.md) |
 | D-18 | Q-J2 broker | open | Redis 8 (AGPLv3 option); Valkey only if a redistributor objects | B2 | [03a](03a_b2_w1_queue_infra.md) |
@@ -234,7 +234,7 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-37 | B5 before the first tag? (new) | approved: YES | owner, 2026-11-03: "not tagging until all of these plans are implemented and tested". v0.7.0 = B0..B5 + R-final; R-final runs last; milestones re-cut (section 3, [09](09_github_actions.md) section 7) | - | section 3 |
 | D-38 | Dependabot #432 handling: Triton 26.09 and a newer Python base (new; the same question as Q-4 and ENV-10 in [08](08_environment_and_setup.md)) | open | close #432 and #422; do the move only inside B3 as optional task B3-A5, with the TensorRT pins and the `Dockerfile.triton` assertion moved together, behind the U-6.2 gate, if B3's GPU window allows; otherwise after the tag | B3 kick-off | [04](04_b3_ultralytics_one_version.md) B3-A5, [09](09_github_actions.md) section 8 |
 | OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [07](07_b5_overview.md) section 9 |
-| OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | [02c](02c_b1_inference_search.md) |
+| OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | OC-2 | pyclipper in the hardened Triton scan image (`docker/hardened/triton`) | open | decide with B2's image work (stage W3, hardening lane) | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
 | OC-3 | `autolabel/job.get_state` still repairs through `_fail_unclaimed` | decided: leave | B2 stage W3 (trigger workers) deletes it | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
 
@@ -245,6 +245,11 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
   `int/b3-ultralytics`, `int/b4-stateless`, `int/b5a-baseline` and so on) cut from `main` after
   the previous batch merged. A lane may branch from the previous integration branch's frozen
   head while that batch's PR is open; B3 is cut from `main` after B1 and rebased after B2.
+- **Lane-brief rules (include in every brief).** Never use `git stash`: the stash is shared by
+  every worktree of a repository, so a lane commits work in progress to its own branch instead.
+  The file-size guard (700 lines) is a guide: a file that is one cohesive concern may exceed it
+  with a `cohesive: <reason>` entry in `scripts/codegen/baselines/file_size.txt`, reviewed at
+  merge; split by concern, never to dodge the number; existing baselines otherwise only shrink.
 - **Each lane** is one agent in its own worktree `<repo>-wt-bN-<lane>` on branch `bN/<lane>`.
   Never two writers in one worktree. Lanes run only the targeted red/green tests of their own
   changes plus static checks on the files they touch. No full suites, no `--all-files` in a lane.
@@ -405,18 +410,18 @@ The former master plan (rev 4) is deleted in the plan-set commit and stays in gi
 | 2 Mission check | this file section 2 (Correct/Fast columns); detail in each batch file |
 | 2 "Deferred, and why" | this file section 10 |
 | 3 Owner rules applied | [10_standards_and_libraries.md](10_standards_and_libraries.md) |
-| 3a Replacement for the Celery plan's Phase 1 | [02a](02a_b1_job_leases.md) (B0/B1 rows), [03a](03a_b2_w1_queue_infra.md) (Celery exclusive starts row) |
-| 3b Every `flock` site (19 files, 55 hits) | [02a](02a_b1_job_leases.md) (B1 rows, the ratchet), [03c](03c_b2_w3_beat_reaper_workers.md) (dispatcher, sweeper, cache prune), [05](05_b4_stateless_api.md) (event hub, `job_lock.py`) |
-| 3c Q-D1..D15 cross-reference | [02](02_b1_overview.md) (B1 rows) and [03](03_b2_overview.md) (B2 rows); D1, D10, D11, D13 are B0 fixes recorded in [01](01_b0_close_out.md) |
-| 3d Superseded source-plan tests | B0 rows: [01](01_b0_close_out.md) section 3 and Corrections; B1 rows: [02a](02a_b1_job_leases.md), [02b](02b_b1_class_registry.md) |
+| 3a Replacement for the Celery plan's Phase 1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B0/B1 rows), [03a](03a_b2_w1_queue_infra.md) (Celery exclusive starts row) |
+| 3b Every `flock` site (19 files, 55 hits) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B1 rows, the ratchet), [03c](03c_b2_w3_beat_reaper_workers.md) (dispatcher, sweeper, cache prune), [05](05_b4_stateless_api.md) (event hub, `job_lock.py`) |
+| 3c Q-D1..D15 cross-reference | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) (B1 rows) and [03](03_b2_overview.md) (B2 rows); D1, D10, D11, D13 are B0 fixes recorded in [01](01_b0_close_out.md) |
+| 3d Superseded source-plan tests | B0 rows: [01](01_b0_close_out.md) section 3 and Corrections; B1 rows: B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | 4 Release strategy | replaced by owner decisions 2-3 and D-37; this file section 6 (D-7, D-16, D-34, D-37) and [06](06_release_acceptance.md) |
 | 5 B0 (5.1 scope, 5.2 gate cycle) | [01](01_b0_close_out.md) |
 | 5.3 R3 live acceptance | [06](06_release_acceptance.md) sections 4.1, 4.2, 5 |
 | 5.4 Tag decision point | [06](06_release_acceptance.md) section 7 |
-| 6.1 J-LEASE, 6.3 trainer claims | [02a](02a_b1_job_leases.md) |
-| 6.2 J-REG | [02b](02b_b1_class_registry.md) |
+| 6.1 J-LEASE, 6.3 trainer claims | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| 6.2 J-REG | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | 7 Common rules | this file section 7 |
-| 7.1 B1 | [02](02_b1_overview.md) and 02a-02e; "Release: R-B1" -> [06](06_release_acceptance.md) section 4.3 |
+| 7.1 B1 | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)); "Release: R-B1" -> [06](06_release_acceptance.md) section 4.3 |
 | 7.2 B2 | [03](03_b2_overview.md), 03a-03c |
 | 7.3 B3 | [04](04_b3_ultralytics_one_version.md) |
 | 7.4 B4 | [05](05_b4_stateless_api.md); R-0.9 -> [06](06_release_acceptance.md) section 4.4 |
@@ -467,41 +472,41 @@ lives now:
 
 | Review items | Disposition and owner file |
 |---|---|
-| M-1 (#8, #346, #348, #365, #400, #401) | every open issue mapped: [09](09_github_actions.md) section 7; #365 interplay in [02b](02b_b1_class_registry.md) |
+| M-1 (#8, #346, #348, #365, #400, #401) | every open issue mapped: [09](09_github_actions.md) section 7; #365 interplay in B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M-2 (audit Appendix C/D) | [11](11_risks_cleanup_host.md) section 4 |
 | M-3 (#17/#18 leftovers) | [07c](07c_b5_crops_ocr_faces.md) (#220 step 3), [07d](07d_b5_processing_plans.md) (#67 phase 2+) |
-| M-4 (per-process limits) | BA-8 documented in [02d](02d_b1_api_frontend_tests.md); pools sized per `API_WORKERS` in [05](05_b4_stateless_api.md) |
+| M-4 (per-process limits) | BA-8 documented in B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)); pools sized per `API_WORKERS` in [05](05_b4_stateless_api.md) |
 | M-5 (CC-4 interim) | the jitter shipped in B0; the known-issue line is dropped (D-6); CC-4 is fixed in B2 |
 | M-6 (PR-3/4/6 as 0.7.x) | replaced by owner decision 2 (one release) |
-| M-7, M-8 (superseded tests, Q-D cross-reference) | [01](01_b0_close_out.md), [02a](02a_b1_job_leases.md), [02b](02b_b1_class_registry.md), [02](02_b1_overview.md), [03](03_b2_overview.md) |
-| M-9 (installer/upgrade for B1) | [02b](02b_b1_class_registry.md); live in [06](06_release_acceptance.md) RF-40..RF-41 |
+| M-7, M-8 (superseded tests, Q-D cross-reference) | [01](01_b0_close_out.md), B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)), [03](03_b2_overview.md) |
+| M-9 (installer/upgrade for B1) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); live in [06](06_release_acceptance.md) RF-40..RF-41 |
 | M-10 (docs per batch) | this file section 9 and each batch file |
 | M-11 (installer YOLO11 config divergence, U-C11) | accepted until B3, which deletes the heredoc: [04](04_b3_ultralytics_one_version.md) |
 | M-12, M-13 (baselines only shrink; image audit) | PQ-2, PQ-8 (section 4) |
 | W-1 (head/commit counts) | no hard-coded SHAs (section 7) |
 | W-2 (CHANGELOG step done) | [01](01_b0_close_out.md) section 3 |
-| W-3, W-4, W-5, W-9 (lease index, O_EXCL "added", B1 done-when, flock count) | [02a](02a_b1_job_leases.md), [02](02_b1_overview.md) |
+| W-3, W-4, W-5, W-9 (lease index, O_EXCL "added", B1 done-when, flock count) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | W-6 (8.4.197 shipped) | done: the pin commit `d1c6bab0` |
 | W-7 (GPU-15 leftover) | review partly not adopted: kept in the backlog with its source (section 10) |
-| W-8 (#447 premise) | [09](09_github_actions.md) C-447; [02e](02e_b1_ultralytics_live_bugs.md) |
+| W-8 (#447 premise) | [09](09_github_actions.md) C-447; B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | C-1 (release gap) | replaced by owner decision 2 |
 | C-2 (one large B1 PR) | one merge commit per lane, revert coupling (section 7, M21); the single PR is kept |
-| C-3 (CC-1 and resume) | [01](01_b0_close_out.md) Corrections; [02a](02a_b1_job_leases.md) |
-| C-4, C-5 (TTL and heartbeat; stale reclaim race) | [02a](02a_b1_job_leases.md) |
+| C-3 (CC-1 and resume) | [01](01_b0_close_out.md) Corrections; B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| C-4, C-5 (TTL and heartbeat; stale reclaim race) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | C-6 (OpenTranscribe alignment) | [03a](03a_b2_w1_queue_infra.md) re-reads it; listed unverified in [11](11_risks_cleanup_host.md) 3.1 |
 | C-7, C-8 (trainer untested on GPU; three versions) | trainer moves in B3 behind U-6.2 ([04](04_b3_ultralytics_one_version.md)); the pin is done |
 | A.4 executability gaps 1-7 (CHANGELOG, red-test names, pyclipper pin, OCR rollback, OCR image set, heavy-run scheduling, CC-1 resume test) | [01](01_b0_close_out.md); [11](11_risks_cleanup_host.md) section 1 |
-| A.4 gaps 8-11, 18 (lease location, kind/scope, busy window, no-doc jobs, live race budget) | [02a](02a_b1_job_leases.md) |
-| A.4 gaps 12-14 (registry upgrade, bounds, trainer ordering) | [02b](02b_b1_class_registry.md) |
-| A.4 gaps 15, 16 (cachetools licence, BA-5 contracts; `families` CI) | [02d](02d_b1_api_frontend_tests.md), [02e](02e_b1_ultralytics_live_bugs.md) |
+| A.4 gaps 8-11, 18 (lease location, kind/scope, busy window, no-doc jobs, live race budget) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| A.4 gaps 12-14 (registry upgrade, bounds, trainer ordering) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| A.4 gaps 15, 16 (cachetools licence, BA-5 contracts; `families` CI) | B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)), B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | A.4 gap 17 (who rebuilds images for the pin) | resolved: the pin is done; R-final builds the images |
 | A.4 gaps 19-21 (B2 compose/env/upgrade, jobs over 6 h, forward-only) | [03](03_b2_overview.md) |
 | A.4 gaps 22-24 (B3 pin rule, B4 spike, B5 thresholds) | [04](04_b3_ultralytics_one_version.md), [05](05_b4_stateless_api.md), [07](07_b5_overview.md) |
 | A.4 cross-cutting (docs per batch, contracts, upgrades) | section 9; [06](06_release_acceptance.md) (0.6.0 -> 0.7.0) |
-| A.5 churn 1, 2, 4, 6, 7 | pin once then B3 ([04](04_b3_ultralytics_one_version.md)); minimal 1E ([02e](02e_b1_ultralytics_live_bugs.md)); one heartbeat class ([02a](02a_b1_job_leases.md), [03a](03a_b2_w1_queue_infra.md)); baseline retaken on the B3 engine ([05](05_b4_stateless_api.md)); #365 out of scope ([02b](02b_b1_class_registry.md)) |
+| A.5 churn 1, 2, 4, 6, 7 | pin once then B3 ([04](04_b3_ultralytics_one_version.md)); minimal 1E (B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md))); one heartbeat class (B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), [03a](03a_b2_w1_queue_infra.md)); baseline retaken on the B3 engine ([05](05_b4_stateless_api.md)); #365 out of scope (B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))) |
 | A.5 churn 3 | not adopted, accepted cost (section 7) |
 | A.5 churn 5 (Cropwright three times) | moot: everything ships in one release (M24) |
-| A.6 doc suggestions (soft shutdown, uvicorn floor, fencing, wall clock, `nms`-only tests) | [03a](03a_b2_w1_queue_infra.md); done (`6a53673c`); [02a](02a_b1_job_leases.md); [02e](02e_b1_ultralytics_live_bugs.md) |
+| A.6 doc suggestions (soft shutdown, uvicorn floor, fencing, wall clock, `nms`-only tests) | [03a](03a_b2_w1_queue_infra.md); done (`6a53673c`); B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | A.7 specific edits 1-18 | applied in revision 2; their content now lives where the rows above say |
 
 ## 15. Revision log

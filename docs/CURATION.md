@@ -78,7 +78,16 @@ endpoints are immutable revisions, and activation is a separate step.
 ## Class registry and class identity
 
 Class identity is the name, never the index. Anything that crosses a boundary (import,
-combine, export, train, promote) pairs classes by name. Manage classes in
+combine, export, train, promote) pairs classes by name.
+
+A project's class registry is one OpenSearch document, written with optimistic concurrency, so
+concurrent class writes never lose a class or give two classes one id. Four errors come from it:
+`409 registry_not_migrated` (the project still has a 0.6.x `class_registry.json` and no document;
+run `./openprocessor curation migrate-registry --project <slug>`, or `--all`, which `upgrade` and
+`repair` already run), `409 registry_full` (the 10,000-class bound), `409 registry_conflict` (five
+lost races in a row; retry) and the unchanged `409` on a duplicate class name. Inference routes and
+other projects are not affected by an unmigrated project. `class_registry.json` is now only an
+export snapshot and what a rollback writes back. Manage classes in
 [Projects](../docs-site/docs/guides/projects.mdx) and the
 [Cropwright classes page](../docs-site/docs/cropwright/user-guide/classes.md). The
 rule is in [`ARCHITECTURE.md`](ARCHITECTURE.md) and
@@ -90,6 +99,29 @@ Automated writers never overwrite a class or box that a person or a validated im
 decided, or an item in the frozen test holdout. Skipped items are reported as
 `locked_skipped`. See "Concurrency and the lock rule" in
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+## Singleton jobs and the job lease
+
+A job that may run once per project (a reprocess, an assist run, a dataset import, a score,
+selection or projection job, a probe, a promote, a combine, an auto-label loop, a label
+operation, the region-cluster jobs) starts under a lease: an OpenSearch document in the
+project, taken create-only, renewed every 15 seconds by a thread of its own and released at
+the end. Two requests on two workers cannot both start the job; the second gets the family's
+409 busy refusal (`reprocess_busy`, `import_busy`, `assist_busy`, `assist_loop_busy`,
+`probe_busy`, `label_op_busy`, or a plain 409 for scores, selection and projection). If
+OpenSearch is down the start answers 503; a job never starts without its lease.
+
+- **Busy window after a crash.** A holder that dies stops renewing; a new start of the same
+  kind is refused for at most 120 seconds after its last renew, then takes over.
+- **Label operations.** A write or undo that died is served `interrupted` or
+  `undo_interrupted` once its lease has expired (up to 120 seconds, no longer instantly).
+- **Fencing.** A holder that finds its lease taken over, or cannot renew for 90 seconds,
+  stops writing its job state. A holder that stalls for longer than the margin between its
+  check and a write can still write once; a write takes milliseconds, so this is accepted.
+- **Probe cap.** At most two VLM endpoint probes run at a time per API worker process, not
+  across the cluster; the `429 probe_busy` text says so.
+- **Not yet leased.** The bulk-ingest runner, the source scan and the ingest dispatcher still
+  use a file lock (B2 moves them).
 
 ## Region profiles
 
@@ -262,6 +294,14 @@ schedules the cluster retrain, and when:
 ## Export and training
 
 Freeze a holdout, export, run preflight, train, promote, compare in the bake-off.
+
+A model upload is routed by its detection head, not by `model.end2end`: `one2one` (YOLO26,
+YOLOv10, NMS-free, one `[batch, 300, 6]` output) goes to the NMS-free export, `nms` (the rest)
+to the YOLO11 toolchain; an export or promote whose head is not `[batch, 300, 6]` is refused.
+An original YOLOv5 checkpoint is refused with a message to retrain from YOLOv5u or export an
+ONNX with the official `ultralytics/yolov5` `export.py` (usable by the probe and the ingest
+secondary detector). An export job queued before the upgrade carries no head kind and fails
+closed: upload the model again.
 [Exports and retention](../docs-site/docs/operations/exports-and-retention.mdx),
 [Training and promote](../docs-site/docs/operations/training-and-promote.mdx).
 

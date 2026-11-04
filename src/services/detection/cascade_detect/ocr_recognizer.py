@@ -95,6 +95,9 @@ def _canonicalize_text(s: str) -> str:
     return ' '.join(''.join(kept).split())
 
 
+# The cascade sizes crops for the region engine; `/ocr` follows PaddleOCR
+# DetResizeForTest (src/clients/triton_ocr.py). The default engine profile
+# accepts 32..960, so the two rules are deliberately separate.
 # Side-length window the OCR text-detection engine accepts. The shipped
 # export (scripts/export_paddleocr.sh) builds up to 960; some TensorRT
 # builds reject sides below 320, so a wide, short crop (a region crop)

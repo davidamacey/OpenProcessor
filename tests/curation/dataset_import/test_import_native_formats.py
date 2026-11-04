@@ -44,8 +44,8 @@ async def test_voc_preview_writes_nothing(tmp_path: Path, monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_voc_import_maps_by_name_not_order(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('person')
-    h.registry.add_class('dog')
+    h.registry.add('person')
+    h.registry.add('dog')
     root = tmp_path / 'ds'
     write_voc(
         root,
@@ -67,7 +67,7 @@ async def test_voc_import_maps_by_name_not_order(tmp_path: Path, monkeypatch) ->
 @pytest.mark.asyncio
 async def test_voc_negative_and_split(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('dog')
+    h.registry.add('dog')
     root = tmp_path / 'ds'
     write_voc(
         root,
@@ -84,7 +84,7 @@ async def test_voc_negative_and_split(tmp_path: Path, monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_voc_lock_rule(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('dog')
+    h.registry.add('dog')
     root = tmp_path / 'ds'
     write_voc(root, {'a': [voc_object('dog', (1, 1, 40, 40))]})
     mapping = map_all(h.registry, 'dog')
@@ -105,8 +105,8 @@ async def test_voc_lock_rule(tmp_path: Path, monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_openimages_import_maps_display_name(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('Car')
-    h.registry.add_class('Dog')
+    h.registry.add('Car')
+    h.registry.add('Dog')
     root = tmp_path / 'ds'
     write_openimages(
         root,
@@ -143,7 +143,7 @@ async def test_openimages_preview_writes_nothing_and_lists_names(
 @pytest.mark.asyncio
 async def test_openimages_lock_rule(tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
-    h.registry.add_class('Dog')
+    h.registry.add('Dog')
     root = tmp_path / 'ds'
     write_openimages(root, {'train': [oi_row('000002b66c9c498e', DOG, 0.1, 0.4, 0.1, 0.4)]})
     mapping = map_all(h.registry, 'Dog')

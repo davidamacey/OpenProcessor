@@ -483,20 +483,44 @@ class QueryFakeOpenSearch:
 
     # ------------------------------------------------------------------ doc ops
 
-    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002
+    async def get(self, *, index: str, id: str, _source: bool = True, **_kw: Any) -> dict[str, Any]:  # noqa: A002
         doc = self.docs(index).get(id)
         if doc is None:
             # A real cluster 404s; a config store refreshed against this fake
             # therefore reads revision 0, so a test that pre-seeds a store
             # (``apply_local``) uses ``config_revision=0`` to keep it.
             raise NotFoundError(404, 'not_found', {'_index': index, '_id': id, 'found': False})
-        return {
+        out = {
             '_id': id,
-            '_source': copy.deepcopy(doc),
             '_seq_no': self.seq.get((index, id), 1),
             '_primary_term': 1,
             'found': True,
         }
+        if _source:
+            out['_source'] = copy.deepcopy(doc)
+        return out
+
+    async def index(
+        self,
+        *,
+        index: str,
+        id: str,  # noqa: A002
+        body: dict[str, Any],
+        op_type: str | None = None,
+        if_seq_no: int | None = None,
+        **_kw: Any,
+    ) -> dict[str, Any]:
+        from opensearchpy.exceptions import ConflictError
+
+        exists = id in self.docs(index)
+        if (op_type == 'create' and exists) or (
+            if_seq_no is not None and if_seq_no != self.seq.get((index, id), 1)
+        ):
+            raise ConflictError(409, 'version_conflict_engine_exception', {})
+        self.docs(index)[id] = copy.deepcopy(body)
+        self._bump(index, id)
+        self.write_calls += 1
+        return {'_id': id, 'result': 'updated' if exists else 'created'}
 
     async def update(
         self,

@@ -208,11 +208,13 @@ async def test_a_cold_process_runs_the_request_an_api_call_persisted(
     """The API persisted ``request.json``; a process that never saw the call
     (fresh OpenSearch client, fresh service) consumes it from the files."""
     fake, ids, _api_service = _embed_world(tmp_path, monkeypatch)
-    job = reprocess_job.create_job(request={'scopes': ['embed']}, scopes=['embed'], image_ids=ids)
+    job, beat = await reprocess_job.create_job(
+        object(), request={'scopes': ['embed']}, scopes=['embed'], image_ids=ids
+    )
     cold_fake = make_fake(list(docs(fake).values()), list(fake.docs(images_index()).values()))
     cold_service = make_service(cold_fake, FakeTriton([]), FakePE())
 
-    await reprocess_job.run_job(job, cold_fake, cold_service)
+    await reprocess_job.run_job(job, cold_fake, cold_service, beat)
 
     state = reprocess_job.read_job(job.directory.name)
     assert state is not None
@@ -225,12 +227,14 @@ async def test_a_job_planned_for_other_indexes_refuses_to_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake, ids, service = _embed_world(tmp_path, monkeypatch)
-    job = reprocess_job.create_job(request={}, scopes=['embed'], image_ids=ids)
+    job, beat = await reprocess_job.create_job(
+        object(), request={}, scopes=['embed'], image_ids=ids
+    )
     path = job.directory / 'request.json'
     payload = json.loads(path.read_text())
     payload['items_index'] = 'op_prj_other__items'
     path.write_text(json.dumps(payload))
-    await reprocess_job.run_job(job, fake, service)
+    await reprocess_job.run_job(job, fake, service, beat)
     state = reprocess_job.read_job(job.directory.name)
     assert state is not None
     assert state.status == 'failed'
@@ -243,9 +247,11 @@ async def test_cancel_stops_a_job_before_its_next_chunk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake, ids, service = _embed_world(tmp_path, monkeypatch)
-    job = reprocess_job.create_job(request={}, scopes=['embed'], image_ids=ids)
+    job, beat = await reprocess_job.create_job(
+        object(), request={}, scopes=['embed'], image_ids=ids
+    )
     assert reprocess_job.cancel_job(job.directory.name) is True
-    await reprocess_job.run_job(job, fake, service)
+    await reprocess_job.run_job(job, fake, service, beat)
     state = reprocess_job.read_job(job.directory.name)
     assert state is not None
     assert state.status == 'cancelled'
@@ -257,7 +263,9 @@ async def test_cancel_stops_a_job_before_its_next_chunk(
 def test_job_status_and_cancel_routes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(make_fake([]), monkeypatch)
     assert client.get(f'{BASE}/reprocess/jobs/rp_nope').status_code == 404
-    job = reprocess_job.create_job(request={}, scopes=['embed'], image_ids=['a'])
+    job, _beat = asyncio.run(
+        reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=['a'])
+    )
     got = client.get(f'{BASE}/reprocess/jobs/{job.directory.name}')
     assert got.status_code == 200
     assert got.json()['status'] == 'queued'
@@ -269,7 +277,9 @@ def test_job_status_and_cancel_routes(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_busy_route_error_is_a_409(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_REPROCESS_SYNC_MAX', '1')
     fake, ids, service = _embed_world(tmp_path, monkeypatch)
-    reprocess_job.create_job(request={}, scopes=['embed'], image_ids=ids)  # a live job
+    asyncio.run(
+        reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=ids)
+    )  # a live job
     client = _client(fake, monkeypatch, service)
     r = client.post(
         f'{BASE}/reprocess',
@@ -285,7 +295,9 @@ def test_orphaned_job_is_marked_interrupted_at_startup_and_busy_sees_live_ones()
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.projects.busy import _reprocess_jobs
 
-    job = reprocess_job.create_job(request={}, scopes=['embed'], image_ids=['a'])
+    job, _beat = asyncio.run(
+        reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=['a'])
+    )
     now = datetime.now(UTC).isoformat()
     record = ProjectRecord(
         slug='default', display_name='d', description='', status='active', revision=1,
@@ -419,8 +431,10 @@ async def test_the_job_entry_point_never_writes_a_locked_item_either(
     before = copy.deepcopy(docs(fake)[crop_id])
     triton.detections = []  # nothing found: a stale-removal pass
 
-    job = reprocess_job.create_job(request={}, scopes=['detect'], image_ids=[res.image_id])
-    await reprocess_job.run_job(job, fake, service)
+    job, beat = await reprocess_job.create_job(
+        object(), request={}, scopes=['detect'], image_ids=[res.image_id]
+    )
+    await reprocess_job.run_job(job, fake, service, beat)
 
     state = reprocess_job.read_job(job.directory.name)
     assert state is not None

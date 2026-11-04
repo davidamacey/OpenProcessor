@@ -174,14 +174,6 @@ class OcrMixin:
             logger.error(f'OCR text search failed: {e}')
             raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
-    async def search_ocr(
-        self, query_text: str, top_k: int = 10, min_score: float = 0.3
-    ) -> list[dict[str, Any]]:
-        """Images whose OCR text matches ``query_text``, best first (one hit
-        per image). See :meth:`search_ocr_page`."""
-        results, _total = await self.search_ocr_page(query_text, size=top_k, min_score=min_score)
-        return results
-
     async def search_ocr_page(
         self,
         query_text: str,

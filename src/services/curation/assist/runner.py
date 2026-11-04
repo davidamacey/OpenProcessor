@@ -8,7 +8,6 @@ the final state go through the run's :class:`~src.services.curation.file_job.Fil
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from typing import TYPE_CHECKING
 
 import httpx
@@ -32,7 +31,7 @@ from src.services.curation.assist.scope_now import current_members
 from src.services.curation.assist.segment import requeue_for_run, wait_for_region
 from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.class_write_guard import ClassWriteGuard
-from src.services.curation.file_job import FileJob, heartbeat_ticker
+from src.services.curation.lease_heartbeat import run_leased
 from src.services.curation.vlm_class_batch import class_context
 from src.services.labeling.run_labeler import get_vlm_labeler
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
@@ -48,6 +47,7 @@ if TYPE_CHECKING:
     from src.services.curation.assist.chunk import ChunkOutcome
     from src.services.curation.assist.prepare import PreparedRun
     from src.services.curation.assist.proposal_models import Proposal
+    from src.services.curation.file_job import FileJob
 
 logger = get_logger(__name__)
 
@@ -79,13 +79,15 @@ async def start_run(opensearch: AsyncOpenSearch, prepared: PreparedRun) -> Assis
         resolved=prepared.resolved(),
         progress=AssistProgress(total=len(prepared.scope.sampled_ids)),
     )
-    job = create_run(
+    job, beat = await create_run(
+        opensearch,
         state=state.model_dump(mode='json'),
         request=prepared.request.model_dump(mode='json'),
         members=await _scope_members(opensearch, prepared),
     )
+    beat.start()
     _tasks[job.directory.name] = asyncio.create_task(
-        run_assist(job, opensearch, prepared, created_at=created)
+        run_leased(beat, opensearch, run_assist(job, opensearch, prepared, created_at=created))
     )
     state.run_id = job.directory.name
     return state
@@ -172,13 +174,14 @@ async def run_assist(
 ) -> None:
     """Run ``prepared`` to a terminal state; the state file is the result."""
     job.update(status='running', updated_at=now_iso())
-    ticker = asyncio.create_task(heartbeat_ticker(job))
     try:
         endpoint = prepared.vlm.endpoint
         if endpoint is not None:
             await assert_may_connect(endpoint)
         labeler = get_vlm_labeler(prepared.pack_name, prepared.pack_revision, endpoint=endpoint)
-        ctx = class_context(labeler, ClassWriteGuard('assist_run'), revision=prepared.pack_revision)
+        ctx = await class_context(
+            labeler, ClassWriteGuard('assist_run'), revision=prepared.pack_revision
+        )
         meta = _meta(job, prepared, created_at, labeler)
         actions = prepared.request.actions
         ids = prepared.scope.sampled_ids
@@ -243,10 +246,6 @@ async def run_assist(
     except _RUN_ERRORS as exc:
         logger.error('assist_run_failed', run=job.directory.name, error=str(exc))
         job.update(status='failed', error=str(exc), finished_at=now_iso(), updated_at=now_iso())
-    finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
 
 
 __all__ = ['CONCURRENCY', 'run_assist', 'start_run']

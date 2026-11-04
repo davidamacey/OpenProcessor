@@ -54,7 +54,7 @@ async def create_assist_loop(body: AssistLoopRequest, opensearch: OpenSearchDep)
     prepared = await prepare_loop(opensearch, body)
     if body.dry_run:
         return dry_run_state(prepared)
-    return views.loop_state(start_loop(prepared))
+    return views.loop_state(await start_loop(opensearch, prepared))
 
 
 @router.get('/assist/loops', response_model=AssistLoopList)
@@ -111,11 +111,11 @@ async def cancel_assist_loop(loop_id: str) -> AssistLoopState:
 
 
 @router.post('/assist/loops/{loop_id}/resume', response_model=AssistLoopState)
-async def resume_assist_loop(loop_id: str) -> AssistLoopState:
+async def resume_assist_loop(loop_id: str, opensearch: OpenSearchDep) -> AssistLoopState:
     """Queue an `interrupted`, `paused` or `cancelled` loop (or a `failed` one with `stop_reason` `vlm_failed`) again; it continues from its
     event log. 409 `assist_loop_not_resumable` for any other status, `assist_loop_busy` while
     another loop is live."""
-    job.resume_loop(loop_id)
+    await job.resume_loop(opensearch, loop_id)
     return _state(loop_id)
 
 

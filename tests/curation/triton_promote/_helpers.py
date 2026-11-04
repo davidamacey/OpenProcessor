@@ -28,8 +28,9 @@ def _make_promoted_model_dir(scratch_models_dir: Path, name: str = 'op_smoke_unl
     return model_dir
 
 
-def write_float_image_onnx(path: Path) -> None:
-    """A tiny valid ONNX with a float32 ``images`` input, like the trainer's ``best.onnx``."""
+def write_float_image_onnx(path: Path, out_dims: list[int | str] | None = None) -> None:
+    """A tiny valid ONNX with a float32 ``images`` input and the NMS-free ``[300, 6]`` output
+    of the trainer's ``best.onnx`` (``out_dims`` replaces the per-item output dims)."""
     import onnx
     from onnx import TensorProto, helper
 
@@ -38,7 +39,11 @@ def write_float_image_onnx(path: Path) -> None:
         [node],
         'toy',
         [helper.make_tensor_value_info('images', TensorProto.FLOAT, ['b', 3, 8, 8])],
-        [helper.make_tensor_value_info('output0', TensorProto.FLOAT, ['b', 3, 8, 8])],
+        [
+            helper.make_tensor_value_info(
+                'output0', TensorProto.FLOAT, ['b', *(out_dims or [300, 6])]
+            )
+        ],
     )
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 17)])
     model.ir_version = 9

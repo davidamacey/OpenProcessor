@@ -98,8 +98,21 @@ jobs:
           -t openprocessor-scan:${{ matrix.image }}
           -f ${{ matrix.file }} ${{ matrix.context }}
 
+      # Trivy copies the image's layers to a temp dir before analysing them. On the root disk that
+      # copy plus the build cache's intermediate stages ran out of space on the api image, so the
+      # cache is dropped and the copy goes to the runner's separate /mnt disk (TMPDIR, honoured by
+      # Go's os.TempDir).
+      - name: Make room for the scan
+        run: |
+          docker builder prune --all --force
+          sudo mkdir -p /mnt/trivy-tmp
+          sudo chown "$USER" /mnt/trivy-tmp
+          df -h / /mnt
+
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TMPDIR: /mnt/trivy-tmp
         with:
           image-ref: openprocessor-scan:${{ matrix.image }}
           severity: CRITICAL,HIGH

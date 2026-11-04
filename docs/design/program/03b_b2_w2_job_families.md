@@ -99,7 +99,7 @@ it names the reaper rule (`03_b2_overview.md` section 9.5) and the `assist_run` 
 **2B done when:** `rg -n "run_detached|_TASKS\[|_tasks\[store" src/services` is empty; the upload
 and resume routes do no blocking extraction or rescan; contracts regenerated.
 
-## 4. Track 2C (`b2/families-c`): families 13-17
+## 4. Track 2C (`b2/families-c`): families 13-18
 
 | ID | Family | Files | Notes | Auto-resume | Time limit |
 |---|---|---|---|---|---|
@@ -108,8 +108,18 @@ and resume routes do no blocking extraction or rescan; contracts regenerated.
 | 2C-3 | `open_vocab_drain` (queue `open_vocab`) | `src/services/curation/open_vocab_ingest.py` (`drain`, `schedule_open_vocab_after_ingest`, `wait_for_scheduled`, `_PASS_LOCK`, `_tasks`); callers `src/routers/curation/ingest.py`, `src/services/curation/upload_ingest.py` | a plain task (overview 9.4); one message per ingest request with its image ids, debounced by `SET op:open_vocab:pending:<slug> NX EX 300` ([V5]; a lost marker only costs one extra drain, the sweeper is the backstop). Delete `_PASS_LOCK`, `_tasks`, `wait_for_scheduled` and the `ALLOWED` entry in `tests/test_no_module_level_async_locks.py` (the last CC-11 site; `ALLOWED` becomes empty) | n/a | default |
 | 2C-4 | `project_delete_finish` | `src/routers/curation/projects.py` (`_BACKGROUND_DELETE_TASKS`, the `_finish` task in the DELETE route), `src/services/projects/delete.py` (`_FINISH_IN_PROGRESS`, the finish function) | a plain task; idempotent through the project record OCC; delete both per-process collections. Celery does not de-duplicate by `task_id` (K-7) | n/a (re-DELETE retries) | default |
 | 2C-5 | `directory_ingest` | `src/routers/ingest/directory.py` (`ingest_directory`: inline `rglob` + `read_bytes`, CC-5) | D-22a: a plain task with a deployment-level record under `/jobs/ingest_directory/<job_id>`; `POST /ingest/directory` returns 202 + job id; a `GET` status route; contracts and README. **First prove idempotency:** `rg -n "image_id|def .*hash" src/services/visual_search/ingest_batch.py` shows how ids are derived; a re-run of the same file must not duplicate docs, else stop and escalate | no | 24 h |
+| 2C-6 | `persons_cluster` (new, research finding N-1) | `src/routers/persons.py` (`POST /persons/cluster` and the grouping in `src/services/face_identity*`: the O(n^2) exact range search and connected components run inside the request) | a plain task with a lease `persons_cluster` (global scope; faces are core-only); the route returns 202 + job id and `GET` reads the result; same recipe as 2C-5 | no | per `time_limit` of the `jobs` queue |
+
+**2C-7 fail-closed config (small cleanup, earliest open batch because B1 is closed).**
+`src/services/curation/item_scores/near_dup.py::_threshold()` catches the `ValueError` of an invalid
+`OP_CROP_DUP_THRESHOLD` and silently uses the default. Make the invalid value refuse at startup
+(validate it in the startup config load, `src/config/`, beside the other curation settings, and
+drop the `except ValueError` fallback; fail closed). Red first: a test that sets `OP_CROP_DUP_THRESHOLD=abc` and
+asserts the config load raises; control: unset gives the default and `0.97` is used.
 
 **2C red tests beyond the recipe:**
+- `tests/test_persons_cluster_job.py`: the route returns 202 and runs no grouping in the handler;
+  a repeat start while one runs answers the busy 409.
 - `tests/curation/test_dispatcher_enqueues_poll.py`: a poll action enqueues `op.jobs.source_poll`
   and creates no asyncio task. Red today.
 - `tests/curation/test_open_vocab_single_consumer.py`: two ingest requests produce at most one
