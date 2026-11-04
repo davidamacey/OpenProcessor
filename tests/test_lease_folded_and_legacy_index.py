@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from src.clients.curation_opensearch import ensure_overlay_fields
+from src.clients.curation_opensearch import ensure_settings_fields
 from src.clients.curation_opensearch.bodies_other import _configs_body, _settings_body
-from src.clients.curation_opensearch.ensure_overlay_fields import ensure_settings_object_keys
+from src.clients.curation_opensearch.ensure_settings_fields import ensure_settings_object_keys
 from src.services.curation import index_bootstrap
 
 
@@ -45,7 +45,7 @@ def test_migration_is_in_the_bootstrap_list() -> None:
 @pytest.mark.asyncio
 async def test_folded_project_puts_the_keys_once(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = SimpleNamespace(configs_index='op_prj_a__configs', settings_index='op_prj_a__configs')
-    monkeypatch.setattr(ensure_overlay_fields, 'config', cfg)
+    monkeypatch.setattr(ensure_settings_fields, 'config', cfg)
     client = _Client()
 
     out = await ensure_settings_object_keys(client)  # type: ignore[arg-type]
@@ -60,7 +60,7 @@ async def test_legacy_project_puts_the_keys_on_both_indexes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cfg = SimpleNamespace(configs_index='op_prj_a__configs', settings_index='op_prj_a__settings')
-    monkeypatch.setattr(ensure_overlay_fields, 'config', cfg)
+    monkeypatch.setattr(ensure_settings_fields, 'config', cfg)
     client = _Client()
 
     await ensure_settings_object_keys(client)  # type: ignore[arg-type]
