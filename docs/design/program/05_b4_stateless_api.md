@@ -59,8 +59,8 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 | 4A fan-out | `b4/bulk-occ`, `<repo>-wt-b4-bulk-occ` | section 4 | 1 |
 | 4D #439 | `b4/project-create`, `<repo>-wt-b4-project-create` | section 6 | 2 |
 | 4B worker knob | `b4/worker-knob`, `<repo>-wt-b4-worker-knob` | section 5 | last (its ratchet allowlist must see every other track's final code) |
-| privacy and security items | `b4/privacy-hardening` | [00_master_plan.md](00_master_plan.md) W4; owns `SECURITY.md` in W4, so it also writes the location rules of section 6c and the identity-text section's operator text | after 4D |
-| capture metadata at ingest (research spatial L-C1, L-X2; pending RD-5) | `b4/capture-metadata` | section 6c | after the privacy lane (cut after 4A, 4D and the privacy lane merged: 4A rewrites the ingest data plane, 4D owns `docs/CURATION.md` until it merges, the privacy lane may edit `src/services/curation/wire.py` for #470) |
+| privacy and security items | `b4/privacy-hardening` | [00_master_plan.md](00_master_plan.md) W4; owns `SECURITY.md` in W4, so it also writes the location rules of section 6c (coordinates stored under the project's `location_policy`, default `store`; exports keep the embedded GPS, as today; owner 2026-11-04, RD-51 reversed, RD-54) and the identity-text section's operator text | after 4D |
+| capture metadata and the location policy at ingest (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` | section 6c | after the privacy lane (cut after 4A, 4D and the privacy lane merged: 4A rewrites the ingest data plane, 4D owns `docs/CURATION.md` until it merges, the privacy lane may edit `src/services/curation/wire.py` for #470) |
 | identity-text privacy baseline (research plate 5.8) | `b4/identity-text-privacy` | section 6c | after the capture lane, before 4B |
 
 Same branch model as B2: one agent per worktree, lanes run only targeted red/green tests and static
@@ -147,7 +147,10 @@ classified:
 - **Document** the exemption in `docs/design/engineering_standards.md`: request-scoped, bounded by
   the batch, awaited before the response, `TaskGroup` only, and the only exemption.
 - **4A-4b, #473 part b, rewritten as ND-C1..ND-C4 (research near-duplicates plan sections 5.2, 5.6
-  and 8, lane ND-C; pending RD-44, RD-50):** while 4A-4 rewrites `visual_search/ingest_batch.py`,
+  and 8, lane ND-C; pending RD-44, RD-50; the core pending rows and runs are written under
+  `core_tx`, the `core` RLS scope of [02a](02a_postgres_schema.md) section 1.4, review RR-3; the job
+  kind and task go in the modules 1B pre-created, `src/config/job_kinds/near_dup_core.py`,
+  `src/config/task_routes/near_dup_core.py` and `src/tasks/near_dup_core.py`, review RR-4):** while 4A-4 rewrites `visual_search/ingest_batch.py`,
   core ingest stops grouping in the request. ND-C1: it writes `near_dup_pending` rows (project NULL,
   level `core`) and the single-writer `near_dup_core_group` job (exclusive group `near_dup_core`)
   groups them, so concurrent batches can no longer race. ND-C2: the ingest response lists
@@ -320,17 +323,24 @@ numbers are its first rows).
   when external use is enabled, external VLM endpoints and the hosted research judge may receive
   any region kind and contact-sheet image; the privacy lane writes the matching SECURITY.md text.
 
-## 6c. Research lanes in W4 (pending owner question RD-1 of [00d](00d_owner_questions.md))
+## 6c. Research lanes in W4 (approved by the owner 2026-11-04, RD-1 of [00d](00d_owner_questions.md))
 
-**`b4/capture-metadata`** (research spatial plan sections 5.1 and 8, lanes L-C1 and L-X2; pending
-RD-5, RD-51..RD-54). Owns: new `src/domain/capture_metadata.py` (`CaptureMetadata`,
+**`b4/capture-metadata`** (research spatial plan sections 5.1 and 8, lane L-C1; RD-51 reversed and
+RD-54 answered by the owner 2026-11-04: GPS coordinates are stored now under the project's
+`location_policy`, default `store`, and exports keep the embedded GPS as today; RD-5 approved;
+pending RD-52, RD-53). Why at ingest: the capture-date filter on the crops list and the capture time that
+the plate burst consensus of W5e groups by (review 3.6; the upgrade backfill reads the stored files,
+so waiting loses nothing for files still present). Owns: new `src/domain/capture_metadata.py` (`CaptureMetadata`,
 `parse_capture(exif_ifd0, exif_ifd, gps_ifd)`, pure, no Pillow import); the header read in
 `src/services/curation/image_decode.py` (`DecodedImage.capture`; 5b-D1 moves it in W5b); the capture
 part of the ingest writer; new `src/clients/curation_opensearch/capture_fields.py` and its
 mapping-migration registration (2F's additive registry); the `capture` wire block and the
-`taken_from` / `taken_to` filter on the crops list; `src/config/job_kinds/capture.py`, its task
-module and the `capture_backfill` handler; the export copy path's GPS strip;
-`src/services/curation/wire.py` (the `capture` block); `docs/CURATION.md`,
+`taken_from` / `taken_to` filter on the crops list; the capture and location-purge steps of the
+`source_backfill` job that ND-A created in W2.3b (new `src/services/source_backfill/{capture,location_purge}.py`
+and their entries in its step list; no new job kind, review RR-10); new `src/domain/location_policy.py`
+(the one visibility helper: `apply_location_policy(meta, policy) -> CaptureMetadata`, pure);
+the `location_policy` change hook in 2C's project-settings service (a switch to `drop` starts the
+purge step); `src/services/curation/wire.py` (the `capture` block); `docs/CURATION.md`,
 `docs/design/curation_api_contract.md`, `CHANGELOG.md`; tests `tests/curation/test_capture_*.py`,
 `tests/domain/test_capture_metadata.py`. Precondition: the spatial prototype P-1 (CPU, the Pillow
 parser against ExifTool) read before the cut.
@@ -338,9 +348,9 @@ parser against ExifTool) read before the cut.
 | ID | Task | Red test | Control |
 |---|---|---|---|
 | CM-1 | the parse rules of spatial 5.1: IFD0 `DateTime` is never capture time; the offset only from `OffsetTimeOriginal` (or the digitized pair) or the GPS UTC delta rounded to 15 minutes within -12:00..+14:00; (0, 0) and out-of-range coordinates are no location; a malformed date gives `exif_status = malformed`, never a failed ingest; the broad-except ratchet does not grow | `tests/domain/test_capture_metadata.py`, one case per rule | a clean header parses |
-| CM-2 | every ingest path carries `capture` (upload, directory and bulk, dataset import, combine copies `capture.*` verbatim); items get `capture_taken_local` and `capture_taken_utc`; **no coordinate is ever stored** (pending RD-51) | `tests/curation/test_capture_paths.py`; the location canary never appears in any serialized response, export or log | - |
-| CM-3 | `capture_backfill` for upgraded projects (header-only read through the storage `source` root; a missing file counted, not failed; pending RD-53) | `tests/curation/test_capture_backfill.py` | a re-run writes nothing |
-| CM-4 | research finding "byte-copy exports keep embedded GPS" (L-X2, pending RD-54): the export copy path strips the GPS IFD losslessly unless the request asks to keep it (ExifTool in the jobs image, chosen over a hand-written EXIF rewriter); if the owner answers "document instead", the task becomes the statement in `SECURITY.md` and the export docs | `tests/curation/test_export_strips_gps.py`: an exported copy of a GPS fixture has no GPS IFD (red today: byte copy) | the pixels and every other tag byte-identical |
+| CM-2 | every ingest path carries `capture` (upload, directory and bulk, dataset import, combine copies `capture.*` verbatim); items get `capture_taken_local` and `capture_taken_utc`; the coordinates go to the images index only, through `apply_location_policy` (`store` as parsed, `store_coarse` rounded to 0.01 degree, about 1 km, `drop` none); **no coordinate is ever copied to items, labels, manifests, training files, a VLM call or a log** | `tests/curation/test_capture_paths.py`; the location canary appears only in the image `capture` block under `store` or `store_coarse` and never in an item response, manifest, training file, VLM request or log | - |
+| CM-3 | the capture step of `source_backfill` for upgraded projects (header-only read through the storage `source` root, in the same pass as ND-A's content step; a missing file counted, not failed; pending RD-53) | `tests/curation/test_capture_backfill.py` | a re-run writes nothing |
+| CM-4 | the location policy (owner 2026-11-04, RD-51 reversed): the writer and the image wire go through the one helper; a switch to `drop` starts the location-purge step (every `capture.location*` value of the project cleared, counts-only audit); the former export GPS strip is **dropped** (RD-54: exports keep the embedded GPS, as today, and `SECURITY.md` says so) | `tests/curation/test_location_policy.py`: under `drop` no coordinate reaches the images index; `store_coarse` rounds; a switch to `drop` purges every coordinate and a re-run writes nothing | `has_location` is unchanged by the policy |
 
 **`b4/identity-text-privacy`** (research plate plan 5.8; a separate lane from `b4/privacy-hardening`,
 which is scoped from private notes; the coordinator checks the two own disjoint files before the
