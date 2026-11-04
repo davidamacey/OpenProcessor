@@ -1,6 +1,6 @@
 # Codebase audit fix plan (0.7.0)
 
-> **Execution order:** see `docs/design/program/00a_decision_register.md` (the program set replaced the former master plan, rev 4, in git history). The B0 fixes (GPU-1, GPU-3a/13, GPU-2, OS-2, OS-1, CC-1, OPS-1, BA-7) are DONE on `fix/411-r2-round`. The rest are scheduled in B1-B5 there. Security items stay neutral here; details are in the private notes.
+> **Execution order:** see `docs/design/v070_rebuild/reference/decision_register.md` (the program set replaced the former master plan, rev 4, in git history). The B0 fixes (GPU-1, GPU-3a/13, GPU-2, OS-2, OS-1, CC-1, OPS-1, BA-7) are DONE on `fix/411-r2-round`. The rest are scheduled in B1-B5 there. Security items stay neutral here; details are in the private notes.
 
 Status: plan only, committed 2026-11-03. No code changed while writing it; B0 items are since done (see the header note).
 

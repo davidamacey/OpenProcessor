@@ -248,7 +248,7 @@ The API has no authentication. Do not expose it. See [SECURITY.md](SECURITY.md).
 
 - [README.md](README.md), [INSTALLATION.md](INSTALLATION.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data model, topology
-- [docs/design/program/00a_decision_register.md](docs/design/program/00a_decision_register.md): the planned work toward 0.7.0 (plans, not current behaviour)
+- [docs/design/v070_rebuild/reference/decision_register.md](docs/design/v070_rebuild/reference/decision_register.md): the planned work toward 0.7.0 (plans, not current behaviour)
 - [docs/CURATION.md](docs/CURATION.md): curation user guide
 - [docs/design/curation_api_contract.md](docs/design/curation_api_contract.md): routes and wire models
 - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): index schemas

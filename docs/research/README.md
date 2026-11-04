@@ -66,7 +66,7 @@ on what it was measured, and every result that matters has a reproduce command.
 
 | Note | What it holds |
 |---|---|
-| [OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md](OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md) | Discovering same-place photo groups, photogrammetry and a dated spatial timeline (issue #348, no milestone; the plan is `docs/design/research_spatial_attributes_plan.md`). Not implemented. |
+| [OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md](OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md) | Discovering same-place photo groups, photogrammetry and a dated spatial timeline (issue #348, no milestone; the plan is `docs/design/v070_rebuild/09f_research_spatial_attributes.md`). Not implemented. |
 
 ## Related material elsewhere
 
