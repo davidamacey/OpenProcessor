@@ -46,8 +46,20 @@ binary path.
 .venv/bin/python -c "import src.main"
 ```
 
-`pyproject.toml`'s `addopts` deselects the `live` marker by default, so
-a plain `pytest tests/` never touches Docker.
+`pyproject.toml`'s `addopts` deselects the `live` and `families` markers by default, so
+a plain `pytest tests/` never touches Docker or the network.
+
+The `families` tests run against the official Ultralytics weights and the original-YOLOv5 ONNX
+exports. Their files live in `~/.cache/op-test-weights` (`$XDG_CACHE_HOME` when set), are never
+committed, and a missing file skips the test locally and fails it under `CI`. The CI job
+`families` fills the cache (`python tests/_ultralytics_weights.py fetch`, sha256-checked) and
+builds the YOLOv5 ONNX files with the official `ultralytics/yolov5` `export.py` in a separate venv
+at the commit pinned in `.github/workflows/ci.yml`. To run them locally, fetch the weights with
+that command, export the ONNX once
+(`python export.py --weights yolov5n.pt --include onnx --imgsz 640 --device cpu --simplify`, and
+with `--dynamic`) as `yolov5n_640.onnx` and `yolov5n_dynamic.onnx` in the cache, then
+`.venv/bin/python -m pytest tests/ -q --no-cov -m families`. The weights and the YOLOv5 repository
+are AGPL-3.0 and used for tests only.
 
 `tests/test_full_system.py` and `tests/validate_visual_results.py` hit the running stack over HTTP and read
 their ports from the environment (`API_PORT`, `TRITON_HTTP_PORT`, `OPENSEARCH_PORT`; defaults 4603/4600/4607):

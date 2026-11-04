@@ -67,6 +67,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           pip install -r requirements-test.txt
+          # export simplify=True needs it; the export image installs it from requirements-export.txt
+          pip install "onnxslim>=0.1.71"
 
       - name: Cache the official weights and YOLOv5 ONNX exports
         id: weights-cache
