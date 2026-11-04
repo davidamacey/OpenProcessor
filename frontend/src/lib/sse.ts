@@ -228,6 +228,31 @@ export function subscribeCurationEvents(
   });
 }
 
+/**
+ * An `onOpen` handler that calls `onResync` on every open after the first.
+ * The backend sends no SSE `id:`, so events missed while a connection was
+ * down are lost; the caller re-reads what it shows instead.
+ */
+export function resyncOnReopen(onResync: (() => void) | undefined): () => void {
+  let opened = false;
+  return () => {
+    if (opened) onResync?.();
+    opened = true;
+  };
+}
+
+/** The project's `config` topic; `onResync` runs after each reconnection. */
+export function subscribeConfigEvents(
+  onEvent: (event: CurationEvent) => void,
+  onResync?: () => void,
+): CurationEventSubscription {
+  return subscribeCurationEvents({
+    topic: 'config',
+    onEvent,
+    onOpen: resyncOnReopen(onResync),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Pipeline events SSE — {API_PREFIX}/pipeline/events
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
  * only source. The payload's `axis` (`registry` | `local_vlm`) is all that
  * is read (question A-4: `name` may not be served on a registry write).
  */
-import { subscribeCurationEvents, subscribeGlobalEvents } from '$lib/sse';
+import { resyncOnReopen, subscribeConfigEvents, subscribeGlobalEvents } from '$lib/sse';
 import type { CurationEvent, ProjectEvent } from '$lib/sse';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 
@@ -27,12 +27,19 @@ export function isVlmActiveEvent(e: VlmEvent): boolean {
   return isConfigAxisEvent(e as CurationEvent, VLM_AXIS);
 }
 
-/** Opens both streams; `close()` closes both. */
-export function subscribeVlmEvents(onEvent: (e: VlmEvent) => void): {
+/** Opens both streams; `close()` closes both. `onResync` runs when either stream
+ *  reconnects, since events missed meanwhile are lost. */
+export function subscribeVlmEvents(
+  onEvent: (e: VlmEvent) => void,
+  onResync?: () => void,
+): {
   close(): void;
 } {
-  const global = subscribeGlobalEvents({ onEvent: (e) => onEvent(e) });
-  const scoped = subscribeCurationEvents({ topic: 'config', onEvent });
+  const global = subscribeGlobalEvents({
+    onEvent: (e) => onEvent(e),
+    onOpen: resyncOnReopen(onResync),
+  });
+  const scoped = subscribeConfigEvents(onEvent, onResync);
   return {
     close() {
       global.close();

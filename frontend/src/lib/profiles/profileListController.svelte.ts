@@ -16,7 +16,7 @@ import {
 } from '$lib/api_profiles';
 import { ConfigList } from '$lib/config/configList.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
-import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
+import { subscribeConfigEvents, type CurationEvent } from '$lib/sse';
 import type {
   ActivationImpact,
   ConfigVocabulary,
@@ -38,7 +38,10 @@ export interface ProfileListDeps extends ProfileActiveDeps {
   deleteRegionProfile: typeof deleteRegionProfile;
   getRegionProfileImpact: typeof getRegionProfileImpact;
   getConfigVocabulary: typeof getConfigVocabulary;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
+  subscribe: (
+    onEvent: (e: CurationEvent) => void,
+    onResync?: () => void,
+  ) => { close(): void };
 }
 
 export class ProfileList extends ConfigList<
@@ -64,9 +67,7 @@ export class ProfileList extends ConfigList<
           (deps.cloneRegionProfile ?? cloneRegionProfile)(name, body),
         remove: (name, rev) =>
           (deps.deleteRegionProfile ?? deleteRegionProfile)(name, rev),
-        subscribe:
-          deps.subscribe ??
-          ((onEvent) => subscribeCurationEvents({ topic: 'config', onEvent })),
+        subscribe: deps.subscribe ?? subscribeConfigEvents,
         isEvent: isProfileConfigEvent,
       },
       new ProfileActive(deps),

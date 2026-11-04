@@ -29,7 +29,7 @@
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { keymapAvailability, loadKeymap } from '$stores/keymap.svelte';
-  import { subscribeCurationEvents } from '$lib/sse';
+  import { subscribeConfigEvents } from '$lib/sse';
   import { projectsStore } from '$stores/projects.svelte';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
@@ -174,16 +174,16 @@
   // `config.changed axis=keymap` event to wait for anyway.
   $effect(() => {
     if (!slug || keymapAvailability.available === false) return;
-    const sub = subscribeCurationEvents({
-      topic: 'config',
-      onEvent: (ev) => {
+    const sub = subscribeConfigEvents(
+      (ev) => {
         if (ev.type !== 'config.changed') return;
         if ((ev as { axis?: string }).axis !== 'keymap') return;
         void loadKeymap().then(() => {
           toastStore.info('Keyboard shortcuts updated');
         });
       },
-    });
+      () => void loadKeymap(),
+    );
     return () => sub.close();
   });
 
