@@ -8,8 +8,9 @@
 | Decisions | D-41 (owner decision 4: training and model export run on Celery; the file protocols are deleted), D-31 (the evaluator on `gpu_eval`, approved), D-22b (promote `wait=true` deleted) |
 | Lanes | 5A, 5B, 5C, 5D in parallel |
 | Merge order | 5D, 5A, 5B, 5C |
-| Runs alongside | stage 4, disjoint files |
+| Runs alongside | stage 4 part W2.3a, disjoint files (merge order 5D first, then 4D, 4A, 4B, 4C, then 5A, 5B, 5C) |
 | Compose project | none in the lanes; no GPU in any lane (handlers are tested with fakes; the GPU smoke runs in a budgeted GPU window, below) |
+| Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [00d](00d_owner_questions.md)): 5A-6 (reservations by card UUID), 5B-4 (the export writes the engine contracts and refuses a mismatch, GPU S-13), 5D-5 (registry rows carry the contracts); the GPU worker shape is 1B-8's `make_app(include, device_uuid)` |
 
 The three GPU images (trainer, export, evaluator) import only `src/tasks/runtime/` and the database
 layer (the heartbeat, the fenced job writes, the event row and the Valkey wake-up all live there,
@@ -42,6 +43,7 @@ tests under `tests/training/` and `tests/trainer/`.
 | 5A-3 | delete the file protocol: `job_protocol.py`, `job_claim.py` (the `O_EXCL` generations), `job_status.py` status files, the 2 s poll in `trainer.py`, `job_files.py`, the claim-file cleanup in `run_retention.py` | `tests/trainer/test_no_file_protocol.py`: `rg`-equivalent scan of `docker/trainer` and `src/services/training` for `.job.json`, `.status.json`, `claim.g`, `.cancel` is empty | - |
 | 5A-4 | trainer reachability and capabilities: at worker start the trainer writes `worker_capabilities` (GPUs, families); `/train/preflight` reports "trainer available" when `inspect().active_queues()` shows a `gpu_train` consumer (timeout 1 s) and its capabilities row is fresh; `.trainer_capabilities.json` and the container-name probe (`trainer_reachability.py`, `lineage.py`'s `containers.get`) deleted; `OP_GPU_ARBITER_TRAINER_CONTAINER` retired | `tests/training/test_trainer_reachability_celery.py` (fake inspect): no consumer -> "not running"; consumer + fresh row -> available | - |
 | 5A-5 | the training image imports: a fresh interpreter in the trainer environment imports `docker/trainer/celery_tasks.py` without FastAPI or OpenSearch (`tests/trainer/test_runtime_import_minimal.py`, run with the trainer requirements in CI's existing trainer job if present, else in the sweep's image check) | the test | - |
+| 5A-6 | research GPU S-7, X-6: training reserves cards by `gpu_uuid` (`gpu_reservations` keyed by UUID, `training_runs.gpu_uuids`); `OP_TRAIN_GPU_ORDER` names cards that are resolved to UUIDs through `gpu_devices` at the start; every `gpu_reservations` insert upserts its card's `gpu_devices` row in the same transaction (review RR-9) | `tests/training/test_reserve_by_uuid.py` (`db`): two cards with swapped CUDA order still reserve the named physical card; `tests/training/test_reserve_card_without_worker.py` (`db`): a reservation for a card with no GPU worker succeeds | one card behaves as today |
 
 ## Lane 5B `b2/gpu-export`: model upload and export become `gpu_export` jobs
 
@@ -59,6 +61,7 @@ under `tests/models/`.
 | 5B-1 | upload and export call `start_job('model_export', ...)` (exclusive per Triton model name) with a `models` row (or a new version) and a `model_engines` row `building`; the "worker heartbeat older than 15 s -> 503" check becomes "no `gpu_export` consumer -> 503" (the routes keep answering 503 while the worker is down) | `tests/models/test_export_start_job.py` (`db`): one job, one message; a second export of the same name while active -> 409; no consumer -> 503 | - |
 | 5B-2 | `export/celery_tasks.py`: the existing build-and-load as the handler, the `ExportStatus` phases (`validating`, `exporting`, `loading`) as `progress.stage`, the engine row `ready` or `failed`; **cancel added** (checked between phases; the export had none) | `tests/models/test_export_handler.py` (fake build): phases in order; cancel between phases -> `cancelled` and the partial engine removed | a fake build completes |
 | 5B-3 | delete `/jobs/model_export`, both heartbeat files, the 4 h `EXPORT_TIMEOUT_S` constant (the kind's time limit replaces it), `reconcile_claimed` | `tests/models/test_no_export_job_files.py` | - |
+| 5B-4 | research GPU S-1..S-4, S-13: every engine the export builds writes `input_contract`, `output_contract`, `build_profile`, `build_settings`, `build_stamp`, the two hashes, `max_batch`, `opt_batch`, `precision` and `device_mib_measured` (measured by loading the engine once); an ONNX input that differs from the declared contract fails the job with `contract_mismatch`; an opt-in INT8 or `small` build is a new row, never an overwrite | `tests/models/test_export_contract_mismatch.py`: an ONNX whose input dtype differs from the contract ends `failed (contract_mismatch)` (fake build) | a matching build writes every column |
 
 ## Lane 5C `b2/gpu-eval`: the bake-off evaluator becomes a `gpu_eval` consumer
 
@@ -86,11 +89,12 @@ new `scripts/curation/bakeoff/celery_tasks.py`; the bake-off routers and the sta
 | 5D-2 | delete `promote.json` and `promote_json.py` (the `PROMOTE_JSON` lease), `run_detached`, `_detached`; `model_classes.py` and `model_repository.py` read `models`, `promotions`, `model_shares` | `tests/promote/test_no_promote_json.py` | the promoted-model listing route returns the same shape |
 | 5D-3 | D-22b: `wait=true` removed from the promote route (only tests used it: `rg -n "wait=true" tests \| rg promote`); those tests use the job path; contracts | `tests/promote/test_promote_no_wait_mode.py`: the parameter is absent from OpenAPI | - |
 | 5D-4 | sharing: `PUT .../models/{model_name}/sharing` writes `model_shares`; the consumer maps classes by name (unchanged rule) | `tests/promote/test_model_share_by_name.py` | - |
+| 5D-5 | research GPU S-1, S-4: the registry rows of builtin and promoted models carry their engines' contracts (seeded for the shipped models from `models/*/config.pbtxt` and the export scripts in `db-migrate`); `openprocessor gpu plan` and the serving planner read `device_mib_measured` instead of the hand-copied 8704 | `tests/promote/test_builtin_engine_contracts.py` (`db`): every shipped Triton model has a ready engine row with a contract | the promoted-model listing route unchanged |
 
 ## GPU check (no lane runs a GPU)
 
 The stage's real-GPU smoke (one short training run on COCO-sized public data, one export of a small
-model, one bake-off on a 20-image set) runs inside **GPU window 1** (the B3 gate,
+model with its contract columns recorded, one bake-off on a 20-image set) runs inside **GPU window 1** (the B3 gate,
 [00_index.md](00_index.md) section 8.1) on the merged B2 + B3 stack, not as an extra window: B3's
 engine export already exercises the export worker, and the training smoke takes about 30 minutes.
 

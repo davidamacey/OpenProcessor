@@ -11,6 +11,10 @@ reproduced), **[community]** (a third party measured it), **[repo]** (read from 
 later; parts 5 to 9 are the TensorRT track, scheduling protocol, metrics schema, ledger and the
 single-decode integration; part 10 is where results get recorded.
 
+Execution plan (2026-11-04): [research_embeddings_search_plan.md](../design/research_embeddings_search_plan.md)
+section 6 runs this evaluation as prototype EP-4, with the tracked harness of its section 6.1 in place of
+the scratch location of part 3.1 below; this note keeps the model facts and sources.
+
 The Google model's public name appears in this file by design (it is a research note about that
 model); generic plumbing must not hardcode it. The other arms are named only in this note too. See the entry in
 `scripts/codegen/naming_leak_allowlist.txt`.

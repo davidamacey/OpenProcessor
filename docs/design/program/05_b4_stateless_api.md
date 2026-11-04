@@ -58,7 +58,10 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 |---|---|---|---|
 | 4A fan-out | `b4/bulk-occ`, `<repo>-wt-b4-bulk-occ` | section 4 | 1 |
 | 4D #439 | `b4/project-create`, `<repo>-wt-b4-project-create` | section 6 | 2 |
-| 4B worker knob | `b4/worker-knob`, `<repo>-wt-b4-worker-knob` | section 5 | 3 (its ratchet allowlist must see 4A's and 4D's final code) |
+| 4B worker knob | `b4/worker-knob`, `<repo>-wt-b4-worker-knob` | section 5 | last (its ratchet allowlist must see every other track's final code) |
+| privacy and security items | `b4/privacy-hardening` | [00_master_plan.md](00_master_plan.md) W4; owns `SECURITY.md` in W4, so it also writes the location rules of section 6c (coordinates stored under the project's `location_policy`, default `store`; exports keep the embedded GPS, as today; owner 2026-11-04, RD-51 reversed, RD-54) and the identity-text section's operator text | after 4D |
+| capture metadata and the location policy at ingest (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` | section 6c | after the privacy lane (cut after 4A, 4D and the privacy lane merged: 4A rewrites the ingest data plane, 4D owns `docs/CURATION.md` until it merges, the privacy lane may edit `src/services/curation/wire.py` for #470) |
+| identity-text privacy baseline (research plate 5.8) | `b4/identity-text-privacy` | section 6c | after the capture lane, before 4B |
 
 Same branch model as B2: one agent per worktree, lanes run only targeted red/green tests and static
 checks on touched files, the coordinator merges `--no-ff` (one merge commit per track) and runs
@@ -143,12 +146,24 @@ classified:
   at the boundary (check with `rg -n "ingest_one|IngestBatch" src`).
 - **Document** the exemption in `docs/design/engineering_standards.md`: request-scoped, bounded by
   the batch, awaited before the response, `TaskGroup` only, and the only exemption.
-- **4A-4b, #473 part b (folded in, [00b](00b_traceability.md) section 3):** the core batch near-duplicate
-  grouping in `visual_search/ingest_batch.py` is racy across concurrent batches; while 4A-4 rewrites
-  that file, make the grouping decision inside one batch-scoped step whose result does not depend on
-  another batch's in-flight writes (read [issue-416-plan.md](../issue_plans/issue-416-plan.md) for the case first). Red:
-  `tests/visual_search/test_batch_grouping_race.py`: two concurrent batches with a shared
-  near-duplicate pair give one group, not two; red today. Control: a single batch is unchanged.
+- **4A-4b, #473 part b, rewritten as ND-C1..ND-C4 (research near-duplicates plan sections 5.2, 5.6
+  and 8, lane ND-C; pending RD-44, RD-50; the core pending rows and runs are written under
+  `core_tx`, the `core` RLS scope of [02a](02a_postgres_schema.md) section 1.4, review RR-3; the job
+  kind and task go in the modules 1B pre-created, `src/config/job_kinds/near_dup_core.py`,
+  `src/config/task_routes/near_dup_core.py` and `src/tasks/near_dup_core.py`, review RR-4):** while 4A-4 rewrites `visual_search/ingest_batch.py`,
+  core ingest stops grouping in the request. ND-C1: it writes `near_dup_pending` rows (project NULL,
+  level `core`) and the single-writer `near_dup_core_group` job (exclusive group `near_dup_core`)
+  groups them, so concurrent batches can no longer race. ND-C2: the ingest response lists
+  `near_duplicate_candidates` (id and cosine above the core cut); the group appears once the job has
+  run; the `near_duplicate_threshold` form field on the three ingest routes goes. ND-C3: the literal
+  thresholds, the stale comment about Immich's threshold and the swallowed exception in
+  `src/services/duplicate_detection/` deleted; the core index fields renamed to `near_dup_*` with
+  the `/query/duplicates` wire shapes kept. ND-C4: the core `content_sha256` key. 4A owns
+  `src/services/visual_search/ingest_single.py`, `src/services/duplicate_detection/`, the threshold
+  fields of `src/routers/ingest/*.py`, the reads in `src/routers/query_duplicates.py` and the core
+  index mapping for these tasks. Red: `tests/visual_search/test_core_grouping_serialized.py`: two
+  concurrent batches with a shared near-duplicate pair give one group, not two (red today). Control:
+  `GET /query/duplicates` answers the same shape.
 - **Red test (CC-7):** a stubbed `ingest_one` raising for the representative leaves no pending
   follower task after the request fails. **Control:** an all-success batch is unchanged (same
   docs, same timings within noise).
@@ -156,7 +171,9 @@ classified:
 ### 4A-5 The small parallel sites
 
 - `semantic_search.py`: the kNN query and the unembedded count become one `_msearch` (one round
-  trip; OpenSearch multi-search API). Red: one client call instead of two concurrent ones.
+  trip; OpenSearch multi-search API), with the vector field and state field of the bound project's
+  space (research embeddings 5.4, ES-C's `embedding_space()`). Red: one client call instead of two
+  concurrent ones.
 - `routers/health.py`: probes run sequentially with their existing timeouts (health is not
   latency-critical). Red: no `create_task` or `gather` in the module (AST test).
 - `resource_links.py`: `op.periodic.resource_reachability` (beat, 30 s) probes the services and
@@ -237,6 +254,27 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
 - **Red test:** a fixture module with a new module-level dict fails; the real tree passes with the
   baseline. **Control:** an allowlisted entry with its reason passes.
 
+### 4B-6 The Triton router (research GPU S-15, S-23)
+
+`src/clients/triton_client_manager.py` takes its server list from the active serving profile (one
+server by default) and picks per call the server with the fewest outstanding requests in this
+process among those whose `serving_reports` say the model is ready; the image-prep call and every
+follow-up for that image go to the same server; a gauge `op_triton_router_outstanding{server}`.
+Red: `tests/clients/test_triton_router.py`: with two fake servers 100 concurrent calls split within
+10 %; a server whose report lacks the model gets no call; one image's follow-up calls stay on its
+server. Control: one server behaves as today.
+
+### 4B-7 The in-process text encoders are deleted (research embeddings ES-E; D-69 consequence; pending RD-31)
+
+Under D-69 every API process requires Triton, so the in-process `torch` and `onnx` PE text backends
+are dead code. Delete them from `src/clients/pe_text_backends.py` (keep only Triton) and
+`src/clients/pe_encoder.py`; retire `OP_PE_TEXT_BACKEND` and `OP_PE_TEXT_ONNX_PATH` as `removed:`
+entries in `src/config/retired_env.py` and `env.template`; the 503 text at
+`src/routers/curation/search.py:116` names Triton's text model. Red:
+`tests/curation/test_search_requires_triton_text.py`: with the Triton text model not ready the
+search refuses with an error naming it and no `torch` import happens anywhere in the API image path;
+the retired variables fail at startup. Control: search with Triton ready is unchanged.
+
 ### 4B-5 Benchmarks (T5; run in GPU window 2, the B5 window)
 
 The scripts and the procedure are written and reviewed in B4; the run needs Triton and a GPU, so
@@ -284,6 +322,48 @@ numbers are its first rows).
   the external-endpoint part of `docs/CURATION.md` (owner decisions OI-1 and OI-2 of 2026-11-04):
   when external use is enabled, external VLM endpoints and the hosted research judge may receive
   any region kind and contact-sheet image; the privacy lane writes the matching SECURITY.md text.
+
+## 6c. Research lanes in W4 (approved by the owner 2026-11-04, RD-1 of [00d](00d_owner_questions.md))
+
+**`b4/capture-metadata`** (research spatial plan sections 5.1 and 8, lane L-C1; RD-51 reversed and
+RD-54 answered by the owner 2026-11-04: GPS coordinates are stored now under the project's
+`location_policy`, default `store`, and exports keep the embedded GPS as today; RD-5 approved;
+pending RD-52, RD-53). Why at ingest: the capture-date filter on the crops list and the capture time that
+the plate burst consensus of W5e groups by (review 3.6; the upgrade backfill reads the stored files,
+so waiting loses nothing for files still present). Owns: new `src/domain/capture_metadata.py` (`CaptureMetadata`,
+`parse_capture(exif_ifd0, exif_ifd, gps_ifd)`, pure, no Pillow import); the header read in
+`src/services/curation/image_decode.py` (`DecodedImage.capture`; 5b-D1 moves it in W5b); the capture
+part of the ingest writer; new `src/clients/curation_opensearch/capture_fields.py` and its
+mapping-migration registration (2F's additive registry); the `capture` wire block and the
+`taken_from` / `taken_to` filter on the crops list; the capture and location-purge steps of the
+`source_backfill` job that ND-A created in W2.3b (new `src/services/source_backfill/{capture,location_purge}.py`
+and their entries in its step list; no new job kind, review RR-10); new `src/domain/location_policy.py`
+(the one visibility helper: `apply_location_policy(meta, policy) -> CaptureMetadata`, pure);
+the `location_policy` change hook in 2C's project-settings service (a switch to `drop` starts the
+purge step); the export copy path's GPS strip for `drop` projects (CM-5); `src/services/curation/wire.py` (the `capture` block); `docs/CURATION.md`,
+`docs/design/curation_api_contract.md`, `CHANGELOG.md`; tests `tests/curation/test_capture_*.py`,
+`tests/domain/test_capture_metadata.py`. Precondition: the spatial prototype P-1 (CPU, the Pillow
+parser against ExifTool) read before the cut.
+
+| ID | Task | Red test | Control |
+|---|---|---|---|
+| CM-1 | the parse rules of spatial 5.1: IFD0 `DateTime` is never capture time; the offset only from `OffsetTimeOriginal` (or the digitized pair) or the GPS UTC delta rounded to 15 minutes within -12:00..+14:00; (0, 0) and out-of-range coordinates are no location; a malformed date gives `exif_status = malformed`, never a failed ingest; the broad-except ratchet does not grow | `tests/domain/test_capture_metadata.py`, one case per rule | a clean header parses |
+| CM-2 | every ingest path carries `capture` (upload, directory and bulk, dataset import, combine copies `capture.*` verbatim); items get `capture_taken_local` and `capture_taken_utc`; the coordinates go to the images index only, through `apply_location_policy` (`store` as parsed, `store_coarse` rounded to 0.01 degree, about 1 km, `drop` none); **no coordinate is ever copied to items, labels, manifests, training files, a VLM call or a log** | `tests/curation/test_capture_paths.py`; the location canary appears only in the image `capture` block under `store` or `store_coarse` and never in an item response, manifest, training file, VLM request or log | - |
+| CM-3 | the capture step of `source_backfill` for upgraded projects (header-only read through the storage `source` root, in the same pass as ND-A's content step; a missing file counted, not failed; pending RD-53) | `tests/curation/test_capture_backfill.py` | a re-run writes nothing |
+| CM-4 | the location policy (owner 2026-11-04, RD-51 reversed): the writer and the image wire go through the one helper; a switch to `drop` starts the location-purge step (every `capture.location*` value of the project cleared, counts-only audit); exports keep the embedded GPS by default (RD-54), and a `drop` project's exports strip it (CM-5) | `tests/curation/test_location_policy.py`: under `drop` no coordinate reaches the images index; `store_coarse` rounds; a switch to `drop` purges every coordinate and a re-run writes nothing | `has_location` is unchanged by the policy |
+| CM-5 | exports honour the project's own policy (review RN-4; the owner's rule "exports keep embedded GPS" is the default, and `drop` is the project choosing otherwise, so no new question): under `store` and `store_coarse` the export copies bytes as today; under `drop` the export copy path removes the GPS IFD losslessly with ExifTool (`exiftool -gps:all= -o <out> <in>`, [ExifTool](https://exiftool.org/), in the jobs image; chosen over a hand-written EXIF rewriter, and Pillow would re-encode the pixels); the policy is read once per export job; `SECURITY.md`, the settings wire description and `docs/CURATION.md` say that `drop` covers the index, the wire and exports, while the stored originals keep their bytes | `tests/curation/test_export_gps_by_policy.py`: under `drop` an exported copy of the GPS fixture has no GPS IFD and its pixels and every other tag are byte-identical; under `store` the copy is byte-identical to the original | a fixture without GPS exports byte-identical under every policy |
+
+**`b4/identity-text-privacy`** (research plate plan 5.8; a separate lane from `b4/privacy-hardening`,
+which is scoped from private notes; the coordinator checks the two own disjoint files before the
+cut). Owns: `src/core/logging.py` (the structlog processor `redact_region_text` in
+`shared_processors`, so structlog and foreign stdlib records both pass through it), new
+`src/config/identity_text.py` (`OP_IDENTITY_TEXT_MAX_MODE`, `OP_IDENTITY_TEXT_SECRETS_DIR`;
+malformed refuses startup), the sink-inventory canary `tests/region_text/test_sink_inventory.py`,
+`env.template` (append rule). Red: a log record carrying `text`, `text_raw`, `text_frame`,
+`text_vlm`, `text_ocr` or a model reply under those keys is masked (red today); a malformed
+`OP_IDENTITY_TEXT_MAX_MODE` refuses startup; the master file must be a regular non-symlink file of
+exactly 32 bytes. The `SECURITY.md` text ("Privacy: identity text") is written by
+`b4/privacy-hardening`, which owns that file in W4.
 
 ## 6b. Events (moved)
 

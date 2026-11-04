@@ -135,10 +135,10 @@ rollback 138/138, lock rule held). `scripts/bench/vlm_rate.py` does not exist.
 | W3 rest: incremental face assignment with abstention, merge and split suggestions (3.2, W3) | defer v0.9.0 (faces feature); tracked under #346 until its wave starts |
 | W5, W7, W9, W10 research (fine-grained measurement, fine groups, adapter, set P pilot) | parked research (#346) |
 | W6 taxonomy as data and a classification-crop export | defer v0.9.0; must use the B1 registry document by name (B1 1B) |
-| W8 visual judge | #406 (v0.9.0) |
+| W8 visual judge | #406: `clu:CL-1` in research wave RW-3 ([research_clustering_plan_b_protocol.md](../research_clustering_plan_b_protocol.md) section 5) |
 | W-UI review screens | defer v0.9.0, with each feature |
-| W12 identity text (plates) | #401 (parked; needs the privacy design) |
-| 6.7 attribute signals | #400 (parked) |
+| W12 identity text (plates) | #401: superseded by [research_plate_text_plan.md](../research_plate_text_plan.md); lands as wave W5e ([03g](03g_w5e_plate_text.md), pending RD-3) |
+| 6.7 attribute signals | #400: superseded by [research_spatial_attributes_plan.md](../research_spatial_attributes_plan.md); research wave RW-5 |
 | `target=frame`, `group_by=image` | #435, #436 (v0.9.0) |
 | 10: eleven issues "to create" | do not file now (owner rule: no growing issue list); file each when its wave starts |
 | `GPU2='flock ... gpu2.lock'` shorthand (9) | conflict C9 (host procedure, not app code); use `11_risks_cleanup_host.md` section 1 when a wave resumes |
@@ -231,7 +231,7 @@ Reference. `05` 4A adds the request-scoped `TaskGroup` exemption (Q-J7). It rece
 | Z5 detector-class roots | #398 (v0.9.0, research) |
 | Fine-grained make/model | #385, #399 closed; further work parked (#346) |
 | Faces plan (#353, #354, #379) | obsolete (all closed); the rest is `cluster_search_makemodel_plan.md` W3 (2.2) |
-| Attribute signals, plate identity, Leiden/GPU clustering | #400, #401, #342-#346: parked |
+| Attribute signals, plate identity, Leiden/GPU clustering | #400 (RW-5), #401 (W5e), #346 (seams in W2.3b 4F, research in RW-3), per the research plans of 2026-11-04 |
 | PE-Core-L stays; embedding swap | #347, #365 (v0.9.0) |
 | Semantic search over crops; filter cost | obsolete for the built parts (#402 phases A and B, #384, #356 closed); #435, #436 v0.9.0 |
 | Ingest-speed work | obsolete (#390, #392, #393 closed) |
@@ -809,7 +809,8 @@ the lasting knowledge and deletes the plan file in the same PR).
 | `processing_plans_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5d | the branch vocabulary and per-route defaults -> `docs/ARCHITECTURE.md` and the API docs | at that time: `CHANGELOG.md` (`[Unreleased]` mention, re-point), `00_index.md`, `07`, `07b`, `07d` |
 | `triton_pipeline_optimization_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5d | 7 accuracy gates -> `docs/PERFORMANCE.md` parity section; 11 verification log is already in PERFORMANCE | at that time: `docs/PERFORMANCE.md` lines 7, 421, 516, 748, 1007, `docs/VISION_AND_GOALS.md` line 115, `docs/research/triton_deep_research_2026-09.md` line 1 (link), `scripts/bench/parity_gates.json`, the `07` files, `00_index.md`; issue comments #40, #67, #84, #219, #220 |
 | `cluster_search_makemodel_plan.md` | KEEP-OPEN | none | none; it is the only design for the parked waves (2.2), too large for an issue body | none now |
-| `auto_label_loop_plan.md` | KEEP-REFERENCE | none | none; it is the as-built design (statistics in 6, lock-rule interplay) cited by `docs/WHITEPAPER.md`, the docs-site guide and reviews | links to `v070_wave_plan.md` fixed in R-1 (row above) |
+| `auto_label_loop_plan.md` | KEEP-REFERENCE, partly superseded | none | none; it is the as-built design (statistics in 6, lock-rule interplay) cited by `docs/WHITEPAPER.md`, the docs-site guide and reviews; its storage (3.1), event file (3.2), budget file (5.8), worker and trigger protocol (D4, 8), control routes (10) and Run panel controls (11) are superseded for the rebuild by [research_auto_label_assist_plan.md](../research_auto_label_assist_plan.md) (lane 6D writes the header note) | links to `v070_wave_plan.md` fixed in R-1 (row above) |
+| `issue_plans/issue-346-plan.md`, `issue-406-plan.md`, `issue-347-plan.md`, `issue-348-plan.md`, `issue-398-plan.md`, `issue-400-plan.md`, `issue-401-plan.md`, `issue-416-plan.md` | DELETED by the research branches (2026-11-04) | none | absorbed into the research plans: clustering (346, 406), embeddings (347), spatial (348, 400), auto-label (398), plate text (401), near-duplicates (416); their content lives there | none |
 | `cq3_label_operations.md` | KEEP-REFERENCE | none | none; cited by `docs-site/docs/guides/label-operations-and-undo.mdx` and `docs/WHITEPAPER.md` | line 5 fixed in R-1 (ship-track row) |
 | `selectable_assist_plan.md` | KEEP-REFERENCE | none | none; cited by `src/services/curation/assist/__init__.py` | line 10 fixed in R-1 (label-confirmation row) |
 | `generic_detector_and_selective_embedding_plan.md` | KEEP-REFERENCE | none | none; defines the embedding-state vocabulary that `docs/PERFORMANCE.md` cites | none |

@@ -279,3 +279,17 @@ custom code and put the comparison in the PR."
   it; evaluate CV-CUDA first. 5b-G3 only on the decision rule. Do not start 5b-G4."
 - **`routes`**: "Do 5b-W1 as a bake-off; ship code only if the 1.5x bar and the gates pass."
 - **`codec`**: "Do 5b-C1 with nvImageCodec; coordinate (a)'s P-vlm/P-sam/P-region gate with 5c."
+
+## Research amendments (2026-11-04, the research integration pass)
+
+| Where | Change |
+|---|---|
+| 5b-D1 | **research spatial finding L-X1: exports ignore EXIF orientation 2-8.** Add `src/services/curation/export_support.py::_copy_or_resize_one` to "Callers to adapt": the resize and crop path decodes through the oriented helper instead of a raw decode without `exif_transpose`. Red: `tests/curation/test_export_orientation.py`: an orientation-6 fixture exported with `resize_mode` set lands its boxes on the object (red today). Control: a tag-1 fixture exports byte-identical. The move of `decode_image` to `src/utils/image_decode.py` carries the W4 capture header read and `DecodedImage.capture` with it |
+| 5b-D1 metrics | GPU S-18: `op_ingest_decode_total` and `op_reprocess_decode_total` are renamed to one `op_decode_route_total{route, path}` in the same commit, no alias |
+| 5b-P1 | Nsight Systems is not in the Triton image: mount the host `nsys` read-only into the bench stack (`gpu:PR-3` and `gpu:PR-4` are cut before the tag, so there are no prototype traces to reuse); add the DCGM fields to the report |
+| 5b-G1 | GPU S-17: one geometry module, `src/domain/image_geometry.py` (letterbox, square, crop rectangle, un-map), copied by `export/sync_model_seed.py` into the image-prep model directory at seed time; replaces the pair `src/services/detection/geometry.py` and `models/gpu_image_prep/1/prep_geometry.py`. Red: `tests/test_geometry_copy_identical.py`: the copy in the model directory is byte-identical to the domain module |
+| 5b-G2 | the CV-CUDA evaluation is `gpu:PR-2`; the lane reads its record before writing kernels (a library that passes replaces the custom code) |
+| 5b-G3 | set `jpeg_fancy_upsampling=True` and `adjust_orientation=True` explicitly; verify ragged JPEG batches on the pinned DALI backend before relying on them |
+| 5b-G4 | **not opened in v0.7.0** (owner 2026-11-04: short runs only, about 10 GPU hours before the tag; `gpu:PR-3` and `gpu:PR-4` are cut, so W5b keeps today's instance shape and the Python backend). After the tag, on the owner's OK, the rule is the `gpu:PR-4` bar: a C++ backend is evaluated only if the through-Triton gap is at least 25 % against the direct pipeline at SM active below 85 % (RD-15), with its own plan file (RW-1) |
+| 5b-C1 | nvImageCodec's `Encoder` refuses chroma-subsampled image objects: encode from the RGB crop array and record the encoder id used |
+| 5b metrics | GPU S-19, S-20: `op_gpu_prep_stage_seconds` and `op_gpu_prep_stage_observations` gain the label `server`; new gauges `op_gpu_prep_budget_bytes_in_use{server}` and `op_gpu_prep_frames_in_flight{server}` |

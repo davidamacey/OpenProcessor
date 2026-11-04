@@ -59,12 +59,12 @@ If a symbol moved, re-find it by concept and record the new name in the lane's P
 
 | Stage | Plain name | File | Lanes | Codes in parallel with | Merges after |
 |---|---|---|---|---|---|
-| 1 | Foundation: Postgres, Valkey, the Celery app, the schema, the storage seam, the test database | [03a_b2_w1_queue_infra.md](03a_b2_w1_queue_infra.md) | 1-0 (deps, coordinator), 1A, 1B, 1C, 1D, 1E | - | - |
-| 2 | Control data moves to Postgres, and the 0.6.0 upgrade step | [03d_b2_s2_control_data.md](03d_b2_s2_control_data.md) | 2A, 2B, 2C, 2D, 2E, then 2F | stage 3 | stage 1 |
+| 1 | Foundation: Postgres, Valkey, the Celery app, the schema, the storage seam, the test database | [03a_b2_w1_queue_infra.md](03a_b2_w1_queue_infra.md) | 1-0 (deps, coordinator), 1A, 1B, 1C, 1D, 1E, 1F (research-seam tables) | - | - |
+| 2 | Control data moves to Postgres, and the 0.6.0 upgrade step | [03d_b2_s2_control_data.md](03d_b2_s2_control_data.md) | 2A, 2B, 2C, 2D, 2E, ES-A (embedding registry), then 2F | stage 3 | stage 1 |
 | 3 | Job runtime, the reaper and the event feed | [03e_b2_s3_job_runtime.md](03e_b2_s3_job_runtime.md) | 3A, 3B | stage 2 (codes from the stage-1 head) | stage 2 |
-| 4 | The API-hosted job families move to Celery | [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md) | 4A, 4B, 4C, 4D, then 4E (frontend) | stage 5 | stage 3 |
-| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03f_b2_s5_gpu_queues.md](03f_b2_s5_gpu_queues.md) | 5A, 5B, 5C, 5D | stage 4 | stage 3 |
-| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03c_b2_w3_beat_reaper_workers.md](03c_b2_w3_beat_reaper_workers.md) | 6A and 6B, then 6C, then 6D (docs) | - | stages 4 and 5 |
+| 4 | The API-hosted job families move to Celery, in two parts | [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md) | W2.3a: 4A, 4B, 4C, 4D. W2.3b (after the W2.3a part check): 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard), then 4E (frontend) | stage 5 (W2.3a only) | stage 3 |
+| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03f_b2_s5_gpu_queues.md](03f_b2_s5_gpu_queues.md) | 5A, 5B, 5C, 5D (W2.3a) | stage 4 W2.3a | stage 3 |
+| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03c_b2_w3_beat_reaper_workers.md](03c_b2_w3_beat_reaper_workers.md) | 6A, 6B and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) | - | stages 4 and 5 |
 
 (The file names keep their earlier stage letters so links elsewhere stay valid; the table above is
 the order.)
@@ -176,7 +176,8 @@ container per xdist worker); `make contracts-check`; `.venv/bin/python scripts/d
 the frontend full set (4E changed `frontend/`): `npm ci`, `npm run check`, lint, knip, `npm run test`,
 `npm run build`, `npm run test:e2e`.
 
-**T2 live harness, `-p op-b2-live`, budget 4 h 30 min, the one run that covers B1 and B2.** The harness gains
+**T2 live harness, `-p op-b2-live`, budget 5 h 30 min (4 h 30 min plus the research-seam steps
+19-23, approved by the owner 2026-11-04, RD-1), the one run that covers B1 and B2.** The harness gains
 `postgres`, `valkey`, `db-migrate`, `jobs-worker` (scaled to 2), `periodic-worker`,
 `open-vocab-worker`, `jobs-beat`, the two curation consumers and a fake GPU consumer per GPU queue
 (no GPU: the fake handlers sleep and write progress). Wait with healthchecks or the Monitor tool; no
@@ -202,6 +203,11 @@ sleep loops.
 | 16 | acceptance subset: `acceptance_run.sh --only ingest,cluster,holdout,label_ops,loop,export,train,bakeoff,promote` | PASS | 15 min |
 | 17 | GPU arbiter with the overlay (carried from the original step 9): a training start with the arbiter overlay on `gpu-arbiter-worker` (RC-6) | one stop per configured container in the Docker events log, not one per API worker | 10 min |
 | 18 | auto-label consumers (carried from the original step 10): two `curation-auto-label-worker` replicas, one job; kill one mid-stage; then cancel a second job at a stage boundary | one run per job; the killed one `interrupted` and resumed or restarted per its kind's auto-resume rule; the cancelled one `cancelled` | 15 min |
+| 19 | the assist loop as an assistant (research auto-label 5.3, gaps G-1..G-3): start a loop on a public COCO project with a fake VLM; pause, resume three times; edit the budget down to the spent amount; start a second project's loop on the one consumer | `paused` within one request timeout plus 1 s each time; the fourth resume runs; the budget edit stops the run with `on_budget` pause; project B's first node starts within one slice; the loop record is in the `assist_loop_*` tables after the 24-hour event retention is simulated | 20 min |
+| 20 | clustering on partitions (research clustering 5.1): `cluster_run` for items on a public project, activation, projection; a second run with the same vectors in another order | the served view equals the first run's; every `cluster_uid` survives; a stale activation is 409 | 15 min |
+| 21 | near-duplicates and the holdout (research near-duplicates 5.4): a full `image` and `item` build on a constructed public copy set; freeze a holdout | every leak-group member of a held-out item is held out and counted; a freeze with pending rows answers 409 `near_dup_stale` | 15 min |
+| 22 | the embedding re-index rehearsal in small (research embeddings 5.5): register a second public encoder as a candidate `item` space on 2,000 items, kill a worker mid-build, resume, promote, retire | resume re-encodes nothing finished; served search answers during the build; the flip is visible to every worker within one config poll | 15 min |
+| 23 | the five stale Cropwright screenshots (owner-approved gap, 2026-11-04; [00b](00b_traceability.md) section 1.8): with the docs overlay of `docs-site/docs/developer-guide/screenshots.mdx` on public data, capture only `projects-1600.png` (phone layout), `ingest-policy-1600.png`, `ingest-policy-preview-1600.png`, `dashboard-1600.png` (button label) and `clusters-1600.png` (filter bar and loop panel) with `frontend/scripts/capture_docs_screenshots.py` | each viewed full-page at desktop and 430 px before commit; the five files replace the stale ones under `docs-site/static/img/screenshots/cropwright/` in the B2 closing commit; `tests/test_docs_screenshot_seed.py` green | 20 min |
 
 A step that overruns stops the run; the coordinator reports instead of extending the budget.
 
@@ -209,7 +215,9 @@ A step that overruns stops the run; the coordinator reports instead of extending
 image-vs-git audit; `pip check` inside each Python image.
 
 **Browser check:** jobs UI (the `queued` state, progress over SSE, cancel of a queued and a running
-job) at 1440 and 430 px, full-page screenshots viewed.
+job) at 1440 and 430 px, full-page screenshots viewed; and the research pages 4E changed (the loop's
+pause, budget dialog and event log; the clusters pages; the near-duplicate status and the freeze
+refusal).
 
 Then one PR from `int/b2-control-plane` against `main`, local CI parity first, CI green, merge commit.
 

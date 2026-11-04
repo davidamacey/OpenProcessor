@@ -292,6 +292,23 @@ Dependabot reads them and the consistency test in section 5 can compare them. Th
 | `scripts/research/fine_grained_requirements.txt` | torch, torchvision, timm, open_clip_torch, transformers, safetensors, numpy, scipy, scikit-learn, pillow, pytest, ultralytics | none | as above; safetensors 0.8.0 | same pins as 3.1 / 3.2; ultralytics `==8.4.197` | plus python-igraph `==1.0.0` (GPL), leidenalg `==0.12.0` |
 | the one example requirements file under `examples/bakeoff/` | open-image-models | `>=0.5` | 0.6.0 | `==0.6.0` | MIT |
 
+**Research venvs (added by the research integration pass, approved, RD-7).** Each research topic owns
+its exact pins in its own tracked file, never in a product manifest, with a committed `pip freeze`
+lock beside it: `scripts/research/gpu_pipeline/requirements-gpu-research.txt` (its `tensorrt-cu13`
+and `cupy-cuda13x` move with the Triton image), `scripts/research/clustering/requirements-cpu.txt`
+and `requirements-gpu.txt` (RAPIDS 26.10 cu13), `scripts/research/embedding_search/requirements.txt`,
+`scripts/research/near_dup/requirements.txt`, `scripts/research/spatial/requirements.txt`,
+`scripts/research/identity_text/requirements.txt`, `scripts/research/auto_label/requirements.txt`.
+The existing unpinned `scripts/research/requirements.txt` and `fine_grained_requirements.txt` take
+the pins of this table. A test (`tests/test_requirements_contract.py`) asserts every research file is
+`==`-pinned and that no GPL package (igraph, leidenalg) appears in a product manifest.
+
+**Product packages the research seams may add** (each only when its lane lands, with its licence in
+ATTRIBUTION): `nvidia-ml-py` in the GPU worker images (1B-8, NVML inventory; skip if already
+present); `imohash` leaves the product manifests if RD-43 replaces it with SHA-256 (ND-8);
+`pdqhash==0.2.8` only on a `nd:P2` pass (ND-E); `rapidfuzz` only if the plate aligned vote ships
+(W5e). Exact versions are taken at the lane's pin time, the newest that installs.
+
 ## 4. New packages and images for the control plane
 
 Another plan designs the control plane (Celery workers, a database for job state). This section only

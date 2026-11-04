@@ -269,3 +269,17 @@ Done-when for 5d includes: this file and the 07a-07d files are deleted per the l
    exists and its step 1 is merged.
 6. #40's acceptance says "P-clip/P-face/P-ocr = 1.0" while `parity_gates.json` uses p01 >= 0.995
    for cosine gates and 98 % for P-ocr; B5 uses the gates file.
+
+## Research amendments (2026-11-04, the research integration pass)
+
+Each line names its source; the GPU pipeline research is [research_gpu_pipeline_plan.md](../research_gpu_pipeline_plan.md) (its prototypes are `gpu:PR-0..PR-9`
+in [00e](00e_research_track.md)). Pending owner question RD-2 (prototypes during W2-W4) for every
+"read the record first" line: without it, the sub-batch runs as written above.
+
+| Where | Change |
+|---|---|
+| M-1 | B5 gates and published rows stay on public data. Set P (the owner's private high-resolution photos) is allowed for the research prototypes and private gates only, under the one set-P rule of [00d](00d_owner_questions.md) RD-8: public text says only "met / not met on set P" |
+| M-3, M-7 | record the DCGM profiling fields `SM_ACTIVE` and `PIPE_TENSOR_ACTIVE`, clocks, power and the GPU UUIDs (`gpu_devices`) for every row; `JobPerfSummary` in `jobs.result` is the per-job record ([02b](02b_jobs_locking_events.md) section 2.2) |
+| section 7 library table | add: nvJPEG batched GPU Huffman is used only above a batch of about 50, and scaled and batched ROI decode are hardware-backend only (not on the A6000); DALI's `jpeg_fancy_upsampling` default is off (set it explicitly); CV-CUDA 0.19.0 is evaluated in `gpu:PR-2` and `gpu:PR-5` with its licence read at adoption |
+| decisions fed by the prototype window | `gpu:PR-0` and `gpu:PR-1` -> 5a-R0 and 5a-S4; `PR-1`, `PR-2` -> 5b-G2, 5b-G3 (`PR-3`, `PR-4` cut before the tag, so 5b-G4 is not opened; [00e](00e_research_track.md) section 2.2); `PR-6` -> 5c-O2, 5c-O3; `PR-5` -> 5d-P5 (each lane reads the record before writing code) |
+| side track #42 | the `small` build profile is a separate `model_engines` row (`build_profile = 'small'`, GPU S-3) |

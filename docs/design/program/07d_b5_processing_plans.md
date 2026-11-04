@@ -207,3 +207,12 @@ in the same commit as any wire change."
 - **`gpu`**: "Do 5d-P5. Evaluate CV-CUDA `warp_affine` before writing an alignment kernel and put
   the comparison in the PR. Apply the 15 % rule per plan."
 - **`docs`**: "Do 5d-P6 after the coordinator confirms the gate results."
+
+## Research amendments (2026-11-04, the research integration pass)
+
+| Where | Change |
+|---|---|
+| 5d-P5 | the CV-CUDA `warp_affine` evaluation is `gpu:PR-5`; uint8 SCRFD and ArcFace inputs with normalization in the graph, and SCRFD anchor decode and NMS in the graph, are adopted only on `PR-5`'s pass |
+| 5d-P2 | GPU S-21: a counter `op_plan_branch_total{route, branch, outcome}` (`ran`, `not_run`, `error`); the resolved plan is stored in `jobs.params.plan` and `plan_sha256` for the ingest and reprocess kinds (GPU S-9) |
+| `near_duplicates` branch | returns candidates (`near_duplicate_candidates`: id and cosine), not groups: grouping is the single-writer `near_dup_core_group` job of W4 lane ND-C (research near-duplicates, pending RD-44) |
+| Q1 | the legacy fields removed in the same change include the core ingest `near_duplicate_threshold` form field (already removed by ND-C2 in W4; Q1 confirms nothing re-adds it) |

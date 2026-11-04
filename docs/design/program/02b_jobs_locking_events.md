@@ -6,6 +6,7 @@
 | Part of | [02_control_plane_database.md](02_control_plane_database.md); tables in [02a_postgres_schema.md](02a_postgres_schema.md) section 5 |
 | Built by | B2 stage 1 (Celery app, queues, producer), stage 3 (job runtime, reaper, events), used by stages 4-6 |
 | Replaces | the shared contract of the former `03_b2_overview.md` section 9 (job files + OpenSearch lease + queued marker), B1's lease documents and heartbeat, the JSONL event hub |
+| Research seams | folded 2026-11-04 (approved by the owner 2026-11-04, RD-1 of [00d](00d_owner_questions.md)): the job-control changes of the auto-label plan (gaps G-1, G-2: `retry_count`, `pause_reason`, pausable kinds, time slices), the research job kinds, the `cluster` and `text_read` queues, the GPU-affinity field, the per-job performance summary and the resolved processing plan. Tables in [02d](02d_research_seam_schema.md) |
 
 ---
 
@@ -15,17 +16,19 @@
 |---|---|---|---|
 | (new) | `queued` | job service `start` | insert; the partial unique index `uq_jobs_one_active` refuses a second active job of the same exclusive group and scope |
 | (new) | `running` | job service `run_inline` | inline kinds only (section 2.5) |
-| `queued` | `running` | task wrapper `claim` | `cancel_requested_at IS NULL` and `attempt < max_attempts` |
+| `queued` | `running` | task wrapper `claim` | `cancel_requested_at IS NULL` and `retry_count < max_attempts` (research G-1: a pause, resume or yield never spends an attempt) |
+| `queued` | `paused` | pause route | pausable kinds only; `pause_reason` set (auto-label plan 5.2); **no revoke** (review RR-1: a revoked id stays in worker memory for up to 10,800 s, and the resumed job is dispatched under the same id, so a revoke would drop it); the stale message finds `paused` at the claim and is acked |
 | `queued` | `cancelled` | cancel route | - |
 | `queued` | `failed` | reaper (`queue_wait_exceeded`), start (`queue_unavailable`), wrapper (`project_unavailable`, `attempts_exhausted`) | - |
 | `running` | `completed`, `completed_with_errors`, `failed` | wrapper, fenced | the handler returned or raised |
 | `running` | `cancelling` | cancel route | - |
-| `running` | `paused` | wrapper, fenced | `pause_requested_at` set and the handler stopped at a boundary (assist loop only) |
+| `running` | `paused` | wrapper, fenced | `pause_requested_at` and `pause_reason` set, by the pause route or by the handler itself (`audit`, `budget`, `project_paused`, `vlm_unavailable`), and the handler stopped at a boundary; pausable kinds only (section 2.1) |
+| `running` | `queued` | wrapper, fenced | the handler returned `Yield` at a boundary after its kind's `slice_s` (research G-2); attempt outcome `yielded`; no `retry_count` change; dispatched again at once |
 | `running`, `cancelling` | `interrupted` | wrapper on worker shutdown (fenced); reaper when the lease expired | - |
 | `cancelling` | `cancelled` | wrapper, fenced; reaper when the lease expired | - |
-| `paused`, `interrupted` | `queued` | resume route; reaper for `auto_resume` kinds | the unique index again guards exclusivity |
+| `paused`, `interrupted` | `queued` | resume route; reaper for `auto_resume` kinds (`interrupted`) and for the system pause reasons `project_paused` and `vlm_unavailable` once the cause is gone (rule h) | the unique index again guards exclusivity; `pause_reason` cleared |
 | `paused`, `interrupted` | `cancelled` | cancel route | - |
-| `interrupted` | `failed` | reaper rule b (`attempts_exhausted`) | `attempt >= max_attempts` (review fix R-5: the trigger refused this write before) |
+| `interrupted` | `failed` | reaper rule b (`attempts_exhausted`) | `retry_count >= max_attempts` (review fix R-5: the trigger refused this write before) |
 
 Terminal: `completed`, `completed_with_errors`, `failed`, `cancelled`. Active (counted by the
 singleton index): `queued`, `running`, `paused`, `cancelling`. `interrupted` is not active: a new
@@ -40,6 +43,11 @@ raises. Existing family status vocabularies (`waiting_region`, `exporting`, `pau
 their family-specific fields through the one serializer, and every status union gains `queued`
 where it lacks it (contracts per family, stage 4).
 
+`retry_count` counts failed deliveries only: it grows when an attempt ends `interrupted` (worker
+shutdown), `lost` (reaper rule a) or `time_limit`, and never on `paused` or `yielded`; `attempt`
+still numbers the `job_attempts` rows. Cancel is terminal for every kind (research auto-label J4,
+pending RD-70): "stop for now" is pause.
+
 ## 2. Starting a job
 
 ### 2.1 The kind table (`src/config/job_kinds/`, one module per lane, pure data)
@@ -49,7 +57,16 @@ where it lacks it (contracts per family, stage 4).
 | `reprocess` | yes | `jobs` | `reprocess`, '' | yes | 24 h / 24 h 15 m | 24 h |
 | `assist_run` | yes | `jobs` | `assist_run`, '' | no | 3 h / 3 h 15 m | 24 h |
 | `item_scores`, `probe`, `selection`, `embedding_viz` | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 24 h |
-| `region_cluster`, `region_fp_centroids` | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 24 h |
+| `region_fp_centroids` | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 24 h |
+| `cluster_run` (lane 4F; replaces `region_cluster` and the IVF retrain inside `autolabel`) | yes | `cluster` | `cluster_run`, `<target>:<level>:<embedding_field>` | no | 6 h / 6 h 15 m (until CL-4 measures the 860k cost) | 24 h |
+| `cluster_projection_sync` (4F) | yes | `jobs` | `cluster_projection`, same scope | yes (each item write fenced by `pending_partition_id`) | 3 h / 3 h 15 m | 24 h |
+| `embedding_reindex` (lane ES-B) | yes | `jobs` | `embedding_reindex`, `space_key` | yes; pausable at batch boundaries; `slice_s` 600 (review RR-20: a long job must not hold a `jobs` slot) | 30 m / 35 m per slice | 24 h |
+| `near_dup_score`, `near_dup_group`, `near_dup_rescore` (lane ND-A) | yes | `jobs` | `near_dup`, `<level>` (one writer per project and level, the Immich rule as a unique index) | score and rescore yes, group no | 3 h / 3 h 15 m | 24 h (rescore 1 h) |
+| `near_dup_projection_sync` (ND-A) | yes | `jobs` | `near_dup_projection`, `<level>` | yes | 3 h / 3 h 15 m | 24 h |
+| `near_dup_core_group` (lane ND-C, W4) | NULL | `jobs` | `near_dup_core`, '' | yes | 3 h / 3 h 15 m | 1 h |
+| `source_backfill` (lane ND-A creates it with the content-key step; the W4 capture lane adds the capture step; review RR-10; RD-53) | yes | `jobs` | `source_backfill`, '' | yes; pausable; `slice_s` 600 | 30 m / 35 m per slice | 24 h |
+| `region_text_reread` (W5e) | yes | `text_read` | `region_text_write`, '' | yes | 24 h / 24 h 15 m | 24 h |
+| `region_text_consensus`, `identity_text_rekey` (W5e) | yes | `jobs` | `region_text_write`, '' | yes | consensus 3 h / 3 h 15 m, rekey 24 h / 24 h 15 m | 24 h |
 | `dataset_import`, `dataset_import_undo` | yes | `jobs` | `dataset_import`, '' | import yes, undo no | 24 h / 24 h 15 m | 24 h |
 | `dataset_upload_extract` | yes | `jobs` | `dataset_upload`, upload id | no | 3 h / 3 h 15 m | 24 h |
 | `combine` | target | `jobs` | `combine`, '' | yes | 24 h / 24 h 15 m | 24 h |
@@ -58,21 +75,35 @@ where it lacks it (contracts per family, stage 4).
 | `open_vocab_drain` | yes | `open_vocab` | `open_vocab_drain`, '' | no (the sweep re-drains) | 3 h / 3 h 15 m | 1 h |
 | `class_merge`, `class_projection_sync` | yes | `jobs` | `class_registry_write`, '' | sync yes | 3 h / 3 h 15 m | 24 h |
 | `promote` | yes | `jobs` | `promote`, Triton model name | no | 3 h / 3 h 15 m | 24 h |
-| `autolabel` | yes | `autolabel` | `autolabel`, '' | no | 3 h / 3 h 15 m | 1 h |
-| `assist_loop` | yes | `assist_loop` | `assist_loop`, '' | yes | 24 h / 24 h 15 m | 1 h |
+| `autolabel` | yes | `autolabel` | `autolabel`, '' | no; pausable between stages and VLM chunks (pending RD-69) | 3 h / 3 h 15 m | 1 h |
+| `assist_loop` | yes | `assist_loop` | `assist_loop`, '' | yes; pausable at node boundaries; `slice_s` 600 (research G-2, pending RD-77) | 30 m / 35 m per slice (was 24 h per run) | 24 h (a yielded slice waits behind other projects' slices) |
 | `train` | yes | `gpu_train` | none | no | 72 h / 72 h 15 m | 7 d |
 | `model_export` | either | `gpu_export` | `model_export`, Triton model name | no | 4 h / 4 h 15 m | 24 h |
 | `bakeoff` | yes | `gpu_eval` | none | no | 24 h / 24 h 15 m | 24 h |
 | `project_delete` | NULL, scope slug | `jobs` | `project_delete`, slug | yes (idempotent) | 3 h / 3 h 15 m | 24 h |
 | `directory_ingest` | NULL | `jobs` | none | no | 24 h / 24 h 15 m | 24 h |
-| `persons_cluster` | NULL | `jobs` | `persons_cluster`, '' | no | 3 h / 3 h 15 m | 24 h |
+| `persons_cluster` (keeps its name in 0.7.0; see the note below the table) | NULL | `jobs` | `persons_cluster`, '' | no | 3 h / 3 h 15 m | 24 h |
 | `label_op`, `label_undo` | yes | inline | `label_op`, op id; `label_undo`, '' | no | request-bound | - |
 | `project_create` (B4 4D, R-21) | NULL, scope slug | `jobs` | `project_create`, slug | yes (idempotent: each step checks what exists) | 1 h / 1 h 5 m | 1 h |
 | `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`, `vlm_verify_region_batch` (B4 4A) | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 1 h |
 | `gpu_arbiter` tick (R-20) | NULL | `arbiter` (periodic task, not a `jobs` row); scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set, which the overlay sets (RC-3) | advisory lock | - | 120 s / 150 s | - |
 
+Note on `persons_cluster`: it keeps its name in 0.7.0 and records its result as a
+`cluster_partitions` row with `method = 'union_find'`, `target = 'face'`, project NULL, through lane
+4F's `record_partition` (the clustering plan's smaller option); it becomes `cluster_run(target='face')`
+with the faces research lane L5.
+
 Auto-resume carries the D-25 recommendation forward. Limits above 3 h carry D-20a. `max_attempts`
-is 3 for every kind (D-20). A test asserts every registered task name maps to exactly one kind and
+is 3 for every kind (D-20).
+
+The `JobKind` dataclass (lane 1B) carries three research fields with safe defaults:
+`pausable: bool = False` (only `assist_loop`, `autolabel`, `embedding_reindex` and `source_backfill` set it; a pause
+request for any other kind answers 409 `job_not_pausable`), `slice_s: int | None = None` (`assist_loop`, `embedding_reindex`,
+`source_backfill`; a test asserts the soft limit exceeds `slice_s` plus the longest boundary wait, one VLM
+request timeout), and `gpu_affinity: Literal['none','any_card'] = 'none'` (GPU S-11: `any_card` for
+`bulk_ingest_run`, `reprocess`, `directory_ingest` and `embedding_reindex`, the kinds that call the
+executor in Triton; the wrapper passes the router's chosen server into the handler). No GPU-prep
+queue exists in 0.7.0 by design (S-11). A test asserts every registered task name maps to exactly one kind and
 every kind routes to a queue that has a consumer in compose (section 7.3).
 
 ### 2.2 The start (one function: `src/services/jobs/service.py::start_job`)
@@ -100,6 +131,13 @@ every kind routes to a queue that has a consumer in compose (section 7.3).
 
 Routes answer 202 with the job id and the existing per-family status route. The wire carries the
 `queued` status.
+
+Research GPU S-8, S-9: `jobs.params.plan` and `jobs.params.plan_sha256` hold the resolved
+`ProcessingPlan` (`src/domain/processing_plan.py`, B5d) of a `bulk_ingest_run`, `reprocess` or
+`directory_ingest` job, so a job's branches are auditable; `jobs.result` of those three kinds carries a
+validated `JobPerfSummary` (`src/schemas/jobs.py`, lane 3A: images, wall seconds, images per second,
+decode routes, seconds per stage, PE calls per image, server names), which the #45 ladders and the
+R-final rows read instead of a side script. No new column.
 
 ### 2.3 Idempotency (D-58)
 
@@ -138,13 +176,13 @@ lease that the reaper marks `interrupted`, which the label-op routes already ser
    UPDATE jobs SET status = 'running', attempt = attempt + 1, fencing_token = fencing_token + 1,
           owner = :owner, heartbeat_at = now(), lease_expires_at = now() + :ttl,
           started_at = coalesce(started_at, now()), updated_at = now()
-    WHERE id = :id AND status = 'queued' AND cancel_requested_at IS NULL AND attempt < max_attempts
+    WHERE id = :id AND status = 'queued' AND cancel_requested_at IS NULL AND retry_count < max_attempts
    RETURNING fencing_token, attempt, params, checkpoint;
    ```
 
    Zero rows: read the row. Terminal, `running` (a redelivery while the first delivery is alive),
    `cancelling`, `paused` or `interrupted`: ack and return (log `claim_skipped` with the status).
-   `queued` with `attempt >= max_attempts`: write `failed` (`attempts_exhausted`) and ack. Project
+   `queued` with `retry_count >= max_attempts`: write `failed` (`attempts_exhausted`) and ack. Project
    missing or archived: `failed` (`project_unavailable`), ack. Insert the `job_attempts` row in the
    same transaction as the claim. `DEL op:queued:<id>` after the commit.
 3. **Heartbeat thread** (`src/tasks/runtime/heartbeat.py`, review fix R-2: it runs in the GPU
@@ -186,7 +224,9 @@ lease that the reaper marks `interrupted`, which the label-op routes already ser
    ('running','cancelling')`, the attempt's `outcome`, an `events` row (`job.state`). Outcome map:
    return -> `completed` or `completed_with_errors`; `cancelled()` or `CancelledError` -> `cancelled`;
    `SoftTimeLimitExceeded` -> `failed` (`time_limit`); any other exception -> `failed` with the
-   message. Zero rows (`Lost`): write nothing, log `lease_lost`. Review fix R-24: Celery raises
+   message; a returned `Yield` (kinds with `slice_s` only) -> `queued` with outcome `yielded` and an
+   immediate dispatch after the commit; `paused()` at a boundary -> `paused` with the requested
+   `pause_reason`. Zero rows (`Lost`): write nothing, log `lease_lost`. Review fix R-24: Celery raises
    `SoftTimeLimitExceeded` from a signal handler in the main thread, which here runs the event loop;
    spike S1 item 7 checks that a handler awaiting `asyncio.sleep` and one awaiting
    `asyncio.to_thread` both reach this terminal write with the engine disposed. If either does not,
@@ -229,9 +269,29 @@ status IN ('queued','paused','interrupted') THEN now() END WHERE id = :id AND st
 Revoked ids are held in worker memory only ([persistent revokes](https://docs.celeryq.dev/en/stable/userguide/workers.html#persistent-revokes));
 the row's status is the truth, which is why the claim checks `status = 'queued'`.
 
-Pause (assist loop only): `pause_requested_at = now()`; the handler stops at its next boundary and
-the wrapper writes `paused`. Resume: `UPDATE ... SET status = 'queued', pause_requested_at = NULL,
-queued_at = now() WHERE id AND status IN ('paused','interrupted')`, then dispatch.
+Pause (pausable kinds only, else 409 `job_not_pausable`): `queued` -> `paused` at once, with
+**no revoke** (review RR-1; revoke is kept only for cancel, which is terminal, so a revoked id never
+comes back; [revoking tasks](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks)); `running` -> `pause_requested_at = now()`, `pause_reason = 'user'` (or the
+handler's own reason), answer 202 with `control.state = 'pausing'`; the handler reads `ctx.paused()`
+before every budget reservation and before admitting a unit of work, so a pause lands within one
+upstream request timeout plus 1 s; the wrapper writes `paused`. `paused` -> 200 no-op; `cancelling`
+-> 409 `job_cancelling`. Resume: `UPDATE ... SET status = 'queued', pause_requested_at = NULL,
+pause_reason = NULL, queued_at = now() WHERE id AND status IN ('paused','interrupted')`, then
+dispatch; resume answers 409 `resume_blocked` naming the reason while the project is paused or the
+VLM is unavailable. Detail for the loop: [research_auto_label_assist_plan.md](../research_auto_label_assist_plan.md)
+section 5.3.
+
+### 3.4 Research job-control tests (lane 3A, red first)
+
+| Test | Red on the base | Green |
+|---|---|---|
+| `tests/db/test_pause_resume_cycles.py` | a job paused and resumed three times fails `attempts_exhausted` on the fourth claim (gap G-1) | the fourth claim runs; `retry_count` is 0 |
+| `tests/tasks/test_yield_slices.py` | a handler that returns `Yield` is recorded as `failed` | the job goes `queued` with outcome `yielded`, re-dispatches at once and keeps `retry_count` |
+| `tests/tasks/test_two_project_slices.py` | with one consumer, project B's loop waits for project A's whole run (gap G-2) | B's first node starts within one slice of A's |
+| `tests/db/test_reaper_system_resume.py` | a `project_paused` job stays paused after the project resumes | rule h re-queues it; a `user` pause is never resumed by the reaper |
+| `tests/jobs/test_pause_not_pausable.py` | a pause of `reprocess` is accepted | 409 `job_not_pausable` |
+| `tests/jobs/test_queued_pause.py` | a queued job cannot be paused | `queued` -> `paused` with no revoke; the stale message is acked as `claim_skipped` |
+| `tests/tasks/test_pause_resume_after_revoke_registry.py` (review RR-1) | with a fake worker control that remembers revoked ids, `queued -> paused -> queued` never runs | it claims and runs; only cancel calls `revoke` |
 
 ## 4. The reaper and stuck-job recovery
 
@@ -244,12 +304,14 @@ the tick also takes `pg_try_advisory_xact_lock(REAPER, 0)` and skips when anothe
 | Rule | Selects | Action |
 |---|---|---|
 | a | `status IN ('running','cancelling') AND lease_expires_at < now()` | `cancelling` -> `cancelled`; `running` -> `interrupted`; attempt outcome `lost`; event |
-| b | `status = 'interrupted' AND auto_resume AND updated_at < now() - interval '30 s'` and no active job of the same group (`AND NOT EXISTS (SELECT 1 FROM jobs a WHERE a.project_id IS NOT DISTINCT FROM j.project_id AND a.exclusive_group = j.exclusive_group AND a.scope = j.scope AND a.status IN (<ACTIVE>))`) | `attempt < max_attempts`: -> `queued`, dispatch after commit; else `failed` (`attempts_exhausted`). Each row's update runs in its own savepoint, so a `unique_violation` from a race skips that row (it stays `interrupted`, logged once) instead of rolling back the batch (review fix R-5); resume (section 3.3) uses the same savepoint |
+| b | `status = 'interrupted' AND auto_resume AND updated_at < now() - interval '30 s'` and no active job of the same group (`AND NOT EXISTS (SELECT 1 FROM jobs a WHERE a.project_id IS NOT DISTINCT FROM j.project_id AND a.exclusive_group = j.exclusive_group AND a.scope = j.scope AND a.status IN (<ACTIVE>))`) | `retry_count < max_attempts`: -> `queued`, dispatch after commit; else `failed` (`attempts_exhausted`). Each row's update runs in its own savepoint, so a `unique_violation` from a race skips that row (it stays `interrupted`, logged once) instead of rolling back the batch (review fix R-5); resume (section 3.3) uses the same savepoint |
 | c | `status = 'queued' AND (last_dispatched_at IS NULL OR last_dispatched_at < now() - interval '120 s')` and the marker is `Absent` | dispatch again (marker `Unknown`: skip) |
 | d | `status = 'queued' AND queued_at + max_queue_wait < now()` | `failed` (`queue_wait_exceeded`) |
 | e | `search_projection_tasks` with `done_at IS NULL AND job_id IS NULL` | start `class_projection_sync` (idempotency key `e:<row id>`) |
 | f | retention ([02a](02a_postgres_schema.md) section 9) | batched deletes, 10,000 rows per statement |
 | g | `stream_worker_claims` with an expired lease | delete (the next replica claims) |
+| h (research auto-label 5.2) | `status = 'paused' AND pause_reason IN ('project_paused','vlm_unavailable')` | `project_paused` when `projects.paused_at IS NULL`, `vlm_unavailable` when `deployment_settings('vlm_paused_for_training')` is cleared and the endpoint probe answers: -> `queued`, `pause_reason = NULL`, dispatch after commit; `user`, `audit` and `budget` wait for a person |
+| i (research clustering 5.1, near-duplicates 5.1) | `search_projection_tasks` of kinds `cluster_partition` and `near_dup_run` with `done_at IS NULL AND job_id IS NULL` | start `cluster_projection_sync` or `near_dup_projection_sync` (idempotency key `i:<row id>`), the rule-e pattern |
 
 All comparisons use the database clock. Postgres down: the tick fails and retries next tick.
 Valkey down: rules a, b, d, f, g still run; c and the dispatch parts of b and e wait (enqueue
@@ -264,7 +326,8 @@ Busy window after a crash: a dead holder blocks a restart for at most `LEASE_TTL
 - Each beat-driven task body that must not overlap itself takes a transaction-level advisory lock:
   `SELECT pg_try_advisory_xact_lock(:class, :obj)`, `class` from `src/config/advisory_locks.py`
   (`REAPER = 16`, `INGEST_DISPATCH = 10`, `OPEN_VOCAB_SWEEP = 11`, `CACHE_PRUNE = 12`,
-  `GPU_ARBITER = 13`, `CLUSTER_REFRESH = 14`, `IVF_RETRAIN = 15`), `obj` the project's `lock_key`
+  `GPU_ARBITER = 13`, `CLUSTER_REFRESH = 14`, `NEAR_DUP_RESCORE = 17` (review RR-21); `IVF_RETRAIN` is removed, research clustering 5.2:
+  the IVF retrain is a `cluster_run` and its exclusivity is the unique index), `obj` the project's `lock_key`
   or 0. False: skip this tick. Transaction-level locks release at commit or rollback and work behind a
   transaction pooler ([advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS)).
   A lock taken in a transaction is held while that transaction does its (short) database work; a
@@ -346,6 +409,14 @@ rows. Payloads are snapshots (the full job progress or state), capped at 7,000 b
 throttled to 1/s per job), lifecycle routes (project, config, VLM changes), combine, and the
 detection worker's pipeline stats (coalesced to at most 1/s per project, the existing
 `_stats_inflight` coalescing in `pipeline_events.py:73`).
+
+Research producers (each payload a snapshot under the 7,000-byte cap; the topic's own tables are the
+record, the 24-hour `events` rows only the UI feed, research G-3): the assist loop's
+`assist_loop.nodes`, `assist_loop.budget`, `assist_loop.audit`, `assist_loop.iteration`,
+`assist_loop.warning` and the `pause_reason`, `stop_reason` and `control` fields on `job.state`
+(constants in `src/domain/assist_loop_events.py`, lane 4D); `cluster.activation` (4F);
+`near_dup.run` and `holdout.near_dup_absorbed` (ND-A, ND-B); the re-index and plate jobs use
+`job.progress` only.
 
 ### 6.3 Read path and commit-safe resume
 
@@ -457,7 +528,9 @@ reaper rebuilds the queue from the `jobs` rows.
 | `arbiter` (R-20) | `gpu-arbiter-worker` (api image, only with the GPU-arbiter overlay) | prefork, 1 | 200 | overlay | none; the only service that mounts the Docker socket |
 | `open_vocab` | `open-vocab-worker` | prefork, 1 | 50 | core | none (calls the segmenter) |
 | `autolabel` | `curation-auto-label-worker` | prefork, 1 | 20 | `curation` | none |
-| `assist_loop` | `curation-assist-loop-worker` | prefork, 1 | 20 | `curation` | none |
+| `assist_loop` | `curation-assist-loop-worker` | prefork, 1 (fair through time slices, research G-2) | 20 | `curation` | none |
+| `cluster` (research clustering 5.2) | `cluster-worker` | prefork, 1 | 1 | `curation` | none in 0.7.0 (RAPIDS only after a passing GPU validation and the owner's yes, RD-25) |
+| `text_read` (W5e, research plate 5.3) | `text-read-worker` | prefork, 1, prefetch 20 | 20 | `curation` | none (the reader is a Triton model; the queue serializes bulk re-reads so they never starve `jobs`) |
 | `gpu_train` | `curation-trainer` (trainer image) | prefork, 1 | 1 (a fresh child per run releases GPU memory) | `training` | `OP_TRAIN_GPU_ORDER` |
 | `gpu_export` | `model-export-worker` (export image) | prefork, 1 | 1 | `export` | the export GPU |
 | `gpu_eval` | `curation-evaluator` (evaluator image) | prefork, 1 | 5 | `evaluator` | `EVALUATOR_GPU_ID` |
@@ -475,6 +548,15 @@ INSTALLATION says so (small, bounded by the number of such starts). A queue whos
 for the trigger files. `tests/test_queue_consumers_from_compose.py` asserts every routed queue has a
 consumer in core or in the profile `QUEUE_PROFILE` names (OpenTranscribe's "a valid route is not a
 drained route").
+
+Research GPU S-11, S-12: there is no GPU-prep queue in 0.7.0 (bulk ingest and reprocess call the
+executor in Triton from `jobs` workers that hold no GPU). `gpu_app.make_app(include, device_uuid)`
+takes the card's UUID and writes it into the worker's `worker_capabilities` row; device-scoped queue
+names (`<family>.<slot>`) are not derived until a family declares itself device-scoped (none does in
+0.7.0; the two-card research landing of RW-1 adds it). CUDA is initialized only in the child after
+fork (`worker_process_init`), never in the parent (`tests/tasks/test_no_cuda_import.py` already
+guards the parent). The spatial plan's `gpu_spatial` queue is reserved, not declared
+([02d](02d_research_seam_schema.md) section 5).
 
 The trainer, export and evaluator images import only `src/tasks/runtime/` (plus `src/db`,
 `src/config`, `src/domain`, `src/utils`) and their own handler module (the heartbeat, the fenced
