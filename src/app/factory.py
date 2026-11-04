@@ -232,7 +232,6 @@ def create_app() -> FastAPI:
             content={
                 'detail': 'Internal server error',
                 'request_id': req_id,
-                'error_type': type(exc).__name__,
             },
             headers={'X-Request-ID': req_id},
         )

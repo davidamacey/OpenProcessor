@@ -47,6 +47,7 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
         request_id=req_id,
         method=request.method,
         path=request.url.path,
+        error_type=type(exc).__name__,
         error=str(exc),
     )
     return JSONResponse(
@@ -54,7 +55,6 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
         content={
             'detail': 'Inference backend (Triton) is temporarily unavailable; retry shortly',
             'request_id': req_id,
-            'error_type': type(exc).__name__,
         },
         headers={
             'X-Request-ID': req_id,

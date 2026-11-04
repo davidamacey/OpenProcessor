@@ -48,7 +48,7 @@ def _assert_503(response) -> None:
     assert response.headers.get('Retry-After')
     body = response.json()
     assert 'request_id' in body
-    assert body['error_type'] == 'RetryExhaustedError'
+    assert 'error_type' not in body
 
 
 def test_detect_returns_503_when_triton_unavailable(
