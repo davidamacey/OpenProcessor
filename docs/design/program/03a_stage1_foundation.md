@@ -186,7 +186,7 @@ W2.3a); the tests of 02d section 6 except `tests/db/test_row_level_security.py`;
 ```
 You are a B2 stage-1 lane agent (Sonnet). Worktree <repo>-wt-b2-<lane>, branch b2/<lane>, cut from
 int/b2-control-plane after lane 1-0. Read: docs/design/program/03_b2_overview.md (sections 3-4),
-docs/design/program/03a_b2_w1_queue_infra.md (your lane), the 02/02a/02b/02c sections it cites,
+docs/design/program/03a_stage1_foundation.md (your lane), the 02/02a/02b/02c sections it cites,
 CLAUDE.md, CONTRIBUTING.md, docs/design/engineering_standards.md. Edit only the files your lane owns.
 Read each cited doc before the task and cite it in the commit body. One commit per task; run the red
 test on the unchanged base first and paste the failure in the commit body; then the fix and the

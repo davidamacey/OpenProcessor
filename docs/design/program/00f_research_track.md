@@ -132,7 +132,7 @@ Every "Data" entry is a row of the dataset register (section 4.1).
 | priors and cross-time (`sp:P-8`) | MSLS, Aachen, RobotCar, YFCC geotagged | 0.5 | - | P-4 | RG-5 | reported, not gated | RW-5 |
 | set P, owner-run (`sp:P-9`) | set P, frozen sample | owner's | owner's | P-1, P-4..P-6 | owner's window | counts only, no location value | RW-5 |
 | data and harness (`pt:P0`) | train split, manifests, local transcription | 0 | CPU, person | none | CPU slot | every pt read | - |
-| which reader (`pt:P1`) | 1,000 plate crops: Open Images, the OpenALPR benchmark, CCPD strata, set P; arms PP-OCRv5 (today, control), PP-OCRv6 (owner Q-B, one comparison), one dedicated plate reader | 1.5 | - | P0 | PW-2 | the W5e reader (RD-11) and the B5c OCR model ([07c](07c_b5_crops_ocr_faces.md)) | W5c, W5e |
+| which reader (`pt:P1`) | 1,000 plate crops: Open Images, the OpenALPR benchmark, CCPD strata, set P; arms PP-OCRv5 (today, control), PP-OCRv6 (owner Q-B, one comparison), one dedicated plate reader | 1.5 | - | P0 | PW-2 | the W5e reader (RD-11) and the B5c OCR model ([06c](06c_b5_crops_ocr_faces.md)) | W5c, W5e |
 | the confident tier (`pt:P2`) | P1's dev halves | 0.5 | - | P1 | PW-2 | `text_confident_char_min`; the script computes the per-character minimum from the recognition logits in its own venv, so it does not wait for W5c's `rec_char_min` output (review RR-24) | W5e |
 | how much bursts add (`pt:P3`) | set P bursts only (UFPR-ALPR skipped by the owner) | 0.3 | - | P1 | PW-2 | the consensus method | W5e |
 | which frames are one vehicle (`pt:P4`) | set P capture times | 0.3 | - | P0, `sp:P-1` | PW-2 | the consensus basis (RD-68) | W5e |
@@ -170,7 +170,7 @@ so a changed licence stops that prototype, not the program.
 | Set | Terms (as cited by the topic plan) | Local only | Used before the tag by | Window |
 |---|---|---|---|---|
 | set P (the owner's private photos) | private | yes; one shared seeded copy under one manifest, removed after PW-3 and the removal recorded (11 rule 10, RD-8) | `gpu:PR-0..PR-2`, `pt:P1..P5`, `al:AL0` | PW-1..PW-3 |
-| sets A and B (the program's public benchmark sets, [07a](07a_b5_baseline.md)) | public sources of 07a | yes | `gpu:PR-0..PR-2`, `PR-5` | PW-1, PW-3 |
+| sets A and B (the program's public benchmark sets, [06a](06a_b5_baseline.md)) | public sources of 07a | yes | `gpu:PR-0..PR-2`, `PR-5` | PW-1, PW-3 |
 | COCO 2017 (and COCO-Text regions) | annotations CC BY 4.0; images under their Flickr licences | yes | `gpu:PR-6`, `nd:P0..P2`, `al:AL0` | PW-1, PW-3 |
 | Open Images V7 (faces, plates, vehicles, 1,024 px sample) | annotations CC BY 4.0; images listed as CC BY 2.0 | yes | `gpu:PR-1`, `PR-5`, `nd:P1`, `pt:P1` | PW-1..PW-3 |
 | LFW pairs | research use, as the dataset site states | yes | `gpu:PR-5` | PW-3 |

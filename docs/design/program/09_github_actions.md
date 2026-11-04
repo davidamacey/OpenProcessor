@@ -6,13 +6,13 @@ Decisions applied: owner decisions 2, 3, 5 and 9 of 2026-11-03 and D-37 = yes (o
 v0.7.0 = B0-B5 + R-final, tagged only when every plan is implemented and tested; v0.8.0 =
 platform breadth; v0.9.0 and v0.10.0 closed once empty; every new issue on v0.7.0; parked
 unmilestoned research stays parked; one batched deps step that never floats the exact
-Ultralytics pin); D-36. The register is in [00_index.md](00_index.md) section 6.
+Ultralytics pin); D-36. The register is in [00a_decision_register.md](00a_decision_register.md) section 6.
 Source IDs: the former master plan (rev 4, in git history) sections 9 and 10 (N1-N16,
 re-scopes, milestones, close table, issue map); audit IDs per issue; ledger section 7 (private).
 
 What to keep after merge: the milestone descriptions and issue bodies are the permanent record
 (they carry what is open); the issue map (section 7) is not copied anywhere. The plan files go
-as described in [00_index.md](00_index.md) "Plan lifecycle".
+as described in [00a_decision_register.md](00a_decision_register.md) "Plan lifecycle".
 
 Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03; GitHub state read the same day
 with `gh api repos/davidamacey/OpenProcessor/milestones?state=all`, `gh issue list --state open
@@ -72,7 +72,7 @@ while read -r n; do gh api -X PATCH "$R/issues/$n" -F milestone=6 --jq '[.number
 
 **GH-2 Edit the v0.7.0 description.**
 ```bash
-gh api -X PATCH "$R/milestones/6" -f description='One release for the 0.7.0 program, tagged only when every plan is implemented and tested: B0 close-out (R2 round fixes, OCR geometry, orientation and unclip, holdout freeze fails closed, create-only config writes, atomic state writes, recycle jitter, exact Ultralytics pin), B1 correctness (job leases, class registry with OCC and an upgrade migration, audit fixes, Ultralytics live bugs), B2 jobs on Celery workers, B3 one Ultralytics version and one detection contract, B4 stateless API, B5 speed (#45 baseline, decode once, crops at model size, OCR and faces on resident crops, processing plans), then one release acceptance (R-final). Tagged on the owner word. Plan: docs/design/program/00_index.md'
+gh api -X PATCH "$R/milestones/6" -f description='One release for the 0.7.0 program, tagged only when every plan is implemented and tested: B0 close-out (R2 round fixes, OCR geometry, orientation and unclip, holdout freeze fails closed, create-only config writes, atomic state writes, recycle jitter, exact Ultralytics pin), B1 correctness (job leases, class registry with OCC and an upgrade migration, audit fixes, Ultralytics live bugs), B2 jobs on Celery workers, B3 one Ultralytics version and one detection contract, B4 stateless API, B5 speed (#45 baseline, decode once, crops at model size, OCR and faces on resident crops, processing plans), then one release acceptance (R-final). Tagged on the owner word. Plan: docs/design/program/00a_decision_register.md'
 ```
 
 **GH-3 Move the B5 perf issues from v0.9.0 to v0.7.0** (D-37: B5 is inside the release; #42 is
@@ -136,7 +136,7 @@ done
 ## 4. New issues N1-N16
 
 Every body ends with the same footer: "Plan: `docs/design/program/<file>`. Task detail by ID in
-`<source plan>`. Tracked in the 0.7.0 program (`docs/design/program/00_index.md`)."
+`<source plan>`. Tracked in the 0.7.0 program (`docs/design/program/00a_decision_register.md`)."
 
 | N | Title | Labels | Milestone | Batch | Closes when |
 |---|---|---|---|---|---|
@@ -390,7 +390,7 @@ docs/design/model_family_versions_plan.md Steps 4-9, sections 6.1 and 6.2.
 Hardening item from the 0.7.0 audit. Details are in the maintainers' private notes, not in this
 issue. It is fixed in batch <B1 | B2> of the 0.7.0 program, and the PR references this issue.
 
-Plan: docs/design/program/<B1 1D (merged; see CHANGELOG.md) | 03c_b2_w3_beat_reaper_workers.md>.
+Plan: docs/design/program/<B1 1D (merged; see CHANGELOG.md) | 03f_stage6_scheduler_scaleout.md>.
 ```
 
 N9 and N10 use 02d (B1); N11 and N12 use 03c (B2).
@@ -407,7 +407,7 @@ Measure recall on COCO val2017 (5k images) with and without upscaling, on the fi
 with the B5a measurement tooling. Keep `scaleup=False` until then (D-35). The owner decides on
 the numbers.
 
-Plan: docs/design/program/07a_b5_baseline.md. Task detail: docs/design/codebase_audit_plan.md GPU-6.
+Plan: docs/design/program/06a_b5_baseline.md. Task detail: docs/design/codebase_audit_plan.md GPU-6.
 ```
 
 ### N16 body
@@ -427,7 +427,7 @@ the `usage` object. The label rate that sizes the budgets was never measured (S0
 - Cropwright pause button and event log.
 
 Depends on: B2 stage 4 lane 4D-2 and stage 3 lane 3B (the former 2E-2 and B4 4C).
-Plan: docs/design/program/03c_b2_w3_beat_reaper_workers.md and 05_b4_stateless_api.md.
+Plan: docs/design/program/03f_stage6_scheduler_scaleout.md and 05_b4_stateless_api.md.
 ```
 
 ### N14 body
@@ -444,7 +444,7 @@ Measure first, act only on a measured defect. Each item closes in its batch.
 
 Items still open when v0.7.0 is tagged move to a follow-up issue on v0.8.0 (or this issue moves).
 
-Plan: docs/design/program/00_index.md (backlog). Task detail: docs/design/codebase_audit_plan.md section 4.
+Plan: docs/design/program/00a_decision_register.md (backlog). Task detail: docs/design/codebase_audit_plan.md section 4.
 ```
 
 ### N15 body
@@ -460,7 +460,7 @@ contracts regenerate in the same PR. Audit BA-6.
 ## Acceptance
 Every operation has a response model; `make contracts-check` clean; no behaviour change.
 
-Plan: docs/design/program/00_index.md (backlog). Task detail: docs/design/codebase_audit_plan.md BA-6.
+Plan: docs/design/program/00a_decision_register.md (backlog). Task detail: docs/design/codebase_audit_plan.md BA-6.
 ```
 
 ## 5. Re-scope comments (ready to post)
@@ -499,7 +499,7 @@ remains: small-target engines built, Triton READY with peak memory under 11 GB, 
 passing, set A throughput recorded, embedding cosine p01 >= 0.995. It runs when GPU 1 is free and
 never blocks a batch; if it has not run by the v0.7.0 tag, the release notes say the profile is
 not yet verified on a 12 GB card. Milestone v0.7.0 (side track).
-Plan: docs/design/program/07_b5_overview.md section 11 (side track).
+Plan: docs/design/program/06_b5_overview.md section 11 (side track).
 ```
 
 **C-368:**
@@ -518,14 +518,14 @@ Width-bucket padding fails the P-ocr gate (comment of 2026-11). Next, in B5c: GP
 in the OCR BLS so Triton's dynamic batcher batches per-crop widths (no padding), or a
 padding-aware CTC/argmax in the graph; uint8 input; face alignment on resident frames; the step 3
 research. This absorbs the former "OCR crops concurrently" item. Milestone v0.7.0.
-Plan: docs/design/program/07c_b5_crops_ocr_faces.md.
+Plan: docs/design/program/06c_b5_crops_ocr_faces.md.
 ```
 
 **C-407:**
 ```markdown
 C2's launch-overhead premise is not supported by a measurement yet: profile first. GPU-12
 (half-pixel letterbox undo) joins this issue's byte-parity gate. B5b, milestone v0.7.0.
-Plan: docs/design/program/07b_b5_decode_once.md.
+Plan: docs/design/program/06b_b5_decode_once.md.
 ```
 
 **C-40:**
@@ -533,7 +533,7 @@ Plan: docs/design/program/07b_b5_decode_once.md.
 Child list update: GPU-3b (one EXIF-oriented decode helper in `src/utils/` for `/embed`,
 `/analyze` and legacy ingest; a behaviour change, in the CHANGELOG) is step 0, before the
 resident-frame waves. The #45 baseline (B5a) comes first. B5b, milestone v0.7.0.
-Plan: docs/design/program/07b_b5_decode_once.md.
+Plan: docs/design/program/06b_b5_decode_once.md.
 ```
 
 **C-411** (edit the body's checklist too):
@@ -547,7 +547,7 @@ implemented and tested):
       tier, and the upgrade from a real 0.6.0 install), run last, after B5
 - [ ] Tag v0.7.0 on the owner's word; images, release and post-release checks
 There is no intermediate release or tag. This issue closes after the tag.
-Plan: docs/design/program/00_index.md, 01_b0_close_out.md, 06_release_acceptance.md.
+Plan: docs/design/program/00a_decision_register.md, 13_b0_close_out.md, 07_release_acceptance.md.
 ```
 
 **C-366** (then close, GH-6):
@@ -576,7 +576,7 @@ segmentation-only annotations as boxes remain. This issue is re-scoped to that o
 `docs-site/docs/guides/dataset-import.mdx`.
 ```
 
-**Moved-doc comments.** Run when the removal wave R-1 lands ([01_b0_close_out.md](01_b0_close_out.md)
+**Moved-doc comments.** Run when the removal wave R-1 lands ([13_b0_close_out.md](13_b0_close_out.md)
 B0-1b; target list in [12_prior_plans_reconciliation.md](12_prior_plans_reconciliation.md) section
 6). Post one comment per open issue whose body cites a moved or deleted design doc, giving the new
 path: "The design doc `<old>` was retired; the content now lives in `<new>`."
@@ -585,7 +585,7 @@ path: "The design doc `<old>` was retired; the content now lives in `<new>`."
 |---|---|---|
 | #40, #67, #219, #231, #268 | `v060_wave_plan.md` | `docs/PERFORMANCE.md` section "Wave 0 parity and FP16 gates" |
 | #398, #400, #401, #402 (closed by C-402), #403, #406 | `improvement_backlog.md` | #407 and the issue itself; lessons in `docs/design/engineering_standards.md` section 5 |
-| #365-#370 | `program_plan.md` | `docs/design/program/00_index.md` (this program) |
+| #365-#370 | `program_plan.md` | `docs/design/program/00a_decision_register.md` (this program) |
 | #40 | `ingest_write_path_investigation.md`, `v060_vector_db_evaluation_plan.md`, `v060_serving_backend_trade_study.md` | the same names under `docs/research/` |
 | #45 | `storage_sizing_and_ingest_baselines.md` | `docs/research/storage_sizing_and_ingest_baselines.md` |
 | #67 | `v060_vector_db_evaluation_plan.md`, `v060_serving_backend_trade_study.md` | `docs/research/` |
@@ -602,14 +602,14 @@ Docs that stay need no comment now (their R-3 removals comment later): `triton_p
 |---|---|---|
 | GH-6 (with D-36) | #366 | comment C-366, close as completed |
 | GH-8 | #402 | comment C-402, close as completed |
-| B0 PR merges | #437, #440, #442, #443, #445 | "Closes #n" lines in the B0 PR body ([01_b0_close_out.md](01_b0_close_out.md) B0-4); verify each `CLOSED` |
+| B0 PR merges | #437, #440, #442, #443, #445 | "Closes #n" lines in the B0 PR body ([13_b0_close_out.md](13_b0_close_out.md) B0-4); verify each `CLOSED` |
 | B1 PR merges | #447, N2, N3, N4, N5, N6, N7, N9, N10 | closing keywords in the B1 PR body; verify |
 | B2 PR merges | N11, N12 | closing keywords |
 | B3 PR merges | N8 | closing keyword |
 | B4 PR merges | N1, #439 | closing keywords |
 | N14 items | N14 | each box checked in its batch PR; the issue closes when all are checked |
 | B5 sub-PRs | #45, #268 (B5a), N13 (B5a decision), #40, #407 (B5b), #219, #220 (B5c), #67 (B5d) | closing keywords in each sub-PR as its acceptance is met |
-| v0.7.0 tagged (last) | #411; then milestone v0.7.0 closed when it has no open issue | comment with the release link and the report location ([06_release_acceptance.md](06_release_acceptance.md) section 7) |
+| v0.7.0 tagged (last) | #411; then milestone v0.7.0 closed when it has no open issue | comment with the release link and the report location ([07_release_acceptance.md](07_release_acceptance.md) section 7) |
 | Side track | #42 | after the 12 GB run |
 | Re-check | after B3: if Stage B ships, any request for EfficientNMS-specific work is obsolete | comment and close |
 
@@ -628,7 +628,7 @@ intermediate tags, "fixed on main" is the closing point and the milestone record
 | #84 wheel example | v0.10.0 -> v0.8.0 | defer, after training stabilises (B3) |
 | #219 crops at model size | v0.9.0 -> v0.7.0 | B5c |
 | #220 OCR and faces | v0.9.0 -> v0.7.0 | B5c (C-220), includes the step 3 research |
-| #231 serving head-to-head research | v0.9.0 -> v0.7.0 | B5 deferred row: owner gate, after #40 lands ([07](07_b5_overview.md) section 10) |
+| #231 serving head-to-head research | v0.9.0 -> v0.7.0 | B5 deferred row: owner gate, after #40 lands ([06](06_b5_overview.md) section 10) |
 | #268 Triton follow-ups | v0.9.0 -> v0.7.0 | B5a |
 | #346 clustering research tracker | none (parked) | defer, stays parked; graph clustering is not in this program |
 | #347 embedding-model research | v0.10.0 -> v0.8.0 | defer |
@@ -693,7 +693,7 @@ Close comments (GH-10, after the lane commit exists for the first three):
   deps step, docs/design/program/09_github_actions.md section 8); it reaches `main` with the B1
   merge."
 - #432, #422: "Interpreter and Triton base moves are an owner decision (D-38 in
-  docs/design/program/00_index.md): if taken, inside the B3 engine rebuild with the TensorRT pins
+  docs/design/program/00a_decision_register.md): if taken, inside the B3 engine rebuild with the TensorRT pins
   moved together. Closing; dependabot opens a fresh PR when due."
 
 The deps lane also lands ENV-12 (08): the new `ignore` entries and the corrected reason on the
@@ -706,7 +706,7 @@ the exact pin moves only by the single-version rule (D-28).
 The lane `b1/deps` is its own lane in B1; its brief, branch, checks and merge position live in
 B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) section 4.1 (this file keeps only the per-PR decisions above
 and the GitHub side). The lane runs only the targeted checks of the
-[Test and GPU budget](00_index.md); the full suite runs once in the B1 sweep.
+[Test and GPU budget](00a_decision_register.md); the full suite runs once in the B1 sweep.
 
 ## 9. Verification after GH-12
 

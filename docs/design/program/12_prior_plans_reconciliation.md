@@ -1,7 +1,7 @@
 # 12: reconciliation of the older plan docs with the program
 
 Status: plan.
-Depends on: `00_index.md` (the program), and the batch files it lists.
+Depends on: `00a_decision_register.md` (the program), and the batch files it lists.
 Verified against `fix/411-r2-round` on 2026-11-03 (head `d1c6bab0`), with read-only `rg`, `git log`,
 `gh issue view`, `gh pr view` and `gh issue list` (37 open issues).
 
@@ -11,12 +11,12 @@ Consolidated 2026-11-03.
 - **Milestone words (owner decision D-37 = yes).** This file was written when B5 was a second release.
   There is now one release, v0.7.0 = B0, B1, B2, B3, B4, B5 and R-final last; `v0.8.0` is platform
   breadth. Wherever a table below says `v0.8.0` for B5 work read **v0.7.0 (B5)**, and wherever it says
-  `v0.9.0` read **v0.8.0 (platform breadth)**. `00_index.md` and `09_github_actions.md` hold the
+  `v0.9.0` read **v0.8.0 (platform breadth)**. `00a_decision_register.md` and `09_github_actions.md` hold the
   authoritative milestone map.
 - **Removal wave R-1: done in this consolidation pass** (the docs are moved or deleted, the content
   moves and the reference fixes are made; section 6 marks each row). **R-2** (`release_acceptance_plan.md`)
   is "remove at R-final RP-9". **R-3** docs are "remove after B5b", "after B5c" or "after B5d". R-2 and R-3 follow
-  the plan lifecycle of [00_index.md](00_index.md) section 8.2: the closing PR of the batch or
+  the plan lifecycle of [00a_decision_register.md](00a_decision_register.md) section 8.2: the closing PR of the batch or
   sub-batch moves the lasting knowledge and deletes the plan files in the same PR.
 - **ADD items (section 3) are folded** into the target files; each ADD heading below carries a
   "Folded into" line. The counts in section 3.7 are final.
@@ -89,7 +89,7 @@ that sub-batch merges. When unsure, the doc is kept.
 | 16 | `ingest_write_path_investigation.md` | not listed | fixes merged into 0.6.0; follow-ups mostly done | 2 | moved to research | DELETE-AFTER-MOVE (to `docs/research/`) |
 | 17 | `label_confirmation_plan.md` | partially done | implemented (PR 1-5 of its section 6; #119 closed) | 0 | removed | DELETE-AFTER-MOVE |
 | 18 | `processing_plans_plan.md` | open (design only for v0.9.0) | P1 done; P0, P2-P6 are B5d (v0.8.0) | 6 | open (B5d input, v0.8.0) | KEEP-OPEN |
-| 19 | `program_plan.md` | open (plan) | superseded (`00_index.md` section 13) | 0 in program | removed | DELETE |
+| 19 | `program_plan.md` | open (plan) | superseded (`00a_decision_register.md` section 13) | 0 in program | removed | DELETE |
 | 20 | `release_acceptance_plan.md` | open (full run not scripted) | mostly scripted (`acceptance_run.sh`, 26 phases; #54 closed; R1 and R2 ran); phases D, E, H, parts of I and K not scripted | 7 | open until R-final, then removed | DELETE-AFTER-MOVE (at RP-9) |
 | 21 | `repo_cleanup_plan.md` | in progress (PR 1 of 9) | implemented: all nine PRs merged (#300, #301, #302, #309, #310, #303/#313/#317, #323, #324) | 0 | removed | DELETE |
 | 22 | `sam3_full_image_detection_plan.md` | implemented | implemented (v0.4.0) | 2 | implemented (reference) | KEEP-REFERENCE |
@@ -137,7 +137,7 @@ rollback 138/138, lock rule held). `scripts/bench/vlm_rate.py` does not exist.
 | W6 taxonomy as data and a classification-crop export | defer v0.9.0; must use the B1 registry document by name (B1 1B) |
 | W8 visual judge | #406: `clu:CL-1` in research wave RW-3 ([research_clustering_plan_b_protocol.md](../research_clustering_plan_b_protocol.md) section 5) |
 | W-UI review screens | defer v0.9.0, with each feature |
-| W12 identity text (plates) | #401: superseded by [research_plate_text_plan.md](../research_plate_text_plan.md); lands as wave W5e ([03g](03g_w5e_plate_text.md), pending RD-3) |
+| W12 identity text (plates) | #401: superseded by [research_plate_text_plan.md](../research_plate_text_plan.md); lands as wave W5e ([06e](06e_w5e_plate_text.md), pending RD-3) |
 | 6.7 attribute signals | #400: superseded by [research_spatial_attributes_plan.md](../research_spatial_attributes_plan.md); research wave RW-5 |
 | `target=frame`, `group_by=image` | #435, #436 (v0.9.0) |
 | 10: eleven issues "to create" | do not file now (owner rule: no growing issue list); file each when its wave starts |
@@ -238,7 +238,7 @@ Reference. `05` 4A adds the request-scoped `TaskGroup` exemption (Q-J7). It rece
 | C2 batched kernels; staged image-prep ideas | covered by `07b` 5b-P1, 5b-G2-G4 (#407) |
 | CUDA MPS opt-in | #403, parked inside B5 (`07` section 10) |
 | Triton memory at start: "the installer could offer the profile by card size" | defer v0.9.0 (installer UX); #373's fix already sizes the default profile by card |
-| Geometry stage of the cluster pass (#337 leftover) | ADD a row to `07_b5_overview.md` section 10 (section 3.5): act only if the 2.5 ms/crop bar tightens |
+| Geometry stage of the cluster pass (#337 leftover) | ADD a row to `06_b5_overview.md` section 10 (section 3.5): act only if the 2.5 ms/crop bar tightens |
 | Remaining stage 2 items (#268) | covered by `07a` track `sweeps` |
 | Loop pause and event log | N16 (2.1) |
 | Label operations UI, thumbnails 404, live write-path failures | obsolete (#404, #405, #397 closed) |
@@ -277,12 +277,12 @@ the audit routes with `src/domain/audit_math.py` (PR 4), the auto-promote audit 
 | Item (10) | Disposition |
 |---|---|
 | P0, P2, P3, P4, P5, P6 | covered by `07d` |
-| "v0.9.0 delivers this" (header) | conflict C8 (release mapping), resolved by `00_index.md` (B5 is v0.8.0) |
+| "v0.9.0 delivers this" (header) | conflict C8 (release mapping), resolved by `00a_decision_register.md` (B5 is v0.8.0) |
 | Q2 "parity on set A and the private set" | conflict C10, resolved by `07d` (public only) |
 
 ### 2.19 `program_plan.md`
 
-Superseded by `00_index.md` (section 13 there).
+Superseded by `00a_decision_register.md` (section 13 there).
 
 | Item (section) | Disposition |
 |---|---|
@@ -295,7 +295,7 @@ Superseded by `00_index.md` (section 13 there).
 | Phase G white paper | obsolete (done: #412 closed, `docs/WHITEPAPER.md`) |
 | 6 NVMe budget, NAS scan | host rules in `11` section 1; NAS scan with #348 |
 | 7 public multi-view datasets | obsolete (already in `docs/research/spatial_datasets.md`) |
-| 0.1 DoD, 2 design reviews and audit gates | covered by `00_index.md` sections 4, 7, 8 and `10` |
+| 0.1 DoD, 2 design reviews and audit gates | covered by `00a_decision_register.md` sections 4, 7, 8 and `10` |
 
 ### 2.20 `release_acceptance_plan.md` (#54)
 
@@ -352,7 +352,7 @@ section is the as-built record.
 | SP4 #40 high-resolution row | covered by `07b` |
 | SP5 #45 ladders | covered by `07a` track `ladders` |
 | 7.3 Z5, 7.4 Z5-I | #398 (v0.9.0) |
-| 3 measurement protocol | still needed: `07_b5_overview.md` line 78 "builds on" it; move (section 6) |
+| 3 measurement protocol | still needed: `06_b5_overview.md` line 78 "builds on" it; move (section 6) |
 | 10.3 GPU locks with `flock` on a host lock file | conflict C9, resolved by `11` section 1 |
 
 ### 2.25 `sp_gpu_prep_concurrency.md` (#392, #407)
@@ -439,14 +439,14 @@ These stay as research notes (no verdict change). Only their action items are re
 
 ## 3. The ADD list (paste-ready, by target file and wave)
 
-Every task follows the program's lane rules (`00_index.md` section 7): own worktree and branch, a
+Every task follows the program's lane rules (`00a_decision_register.md` section 7): own worktree and branch, a
 red test seen failing on the base plus a paired control, pre-commit before each commit, `make
 contracts` with any wire change.
 
-### 3.0 `01_b0_close_out.md` (B0)
+### 3.0 `13_b0_close_out.md` (B0)
 
 **B0-1b Retire the finished plans (docs only, one commit).** *Folded into
-[01_b0_close_out.md](01_b0_close_out.md) B0-1b; wave R-1 itself was executed in the consolidation pass.* After B0-1, in the same worktree:
+[13_b0_close_out.md](13_b0_close_out.md) B0-1b; wave R-1 itself was executed in the consolidation pass.* After B0-1, in the same worktree:
 apply the removal wave R-1 of section 6 (deletes, moves to `docs/research/`, the content moves and
 every reference fix listed there), then the README rows of section 5.
 - Commit: `docs(design): retire finished plans and move measured notes to research`.
@@ -463,7 +463,7 @@ every reference fix listed there), then the README rows of section 5.
 **Note for the coordinator (plan-set inconsistency; RESOLVED: the master plan is deleted and the
 program cites it only as "the former master plan (rev 4, in git history)").** B0-1's done-when says the master-plan file
 name must have no hit under `docs` after B0-1. Today nine program files cite that file name
-(`00_index.md`, `01`, `02`, `03`, `06`, `08`, `09`, `10`, `11`). Either reword the done-when to
+(`00a_decision_register.md`, `01`, `02`, `03`, `06`, `08`, `09`, `10`, `11`). Either reword the done-when to
 "no hit outside `docs/design/program/`" or reword those citations to "the retired master plan
 (rev 4)".
 
@@ -521,9 +521,9 @@ B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) 1B-14.*
 `docs/design/cq3_label_operations.md` sections 3 (the locks row), 6.4 and 9 (crash during undo) to
 name the leases `label_op` and `label_undo` instead of `write.lock`, `undo.lock` and `flock`".
 
-### 3.2 R-final (`06_release_acceptance.md`)
+### 3.2 R-final (`07_release_acceptance.md`)
 
-*Folded into [06_release_acceptance.md](06_release_acceptance.md) (RF-70 to RF-76, RP-7 to RP-9).*
+*Folded into [07_release_acceptance.md](07_release_acceptance.md) (RF-70 to RF-76, RP-7 to RP-9).*
 Add a section "4.5 Checks carried from `release_acceptance_plan.md`":
 
 | ID | Check | How | Pass |
@@ -546,16 +546,16 @@ Add to section 3 (release prep):
 
 ### 3.3 B2 (`03_b2_overview.md` stages)
 
-*Folded into [03b](03b_b2_w2_job_families.md) (2A and 2C doc syncs), [03c](03c_b2_w3_beat_reaper_workers.md)
+*Folded into [03d](03d_stage4_job_families.md) (2A and 2C doc syncs), [03f](03f_stage6_scheduler_scaleout.md)
 2E-2 and [03_b2_overview.md](03_b2_overview.md) section 17.*
 
-- **`03b_b2_w2_job_families.md` track 2A, the `assist_run` family commit: add** "update the
+- **`03d_stage4_job_families.md` track 2A, the `assist_run` family commit: add** "update the
   `selectable_assist_plan.md` Deviations line that says a restart ends a run `interrupted` through
   `reconcile_orphaned_jobs` to the reaper rule".
 - **`03b` track 2C, `open_vocab_drain`: add** "update `sam3_full_image_detection_plan.md` section 16
   Wave 5 (API background task, serialized per process, sweeper) to the `open_vocab` queue and the
   beat task".
-- **`03c_b2_w3_beat_reaper_workers.md` 2E-2: add** "update `auto_label_loop_plan.md` sections 0
+- **`03f_stage6_scheduler_scaleout.md` 2E-2: add** "update `auto_label_loop_plan.md` sections 0
   (D4), 1 (worker pattern), 3.1 (`start.lock`, `trigger.json`) and 8 (one loop per project) to the
   lease and the `-Q assist_loop -c 1` consumer".
 - **`03_b2_overview.md` section 17: add** `docs/design/curation_design_rationale.md` section 6 (the
@@ -567,11 +567,11 @@ No ADD. The old plans' fan-out and event-log items are already in 4A-2 (region u
 
 ### 3.5 B5 (v0.7.0, D-37)
 
-*Folded into [07a](07a_b5_baseline.md) (5a-S8, 5a-A5), [07b](07b_b5_decode_once.md) (5b-D2),
-[07c](07c_b5_crops_ocr_faces.md) (5c-K4) and [07_b5_overview.md](07_b5_overview.md) section 10 (the three
+*Folded into [06a](06a_b5_baseline.md) (5a-S8, 5a-A5), [06b](06b_b5_decode_once.md) (5b-D2),
+[06c](06c_b5_crops_ocr_faces.md) (5c-K4) and [06_b5_overview.md](06_b5_overview.md) section 10 (the three
 deferred rows; Waves 8 and 10 are v0.8.0).*
 
-**`07a_b5_baseline.md` track `sweeps`: 5a-S8 Triton warmup and memory pools.**
+**`06a_b5_baseline.md` track `sweeps`: 5a-S8 Triton warmup and memory pools.**
 - From `triton_pipeline_optimization_plan.md` Wave 4 (not covered by 5a-S1-S7): `model_warmup` at
   batch 1 and the profile's largest batch for the detector, PE and OCR models; explicit
   `--cuda-memory-pool-byte-size` and `--pinned-memory-pool-byte-size` sized from the measured use.
@@ -587,7 +587,7 @@ deferred rows; Waves 8 and 10 are v0.8.0).*
 - Docs: OpenSearch nodes stats API and force merge API.
 - Origin: `ingest_write_path_investigation.md` section 7 items 2 and 4.
 
-**`07b_b5_decode_once.md` track `decode`: 5b-D2 CPU letterbox on OpenCV (M).** After 5b-D1.
+**`06b_b5_decode_once.md` track `decode`: 5b-D2 CPU letterbox on OpenCV (M).** After 5b-D1.
 - From `triton_pipeline_optimization_plan.md` Wave 2: an ndarray path in `letterbox_to_square`
   (`src/services/detection/geometry.py`) with `cv2.resize`, `INTER_AREA` for downscales (OpenCV docs
   recommend it for shrinking; PIL bilinear antialiases, `INTER_LINEAR` does not), and the 640
@@ -597,7 +597,7 @@ deferred rows; Waves 8 and 10 are v0.8.0).*
 - Measure: API CPU-seconds per image on the CPU route (set A, and set B below the 3 MP GPU gate).
 - Gate: P-box against `ref-b5a`; adopt only with a gain beyond 2x the spread.
 
-**`07c_b5_crops_ocr_faces.md` track `crops`: 5c-K4 Reduced decode once K3 sets the cap
+**`06c_b5_crops_ocr_faces.md` track `crops`: 5c-K4 Reduced decode once K3 sets the cap
 (measurement first, M).**
 - From `v070_measurement_log.md` ("measure a second decode route"): with work crops capped at
   `crop_max_side`, a DCT-scaled decode (scale chosen so the largest work crop still has at least the
@@ -609,7 +609,7 @@ deferred rows; Waves 8 and 10 are v0.8.0).*
   at the original resolution), P-vlm, P-sam, P-region, P-pe. Adopt only with a gain beyond 2x the
   spread; otherwise record and close.
 
-**`07_b5_overview.md` section 10 "Deferred inside the milestone": add three rows.**
+**`06_b5_overview.md` section 10 "Deferred inside the milestone": add three rows.**
 
 | Item | Rule |
 |---|---|
@@ -639,7 +639,7 @@ token budgets for the assist loop`.
 
 **C-370 (comment and re-scope #370).** Every format in the owner's 2026-10-31 list shipped (#426,
 `195a7697`) except COCO segmentation-only annotations as boxes. Re-scope #370 to that item
-(v0.9.0), or close it and file one small issue. Fix the `00_index.md` section 10 and `09` section 7
+(v0.9.0), or close it and file one small issue. Fix the `00a_decision_register.md` section 10 and `09` section 7
 rows that say "importers ... defer".
 
 **Moved-doc comments.** When removal wave R-1 runs, post one comment on each open issue whose body
@@ -675,13 +675,13 @@ cites a moved or deleted doc, giving the new path (from the scan of open-issue b
 | C5 | `ingest_surfaces_plan.md` (overview, 9) | trigger loop in every API worker, `dispatch.lock`, bulk-ingest start lock | B1 1A 1A-6; `03c` 2D-1 (beat tick plus a per-project lease) |
 | C6 | `cq3_label_operations.md` (6.4), `selectable_assist_plan.md` | per-item `gather` in request handlers (bounded by a semaphore) | `05` 4A-2 (one `mget` plus one bulk with per-item OCC) |
 | C7 | `release_acceptance_plan.md` (5, implied cadence) | a full acceptance run per release (R3, R-B1, R-0.9) | owner decisions 2-3 of 2026-11-03: one R-final before the single v0.7.0 tag (`06`) |
-| C8 | `program_plan.md`, `ship_track_plan.md`, `v070_wave_plan.md`, `processing_plans_plan.md` | release mapping: v0.7.0 winter pipeline, v0.8.0 Triton and clustering, v0.9.0 spatial; processing plans in v0.9.0 | `00_index.md` (D-37 = yes): v0.7.0 = B0-B5 with R-final last, v0.8.0 = platform breadth; milestone moves in `09` |
+| C8 | `program_plan.md`, `ship_track_plan.md`, `v070_wave_plan.md`, `processing_plans_plan.md` | release mapping: v0.7.0 winter pipeline, v0.8.0 Triton and clustering, v0.9.0 spatial; processing plans in v0.9.0 | `00a_decision_register.md` (D-37 = yes): v0.7.0 = B0-B5 with R-final last, v0.8.0 = platform breadth; milestone moves in `09` |
 | C9 | `ship_track_plan.md` (0, 10.3), `cluster_search_makemodel_plan.md` (9) | GPU use guarded by `flock` on host lock files | not an app-code rule; the program's host procedure replaces it: ask the peer sessions and wait, `-p` names, GPUs 0 and 2 (`11` section 1) |
 | C10 | `triton_pipeline_optimization_plan.md` (Q1, Q7), `processing_plans_plan.md` (Q2), `ingest_write_path_investigation.md` (7) | gates and repeats on the private photo set | public-only rule: set B replaces it (`07` OQ-B5-1, `07d` Q2) |
 | C11 | `triton_deep_research_2026-09.md` (action 3) | "replace ingest_batch's sync threads with bounded async inference" could read as request-path fan-out | `05` 4A: request-scoped parallelism only as the documented `asyncio.TaskGroup` exemption (Q-J7, D-29); heavy work goes to Celery (B2) |
 | C12 | `generic_detector_and_selective_embedding_plan.md` (5, case 6), `triton_pipeline_optimization_plan.md` (Wave 10) | full re-embed in place when the model changes | #365 dual-field migration (v0.9.0); no in-place swap |
-| C13 | `00_index.md` section 10 and `09` section 7 (the program itself) | #370 called "importers, defer" and #402 "defer after B4", but both are almost fully shipped | C-370 and C-402 (section 3.6) |
-| C14 | `01_b0_close_out.md` B0-1 done-when versus nine program files | the done-when requires no hit for the master-plan file name under `docs`, but the program cites it | resolved: the master plan is deleted and the citations read "the former master plan (rev 4, in git history)" |
+| C13 | `00a_decision_register.md` section 10 and `09` section 7 (the program itself) | #370 called "importers, defer" and #402 "defer after B4", but both are almost fully shipped | C-370 and C-402 (section 3.6) |
+| C14 | `13_b0_close_out.md` B0-1 done-when versus nine program files | the done-when requires no hit for the master-plan file name under `docs`, but the program cites it | resolved: the master plan is deleted and the citations read "the former master plan (rev 4, in git history)" |
 
 No old doc carries a class-index-across-a-boundary rule or a compatibility shim that the program
 would keep. The `threading.Lock` objects in the assist loop are single-owner state (2.1), not a
@@ -695,7 +695,7 @@ read `v0.8.0` below as v0.7.0 B5 and `v0.9.0` as v0.8.0). The "Status" column be
 
 | Doc | New status |
 |---|---|
-| `program/00_index.md` (new row, added by B0-1) | plan (the 0.7.0 and 0.8.0 program) |
+| `program/00a_decision_register.md` (new row, added by B0-1) | plan (the 0.7.0 and 0.8.0 program) |
 | `auto_label_loop_plan.md` | implemented (reference; S0 not run, pause and events in N16) |
 | `cluster_search_makemodel_plan.md` | open (parked research; W2, the W3 privacy part and W4 shipped; v0.9.0 and later) |
 | `cq3_label_operations.md` | implemented (reference) |
@@ -750,7 +750,7 @@ experiments ran), `triton_pipeline_optimization_plan.md` and `processing_plans_p
 
 **Waves.** R-1 runs in B0-1b (section 3.0). R-2 runs at RP-9 (after the R-final run). R-3 runs in
 the docs commit of the named B5 sub-batch. KEEP-REFERENCE docs are never removed by this program.
-R-2 and R-3 follow the plan lifecycle of [00_index.md](00_index.md) section 8.2 (the closing PR moves
+R-2 and R-3 follow the plan lifecycle of [00a_decision_register.md](00a_decision_register.md) section 8.2 (the closing PR moves
 the lasting knowledge and deletes the plan file in the same PR).
 
 **Status of the waves (2026-11-03).**
@@ -765,7 +765,7 @@ the lasting knowledge and deletes the plan file in the same PR).
   ("Wave 0 parity and FP16 gates"); the gRPC decision rule to `docs/PERFORMANCE.md` ("Ingest
   transports"); the `error_kind` table to `docs-site/docs/guides/ingest-sources.mdx`; the lessons
   learned to `engineering_standards.md` section 5 (items 19 to 27); the ship-track measurement rules to
-  `07_b5_overview.md` section 5; the `representatives` rule to `vlm-selection.mdx`. Issue comments
+  `06_b5_overview.md` section 5; the `representatives` rule to `vlm-selection.mdx`. Issue comments
   (section 3.6) are still to post when the owner lets `gh` run.
 - **R-2: remove at R-final RP-9** (`release_acceptance_plan.md`).
 - **R-3: remove after B5b** (`gpu_decode_plan.md`, `sp_gpu_prep_concurrency.md`), **after B5c**
@@ -790,24 +790,24 @@ the lasting knowledge and deletes the plan file in the same PR).
 | `dataset_import_voc_openimages.md` | DELETE | R-1 | none | only `dataset_import_more_formats.md` (deleted together) |
 | `docs_overhaul_plan.md` | DELETE | R-1 | none | README row: drop |
 | `repo_cleanup_plan.md` | DELETE | R-1 | none (`engineering_standards.md` is the record) | `docs/design/engineering_standards.md` lines 4 and 600 (links): replace with "the nine cleanup PRs, #300 to #324" in plain text; README row: drop; `CHANGELOG.md` lines 550, 705 (0.6.0): may stay |
-| `program_plan.md` | DELETE | R-1 | none (spatial datasets already in `docs/research/spatial_datasets.md`) | `docs/design/cluster_search_makemodel_plan.md` line 28 (plain): reword to "the retired program plan (git history)"; `ship_track_plan.md` (deleted in the same wave); README row: drop; `00_index.md` section 13 row: keep as a plain-text record; issue comments #365-#370 |
-| `v070_wave_plan.md` | DELETE | R-1 | none | `docs/design/auto_label_loop_plan.md` line 6 (link) and lines 23, 557 (plain): replace with "the 0.7.0 wave plan (retired)"; `program_plan.md`, `ship_track_plan.md` (deleted); README rows (also the `auto_label_loop_plan.md` row text): update; `00_index.md` row: keep as text |
-| `v060_execution_path.md` | DELETE | R-1 | none | README row: drop; `docs_overhaul_plan.md` (deleted); `00_index.md` row: keep as text |
+| `program_plan.md` | DELETE | R-1 | none (spatial datasets already in `docs/research/spatial_datasets.md`) | `docs/design/cluster_search_makemodel_plan.md` line 28 (plain): reword to "the retired program plan (git history)"; `ship_track_plan.md` (deleted in the same wave); README row: drop; `00a_decision_register.md` section 13 row: keep as a plain-text record; issue comments #365-#370 |
+| `v070_wave_plan.md` | DELETE | R-1 | none | `docs/design/auto_label_loop_plan.md` line 6 (link) and lines 23, 557 (plain): replace with "the 0.7.0 wave plan (retired)"; `program_plan.md`, `ship_track_plan.md` (deleted); README rows (also the `auto_label_loop_plan.md` row text): update; `00a_decision_register.md` row: keep as text |
+| `v060_execution_path.md` | DELETE | R-1 | none | README row: drop; `docs_overhaul_plan.md` (deleted); `00a_decision_register.md` row: keep as text |
 | `label_confirmation_plan.md` | DELETE-AFTER-MOVE | R-1 | none beyond what `docs-site/docs/guides/vlm-selection.mdx` already holds (the scope table); check that 4's scope definitions match it, add any missing sentence there | `frontend/src/lib/labelConfirmation/vlmScopeCopy.ts` line 4 and `frontend/e2e/stubbed/test_label_confirmation.py` line 1 (cited-paths guard): re-point to `docs-site/docs/guides/vlm-selection.mdx`; `docs/design/selectable_assist_plan.md` line 10 (plain): re-point to the same guide; README row: drop |
-| `ship_track_plan.md` | DELETE-AFTER-MOVE | R-1 | 3 measurement protocol -> `docs/design/program/07_b5_overview.md` section 5 (inline the rules it "builds on") | `07_b5_overview.md` line 78: drop "builds on" once inlined; `docs/research/cluster_program_outcome.md` lines 40, 87, 149 (links): re-point to #398 (Z5) and `07_b5_overview.md`; `docs/design/cq3_label_operations.md` line 5 and `sp_gpu_prep_concurrency.md` line 11 (plain): reword to "the retired ship-track plan"; `docs/reviews/cq1_review.md`, `cq3_review.md`, `ui1_ui2_review.md` (plain, historical): may stay; README row: drop; `00_index.md` row: keep as text |
+| `ship_track_plan.md` | DELETE-AFTER-MOVE | R-1 | 3 measurement protocol -> `docs/design/program/06_b5_overview.md` section 5 (inline the rules it "builds on") | `06_b5_overview.md` line 78: drop "builds on" once inlined; `docs/research/cluster_program_outcome.md` lines 40, 87, 149 (links): re-point to #398 (Z5) and `06_b5_overview.md`; `docs/design/cq3_label_operations.md` line 5 and `sp_gpu_prep_concurrency.md` line 11 (plain): reword to "the retired ship-track plan"; `docs/reviews/cq1_review.md`, `cq3_review.md`, `ui1_ui2_review.md` (plain, historical): may stay; README row: drop; `00a_decision_register.md` row: keep as text |
 | `v060_wave_plan.md` | DELETE-AFTER-MOVE | R-1 | 0 rule 3 (benchmark protocol) and 2, 2.1 (parity chain, gate table, cluster-agreement metric) -> `docs/PERFORMANCE.md` section "Wave 0 parity and FP16 gates" | `docs/PERFORMANCE.md` line 1008: point at its own section; `scripts/bench/parity_gates.json` `source`: re-point to `docs/PERFORMANCE.md` and `triton_pipeline_optimization_plan.md` section 7; `docs/design/gpu_decode_plan.md` line 4 (link): drop the link, keep "WP-2.4"; moved notes `v060_vector_db_evaluation_plan.md` line 4 and `v060_serving_backend_trade_study.md` line 4 (links): re-point to `../PERFORMANCE.md`; `v060_execution_path.md`, `v070_wave_plan.md`, `docs_overhaul_plan.md` (deleted); README row: drop; issue comments #40, #67, #219, #231, #268 |
-| `improvement_backlog.md` | DELETE-AFTER-MOVE | R-1 | 6 lessons learned -> `docs/design/engineering_standards.md` section 5 (pitfalls); every other row is in section 2.14 of this file | `README.md` line 110 (link, "What to do next"): re-point to `docs/design/program/00_index.md`; `docs/handoff/0.7.0-next-steps.md` (superseded and removed; its link is gone); `docs/reviews/rc_summary.md` line 16 (link): re-point to `docs/research/cluster_program_outcome.md`; `docs/design/program/10_standards_and_libraries.md` lines 146, 175 (plain): reword to cite #407; issue comments #398, #400-#403, #406 |
+| `improvement_backlog.md` | DELETE-AFTER-MOVE | R-1 | 6 lessons learned -> `docs/design/engineering_standards.md` section 5 (pitfalls); every other row is in section 2.14 of this file | `README.md` line 110 (link, "What to do next"): re-point to `docs/design/program/00a_decision_register.md`; `docs/handoff/0.7.0-next-steps.md` (superseded and removed; its link is gone); `docs/reviews/rc_summary.md` line 16 (link): re-point to `docs/research/cluster_program_outcome.md`; `docs/design/program/10_standards_and_libraries.md` lines 146, 175 (plain): reword to cite #407; issue comments #398, #400-#403, #406 |
 | `ingest_surfaces_plan.md` | DELETE-AFTER-MOVE | R-1 | 8 gRPC decision rule -> `docs/PERFORMANCE.md` "Ingest transports"; the `error_kind` vocabulary -> `docs-site/docs/guides/ingest-sources.mdx` | `docs/PERFORMANCE.md` line 3494: point at its own text; `scripts/bench/ingest_transport_bench.py` line 2 and `src/services/curation/bulk_ingest/object_fetch.py` line 12 (cited-paths guard): re-point to `docs/PERFORMANCE.md` and the guide; `repo_cleanup_plan.md` (deleted); README row: drop |
 | `ingest_write_path_investigation.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/ingest_write_path_investigation.md`; add the research index rows | `docs-site/docs/operations/storage.mdx` line 19, `docs/releases/v0.6.0.md` line 73 (plain): re-point to the new path; `CHANGELOG.md` line 761 (0.6.0): may stay; `v070_wave_plan.md` (deleted); issue comment #40 |
-| `storage_sizing_and_ingest_baselines.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/storage_sizing_and_ingest_baselines.md` | `scripts/bench/suite_report.py` line 31 (cited-paths guard), `docs/PERFORMANCE.md` lines 400, 648, `docs-site/docs/guides/ingest-large-folder.mdx` line 505, `docs/design/program/07a_b5_baseline.md` line 11: re-point; `docs/releases/v0.4.0.md` line 118: re-point (moved file); README row: move to the research table; issue comment #45 |
+| `storage_sizing_and_ingest_baselines.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/storage_sizing_and_ingest_baselines.md` | `scripts/bench/suite_report.py` line 31 (cited-paths guard), `docs/PERFORMANCE.md` lines 400, 648, `docs-site/docs/guides/ingest-large-folder.mdx` line 505, `docs/design/program/06a_b5_baseline.md` line 11: re-point; `docs/releases/v0.4.0.md` line 118: re-point (moved file); README row: move to the research table; issue comment #45 |
 | `v060_vector_db_evaluation_plan.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/v060_vector_db_evaluation_plan.md` | `docs/PERFORMANCE.md` line 2204 (link): re-point to `research/v060_vector_db_evaluation_plan.md`; `docker/bench/vectordb/compose.yml` line 1 comment: re-point; the moved note's own links (`v060_wave_plan.md`, `storage_sizing...`): fix with the moves; README row: move; issue comments #40, #67 |
 | `v060_serving_backend_trade_study.md` | DELETE-AFTER-MOVE (`git mv` to `docs/research/`) | R-1 | whole file -> `docs/research/v060_serving_backend_trade_study.md` (#231 and #403 still read its rooflines and decision rules) | `docs/design/processing_plans_plan.md` line 395 (plain): re-point; `program_plan.md`, `improvement_backlog.md`, `v060_wave_plan.md` (deleted); README row: move; issue comments #40, #67, #231 |
-| `release_acceptance_plan.md` | DELETE-AFTER-MOVE | R-2 (RP-9) | 1 run rules and 5 go/no-go -> `docs-site/docs/operations/release-acceptance.mdx`; phases D, E, H, I, K -> `06` RF-70 to RF-76 and B1 1B 1B-12b (section 3) | `scripts/release/acceptance_run.sh` line 6 (cited-paths guard): re-point to `docs-site/docs/operations/release-acceptance.mdx`; `docs/design/program/00_index.md` line 411, `01_b0_close_out.md` line 178, `06_release_acceptance.md` lines 11, 148: re-point to `06` and the docs-site page; `docs/reviews/rc_summary.md` line 15 (link): re-point to the docs-site page; README row: drop |
-| `gpu_decode_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5b | 13 build record and 6.1 decoder notes -> `docs/PERFORMANCE.md` "Decode once and the GPU decode" and `docs/ARCHITECTURE.md` (GPU pipeline) | at that time: `scripts/bench/gpu_decode_bench.py` line 2 (guard), `docs/PERFORMANCE.md` lines 2976, 3215, 3316, `07b`, `07`, `00_index.md`, `10`, `processing_plans_plan.md`, `faces_ocr_resident_crops_plan.md`, `CHANGELOG.md` line 409 (0.6.0, may stay); issue comments #40, #220 |
-| `sp_gpu_prep_concurrency.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5b | 2-4 diagnosis -> `docs/research/` (new note) or `docs/research/v070_measurement_log.md` | at that time: `docs/benchmarks/v070/sp0/gpu_prep_concurrency_matrix.md`, `docs/reviews/sp_fixes_review.md`, `docs/WHITEPAPER.md`, `07`, `07b`, `00_index.md`, `processing_plans_plan.md`; issue comments #403, #407 |
+| `release_acceptance_plan.md` | DELETE-AFTER-MOVE | R-2 (RP-9) | 1 run rules and 5 go/no-go -> `docs-site/docs/operations/release-acceptance.mdx`; phases D, E, H, I, K -> `06` RF-70 to RF-76 and B1 1B 1B-12b (section 3) | `scripts/release/acceptance_run.sh` line 6 (cited-paths guard): re-point to `docs-site/docs/operations/release-acceptance.mdx`; `docs/design/program/00a_decision_register.md` line 411, `13_b0_close_out.md` line 178, `07_release_acceptance.md` lines 11, 148: re-point to `06` and the docs-site page; `docs/reviews/rc_summary.md` line 15 (link): re-point to the docs-site page; README row: drop |
+| `gpu_decode_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5b | 13 build record and 6.1 decoder notes -> `docs/PERFORMANCE.md` "Decode once and the GPU decode" and `docs/ARCHITECTURE.md` (GPU pipeline) | at that time: `scripts/bench/gpu_decode_bench.py` line 2 (guard), `docs/PERFORMANCE.md` lines 2976, 3215, 3316, `07b`, `07`, `00a_decision_register.md`, `10`, `processing_plans_plan.md`, `faces_ocr_resident_crops_plan.md`, `CHANGELOG.md` line 409 (0.6.0, may stay); issue comments #40, #220 |
+| `sp_gpu_prep_concurrency.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5b | 2-4 diagnosis -> `docs/research/` (new note) or `docs/research/v070_measurement_log.md` | at that time: `docs/benchmarks/v070/sp0/gpu_prep_concurrency_matrix.md`, `docs/reviews/sp_fixes_review.md`, `docs/WHITEPAPER.md`, `07`, `07b`, `00a_decision_register.md`, `processing_plans_plan.md`; issue comments #403, #407 |
 | `faces_ocr_resident_crops_plan.md` | KEEP-OPEN, then DELETE | R-3 after 5c | none (07c and 07d hold the steps) | at that time: `07`, `07c`, `07d`, `processing_plans_plan.md`; issue comment #220 |
-| `processing_plans_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5d | the branch vocabulary and per-route defaults -> `docs/ARCHITECTURE.md` and the API docs | at that time: `CHANGELOG.md` (`[Unreleased]` mention, re-point), `00_index.md`, `07`, `07b`, `07d` |
-| `triton_pipeline_optimization_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5d | 7 accuracy gates -> `docs/PERFORMANCE.md` parity section; 11 verification log is already in PERFORMANCE | at that time: `docs/PERFORMANCE.md` lines 7, 421, 516, 748, 1007, `docs/VISION_AND_GOALS.md` line 115, `docs/research/triton_deep_research_2026-09.md` line 1 (link), `scripts/bench/parity_gates.json`, the `07` files, `00_index.md`; issue comments #40, #67, #84, #219, #220 |
+| `processing_plans_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5d | the branch vocabulary and per-route defaults -> `docs/ARCHITECTURE.md` and the API docs | at that time: `CHANGELOG.md` (`[Unreleased]` mention, re-point), `00a_decision_register.md`, `07`, `07b`, `07d` |
+| `triton_pipeline_optimization_plan.md` | KEEP-OPEN, then DELETE-AFTER-MOVE | R-3 after 5d | 7 accuracy gates -> `docs/PERFORMANCE.md` parity section; 11 verification log is already in PERFORMANCE | at that time: `docs/PERFORMANCE.md` lines 7, 421, 516, 748, 1007, `docs/VISION_AND_GOALS.md` line 115, `docs/research/triton_deep_research_2026-09.md` line 1 (link), `scripts/bench/parity_gates.json`, the `07` files, `00a_decision_register.md`; issue comments #40, #67, #84, #219, #220 |
 | `cluster_search_makemodel_plan.md` | KEEP-OPEN | none | none; it is the only design for the parked waves (2.2), too large for an issue body | none now |
 | `auto_label_loop_plan.md` | KEEP-REFERENCE, partly superseded | none | none; it is the as-built design (statistics in 6, lock-rule interplay) cited by `docs/WHITEPAPER.md`, the docs-site guide and reviews; its storage (3.1), event file (3.2), budget file (5.8), worker and trigger protocol (D4, 8), control routes (10) and Run panel controls (11) are superseded for the rebuild by [research_auto_label_assist_plan.md](../research_auto_label_assist_plan.md) (lane 6D writes the header note) | links to `v070_wave_plan.md` fixed in R-1 (row above) |
 | `issue_plans/issue-346-plan.md`, `issue-406-plan.md`, `issue-347-plan.md`, `issue-348-plan.md`, `issue-398-plan.md`, `issue-400-plan.md`, `issue-401-plan.md`, `issue-416-plan.md` | DELETED by the research branches (2026-11-04) | none | absorbed into the research plans: clustering (346, 406), embeddings (347), spatial (348, 400), auto-label (398), plate text (401), near-duplicates (416); their content lives there | none |

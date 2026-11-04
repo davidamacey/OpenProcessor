@@ -6,7 +6,7 @@ Depends on: owner approval of this plan set; the host all-clear from the OpenTra
 session (section 4).
 Decisions applied: D-1 (B0 scope, minus release prep), D-2 (exact Ultralytics pin, done), D-3
 (gates, push, CI, merge commit; R3 deferred into R-final), D-5 (#42 never blocks), D-6 dropped,
-owner decisions 1-3 and 7-9 of 2026-11-03 ([00_index.md](00_index.md), decision register).
+owner decisions 1-3 and 7-9 of 2026-11-03 ([00a_decision_register.md](00a_decision_register.md), decision register).
 Source IDs: GPU-1, GPU-3a, GPU-13, GPU-2, OS-2, OS-1, OPS-1, CC-1, BA-7 (`codebase_audit_plan.md`
 section 4); U-J2, U-C4 (`model_family_versions_plan.md`); Q-D1, Q-D10, Q-D11, Q-D13
 (`task_queue_plan.md`); ledger sections 3, 14, 16-18 (private).
@@ -18,7 +18,7 @@ Consolidated 2026-11-03.
 ## 1. Goal
 
 Get everything on `fix/411-r2-round` onto `main` in one push, behind one CPU gate cycle (no GPU
-run: [00_index.md](00_index.md) section 8.1), with a merge commit. **No VERSION bump, no tag, no
+run: [00a_decision_register.md](00a_decision_register.md) section 8.1), with a merge commit. **No VERSION bump, no tag, no
 release images, no GitHub release** (owner decisions 2 and 3, D-37: the tag comes only after
 every plan is implemented and tested). B0 ends when `main` holds the branch and the worktree is
 cleaned up. The next step is B1 (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md))).
@@ -39,9 +39,9 @@ What moved out of B0 compared with section 5 of the former master plan (rev 4, i
 | Item in the old B0 | Where it is now |
 |---|---|
 | OCR before/after comparison on GPU 0 (B0-3) | GPU window 1, the B3 gate ([04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md)); the B0 merge needs CPU gates only |
-| Release prep (VERSION 0.7.0, CHANGELOG known-issue lines for #447, CC-2, CC-4) | VERSION and CHANGELOG consolidation: release prep in [06_release_acceptance.md](06_release_acceptance.md). The known-issue lines are dropped (D-6): no release ships before B1-B4 fix them |
-| R3 live acceptance and its extra checks | merged into R-final, [06_release_acceptance.md](06_release_acceptance.md) |
-| Tag decision point | one tag decision after R-final, which runs after B5 (D-16, D-37), [06_release_acceptance.md](06_release_acceptance.md) |
+| Release prep (VERSION 0.7.0, CHANGELOG known-issue lines for #447, CC-2, CC-4) | VERSION and CHANGELOG consolidation: release prep in [07_release_acceptance.md](07_release_acceptance.md). The known-issue lines are dropped (D-6): no release ships before B1-B4 fix them |
+| R3 live acceptance and its extra checks | merged into R-final, [07_release_acceptance.md](07_release_acceptance.md) |
+| Tag decision point | one tag decision after R-final, which runs after B5 (D-16, D-37), [07_release_acceptance.md](07_release_acceptance.md) |
 | B0 rows of the issue close table | [09_github_actions.md](09_github_actions.md) |
 | Dependabot PRs | not in B0; the separate `b1/deps` lane in B1 (B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) "Lane b1/deps"; per-PR data in [09_github_actions.md](09_github_actions.md) section 8) |
 
@@ -123,15 +123,15 @@ anything.
 Files: `docs/design/program/*.md` (new), the master-plan file in `docs/design/` (deleted),
 `docs/design/task_queue_plan.md`, `docs/design/codebase_audit_plan.md`,
 `docs/design/model_family_versions_plan.md` (each had a header pointer to the master plan;
-repointed to `docs/design/program/00_index.md`), `docs/design/README.md` (a "Program plan
+repointed to `docs/design/program/00a_decision_register.md`), `docs/design/README.md` (a "Program plan
 (current)" section with one row per `program/` file, rows for the three source plans and the
 other missing rows, the statuses of file 12 section 5).
 
 Steps:
 1. Check that every section of the former master plan is placed: walk the mapping table in
-   [00_index.md](00_index.md) section 12 and open each target file.
+   [00a_decision_register.md](00a_decision_register.md) section 12 and open each target file.
 2. `git rm` the master-plan file; rewrite every reference (the three source-plan headers,
-   `docs/design/program/*.md`) to `program/00_index.md`, the specific batch file, or, where the
+   `docs/design/program/*.md`) to `program/00a_decision_register.md`, the specific batch file, or, where the
    history is meant, "the former master plan (rev 4, in git history)".
 3. A search of `docs` for the old file name (master, underscore, plan) must find nothing.
 4. Run the naming-leak scan and the docs check on the changed files:
@@ -198,7 +198,7 @@ Done when: every step is green, or each failure is fixed with a red/green test o
 
 This task is not part of the B0 merge. It runs in the B3 GPU window
 ([04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md);
-[00_index.md](00_index.md) section 8.1), against `main` after B0 (the "before" tree stays the
+[00a_decision_register.md](00a_decision_register.md) section 8.1), against `main` after B0 (the "before" tree stays the
 `5b95591f` worktree). The procedure is kept here so B3's gate agent can run it unchanged.
 
 Why: GPU-1, GPU-3a and GPU-2 change `/ocr` output (box geometry, orientation, unclip). The
@@ -283,8 +283,8 @@ See [11_risks_cleanup_host.md](11_risks_cleanup_host.md) section 5 for the full 
 - No VERSION change (`cat VERSION` is `0.6.0`), no tag (`git ls-remote --tags origin | rg v0.7`
   is empty).
 - Gate evidence under `artifacts_local/b0/`.
-- Delete this batch's plan file (`program/01_b0_close_out.md`) and its rows in `00_index.md` and
-  `docs/design/README.md` after moving the keep-list below ([00_index.md](00_index.md)
+- Delete this batch's plan file (`program/13_b0_close_out.md`) and its rows in `00a_decision_register.md` and
+  `docs/design/README.md` after moving the keep-list below ([00a_decision_register.md](00a_decision_register.md)
   section 8.2). Do this in the B0 closing PR, or in the first B1 docs commit if B0 already
   merged.
 
@@ -305,7 +305,7 @@ See [11_risks_cleanup_host.md](11_risks_cleanup_host.md) section 5 for the full 
 - Contracts: no change in B0.
 - CHANGELOG: entries already present (section 3). The OCR geometry and orientation changes are
   behaviour changes; they are written as such under `[Unreleased]` and are gathered into the
-  release's upgrade notes at release prep ([06_release_acceptance.md](06_release_acceptance.md)).
+  release's upgrade notes at release prep ([07_release_acceptance.md](07_release_acceptance.md)).
 
 ## 8. Upgrade impact
 
@@ -334,7 +334,7 @@ None for users: nothing is released. For a developer on `main`: rebuild the Trit
 ## 11. Ready-to-paste brief: B0 gate agent (coordinator may run it itself)
 
 ```
-You run the B0 CPU gate cycle for OpenProcessor. Plan: docs/design/program/01_b0_close_out.md,
+You run the B0 CPU gate cycle for OpenProcessor. Plan: docs/design/program/13_b0_close_out.md,
 sections 4 and 5 (B0-2; no GPU step). Worktree: <repo>-wt-r2round, branch fix/411-r2-round. You are the
 only writer in it. Do not push, merge or tag; report back.
 - Before any heavy step: ListAgents, message every OpenTranscribe session, wait for "go"; run

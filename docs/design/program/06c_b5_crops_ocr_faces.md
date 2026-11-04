@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Release | v0.7.0 (inside the release; R-final runs after B5; see `07_b5_overview.md` section 2) |
-| Depends on | 5b merged (`07b_b5_decode_once.md`); `ref-b5a` with OCR probes and (for P-vlm) VLM labels; a GPU plan for the VLM and the segmenter during the gate |
+| Release | v0.7.0 (inside the release; R-final runs after B5; see `06_b5_overview.md` section 2) |
+| Depends on | 5b merged (`06b_b5_decode_once.md`); `ref-b5a` with OCR probes and (for P-vlm) VLM labels; a GPU plan for the VLM and the segmenter during the gate |
 | Blocks | 5d P5 (faces and OCR as `gpu_image_prep` branches) uses the OCR contract this batch leaves |
 | Decisions applied | #40 Q2/Q3 (2026-10-03: work-crop cap recommended 1024, shipped off first; the VLM cap set from the VLM's real input size); `faces_ocr_resident_crops_plan.md` J1-J5 (pre-approved; J5 moves face alignment to #67 P5); public data only |
 | Open decisions | none new |
@@ -44,17 +44,17 @@ Integration branch `int/b5c-crops-ocr-faces` from main after 5b merged. Tracks `
 
 ## 4. Measurement protocol and gates for this batch
 
-- `07_b5_overview.md` M-1..M-10. Set B is the gate set for #219 (the cap never triggers on COCO
+- `06_b5_overview.md` M-1..M-10. Set B is the gate set for #219 (the cap never triggers on COCO
   crops, which are near model size already; the public COCO gate is the unit tests plus byte
   accounting). Set A and the pinned OCR set for P-ocr.
 - **Pinned OCR set:** the public text-bearing set used for B0's OCR before/after
-  (`01_b0_close_out.md`; COCO-Text v2 rule with its fallback), so P-ocr is comparable across
+  (`13_b0_close_out.md`; COCO-Text v2 rule with its fallback), so P-ocr is comparable across
   batches. Re-check its download location and licence at fetch time (the former master plan, rev 4, section 15 notes it was
   not re-checked); record both in the manifest.
 - Baselines: 5a endpoint rows (`/ocr` at 1 and 16 clients; the OCR BLS ms per request from Triton
   `compute_infer` of `ocr_pipeline`), 5a set B ingest rows, crop-cache bytes per image from
   `run_baseline.py --crop-cache-dir`.
-- Gates (thresholds in `07_b5_overview.md` section 6): P-vlm >= 97 % label agreement with the
+- Gates (thresholds in `06_b5_overview.md` section 6): P-vlm >= 97 % label agreement with the
   disagreement list reviewed by a human; P-sam hit/miss >= 97 %, IoU mean >= 0.97, p05 >= 0.90;
   P-region hit/miss >= 99 %, IoU >= 0.9; P-ocr >= 98 % exact, CER not worse; P-pe unchanged (PE
   reads pixels, not the cached JPEG).
@@ -165,7 +165,7 @@ With the cap off, outputs byte-identical to the 5a reference.
 - T0 (targeted red/green plus static checks on the touched files) per task; one offline sweep on
   the merged integration head (pre-commit `--all-files`, suite `-n 8`, contracts-check, docs check,
   CHANGELOG rules; frontend only if `frontend/` changed).
-- The gate runs inside the B5 GPU window (`00_index.md` section 8.1), after 5b's: P-vlm, P-sam,
+- The gate runs inside the B5 GPU window (`00a_decision_register.md` section 8.1), after 5b's: P-vlm, P-sam,
   P-region and P-ocr together; one confirmation row on set A
   and set B against 5a.
 - #219 acceptance (public set B), #220 acceptance as re-scoped (OCR bytes already 4x down by step 1;
@@ -182,8 +182,8 @@ With the cap off, outputs byte-identical to the 5a reference.
   #220 closed (faces part points at #67);
 - 5c-K4 adopted or recorded;
 - the R-3 docs removal for 5c is done in the closing PR (`faces_ocr_resident_crops_plan.md`; table
-  in `07_b5_overview.md` section 10.1), and this file is deleted after the keep-list below is
-  moved (`00_index.md` "Plan lifecycle"), with its row removed from `00_index.md` and
+  in `06_b5_overview.md` section 10.1), and this file is deleted after the keep-list below is
+  moved (`00a_decision_register.md` "Plan lifecycle"), with its row removed from `00a_decision_register.md` and
   `docs/design/README.md`.
 
 ### What to keep after merge
@@ -220,8 +220,8 @@ With the cap off, outputs byte-identical to the 5a reference.
 ## 10. Lane briefs (ready to paste)
 
 Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
-`<repo>-wt-b5c-<track>`, branch `b5c/<track>`, file `docs/design/program/07c_b5_crops_ocr_faces.md`,
-plus: "Parity and benchmarks per `07_b5_overview.md` against `ref-b5a`. Stack `docker compose -p
+`<repo>-wt-b5c-<track>`, branch `b5c/<track>`, file `docs/design/program/06c_b5_crops_ocr_faces.md`,
+plus: "Parity and benchmarks per `06_b5_overview.md` against `ref-b5a`. Stack `docker compose -p
 op-b5c-bench`. GPU 0; GPU 2 only if the coordinator says the peer agreed. Never read or print
 `.env`; pass it to compose. Project slugs start with `b5c-`."
 
@@ -238,5 +238,5 @@ op-b5c-bench`. GPU 0; GPU 2 only if the coordinator says the peer agreed. Never 
 | 5c-K1 | `crop_sizing` uses the storage seam's size-variant crop key (GPU S-10, lane 1E-4), so a source-size crop is never served as a capped one |
 | 5c-K4 | reduced decode on the GPU route is impossible on the A6000 (nvJPEG scaled decode is hardware-backend only); the task is the CPU-route measurement only |
 | 5c-O2, 5c-O3 | read `gpu:PR-6`'s record first (argmax in the recognition graph, padding-aware CTC on bucketed widths) |
-| track `ocr`, model choice (owner Q-B, 2026-11-04; review RR-5) | PP-OCRv6 (Apache-2.0, released June 2026) is compared with PP-OCRv5 once, in the short `pt:P1` run of PW-2 ([00e](00e_research_track.md) section 3), on the pinned OCR set's lines as well as the plate crops. PP-OCRv5 stays the model unless that run shows a clear win on both at no more than today's latency; on a win, the swap is one task of this track (export, `MODEL_VERSION` bump, the P-ocr gate, `ATTRIBUTION.md`), done before `rec_char_min` so the new output is added once |
-| track `ocr` | **research plate 5.7: a new output tensor `rec_char_min`** (FP32, `[128]`) in `ocr_pipeline`: the minimum per-character max probability over the decoded characters of each line, computed in `CTCLabelDecode` beside the mean; padded slots 0.0; threaded through `src/clients/triton_ocr.py` and the cascade OCR recognizer (`OcrLine.char_min`); `MODEL_VERSION` bumped; one more output in the decode loop 5c-O2 already rewrites. Red: `tests/ocr/test_rec_char_min.py`: the output exists and equals the per-line minimum on a fixture. Control (parity): `rec_scores` and `texts` byte-identical on the fixed fixture. Its first reader is the W5e confident tier ([03g](03g_w5e_plate_text.md)) |
+| track `ocr`, model choice (owner Q-B, 2026-11-04; review RR-5) | PP-OCRv6 (Apache-2.0, released June 2026) is compared with PP-OCRv5 once, in the short `pt:P1` run of PW-2 ([00f](00f_research_track.md) section 3), on the pinned OCR set's lines as well as the plate crops. PP-OCRv5 stays the model unless that run shows a clear win on both at no more than today's latency; on a win, the swap is one task of this track (export, `MODEL_VERSION` bump, the P-ocr gate, `ATTRIBUTION.md`), done before `rec_char_min` so the new output is added once |
+| track `ocr` | **research plate 5.7: a new output tensor `rec_char_min`** (FP32, `[128]`) in `ocr_pipeline`: the minimum per-character max probability over the decoded characters of each line, computed in `CTCLabelDecode` beside the mean; padded slots 0.0; threaded through `src/clients/triton_ocr.py` and the cascade OCR recognizer (`OcrLine.char_min`); `MODEL_VERSION` bumped; one more output in the decode loop 5c-O2 already rewrites. Red: `tests/ocr/test_rec_char_min.py`: the output exists and equals the per-line minimum on a fixture. Control (parity): `rec_scores` and `texts` byte-identical on the fixed fixture. Its first reader is the W5e confident tier ([06e](06e_w5e_plate_text.md)) |

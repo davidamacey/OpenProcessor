@@ -1,6 +1,6 @@
 # Auto-label assist loop: research and the seams for the clean rebuild
 
-**Superseded parts:** the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first.
+**Superseded parts:** the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03d_stage4_job_families.md) (W2.3a and W2.3b), [program/03d](program/03b_stage2_control_data.md), [program/03c](program/03f_stage6_scheduler_scaleout.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00f_research_track.md](program/00f_research_track.md) section 2.1). A fresh agent loads those files first.
 
 Status: plan, research. Nothing here is implemented. Written 2026-11-04 against `origin/main` at
 `49731595`. Part A (the seams, section 5) is design input to program B2 and must land in the B2 plan
@@ -83,7 +83,7 @@ replaying cached real VLM answers (AL3, CPU only), before any new strategy enter
 | Loop driver, node step, gate, propagate, split, audit, rollback, plan | `src/services/curation/assist_loop/` (`driver.py`, `node_step.py`, `evaluate.py`, `propagate.py`, `splitter.py`, `audit.py`, `rollback.py`, `plan.py`) | as built in #286; algorithm in [auto_label_loop_plan.md](auto_label_loop_plan.md) 5-7 |
 | Exact gate and tree | `src/domain/loop_stats.py` (hypergeometric `required_sample`, Wilson bound), `src/domain/loop_tree.py` (path grammar `r<int>(.<int>)*`, seeded child draws, best-first key) | pure, tested |
 | Partition seam | `assist_loop/partition.py` `PartitionReader` (`survey`, `roots`, `root_of`); one implementation `ClusterFieldPartition` | the place a second partition plugs in (Z5-I) |
-| Loop record | `assist_loop/store.py`: job directory, `events.jsonl` with fsync per line, replay; `assist_loop/budget.py`: write-ahead reservations in `budget.json` under a `threading.Lock` | file-based; lane 4D of B2 deletes it ([03b](program/03b_b2_w2_job_families.md) 4D-2) |
+| Loop record | `assist_loop/store.py`: job directory, `events.jsonl` with fsync per line, replay; `assist_loop/budget.py`: write-ahead reservations in `budget.json` under a `threading.Lock` | file-based; lane 4D of B2 deletes it ([03d](program/03d_stage4_job_families.md) 4D-2) |
 | Worker | `scripts/curation/assist_loop_worker.py` (trigger claim by `unlink`, `pause.flag`, `cancel.flag`) | deleted by lane 4D |
 | Routes | `src/routers/curation/assist_loop.py`: `/curation/projects/{project}/assist/loops` (plan or start), list, state, nodes, node members, `/cancel`, `/resume`, `/rollback` | no pause route, no events, no budget edit |
 | Pause today | the driver honours `pause.flag` (`pause_reason: user`) and pauses itself on a failing audit (`pause_reason: audit`); nothing writes `pause.flag` except tests | #466 |
@@ -124,7 +124,7 @@ Valkey wake-up and SSE resume. Three gaps matter here:
 |---|---|---|---|
 | G-1 | the claim increments `attempt` and refuses at `attempt >= max_attempts` (3); resume from `paused` goes back to `queued` | a loop paused and resumed three times fails `attempts_exhausted` on the fourth resume | count only failed deliveries: `retry_count` |
 | G-2 | `assist_loop` routes to queue `assist_loop`, consumer `-c 1`, soft limit 24 h, max queue wait 1 h | one project's long loop holds the only slot; a second project's resumed loop fails `queue_wait_exceeded` after 1 h; a 24 h segment also outlives the 6 h `visibility_timeout`, so the message is redelivered (harmless, the claim skips it, but noisy) | time slices: the handler yields at a node boundary after `slice_s` and the wrapper re-queues it |
-| G-3 | [03b](program/03b_b2_w2_job_families.md) 4D-2 moves `budget.json` "into `jobs.params` and `checkpoint`" | a jsonb checkpoint cannot be an atomic counter that several in-flight requests reserve against; and `events` rows (24 h) cannot replace `events.jsonl`, which is the loop's durable log | the loop tables of section 5.1 |
+| G-3 | [03d](program/03d_stage4_job_families.md) 4D-2 moves `budget.json` "into `jobs.params` and `checkpoint`" | a jsonb checkpoint cannot be an atomic counter that several in-flight requests reserve against; and `events` rows (24 h) cannot replace `events.jsonl`, which is the loop's durable log | the loop tables of section 5.1 |
 
 ---
 
@@ -496,7 +496,7 @@ boundary wait (one VLM request timeout).
 
 ### 5.3 The control API and its Celery semantics
 
-Owner: [03b](program/03b_b2_w2_job_families.md) 4D-2 (routes and service), contracts regenerated in
+Owner: [03d](program/03d_stage4_job_families.md) 4D-2 (routes and service), contracts regenerated in
 the same commits; lane **4D**. All routes are project-scoped, go through the one serializer, accept
 the optional `Idempotency-Key` on start (D-58), and are added to the cross-project leak tables.
 
@@ -588,7 +588,7 @@ Owner: lane **4D** (`assist_loop/budget.py` rewritten on `src/db/repos/assist_lo
 ### 5.6 Lock-rule integration
 
 Owner: unchanged module `src/clients/occ_locks.py`; tests in lane **4D**; label-operation kinds in
-lane **2D** ([03d](program/03d_b2_s2_control_data.md)).
+lane **2D** ([03b](program/03b_stage2_control_data.md)).
 
 | Point | Rule |
 |---|---|
@@ -607,7 +607,7 @@ over unchanged in intent: one case per locked kind, each never written, through 
 ### 5.7 Config kinds
 
 Owner: [02a](program/02a_postgres_schema.md) section 4; lane **2C**
-([03d](program/03d_b2_s2_control_data.md)).
+([03b](program/03b_stage2_control_data.md)).
 
 | Change | Value |
 |---|---|
@@ -678,7 +678,7 @@ asks exactly what the product asks.
 A separate venv outside `.venv` (which holds CPU torch and `faiss-cpu`):
 `python3.12 -m venv artifacts_local/venvs/auto_label`, then
 `artifacts_local/venvs/auto_label/bin/pip install -r requirements-test.txt -r scripts/research/auto_label/requirements.txt`.
-Shared packages use the versions of [13_package_pins.md](program/13_package_pins.md) (torch 2.15.0
+Shared packages use the versions of [01_package_pins.md](program/01_package_pins.md) (torch 2.15.0
 with torchvision 0.29.2, NumPy 2.5.4, the product's Ultralytics pin of the day, the product's
 transformers pin); research-only packages (vLLM, Label Studio, statsmodels, cleanlab, pyarrow) are
 pinned `==` to their current release on the day of the AL0 commit, and the lock file records the
@@ -894,7 +894,7 @@ Cropwright (v0.8.0): verify queue ordered by the strategy, blind audit queue ran
 - A trained model becomes the next iteration's proposer (`proposer_kind = 'detector'`) only after
   a bake-off against the current proposer on the **frozen holdout** passes the bake-off profile's
   bar, and a person clicks "use as proposer"; it is never promoted to the live detector by the loop.
-  Promotion keeps its own job and `promotions` rows ([03f](program/03f_b2_s5_gpu_queues.md) 5D);
+  Promotion keeps its own job and `promotions` rows ([03e](program/03e_stage5_gpu_queues.md) 5D);
   class identity by name end to end (`models.labels`).
 
 ### 7.5 Strategies and proposers (v0.8.0, only those that passed AL3 and AL4)
@@ -948,13 +948,13 @@ strategy if J7 says yes, so one control surface covers every whole-project VLM r
 
 | When | Lane | Plan file | Content |
 |---|---|---|---|
-| B2 stage 1 | **1A** `b2/db-core` | [03a](program/03a_b2_w1_queue_infra.md) | the tables of 5.1, the `jobs` columns and transitions of 5.2 in `0001_control_plane`; `tests/db/test_assist_loop_schema.py` (CHECKs, cascades, RLS through `run_id`, the budget CHECK refuses an over-reserve) |
-| B2 stage 2 | **2C** `b2/config-pg` | [03d](program/03d_b2_s2_control_data.md) | `assist_loop_preset` kind and axis (5.7) |
-| B2 stage 2 | **2D** `b2/records-pg` | [03d](program/03d_b2_s2_control_data.md) | label-operation kinds `assist_loop_propagate` and `assist_loop_review` |
-| B2 stage 3 | **3A** `b2/job-runtime` | [03e](program/03e_b2_s3_job_runtime.md) | `Yield` and the `running -> queued` transition, `queued -> paused`, `retry_count` in the claim, `pause_reason`, `pausable` and `slice_s` in `register_job`, the reaper's system-pause resume rule; red tests: three pause/resume cycles then a fourth resume claims (red on today's claim); a yielded job re-dispatches and keeps its attempt budget |
-| B2 stage 3 | **3B** `b2/events-pg` | [03e](program/03e_b2_s3_job_runtime.md) | nothing new beyond the producer list; the loop types ride the generic feed |
-| B2 stage 4 | **4D** `b2/trigger-workers` | [03b](program/03b_b2_w2_job_families.md) | the port: loop on the tables (no `jobs.params` budget), pause and budget routes, events, `usage` capture and `record_vlm_usage`, slices, the lock-rule and budget tests carried over (randomized 200-seed budget test against the SQL reservation, kill after each step then resume, pause latency in the live test) |
-| B2 stage 4 | **4E** `b2/frontend-queued` | [03b](program/03b_b2_w2_job_families.md) | Cropwright: pause button and paused state with reason, budget edit dialog, event log fed by SSE, `control` flags drive every button |
+| B2 stage 1 | **1A** `b2/db-core` | [03a](program/03a_stage1_foundation.md) | the tables of 5.1, the `jobs` columns and transitions of 5.2 in `0001_control_plane`; `tests/db/test_assist_loop_schema.py` (CHECKs, cascades, RLS through `run_id`, the budget CHECK refuses an over-reserve) |
+| B2 stage 2 | **2C** `b2/config-pg` | [03b](program/03b_stage2_control_data.md) | `assist_loop_preset` kind and axis (5.7) |
+| B2 stage 2 | **2D** `b2/records-pg` | [03b](program/03b_stage2_control_data.md) | label-operation kinds `assist_loop_propagate` and `assist_loop_review` |
+| B2 stage 3 | **3A** `b2/job-runtime` | [03c](program/03c_stage3_job_runtime.md) | `Yield` and the `running -> queued` transition, `queued -> paused`, `retry_count` in the claim, `pause_reason`, `pausable` and `slice_s` in `register_job`, the reaper's system-pause resume rule; red tests: three pause/resume cycles then a fourth resume claims (red on today's claim); a yielded job re-dispatches and keeps its attempt budget |
+| B2 stage 3 | **3B** `b2/events-pg` | [03c](program/03c_stage3_job_runtime.md) | nothing new beyond the producer list; the loop types ride the generic feed |
+| B2 stage 4 | **4D** `b2/trigger-workers` | [03d](program/03d_stage4_job_families.md) | the port: loop on the tables (no `jobs.params` budget), pause and budget routes, events, `usage` capture and `record_vlm_usage`, slices, the lock-rule and budget tests carried over (randomized 200-seed budget test against the SQL reservation, kill after each step then resume, pause latency in the live test) |
+| B2 stage 4 | **4E** `b2/frontend-queued` | [03d](program/03d_stage4_job_families.md) | Cropwright: pause button and paused state with reason, budget edit dialog, event log fed by SSE, `control` flags drive every button |
 | after the tag | `research/auto-label` | this file, section 6 | AL0-AL5 (one lane per prototype, registration commits first) |
 | after the tag | `research/z5` | this file, section 6.8 | AL6 |
 | v0.8.0 | `feat/loop-review` | this file, section 7.3 | review and metrics routes, Cropwright review grid and metrics panel |
@@ -1026,11 +1026,11 @@ static checks only in the lane, one full sweep per wave on the integration branc
 |---|---|
 | [program/02a_postgres_schema.md](program/02a_postgres_schema.md) | add section 5.1 with the DDL of section 5.1 here; add `retry_count` and `pause_reason` to `jobs` with their CHECKs; `job_attempts.outcome` gains `yielded`; section 4: `config_documents.kind` and `config_activations.axis` gain `assist_loop_preset` (and the axis-kind pair); section 9: the retention rows of 5.1 and the `jobs` keep-list gains `assist_loop_runs` |
 | [program/02b_jobs_locking_events.md](program/02b_jobs_locking_events.md) | section 1: the transitions of 5.2 (`running -> queued` yield, `queued -> paused`, widened `running -> paused`, reaper `paused -> queued` for system reasons); the claim uses `retry_count < max_attempts`; section 2.1: `assist_loop` slice 600 s, soft/hard 30 m/35 m, max queue wait 24 h, `pausable`; `autolabel` `pausable` (J3); section 3.1: `ctx.paused()` read before every reservation, `Yield` return; section 3.3: pause route semantics of 5.3, cancel terminal for every kind; section 4: the reaper's system-pause resume rule; section 6.2: the loop event types of 5.4 in the producer list |
-| [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | lane 1A owns the loop tables in `0001_control_plane` and `tests/db/test_assist_loop_schema.py` |
-| [program/03e_b2_s3_job_runtime.md](program/03e_b2_s3_job_runtime.md) | lane 3A: `Yield`, `retry_count`, `pause_reason`, `pausable`, `slice_s`, the reaper rule, and the red tests named in section 8 |
-| [program/03d_b2_s2_control_data.md](program/03d_b2_s2_control_data.md) | lane 2C: the `assist_loop_preset` kind; lane 2D: label-operation kinds `assist_loop_propagate`, `assist_loop_review` |
-| [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | 4D-2: replace "`budget.json` (into `jobs.params` and `checkpoint`)" and "events are `events` rows" with "the loop record moves to the `assist_loop_*` tables ([research_auto_label_assist_plan.md](research_auto_label_assist_plan.md) section 5); `events` rows are the UI feed only"; add the pause and budget routes, `usage` capture (`src/services/labeling/vlm_client.py` and `record_vlm_usage` added to 4D's owned files), slices, `rollback.py` and `store.py` deleted in favour of the label-op undo and the repo; 4D red tests: three pause cycles, a two-project slice interleave, the SQL budget under a randomized crash test; 4E: pause, budget edit, event log, `control` flags |
-| [program/03c_b2_w3_beat_reaper_workers.md](program/03c_b2_w3_beat_reaper_workers.md) | 6D doc sync: `auto_label_loop_plan.md` header says its storage, events, budget and control sections are superseded by this plan for the rebuild |
+| [program/03a_stage1_foundation.md](program/03a_stage1_foundation.md) | lane 1A owns the loop tables in `0001_control_plane` and `tests/db/test_assist_loop_schema.py` |
+| [program/03c_stage3_job_runtime.md](program/03c_stage3_job_runtime.md) | lane 3A: `Yield`, `retry_count`, `pause_reason`, `pausable`, `slice_s`, the reaper rule, and the red tests named in section 8 |
+| [program/03b_stage2_control_data.md](program/03b_stage2_control_data.md) | lane 2C: the `assist_loop_preset` kind; lane 2D: label-operation kinds `assist_loop_propagate`, `assist_loop_review` |
+| [program/03d_stage4_job_families.md](program/03d_stage4_job_families.md) | 4D-2: replace "`budget.json` (into `jobs.params` and `checkpoint`)" and "events are `events` rows" with "the loop record moves to the `assist_loop_*` tables ([research_auto_label_assist_plan.md](research_auto_label_assist_plan.md) section 5); `events` rows are the UI feed only"; add the pause and budget routes, `usage` capture (`src/services/labeling/vlm_client.py` and `record_vlm_usage` added to 4D's owned files), slices, `rollback.py` and `store.py` deleted in favour of the label-op undo and the repo; 4D red tests: three pause cycles, a two-project slice interleave, the SQL budget under a randomized crash test; 4E: pause, budget edit, event log, `control` flags |
+| [program/03f_stage6_scheduler_scaleout.md](program/03f_stage6_scheduler_scaleout.md) | 6D doc sync: `auto_label_loop_plan.md` header says its storage, events, budget and control sections are superseded by this plan for the rebuild |
 | [program/00b_traceability.md](program/00b_traceability.md) | #466 and #398 rows point here; #84 row gains "loop side: section 7.4 here" |
 | [program/12_prior_plans_reconciliation.md](program/12_prior_plans_reconciliation.md) | `auto_label_loop_plan.md`: KEEP-REFERENCE, partly superseded by this plan (storage, events, budgets, control); add a row: `issue_plans/issue-398-plan.md` absorbed into this plan and deleted |
 | [program/09_github_actions.md](program/09_github_actions.md) | a comment on #466 and #398 linking this plan; #466 scope: review queue and metrics added (section 7.3) |

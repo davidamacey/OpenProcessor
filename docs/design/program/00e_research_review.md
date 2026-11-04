@@ -4,7 +4,7 @@
 |---|---|
 | Status | review, written 2026-11-04 on `research/review` (from `research/master`) |
 | Reviewer | an independent reviewer (production operations, PostgreSQL, Celery, OpenSearch, GPU inference, ML data curation) who did not write the plans |
-| Scope | the seven research plans (`docs/design/research_*_plan*.md`); the integrated program: [00_master_plan.md](00_master_plan.md), [00_index.md](00_index.md), [00b_traceability.md](00b_traceability.md) section 5, [00d_owner_questions.md](00d_owner_questions.md), [00e_research_track.md](00e_research_track.md), [02](02_control_plane_database.md) to [02d](02d_research_seam_schema.md), [03](03_b2_overview.md) to [03g](03g_w5e_plate_text.md), [05](05_b4_stateless_api.md), the 07 files, [08](08_environment_and_setup.md), [10](10_standards_and_libraries.md), [11](11_risks_cleanup_host.md), [13](13_package_pins.md), [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md) |
+| Scope | the seven research plans (`docs/design/research_*_plan*.md`); the integrated program: [00_master_plan.md](00_master_plan.md), [00a_decision_register.md](00a_decision_register.md), [00b_traceability.md](00b_traceability.md) section 5, [00d_owner_questions.md](00d_owner_questions.md), [00f_research_track.md](00f_research_track.md), [02](02_control_plane_database.md) to [02d](02d_research_seam_schema.md), [03](03_b2_overview.md) to [06e](06e_w5e_plate_text.md), [05](05_b4_stateless_api.md), the 07 files, [08](08_environment_and_setup.md), [10](10_standards_and_libraries.md), [11](11_risks_cleanup_host.md), [01](01_package_pins.md), [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md) |
 | Ground truth | the code on `research/master` (`src/`, `scripts/`, `models/`, compose files, `tests/`) and the official docs or primary sources cited in each finding (read 2026-11-04) |
 | Not repeated | anything [00c_plan_review.md](00c_plan_review.md) closed. None of its fixes is reopened by the research integration (checked: R-5, R-13, R-18, R-19, R-20, R-24, R-33, RC-3, RC-9) |
 | Method | every claim checked against the code, the DDL text or a primary doc, not against a plan's description of itself; line numbers are from `research/master` and move, so re-find by symbol |
@@ -51,7 +51,7 @@ What is wrong falls into four groups:
 
 **RR-1. A resumed job can be silently skipped by the workers (pause revokes the task id, resume reuses it).**
 - *Where:* [02b](02b_jobs_locking_events.md) section 1 (`queued -> paused` row) and section 3.3
-  (Pause); [03e](03e_b2_s3_job_runtime.md) 3A-13; [03a](03a_b2_w1_queue_infra.md) 1B-4.
+  (Pause); [03c](03c_stage3_job_runtime.md) 3A-13; [03a](03a_stage1_foundation.md) 1B-4.
 - *What:* pausing a `queued` job does a "best-effort `revoke` of the message"
   (02b:20, 02b:273). Resume sets `queued` and dispatches again. Every dispatch uses
   `task_id = job_id` (02a:31, 03a 1B-4 "`task_id = job_id`"). A Celery worker that got the revoke
@@ -102,7 +102,7 @@ What is wrong falls into four groups:
 
 **RR-3. NULL-project rows are only visible in deployment scope, but the code that uses them runs in request or project scope.**
 - *Where:* [02a](02a_postgres_schema.md) section 1.4; [02d](02d_research_seam_schema.md) sections
-  2.2 and 3; [03b](03b_b2_w2_job_families.md) 4C-7; [05](05_b4_stateless_api.md) ND-C1..ND-C4.
+  2.2 and 3; [03d](03d_stage4_job_families.md) 4C-7; [05](05_b4_stateless_api.md) ND-C1..ND-C4.
 - *What:* the policy lets `project_id IS NULL` rows through only when `op.scope = 'deployment'`,
   and `deployment_tx` is allowed only in "the reaper, beat tasks, the project registry, the upgrade
   step, admin CLIs" (02a section 1.4). The research adds NULL-project rows that other code must
@@ -133,8 +133,8 @@ What is wrong falls into four groups:
     research tables altogether. It also closes RR-18.
 
 **RR-4. The W2.3 research lanes must edit `src/tasks/app.py`, which the plan says no later lane edits.**
-- *Where:* [03a](03a_b2_w1_queue_infra.md) lane 1B Owns and 1B-2/1B-3;
-  [03b](03b_b2_w2_job_families.md) lanes 4F, ES-B, ND-A.
+- *Where:* [03a](03a_stage1_foundation.md) lane 1B Owns and 1B-2/1B-3;
+  [03d](03d_stage4_job_families.md) lanes 4F, ES-B, ND-A.
 - *What:* 1B creates empty task modules and kind and route modules "so no later lane edits
   `app.py`" (03a:70-71): `jobs_a`, `jobs_b`, `jobs_c`, `trigger`, `promote`, `periodic`, `b4`, and
   the job-kind and route modules `families_a`, ..., `b4_project`. The research lanes add new ones:
@@ -158,7 +158,7 @@ What is wrong falls into four groups:
 
 **RR-5. The plate-text research misses PP-OCRv6 (released June 2026).** High for research quality; it does not block W2.
 - *Where:* [research_plate_text_plan.md](../research_plate_text_plan.md) sections 3.1 and 4.1
-  (readers R1-R7), 00e `pt:P1`; [07c](07c_b5_crops_ocr_faces.md) (OCR on the GPU);
+  (readers R1-R7), 00e `pt:P1`; [06c](06c_b5_crops_ocr_faces.md) (OCR on the GPU);
   [10](10_standards_and_libraries.md) plate-text row ("PP-OCRv5 on Triton stays the reader").
 - *What:* PaddleOCR 3.7.0 (2026-06-11) released PP-OCRv6 under Apache-2.0:
   - three sizes, tiny, small and medium (1.5M to 34.5M parameters);
@@ -230,7 +230,7 @@ What is wrong falls into four groups:
     per statement.
 
 **RR-8. The plate normalizer forces a close and reopen of every upgraded items index, only for defence in depth.**
-- *Where:* [03d](03d_b2_s2_control_data.md) 2F-6; [02c](02c_migration_ops_tests.md) section 2.2;
+- *Where:* [03b](03b_stage2_control_data.md) 2F-6; [02c](02c_migration_ops_tests.md) section 2.2;
   X-4; plate plan section 5.1.
 - *What:*
   - The plate plan says the domain function already computes `text_norm` and `text_fold`, and that
@@ -353,7 +353,7 @@ What is wrong falls into four groups:
   - The ownership lists hold under the split; ND-B already waits for 4F.
 
 **RR-14. ES-A deletes `_knn_field` but owns none of its callers.**
-- *Where:* [03d](03d_b2_s2_control_data.md) ES-A Owns and ES-A3.
+- *Where:* [03b](03b_stage2_control_data.md) ES-A Owns and ES-A3.
 - *What:* ES-A3 says "`_knn_field` deleted". Its callers are:
   - `src/clients/curation_opensearch/bodies_core.py:9`, `:97` and `:105`, which lane 2F owns in
     W2.2 "for 2F-6 and 2F-8 only";
@@ -646,21 +646,21 @@ Each wave's lanes and their owned paths (03a, 03d, 03e, 03b, 03f, 03c Owns lines
 Every finding was checked against the tree and the plan files before the fix. The owner rejected
 the review's scope cuts (Q-A: "keep all seams now and ensure the plans are updated accordingly to
 do in the right order and waves"); its correctness findings all apply. Owner answers of the same
-day are recorded in [00d](00d_owner_questions.md) section 0 and the [00_index.md](00_index.md)
+day are recorded in [00d](00d_owner_questions.md) section 0 and the [00a_decision_register.md](00a_decision_register.md)
 register; the plan changes are mapped in [00b](00b_traceability.md) section 5.6.
 
 | Finding | Verdict | Fix (file, lane, test) |
 |---|---|---|
-| RR-1 pause revokes, resume reuses the id | fixed | pause never revokes (revoke only on cancel; a stale message is acked by the claim): [02b](02b_jobs_locking_events.md) state table and pause text; [03e](03e_b2_s3_job_runtime.md) 3A-13; [03a](03a_b2_w1_queue_infra.md) spike S1 item 10. Test `tests/tasks/test_pause_resume_after_revoke_registry.py` |
+| RR-1 pause revokes, resume reuses the id | fixed | pause never revokes (revoke only on cancel; a stale message is acked by the claim): [02b](02b_jobs_locking_events.md) state table and pause text; [03c](03c_stage3_job_runtime.md) 3A-13; [03a](03a_stage1_foundation.md) spike S1 item 10. Test `tests/tasks/test_pause_resume_after_revoke_registry.py` |
 | RR-2 immutability trigger vs `SET NULL` | fixed | `cluster_partitions_ready_immutable` lets `job_id` and `parent_partition_id` go to NULL and nothing else: [02d](02d_research_seam_schema.md) section 2.2; 03a 1F-1; four test cases in 02d section 6 |
 | RR-3 NULL-project rows invisible in request or project scope | fixed | a third RLS scope `core` (`op_scope_is_core()`, `core_tx` with a ratchet allowlist) for core near-duplicate rows; a read-only `FOR SELECT` policy for the default calibrations: [02a](02a_postgres_schema.md) section 1.4; 03a 1A-13; ND-C writes under `core_tx` ([05](05_b4_stateless_api.md) 4A-4b). RLS test cases added |
 | RR-4 later lanes would edit `app.py` | fixed | 1B pre-creates every planned research task module, its `include=` entry and both aggregator entries (`clustering`, `embedding_reindex`, `near_dup`, `near_dup_core`, `source_backfill`, `region_text`; `b4_fanout`, `b4_project`): 03a 1B Owns, 1B-8. Test `tests/tasks/test_planned_modules_included.py` |
-| RR-5 PP-OCRv6 missing | fixed (owner Q-B) | one short PP-OCRv6 arm against PP-OCRv5 in `pt:P1` (PW-2), also deciding the B5c OCR model: [00e_research_track.md](00e_research_track.md) section 3; [07c](07c_b5_crops_ocr_faces.md) research amendments; [03g](03g_w5e_plate_text.md); [10](10_standards_and_libraries.md) |
+| RR-5 PP-OCRv6 missing | fixed (owner Q-B) | one short PP-OCRv6 arm against PP-OCRv5 in `pt:P1` (PW-2), also deciding the B5c OCR model: [00f_research_track.md](00f_research_track.md) section 3; [06c](06c_b5_crops_ocr_faces.md) research amendments; [06e](06e_w5e_plate_text.md); [10](10_standards_and_libraries.md) |
 | RR-6 X-1b reason misstated | fixed | the reason now says the documented difference is deferrability; the project delete no longer relies on one cascade (RR-7) and the catalog-enumerated test decides: 02a section 1.2; 00b X-1b |
-| RR-7 one-statement cascading project delete | fixed | 4C-5 deletes per table in reverse foreign-key order read from the catalog, 10,000 rows per transaction, the `projects` row last: [03b](03b_b2_w2_job_families.md) 4C-5. Test `tests/projects/test_project_delete_batched.py` (200,000 rows under a 30 s statement timeout, resume after a kill) |
-| RR-8 the normalizer forces close and reopen | **rebutted on scope (owner Q-A keeps it); the safety part fixed** | the step is per index with a dry run and stated downtime, progress per index, a `try/finally` reopen with a wait for yellow, an `_analyze` check, stop-and-report rollback and an idempotent re-run: [02c](02c_migration_ops_tests.md) section 2.2; [03d](03d_b2_s2_control_data.md) 2F-6. Test `tests/opensearch/test_analysis_settings_failure.py` |
-| RR-9 `gpu_devices` rows expire, some cards never get one | fixed | `seen_at` refreshed by every GPU worker heartbeat and by `op.periodic.serving_inventory` (every card Triton reports); a worker registers every NVML-visible card; every reservation upserts its card in the same transaction; retention skips referenced rows: 02a sections 5 and 9; 03a 1B-8; [03c](03c_b2_w3_beat_reaper_workers.md) beat table; [03f](03f_b2_s5_gpu_queues.md) 5A-6. `openprocessor gpu plan` stays a reader (bash, no database client; 00b section 5.5). Tests in 1B-8 and `tests/training/test_reserve_card_without_worker.py` |
-| RR-10 the exact key covers only new images | fixed | one pausable `source_backfill` job (02b) with a content step (ND-A, ND-11) and the W4 capture step in the same pass; ND-8 first proves stored bytes equal uploaded bytes: 03b ND-A; 02c section 2.2; 05 CM-3; [06](06_release_acceptance.md) RF-82. Tests `tests/near_duplicates/test_stored_bytes_equal_upload.py`, `test_backfill_then_reingest_refused.py` |
+| RR-7 one-statement cascading project delete | fixed | 4C-5 deletes per table in reverse foreign-key order read from the catalog, 10,000 rows per transaction, the `projects` row last: [03d](03d_stage4_job_families.md) 4C-5. Test `tests/projects/test_project_delete_batched.py` (200,000 rows under a 30 s statement timeout, resume after a kill) |
+| RR-8 the normalizer forces close and reopen | **rebutted on scope (owner Q-A keeps it); the safety part fixed** | the step is per index with a dry run and stated downtime, progress per index, a `try/finally` reopen with a wait for yellow, an `_analyze` check, stop-and-report rollback and an idempotent re-run: [02c](02c_migration_ops_tests.md) section 2.2; [03b](03b_stage2_control_data.md) 2F-6. Test `tests/opensearch/test_analysis_settings_failure.py` |
+| RR-9 `gpu_devices` rows expire, some cards never get one | fixed | `seen_at` refreshed by every GPU worker heartbeat and by `op.periodic.serving_inventory` (every card Triton reports); a worker registers every NVML-visible card; every reservation upserts its card in the same transaction; retention skips referenced rows: 02a sections 5 and 9; 03a 1B-8; [03f](03f_stage6_scheduler_scaleout.md) beat table; [03e](03e_stage5_gpu_queues.md) 5A-6. `openprocessor gpu plan` stays a reader (bash, no database client; 00b section 5.5). Tests in 1B-8 and `tests/training/test_reserve_card_without_worker.py` |
+| RR-10 the exact key covers only new images | fixed | one pausable `source_backfill` job (02b) with a content step (ND-A, ND-11) and the W4 capture step in the same pass; ND-8 first proves stored bytes equal uploaded bytes: 03b ND-A; 02c section 2.2; 05 CM-3; [07](07_release_acceptance.md) RF-82. Tests `tests/near_duplicates/test_stored_bytes_equal_upload.py`, `test_backfill_then_reingest_refused.py` |
 | RR-11 the dataset list | fixed (owner RD-10, Q-C) | one dataset register, 00e_research_track section 4.1; UFPR-ALPR, LPLC and RodoSol skipped, so no request is needed; post-tag sets get their row before their window |
 | RR-12 defer seams without a 0.7.0 reader | **rebutted** | the owner keeps every seam now (Q-A, RD-1). Each kept seam has a writer and a red test in its lane (00b section 5.2); the re-index job is time-sliced (RR-20) |
 | RR-13 W2.3 too large | fixed (owner Q-A) | W2.3a = 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C (ports, one cross-lane signature); W2.3b = 4F, ND-A, ES-B, then ND-B, then 4E. Every research call W2.3a lanes made moved to W2.3b (the `near_dup` scorer deletion and the `enqueue_pending` calls to ND-A; person grouping as a partition to 4F-9; the IVF retrain and the loop's cluster reader to 4F-10). ES-B is kept, not cut: 03b header and sections 2-8; [00_master_plan.md](00_master_plan.md) sections 2-4 |
@@ -771,7 +771,7 @@ triggers. The rest are three mediums and four lows.
 #### High
 
 **RN-1. The batched project delete (RR-7) deletes rows that the immutability triggers refuse to delete while their parent exists.**
-- *Where:* [03b](03b_b2_w2_job_families.md) 4C-5; [02d](02d_research_seam_schema.md):190-191
+- *Where:* [03d](03d_stage4_job_families.md) 4C-5; [02d](02d_research_seam_schema.md):190-191
   (`cluster_children_ready_immutable`: "UPDATE or DELETE raises while the parent partition is
   'ready' (a DELETE by cascade passes: parent gone)"), 02d:86 (`cluster_calibrations_immutable`);
   [02a](02a_postgres_schema.md):362 (`config_revisions_immutable`: "a DELETE only by cascade: the
@@ -887,8 +887,8 @@ upsert needs no scope. Say that, or add the GPU runtime module to the allow-list
 |---|---|---|
 | RN-1 batched delete vs immutability triggers | fixed, settled before lane 1F writes the triggers | one guarded-delete rule in [02a](02a_postgres_schema.md) section 1.2: every immutability trigger allows a DELETE by cascade or when `op_project_delete_allows(project_id)` is true, which needs the transaction-local setting `op.project_delete` naming the project **and** the project row in `deleting`; one role (`op_app`) runs every process, so the status, not a role, is the guard, and a ratchet test allows the setting's literal only in `src/services/projects/delete.py`. Retention sets a superseded partition `discarded` before batch-deleting its children. 02d trigger comments and tests; 03a 1A-13, 1F-1; 03b 4C-5. Red test `tests/projects/test_project_delete_guarded.py` (a project with a `ready` partition, a config document with two revisions and a calibration deletes; the same child deletes without the setting, for another project, or for a project not `deleting` raise) |
 | RN-2 core scope and `op_scope_allows` | fixed | `op_scope_allows(pid)` gains `OR (pid IS NULL AND op_scope_is_core())`; `op_app` gets `EXECUTE` on `op_scope_is_core` and `op_project_delete_allows`: 02a sections 1.4, 1.5; 03a 1A-13. Test case in `tests/db/test_row_level_security.py`: a core job writes its `job_attempts` and `job_items` rows under `core_tx` |
-| RN-3 analysis step after `delete_sources` | fixed (the first option) | the bounded close, settings and reopen is step 3a of `upgrade_from_060`, after verify and before `delete_sources`, recorded in `upgrade_runs`; step 4 refuses until it completed, so "stop before `delete_sources`" is real; the later `db-migrate` OpenSearch migrate only skips indexes that have the settings: [02c](02c_migration_ops_tests.md) section 2.2; [03d](03d_b2_s2_control_data.md) 2F-6 |
-| RN-4 `drop` does not keep GPS out of exports | fixed, no new question | exports keep the embedded GPS by default (RD-54); a `drop` project's exports strip the GPS IFD losslessly with ExifTool in the jobs image; the docs say `drop` covers index, wire and exports, not the stored originals: [05](05_b4_stateless_api.md) CM-5; [06](06_release_acceptance.md) RF-84; [08](08_environment_and_setup.md); [10](10_standards_and_libraries.md); 00b, 00d, 00_index. Test `tests/curation/test_export_gps_by_policy.py` |
+| RN-3 analysis step after `delete_sources` | fixed (the first option) | the bounded close, settings and reopen is step 3a of `upgrade_from_060`, after verify and before `delete_sources`, recorded in `upgrade_runs`; step 4 refuses until it completed, so "stop before `delete_sources`" is real; the later `db-migrate` OpenSearch migrate only skips indexes that have the settings: [02c](02c_migration_ops_tests.md) section 2.2; [03b](03b_stage2_control_data.md) 2F-6 |
+| RN-4 `drop` does not keep GPS out of exports | fixed, no new question | exports keep the embedded GPS by default (RD-54); a `drop` project's exports strip the GPS IFD losslessly with ExifTool in the jobs image; the docs say `drop` covers index, wire and exports, not the stored originals: [05](05_b4_stateless_api.md) CM-5; [07](07_release_acceptance.md) RF-84; [08](08_environment_and_setup.md); [10](10_standards_and_libraries.md); 00b, 00d, 00_index. Test `tests/curation/test_export_gps_by_policy.py` |
 | RN-5 three research-plan sections | fixed | the auto-label plan's queued pause and cancel rows (no revoke on pause; revoke only on the terminal cancel); the spatial plan's `location_policy` default `store`; the plate plan's reader table gains R9, PP-OCRv6 |
 | RN-6 cut prototypes cited as feeds | fixed | 00b #40, #403, #407 rows (sections 2 and 5.3) use 07b's wording: MPS off, 5b-G4 not opened, `PR-3` and `PR-4` post-tag in RW-1 |
 | RN-7 02a first cascade bullet | fixed | the cascade is the safety net behind 4C-5's batched delete: 02a section 1.2 |

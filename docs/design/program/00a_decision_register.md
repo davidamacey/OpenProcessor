@@ -22,7 +22,7 @@ processes are stateless for scale-out; B2 is re-planned in six stages on that fo
 ([02_control_plane_database.md](02_control_plane_database.md)).
 
 This set replaces the former master plan (rev 4, in git history; the file is deleted in the
-plan-set commit, [01_b0_close_out.md](01_b0_close_out.md) B0-1). Section 12 says where each of
+plan-set commit, [13_b0_close_out.md](13_b0_close_out.md) B0-1). Section 12 says where each of
 its sections went. [12_prior_plans_reconciliation.md](12_prior_plans_reconciliation.md) reconciles
 every older plan with this set.
 
@@ -36,21 +36,21 @@ task text that file cites by ID. Where a source plan and this set disagree, this
 | [00_master_plan.md](00_master_plan.md) | **the execution order**: every wave to the tag, lanes and file ownership, folded-in decided items, sweeps and exit gates, the GPU-window budget, the wave procedure, the owner questions |
 | [00b_traceability.md](00b_traceability.md) | every task, ID and issue of the original plans mapped to its wave and lane or retired with a reason; every open issue mapped; the fold-in record; the proposed GitHub actions |
 | [00c_plan_review.md](00c_plan_review.md) | the independent review of the plan set (R-1..R-38) and, in its section 5, the planner's response to every finding |
-| `00_index.md` (this) | mission, decision register, wave exit gates, production-ready definition, branch/lane model, test tiers, the test and GPU budget rules (section 8.1), legends, section map, superseded plans |
-| [01_b0_close_out.md](01_b0_close_out.md) | B0: gate cycle, push, merge |
+| `00a_decision_register.md` (this) | mission, decision register, wave exit gates, production-ready definition, branch/lane model, test tiers, the test and GPU budget rules (section 8.1), legends, section map, superseded plans |
+| [13_b0_close_out.md](13_b0_close_out.md) | B0: gate cycle, push, merge |
 | B1 (merged; plan files removed, the lasting facts are in the permanent docs and `CHANGELOG.md`) | B1 correctness: leases, class registry, inference and search, API/frontend/tests, Ultralytics live bugs. **Done.** |
 | [02_control_plane_database.md](02_control_plane_database.md), [02a](02a_postgres_schema.md), [02b](02b_jobs_locking_events.md), [02c](02c_migration_ops_tests.md) | the control-plane design B2 builds: data ownership, the Postgres schema, jobs and events, migrations and the 0.6.0 upgrade |
-| [03_b2_overview.md](03_b2_overview.md), [03a](03a_b2_w1_queue_infra.md), [03d](03d_b2_s2_control_data.md), [03e](03e_b2_s3_job_runtime.md), [03b](03b_b2_w2_job_families.md), [03f](03f_b2_s5_gpu_queues.md), [03c](03c_b2_w3_beat_reaper_workers.md) | B2 the control plane on PostgreSQL, Valkey and Celery, six stages |
+| [03_b2_overview.md](03_b2_overview.md), [03a](03a_stage1_foundation.md), [03b](03b_stage2_control_data.md), [03c](03c_stage3_job_runtime.md), [03d](03d_stage4_job_families.md), [03e](03e_stage5_gpu_queues.md), [03f](03f_stage6_scheduler_scaleout.md) | B2 the control plane on PostgreSQL, Valkey and Celery, six stages |
 | [04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md) | B3 one Ultralytics version, one detection contract |
 | [05_b4_stateless_api.md](05_b4_stateless_api.md) | B4 stateless API |
-| [06_release_acceptance.md](06_release_acceptance.md) | release prep, R-final, the tag and publish procedure |
-| [07_b5_overview.md](07_b5_overview.md), [07a](07a_b5_baseline.md), [07b](07b_b5_decode_once.md), [07c](07c_b5_crops_ocr_faces.md), [07d](07d_b5_processing_plans.md) | B5 speed (inside v0.7.0, D-37) |
+| [07_release_acceptance.md](07_release_acceptance.md) | release prep, R-final, the tag and publish procedure |
+| [06_b5_overview.md](06_b5_overview.md), [06a](06a_b5_baseline.md), [06b](06b_b5_decode_once.md), [06c](06c_b5_crops_ocr_faces.md), [06d](06d_b5_processing_plans.md) | B5 speed (inside v0.7.0, D-37) |
 | [12_prior_plans_reconciliation.md](12_prior_plans_reconciliation.md) | every older plan: what is unfinished, where it lives now, what was removed and when |
 | [08_environment_and_setup.md](08_environment_and_setup.md) | dev and deployment setup; config added and removed per batch |
 | [09_github_actions.md](09_github_actions.md) | new issues, re-scopes, milestones, closes, dependabot and the deps lane |
 | [10_standards_and_libraries.md](10_standards_and_libraries.md) | code standards, the library-per-mechanism register with sources, the hand-roll audit |
 | [11_risks_cleanup_host.md](11_risks_cleanup_host.md) | risk register, cleanup, host/GPU/peer rules, the #42 side track, "do not redo" |
-| [13_package_pins.md](13_package_pins.md) | exact pins for every Python dependency and the control-plane images; the bump order (part A in W2.1, part B in W3) |
+| [01_package_pins.md](01_package_pins.md) | exact pins for every Python dependency and the control-plane images; the bump order (part A in W2.1, part B in W3) |
 
 ### 0.1 Standing procedure for a session resuming the program
 
@@ -81,14 +81,14 @@ Speed is measured once the stack it is measured on stops changing. See
 
 | Batch | Milestone | Size | Depends on | Scope | Correct | Fast | File |
 |---|---|---|---|---|---|---|---|
-| **B0** close-out | v0.7.0 | M | plan approval; host all-clear | CPU gate cycle, push, merge of the R2 round, the B0 small fixes and the exact Ultralytics pin (code done, `d1c6bab0`) | OCR boxes on the text and in the reported frame; real DB unclip; holdout freeze fails closed; create-only first config writes; status polls stop answering 500; outages stop reading as "not found"; Ultralytics stops floating | recycle jitter stops 32 workers restarting together | [01](01_b0_close_out.md) |
+| **B0** close-out | v0.7.0 | M | plan approval; host all-clear | CPU gate cycle, push, merge of the R2 round, the B0 small fixes and the exact Ultralytics pin (code done, `d1c6bab0`) | OCR boxes on the text and in the reported frame; real DB unclip; holdout freeze fails closed; create-only first config writes; status polls stop answering 500; outages stop reading as "not found"; Ultralytics stops floating | recycle jitter stops 32 workers restarting together | [13](13_b0_close_out.md) |
 | **B1** correctness (done, merged) | v0.7.0 | XL (L, L, M, M, S-M, deps S) | B0 merged; D-8..D-12, D-15 | 1A leases, 1B class registry and upgrade migration, 1C inference/search hygiene, 1D API/frontend/tests and SEC-3/SEC-6, 1E Ultralytics live bugs, the deps lane | duplicate class ids end; one start per singleton; a sibling's live job is never flipped; a blocked loop keeps its lease; stale per-worker caches end; YOLO26 uploads build the right engine; class by name on the secondary | GPU-5/GPU-9 drop multi-GB allocations; GPU-8 stops retrying deterministic errors; OS-6 filtered kNN returns k hits | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | **B2** control plane | v0.7.0 | XXL (6 stages) | B1 merged; D-17..D-26 (D-17, D-18, D-31 approved), D-39..D-63 | PostgreSQL for every control record (projects, classes, config, jobs, runs, models) with Alembic and row-level security; Valkey and Celery for every long job, training, model export and the bake-off included; the event feed in Postgres; the 0.6.0 upgrade that moves the OpenSearch control data; beat and the reaper; scale-out compose; OPS-2; SEC-4, SEC-5 | jobs survive API recycling (CC-4); periodic side effects run once; claims hold with any number of workers and replicas; one owner per value | heavy work leaves the request processes; 6 OpenSearch indexes per project become 2 | [02](02_control_plane_database.md), [03](03_b2_overview.md) |
 | **B3** one Ultralytics | v0.7.0 | L + about 1 GPU day | B1 merged; D-27, D-28 (D-38) | U-Step 4-9, trainer `nms` by capability, full U-6.1 matrix in CI, GPU-14 final, GPU-18 docs, U-C11, first #368 slice | one version, one fused `[b,300,6]` contract, no monkey-patched fork, no deprecated plugin | at least 95 % of today's detector throughput, or Stage A ships alone | [04](04_b3_ultralytics_one_version.md) |
 | **B4** stateless API | v0.7.0 | M-L | B2, B3 merged; D-29, D-29a, D-32, D-32a, D-33 | Q-Phase 6-7 (bulk OCC, `API_WORKERS`, pools sized from totals), #439 (events and the last file lock moved into B2) | same answers with 1 and N workers and replicas | worker count is a tuning knob, benchmarked on the B3 engine | [05](05_b4_stateless_api.md) |
-| **B5** speed | v0.7.0 (D-37) | XL, 4 PRs | B4 merged; D-35 | 5a #45 baseline, #268, GPU-6 recall; 5b GPU-3b then #40/#407 (+GPU-12); 5c #219, #220 (+GPU-7, GPU-19); 5d #67 | parity gates on every change | the GPU pipeline, crops at model size, OCR/faces on resident crops, processing plans | [07](07_b5_overview.md) |
-| **R-final** | v0.7.0 | M (1-2 days) | B5d merged; D-16 | release prep (VERSION and CHANGELOG), one acceptance run (old R3 + R-B1 + R-0.9), tag on the owner's word | the production-ready definition (section 5) | no regression against the retaken baseline and the B5 numbers | [06](06_release_acceptance.md) |
-| side #42 | v0.8.0 | S (GPU time) | GPU 1 free | 12 GB card acceptance; never blocks the tag | | | [07](07_b5_overview.md) section 11 |
+| **B5** speed | v0.7.0 (D-37) | XL, 4 PRs | B4 merged; D-35 | 5a #45 baseline, #268, GPU-6 recall; 5b GPU-3b then #40/#407 (+GPU-12); 5c #219, #220 (+GPU-7, GPU-19); 5d #67 | parity gates on every change | the GPU pipeline, crops at model size, OCR/faces on resident crops, processing plans | [06](06_b5_overview.md) |
+| **R-final** | v0.7.0 | M (1-2 days) | B5d merged; D-16 | release prep (VERSION and CHANGELOG), one acceptance run (old R3 + R-B1 + R-0.9), tag on the owner's word | the production-ready definition (section 5) | no regression against the retaken baseline and the B5 numbers | [07](07_release_acceptance.md) |
+| side #42 | v0.8.0 | S (GPU time) | GPU 1 free | 12 GB card acceptance; never blocks the tag | | | [06](06_b5_overview.md) section 11 |
 
 ### 2.1 The plan in plain words (read this before the codes)
 
@@ -110,12 +110,12 @@ B2 has six stages; [02_control_plane_database.md](02_control_plane_database.md) 
 
 | Stage | Plain name | File |
 |---|---|---|
-| 1 | Foundation: the Postgres and Valkey services, the schema, the Celery app, the storage seam, the test database | [03a](03a_b2_w1_queue_infra.md) |
-| 2 | Projects, classes, configs and other records move into Postgres; the one-step 0.6.0 upgrade | [03d](03d_b2_s2_control_data.md) |
-| 3 | The job machinery (start, claim, heartbeat, cancel, the reaper) and the event feed to the browser | [03e](03e_b2_s3_job_runtime.md) |
-| 4 | Each job type that ran inside the API moves onto the queue | [03b](03b_b2_w2_job_families.md) |
-| 5 | Training, model export and the bake-off evaluator run as GPU queue workers; promotion and the model registry in Postgres | [03f](03f_b2_s5_gpu_queues.md) |
-| 6 | Timed jobs run once from one scheduler; the old file machinery is deleted; every service can scale; hardening; docs | [03c](03c_b2_w3_beat_reaper_workers.md) |
+| 1 | Foundation: the Postgres and Valkey services, the schema, the Celery app, the storage seam, the test database | [03a](03a_stage1_foundation.md) |
+| 2 | Projects, classes, configs and other records move into Postgres; the one-step 0.6.0 upgrade | [03b](03b_stage2_control_data.md) |
+| 3 | The job machinery (start, claim, heartbeat, cancel, the reaper) and the event feed to the browser | [03c](03c_stage3_job_runtime.md) |
+| 4 | Each job type that ran inside the API moves onto the queue | [03d](03d_stage4_job_families.md) |
+| 5 | Training, model export and the bake-off evaluator run as GPU queue workers; promotion and the model registry in Postgres | [03e](03e_stage5_gpu_queues.md) |
+| 6 | Timed jobs run once from one scheduler; the old file machinery is deleted; every service can scale; hardening; docs | [03f](03f_stage6_scheduler_scaleout.md) |
 
 The audit codes used most often in the table above:
 
@@ -200,7 +200,7 @@ Common exit criteria, required by every wave ("PQ" gates):
 
 ## 5. Definition of production-ready for v0.7.0
 
-R-final verifies every line; the RF row ids are in [06_release_acceptance.md](06_release_acceptance.md)
+R-final verifies every line; the RF row ids are in [07_release_acceptance.md](07_release_acceptance.md)
 section 4.
 
 | # | Production-ready means | Verified by |
@@ -228,13 +228,13 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 
 | ID | Decision | Status | Recommendation or note | Needed by | Detail |
 |---|---|---|---|---|---|
-| D-1 | B0 scope | approved, minus release prep | the B0 small fixes, the uvicorn floor and the pin on `fix/411-r2-round`, one gate cycle | B0 | [01](01_b0_close_out.md) |
-| D-2 | Ultralytics exact pin in B0 (U-J2) | approved, done (`d1c6bab0`) | `==8.4.197` in `requirements.txt`, `requirements-test.txt`, `pyproject.toml`; next move only in B3 | B0 | [01](01_b0_close_out.md) |
-| D-3 | Gates, push, CI, merge commit | approved; R3 deferred into R-final | | B0 | [01](01_b0_close_out.md), [06](06_release_acceptance.md) |
-| D-4 | Segmenter tier in acceptance | approved | HF token from the stack's `.env`, never printed; GPU 0 (GPU 2 if free and agreed) | R-final | [06](06_release_acceptance.md) RF-22 |
-| D-5 | #42 timing | approved | runs when GPU 1 frees; never a tag blocker; release notes say so if unrun | side | [07](07_b5_overview.md) section 11 |
+| D-1 | B0 scope | approved, minus release prep | the B0 small fixes, the uvicorn floor and the pin on `fix/411-r2-round`, one gate cycle | B0 | [13](13_b0_close_out.md) |
+| D-2 | Ultralytics exact pin in B0 (U-J2) | approved, done (`d1c6bab0`) | `==8.4.197` in `requirements.txt`, `requirements-test.txt`, `pyproject.toml`; next move only in B3 | B0 | [13](13_b0_close_out.md) |
+| D-3 | Gates, push, CI, merge commit | approved; R3 deferred into R-final | | B0 | [13](13_b0_close_out.md), [07](07_release_acceptance.md) |
+| D-4 | Segmenter tier in acceptance | approved | HF token from the stack's `.env`, never printed; GPU 0 (GPU 2 if free and agreed) | R-final | [07](07_release_acceptance.md) RF-22 |
+| D-5 | #42 timing | approved | runs when GPU 1 frees; never a tag blocker; release notes say so if unrun | side | [06](06_b5_overview.md) section 11 |
 | D-6 | Known-issue lines for #447, CC-2, CC-4 | dropped | no release ships before B1-B4 fix them | - | |
-| D-7 | Release train (early v0.8.0 after B1) | replaced | by owner decisions 2-3 and D-37: one release v0.7.0 after B5 and R-final | - | [06](06_release_acceptance.md) |
+| D-7 | Release train (early v0.8.0 after B1) | replaced | by owner decisions 2-3 and D-37: one release v0.7.0 after B5 and R-final | - | [07](07_release_acceptance.md) |
 | D-8 | J-LEASE | approved | OpenSearch lease docs in the SETTINGS role, thread heartbeat 15 s, TTL 120 s, cooperative fencing | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | D-9 | J-REG and its upgrade path | approved | registry doc with OCC (5 attempts, 10,000 classes), 409 `registry_not_migrated`, `upgrade` hook, `.migrated` rename, downgrade note. Only 0.6.0 -> 0.7.0 is tested (no 0.7.0 install exists) | B1 | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | D-10 | B1-1E scope | approved | minimal in B1; trainer `nms`, export module and full matrix in B3 | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
@@ -243,8 +243,8 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-13 | Order (Q-J8) | approved; amended by D-37 | B0, B1, B2, B3, B4, B5, then R-final last | - | section 3 |
 | D-14 | Commit the plans | done | committed on `fix/411-r2-round` | - | |
 | D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
-| D-17 | Q-J1 Celery 5.6 | approved 2026-11-04 | Celery 5.6 with kombu's `redis://` transport and redis-py; exact pins in `13_package_pins.md` | B2 | [02b](02b_jobs_locking_events.md) section 7 |
+| D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [07](07_release_acceptance.md) section 7 |
+| D-17 | Q-J1 Celery 5.6 | approved 2026-11-04 | Celery 5.6 with kombu's `redis://` transport and redis-py; exact pins in `01_package_pins.md` | B2 | [02b](02b_jobs_locking_events.md) section 7 |
 | D-18 | Q-J2 broker | approved 2026-11-04: **Valkey** | Valkey 9 (BSD-3-Clause) by digest; kombu has no `valkey://` scheme (issue #2245), so the documented `redis://` transport and redis-py are used; no third-party transport | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
 | D-19 | Q-J3 default install | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | core: `postgres`, `valkey`, `db-migrate` (one-shot), `jobs-worker`, `periodic-worker` (so the reaper and the dispatch tick never wait behind long jobs), `open-vocab-worker`, `jobs-beat`; Flower under `monitoring` | B2 | [02c](02c_migration_ops_tests.md) section 4 |
 | D-20 | Q-J4 delivery | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | `acks_late` + `reject_on_worker_lost` + the claim `UPDATE` with a fencing token + attempt cap 3 + soft shutdown 30 s | B2 | [02b](02b_jobs_locking_events.md) section 3 |
@@ -252,9 +252,9 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-20b | `REMAP_SIGTERM=SIGQUIT` on worker services | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, so `docker stop` gets the soft shutdown; `stop_grace_period` above the soft-shutdown timeout | B2 | [02b](02b_jobs_locking_events.md) section 7.1 |
 | D-21 | Q-J5 job-state store | replaced by D-39 (2026-11-04) | the `jobs` table in PostgreSQL is the store; `FileJob` and the leases are deleted | - | [02b](02b_jobs_locking_events.md) |
 | D-22 | Q-J6 scope | approved 2026-11-04 (owner decision 4, D-41): scope now includes training, model export and the evaluator | every API-hosted family, the periodic loops, auto-label, assist loop, the trainer (`gpu_train`), model export (`gpu_export`), the evaluator (`gpu_eval`); the detection and VLM stream workers stay (D-53) | B2 | [02](02_control_plane_database.md) section 4 |
-| D-22a | Directory ingest is not project-bound | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | a deployment-level job row (`project_id` NULL), 202 + job id | B2 | [03b](03b_b2_w2_job_families.md) 4C-6 |
-| D-22b | Promote `wait=true` | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | delete it (only tests use it); no shim | B2 | [03f](03f_b2_s5_gpu_queues.md) 5D-3 |
-| D-23 | Q-J9 `jobs` concurrency | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | 4, tunable | B2 | [03a](03a_b2_w1_queue_infra.md) |
+| D-22a | Directory ingest is not project-bound | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | a deployment-level job row (`project_id` NULL), 202 + job id | B2 | [03d](03d_stage4_job_families.md) 4C-6 |
+| D-22b | Promote `wait=true` | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | delete it (only tests use it); no shim | B2 | [03e](03e_stage5_gpu_queues.md) 5D-3 |
+| D-23 | Q-J9 `jobs` concurrency | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | 4, tunable | B2 | [03a](03a_stage1_foundation.md) |
 | D-24 | Q-J10 broker durability | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | Valkey AOF everysec, no backup (the reaper rebuilds the queue from the `jobs` rows) | B2 | [02b](02b_jobs_locking_events.md) section 7.2 |
 | D-25 | Q-J11 auto-resume | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | reprocess, dataset import, bulk ingest, combine, assist loop, project delete, class projection sync | B2 | [02b](02b_jobs_locking_events.md) section 2.1 |
 | D-26 | Q-J12 recycling | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | keep `--limit-max-requests` with jitter (landed in B0) | B2 | [03](03_b2_overview.md) |
@@ -263,21 +263,21 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-29 | Q-J7 request fan-out | open | bulk OCC; the ingest data plane a documented `TaskGroup` exemption | B4 | [05](05_b4_stateless_api.md) |
 | D-29a | VLM batch routes (`label_batch`, `verify_region_batch`) (new) | open | 202 + a Celery job; the bounded `TaskGroup` runs in the worker | B4 | [05](05_b4_stateless_api.md) |
 | D-30 | Q-J13 event transport | replaced by D-48 (2026-11-04) | events in Postgres, built in B2 stage 3 | - | [02b](02b_jobs_locking_events.md) section 6 |
-| D-31 | Q-J6 evaluator | approved 2026-11-04 (owner decision 4) | `-Q gpu_eval -c 1`, built in B2 stage 5 | B2 | [03f](03f_b2_s5_gpu_queues.md) |
+| D-31 | Q-J6 evaluator | approved 2026-11-04 (owner decision 4) | `-Q gpu_eval -c 1`, built in B2 stage 5 | B2 | [03e](03e_stage5_gpu_queues.md) |
 | D-32 | #439 approach | open | measure first; then a `project_create` job (202) | B4 | [05](05_b4_stateless_api.md) |
 | D-32a | Project status during creation (new) | open | reuse the existing `building` status (combine targets use it), not a new `creating` | B4 | [05](05_b4_stateless_api.md) |
 | D-33 | Q-J14 API workers | open | `API_WORKERS` (`WEB_CONCURRENCY`), default `min(nproc, 32)`, confirmed by the benchmark; replicas need nothing more after B2 | B4 | [05](05_b4_stateless_api.md) |
 | D-34 | Tag v0.9.0 | dropped | merged into D-16 | - | |
-| D-35 | GPU-6 `/detect` upscaling | open | keep `scaleup=False` until 5a measures recall | B5a | [07a](07a_b5_baseline.md) |
+| D-35 | GPU-6 `/detect` upscaling | open | keep `scaleup=False` until 5a measures recall | B5a | [06a](06a_b5_baseline.md) |
 | D-36 | GitHub actions | approved | executed only on the owner's go after this set is approved | before W1 | [09](09_github_actions.md) |
 | D-37 | B5 before the first tag? (new) | approved: YES | owner, 2026-11-03: "not tagging until all of these plans are implemented and tested". v0.7.0 = B0..B5 + R-final; R-final runs last; milestones re-cut (section 3, [09](09_github_actions.md) section 7) | - | section 3 |
 | D-38 | Dependabot #432 handling: Triton 26.09 and a newer Python base (new; the same question as Q-4 and ENV-10 in [08](08_environment_and_setup.md)) | open | close #432 and #422; do the move only inside B3 as optional task B3-A5, with the TensorRT pins and the `Dockerfile.triton` assertion moved together, behind the U-6.2 gate, if B3's GPU window allows; otherwise after the tag | B3 kick-off | [04](04_b3_ultralytics_one_version.md) B3-A5, [09](09_github_actions.md) section 8 |
 | D-39 | PostgreSQL holds all relational and control data (projects, settings, classes, revisioned config, jobs and their locking, training runs, models, promotions; later users and tokens) | approved 2026-11-04 (owner decision 1; replaces D-21) | the schema of [02a](02a_postgres_schema.md) | B2 | [02](02_control_plane_database.md) |
 | D-40 | OpenSearch keeps the search, text and vector data; each value has one owner | approved 2026-11-04 (owner decision 2) | the data-ownership table | B2 | [02](02_control_plane_database.md) section 3 |
-| D-41 | Every long job runs on Celery, training and model export included; `FileJob`, the file protocols, `/jobs` and every file lock are deleted | approved 2026-11-04 (owner decision 4) | GPU queues `gpu_train`, `gpu_export`, `gpu_eval` | B2 | [03f](03f_b2_s5_gpu_queues.md) |
+| D-41 | Every long job runs on Celery, training and model export included; `FileJob`, the file protocols, `/jobs` and every file lock are deleted | approved 2026-11-04 (owner decision 4) | GPU queues `gpu_train`, `gpu_export`, `gpu_eval` | B2 | [03e](03e_stage5_gpu_queues.md) |
 | D-42 | Cloud-ready scale-out: stateless API and workers, N replicas, no fixed `container_name` on scalable services, shared state only in Postgres, Valkey or OpenSearch | approved 2026-11-04 (owner decision 5) | the storage seam (D-46) for blobs | B2 | [02](02_control_plane_database.md) section 2 |
 | D-43 | 0.6.0 -> 0.7.0 in one step: the OpenSearch control data moves into Postgres by a tested upgrade step, then the OpenSearch copies are deleted (no dual read) | approved 2026-11-04 (owner decision 6) | bundle, load, verify, delete; rollback from the bundle | B2 | [02c](02c_migration_ops_tests.md) section 2 |
-| D-44 | Packages exact-pinned at the latest installable versions | approved 2026-11-04 (owner decision 7) | `13_package_pins.md` | B2 | - |
+| D-44 | Packages exact-pinned at the latest installable versions | approved 2026-11-04 (owner decision 7) | `01_package_pins.md` | B2 | - |
 | D-45 | Plain names first, codes after, in every plan text | approved 2026-11-04 (owner decision 8) | each decision has a one-line plain question (section 2.1) | - | - |
 | D-46 | Multi-host files: shared volume or object store? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | the storage seam with a local backend in 0.7.0 (a shared POSIX volume for several hosts); an S3-compatible backend in v0.8.0, planned as feature F10 of [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md) (owner-approved addition 2026-11-04; issue text in [00b](00b_traceability.md) section 4.6) | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 5 |
 | D-47 | Do items keep the class name? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, as a projection owned by Postgres: one writer path, an outbox row in the same transaction, a sync job, a verifier | B2 stage 2 | [02](02_control_plane_database.md) section 3.3 |
@@ -287,7 +287,7 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-51 | Jobs in flight during the 0.6.0 upgrade? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | recorded `interrupted`, no automatic resume | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2 |
 | D-52 | Which 0.6.0 job histories move? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | training runs, promotions, models, imports, exports, label operations, combine provenance; the transient ones stay in the bundle | B2 stage 2 | [02c](02c_migration_ops_tests.md) section 2.1 |
 | D-53 | Detection and VLM workers on Celery? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | no: stream workers that claim whole projects through Postgres | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 5 |
-| D-54 | Which services lose `container_name`? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | all; lookups by Compose labels | B2 stage 6 | [03c](03c_b2_w3_beat_reaper_workers.md) 6B-2 |
+| D-54 | Which services lose `container_name`? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | all; lookups by Compose labels | B2 stage 6 | [03f](03f_stage6_scheduler_scaleout.md) 6B-2 |
 | D-55 | Row-level security in Postgres? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, `FORCE`d on every project-scoped table, with `project_tx` | B2 stage 1 | [02a](02a_postgres_schema.md) section 1.4 |
 | D-56 | Delete the per-project `configs`, `classes`, `umap_state`, `labels_confirmed` indexes? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes (6 indexes per project become 2) | B2 stage 2 | [02](02_control_plane_database.md) section 4.7 |
 | D-57 | Keep the 10,000-class cap? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | no; `registry_full` goes | B2 stage 2 | [02a](02a_postgres_schema.md) section 3 |
@@ -300,39 +300,39 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-64 | Does inference keep serving when the control plane is down? | **replaced 2026-11-04 by D-69** (the owner: the system only works when everything is up, so running the app without its databases makes no sense) | was: yes: `/detect`, `/faces`, `/embed`, `/ocr`, `/search` and `/health` keep serving when PostgreSQL or Valkey is down; only the curation and job routes need them and answer 503; `/health` and `/ready` say which dependency is down; workers and beat keep the hard dependency | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 1.2 |
 | D-69 | Must every service have PostgreSQL, Valkey and OpenSearch? | approved 2026-11-04 (owner correction, replaces D-64) | yes: the API and every worker require PostgreSQL, Valkey and OpenSearch, plus Triton for inference; no degraded mode and no flag for one; at start a process waits with bounded retries, then refuses with an error naming the missing dependency; `/live` says the process is up, `/ready` answers 503 and names each dependency that is down; compose `depends_on` with `service_healthy` on all of them and `service_completed_successfully` on `db-migrate`; the OpenSearch migrate step runs in `db-migrate` after Alembic (RC-1), and on an upgrade from 0.6.0 again after the projects are loaded | B2 stages 1 and 2 | [02c](02c_migration_ops_tests.md) section 1.2 |
 | D-65 | How are browser events woken up? | approved 2026-11-04 (owner decision 2, after 00c R-6; amends D-48) | Valkey pub/sub (`op:events:<project>`), not a per-process Postgres `LISTEN`; the Postgres `events` table stays the durable record and the resume cursor | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 6 |
-| D-66 | Which kombu and redis-py? | approved 2026-11-04 (owner decision 3, after 00c R-10) | hold `kombu==5.6.2` and `redis==6.4.0` until a Celery release declares support for kombu 5.7 | B2 stage 1 | [13](13_package_pins.md) sections 1 and 4 |
-| D-67 | Where does pins part A land? | approved 2026-11-04 (owner decision 4, after 00c R-16) | its own PR to `main` before W2.1 (wave W2.0); part B stays with the B3 GPU gate | W2.0 | [13](13_package_pins.md) section 7.1 |
+| D-66 | Which kombu and redis-py? | approved 2026-11-04 (owner decision 3, after 00c R-10) | hold `kombu==5.6.2` and `redis==6.4.0` until a Celery release declares support for kombu 5.7 | B2 stage 1 | [01](01_package_pins.md) sections 1 and 4 |
+| D-67 | Where does pins part A land? | approved 2026-11-04 (owner decision 4, after 00c R-16) | its own PR to `main` before W2.1 (wave W2.0); part B stays with the B3 GPU gate | W2.0 | [01](01_package_pins.md) section 7.1 |
 | D-68 | The GitHub actions of the master-plan pass | approved 2026-11-04 (owner decision 11) | run by the coordinator after the review fix pass, with the exact text of [00b](00b_traceability.md) section 4 | after this pass | [00b](00b_traceability.md) section 4 |
 | OI-1 | #469: which region kinds may reach external model endpoints? | approved 2026-11-04 (owner: keep today's behaviour) | when external use is allowed, external endpoints may receive any region kind; no code change; #469 closes as "decided: keep current behaviour"; the privacy lane adds a plain SECURITY.md statement | W4 (docs only) | [00b](00b_traceability.md) section 4 |
 | OI-2 | #471: on what basis does the research judge refuse a hosted call? | approved 2026-11-04 (owner: no new restriction) | contact sheets and photos go to the hosted judge as today; the existing refusal by declared kind stays as the opt-out; no new check; #471 closes as "decided: keep current behaviour" | W4 (docs only) | [00b](00b_traceability.md) section 4 |
 | MQ-1 | Accept every open B2 recommendation as written, naming only the exceptions? | approved 2026-11-04 (owner decision 5) | yes | before W2.1 | [00_master_plan.md](00_master_plan.md) section 9.1 |
-| MQ-2 | Which Postgres image base? | approved 2026-11-04 (owner decision 6) | `postgres:18.6-trixie` by digest everywhere | before W2.1 | [13](13_package_pins.md) section 4 |
+| MQ-2 | Which Postgres image base? | approved 2026-11-04 (owner decision 6) | `postgres:18.6-trixie` by digest everywhere | before W2.1 | [01](01_package_pins.md) section 4 |
 | MQ-3 | Also run the Docker-free offline suite (4 shards) at each B2 part check? | approved 2026-11-04 (owner) | yes: every B2 part check runs it (about 10 min since PR #477) | W2.1 on | [03](03_b2_overview.md) section 4 |
-| MQ-4 | Pillow and simplejpeg ride the W3 GPU gate with OpenCV; the Hugging Face stack and MLflow ride there by the bisect order | approved 2026-11-04 (owner) | yes: all four are members of pins part B (the W3 GPU gate) | W3 | [13](13_package_pins.md) section 7.1 |
-| MQ-5 | #473: what happens to near-duplicates of held-out items at a holdout freeze? | approved 2026-11-04 (owner decision 8) | the whole near-duplicate group goes into the holdout together | W2.2 (2D-4) | [03d](03d_b2_s2_control_data.md) 2D-4 |
+| MQ-4 | Pillow and simplejpeg ride the W3 GPU gate with OpenCV; the Hugging Face stack and MLflow ride there by the bisect order | approved 2026-11-04 (owner) | yes: all four are members of pins part B (the W3 GPU gate) | W3 | [01](01_package_pins.md) section 7.1 |
+| MQ-5 | #473: what happens to near-duplicates of held-out items at a holdout freeze? | approved 2026-11-04 (owner decision 8) | the whole near-duplicate group goes into the holdout together | W2.2 (2D-4) | [03b](03b_stage2_control_data.md) 2D-4 |
 | MQ-6 | #468-#472 (five neutral security items, in no plan yet): one W4 lane scoped from the private notes; #469 and #471 need the owner's decision text | approved 2026-11-04 (owner decision 7); #469 and #471 still need the owner's decision text (OI-1, OI-2; both decided 2026-11-04 as "keep current behaviour", so the lane does #468, #470, #472 and a SECURITY.md statement) | a W4 lane `b4/privacy-hardening` | before W4 | [00_master_plan.md](00_master_plan.md) W4 |
 | MQ-7 | #465 typed response models (BA-6): CPU lanes during W5a-W5c, merged into the B5 sub-batch PRs | approved 2026-11-04 (owner decision 7) | CPU lanes during W5a-W5c | before W5a | [05](05_b4_stateless_api.md) section 13 |
 | MQ-8 | Fold the GPU-15 leftover (refuse an undeclared region head at profile validation) into B3-D3 | approved 2026-11-04 (owner) | yes: part of B3-D3 | W3 | [04](04_b3_ultralytics_one_version.md) B3-D3 |
 | Q-3 / ENV-18 | Flower: loopback port 4613, the gateway subpath, or both? | approved 2026-11-04 (owner) | both: port 4613 on loopback and the gateway subpath, only when the `monitoring` profile runs | B2 stage 1 | [08](08_environment_and_setup.md) ENV-18 |
-| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | approved 2026-11-04 (owner decision 9); **amended 2026-11-04 by RD-2**: short decision-feeding prototype runs on idle GPU during W2-W4, about 10 GPU hours in total | after the tag for everything else, each post-tag window on the owner's OK; their already-decided items stay folded into the rewrite | before W5a | [00_master_plan.md](00_master_plan.md) section 10; [00e_research_track.md](00e_research_track.md) |
-| RD-1 | Build every research seam into the rebuild now | **approved 2026-11-04** (owner), as recommended; the review's deferrals rejected (Q-A), the plate-text index normalizer included, its upgrade close and reopen made safe and bounded; W2.3 split into W2.3a and W2.3b "to do in the right order and waves" | every seam now | W2.1 | [00d](00d_owner_questions.md) section 0; [03b](03b_b2_w2_job_families.md) |
-| RD-2 | Prototypes on idle GPU during W2-W4 | **approved 2026-11-04, modified**: "we want to implement what we can of the research and prototypes, but we do not want long GPU hours"; short tiered runs on small seeded samples with early stop, no long sweeps, today's approach the default, about 10 GPU hours in total before the tag, more only on the owner's OK | short runs only | W2.1 | [00e_research_track.md](00e_research_track.md) section 2.1 |
-| RD-4 | Plate tables in their own revision | **approved 2026-11-04**: `0004_region_text` in W5e | as recommended | W2.1 | [03g](03g_w5e_plate_text.md) |
+| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | approved 2026-11-04 (owner decision 9); **amended 2026-11-04 by RD-2**: short decision-feeding prototype runs on idle GPU during W2-W4, about 10 GPU hours in total | after the tag for everything else, each post-tag window on the owner's OK; their already-decided items stay folded into the rewrite | before W5a | [00_master_plan.md](00_master_plan.md) section 10; [00f_research_track.md](00f_research_track.md) |
+| RD-1 | Build every research seam into the rebuild now | **approved 2026-11-04** (owner), as recommended; the review's deferrals rejected (Q-A), the plate-text index normalizer included, its upgrade close and reopen made safe and bounded; W2.3 split into W2.3a and W2.3b "to do in the right order and waves" | every seam now | W2.1 | [00d](00d_owner_questions.md) section 0; [03d](03d_stage4_job_families.md) |
+| RD-2 | Prototypes on idle GPU during W2-W4 | **approved 2026-11-04, modified**: "we want to implement what we can of the research and prototypes, but we do not want long GPU hours"; short tiered runs on small seeded samples with early stop, no long sweeps, today's approach the default, about 10 GPU hours in total before the tag, more only on the owner's OK | short runs only | W2.1 | [00f_research_track.md](00f_research_track.md) section 2.1 |
+| RD-4 | Plate tables in their own revision | **approved 2026-11-04**: `0004_region_text` in W5e | as recommended | W2.1 | [06e](06e_w5e_plate_text.md) |
 | RD-5 | Capture metadata at ingest in W4 | **approved 2026-11-04** with every seam (RD-1) | as recommended | W4 | [05](05_b4_stateless_api.md) section 6c |
 | RD-7 | Prototype code tracked with exact pins and a lock file | **approved 2026-11-04** | as recommended | PW-1 | 00e |
 | RD-8 | Set P local only, "met / not met" in public text | **approved 2026-11-04**; one shared seeded copy | as recommended | PW-1 | [11](11_risks_cleanup_host.md) rule 10 |
 | RD-10 | The research datasets, local only, aggregates with citations | **approved 2026-11-04, but skip UFPR-ALPR and LPLC** (freely downloadable plate sets plus set P; no academic request, review Q-C) | the dataset register | PW-1 | 00e section 4.1 |
 | RD-23 | Cluster memberships in PostgreSQL | **approved 2026-11-04** | as recommended | W2.1 | [02d](02d_research_seam_schema.md) section 2.2 |
-| RD-25 | The `cluster` queue and `cluster-worker` | **decided 2026-11-04** (review Q-D) | CPU in v0.7.0 | W2.1 | [03a](03a_b2_w1_queue_infra.md) 1B-8 |
+| RD-25 | The `cluster` queue and `cluster-worker` | **decided 2026-11-04** (review Q-D) | CPU in v0.7.0 | W2.1 | [03a](03a_stage1_foundation.md) 1B-8 |
 | RD-51 | GPS coordinates | **reversed 2026-11-04: store them now**, behind a per-project `location_policy` (default `store`) in the W2.1 schema | store, policy per project | W2.1 | [02a](02a_postgres_schema.md) section 4 |
 | RD-54 | Exported copies and their GPS | **approved 2026-11-04: exports keep the embedded GPS, as today**, by default; a `drop`-policy project's exports strip it (CM-5, review RN-4) | keep | W4 | 05 CM-4, CM-5 |
-| Q-B (research review) | PP-OCRv6 as a reader candidate | **approved 2026-11-04**: one short comparison against PP-OCRv5 in the plate-text and B5c OCR work | as recommended | PW-2 | [07c](07c_b5_crops_ocr_faces.md) |
+| Q-B (research review) | PP-OCRv6 as a reader candidate | **approved 2026-11-04**: one short comparison against PP-OCRv5 in the plate-text and B5c OCR work | as recommended | PW-2 | [06c](06c_b5_crops_ocr_faces.md) |
 | RD-3, RD-6, RD-9, RD-11..RD-80 (the rest) | The remaining research owner questions | open: 69 rows, none blocks coding | the plan follows each recommendation and marks the place "pending RD-n"; each answer becomes its own row here | at the wave named | [00d_owner_questions.md](00d_owner_questions.md) |
-| MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | approved 2026-11-04 (owner decision 10) | yes | W6 | [07](07_b5_overview.md) section 11 |
-| OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [07](07_b5_overview.md) section 9 |
+| MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | approved 2026-11-04 (owner decision 10) | yes | W6 | [06](06_b5_overview.md) section 11 |
+| OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [06](06_b5_overview.md) section 9 |
 | OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
-| OC-2 | pyclipper in the hardened Triton scan image (`docker/hardened/triton`) | open | decide with B2's image work (stage 6, lane 6C) | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
-| OC-3 | `autolabel/job.get_state` still repairs through `_fail_unclaimed` | decided: leave | B2 stage 4 (lane 4D, trigger workers) deletes it | B2 | [03c](03c_b2_w3_beat_reaper_workers.md) |
+| OC-2 | pyclipper in the hardened Triton scan image (`docker/hardened/triton`) | open | decide with B2's image work (stage 6, lane 6C) | B2 | [03f](03f_stage6_scheduler_scaleout.md) |
+| OC-3 | `autolabel/job.get_state` still repairs through `_fail_unclaimed` | decided: leave | B2 stage 4 (lane 4D, trigger workers) deletes it | B2 | [03f](03f_stage6_scheduler_scaleout.md) |
 
 ## 7. Branch, lane and wave model
 
@@ -454,7 +454,7 @@ Config added or removed per batch (env keys, compose services, installer steps) 
   registration-plate text lands as wave W5e (#401, pending RD-3; its revision approved, RD-4), and
   the decision-feeding prototypes run as short runs on idle GPU in W2-W4, about 10 GPU hours in
   total (approved as short runs, RD-2). The **experiments and their landings** are
-  the post-tag research waves RW-1..RW-6 ([00e](00e_research_track.md)): #346, #347, #348, #365,
+  the post-tag research waves RW-1..RW-6 ([00f](00f_research_track.md)): #346, #347, #348, #365,
   #398, #400, #406, #416, #435, #436, #466 (remainder), #84, #231, #403. Still out of this program:
   #8 (parked), #366 (done), #367, #370, #402 (v0.8.0 features)
   ([09_github_actions.md](09_github_actions.md) section 7 and 00b section 5.3 give each one's place).
@@ -484,10 +484,10 @@ Config added or removed per batch (env keys, compose services, installer steps) 
 | `W-n`, `W2.n` | [00_master_plan.md](00_master_plan.md) section 2 | program waves; W2 (B2) has four parts W2.1-W2.4; B2's stages are numbered 1-6 (the file names 03a, 03b, 03c keep older letters) |
 | `MQ-n` | this file, section 6; [00_master_plan.md](00_master_plan.md) section 9 | owner questions raised by the master-plan pass |
 | `PQ-n`, `PR-nn` | this file, sections 4 and 5 | wave exit gates; production-ready items |
-| `RF-nn`, `RP-n` | [06](06_release_acceptance.md) | R-final checks; release-prep tasks |
+| `RF-nn`, `RP-n` | [07](07_release_acceptance.md) | R-final checks; release-prep tasks |
 | `GH-n`, `C-<issue>` | [09](09_github_actions.md) | GitHub steps; re-scope comments |
 | `M-n` | [11](11_risks_cleanup_host.md) section 3 | risks |
-| `B0-n` | [01](01_b0_close_out.md) | B0 tasks |
+| `B0-n` | [13](13_b0_close_out.md) | B0 tasks |
 
 **Paths** (the public tree carries no machine paths):
 - `<repo>` is the OpenProcessor checkout; `<repo>-wt-<name>` is a sibling git worktree.
@@ -507,29 +507,29 @@ The former master plan (rev 4) is deleted in the plan-set commit and stays in gi
 | Master section | Now in |
 |---|---|
 | Header, mission, "How to use", path legend, ID legend | this file, sections 0, 1, 11 |
-| 0 "Branch facts" | [01](01_b0_close_out.md) section 3 (current); this file section 7 (no hard-coded SHAs) |
+| 0 "Branch facts" | [13](13_b0_close_out.md) section 3 (current); this file section 7 (no hard-coded SHAs) |
 | 0 "Inputs read for revision 2" | this file section 15 (revision log) |
 | 1 TL;DR, release train | this file sections 2-4 (re-cut to one release by owner decisions 2-3) |
 | 2 Mission check | this file section 2 (Correct/Fast columns); detail in each batch file |
 | 2 "Deferred, and why" | this file section 10 |
 | 3 Owner rules applied | [10_standards_and_libraries.md](10_standards_and_libraries.md) |
-| 3a Replacement for the Celery plan's Phase 1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B0/B1 rows), [03a](03a_b2_w1_queue_infra.md) (Celery exclusive starts row) |
-| 3b Every `flock` site (19 files, 55 hits) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B1 rows, the ratchet), [03c](03c_b2_w3_beat_reaper_workers.md) (dispatcher, sweeper, cache prune), [05](05_b4_stateless_api.md) (event hub, `job_lock.py`) |
-| 3c Q-D1..D15 cross-reference | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) (B1 rows) and [03](03_b2_overview.md) (B2 rows); D1, D10, D11, D13 are B0 fixes recorded in [01](01_b0_close_out.md) |
-| 3d Superseded source-plan tests | B0 rows: [01](01_b0_close_out.md) section 3 and Corrections; B1 rows: B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| 4 Release strategy | replaced by owner decisions 2-3 and D-37; this file section 6 (D-7, D-16, D-34, D-37) and [06](06_release_acceptance.md) |
-| 5 B0 (5.1 scope, 5.2 gate cycle) | [01](01_b0_close_out.md) |
-| 5.3 R3 live acceptance | [06](06_release_acceptance.md) sections 4.1, 4.2, 5 |
-| 5.4 Tag decision point | [06](06_release_acceptance.md) section 7 |
+| 3a Replacement for the Celery plan's Phase 1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B0/B1 rows), [03a](03a_stage1_foundation.md) (Celery exclusive starts row) |
+| 3b Every `flock` site (19 files, 55 hits) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B1 rows, the ratchet), [03f](03f_stage6_scheduler_scaleout.md) (dispatcher, sweeper, cache prune), [05](05_b4_stateless_api.md) (event hub, `job_lock.py`) |
+| 3c Q-D1..D15 cross-reference | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) (B1 rows) and [03](03_b2_overview.md) (B2 rows); D1, D10, D11, D13 are B0 fixes recorded in [13](13_b0_close_out.md) |
+| 3d Superseded source-plan tests | B0 rows: [13](13_b0_close_out.md) section 3 and Corrections; B1 rows: B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| 4 Release strategy | replaced by owner decisions 2-3 and D-37; this file section 6 (D-7, D-16, D-34, D-37) and [07](07_release_acceptance.md) |
+| 5 B0 (5.1 scope, 5.2 gate cycle) | [13](13_b0_close_out.md) |
+| 5.3 R3 live acceptance | [07](07_release_acceptance.md) sections 4.1, 4.2, 5 |
+| 5.4 Tag decision point | [07](07_release_acceptance.md) section 7 |
 | 6.1 J-LEASE, 6.3 trainer claims | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | 6.2 J-REG | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | 7 Common rules | this file section 7 |
-| 7.1 B1 | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)); "Release: R-B1" -> [06](06_release_acceptance.md) section 4.3 |
+| 7.1 B1 | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)); "Release: R-B1" -> [07](07_release_acceptance.md) section 4.3 |
 | 7.2 B2 | [03](03_b2_overview.md), 03a-03c |
 | 7.3 B3 | [04](04_b3_ultralytics_one_version.md) |
-| 7.4 B4 | [05](05_b4_stateless_api.md); R-0.9 -> [06](06_release_acceptance.md) section 4.4 |
-| 7.5 B5 | [07](07_b5_overview.md), 07a-07d |
-| 7.6 #42 side track | [07](07_b5_overview.md) section 11 (GPU 1 host rule in [11](11_risks_cleanup_host.md) section 1) |
+| 7.4 B4 | [05](05_b4_stateless_api.md); R-0.9 -> [07](07_release_acceptance.md) section 4.4 |
+| 7.5 B5 | [06](06_b5_overview.md), 07a-07d |
+| 7.6 #42 side track | [06](06_b5_overview.md) section 11 (GPU 1 host rule in [11](11_risks_cleanup_host.md) section 1) |
 | 7.7 Backlog | this file section 10 |
 | 8 Decision register | this file section 6 |
 | 9 GitHub issue actions | [09](09_github_actions.md) |
@@ -551,7 +551,7 @@ The former master plan (rev 4) is deleted in the plan-set commit and stays in gi
 
 [12_prior_plans_reconciliation.md](12_prior_plans_reconciliation.md) gives the verdict for every
 older plan. The finished ones are removed by removal wave R-1 (task B0-1b in
-[01_b0_close_out.md](01_b0_close_out.md)), the rest at R-final (R-2) or after the named B5
+[13_b0_close_out.md](13_b0_close_out.md)), the rest at R-final (R-2) or after the named B5
 sub-batch (R-3); the statuses of the survivors are set in `docs/design/README.md`.
 
 | Plan | Assessment |
@@ -577,39 +577,39 @@ lives now:
 |---|---|
 | M-1 (#8, #346, #348, #365, #400, #401) | every open issue mapped: [09](09_github_actions.md) section 7; #365 interplay in B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M-2 (audit Appendix C/D) | [11](11_risks_cleanup_host.md) section 4 |
-| M-3 (#17/#18 leftovers) | [07c](07c_b5_crops_ocr_faces.md) (#220 step 3), [07d](07d_b5_processing_plans.md) (#67 phase 2+) |
+| M-3 (#17/#18 leftovers) | [06c](06c_b5_crops_ocr_faces.md) (#220 step 3), [06d](06d_b5_processing_plans.md) (#67 phase 2+) |
 | M-4 (per-process limits) | BA-8 documented in B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)); pools sized per `API_WORKERS` in [05](05_b4_stateless_api.md) |
 | M-5 (CC-4 interim) | the jitter shipped in B0; the known-issue line is dropped (D-6); CC-4 is fixed in B2 |
 | M-6 (PR-3/4/6 as 0.7.x) | replaced by owner decision 2 (one release) |
-| M-7, M-8 (superseded tests, Q-D cross-reference) | [01](01_b0_close_out.md), B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)), [03](03_b2_overview.md) |
-| M-9 (installer/upgrade for B1) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); live in [06](06_release_acceptance.md) RF-40..RF-41 |
+| M-7, M-8 (superseded tests, Q-D cross-reference) | [13](13_b0_close_out.md), B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)), [03](03_b2_overview.md) |
+| M-9 (installer/upgrade for B1) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); live in [07](07_release_acceptance.md) RF-40..RF-41 |
 | M-10 (docs per batch) | this file section 9 and each batch file |
 | M-11 (installer YOLO11 config divergence, U-C11) | accepted until B3, which deletes the heredoc: [04](04_b3_ultralytics_one_version.md) |
 | M-12, M-13 (baselines only shrink; image audit) | PQ-2, PQ-8 (section 4) |
 | W-1 (head/commit counts) | no hard-coded SHAs (section 7) |
-| W-2 (CHANGELOG step done) | [01](01_b0_close_out.md) section 3 |
+| W-2 (CHANGELOG step done) | [13](13_b0_close_out.md) section 3 |
 | W-3, W-4, W-5, W-9 (lease index, O_EXCL "added", B1 done-when, flock count) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | W-6 (8.4.197 shipped) | done: the pin commit `d1c6bab0` |
 | W-7 (GPU-15 leftover) | review partly not adopted: kept in the backlog with its source (section 10) |
 | W-8 (#447 premise) | [09](09_github_actions.md) C-447; B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | C-1 (release gap) | replaced by owner decision 2 |
 | C-2 (one large B1 PR) | one merge commit per lane, revert coupling (section 7, M21); the single PR is kept |
-| C-3 (CC-1 and resume) | [01](01_b0_close_out.md) Corrections; B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| C-3 (CC-1 and resume) | [13](13_b0_close_out.md) Corrections; B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | C-4, C-5 (TTL and heartbeat; stale reclaim race) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
-| C-6 (OpenTranscribe alignment) | [03a](03a_b2_w1_queue_infra.md) re-reads it; listed unverified in [11](11_risks_cleanup_host.md) 3.1 |
+| C-6 (OpenTranscribe alignment) | [03a](03a_stage1_foundation.md) re-reads it; listed unverified in [11](11_risks_cleanup_host.md) 3.1 |
 | C-7, C-8 (trainer untested on GPU; three versions) | trainer moves in B3 behind U-6.2 ([04](04_b3_ultralytics_one_version.md)); the pin is done |
-| A.4 executability gaps 1-7 (CHANGELOG, red-test names, pyclipper pin, OCR rollback, OCR image set, heavy-run scheduling, CC-1 resume test) | [01](01_b0_close_out.md); [11](11_risks_cleanup_host.md) section 1 |
+| A.4 executability gaps 1-7 (CHANGELOG, red-test names, pyclipper pin, OCR rollback, OCR image set, heavy-run scheduling, CC-1 resume test) | [13](13_b0_close_out.md); [11](11_risks_cleanup_host.md) section 1 |
 | A.4 gaps 8-11, 18 (lease location, kind/scope, busy window, no-doc jobs, live race budget) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | A.4 gaps 12-14 (registry upgrade, bounds, trainer ordering) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | A.4 gaps 15, 16 (cachetools licence, BA-5 contracts; `families` CI) | B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)), B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | A.4 gap 17 (who rebuilds images for the pin) | resolved: the pin is done; R-final builds the images |
 | A.4 gaps 19-21 (B2 compose/env/upgrade, jobs over 6 h, forward-only) | [03](03_b2_overview.md) |
-| A.4 gaps 22-24 (B3 pin rule, B4 spike, B5 thresholds) | [04](04_b3_ultralytics_one_version.md), [05](05_b4_stateless_api.md), [07](07_b5_overview.md) |
-| A.4 cross-cutting (docs per batch, contracts, upgrades) | section 9; [06](06_release_acceptance.md) (0.6.0 -> 0.7.0) |
-| A.5 churn 1, 2, 4, 6, 7 | pin once then B3 ([04](04_b3_ultralytics_one_version.md)); minimal 1E (B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md))); one heartbeat class (B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), [03a](03a_b2_w1_queue_infra.md)); baseline retaken on the B3 engine ([05](05_b4_stateless_api.md)); #365 out of scope (B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))) |
+| A.4 gaps 22-24 (B3 pin rule, B4 spike, B5 thresholds) | [04](04_b3_ultralytics_one_version.md), [05](05_b4_stateless_api.md), [06](06_b5_overview.md) |
+| A.4 cross-cutting (docs per batch, contracts, upgrades) | section 9; [07](07_release_acceptance.md) (0.6.0 -> 0.7.0) |
+| A.5 churn 1, 2, 4, 6, 7 | pin once then B3 ([04](04_b3_ultralytics_one_version.md)); minimal 1E (B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md))); one heartbeat class (B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), [03a](03a_stage1_foundation.md)); baseline retaken on the B3 engine ([05](05_b4_stateless_api.md)); #365 out of scope (B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))) |
 | A.5 churn 3 | not adopted, accepted cost (section 7) |
 | A.5 churn 5 (Cropwright three times) | moot: everything ships in one release (M24) |
-| A.6 doc suggestions (soft shutdown, uvicorn floor, fencing, wall clock, `nms`-only tests) | [03a](03a_b2_w1_queue_infra.md); done (`6a53673c`); B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
+| A.6 doc suggestions (soft shutdown, uvicorn floor, fencing, wall clock, `nms`-only tests) | [03a](03a_stage1_foundation.md); done (`6a53673c`); B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | A.7 specific edits 1-18 | applied in revision 2; their content now lives where the rows above say |
 
 ## 15. Revision log
@@ -626,7 +626,7 @@ lives now:
 | program set 4 (master plan) | 2026-11-04 | `00_master_plan.md` (execution order, waves W2.1-W6, GPU-window budget, wave procedure, owner questions) and `00b_traceability.md` added; this file became the register and legends (sections 3-4 point to the master plan, the duplicated sections 3-6 and the stale D-18 row removed); MQ-1..MQ-10 added; decided items folded into their lanes (00b section 3) |
 | program set 5 (review fixes) | 2026-11-04 | the independent review [00c_plan_review.md](00c_plan_review.md) applied (R-1..R-38; planner responses in its section 5); the owner's answers of 2026-11-04 recorded (D-64..D-68, the open B2 recommendations as a block, MQ-1, 2, 5, 6, 7, 9, 10); OI-1, OI-2 opened; pins part A became its own wave W2.0 |
 | program set 6 (re-check fixes) | 2026-11-04 | the re-check of [00c_plan_review.md](00c_plan_review.md) section 6 applied (RC-1..RC-13; responses in its section 5.1); D-64 replaced by D-69 (every service requires PostgreSQL, Valkey and OpenSearch, no degraded mode); OI-1, OI-2, MQ-3, MQ-4, MQ-8 and Q-3 answered by the owner; the open list reduced to the B3, B4, B5 and tag kick-off questions |
-| research integration | 2026-11-04 | the seven research plans folded into the program on `research/master`: [02d](02d_research_seam_schema.md) (research-seam tables), [03g](03g_w5e_plate_text.md) (wave W5e), [00d](00d_owner_questions.md) (80 owner questions), [00e](00e_research_track.md) (prototype track and research waves); new lanes 1F, ES-A, ES-B, ES-C, 4F, ND-A, ND-B, ND-C, `b4/capture-metadata`, `b4/identity-text-privacy`, `tools/make-gate`, `b2/frontend-spaces`; 2D-4 moved to ND-B; the `NO ACTION` foreign-key rule (02a 1.2); resolutions X-1..X-20 and the issue map in [00b](00b_traceability.md) section 5; F10 (S3 storage) in the v0.8.0 plan |
+| research integration | 2026-11-04 | the seven research plans folded into the program on `research/master`: [02d](02d_research_seam_schema.md) (research-seam tables), [06e](06e_w5e_plate_text.md) (wave W5e), [00d](00d_owner_questions.md) (80 owner questions), [00f](00f_research_track.md) (prototype track and research waves); new lanes 1F, ES-A, ES-B, ES-C, 4F, ND-A, ND-B, ND-C, `b4/capture-metadata`, `b4/identity-text-privacy`, `tools/make-gate`, `b2/frontend-spaces`; 2D-4 moved to ND-B; the `NO ACTION` foreign-key rule (02a 1.2); resolutions X-1..X-20 and the issue map in [00b](00b_traceability.md) section 5; F10 (S3 storage) in the v0.8.0 plan |
 | research final pass | 2026-11-04 | the research review [00e_research_review.md](00e_research_review.md) merged and every finding answered in its Planner responses (RR-1..RR-24); the owner answers of 2026-11-04 recorded (section 6: RD-1, RD-2, RD-4, RD-5, RD-7, RD-8, RD-10, RD-23, RD-25, RD-51, RD-54, review Q-A..Q-D); W2.3 split into W2.3a and W2.3b; GPS stored per `location_policy`; prototypes cut to short runs, about 10 GPU hours before the tag ([00b](00b_traceability.md) section 5.6) |
 
 ## 16. Corrections found while splitting
@@ -647,5 +647,5 @@ lives now:
   convention; rename to a literal `### Breaking` heading at release prep if the owner prefers.
 - The former master plan named a peer session by its session name; names change, so this set says "the
   OpenTranscribe release session" and finds it with ListAgents.
-- Per-file corrections: [01](01_b0_close_out.md) section 12 (CC-1 test file, pin files), [09](09_github_actions.md) section 10 (milestone renames, `build` label,
+- Per-file corrections: [13](13_b0_close_out.md) section 12 (CC-1 test file, pin files), [09](09_github_actions.md) section 10 (milestone renames, `build` label,
   #366, close points).

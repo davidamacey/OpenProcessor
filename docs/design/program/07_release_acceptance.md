@@ -1,9 +1,9 @@
 # R-final: release prep, one release acceptance run, and the v0.7.0 tag
 
 Status: plan, not started.
-Depends on: B5d merged to `main` ([07_b5_overview.md](07_b5_overview.md); D-37 = yes, so this
+Depends on: B5d merged to `main` ([06_b5_overview.md](06_b5_overview.md); D-37 = yes, so this
 file runs last); a host window agreed with peer sessions (GPU window 3,
-[00_index.md](00_index.md) section 8.1).
+[00a_decision_register.md](00a_decision_register.md) section 8.1).
 Decisions applied: owner decisions 2 and 3 of 2026-11-03 (one release acceptance, one release
 v0.7.0, no intermediate tags, supported upgrade 0.6.0 -> 0.7.0 directly); D-37 (B5 inside the
 release, R-final after it); D-3 and D-4 (R3 checks and the segmenter tier move here); D-5 (#42
@@ -22,14 +22,14 @@ Consolidated 2026-11-03.
 Prove, once, on the merged `main` after B5, that a new user and an upgrading 0.6.0 user get a
 working, correct, fast product, then tag v0.7.0 on the owner's word. The run is the union of the
 old R3 (after B0), R-B1 (after B1) and R-0.9 (after B4) checks, plus the B5 speed and parity
-gates of [07_b5_overview.md](07_b5_overview.md) (recorded rows, section 4.6), so nothing they
+gates of [06_b5_overview.md](06_b5_overview.md) (recorded rows, section 4.6), so nothing they
 would have caught is lost. It also verifies the production-ready definition in
-[00_index.md](00_index.md) section 5. R-final is GPU window 3.
+[00a_decision_register.md](00a_decision_register.md) section 5. R-final is GPU window 3.
 
 ## 2. Preconditions
 
 - B0-B5 merged to `main` with green CI; every batch gate passed and is recorded
-  ([00_index.md](00_index.md) section 4).
+  ([00a_decision_register.md](00a_decision_register.md) section 4).
 - Release prep (section 3: VERSION and CHANGELOG first) merged, so `/health` and the images
   report 0.7.0.
 - `rg -n "fcntl" src` is empty on `main` (B4 done-when) and the file-lock ratchet baseline is at
@@ -52,10 +52,10 @@ section: M.
 | RP-3 | Consolidate `frontend/CHANGELOG.md` `[Unreleased]` | `frontend/CHANGELOG.md` | same rules |
 | RP-4 | Release notes | `docs/releases/v0.7.0.md` (new, from `v0.6.0.md`'s layout) | highlights; the 0.6.0 -> 0.7.0 upgrade (the control-data move into Postgres and its report, the new services and secrets, the default detector engine rebuild, `API_WORKERS`, the downgrade note); the `small` profile note if #42 has not run on a 12 GB card (D-5); the verification summary is filled after the run |
 | RP-5 | Release checklist for 0.7.0 | `docs/releases/RELEASE_CHECKLIST.md` | retitled to v0.7.0; the image list and the `images.lock` line count match the 0.7.0 image set (the export image, Postgres and Valkey are new since the 0.6.0 text: re-count from `scripts/lib/image_keys.sh` and the compose files) |
-| RP-6 | Plan statuses | `docs/design/README.md`, `docs/design/program/00_index.md` (status lines) | statuses match what merged |
+| RP-6 | Plan statuses | `docs/design/README.md`, `docs/design/program/00a_decision_register.md` (status lines) | statuses match what merged |
 | RP-7 | Stale "known issue" notes (XS) | `docs-site/docs/operations/curation-workflow.mdx` (caution "a gated promote stops the retrain", #280, fixed by #302), `docs-site/docs/guides/pipeline-modes.mdx` section 4 (same), `docs/research/installer_drive_log.md` (the SIGINT row; fixed by `_op_on_signal` in `setup-openprocessor.sh`, which prints the resume hint). Pattern: the docs check lists issue links; no library | every "Known issue" note and every "(issue #N)" in `docs-site/docs`, `docs/` and `README.md` names an open issue (`gh issue list --state open`) or is removed. Red: a `rg` for the three strings finds them today and nothing after |
 | RP-8 | Assist-loop live numbers (XS) | `docs/PERFORMANCE.md` (loop section) | the #286 closing evidence (runs, budget never exceeded, rollback 138/138, reproducibility, lock rule, yield per crop) is copied with its stack facts (`gh issue view 286`); docs only, no new measurement. Closes the S11 row of the auto-label plan |
-| RP-9 | Retire `release_acceptance_plan.md` (removal wave R-2; XS; done after the R-final run PASSES, before the release commit, because the run still follows its method) | `docs/design/release_acceptance_plan.md`, `docs-site/docs/operations/release-acceptance.mdx`, `scripts/release/acceptance_run.sh` line 6 (a comment citing the plan; change the comment text only), `docs/reviews/rc_summary.md` line 15, `docs/design/README.md`, `docs/design/program/00_index.md` and this file (citations) | the run rules (one run per release) and the go/no-go list (old plan sections 1 and 5) live in `release-acceptance.mdx`; its phases D, E, H, I, K live in RF-70..RF-76 and 1B-12b; `git rm` the plan; `rg -l release_acceptance_plan.md --glob '!CHANGELOG.md'` lists only plain-text history; the docs check and the cited-paths hook pass. Pattern: `git rm` after the move ([12_prior_plans_reconciliation.md](12_prior_plans_reconciliation.md) section 6) |
+| RP-9 | Retire `release_acceptance_plan.md` (removal wave R-2; XS; done after the R-final run PASSES, before the release commit, because the run still follows its method) | `docs/design/release_acceptance_plan.md`, `docs-site/docs/operations/release-acceptance.mdx`, `scripts/release/acceptance_run.sh` line 6 (a comment citing the plan; change the comment text only), `docs/reviews/rc_summary.md` line 15, `docs/design/README.md`, `docs/design/program/00a_decision_register.md` and this file (citations) | the run rules (one run per release) and the go/no-go list (old plan sections 1 and 5) live in `release-acceptance.mdx`; its phases D, E, H, I, K live in RF-70..RF-76 and 1B-12b; `git rm` the plan; `rg -l release_acceptance_plan.md --glob '!CHANGELOG.md'` lists only plain-text history; the docs check and the cited-paths hook pass. Pattern: `git rm` after the move ([12_prior_plans_reconciliation.md](12_prior_plans_reconciliation.md) section 6) |
 
 Gate: `.venv/bin/pre-commit run --all-files`, `tests/test_version_consistency.py`, the changelog
 rules, `.venv/bin/python scripts/docs/check_docs_vs_code.py`, `make contracts-check`; CI green;
@@ -95,7 +95,7 @@ time and an evidence path. A failing row becomes a finding; never relax a criter
 | RF-24 | Engine adoption | a second fresh install dir seeded with install A's engines and `.install/precision.tsv` | every group adopted or "up to date, skipped"; nothing rebuilt (R2 rebuilt all 8 in about 30 min) |
 | RF-25 | Triton down vs engine invalid | stop Triton during `models install` | a clear "Triton unreachable" stop; no rebuild |
 | RF-26 | VERSION | `GET /health` | reports `0.7.0` |
-| RF-27 | OCR fixes | `/ocr` on the B0 OCR image set (ids in the private evidence, rule in [01_b0_close_out.md](01_b0_close_out.md) B0-3) | boxes on the text; rotated frames match `image_size`; RGBA composited on white |
+| RF-27 | OCR fixes | `/ocr` on the B0 OCR image set (ids in the private evidence, rule in [13_b0_close_out.md](13_b0_close_out.md) B0-3) | boxes on the text; rotated frames match `image_size`; RGBA composited on white |
 | RF-28 | Holdout freeze | acceptance `holdout` phase | PASS (the fail-closed path is covered offline) |
 | RF-29 | Cleanup cancels jobs (R2 fix (e), never verified live) | start a job that outlives the cleanup window (dataset import of the 2k COCO set, or a train with more epochs), then run the acceptance cleanup | the job ends `cancelled` in its worker and the project deletes |
 | RF-30 | Assist-loop admission (R2 oddity: budget spent, nothing visited) | UI loop with `min_root_size 10`, budget 120 | every spent crop belongs to a node with a decision; unvisited nodes carry `reason_message` |
@@ -159,9 +159,9 @@ live checks on A (step 4), RF-76 with the suites (step 5).
 
 D-37 puts B5 inside this release, so the run records, without re-measuring the whole baseline,
 the rows that guard it: the parity gates P-box, P-vlm, P-sam, P-region, P-ocr and P-pe of
-[07_b5_overview.md](07_b5_overview.md) on the candidate images (the sub-batch records are the
+[06_b5_overview.md](06_b5_overview.md) on the candidate images (the sub-batch records are the
 reference; a gate that regressed is a FAIL), and the ingest and search figures of
-[07a_b5_baseline.md](07a_b5_baseline.md) re-taken once on install A at the shipped
+[06a_b5_baseline.md](06a_b5_baseline.md) re-taken once on install A at the shipped
 `API_WORKERS` default (no regression against the B5 result). These rows use GPU window 3 and no
 new tooling.
 
@@ -289,7 +289,7 @@ task #42 (12 GB card) runs when GPU 1 frees and never blocks the tag.
 
 ### What to keep after the release
 
-Per [00_index.md](00_index.md) section 8.2, after the tag the whole `program/` folder is removed
+Per [00a_decision_register.md](00a_decision_register.md) section 8.2, after the tag the whole `program/` folder is removed
 (`git rm -r docs/design/program`) and its rows leave `docs/design/README.md`, after this keep-list
 is moved:
 
@@ -315,7 +315,7 @@ is moved:
 | Risk | Mitigation |
 |---|---|
 | The single upgrade carries everything at once (the control-data move, Postgres, Valkey, new services, engine rebuild, `API_WORKERS`) | Install B tests exactly that path from a real 0.6.0 install with real registries; RF-62 tests the way back |
-| Rollback after the control-data move loses classes in 0.6.0 | RF-62; the downgrade note in the release notes; B2 lane 2E owns the rollback ([03d](03d_b2_s2_control_data.md) 2E-4, [02c](02c_migration_ops_tests.md) section 2.3; re-pointed from B1-1B, review R-23) |
+| Rollback after the control-data move loses classes in 0.6.0 | RF-62; the downgrade note in the release notes; B2 lane 2E owns the rollback ([03b](03b_stage2_control_data.md) 2E-4, [02c](02c_migration_ops_tests.md) section 2.3; re-pointed from B1-1B, review R-23) |
 | a 0.6.0 API started before the rollback re-index creates the control indexes empty | the rollback order of 02c section 2.3 (OpenSearch only, recreate, verify, then 0.6.0 services); RF-62 checks it; if it fails, 2E fixes the step and RF-62 re-runs |
 | `./openprocessor upgrade` in a 0.6.0 install runs the 0.6.0 CLI, which must hand off to the 0.7.0 installer for the upgrade step to run | 2E-5 tests the hand-off from a 0.6.0 install offline (the v0.6.0 bootstrap downloads the newest installer, review section 3.1); RF-40 proves it live (the upgrade report exists under `.install/`) |
 | Host load skews the run or delays it (M1) | one heavy run at a time; peers told first; budget per step |
@@ -325,7 +325,7 @@ is moved:
 ## 11. Ready-to-paste brief: R-final runner (Sonnet)
 
 ```
-You run R-final for OpenProcessor. Plan: docs/design/program/06_release_acceptance.md, sections 4
+You run R-final for OpenProcessor. Plan: docs/design/program/07_release_acceptance.md, sections 4
 and 5. Entry: origin/main after the release-prep merge (record the SHA). You do not tag, push
 images or publish anything; you report.
 - Compose projects op-rfinal, op-rfinal-b, op-rfinal-skip, op-rfinal-adopt, op-rfinal-live; always

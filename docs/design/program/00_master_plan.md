@@ -4,11 +4,11 @@
 |---|---|
 | Status | plan, written 2026-11-04 on `plan/master` (from `plan/integration` = `origin/main` + the control-plane re-plan + the package pins). Executes wave by wave on the owner's go |
 | What this file is | the **execution order**: every wave from now to the v0.7.0 tag, its lanes, file ownership, sources, issues, folded-in decided items, tests, sweep, exit gate, GPU window, and what codes in parallel. It links to the batch files for task detail and never restates it |
-| What it is not | the decision register and the legends: those are [00_index.md](00_index.md) (section 6 is the register, section 11 the ID legend, section 2.1 the plain-words map). Where this file and a batch file disagree on order, this file wins; on task content, the batch file wins |
+| What it is not | the decision register and the legends: those are [00a_decision_register.md](00a_decision_register.md) (section 6 is the register, section 11 the ID legend, section 2.1 the plain-words map). Where this file and a batch file disagree on order, this file wins; on task content, the batch file wins |
 | Traceability | [00b_traceability.md](00b_traceability.md): every original task, ID and open issue mapped to its wave and lane, or retired with a reason; the fold-in record; the GitHub actions (approved 2026-11-04, D-68) |
 | Review | [00c_plan_review.md](00c_plan_review.md): the independent review (R-1..R-38) and, in its section 5, the planner's response to each finding. Every finding is applied in the plan files; this file carries the wave and lane consequences |
 | Owner answers applied | 2026-11-04, after the review: every service requires PostgreSQL, Valkey and OpenSearch, no degraded mode (D-69, which replaced D-64 the same day); event wake-ups over Valkey pub/sub (D-65); kombu and redis-py held (D-66); pins part A as its own PR first (D-67, wave W2.0); every open B2 recommendation accepted as a block; `postgres:18.6-trixie`; the security lane in W4 and the typed-response lanes in W5a-W5c; near-duplicate groups held out together; research experiments after the tag; #42 to v0.8.0 if unrun; the GitHub actions of 00b (D-68) |
-| Research integration | 2026-11-04 on `research/master` (from `research/integration` = `main` + the seven research plans): every research seam is folded into the lane that owns its file (tables in [02d](02d_research_seam_schema.md); the seam-to-lane map, the cross-topic resolutions X-1..X-20 and the issue map in [00b](00b_traceability.md) section 5); new lanes 1F, ES-A, ES-B, ES-C, 4F, ND-A, ND-B, ND-C, `b4/capture-metadata`, `b4/identity-text-privacy`, a W2.0 gate lane; a new wave W5e for registration-plate text ([03g](03g_w5e_plate_text.md)); the research prototype track and the post-tag research waves RW-1..RW-6 ([00e](00e_research_track.md)); the 80 de-duplicated research owner questions ([00d](00d_owner_questions.md)). Final pass the same day: the research review ([00e_research_review.md](00e_research_review.md), every finding answered in its Planner responses) and the owner's answers (11 rows approved, among them every seam now, W2.3 split in two, GPS stored per project policy, short prototype runs capped at about 10 GPU hours); 69 questions stay open, none blocks coding, each marked "pending RD-n" where it sits |
+| Research integration | 2026-11-04 on `research/master` (from `research/integration` = `main` + the seven research plans): every research seam is folded into the lane that owns its file (tables in [02d](02d_research_seam_schema.md); the seam-to-lane map, the cross-topic resolutions X-1..X-20 and the issue map in [00b](00b_traceability.md) section 5); new lanes 1F, ES-A, ES-B, ES-C, 4F, ND-A, ND-B, ND-C, `b4/capture-metadata`, `b4/identity-text-privacy`, a W2.0 gate lane; a new wave W5e for registration-plate text ([06e](06e_w5e_plate_text.md)); the research prototype track and the post-tag research waves RW-1..RW-6 ([00f](00f_research_track.md)); the 80 de-duplicated research owner questions ([00d](00d_owner_questions.md)). Final pass the same day: the research review ([00e_research_review.md](00e_research_review.md), every finding answered in its Planner responses) and the owner's answers (11 rows approved, among them every seam now, W2.3 split in two, GPS stored per project policy, short prototype runs capped at about 10 GPU hours); 69 questions stay open, none blocks coding, each marked "pending RD-n" where it sits |
 | Owner direction applied | 2026-11-04: foundation first (PostgreSQL for control data, Celery and Valkey for every long job, a stateless API that scales to N replicas); then the speed work on it; all package upgrades with the bumps that can change model output riding the B3 GPU gate; no task dropped except with a reason; decided items folded into the lane that already rewrites their code; plain names first; waves with disjoint lanes and one sweep each; CI path-scoped and sharded |
 
 Plain-words rule: every heading and row names the thing first and puts its code after it, for
@@ -36,25 +36,25 @@ RR-13, owner Q-A of 2026-11-04); each part ends with a short part check (D-63), 
 
 | Wave | Plain name | Batch and files | Integration branch | GPU | Closing check | Issues it closes |
 |---|---|---|---|---|---|---|
-| **W2.0** | Dependency pins part A as their own PR, and the local `make gate` | [13](13_package_pins.md) section 7.1, part A (D-67); the gate lane of section 4 | `deps/pins-part-a`, PR to `main` | none | one offline sweep (CPU), run with the new `make gate` | - (N20 (#480) stays open for part B) |
-| **W2.1** | Foundation: PostgreSQL, Valkey, the Celery app, the schema, the storage seam, the test database; the research-seam tables (every seam now, RD-1) | B2 stage 1 ([03a](03a_b2_w1_queue_infra.md); 1F and [02d](02d_research_seam_schema.md)) | `int/b2-control-plane` | none; **prototype window PW-1** on idle GPU (short runs, RD-2) | part check | - |
-| **W2.2** | Control data moves into PostgreSQL; the job machinery (pause, resume and time slices that never spend attempts) and the event feed; the embedding registry | B2 stages 2 and 3 ([03d](03d_b2_s2_control_data.md), [03e](03e_b2_s3_job_runtime.md)) | same | none; PW-1 continues | part check | - |
-| **W2.3a** | Every long job onto the queue as a port of today's behaviour, training, model export and the evaluator included; the assist loop's own record, pause and budgets | B2 stage 4 lanes 4A-4D ([03b](03b_b2_w2_job_families.md)) and stage 5 ([03f](03f_b2_s5_gpu_queues.md)) | same | none (real-GPU smoke deferred to GPU window 1); **PW-2** on idle GPU | part check | #466 (pause, events, budgets) |
-| **W2.3b** | The research families on the queue: clustering on versioned partitions; near-duplicate runs, the exact key and its backfill, the holdout guard; the embedding re-index job; Cropwright follows every new state | B2 stage 4 lanes 4F, ND-A, ES-B, ND-B, 4E ([03b](03b_b2_w2_job_families.md)) | same | none; PW-2 continues | part check | #473 parts a and c |
-| **W2.4** | One scheduler; the old job machinery deleted; scale-out compose; hardening; readers on the embedding registry; docs; **the B2 sweep** with the five stale screenshots recaptured | B2 stage 6 ([03c](03c_b2_w3_beat_reaper_workers.md)); sweep [03](03_b2_overview.md) section 9 | same, then PR to `main` | none; PW-2 continues outside live run 2 | **full B2 sweep + live run 2 of 3** | #461, #462, #453 |
-| **W3** | One Ultralytics version and the dependency bumps that can change model output | B3 ([04](04_b3_ultralytics_one_version.md)); pins part B ([13](13_package_pins.md) section 7) | `int/b3-ultralytics` | **GPU window 1** (about 1.5 days, GPU 0) | full B3 sweep + the GPU gate | #458 |
+| **W2.0** | Dependency pins part A as their own PR, and the local `make gate` | [01](01_package_pins.md) section 7.1, part A (D-67); the gate lane of section 4 | `deps/pins-part-a`, PR to `main` | none | one offline sweep (CPU), run with the new `make gate` | - (N20 (#480) stays open for part B) |
+| **W2.1** | Foundation: PostgreSQL, Valkey, the Celery app, the schema, the storage seam, the test database; the research-seam tables (every seam now, RD-1) | B2 stage 1 ([03a](03a_stage1_foundation.md); 1F and [02d](02d_research_seam_schema.md)) | `int/b2-control-plane` | none; **prototype window PW-1** on idle GPU (short runs, RD-2) | part check | - |
+| **W2.2** | Control data moves into PostgreSQL; the job machinery (pause, resume and time slices that never spend attempts) and the event feed; the embedding registry | B2 stages 2 and 3 ([03b](03b_stage2_control_data.md), [03c](03c_stage3_job_runtime.md)) | same | none; PW-1 continues | part check | - |
+| **W2.3a** | Every long job onto the queue as a port of today's behaviour, training, model export and the evaluator included; the assist loop's own record, pause and budgets | B2 stage 4 lanes 4A-4D ([03d](03d_stage4_job_families.md)) and stage 5 ([03e](03e_stage5_gpu_queues.md)) | same | none (real-GPU smoke deferred to GPU window 1); **PW-2** on idle GPU | part check | #466 (pause, events, budgets) |
+| **W2.3b** | The research families on the queue: clustering on versioned partitions; near-duplicate runs, the exact key and its backfill, the holdout guard; the embedding re-index job; Cropwright follows every new state | B2 stage 4 lanes 4F, ND-A, ES-B, ND-B, 4E ([03d](03d_stage4_job_families.md)) | same | none; PW-2 continues | part check | #473 parts a and c |
+| **W2.4** | One scheduler; the old job machinery deleted; scale-out compose; hardening; readers on the embedding registry; docs; **the B2 sweep** with the five stale screenshots recaptured | B2 stage 6 ([03f](03f_stage6_scheduler_scaleout.md)); sweep [03](03_b2_overview.md) section 9 | same, then PR to `main` | none; PW-2 continues outside live run 2 | **full B2 sweep + live run 2 of 3** | #461, #462, #453 |
+| **W3** | One Ultralytics version and the dependency bumps that can change model output | B3 ([04](04_b3_ultralytics_one_version.md)); pins part B ([01](01_package_pins.md) section 7) | `int/b3-ultralytics` | **GPU window 1** (about 1.5 days, GPU 0) | full B3 sweep + the GPU gate | #458 |
 | **W4** | Stateless API: request fan-out out, the worker count a tuning knob, project creation; the privacy and security items; capture metadata and GPS coordinates at ingest under the project's location policy; the identity-text privacy baseline; core near-duplicate grouping off the request path | B4 ([05](05_b4_stateless_api.md)); lanes `b4/privacy-hardening`, `b4/capture-metadata`, `b4/identity-text-privacy` | `int/b4-stateless` | none (its benchmark runs first in window 2); **PW-3** on idle GPU outside live run 3 | full B4 sweep + live run 3 of 3 | #451, #439, #473, #468, #470, #472 (and #469, #471 once OI-1 and OI-2 are answered) |
-| **W5a** | Public baseline, Triton sweeps, the `/detect` upscaling question; typed responses part 1 | B5a ([07a](07a_b5_baseline.md)); typed-response lane | `int/b5a-baseline` | **GPU window 2 opens** | full sweep + 5a runs | #45, #268, #463 |
-| **W5b** | Decode each image once; typed responses part 2 | B5b ([07b](07b_b5_decode_once.md)); typed-response lane | `int/b5b-decode-once` | window 2 | full sweep + 5b gate | #40, #407 |
-| **W5c** | Crops at model size; OCR on the GPU; typed responses part 3 | B5c ([07c](07c_b5_crops_ocr_faces.md)); typed-response lane | `int/b5c-crops-ocr-faces` | window 2 | full sweep + 5c gate | #219, #220 |
-| **W5d** | Request-driven processing plans; faces on resident frames (the routers 5d rewrites are typed here) | B5d ([07d](07d_b5_processing_plans.md)) | `int/b5d-processing-plans` | window 2 | full sweep + 5d gate | #67, #464 (remaining boxes moved), #465 |
-| **W5e** | Registration-plate text: per-box readings with a real confidence, burst consensus, exact, fuzzy and fragment search, privacy modes (its own revision, RD-4) | [03g](03g_w5e_plate_text.md) | `int/b5e-plate-text` | **window 2 closes** (a short W5e gate) | full sweep + W5e gate | #401 |
-| **W6** | Release prep, the one acceptance run, the tag on the owner's word | R-final ([06](06_release_acceptance.md)) | `chore/release-0.7.0-prep` | **GPU window 3** | R-final (every RF row) | #411 after the tag |
-| side | 12 GB card acceptance | [07](07_b5_overview.md) section 11 | `perf/42-small-gpu-acceptance` | GPU 1 when its owner frees it | its own pass list | #42 |
-| side | Research prototypes that feed a v0.7.0 decision: short tiered runs, about 10 GPU hours in total (RD-2, RD-7) | [00e](00e_research_track.md) sections 2-4 | `research/<topic>-proto` per topic (scripts and notes only) | PW-1 (W2.1-W2.2), PW-2 (W2.3a-W2.4), PW-3 (W4), idle GPU only | each prototype's registered bar | - |
-| after the tag | Research waves RW-1..RW-6 (GPU serving breadth, embeddings, clustering, near-duplicate evidence, spatial, the auto-label assistant measured) | [00e](00e_research_track.md) section 5 | `int/rw<n>-<topic>` | research GPU windows RG-1..RG-6, not scheduled: each on the owner's OK | per wave | #403, #231, #347, #365, #435, #436, #346, #406, #416, #348, #400, #466, #398, #84 |
+| **W5a** | Public baseline, Triton sweeps, the `/detect` upscaling question; typed responses part 1 | B5a ([06a](06a_b5_baseline.md)); typed-response lane | `int/b5a-baseline` | **GPU window 2 opens** | full sweep + 5a runs | #45, #268, #463 |
+| **W5b** | Decode each image once; typed responses part 2 | B5b ([06b](06b_b5_decode_once.md)); typed-response lane | `int/b5b-decode-once` | window 2 | full sweep + 5b gate | #40, #407 |
+| **W5c** | Crops at model size; OCR on the GPU; typed responses part 3 | B5c ([06c](06c_b5_crops_ocr_faces.md)); typed-response lane | `int/b5c-crops-ocr-faces` | window 2 | full sweep + 5c gate | #219, #220 |
+| **W5d** | Request-driven processing plans; faces on resident frames (the routers 5d rewrites are typed here) | B5d ([06d](06d_b5_processing_plans.md)) | `int/b5d-processing-plans` | window 2 | full sweep + 5d gate | #67, #464 (remaining boxes moved), #465 |
+| **W5e** | Registration-plate text: per-box readings with a real confidence, burst consensus, exact, fuzzy and fragment search, privacy modes (its own revision, RD-4) | [06e](06e_w5e_plate_text.md) | `int/b5e-plate-text` | **window 2 closes** (a short W5e gate) | full sweep + W5e gate | #401 |
+| **W6** | Release prep, the one acceptance run, the tag on the owner's word | R-final ([07](07_release_acceptance.md)) | `chore/release-0.7.0-prep` | **GPU window 3** | R-final (every RF row) | #411 after the tag |
+| side | 12 GB card acceptance | [06](06_b5_overview.md) section 11 | `perf/42-small-gpu-acceptance` | GPU 1 when its owner frees it | its own pass list | #42 |
+| side | Research prototypes that feed a v0.7.0 decision: short tiered runs, about 10 GPU hours in total (RD-2, RD-7) | [00f](00f_research_track.md) sections 2-4 | `research/<topic>-proto` per topic (scripts and notes only) | PW-1 (W2.1-W2.2), PW-2 (W2.3a-W2.4), PW-3 (W4), idle GPU only | each prototype's registered bar | - |
+| after the tag | Research waves RW-1..RW-6 (GPU serving breadth, embeddings, clustering, near-duplicate evidence, spatial, the auto-label assistant measured) | [00f](00f_research_track.md) section 5 | `int/rw<n>-<topic>` | research GPU windows RG-1..RG-6, not scheduled: each on the owner's OK | per wave | #403, #231, #347, #365, #435, #436, #346, #406, #416, #348, #400, #466, #398, #84 |
 
-The wave codes W2..W6 keep the meaning they had in [00_index.md](00_index.md) before this file
+The wave codes W2..W6 keep the meaning they had in [00a_decision_register.md](00a_decision_register.md) before this file
 (W0 = B0, W1 = B1, both done); W2 gains the five parts and the pins PR W2.0 before them; W5e is new
 (the plate-text wave).
 
@@ -102,7 +102,7 @@ wave: a decision whose prototype has not run is taken on today's behaviour and t
 Every lane: one agent in its own worktree `<repo>-wt-<lane>` on its own branch, cut from the
 integration branch at the point the wave says; it edits only the files it owns; it runs only its
 red-then-green tests and static checks on the files it touches. Lane rules and the common brief
-block: [03a](03a_b2_w1_queue_infra.md) "Lane brief" (B2), [04](04_b3_ultralytics_one_version.md)
+block: [03a](03a_stage1_foundation.md) "Lane brief" (B2), [04](04_b3_ultralytics_one_version.md)
 section 17 (B3), [05](05_b4_stateless_api.md) section 17 (B4), each 07 file's "Lane briefs" (B5).
 
 Append-only shared files (`env.template`, `src/config/retired_env.py`, the baselines in
@@ -116,7 +116,7 @@ versions in a small PR of their own, so a dependency regression never blocks or 
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Pins part A: tooling, pure-Python libraries, web layer, clients | `deps/pins-part-a` (from `main`) | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (existing dependency lines only), `tests/test_requirements_contract.py`, `frontend/package.json` and its lock (re-applies PR #474) | [13](13_package_pins.md) section 7.1, part A | N20 (#480) |
+| 1 | Pins part A: tooling, pure-Python libraries, web layer, clients | `deps/pins-part-a` (from `main`) | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (existing dependency lines only), `tests/test_requirements_contract.py`, `frontend/package.json` and its lock (re-applies PR #474) | [01](01_package_pins.md) section 7.1, part A | N20 (#480) |
 | 1 | The local gate: `make gate` (owner-approved gap, 2026-11-04) | `tools/make-gate` (from `main`, merged into `deps/pins-part-a` before its sweep) | `Makefile` (the `gate` target only), new `scripts/dev/gate.sh`, new `tests/dev/test_gate_script.py`, `CONTRIBUTING.md` (one paragraph) | section 4.0a below | - |
 
 **Sweep and exit.** One CPU offline sweep (the 4 CI shards, run through the new `make gate`, which
@@ -172,8 +172,8 @@ offline command deselects the database tests (R-4). No job family moves yet.
 
 | Order | Lane (plain name) | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 0 | Control-plane package pins, the `db` marker and its deselection in `addopts` (coordinator commit) | on `int/b2-control-plane` | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (the new packages with kombu 5.6.2 and redis-py 6.4.0, the `db` marker, the `addopts` expression), `tests/test_control_plane_pins.py` | [03a](03a_b2_w1_queue_infra.md) lane 1-0 | #451 |
-| 1 | The schema and the database layer | `b2/db-core` | [03a](03a_b2_w1_queue_infra.md) lane 1A (minus the `pyproject.toml` marker, now in lane 0) | 03a lane 1A | N19 (#479) |
+| 0 | Control-plane package pins, the `db` marker and its deselection in `addopts` (coordinator commit) | on `int/b2-control-plane` | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (the new packages with kombu 5.6.2 and redis-py 6.4.0, the `db` marker, the `addopts` expression), `tests/test_control_plane_pins.py` | [03a](03a_stage1_foundation.md) lane 1-0 | #451 |
+| 1 | The schema and the database layer | `b2/db-core` | [03a](03a_stage1_foundation.md) lane 1A (minus the `pyproject.toml` marker, now in lane 0) | 03a lane 1A | N19 (#479) |
 | 1 | The Celery app, queues, the producer | `b2/queue-core` | 03a lane 1B | 03a lane 1B | #451, #464 (OPS-2 box) |
 | 1 | Services, secrets, installer, CLI | `b2/compose-installer` | 03a lane 1C | 03a lane 1C | N19 (#479) |
 | 1 | The storage seam | `b2/storage-seam` | 03a lane 1E | 03a lane 1E | N19 (#479) |
@@ -212,12 +212,12 @@ yet).
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Projects, slugs, index ownership, pause | `b2/projects-pg` | [03d](03d_b2_s2_control_data.md) lane 2A | 03d 2A | N19 (#479) |
+| 1 | Projects, slugs, index ownership, pause | `b2/projects-pg` | [03b](03b_stage2_control_data.md) lane 2A | 03d 2A | N19 (#479) |
 | 1 | The class registry | `b2/classes-pg` | 03d lane 2B | 03d 2B | N19 (#479) |
 | 1 | Config store, VLM endpoints, settings, keymap, view state | `b2/config-pg` | 03d lane 2C | 03d 2C | N19 (#479) |
 | 1 | Holdout freezes, label-operation records, project markers | `b2/records-pg` | 03d lane 2D | 03d 2D | N19 (#479), #473 (part c) |
 | 1 | The one-step 0.6.0 upgrade and its rollback | `b2/upgrade-060` | 03d lane 2E | 03d 2E | N19 (#479) |
-| 1 | The job runtime and the reaper | `b2/job-runtime` | [03e](03e_b2_s3_job_runtime.md) lane 3A | 03e 3A | #451 |
+| 1 | The job runtime and the reaper | `b2/job-runtime` | [03c](03c_stage3_job_runtime.md) lane 3A | 03e 3A | #451 |
 | 1 | Events in PostgreSQL and resumable SSE | `b2/events-pg` | 03e lane 3B | 03e 3B | #451 |
 | 1 | The embedding catalog and spaces (approved, RD-1) | `b2/embedding-registry` | 03d lane ES-A | 03d ES-A | #365 (seams) |
 | 2 | Remove the OpenSearch control indexes | `b2/opensearch-control-removal` (after 2A-2E and ES-A merged) | 03d lane 2F | 03d 2F | N19 (#479) |
@@ -258,11 +258,11 @@ ported unchanged, in one module each, for W2.3b to replace.
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Reprocess, assist runs, scores (the `near_dup` scorer ported unchanged), probe, selection, viz, label ops | `b2/families-a` | [03b](03b_b2_w2_job_families.md) lane 4A | 03b 4A | #451 |
+| 1 | Reprocess, assist runs, scores (the `near_dup` scorer ported unchanged), probe, selection, viz, label ops | `b2/families-a` | [03d](03d_stage4_job_families.md) lane 4A | 03b 4A | #451 |
 | 1 | Dataset upload and import, combine, class merge and the name projection | `b2/families-b` | 03b lane 4B (region clustering moved to 4F) | 03b 4B | #451 |
 | 1 | Bulk ingest, source polls, open-vocabulary drain, project delete (batched, RR-7), directory ingest, person grouping as a plain job | `b2/families-c` | 03b lane 4C | 03b 4C | #451 |
 | 1 | Auto-label and the assist loop as queue consumers; the loop's own record, pause, budgets, slices and usage (gaps G-2, G-3) | `b2/trigger-workers` | 03b lane 4D | 03b 4D | #451, #466 (pause, events, budgets) |
-| 1 | Training as a GPU queue consumer | `b2/gpu-train` | [03f](03f_b2_s5_gpu_queues.md) lane 5A | 03f 5A | #451 |
+| 1 | Training as a GPU queue consumer | `b2/gpu-train` | [03e](03e_stage5_gpu_queues.md) lane 5A | 03f 5A | #451 |
 | 1 | Model upload and export as GPU queue jobs | `b2/gpu-export` | 03f lane 5B | 03f 5B | #451 |
 | 1 | The bake-off evaluator as a GPU queue consumer | `b2/gpu-eval` | 03f lane 5C | 03f 5C | #451 |
 | 1 | Promotion and the model registry | `b2/promote-models` | 03f lane 5D | 03f 5D | #451 |
@@ -320,7 +320,7 @@ hardened; the permanent docs describe the control plane. Then the one B2 sweep.
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Periodic work to beat; old infrastructure deleted | `b2/beat-periodic` | [03c](03c_b2_w3_beat_reaper_workers.md) lane 6A | 03c 6A | #451, #453, #464 (OPS-2 act part) |
+| 1 | Periodic work to beat; old infrastructure deleted | `b2/beat-periodic` | [03f](03f_stage6_scheduler_scaleout.md) lane 6A | 03c 6A | #451, #453, #464 (OPS-2 act part) |
 | 1 | Scale-out compose and monitoring (with `monitoring/alloy-config.alloy` and the dashboards, R-12; the `gpu-arbiter-worker` in the arbiter overlay, R-20) | `b2/scale-out-compose` | 03c lane 6B | 03c 6B | #451 |
 | 1 | Readers resolve their vector field through the embedding registry (approved, RD-1) | `b2/embedding-readers` | 03c lane ES-C (about 40 files; the coordinator checks them against 6A and 6B at the cut) | 03c ES-C | #365 (seams) |
 | 2 | Cropwright reads `embedding_states` | `b2/frontend-spaces` (after ES-C merged) | 03c lane `b2/frontend-spaces` | 03c | - |
@@ -335,8 +335,8 @@ this file does not restate the step count or the budget (R-23).
 Then local CI parity, the owner's yes, one PR to `main`, merge commit.
 
 **Exit gate.** The done-when of [03](03_b2_overview.md) section 1 by `rg`; PQ-1..PQ-9 of
-[00_index.md](00_index.md) section 4; the plan lifecycle deletions for B2 and 02-02c in the
-closing PR ([00_index.md](00_index.md) section 8.2).
+[00a_decision_register.md](00a_decision_register.md) section 4; the plan lifecycle deletions for B2 and 02-02c in the
+closing PR ([00a_decision_register.md](00a_decision_register.md) section 8.2).
 
 **Codes in parallel during the sweep.** W3 lanes (pins part B and `b3/frame`, then the rest in
 order) cut from the frozen `int/b2-control-plane` head; B4's 4A-0 evidence script (offline).
@@ -351,7 +351,7 @@ MLflow and Dependabot tail of the pin series.
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Pins part B: the model-output set and the image pins (D-67) | `deps/pins-part-b` | the three manifests, `requirements-export.txt` and the `export` extra (versions only), `docker/trainer/requirements.txt`, `scripts/curation/bakeoff/requirements.txt`, `Dockerfile.triton`, `docker/hardened/triton/Dockerfile`, `docker/segmenter/Dockerfile`, new `docker/triton/requirements.txt` and `docker/segmenter/requirements.txt`, the root `Dockerfile` (the evaluator's inline `mlflow`), `docker-compose.yml` (`MLFLOW_IMAGE` only), `CONTRIBUTING.md` and `.github/workflows/ci.yml` (the CPU torch-pair commands only), `.github/dependabot.yml`, `tests/test_requirements_contract.py` | [13](13_package_pins.md) section 7, part B; [04](04_b3_ultralytics_one_version.md) track `deps` | N20 (#480), #458 |
+| 1 | Pins part B: the model-output set and the image pins (D-67) | `deps/pins-part-b` | the three manifests, `requirements-export.txt` and the `export` extra (versions only), `docker/trainer/requirements.txt`, `scripts/curation/bakeoff/requirements.txt`, `Dockerfile.triton`, `docker/hardened/triton/Dockerfile`, `docker/segmenter/Dockerfile`, new `docker/triton/requirements.txt` and `docker/segmenter/requirements.txt`, the root `Dockerfile` (the evaluator's inline `mlflow`), `docker-compose.yml` (`MLFLOW_IMAGE` only), `CONTRIBUTING.md` and `.github/workflows/ci.yml` (the CPU torch-pair commands only), `.github/dependabot.yml`, `tests/test_requirements_contract.py` | [01](01_package_pins.md) section 7, part B; [04](04_b3_ultralytics_one_version.md) track `deps` | N20 (#480), #458 |
 | 1 | Each adapter declares its box frame (GPU-14 final; the only B3 track that touches no B2 file, R-18) | `b3/frame` | 04 track `frame` | 04 B3-G1 | #458 |
 | 2 | Stage A: the pin, the second environment deleted, the trainer on the pin | `b3/stagea` (from the pins part B merge) | 04 track `stagea` | 04 B3-A1..A4 (A5 only if D-38 yes) | #458 |
 | 3 | The family registry and the full CPU matrix | `b3/families` (from `b3/stagea`) | 04 track `families` | 04 B3-F1..F3 | #458, #368 (first slice) |
@@ -435,7 +435,7 @@ rewrites (`/analyze`, `/ingest`) are typed inside 5d's own lanes; #465 closes wi
 
 ### W5a Public baseline (B5a; GPU window 2 opens)
 
-**Goal and lanes.** [07a](07a_b5_baseline.md): tracks `ref`, `ladders`, `sweeps`, `recall`; first
+**Goal and lanes.** [06a](06a_b5_baseline.md): tracks `ref`, `ladders`, `sweeps`, `recall`; first
 the 4B-5 benchmark of [05](05_b4_stateless_api.md) (the 32-worker baseline retaken on the B3
 engine, then the `API_WORKERS` default). Owner answers OQ-B5-1..3 before it; D-35 is decided on
 the recall numbers at its end (#463). No optimization code merges before the 5a numbers exist.
@@ -445,14 +445,14 @@ typed-response lane.
 
 ### W5b Decode once (B5b)
 
-[07b](07b_b5_decode_once.md): tracks `decode` (GPU-3b first), `profile`, `prep` (#407 staged,
+[06b](06b_b5_decode_once.md): tracks `decode` (GPU-3b first), `profile`, `prep` (#407 staged,
 GPU-12), `routes` (#40 Wave 6), `codec`. Gate in window 2. The serving head-to-head (#231) may run
-after the 5b gate in the same window, under its own rule ([07](07_b5_overview.md) section 10), or
+after the 5b gate in the same window, under its own rule ([06](06_b5_overview.md) section 10), or
 is recorded and closed. **Codes in parallel:** the W5c lanes and the third typed-response lane.
 
 ### W5c Crops at model size, OCR on the GPU (B5c)
 
-[07c](07c_b5_crops_ocr_faces.md): tracks `crops` (#219), `ocr` (#220, GPU-7), `ocrnorm` (GPU-19
+[06c](06c_b5_crops_ocr_faces.md): tracks `crops` (#219), `ocr` (#220, GPU-7), `ocrnorm` (GPU-19
 evidence, #464 box). One GPU day in window 2 for P-vlm, P-sam, P-region, P-ocr. **Codes in
 parallel:** the W5d lanes.
 
@@ -463,13 +463,13 @@ near-duplicate candidates in 5d.
 
 ### W5d Request-driven processing plans (B5d)
 
-[07d](07d_b5_processing_plans.md): tracks `p0`, `analyze`, `curation`, `gpu` (faces on resident
+[06d](06d_b5_processing_plans.md): tracks `p0`, `analyze`, `curation`, `gpu` (faces on resident
 frames), `docs`. Owner answers 07d Q1-Q9 at kick-off. **Codes in parallel:** the W5e lanes (cut from
 the frozen W5d head).
 
 ### W5e Registration-plate text (GPU window 2 closes; pending RD-3)
 
-[03g](03g_w5e_plate_text.md): lanes `w5e/region-text-store` (revision `0004_region_text`), then
+[06e](06e_w5e_plate_text.md): lanes `w5e/region-text-store` (revision `0004_region_text`), then
 `w5e/region-text-fields` and `w5e/region-text-jobs` in parallel, then `w5e/identity-text-modes`; the
 reader lane and a frontend lane only on their conditions. Preconditions: W5c and W4 merged; the
 plate prototypes `pt:P0..P5` read (short runs in PW-2; `pt:P6` cut, so plate boxes come from the segmenter with the text hint). One full sweep and a short GPU gate (about 2 h) at
@@ -477,18 +477,18 @@ the end of window 2. **Codes in parallel:** release-prep drafting (moved here fr
 
 ### W6 Release prep, R-final, the tag (GPU window 3)
 
-[06](06_release_acceptance.md): RP-1..RP-9 (VERSION and CHANGELOG first), then the one R-final run
+[07](07_release_acceptance.md): RP-1..RP-9 (VERSION and CHANGELOG first), then the one R-final run
 (every RF row including the research rows RF-80..RF-86 of 06 section 4.7, the segmenter tier, the 0.6.0 upgrade with an in-flight job), the fix loop only for
 a failed row, the tag and release only on the owner's word (D-16). Nothing else merges to `main`.
 
 ### Side track: the 12 GB card (#42)
 
-[07](07_b5_overview.md) section 11. Runs on GPU 1 only after its owner session confirms the card is
+[06](06_b5_overview.md) section 11. Runs on GPU 1 only after its owner session confirms the card is
 free; never blocks a wave.
 
 ### 4.10 The research prototype track (side; approved, RD-2 and RD-7)
 
-[00e](00e_research_track.md) holds every prototype with its data, hours, dependency, window,
+[00f](00f_research_track.md) holds every prototype with its data, hours, dependency, window,
 decision and landing wave. In short, per the owner (2026-11-04): working, known code first;
 prototypes are simple local-venv GPU scripts (no Docker builds) on set P and freely downloadable
 public sets (the dataset register, 00e section 4.1), tracked under `scripts/research/<topic>/` with
@@ -514,7 +514,7 @@ with a program lane. Registration (the bars) is committed before any score.
 | RW-5 Spatial and attributes | `sp:P-2..P-9` | attribute signals, the timeline (v0.8.0), scenes after a GO | #348, #400 |
 | RW-6 The auto-label assistant, measured | `al:AL1..AL6` (`al:AL0` ran short in PW-3) | the review queue and metrics, strategies, Z5 roots, retraining | #466, #398, #84 |
 
-Lanes, gates and windows: [00e](00e_research_track.md) section 5; their v0.8.0 landings:
+Lanes, gates and windows: [00f](00f_research_track.md) section 5; their v0.8.0 landings:
 [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md) section 2.11.
 
 ## 5. GPU-window budget
@@ -534,7 +534,7 @@ window or a live-harness run (rows PW-1..PW-3; RD-2: short runs, about 10 GPU ho
 | 2 | W5a-W5e | the 4B-5 benchmark; 5a `ref`, then `ladders`, `sweeps` (tiered), `recall`; 5b `profile`, then the 5b gate; the #231 head-to-head (optional, after 5b); the 5c gate (one day); 5d `p0` and the 5d gate; the W5e gate (about 2 h) | several GPU days spread over the B5 waves, one run at a time |
 | 3 | W6 | the R-final run (segmenter tier, OCR set, B5 confirmation rows) | 1-2 days |
 | side | any | #42 on GPU 1 | about half a day |
-| RG-1..RG-6 | after the tag (research waves) | [00e](00e_research_track.md) section 2.2; not scheduled, each on the owner's OK | the plans' upper estimates sum to about 70 GPU hours; tier 1 at most 2 h per prototype |
+| RG-1..RG-6 | after the tag (research waves) | [00f](00f_research_track.md) section 2.2; not scheduled, each on the owner's OK | the plans' upper estimates sum to about 70 GPU hours; tier 1 at most 2 h per prototype |
 
 Research GPU total before the tag: **about 10 hours**, the owner's cap (was 31 before and 62 after).
 
@@ -612,7 +612,7 @@ Lanes never run a full suite, `--all-files`, the live harness or a GPU.
 
 ## 9. Owner questions
 
-### 9.1 Answered on 2026-11-04 (recorded in the register, [00_index.md](00_index.md) section 6)
+### 9.1 Answered on 2026-11-04 (recorded in the register, [00a_decision_register.md](00a_decision_register.md) section 6)
 
 Every open B2 recommendation as a block (D-19..D-26, D-46..D-63, with D-48 and D-50 as amended);
 every service requires the control plane, no degraded mode (D-69, replacing D-64); Valkey
@@ -638,8 +638,8 @@ kick-off, not before.
 | D-27, D-28 | Ultralytics staging and the pin rule | W3 | as in [04](04_b3_ultralytics_one_version.md) section 3 |
 | D-38 / Q-4, PR #449 | Triton 26.09 or 26.10 and a newer Python base inside B3? | W3 | only if window 1 has room (B3-A5); otherwise after the tag, and close PR #449 now |
 | D-29, D-29a, D-32, D-32a, D-33, ENV-17 | B4 fan-out, VLM batch routes, project creation, the worker default, pool names | W4 | as in [05](05_b4_stateless_api.md) section 9 |
-| OQ-B5-1..3, D-35 | public replacement bars, the 1M run, GPU 2 rows; `/detect` upscaling after the recall numbers | W5a | as in [07](07_b5_overview.md) section 9 |
-| 07d Q1-Q9 | processing-plan behaviour | W5d | as in [07d](07d_b5_processing_plans.md) section 3 |
+| OQ-B5-1..3, D-35 | public replacement bars, the 1M run, GPU 2 rows; `/detect` upscaling after the recall numbers | W5a | as in [06](06_b5_overview.md) section 9 |
+| 07d Q1-Q9 | processing-plan behaviour | W5d | as in [06d](06d_b5_processing_plans.md) section 3 |
 | Q-1, Q-2 | a Python 3.13 CI job; image lock files | W6 | one 3.13 `pytest` job; `pip freeze` records now, lock files later ([08](08_environment_and_setup.md) section 8) |
 | D-16 | the tag | after R-final | on your word after R-final passes |
 
@@ -647,7 +647,7 @@ kick-off, not before.
 
 The full list, grouped by theme with one recommendation each, is [00d_owner_questions.md](00d_owner_questions.md).
 
-**Answered by the owner on 2026-11-04** (00d section 0; register rows in [00_index.md](00_index.md)
+**Answered by the owner on 2026-11-04** (00d section 0; register rows in [00a_decision_register.md](00a_decision_register.md)
 section 6): RD-1 every seam now, the review's deferrals rejected (Q-A), so W2.3 is split into W2.3a
 and W2.3b; RD-2 short tiered prototype runs only, about 10 GPU hours before the tag, more only on the
 owner's OK; RD-4 the plate tables in their own W5e revision; RD-5 capture metadata at ingest; RD-7
@@ -665,7 +665,7 @@ RD-2 amends it for the short PW runs only.
 
 ## 10. After the tag
 
-The research waves RW-1..RW-6 (section 4.11, [00e](00e_research_track.md) section 5) run after the
+The research waves RW-1..RW-6 (section 4.11, [00f](00f_research_track.md) section 5) run after the
 tag in RG-1..RG-6, each window only on the owner's OK and as short tiered runs; the prototypes RD-2
 brings forward ran short in PW-1..PW-3. The seams they land on are
 already in the rebuild (00b section 5.2). v0.8.0 ([v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md))
@@ -673,7 +673,7 @@ follows, with F3 and F9 shrunk by the seams and F10 (an S3-compatible storage ba
 hosts, D-46) added. Before their waves
 start, re-base the v0.8.0 designs that assumed Redis, OpenSearch leases or an OpenSearch auth index
 (F3, F5, F7, F9) on PostgreSQL and Valkey. The program folder is deleted after the tag
-([00_index.md](00_index.md) section 8.2).
+([00a_decision_register.md](00a_decision_register.md) section 8.2).
 
 ## 11. Fold-in record
 

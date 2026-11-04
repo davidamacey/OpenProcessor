@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Release | part of the single v0.7.0 release; B5 follows B4 and R-final (`06_release_acceptance.md`) runs last, after B5 (D-37 approved, [00_index.md](00_index.md) section 6); the tag is the owner's word |
+| Release | part of the single v0.7.0 release; B5 follows B4 and R-final (`07_release_acceptance.md`) runs last, after B5 (D-37 approved, [00a_decision_register.md](00a_decision_register.md) section 6); the tag is the owner's word |
 | Depends on | B2 merged (`03_b2_overview.md`) and B3 merged (`04_b3_ultralytics_one_version.md`); the CC-10 evidence (4A-0) before 4A-3 |
 | Decisions applied | D-13 order (approved); owner rules: no asyncio fan-out in request handlers (bulk OCC instead; the ingest data plane is the documented `TaskGroup` exemption Q-J7), no in-process or file locks for cross-process state (the last `flock` goes here), the API ends stateless, the worker count is a tuning knob only |
-| Open decisions | D-29, D-29a, D-32, D-32a, D-33 (D-30 replaced by D-48 and D-31 approved, both delivered by B2): status in [00_index.md](00_index.md) section 6; section 9 holds the detail |
+| Open decisions | D-29, D-29a, D-32, D-32a, D-33 (D-30 replaced by D-48 and D-31 approved, both delivered by B2): status in [00a_decision_register.md](00a_decision_register.md) section 6; section 9 holds the detail |
 | Source IDs | `task_queue_plan.md` section 4e, Phase 6, Phase 7, J7, J13, J14, E26, section 2e, 2f; audit CC-7, CC-10, BA-6 (deferred), BA-8 (documented in B1); Q-D14 (remaining part); former master plan rev 4 sections 3b (event-hub and `job_lock.py` rows), 3c D14, 7.4, 7.7 (BA-6), 12 (T2 B4, T5), 15 (M15, M16), 16 (B4 row), Appendix A (A.4 #23, A.5 #6, A.7 #10, M-4) |
 | Branches | `int/b4-stateless` from main after B2 and B3 merged; tracks `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/project-create` (4D), each in `<repo>-wt-b4-<track>` |
 | Size | M-L (4A M, 4B M, 4D S-M); the former events track 4C is done by B2 stage 3 |
@@ -37,11 +37,11 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 - the installer default `API_WORKERS` (D-33) is set provisionally as `min(nproc, 32)`, and its
   benchmark against the 32-worker baseline retaken on the B3 engine is recorded in
   `docs/PERFORMANCE.md` in GPU window 2 (step 4B-5; it needs Triton, and only three GPU windows
-  exist, [00_index.md](00_index.md) section 8.1);
+  exist, [00a_decision_register.md](00a_decision_register.md) section 8.1);
 - the B4 gate (section 7) is green and the PR merged with a merge commit. B5 follows; R-final
   runs last;
 - the closing PR moves the section 8.1 keep-list to its targets and deletes this file and its rows
-  in `00_index.md` and `docs/design/README.md` ([00_index.md](00_index.md) "Plan lifecycle").
+  in `00a_decision_register.md` and `docs/design/README.md` ([00a_decision_register.md](00a_decision_register.md) "Plan lifecycle").
 
 ## 2. Preconditions
 
@@ -185,7 +185,7 @@ classified:
 
 ### 4A-6 Evaluator
 
-Done in B2 stage 5 (lane 5C, [03f](03f_b2_s5_gpu_queues.md)): the evaluator is a `gpu_eval` consumer
+Done in B2 stage 5 (lane 5C, [03e](03e_stage5_gpu_queues.md)): the evaluator is a `gpu_eval` consumer
 (D-31 approved 2026-11-04).
 
 **4A done when:** `rg -n "asyncio\.gather" src/routers` is empty; the 4A red tests and controls
@@ -278,8 +278,8 @@ the retired variables fail at startup. Control: search with Triton ready is unch
 ### 4B-5 Benchmarks (T5; run in GPU window 2, the B5 window)
 
 The scripts and the procedure are written and reviewed in B4; the run needs Triton and a GPU, so
-it happens as the first step of the B5 window ([00_index.md](00_index.md) section 8.1;
-`07a_b5_baseline.md`), on the stack as merged after B4.
+it happens as the first step of the B5 window ([00a_decision_register.md](00a_decision_register.md) section 8.1;
+`06a_b5_baseline.md`), on the stack as merged after B4.
 
 1. **Retake the 32-worker ingest and search baseline on the B3 engine** (the baseline in
    `docs/PERFORMANCE.md` was taken on the 0.6.0 engine; comparing against it would mix engines).
@@ -368,7 +368,7 @@ exactly 32 bytes. The `SECURITY.md` text ("Privacy: identity text") is written b
 ## 6b. Events (moved)
 
 The event transport is decided (D-48 as approved 2026-11-04: a Postgres `events` table, a Valkey pub/sub wake-up, resumable SSE ids) and
-built in B2 stage 3 ([03e](03e_b2_s3_job_runtime.md)); the JSONL log, its `flock` and `job_lock.py`
+built in B2 stage 3 ([03c](03c_stage3_job_runtime.md)); the JSONL log, its `flock` and `job_lock.py`
 are deleted there. B4 has no events track.
 
 ## 7. Gate (once for B4)
@@ -378,7 +378,7 @@ are deleted there. B4 has no events track.
   `check_docs_vs_code.py`; the frontend full set (4A conflicts display, 4D `building`) and a
   browser check of every page that streams events at 1440 and 430 px.
 - **Live harness, `-p op-b4-live`, no GPU (the harness has no Triton), budget 2 h; the third and
-  last live-harness run** ([00_index.md](00_index.md) section 8.1):
+  last live-harness run** ([00a_decision_register.md](00a_decision_register.md) section 8.1):
   - **the 1-vs-N diff (Q-E26), workers and replicas:** one scripted scenario run three times:
     `API_WORKERS=1` with one `api` replica and one `jobs-worker`; `API_WORKERS=32` with one replica;
     `API_WORKERS=4` with two `api` replicas and two `jobs-worker` replicas (no `container_name`
@@ -420,7 +420,7 @@ are deleted there. B4 has no events track.
 | the 1-vs-32 diff result, the spike numbers, the retaken baseline and the confirmed default | `docs/PERFORMANCE.md` |
 | the Breaking entries (project create 202, 202 batch routes) | `CHANGELOG.md`, `frontend/CHANGELOG.md` |
 
-## 9. Decision detail (status lives only in [00_index.md](00_index.md) section 6)
+## 9. Decision detail (status lives only in [00a_decision_register.md](00a_decision_register.md) section 6)
 
 | ID | Decision | Recommendation | Consequence | Needed by |
 |---|---|---|---|---|
@@ -454,7 +454,7 @@ are deleted there. B4 has no events track.
 | `op:resource_reachability` | Valkey key | `EX 90` | `resource_links.py` | 4A-5 |
 | removed | compose `--workers=32`; Dockerfile `--workers 16`; the JSONL event log path and its rotation constant | - | - | 08 deletes them from `env.template` and docs |
 
-## 12. Release checks handed to R-final (`06_release_acceptance.md`)
+## 12. Release checks handed to R-final (`07_release_acceptance.md`)
 
 - The 1-vs-32 diff re-run on the release stack (or its result carried from the B4 gate if the SHA
   is the same; R-final decides).

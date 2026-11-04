@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started (P1 of the source plan is done) |
-| Release | v0.7.0 (inside the release; R-final runs after B5; see `07_b5_overview.md` section 2) |
-| Depends on | 5c merged (`07c_b5_crops_ocr_faces.md`: OCR contract settled); 5b's one decode helper (`07b_b5_decode_once.md` 5b-D1); `ref-b5a` |
+| Release | v0.7.0 (inside the release; R-final runs after B5; see `06_b5_overview.md` section 2) |
+| Depends on | 5c merged (`06c_b5_crops_ocr_faces.md`: OCR contract settled); 5b's one decode helper (`06b_b5_decode_once.md` 5b-D1); `ref-b5a` |
 | Decisions applied | #67 owner decision 2026-10-31 (design first; route work after #220 PR 1, which is merged); `faces_ocr_resident_crops_plan.md` J5 (face alignment on resident frames moves here, P5); C1 recommendation BLS, not ensembles, still measured (M1) |
 | Open decisions | `processing_plans_plan.md` section 12 Q1-Q9 (present at 5d kick-off; see section 3) |
 | Source IDs | former master plan (rev 4, in git history) 7.5 row 5d, 11 (#17/#18 leftover: #67 phase 2+); #67; `docs/design/processing_plans_plan.md` (the detail reference: sections 3-10); #220 step 4 |
@@ -29,7 +29,7 @@ read sections 3-9 there before coding.
 |---|---|---|
 | design doc | done (PR #426) | `processing_plans_plan.md` |
 | P1 pure domain module, wire models, tests | **done**: `src/domain/processing_plan.py`, `src/schemas/processing_plan.py`, `tests/test_processing_plan.py`; no route uses them | `rg -l processing_plan src tests` |
-| #220 PR 1 (P0's precondition) | **done** (`27ebeb45`) | `07c_b5_crops_ocr_faces.md` 2 |
+| #220 PR 1 (P0's precondition) | **done** (`27ebeb45`) | `06c_b5_crops_ocr_faces.md` 2 |
 | P0 M1 (does an ensemble skip unrequested steps) and per-plan baselines | open | plan 5.4, 10 |
 | P2 `/analyze` and `/analyze/batch` on the CPU executor | open | plan 10 |
 | P3 core `/ingest` family on the executor | open | plan 10 |
@@ -130,7 +130,7 @@ ingest pages, `docs/PERFORMANCE.md` per-plan table, the source plan's status to 
 
 ## 6. Measurement protocol
 
-`07_b5_overview.md` M-1..M-10 and section 6 gates; plus the source plan's M1-M4 as written there,
+`06_b5_overview.md` M-1..M-10 and section 6 gates; plus the source plan's M1-M4 as written there,
 with the public-only change to Q2. Live tests under `docker/test/compose.yml` with its own `-p`
 name (source plan 9.7), GPU 0 (GPU 2 when agreed).
 
@@ -140,7 +140,7 @@ name (source plan 9.7), GPU 0 (GPU 2 when agreed).
   the merged integration head (pre-commit `--all-files`, suite `-n 8`, contracts-check, docs check,
   CHANGELOG rules, frontend set only if `frontend/` changed).
 - No separate live-harness run for 5d: the live harness runs only at B1, end of B2 and B4
-  (`00_index.md` section 8.1); the skip proofs and route parity run in the B5 GPU window instead
+  (`00a_decision_register.md` section 8.1); the skip proofs and route parity run in the B5 GPU window instead
   (skip proofs live, parity of each route's default plan: P-box, P-item, P-pe,
   P-clip, P-face, P-ocr against `ref-b5a`).
 - Benchmarks M2-M4 recorded with host load.
@@ -153,9 +153,9 @@ name (source plan 9.7), GPU 0 (GPU 2 when agreed).
   15 % rule, recorded;
 - docs updated; CI green; PR merged with a merge commit; #67 closed;
 - the R-3 docs removal for 5d is done in the closing PR (`processing_plans_plan.md` and
-  `triton_pipeline_optimization_plan.md`; table in `07_b5_overview.md` section 10.1); this file,
-  `07_b5_overview.md` and the other 07 files are deleted after the keep-lists are moved
-  (`00_index.md` "Plan lifecycle"), with their rows removed from `00_index.md` and
+  `triton_pipeline_optimization_plan.md`; table in `06_b5_overview.md` section 10.1); this file,
+  `06_b5_overview.md` and the other 07 files are deleted after the keep-lists are moved
+  (`00a_decision_register.md` "Plan lifecycle"), with their rows removed from `00a_decision_register.md` and
   `docs/design/README.md`.
 
 ### What to keep after merge
@@ -192,9 +192,9 @@ name (source plan 9.7), GPU 0 (GPU 2 when agreed).
 ## 11. Lane briefs (ready to paste)
 
 Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
-`<repo>-wt-b5d-<track>`, branch `b5d/<track>`, file `docs/design/program/07d_b5_processing_plans.md`
+`<repo>-wt-b5d-<track>`, branch `b5d/<track>`, file `docs/design/program/06d_b5_processing_plans.md`
 and `docs/design/processing_plans_plan.md` (read sections 3-10 first), plus: "Benchmarks and parity
-per `07_b5_overview.md` against `ref-b5a`. Stack `docker compose -p op-b5d-bench`, GPU 0 only
+per `06_b5_overview.md` against `ref-b5a`. Stack `docker compose -p op-b5d-bench`, GPU 0 only
 unless the coordinator says GPU 2 is agreed. Project slugs start with `b5d-`. Run `make contracts`
 in the same commit as any wire change."
 

@@ -3,13 +3,13 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Depends on | stage 3 merged ([03e](03e_b2_s3_job_runtime.md)): `start_job`, `register_job`, `JobContext`, the reaper, `publish` |
+| Depends on | stage 3 merged ([03c](03c_stage3_job_runtime.md)): `start_job`, `register_job`, `JobContext`, the reaper, `publish` |
 | Design | [02b](02b_jobs_locking_events.md) sections 1-3 (the kind table is authoritative for queue, exclusivity, auto-resume and limits) |
 | Lanes | two parts (review RR-13, owner Q-A 2026-11-04), each closed by a part check. **W2.3a** (the B2 families, ports of today's behaviour): 4A, 4B, 4C, 4D in parallel with stage 5's 5A-5D. **W2.3b** (the research families, cut from the W2.3a head after its part check): 4F, ND-A and ES-B in parallel; then ND-B (cut after ND-A and 4F merged); then 4E (frontend, after every other W2.3a and W2.3b lane merged and `make contracts-check` is green) |
 | Merge order | W2.3a: 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C. W2.3b: 4F, ND-A, ES-B, ND-B, 4E ([00_master_plan.md](00_master_plan.md) W2.3a and W2.3b). Why: 4D fixes the VLM client signature other callers use (4A-8); 4F fixes `record_partition`, `group_lineage` and `assign.place_new` that ND-A calls; ES-B reuses 4A's reprocess decode path (merged in W2.3a) and queues 4F's and ND-A's kinds; ND-B edits the item serializer and query builders after 4F and calls ND-A's groups |
 | Wave size | W2.3a: 8 lanes, no cross-lane signature except 4D's VLM keyword. W2.3b: 3 lanes at once, then 2 in sequence; every W2.3b cross-lane call is against a signature fixed in this file |
 | Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1, every seam now; [00d](00d_owner_questions.md)): the clustering family becomes its own lane 4F (split from 4B, which keeps import, combine and class merge); the embedding re-index job (ES-B); the near-duplicate machinery (ND-A) and holdout guard (ND-B, replacing 2D-4); the assist loop's own record, pause, budgets and slices in 4D (gaps G-2, G-3); 4E follows every new control and wire. Seam map: [00b](00b_traceability.md) section 5.2 |
-| Runs alongside | stage 5 ([03f](03f_b2_s5_gpu_queues.md)), disjoint files |
+| Runs alongside | stage 5 ([03e](03e_stage5_gpu_queues.md)), disjoint files |
 | Compose project | none in the lanes; compose changes go to lane 6B through the PR notes |
 
 ---
@@ -313,7 +313,7 @@ healthchecks, the removed volumes and env vars.
 
 ## 8. Lane briefs
 
-Use the common block of [03a](03a_b2_w1_queue_infra.md), with: "B2 stage-4 lane <4A..4F, ES-B, ND-A, ND-B>", "cut
+Use the common block of [03a](03a_stage1_foundation.md), with: "B2 stage-4 lane <4A..4F, ES-B, ND-A, ND-B>", "cut
 from int/b2-control-plane after stage 3 merged" for the W2.3a lanes 4A-4D, "after the W2.3a part
 check" for 4F, ND-A and ES-B, "after 4F and ND-A merged" for ND-B, the research plan of the
 lane in the reading list for 4F, 4D, ES-B, ND-A and ND-B (its sections 5 and 8), the reading list: this file (sections 1 and your

@@ -6,7 +6,7 @@
 | Part of | [02_control_plane_database.md](02_control_plane_database.md) (read its sections 2 and 3 first) |
 | Built by | B2 stage 1 (all tables, one initial Alembic revision), used by stages 2-6 ([03_b2_overview.md](03_b2_overview.md)) |
 | Research seams | the tables the seven research plans need are in [02d_research_seam_schema.md](02d_research_seam_schema.md) (revisions `0002`-`0004`); the changes they make to tables of this file are edited in place below and listed in 02d section 1 (approved by the owner 2026-11-04, RD-1 of [00d](00d_owner_questions.md)) |
-| Server | PostgreSQL 18 (latest stable major on 2026-11-04; 19 is a release candidate). The schema needs at least 15 (`NULLS NOT DISTINCT`) and 18 (`uuidv7()`); the exact image tag is in `13_package_pins.md` (written on its own branch) |
+| Server | PostgreSQL 18 (latest stable major on 2026-11-04; 19 is a release candidate). The schema needs at least 15 (`NULLS NOT DISTINCT`) and 18 (`uuidv7()`); the exact image tag is in `01_package_pins.md` (written on its own branch) |
 
 The DDL below is the contract. Stage 1 writes it as SQLAlchemy models in `src/db/models/` and one
 Alembic revision `0001_control_plane` (followed by the fixed chain of 02d section 0), drafted with

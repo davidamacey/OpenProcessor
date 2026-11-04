@@ -1,22 +1,22 @@
 # 10: code standards and "no hand-rolling" (cross-cutting)
 
 Status: plan, not started. Nothing in this file has been implemented.
-Depends on: [00_index.md](00_index.md) and the batch files: B0 [01_b0_close_out.md](01_b0_close_out.md);
+Depends on: [00a_decision_register.md](00a_decision_register.md) and the batch files: B0 [13_b0_close_out.md](13_b0_close_out.md);
 B1 tracks 1A B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), 1B B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)),
 1C B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)), 1D B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)),
 1E B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)); B2 [03_b2_overview.md](03_b2_overview.md)
-(W1 [03a_b2_w1_queue_infra.md](03a_b2_w1_queue_infra.md), W2 [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md),
-W3 [03c_b2_w3_beat_reaper_workers.md](03c_b2_w3_beat_reaper_workers.md)); B3
+(W1 [03a_stage1_foundation.md](03a_stage1_foundation.md), W2 [03d_stage4_job_families.md](03d_stage4_job_families.md),
+W3 [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md)); B3
 [04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md); B4 [05_b4_stateless_api.md](05_b4_stateless_api.md);
-R-final [06_release_acceptance.md](06_release_acceptance.md); B5 [07_b5_overview.md](07_b5_overview.md)
-(5b [07b_b5_decode_once.md](07b_b5_decode_once.md)); [09_github_actions.md](09_github_actions.md).
+R-final [07_release_acceptance.md](07_release_acceptance.md); B5 [06_b5_overview.md](06_b5_overview.md)
+(5b [06b_b5_decode_once.md](06b_b5_decode_once.md)); [09_github_actions.md](09_github_actions.md).
 Companion: [08_environment_and_setup.md](08_environment_and_setup.md) (ENV-n findings).
 Source IDs: CC-1, CC-5, CC-7, CC-9, CC-10, CC-11, BA-3, BA-8, GPU-3b, GPU-8, GPU-12, OS-7
 (`codebase_audit_plan.md`, including Appendix B "negative results", C "refuted" and D "cut as
 churn"); Q-Phase 2..7, Q-J7 (`task_queue_plan.md`); U-Step 3, U-Step 5, U-Step 6
 (`model_family_versions_plan.md`); the former master plan (rev 4, in git history) sections 3,
-3b, 17, which [00_index.md](00_index.md) section 12 maps. Decisions are in the register at
-[00_index.md](00_index.md) section 6 and are not restated here.
+3b, 17, which [00a_decision_register.md](00a_decision_register.md) section 12 maps. Decisions are in the register at
+[00a_decision_register.md](00a_decision_register.md) section 6 and are not restated here.
 
 Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03 (read only; the later pin commit
 `d1c6bab0` touches no file cited here).
@@ -27,7 +27,7 @@ section 2.2 and the register rows of section 3 that the owner decisions of that 
 What to keep after merge: sections 1 and 2 (the rules and the ratchets) move into
 `docs/design/engineering_standards.md` and `CONTRIBUTING.md` as each ratchet lands; the library
 register (section 3) moves to `docs/ARCHITECTURE.md` (mechanism, library, source). The files go as
-described in [00_index.md](00_index.md) "Plan lifecycle".
+described in [00a_decision_register.md](00a_decision_register.md) "Plan lifecycle".
 
 ## 0. How to use this file
 
@@ -47,7 +47,7 @@ described in [00_index.md](00_index.md) "Plan lifecycle".
 
 | # | Rule | Written in | Enforced by |
 |---|---|---|---|
-| 1 | **Correct first, under concurrency; speed measured once the stack stops changing** | VISION "core mission"; [00_index.md](00_index.md) section 1 | batch order (B1-B4 before B5); review |
+| 1 | **Correct first, under concurrency; speed measured once the stack stops changing** | VISION "core mission"; [00a_decision_register.md](00a_decision_register.md) section 1 | batch order (B1-B4 before B5); review |
 | 2 | **Fail closed**: an outage, an unbound project, a stale registry or an ambiguous state refuses; a broad `except` that returns `None/False/[]/0` is a bug unless the fallback is the feature | VISION; engineering_standards 1.3 | broad-except ratchet (`check_ruff_ratchet.py`); ruff `S110`/`S112`; review |
 | 3 | **No dead code, no duplicate logic, no shims or aliases**; a superseded route, field or helper is deleted in the same change | VISION; engineering_standards 1.5; CLAUDE.md | vulture ratchet (`check_vulture.py`); review; STD-1, STD-2 |
 | 4 | **Retired settings are refused at startup**, naming the replacement; no alias is read | CLAUDE.md; `src/config/retired_env.py`; `scripts/lib/retired_env.sh`; engineering_standards 5.18 | entry-point calls (ENV-6 adds a test) |
@@ -71,7 +71,7 @@ described in [00_index.md](00_index.md) "Plan lifecycle".
 | 22 | **Public tree**: no private names, machine paths or secrets; public data (COCO, Open Images) in tests and docs; security findings as neutral one-liners | CONTRIBUTING; CLAUDE.md | `check_naming_leaks.py`; gitleaks; review |
 | 23 | **Review depth follows risk**: isolation, locking, concurrency and security get characterization tests and an independent review | VISION; engineering_standards 1.8 | review |
 | 23a | **Project isolation in Postgres**: every project-scoped query runs inside `project_tx`; row-level security refuses other projects' rows; `deployment_tx` only in the allowlisted modules | [02a](02a_postgres_schema.md) section 1.4 | `tests/db/test_row_level_security.py`; the scope-helper ratchet |
-| 24 | **Agent lanes**: one agent per worktree and branch; lanes run targeted tests only (the [Test and GPU budget](00_index.md): T0 per task, one sweep per wave, three live-harness runs, three GPU windows); briefs forbid `pgrep -f`, `pkill -f` and sleep/until loops and name the `-p` project, the GPU, the worktree and the PR deadline | global agent instructions; [00_index.md](00_index.md) section 7 | brief template; coordinator |
+| 24 | **Agent lanes**: one agent per worktree and branch; lanes run targeted tests only (the [Test and GPU budget](00a_decision_register.md): T0 per task, one sweep per wave, three live-harness runs, three GPU windows); briefs forbid `pgrep -f`, `pkill -f` and sleep/until loops and name the `-p` project, the GPU, the worktree and the PR deadline | global agent instructions; [00a_decision_register.md](00a_decision_register.md) section 7 | brief template; coordinator |
 
 ## 2. Ratchets and guards
 
@@ -192,7 +192,7 @@ EXIF, NMS/IoU, `pyclipper`/contours, `while True` + `sleep` loops, `text/event-s
 | STD-2 | Three scalar IoU helpers in `src`: `services/detection/geometry.py::iou`, `services/curation/dataset_import/regions.py::iou`, `services/curation/region_eval_geometry.py::iou`. They differ on degenerate boxes (the last does not clamp a negative width or height in the union) | one pure helper in `src/domain/` (domain imports only `config` and `utils`, so every caller may use it); `torchvision.ops.box_iou` is for tensors and would pull torch into pure code, so it is not the answer here | B1-1C | S | parametrized test on normal, touching, disjoint and degenerate boxes against the old three; the three callers' tests pass |
 | STD-3 | The B4 `create_task` ratchet (Q-Phase 7) looks like audit Appendix D's cut item "a `spawn(coro, registry)` helper plus a `create_task` ratchet". The cut reason was "it would cement jobs in API workers"; after B2 no job runs in an API worker, so the reason no longer applies | state this in the ratchet's docstring and in [05_b4_stateless_api.md](05_b4_stateless_api.md) so review does not flag it as redoing a cut item; take its baseline only after B2 merges | B4-4B | XS | the ratchet's plant-a-violation proof |
 | STD-4 | Counts in plans go stale: the file-lock count is 19 files / 55 lines today, the former master plan said 18 / 51 | every new ratchet's first baseline is generated by running the guard on the tree, with a reason written per line by a person; a count quoted in a plan is never copied into a baseline | B1-1A | XS | the guard's own tests |
-| STD-5 | The module-level asyncio guard allows `open_vocab_ingest.py::_PASS_LOCK` | delete the lock and the allowlist line together | covered by **B2 lane 4C** ([03b_b2_w2_job_families.md](03b_b2_w2_job_families.md)) | XS | the guard with an empty allowlist |
+| STD-5 | The module-level asyncio guard allows `open_vocab_ingest.py::_PASS_LOCK` | delete the lock and the allowlist line together | covered by **B2 lane 4C** ([03d_stage4_job_families.md](03d_stage4_job_families.md)) | XS | the guard with an empty allowlist |
 | STD-6 | Owner rule 6 (library first) is enforced by nothing but review; `.github/PULL_REQUEST_TEMPLATE.md` has no item for it | add a checklist line: "A new mechanism uses a maintained library or a documented pattern; the doc is cited in the PR; any custom code says why the library does not fit" | B1 (with [09_github_actions.md](09_github_actions.md)) | XS | n/a (template) |
 | STD-7 | Stale guard reference: the PR template and CONTRIBUTING's intro name a region-field ratchet (`scripts/codegen/check_no_literal_region_fields.py`, `PORTED_PATHS`) that does not exist (`ls scripts/codegen`; the only remaining mention outside docs is the naming-leak allowlist) | delete both mentions (same commit as ENV-9) | B1-1D | XS | `tests/test_doc_links.py`; `rg check_no_literal_region_fields` finds only history |
 

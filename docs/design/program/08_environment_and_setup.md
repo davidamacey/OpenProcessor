@@ -1,22 +1,22 @@
 # 08: environment, setup, configuration and CI parity (cross-cutting)
 
 Status: plan, not started. Nothing in this file has been implemented.
-Depends on: [00_index.md](00_index.md) (decision register, batch order) and the batch files:
-B0 [01_b0_close_out.md](01_b0_close_out.md); B1 tracks 1A B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)),
+Depends on: [00a_decision_register.md](00a_decision_register.md) (decision register, batch order) and the batch files:
+B0 [13_b0_close_out.md](13_b0_close_out.md); B1 tracks 1A B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)),
 1B B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), 1C B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)),
 1D B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)), 1E B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md));
-B2 [03_b2_overview.md](03_b2_overview.md) with W1 [03a_b2_w1_queue_infra.md](03a_b2_w1_queue_infra.md),
-W2 [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md), W3 [03c_b2_w3_beat_reaper_workers.md](03c_b2_w3_beat_reaper_workers.md);
+B2 [03_b2_overview.md](03_b2_overview.md) with W1 [03a_stage1_foundation.md](03a_stage1_foundation.md),
+W2 [03d_stage4_job_families.md](03d_stage4_job_families.md), W3 [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md);
 B3 [04_b3_ultralytics_one_version.md](04_b3_ultralytics_one_version.md); B4
-[05_b4_stateless_api.md](05_b4_stateless_api.md); R-final [06_release_acceptance.md](06_release_acceptance.md);
-B5 [07_b5_overview.md](07_b5_overview.md); [09_github_actions.md](09_github_actions.md),
+[05_b4_stateless_api.md](05_b4_stateless_api.md); R-final [07_release_acceptance.md](07_release_acceptance.md);
+B5 [06_b5_overview.md](06_b5_overview.md); [09_github_actions.md](09_github_actions.md),
 [11_risks_cleanup_host.md](11_risks_cleanup_host.md). Each finding's batch below names the track
 (for example "B1-1D" is the 02d file).
 Companion: [10_standards_and_libraries.md](10_standards_and_libraries.md).
 Source IDs: Q-Phase 2, Q-Phase 4, Q-Phase 5, Q-Phase 7, Q-J3, Q-J9, Q-J14 (`task_queue_plan.md`);
 CC-1, BA-3, GPU-16, OS-7, T-3, T-4, T-8, OPS-1 (`codebase_audit_plan.md`); U-Step 3, U-Step 7,
 U-J8 (`model_family_versions_plan.md`); the decisions it applies are in the register at
-[00_index.md](00_index.md) section 6 (D-2, D-9, D-18..D-26, D-30, D-33 came from the former
+[00a_decision_register.md](00a_decision_register.md) section 6 (D-2, D-9, D-18..D-26, D-30, D-33 came from the former
 master plan, rev 4, in git history).
 
 Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03. The branch head moved to
@@ -25,20 +25,20 @@ changed say so.
 Consolidated 2026-11-03. Updated 2026-11-04 for the PostgreSQL control plane (owner decisions of
 2026-11-04, [02_control_plane_database.md](02_control_plane_database.md)): the B2 rows of sections
 2.2, 4, 4.1, 5 and 7.3 are rewritten; package versions live only in
-`13_package_pins.md` (written on its own branch).
+`01_package_pins.md` (written on its own branch).
 
 **Owner decisions that override the former master plan here (2026-11-03).** No intermediate
 releases: B0..B5 land on `main`, then one release acceptance (R-final, last) and v0.7.0 (D-37).
 The only supported upgrade is **0.6.0 -> 0.7.0, directly**. Every "v0.8.0", "R-B1", "R-0.9" and
 "upgrade from 0.7.0 or 0.8.0" in the former master plan is replaced by that one path (section 5).
-The test and GPU runs this file mentions follow the [Test and GPU budget](00_index.md): three
+The test and GPU runs this file mentions follow the [Test and GPU budget](00a_decision_register.md): three
 live-harness runs and three GPU windows, nothing per branch or per commit.
 
 What to keep after merge: the per-batch config delta (section 4) becomes `env.template`,
 `docs-site/docs/operations/` configuration pages and the CHANGELOG entries as each batch lands;
 the CI parity table (section 6) moves to `CONTRIBUTING.md`; the exact-pin table (section 7.1) is
 enforced by `tests/test_requirements_contract.py`. The files go as described in
-[00_index.md](00_index.md) "Plan lifecycle".
+[00a_decision_register.md](00a_decision_register.md) "Plan lifecycle".
 
 ## 0. How to use this file
 
@@ -88,14 +88,14 @@ of those guards:
 | Node for `frontend/` | `frontend/.nvmrc` (26), CI `actions/setup-node` with `node-version-file` | `cd frontend && npm ci` | yes. One `npm ci` per worktree: a shared `node_modules` symlink breaks `svelte-kit sync` (engineering_standards 5.12) |
 | GPU placement | CLAUDE.md "Services and compose" | `TRITON_GPU_ID`, `API_GPU_ID`, `SEGMENTER_GPU_ID`, `EVALUATOR_GPU_ID`, `VLM_GPU_ID` | partly: compose also reads `OP_TRAIN_GPU_ORDER` (trainer) and `OP_CLUSTER_GPU_DEVICE` (`docker-compose.gpu-clustering.yml`); `GPU_ID` is a fourth, legacy name (ENV-3) |
 | `-p` per worktree | CLAUDE.md, CONTRIBUTING | `docker compose -p <name> ...` | the Makefile `COMPOSE` variable passes no `-p`; it relies on `COMPOSE_PROJECT_NAME` from `.env` (ENV-9) |
-| live harness | CONTRIBUTING, `docker/test/README.md` | `docker compose -p op-live-verify -f docker/test/compose.yml up -d --wait`; `.venv/bin/python -m pytest tests/live -q --no-cov -m live`; `... down -v --remove-orphans` | yes. Harness images are local (`${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest`, built from the checkout). Run only the three budgeted times ([Test and GPU budget](00_index.md)) |
+| live harness | CONTRIBUTING, `docker/test/README.md` | `docker compose -p op-live-verify -f docker/test/compose.yml up -d --wait`; `.venv/bin/python -m pytest tests/live -q --no-cov -m live`; `... down -v --remove-orphans` | yes. Harness images are local (`${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest`, built from the checkout). Run only the three budgeted times ([Test and GPU budget](00a_decision_register.md)) |
 | local-only image tags | the former master plan 5.3, memory of the image-tag clobber | `build_and_publish.sh --dry-run --version <v> --local-tag-suffix -rcN` | yes; the compose defaults use `${OP_IMAGE_TAG:-0.6.0}`, so a local build must set `OP_IMAGE_REPO`/`OP_IMAGE_TAG` (`env.template` "Image repo / tag") |
 | restart after code or `.env` change | CONTRIBUTING "After pulling or merging code" | `make dev-restart` (code), `make dev-up` (`.env`) | yes |
 
 ### 2.2 The core flows a fresh setup must reach
 
 The acceptance phases in `scripts/release/acceptance_phases.sh` are the executable form of "works
-end to end". R-final ([06_release_acceptance.md](06_release_acceptance.md)) owns them. This file only
+end to end". R-final ([07_release_acceptance.md](07_release_acceptance.md)) owns them. This file only
 adds the configuration each flow needs, so a fresh agent can tell a config gap from a code bug:
 
 | Flow | Services (profile) | Config that must be present |
@@ -174,7 +174,7 @@ entry (`removed: <what to do>`) in the same commit.
 | B1-1D | `cachetools` added to `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (BA-3); ENV-1, ENV-3, ENV-5, ENV-7, ENV-9, ENV-11; `OCC_BULK_PAGE_SIZE` -> `OP_OCC_BULK_PAGE_SIZE` (retired entry) | deps, env | ATTRIBUTION (cachetools, MIT), template | checkout setup (ENV-3) | ADVANCED |
 | B1 deps lane | ENV-12 (`.github/dependabot.yml` ignore entries) and the re-applied dependabot bumps of section 7.2; no `OP_*` change | deps | none | none | none |
 | B1-1E | CI job `families` (network, `actions/cache` on the pin and fixture list); fixture cache `~/.cache/op-test-weights`; ENV-6 export worker | CI | [09_github_actions.md](09_github_actions.md), CONTRIBUTING (how to run it locally) | n/a | n/a |
-| B2 stage 1 | services `postgres` (the image and digest of [13](13_package_pins.md) section 4, MQ-2, volume `openprocessor-pg` at `/var/lib/postgresql`, `max_connections`), `valkey` (the image and digest of 13 section 4, volume `openprocessor-queue`, AOF everysec, `noeviction`, no `ports:`), `db-migrate` (one-shot), `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat`, `flower` (`monitoring`); env `OP_DB_HOST`, `OP_DB_PORT`, `OP_DB_NAME`, `OP_DB_APP_USER`, `OP_DB_APP_PASSWORD_FILE`, `OP_DB_OWNER_USER`, `OP_DB_OWNER_PASSWORD_FILE`, `OP_DB_DIRECT_HOST`, `OP_DB_SSLMODE`, `OP_DB_POOLER`, `OP_DB_API_CONNECTIONS_TOTAL`, `OP_PG_MAX_CONNECTIONS` and `OP_PG_SHARED_BUFFERS` (compose-only), `OP_QUEUE_URL` (default `redis://valkey:6379/0`, no password in it), `OP_QUEUE_PASSWORD_FILE`, `OP_JOBS_CONCURRENCY` (default 4, D-23), `OP_STOP_GRACE_JOBS` (compose-only, default 60), `OP_DB_BACKUP_KEEP` (7), `OP_DB_BACKUP_INTERVAL_H` (unset); added after the review [00c](00c_plan_review.md): `OP_DB_SUPER_PASSWORD_FILE` (R-13), `OP_API_REPLICAS` (default 1, R-6), `OP_VALKEY_MAXMEMORY` (1gb), `OP_JOBS_MAX_MEMORY_PER_CHILD_KB`, and the compose-only memory limits `OP_PG_MEM_LIMIT`, `OP_JOBS_MEM_LIMIT`, `OP_PERIODIC_MEM_LIMIT`, `OP_BEAT_MEM_LIMIT` (R-19); every Python service, `api` included, waits on `db-migrate` and on healthy `postgres`, `valkey` and `opensearch` (D-69, which replaced D-64); secrets (ENV-14); CLI `openprocessor db backup/restore`; the shared env generator first (ENV-4); deps named in [03](03_b2_overview.md), pinned in file 13 | services, env, secrets, deps | ARCHITECTURE, CLAUDE.md, INSTALLATION, SECURITY (neutral), CONTRIBUTING (test tiers), docs-site, ATTRIBUTION (section 7.3) | installer `do_install` (fresh, re-run, upgrade, repair) and the shared env generator | BASIC: none (installer-managed); ADVANCED: the rest |
+| B2 stage 1 | services `postgres` (the image and digest of [01](01_package_pins.md) section 4, MQ-2, volume `openprocessor-pg` at `/var/lib/postgresql`, `max_connections`), `valkey` (the image and digest of 13 section 4, volume `openprocessor-queue`, AOF everysec, `noeviction`, no `ports:`), `db-migrate` (one-shot), `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat`, `flower` (`monitoring`); env `OP_DB_HOST`, `OP_DB_PORT`, `OP_DB_NAME`, `OP_DB_APP_USER`, `OP_DB_APP_PASSWORD_FILE`, `OP_DB_OWNER_USER`, `OP_DB_OWNER_PASSWORD_FILE`, `OP_DB_DIRECT_HOST`, `OP_DB_SSLMODE`, `OP_DB_POOLER`, `OP_DB_API_CONNECTIONS_TOTAL`, `OP_PG_MAX_CONNECTIONS` and `OP_PG_SHARED_BUFFERS` (compose-only), `OP_QUEUE_URL` (default `redis://valkey:6379/0`, no password in it), `OP_QUEUE_PASSWORD_FILE`, `OP_JOBS_CONCURRENCY` (default 4, D-23), `OP_STOP_GRACE_JOBS` (compose-only, default 60), `OP_DB_BACKUP_KEEP` (7), `OP_DB_BACKUP_INTERVAL_H` (unset); added after the review [00c](00c_plan_review.md): `OP_DB_SUPER_PASSWORD_FILE` (R-13), `OP_API_REPLICAS` (default 1, R-6), `OP_VALKEY_MAXMEMORY` (1gb), `OP_JOBS_MAX_MEMORY_PER_CHILD_KB`, and the compose-only memory limits `OP_PG_MEM_LIMIT`, `OP_JOBS_MEM_LIMIT`, `OP_PERIODIC_MEM_LIMIT`, `OP_BEAT_MEM_LIMIT` (R-19); every Python service, `api` included, waits on `db-migrate` and on healthy `postgres`, `valkey` and `opensearch` (D-69, which replaced D-64); secrets (ENV-14); CLI `openprocessor db backup/restore`; the shared env generator first (ENV-4); deps named in [03](03_b2_overview.md), pinned in file 13 | services, env, secrets, deps | ARCHITECTURE, CLAUDE.md, INSTALLATION, SECURITY (neutral), CONTRIBUTING (test tiers), docs-site, ATTRIBUTION (section 7.3) | installer `do_install` (fresh, re-run, upgrade, repair) and the shared env generator | BASIC: none (installer-managed); ADVANCED: the rest |
 | B2 stage 2 | `op_projects`, `op_global_configs` and four per-project index roles deleted; retired `OP_PROJECTS_INDEX`, `OP_GLOBAL_CONFIGS_INDEX`; the 0.6.0 control-data upgrade step; `openprocessor db verify`; `curation migrate-registry` removed from the CLI; `OP_CONFIG_POLL_S` kept (reads the epoch) | env, CLI, installer step | INSTALLATION (upgrade, downgrade), CLAUDE.md command list | `setup-openprocessor.sh` upgrade (section 5 steps 9-12) | ADVANCED |
 | B2 stage 3 | `OP_EVENT_BUS`, `OP_EVENT_LOG_MAX_BYTES` retired with the JSONL log (ENV-16 settled: events in Postgres, D-48) | env | ARCHITECTURE (events) | none | - |
 | B2 stages 4-5 | `OP_TRAIN_JOBS_DIR`, `OP_COMBINE_JOBS_DIR`, `OP_AUTO_LABEL_STATE_DIR`, `OP_BAKEOFF_JOBS_DIR`, `OP_GPU_ARBITER_TRAINER_CONTAINER`, the `/jobs/model_export` setting and every other env var read only by deleted job-file code retired (`removed:` entries); ENV-2(a) `OP_TRITON_URL` retired (4D) | env | template, CHANGELOG | none | - |
@@ -195,7 +195,7 @@ entry (`removed: <what to do>`) in the same commit.
 | ENV-16 | Event-log settings: B2 stage 3 deletes the JSONL log (events move to Postgres, D-48; this was B4-4C), which `OP_EVENT_BUS` (`file` or `process`) and `OP_EVENT_LOG_MAX_BYTES` configure. No plan lists their retirement, and `OP_EVENT_BUS=process` is a compatibility mode ("restores the pre-S-3 in-process-only" behaviour, `event_hub.py` docstring) | Retire both with `removed:` entries; the event retention (24 h) is a module constant (no speculative knobs) | B2 stage 3 |
 | ENV-17 | Pool sizing: task plan Phase 7 says "size the shared executor and the Triton pool from the totals divided by `API_WORKERS` (new config in `src/config/`)" with no names | Name them at B4 kick-off (proposal: `OP_CPU_POOL_THREADS_TOTAL`, `OP_TRITON_CHANNELS_TOTAL`), read through `env.py`, ADVANCED tier; if the current per-process values are already env-driven, rename with retired entries instead of adding a second name (`rg -n "env_int\('OP_.*(POOL|THREAD|CHANNEL)" src`) | B4-4B |
 | ENV-18 | Flower port and exposure. "Flower under `monitoring`, internal only" has no port; 4600-4612 are taken | Decided (owner, Q-3, 2026-11-04): both, port 4613 published on `${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}` like the other monitoring UIs and the gateway subpath (`OP_GATEWAY_SUBPATHS`), and only when the `monitoring` profile runs; the SECURITY.md line is neutral and Flower stays loopback by default | B2 stage 1 |
-| ENV-19 | Release-train text. The former master plan (rev 4) sections 4, 5.1, 7.1-7.4 and its CHANGELOG known-issue lines ("until the fix in 0.8.0") assume v0.8.0/v0.9.0 and upgrades from 0.7.0/0.8.0 | Owner decision 2 replaces them: one v0.7.0; the B0 known-issue lines are dropped (01 says so); `installer_upgrade` runs from 0.6.0 only (section 5) | [00_index.md](00_index.md), [06_release_acceptance.md](06_release_acceptance.md) |
+| ENV-19 | Release-train text. The former master plan (rev 4) sections 4, 5.1, 7.1-7.4 and its CHANGELOG known-issue lines ("until the fix in 0.8.0") assume v0.8.0/v0.9.0 and upgrades from 0.7.0/0.8.0 | Owner decision 2 replaces them: one v0.7.0; the B0 known-issue lines are dropped (01 says so); `installer_upgrade` runs from 0.6.0 only (section 5) | [00a_decision_register.md](00a_decision_register.md), [07_release_acceptance.md](07_release_acceptance.md) |
 | ENV-20 | Worker liveness after B2 (lane 4D for the two curation consumers, 5A-5C for the GPU consumers): Phase 5 says "keep the `worker_liveness` heartbeats or use `celery inspect ping`; pick one"; Phase 2 ports a pool healthcheck because "a ping cannot see a wedged prefork pool" | Celery services use the ported pool healthcheck only; `worker_liveness.py` stays for the detection and VLM workers (not migrated). Delete the liveness entries of the converted workers in the same commit | B2 stages 4-6 |
 
 ## 5. Upgrade path 0.6.0 -> 0.7.0 (config side; input for R-final)
@@ -272,7 +272,7 @@ Not separate jobs, already inside the above: contracts drift (`api-contracts-dri
 | tenacity | `>=8.2` | `>=8.2` | `>=8.2` | | keep (used by `vlm_client.py`) |
 | opensearch-py | `>=2.3.0` | `opensearch-py[async]>=2.3.0` | `>=2.3.0` | | keep; `aiohttp` stays a dependency because the async client needs it |
 | cachetools | absent (try-import in `image_serving.py`) | absent | absent | | add in B1-1D (BA-3), floor pin, MIT |
-| SQLAlchemy, Alembic, psycopg, Celery, kombu, billiard, redis-py, Flower, testcontainers; images `postgres`, `valkey` | absent | absent | absent | | exact pins and digests in `13_package_pins.md` (written on its own branch); the traps (kombu 5.7 under Celery 5.6, the redis-py range kombu accepts, billiard >= 4.3.1) in [02b](02b_jobs_locking_events.md) section 7.1; spike S1 runs on the pins |
+| SQLAlchemy, Alembic, psycopg, Celery, kombu, billiard, redis-py, Flower, testcontainers; images `postgres`, `valkey` | absent | absent | absent | | exact pins and digests in `01_package_pins.md` (written on its own branch); the traps (kombu 5.7 under Celery 5.6, the redis-py range kombu accepts, billiard >= 4.3.1) in [02b](02b_jobs_locking_events.md) section 7.1; spike S1 runs on the pins |
 
 Rule for exact pins: use `==` where the package's behaviour is part of a tested contract or a
 gate (Ultralytics export head, FastAPI OpenAPI output, TensorRT engine format, Celery delivery

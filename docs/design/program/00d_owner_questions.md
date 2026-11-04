@@ -2,30 +2,30 @@
 
 | Field | Value |
 |---|---|
-| Status | written 2026-11-04 by the research integration pass; the owner answered 11 rows the same day (section 0, recorded in the [00_index.md](00_index.md) register); **69 stay open, and none blocks coding**: each has a recommendation the plan already follows, and each is asked only before the wave named |
+| Status | written 2026-11-04 by the research integration pass; the owner answered 11 rows the same day (section 0, recorded in the [00a_decision_register.md](00a_decision_register.md) register); **69 stay open, and none blocks coding**: each has a recommendation the plan already follows, and each is asked only before the wave named |
 | Source | the section 10 owner questions of the seven research plans (112 raw: GPU pipeline J1-J12, clustering J1-J17, embeddings J1-J14, near-duplicates J1-J15, spatial J1-J15, plate text J1-J13, auto-label J1-J26). Merged where two plans ask the same thing; the "From" column keeps every source, so no raw question is lost |
 | How to answer | one word per row is enough ("yes", "no", or the other option). Every open row is needed only by the wave named. The plan already follows each recommendation and marks the place "pending RD-n", so a "no" is a small, named removal |
-| Where answers go | the decision register of [00_index.md](00_index.md) section 6 (one row per answered RD-n), then the research plan's own J-row is marked answered |
+| Where answers go | the decision register of [00a_decision_register.md](00a_decision_register.md) section 6 (one row per answered RD-n), then the research plan's own J-row is marked answered |
 
 ## 0. Answered by the owner on 2026-11-04 (approved; the rows are removed from the tables below)
 
 | ID | Question | Answer, in plain words | Where the plan follows it |
 |---|---|---|---|
-| RD-1 | Build every research seam into the rebuild now? | **Approved as recommended: every seam now.** The review's deferrals (Q-A of [00e_research_review.md](00e_research_review.md)) are rejected, the plate-text index normalizer included; its close, settings and reopen step on upgraded indexes is made safe and bounded (per index, progress, dry run, rollback, stated downtime). "Keep all seams now and ensure the plans are updated accordingly to do in the right order and waves": W2.3 is split into W2.3a (ports) and W2.3b (research families) | [00_master_plan.md](00_master_plan.md) sections 2-4; [03b](03b_b2_w2_job_families.md); [02c](02c_migration_ops_tests.md) section 2.2 |
-| RD-2 | Prototypes on idle GPU during W2-W4? | **Approved, modified:** "we want to implement what we can of the research and prototypes, but we do not want long GPU hours". Working, known code first; every prototype is a short tiered run on a small seeded sample with early stop; no long sweeps; the default is the current proven approach, replaced only on a clear short-run win; **about 10 GPU hours in total before the tag** (replaces 31 + 62); anything beyond the cap needs the owner's OK | [00e_research_track.md](00e_research_track.md) sections 2-4 |
-| RD-4 | Plate tables in their own revision? | **Approved:** their own revision `0004_region_text` in W5e | [03g](03g_w5e_plate_text.md); [02d](02d_research_seam_schema.md) section 0 |
+| RD-1 | Build every research seam into the rebuild now? | **Approved as recommended: every seam now.** The review's deferrals (Q-A of [00e_research_review.md](00e_research_review.md)) are rejected, the plate-text index normalizer included; its close, settings and reopen step on upgraded indexes is made safe and bounded (per index, progress, dry run, rollback, stated downtime). "Keep all seams now and ensure the plans are updated accordingly to do in the right order and waves": W2.3 is split into W2.3a (ports) and W2.3b (research families) | [00_master_plan.md](00_master_plan.md) sections 2-4; [03d](03d_stage4_job_families.md); [02c](02c_migration_ops_tests.md) section 2.2 |
+| RD-2 | Prototypes on idle GPU during W2-W4? | **Approved, modified:** "we want to implement what we can of the research and prototypes, but we do not want long GPU hours". Working, known code first; every prototype is a short tiered run on a small seeded sample with early stop; no long sweeps; the default is the current proven approach, replaced only on a clear short-run win; **about 10 GPU hours in total before the tag** (replaces 31 + 62); anything beyond the cap needs the owner's OK | [00f_research_track.md](00f_research_track.md) sections 2-4 |
+| RD-4 | Plate tables in their own revision? | **Approved:** their own revision `0004_region_text` in W5e | [06e](06e_w5e_plate_text.md); [02d](02d_research_seam_schema.md) section 0 |
 | RD-5 | Capture metadata at ingest in W4? | **Approved** with every seam (RD-1, Q-A); the reason is the capture-date filter and the plate consensus basis (review 3.6) | [05](05_b4_stateless_api.md) section 6c |
 | RD-7 | Prototype code tracked with exact pins and a lock file? | **Approved** | 00e header |
 | RD-8 | Set P on local NVMe, "met / not met" only? | **Approved**; one shared seeded copy under one manifest (review 3.7) | [11](11_risks_cleanup_host.md) rule 10 |
 | RD-10 | The research datasets, local only, aggregates with citations? | **Approved, but skip UFPR-ALPR and LPLC** (and so RodoSol): freely downloadable plate sets plus set P | the dataset register, 00e section 4.1 |
 | RD-23 | Cluster memberships in PostgreSQL? | **Approved** | 02d section 2.2 |
-| RD-25 | A `cluster` queue and `cluster-worker`, CPU in v0.7.0? | **Decided: yes** (review Q-D) | [03a](03a_b2_w1_queue_infra.md) 1B-8 |
+| RD-25 | A `cluster` queue and `cluster-worker`, CPU in v0.7.0? | **Decided: yes** (review Q-D) | [03a](03a_stage1_foundation.md) 1B-8 |
 | RD-51 | Store no GPS coordinates in v0.7.0? | **Reversed: store GPS coordinates now**, behind a per-project `location_policy` (`drop`, `store_coarse`, `store`; default `store`, keep) in the W2.1 schema | [02a](02a_postgres_schema.md) section 4; 02d section 1; 05 CM-2, CM-4 |
-| RD-54 | Strip GPS from exported copies? | **No: exports keep the embedded GPS, as today**, by default; a project whose own `location_policy` is `drop` gets GPS-free exports (review RN-4, the project's policy, not a new question) | 05 CM-4, CM-5; [06](06_release_acceptance.md) RF-84 |
+| RD-54 | Strip GPS from exported copies? | **No: exports keep the embedded GPS, as today**, by default; a project whose own `location_policy` is `drop` gets GPS-free exports (review RN-4, the project's policy, not a new question) | 05 CM-4, CM-5; [07](07_release_acceptance.md) RF-84 |
 
 Also answered from the review (00e_research_review.md section 4): **Q-A** keep all seams now (above,
 RD-1); **Q-B** add PP-OCRv6 as one short reader comparison against PP-OCRv5 in the plate-text and
-B5c OCR work ([07c](07c_b5_crops_ocr_faces.md), `pt:P1`); **Q-C** no academic requests: UFPR-ALPR
+B5c OCR work ([06c](06c_b5_crops_ocr_faces.md), `pt:P1`); **Q-C** no academic requests: UFPR-ALPR
 and LPLC are skipped (RD-10); **Q-D** the `cluster` queue and worker are decided (RD-25).
 
 RD-3 (W5e as its own wave) stays open in name, but the RD-4 answer places the plate tables in a W5e

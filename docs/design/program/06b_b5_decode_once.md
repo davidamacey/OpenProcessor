@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Release | v0.7.0 (inside the release; R-final runs after B5; see `07_b5_overview.md` section 2) |
-| Depends on | 5a merged (`07a_b5_baseline.md`): `ref-b5a` captures, the 5a-R0 rows, D-35 decided |
+| Release | v0.7.0 (inside the release; R-final runs after B5; see `06_b5_overview.md` section 2) |
+| Depends on | 5a merged (`06a_b5_baseline.md`): `ref-b5a` captures, the 5a-R0 rows, D-35 decided |
 | Blocks | 5c and 5d build on the one decode helper and the GPU route this batch leaves |
 | Decisions applied | #40 owner decisions (2026-10-03: baseline first; every wave behind a rollback switch; compiled code only if the profile says Python dominates after the data-volume work); `gpu_decode_plan.md` D1-D3 as decided (13); public data only |
 | Open decisions | none new; D-35's outcome may add the `/detect` `scaleup` switch to 5b-D1 |
@@ -52,7 +52,7 @@ independent in files; `prep` waits for `profile`'s report.
 
 ## 4. Measurement protocol for this batch
 
-- `07_b5_overview.md` M-1..M-10 for every number.
+- `06_b5_overview.md` M-1..M-10 for every number.
 - Baseline: the 5a-R0 rows (A-upload, A-batch, B-4, B-8, endpoints, perf_analyzer) and the 5a set B
   ingest-profile row with 2 instances. Spread: the 5a spread of the same row, or the candidate's,
   whichever is larger.
@@ -212,7 +212,7 @@ evaluation is its own plan file (`docs/design/`) before any code. Rust adds no s
   the merged integration head (pre-commit `--all-files`, suite `-n 8`, contracts-check, docs check,
   CHANGELOG rules; frontend only if `frontend/` changed). No long or GPU run per branch.
 - The batch's benchmark rows and parity compares on GPU 0 (GPU 2 when agreed), in the B5 GPU window
-  after 5a's baseline (`00_index.md` section 8.1); one confirmation run of the final head against
+  after 5a's baseline (`00a_decision_register.md` section 8.1); one confirmation run of the final head against
   5a on set A and set B.
 - #40 checks (public): set A one card not below the 5a A-batch row by more than the spread; set B
   above it; decode once per image (the `decode` stage counter equals the image count on every
@@ -226,9 +226,9 @@ evaluation is its own plan file (`docs/design/`) before any code. Rust adds no s
 - Wave 6 adopted or recorded;
 - numbers in `docs/PERFORMANCE.md`; CI green; PR merged with a merge commit;
 - the R-3 docs removal for 5b is done in the closing PR (`gpu_decode_plan.md` and
-  `sp_gpu_prep_concurrency.md`; table in `07_b5_overview.md` section 10.1), and this file is deleted
-  after the keep-list below is moved (`00_index.md` "Plan lifecycle"), with its rows removed from
-  `00_index.md` and `docs/design/README.md`.
+  `sp_gpu_prep_concurrency.md`; table in `06_b5_overview.md` section 10.1), and this file is deleted
+  after the keep-list below is moved (`00a_decision_register.md` "Plan lifecycle"), with its rows removed from
+  `00a_decision_register.md` and `docs/design/README.md`.
 - #40 closes when its children (#45, #268, #219, #220, #67, #231 decision) are closed and its
   whole-epic acceptance is recorded on public data.
 
@@ -264,8 +264,8 @@ evaluation is its own plan file (`docs/design/`) before any code. Rust adds no s
 ## 10. Lane briefs (ready to paste)
 
 Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
-`<repo>-wt-b5b-<track>`, branch `b5b/<track>`, file `docs/design/program/07b_b5_decode_once.md`,
-plus: "Benchmarks and parity follow `07_b5_overview.md` M-1..M-10 and section 6, against
+`<repo>-wt-b5b-<track>`, branch `b5b/<track>`, file `docs/design/program/06b_b5_decode_once.md`,
+plus: "Benchmarks and parity follow `06_b5_overview.md` M-1..M-10 and section 6, against
 `ref-b5a`. Stack `docker compose -p op-b5b-bench`, GPU 0 only unless the coordinator says GPU 2 is
 agreed. Project slugs start with `b5b-`. Evaluate the library named in your task before writing
 custom code and put the comparison in the PR."
@@ -273,7 +273,7 @@ custom code and put the comparison in the PR."
 - **`decode`**: "Do 5b-D1 (red EXIF 1-8 test first), then 5b-D2. No shim at the old import path. If the
   coordinator says D-35 chose `scaleup=True`, add that change as its own commit."
 - **closing PR (coordinator)**: "Move the keep-list, remove the R-3 docs, delete this sub-batch's
-  plan files: `00_index.md` Plan lifecycle."
+  plan files: `00a_decision_register.md` Plan lifecycle."
 - **`profile`**: "Run 5b-P1. No code. Report the table and the decision-rule outcome."
 - **`prep`**: "Do 5b-G1. Then 5b-G2 only if the coordinator forwards a 5b-P1 report that supports
   it; evaluate CV-CUDA first. 5b-G3 only on the decision rule. Do not start 5b-G4."

@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Release | part of the single v0.7.0 release (no intermediate tag; R-final in [06_release_acceptance.md](06_release_acceptance.md)) |
+| Release | part of the single v0.7.0 release (no intermediate tag; R-final in [07_release_acceptance.md](07_release_acceptance.md)) |
 | Depends on | B1 merged into `main` (done); the owner's go for B2 |
 | Design | [02_control_plane_database.md](02_control_plane_database.md), [02a](02a_postgres_schema.md) (schema), [02b](02b_jobs_locking_events.md) (jobs, events, queues, pools), [02c](02c_migration_ops_tests.md) (migrations, upgrade, services, storage, tests, traps). This file and the stage files say **who builds what, in which order, proven how** |
-| Decisions applied | approved 2026-11-04: D-17 (Celery 5.6), D-18 (Valkey), D-31 (evaluator on `gpu_eval`), D-39..D-45 (the owner decisions). Also approved 2026-11-04 as a block: D-19, D-20, D-20a, D-20b, D-22a, D-22b, D-23, D-24, D-25, D-26, D-46..D-63 (D-48 and D-50 as amended), and after the review [00c](00c_plan_review.md): D-64 (inference without the control plane; replaced the same day by D-69: every service requires the control plane), D-65 (Valkey wake-up), D-66 (kombu and redis-py held), D-67 (pins part A first). Register: [00_index.md](00_index.md) section 6 |
-| Packages | named here, pinned in `13_package_pins.md` (written on its own branch): SQLAlchemy (with the `asyncio` extra), Alembic, psycopg 3 (`psycopg[binary]`), Celery, kombu, billiard, redis-py, Flower, testcontainers (`testcontainers[postgres,redis]`); the Postgres and Valkey images and digests of `13_package_pins.md` section 4 (Postgres base: owner question MQ-2) |
+| Decisions applied | approved 2026-11-04: D-17 (Celery 5.6), D-18 (Valkey), D-31 (evaluator on `gpu_eval`), D-39..D-45 (the owner decisions). Also approved 2026-11-04 as a block: D-19, D-20, D-20a, D-20b, D-22a, D-22b, D-23, D-24, D-25, D-26, D-46..D-63 (D-48 and D-50 as amended), and after the review [00c](00c_plan_review.md): D-64 (inference without the control plane; replaced the same day by D-69: every service requires the control plane), D-65 (Valkey wake-up), D-66 (kombu and redis-py held), D-67 (pins part A first). Register: [00a_decision_register.md](00a_decision_register.md) section 6 |
+| Packages | named here, pinned in `01_package_pins.md` (written on its own branch): SQLAlchemy (with the `asyncio` extra), Alembic, psycopg 3 (`psycopg[binary]`), Celery, kombu, billiard, redis-py, Flower, testcontainers (`testcontainers[postgres,redis]`); the Postgres and Valkey images and digests of `01_package_pins.md` section 4 (Postgres base: owner question MQ-2) |
 | Source IDs | `task_queue_plan.md` Phases 2-5 and E1-E26 (task detail where still valid); audit CC-4, CC-5, CC-9, CC-11, OPS-2, SEC-4, SEC-5; ENV-4, ENV-6, ENV-14, ENV-18, ENV-20 of [08](08_environment_and_setup.md) |
 
 Verified against `origin/main` at `7f3453de` on 2026-11-04 (read only).
@@ -40,7 +40,7 @@ section 1).
   jobs-worker=2 --scale api=2` starts (D-54);
 - the B2 sweep (section 9) is green, including the one B2 live run;
 - the closing PR moves the keep-list (section 11) into the permanent docs and deletes the B2 and 02
-  plan files and their rows in `00_index.md` and `docs/design/README.md` ([00_index.md](00_index.md)
+  plan files and their rows in `00a_decision_register.md` and `docs/design/README.md` ([00a_decision_register.md](00a_decision_register.md)
   section 8.2); merged with a merge commit; no tag.
 
 ## 2. Preconditions
@@ -49,8 +49,8 @@ section 1).
 |---|---|---|
 | B1 on main | `git log --oneline origin/main \| rg -i "b1\|lease\|registry"` | the B1 merges |
 | the code B2 replaces still exists | `rg -ln "class FileJob" src/services/curation/file_job.py`; `rg -n "def (acquire\|takeover_expired\|renew\|release)" src/clients/job_lease.py` | present |
-| package pins | `13_package_pins.md` merged into the integration branch | exact versions for every package in the header |
-| decisions | [00_index.md](00_index.md) section 6 | the "needed by B2" rows answered or the recommendation accepted |
+| package pins | `01_package_pins.md` merged into the integration branch | exact versions for every package in the header |
+| decisions | [00a_decision_register.md](00a_decision_register.md) section 6 | the "needed by B2" rows answered or the recommendation accepted |
 | host | [11_risks_cleanup_host.md](11_risks_cleanup_host.md) section 1 | peers told before the spikes and the live run; no GPU needed except stage 5's optional smoke (none in lanes) |
 
 If a symbol moved, re-find it by concept and record the new name in the lane's PR notes.
@@ -59,12 +59,12 @@ If a symbol moved, re-find it by concept and record the new name in the lane's P
 
 | Stage | Plain name | File | Lanes | Codes in parallel with | Merges after |
 |---|---|---|---|---|---|
-| 1 | Foundation: Postgres, Valkey, the Celery app, the schema, the storage seam, the test database | [03a_b2_w1_queue_infra.md](03a_b2_w1_queue_infra.md) | 1-0 (deps, coordinator), 1A, 1B, 1C, 1D, 1E, 1F (research-seam tables) | - | - |
-| 2 | Control data moves to Postgres, and the 0.6.0 upgrade step | [03d_b2_s2_control_data.md](03d_b2_s2_control_data.md) | 2A, 2B, 2C, 2D, 2E, ES-A (embedding registry), then 2F | stage 3 | stage 1 |
-| 3 | Job runtime, the reaper and the event feed | [03e_b2_s3_job_runtime.md](03e_b2_s3_job_runtime.md) | 3A, 3B | stage 2 (codes from the stage-1 head) | stage 2 |
-| 4 | The API-hosted job families move to Celery, in two parts | [03b_b2_w2_job_families.md](03b_b2_w2_job_families.md) | W2.3a: 4A, 4B, 4C, 4D. W2.3b (after the W2.3a part check): 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard), then 4E (frontend) | stage 5 (W2.3a only) | stage 3 |
-| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03f_b2_s5_gpu_queues.md](03f_b2_s5_gpu_queues.md) | 5A, 5B, 5C, 5D (W2.3a) | stage 4 W2.3a | stage 3 |
-| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03c_b2_w3_beat_reaper_workers.md](03c_b2_w3_beat_reaper_workers.md) | 6A, 6B and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) | - | stages 4 and 5 |
+| 1 | Foundation: Postgres, Valkey, the Celery app, the schema, the storage seam, the test database | [03a_stage1_foundation.md](03a_stage1_foundation.md) | 1-0 (deps, coordinator), 1A, 1B, 1C, 1D, 1E, 1F (research-seam tables) | - | - |
+| 2 | Control data moves to Postgres, and the 0.6.0 upgrade step | [03b_stage2_control_data.md](03b_stage2_control_data.md) | 2A, 2B, 2C, 2D, 2E, ES-A (embedding registry), then 2F | stage 3 | stage 1 |
+| 3 | Job runtime, the reaper and the event feed | [03c_stage3_job_runtime.md](03c_stage3_job_runtime.md) | 3A, 3B | stage 2 (codes from the stage-1 head) | stage 2 |
+| 4 | The API-hosted job families move to Celery, in two parts | [03d_stage4_job_families.md](03d_stage4_job_families.md) | W2.3a: 4A, 4B, 4C, 4D. W2.3b (after the W2.3a part check): 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard), then 4E (frontend) | stage 5 (W2.3a only) | stage 3 |
+| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03e_stage5_gpu_queues.md](03e_stage5_gpu_queues.md) | 5A, 5B, 5C, 5D (W2.3a) | stage 4 W2.3a | stage 3 |
+| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md) | 6A, 6B and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) | - | stages 4 and 5 |
 
 (The file names keep their earlier stage letters so links elsewhere stay valid; the table above is
 the order.)
@@ -167,7 +167,7 @@ made after the upgrade are not carried back.
 ## 9. The B2 sweep (once, after stage 6 merged)
 
 Run by the coordinator on `int/b2-control-plane`, announced to the peer sessions; one heavy run at a
-time; never overlapping B3's GPU window. Budget rules: [00_index.md](00_index.md) section 8.1.
+time; never overlapping B3's GPU window. Budget rules: [00a_decision_register.md](00a_decision_register.md) section 8.1.
 
 **T1 offline (about 40 min):** `.venv/bin/pre-commit run --all-files` and the pre-push hooks; the
 Docker-free suite `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not db' -n 8`;

@@ -2,13 +2,13 @@
 
 | Field | Value |
 |---|---|
-| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first |
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03d_stage4_job_families.md) (W2.3a and W2.3b), [program/03d](program/03b_stage2_control_data.md), [program/03c](program/03f_stage6_scheduler_scaleout.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00f_research_track.md](program/00f_research_track.md) section 2.1). A fresh agent loads those files first |
 | Status | plan (research first, then product). Nothing here is implemented. Written 2026-11-04 against `origin/main` at `497315954` |
 | Issues | #401 (the feature; parked until now), #470 (a neutral security item about stored recognized text, owned by the W4 privacy lane), #220 (OCR on the GPU, B5c) |
 | Absorbs | the former issue-401 plan (deleted in the commit that adds this file; its privacy model, sink inventory, key design, purge and test list are carried into sections 4, 5, 7 and 9 below, corrected where the owner's 2026-11-04 decisions changed them) |
 | Supersedes | RQ-7, E-9 and OQ-6 of [research_clustering_plan.md](research_clustering_plan.md); section 6.8 and wave W12 of [cluster_search_makemodel_plan.md](cluster_search_makemodel_plan.md) |
-| Builds on | the control-plane design [02](program/02_control_plane_database.md), [02a](program/02a_postgres_schema.md), [02b](program/02b_jobs_locking_events.md); the wave order in [00_master_plan.md](program/00_master_plan.md); the B5c OCR work in [07c](program/07c_b5_crops_ocr_faces.md) |
-| Owner direction | 2026-11-04: the plate text is a must for registration plates. Research fully to best practice first; prototypes are simple local-venv GPU scripts (no Docker builds) on set P (private vehicle photos with bursts) and public plate sets; plan first, run nothing. Decided the same day: external endpoints keep today's behaviour (OI-1 for #469, OI-2 for #471, [00_index.md](program/00_index.md) section 6) |
+| Builds on | the control-plane design [02](program/02_control_plane_database.md), [02a](program/02a_postgres_schema.md), [02b](program/02b_jobs_locking_events.md); the wave order in [00_master_plan.md](program/00_master_plan.md); the B5c OCR work in [06c](program/06c_b5_crops_ocr_faces.md) |
+| Owner direction | 2026-11-04: the plate text is a must for registration plates. Research fully to best practice first; prototypes are simple local-venv GPU scripts (no Docker builds) on set P (private vehicle photos with bursts) and public plate sets; plan first, run nothing. Decided the same day: external endpoints keep today's behaviour (OI-1 for #469, OI-2 for #471, [00a_decision_register.md](program/00a_decision_register.md) section 6) |
 | Audience | a fresh agent with no conversation memory. Symbols are cited by path and name; re-find line numbers with `rg` |
 
 Wording rule for this file and for the code it proposes: prose says "registration plate" and
@@ -75,7 +75,7 @@ from a region box). Nothing in code names a vehicle or a plate; the naming scan
 
 | Measurement | Result | Source |
 |---|---|---|
-| OCR parity gate machinery (P-ocr) | width-bucketed recognition rejected: P-ocr 86.0 % exact, character edit rate 1.94 %, BLS 43.2 ms against 48.0 ms; exact-width grouping 100 % but 49.5 ms | [07c](program/07c_b5_crops_ocr_faces.md) section 2 (#220 comment 2026-11-02) |
+| OCR parity gate machinery (P-ocr) | width-bucketed recognition rejected: P-ocr 86.0 % exact, character edit rate 1.94 %, BLS 43.2 ms against 48.0 ms; exact-width grouping 100 % but 49.5 ms | [06c](program/06c_b5_crops_ocr_faces.md) section 2 (#220 comment 2026-11-02) |
 | uint8 OCR inputs | bit-identical to the FP32 path | [faces_ocr_resident_crops_plan.md](faces_ocr_resident_crops_plan.md) section 0 |
 | A full-frame small-region detector (one earlier model, not shipped) | mAP@.5 0.968 (FP32 ONNX), 101.8 img/s on ORT-CUDA, A6000; test split 5,837 frames | [detector_quantization_results.md](../research/detector_quantization_results.md) |
 | **Plate read accuracy of any reader** | **never measured** on any data | - |
@@ -195,7 +195,7 @@ Open Images transcriptions plus set P.
 | R6 | Format-constrained re-decode of the CTC output (top-N per position plus the `text_format` regex) | 🟡 P2 | the OpenALPR pattern; helps where a jurisdiction format is known; US formats vary by state, so gains may be small |
 | R7 | Agreement with the configured VLM (`both`), VLM as fallback on low confidence | ✅ keep | already wired; matches fusion and the BLPR pattern; external endpoints allowed as today (OI-1) |
 | R8 | TrOCR, the 2018 segmentation-free CNN reader, commercial engines | ❌ | too slow, untrained for US plates, or not open-source |
-| R9 | PP-OCRv6 recognition (Apache-2.0, released June 2026) in place of PP-OCRv5 | 🟡 P1 (owner Q-B, review RR-5) | one short comparison against R1 in `pt:P1`; adopted only on a clear win at no more than today's latency, and then for the B5c OCR model too ([program/07c](program/07c_b5_crops_ocr_faces.md)) |
+| R9 | PP-OCRv6 recognition (Apache-2.0, released June 2026) in place of PP-OCRv5 | 🟡 P1 (owner Q-B, review RR-5) | one short comparison against R1 in `pt:P1`; adopted only on a clear win at no more than today's latency, and then for the B5c OCR model too ([program/07c](program/06c_b5_crops_ocr_faces.md)) |
 
 ### 4.2 Confidence and tiers
 
@@ -289,7 +289,7 @@ when a group exists), so search, review and export read one field.
 
 - Owner: [02](program/02_control_plane_database.md) data-ownership table (OpenSearch owns every
   text value); code lane **W5e `w5e/region-text-fields`**.
-- Index settings (**B2**, owner [03d](program/03d_b2_s2_control_data.md) lane 2F, which owns the
+- Index settings (**B2**, owner [03b](program/03b_stage2_control_data.md) lane 2F, which owns the
   OpenSearch bootstrap `scripts/opensearch/migrate.py`): the items index body gains, at creation,
 
   ```json
@@ -409,7 +409,7 @@ CREATE TABLE region_text_consensus_members (
 | fragment | `wildcard` on `region_boxes.text_fold.sub` with `*<q>*` | same, wildcard metacharacters escaped |
 | keyed mode | exact and fragment refused (400 `identity_text_keyed`); "same text as box X" is a `term` on `text_key` read server-side from box X | the key never travels on the wire |
 
-### 5.5 Config (owner [03d](program/03d_b2_s2_control_data.md) lane 2C for the body model; values set in W5e)
+### 5.5 Config (owner [03b](program/03b_stage2_control_data.md) lane 2C for the body model; values set in W5e)
 
 No new `config_documents.kind`. The reader, the tiers and the consensus settings are part of what
 defines a region, so they are fields of the `region_profile` body (validated pydantic,
@@ -435,7 +435,7 @@ Environment (owner [08](program/08_environment_and_setup.md) section 4 delta tab
 | `OP_IDENTITY_TEXT_MAX_MODE` | `off`, `keyed`, `raw` | `raw` (J1) | ADVANCED; read live; malformed refuses startup |
 | `OP_IDENTITY_TEXT_SECRETS_DIR` | path | `/run/secrets/op_identity_text` | ADVANCED; the master is a regular non-symlink file of exactly 32 bytes |
 
-Secrets (**B2**, owner [03a](program/03a_b2_w1_queue_infra.md) lane 1C, which owns services,
+Secrets (**B2**, owner [03a](program/03a_stage1_foundation.md) lane 1C, which owns services,
 secrets and the installer): the installer and checkout setup create `./secrets/identity_text/master`
 (32 random bytes, mode 600, never printed) through the shared env generator; compose mounts it
 read-only into `api`, `curation-detection-worker` and `text-read-worker` only.
@@ -465,7 +465,7 @@ are never on the wire. SSE payloads carry counts only (a test pins the key set).
 runs in the same commit as each wire change. #470's access rule (W4) attaches to this one
 serializer.
 
-### 5.7 OCR pipeline output (owner [07c](program/07c_b5_crops_ocr_faces.md) track `ocr`)
+### 5.7 OCR pipeline output (owner [06c](program/06c_b5_crops_ocr_faces.md) track `ocr`)
 
 - New output tensor `rec_char_min` (FP32, `[128]`) in `ocr_pipeline`: the minimum per-character
   max probability over the decoded characters of each line, computed in `CTCLabelDecode` next to
@@ -606,7 +606,7 @@ n of at least 500 confident test readings per reader that claims the bar.
 - **Plate strings never appear in any committed file**: not in notes, manifests, tests, fixtures,
   issue comments or commit messages. Transcriptions and predictions live only in
   `artifacts_local/identity_text/`. Tests use canaries that fail every plate format: a character outside `[A-Z0-9]`, or
-  12 characters (review 3.7; [program/03g](program/03g_w5e_plate_text.md)).
+  12 characters (review 3.7; [program/03g](program/06e_w5e_plate_text.md)).
 - Per-run JSON, logs and GPU samples stay in `artifacts_local/`; never bulk-deleted.
 
 ## 7. Production design
@@ -705,7 +705,7 @@ downloaded copies, `artifacts_local/`.
 | W5e | `w5e/region-text-jobs` | `src/config/job_kinds/region_text.py`, the three handlers, beat entries, `text-read-worker` in compose, the reread and consensus routes | store lane | 5.3 |
 | W5e | `w5e/identity-text-modes` | `identity_text_keys.py`, policy routes, rekey, purge script and CLI, combine and clone stripping | fields and jobs lanes | 7.3 to 7.5 |
 | W5e | `w5e/region-text-reader` (only if P1 adopts R3 or R4) | Triton model directory for the reader, export step, installer model group | P1, J6 | P5 numbers reproduced on Triton |
-| W6 | R-final row | acceptance: read a public sample, consensus, exact/fuzzy/fragment search, keyed mode and a purge leaving 0 | W5e | [06](program/06_release_acceptance.md) |
+| W6 | R-final row | acceptance: read a public sample, consensus, exact/fuzzy/fragment search, keyed mode and a purge leaving 0 | W5e | [07](program/07_release_acceptance.md) |
 
 W5e runs one full sweep, like every wave, and one short GPU gate in GPU window 2 (the reader on
 Triton and the P-ocr gate for `rec_char_min`).
@@ -753,17 +753,17 @@ Triton and the P-ocr gate for `rec_char_min`).
 | [02_control_plane_database.md](program/02_control_plane_database.md) | data-ownership table: region text values in OpenSearch; reader runs, consensus groups and identity-text policies in PostgreSQL |
 | [02a_postgres_schema.md](program/02a_postgres_schema.md) | new section "Region text" with the four tables of 5.2, their RLS, `region_text_consensus_marker` in the `project_state` CHECK, the "no text columns" schema test |
 | [02b_jobs_locking_events.md](program/02b_jobs_locking_events.md) | kind-table rows of 5.3; queue row `text_read` / `text-read-worker`; the two beat tasks |
-| [03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | lane 1C: the `identity_text` secret in the shared env generator and the three compose mounts |
-| [03d_b2_s2_control_data.md](program/03d_b2_s2_control_data.md) | lane 2F: `op_alnum_only` and `op_text_compact` in the items index body; lane 2C: room in the `region_profile` body model for the 5.5 fields (values land in W5e) |
+| [03a_stage1_foundation.md](program/03a_stage1_foundation.md) | lane 1C: the `identity_text` secret in the shared env generator and the three compose mounts |
+| [03b_stage2_control_data.md](program/03b_stage2_control_data.md) | lane 2F: `op_alnum_only` and `op_text_compact` in the items index body; lane 2C: room in the `region_profile` body model for the 5.5 fields (values land in W5e) |
 | [05_b4_stateless_api.md](program/05_b4_stateless_api.md) and [00_master_plan.md](program/00_master_plan.md) W4 | lane `b4/identity-text-privacy` (5.8) |
-| [07c_b5_crops_ocr_faces.md](program/07c_b5_crops_ocr_faces.md) | track `ocr`: the `rec_char_min` output and its parity test (5.7) |
+| [06c_b5_crops_ocr_faces.md](program/06c_b5_crops_ocr_faces.md) | track `ocr`: the `rec_char_min` output and its parity test (5.7) |
 | [00_master_plan.md](program/00_master_plan.md) | wave W5e (section 8), its sweep and its slot in GPU window 2; the prototype window during W2 to W4 |
-| [00_index.md](program/00_index.md) section 6 | decision rows for J1 to J13 once answered; MQ-9 exception for J4 |
+| [00a_decision_register.md](program/00a_decision_register.md) section 6 | decision rows for J1 to J13 once answered; MQ-9 exception for J4 |
 | [08_environment_and_setup.md](program/08_environment_and_setup.md) | config delta rows for `OP_IDENTITY_TEXT_MAX_MODE` and `OP_IDENTITY_TEXT_SECRETS_DIR` |
 | [00b_traceability.md](program/00b_traceability.md), [09_github_actions.md](program/09_github_actions.md) | #401: from "parked" to W5e with this plan; milestone v0.7.0 on the owner's go |
 | [12_prior_plans_reconciliation.md](program/12_prior_plans_reconciliation.md) | the W12 and "plate identity" rows point here |
-| [06_release_acceptance.md](program/06_release_acceptance.md) | one acceptance row (section 8, W6) |
+| [07_release_acceptance.md](program/07_release_acceptance.md) | one acceptance row (section 8, W6) |
 | [research_clustering_plan.md](research_clustering_plan.md) | RQ-7, E-9, OQ-6 and their stop rule point here; E-9 is replaced by P1 to P4 |
 | [cluster_search_makemodel_plan.md](cluster_search_makemodel_plan.md) | section 6.8 and W12 marked superseded by this plan |
-| [13_package_pins.md](program/13_package_pins.md) | `rapidfuzz` (MIT) as a product dependency if C3 ships; research pins stay out of the product files |
+| [01_package_pins.md](program/01_package_pins.md) | `rapidfuzz` (MIT) as a product dependency if C3 ships; research pins stay out of the product files |
 | `ATTRIBUTION.md` | PP-OCRv5 English model if R3 ships; the reader of J6 if it ships |

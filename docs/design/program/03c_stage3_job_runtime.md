@@ -86,7 +86,7 @@ baseline loses the `event_hub.py` line; tests green.
 
 ## Lane briefs
 
-Use the common block of [03a](03a_b2_w1_queue_infra.md), with: "B2 stage-3 lane", "cut from
+Use the common block of [03a](03a_stage1_foundation.md), with: "B2 stage-3 lane", "cut from
 int/b2-control-plane at the stage-1 merge (3B) or after 2A merged (3A, R-18); you code alongside
-stage 2 and the coordinator merges you after stage 2", the reading list `03e_b2_s3_job_runtime.md` (your lane) and
+stage 2 and the coordinator merges you after stage 2", the reading list `03c_stage3_job_runtime.md` (your lane) and
 [02b](02b_jobs_locking_events.md) sections 1-4 and 6. Compose project: none. GPU: none.

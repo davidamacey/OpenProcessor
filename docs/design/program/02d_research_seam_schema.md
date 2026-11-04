@@ -24,9 +24,9 @@ with `--rev-id`, so two lanes never guess the chain:
 | Revision | Lane, wave | Creates or changes | Rule |
 |---|---|---|---|
 | `0001_control_plane` | 1A `b2/db-core`, W2.1 | every table of 02a, **including the in-place research changes listed in section 1** (columns and `CHECK` values on 02a tables, the `gpu_devices` table) | a change to a table 0001 creates is made in 0001 |
-| `0002_research_seams` | 1F `b2/db-research-seams`, W2.1 (cut after 1A merged; [03a](03a_b2_w1_queue_infra.md) lane 1F) | section 2: serving reports, clustering S-core, the embedding registry, the auto-label loop record | only new tables; `down_revision = '0001_control_plane'` |
-| `0003_near_duplicates` | ND-A `b2/near-duplicates`, W2.3b ([03b](03b_b2_w2_job_families.md) lane ND-A) | section 3: the near-duplicate tables, three `holdout_freezes` columns, the `near_dup_profile` kind and `near_dup` axis, the `near_dup_run` projection kind | the only revision-writing lane of W2.3b (W2.3a writes none) |
-| `0004_region_text` | `w5e/region-text-store`, W5e ([03g](03g_w5e_plate_text.md)) | section 4: the registration-plate text tables and the `region_text_consensus_marker` state key | approved (RD-4) |
+| `0002_research_seams` | 1F `b2/db-research-seams`, W2.1 (cut after 1A merged; [03a](03a_stage1_foundation.md) lane 1F) | section 2: serving reports, clustering S-core, the embedding registry, the auto-label loop record | only new tables; `down_revision = '0001_control_plane'` |
+| `0003_near_duplicates` | ND-A `b2/near-duplicates`, W2.3b ([03d](03d_stage4_job_families.md) lane ND-A) | section 3: the near-duplicate tables, three `holdout_freezes` columns, the `near_dup_profile` kind and `near_dup` axis, the `near_dup_run` projection kind | the only revision-writing lane of W2.3b (W2.3a writes none) |
+| `0004_region_text` | `w5e/region-text-store`, W5e ([06e](06e_w5e_plate_text.md)) | section 4: the registration-plate text tables and the `region_text_consensus_marker` state key | approved (RD-4) |
 
 A wave that needs a schema change has exactly one revision-writing lane. Downgrade is tested to base
 and back (1A-3), so every revision has a real `downgrade()`.
@@ -331,7 +331,7 @@ CREATE TABLE embedding_evaluation_runs (
 
 Rows at creation and upgrade (catalog sync in `db-migrate`, three default spaces in the project
 create transaction, spaces per upgraded project with `knn_method` read from the live mapping):
-embeddings plan 5.2, lanes ES-A, 2A and 2E ([03d](03d_b2_s2_control_data.md)).
+embeddings plan 5.2, lanes ES-A, 2A and 2E ([03b](03b_stage2_control_data.md)).
 
 ### 2.4 Auto-label loop record (auto-label plan 5.1; fixes gap G-3)
 

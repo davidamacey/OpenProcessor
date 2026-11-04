@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03b_b2_w2_job_families.md) (W2.3a and W2.3b), [program/03d](program/03d_b2_s2_control_data.md), [program/03c](program/03c_b2_w3_beat_reaper_workers.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/03g_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00e_research_track.md](program/00e_research_track.md) section 2.1). A fresh agent loads those files first |
+| Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [program/03b](program/03d_stage4_job_families.md) (W2.3a and W2.3b), [program/03d](program/03b_stage2_control_data.md), [program/03c](program/03f_stage6_scheduler_scaleout.md), [program/05](program/05_b4_stateless_api.md) and [program/03g](program/06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([program/00b](program/00b_traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([program/00f_research_track.md](program/00f_research_track.md) section 2.1). A fresh agent loads those files first |
 | Status | plan, research. Nothing here is implemented. Written 2026-11-04 against `origin/main` at `49731595`. Section 5 (the seams) is the only part meant for the v0.7.0 rebuild; every experiment runs after the v0.7.0 tag (MQ-9) except the docs-only registration EP-0 |
 | Depends on | the v0.7.0 foundation: PostgreSQL for control data, Celery and Valkey for every long job, a stateless API ([program/02_control_plane_database.md](program/02_control_plane_database.md), [02a](program/02a_postgres_schema.md), [02b](program/02b_jobs_locking_events.md)); OpenSearch keeps vectors and search (D-40); every service needs PostgreSQL, Valkey, OpenSearch and Triton (D-69); B5's decode-once path for any new image encoder |
 | Issues | #347 (second encoder evaluation), #365 (encoder swap with a dual-field migration), #435 (frame target), #436 (`group_by=image`); results of closed #414 (search latency at 100k and 1M) and #402 (similar, image and box search) |
@@ -350,7 +350,7 @@ rewrites another space's nested list (the same reason `region_box_embeddings` is
 `region_boxes` today, `bodies_core.py:212-218`). Cost: one more nested Lucene document per box and
 space; only optional spaces that target boxes pay it (J12).
 
-### 5.2 PostgreSQL tables (owner: [02a](program/02a_postgres_schema.md), new section "Embedding registry"; created in `0001_control_plane` by lane 1A of [03a](program/03a_b2_w1_queue_infra.md))
+### 5.2 PostgreSQL tables (owner: [02a](program/02a_postgres_schema.md), new section "Embedding registry"; created in `0001_control_plane` by lane 1A of [03a](program/03a_stage1_foundation.md))
 
 ```sql
 CREATE TABLE embedding_model_versions (           -- deployment-wide catalog; no project_id, no RLS
@@ -449,7 +449,7 @@ Rows written at creation and upgrade:
 | When | Rows | Owner |
 |---|---|---|
 | `db-migrate` (deployment) | `embedding_model_versions` for `pe_core_l14_336` v1 and `mobileclip2_s2` v1 from the shipped catalog `examples/embedding/catalog.tsv` (new, same reader shape as `examples/vlm/catalog.tsv`), weights refs and sha256 from the export scripts | lane ES-A |
-| project create (the create transaction of 02a section 2) | three `pe_core_l14_336_v1` spaces, all `primary` and `ready`: `item` (`pe_embedding`, state `embedding_state`), `box` (nested `region_box_embeddings`, leaf `embedding`; the per-box state stays derived from the box list as today), `frame` (images `pe_embedding`, no state field) | [03d](program/03d_b2_s2_control_data.md) lane 2A |
+| project create (the create transaction of 02a section 2) | three `pe_core_l14_336_v1` spaces, all `primary` and `ready`: `item` (`pe_embedding`, state `embedding_state`), `box` (nested `region_box_embeddings`, leaf `embedding`; the per-box state stays derived from the box list as today), `frame` (images `pe_embedding`, no state field) | [03b](program/03b_stage2_control_data.md) lane 2A |
 | the one-step 0.6.0 upgrade | the same rows for every loaded project, `created_by = 'upgrade'`, `knn_method` read from each live index mapping (faiss for old projects, Lucene for new: the registry records what is there) | 03d lane 2E |
 
 The `box` space's `vector_field` for the upgraded PE space is the nested leaf `embedding` under
@@ -485,7 +485,7 @@ The `box` space's `vector_field` for the upgraded PE space is the nested leaf `e
   rest are dropped and their items marked `deferred` for that space; the preview warning
   `embedding_model_mismatch` compares space keys, not dimensions (replaces `warnings.py:42-60`).
 
-### 5.5 The re-index Celery job (owner: [03b](program/03b_b2_w2_job_families.md), new lane ES-B; kind row in [02b](program/02b_jobs_locking_events.md) section 2.1)
+### 5.5 The re-index Celery job (owner: [03d](program/03d_stage4_job_families.md), new lane ES-B; kind row in [02b](program/02b_jobs_locking_events.md) section 2.1)
 
 | Item | Value |
 |---|---|
@@ -533,7 +533,7 @@ Proposed routes (they do not exist yet):
 | POST `curation/projects/{project}/embedding/spaces/{space_key}/evaluate` | start an in-product evaluation against the primary | 202, row in `embedding_evaluation_runs` |
 | GET `curation/projects/{project}/embedding/reindex-runs/{run_id}` | the run with its job's progress | `EmbeddingReindexRunResponse` |
 
-Cancel and pause use the generic job routes of [03e](program/03e_b2_s3_job_runtime.md) (3A-9).
+Cancel and pause use the generic job routes of [03c](program/03c_stage3_job_runtime.md) (3A-9).
 
 Search wire (the three existing routes `/curation/projects/{project}/search/text`, `/search/similar`,
 `/search/image`): a `space` query parameter (default: the target's primary), echoed in the response as
@@ -850,13 +850,13 @@ indexes, Celery task routing, 02b) before coding and citing them in the commit.
 | [program/02a_postgres_schema.md](program/02a_postgres_schema.md) | new section "Embedding registry" with the four tables of 5.2 and their RLS; `project_settings` gains `search jsonb NULL`; the creation-order note lists them after `jobs`; the immutability trigger on `embedding_model_versions` |
 | [program/02_control_plane_database.md](program/02_control_plane_database.md) | data-ownership table: PostgreSQL owns encoder identity, spaces and their status; OpenSearch keeps the vectors and per-item state fields; section 4.7 lists the registry-named vector fields |
 | [program/02b_jobs_locking_events.md](program/02b_jobs_locking_events.md) | kind table row `embedding_reindex` (queue `jobs`, exclusive group per space, auto-resume, 24 h) |
-| [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | lane 1A creates the registry tables in `0001_control_plane` |
-| [program/03d_b2_s2_control_data.md](program/03d_b2_s2_control_data.md) | 2A: three default spaces in the create transaction; 2E: spaces per upgraded project with `knn_method` from the live mapping, and a test for each engine |
-| [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | new lane ES-B (`b2/embedding-reindex`), merge after 4A (it reuses the reprocess decode path) |
-| [program/03c_b2_w3_beat_reaper_workers.md](program/03c_b2_w3_beat_reaper_workers.md) | new lane ES-C (`b2/embedding-readers`) in W2.4 beside 6A and 6B; 6D documents spaces |
+| [program/03a_stage1_foundation.md](program/03a_stage1_foundation.md) | lane 1A creates the registry tables in `0001_control_plane` |
+| [program/03b_stage2_control_data.md](program/03b_stage2_control_data.md) | 2A: three default spaces in the create transaction; 2E: spaces per upgraded project with `knn_method` from the live mapping, and a test for each engine |
+| [program/03d_stage4_job_families.md](program/03d_stage4_job_families.md) | new lane ES-B (`b2/embedding-reindex`), merge after 4A (it reuses the reprocess decode path) |
+| [program/03f_stage6_scheduler_scaleout.md](program/03f_stage6_scheduler_scaleout.md) | new lane ES-C (`b2/embedding-readers`) in W2.4 beside 6A and 6B; 6D documents spaces |
 | [program/05_b4_stateless_api.md](program/05_b4_stateless_api.md) | lane 4B adds ES-E (in-process text backends deleted, two env vars retired); 4A-5's `_msearch` takes the space from the binding |
 | [program/00_master_plan.md](program/00_master_plan.md) | the lane rows above in W2.1-W2.4 and W4; section 10 names this plan beside the GPU and clustering research plans |
-| [program/00_index.md](program/00_index.md) | register J1-J14 as decisions once answered; section 9 docs list gains the registry docs |
+| [program/00a_decision_register.md](program/00a_decision_register.md) | register J1-J14 as decisions once answered; section 9 docs list gains the registry docs |
 | [program/00b_traceability.md](program/00b_traceability.md) | #347: research after the tag under this plan (EP-4); #365: seams in v0.7.0 (ES-A..ES-C), flip in v0.8.0 F9; #435: decided by EP-2; #436: v0.8.0 F2 with `space`; the deleted issue-347 plan mapped here |
 | [program/04_b3_ultralytics_one_version.md](program/04_b3_ultralytics_one_version.md) | GPU gate G7 (embeddings) records the PE engine parity into the catalog (`engine_parity_min_cos`); below 0.999 the catalog gets a new version instead of an in-place engine swap |
 | [program/08_environment_and_setup.md](program/08_environment_and_setup.md) | retire `OP_PE_TEXT_BACKEND` and `OP_PE_TEXT_ONNX_PATH` (ES-E) |

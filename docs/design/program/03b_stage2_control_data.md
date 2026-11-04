@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Depends on | stage 1 merged into `int/b2-control-plane` ([03a](03a_b2_w1_queue_infra.md)) |
+| Depends on | stage 1 merged into `int/b2-control-plane` ([03a](03a_stage1_foundation.md)) |
 | Design | [02](02_control_plane_database.md) sections 3-4, [02a](02a_postgres_schema.md) sections 2-4 and 6, [02c](02c_migration_ops_tests.md) sections 2-3 |
 | Lanes | 2A, 2B, 2C, 2D, 2E and ES-A in parallel; then 2F |
 | Merge order | 2A, 2B, 2C, 2D, 2E, ES-A, 2F |
@@ -182,7 +182,7 @@ tests under `tests/embedding_spaces/`. The readers move in W2.4 (lane ES-C), the
 
 ## Lane briefs
 
-Use the common block of [03a](03a_b2_w1_queue_infra.md) ("Lane brief"), with: "B2 stage-2 lane",
+Use the common block of [03a](03a_stage1_foundation.md) ("Lane brief"), with: "B2 stage-2 lane",
 "cut from int/b2-control-plane after stage 1 merged" (2F: "after 2A-2E merged"), the reading list
-`03d_b2_s2_control_data.md` (your lane) plus the 02 sections it cites, and "Edit only the files your
+`03b_stage2_control_data.md` (your lane) plus the 02 sections it cites, and "Edit only the files your
 lane owns; a file you need but do not own goes to the coordinator." Compose project: none. GPU: none.

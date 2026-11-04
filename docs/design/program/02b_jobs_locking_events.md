@@ -235,7 +235,7 @@ lease that the reaper marks `interrupted`, which the label-op routes already ser
 8. **Worker shutdown**: the soft-shutdown cancel raises `SystemExit` in the child; the wrapper
    writes `interrupted` fenced (`auto_resume` from the kind table), the attempt outcome
    `interrupted`, and re-raises so Celery requeues the message (billiard behaviour verified in spike
-   S1, [03a](03a_b2_w1_queue_infra.md)). The requeued message then finds `interrupted` and acks; the
+   S1, [03a](03a_stage1_foundation.md)). The requeued message then finds `interrupted` and acks; the
    reaper is what re-queues a resumable job (rule b), so recovery does not depend on the requeue.
 9. `finally`: stop the heartbeat thread, dispose the per-task engine.
 
@@ -498,7 +498,7 @@ Changed:
 | `worker_init`, `beat_init` handlers | `reject_retired_env()`; `beat_init` also takes the single-beat lock | ENV-6 of [08](08_environment_and_setup.md); D-60 |
 | `worker_ready` handler | refuses to start when a registered task has no route or no kind | OpenTranscribe `_validate_task_routes` |
 
-Package pins (owner decision 2026-11-04 after review R-10; [13](13_package_pins.md) section 4):
+Package pins (owner decision 2026-11-04 after review R-10; [01](01_package_pins.md) section 4):
 Celery 5.6.3 requires `kombu>=5.6.0` without a cap, and kombu 5.7.0 (released 2026-11-03) has not
 been released against by any Celery version, so **kombu is held at 5.6.2** and **redis-py at 6.4.0**
 (kombu 5.6.2's `redis` extra accepts `redis>=4.5.2,<6.5`, excluding 4.5.5 and 5.0.2; kombu 5.7.0's
@@ -508,7 +508,7 @@ passes in the api image with the `redis` extra.
 
 ### 7.2 Valkey
 
-the Valkey image (tag `9.1.3-alpine3.24`) by digest ([13](13_package_pins.md) section 4; Valkey is BSD-3-Clause,
+the Valkey image (tag `9.1.3-alpine3.24`) by digest ([01](01_package_pins.md) section 4; Valkey is BSD-3-Clause,
 [COPYING](https://github.com/valkey-io/valkey/blob/unstable/COPYING); Immich runs `valkey/valkey:9`
 by digest). Settings: `appendonly yes` (the default is `no`), `appendfsync everysec` (about one
 second of loss, [persistence](https://valkey.io/topics/persistence/#how-durable-is-the-append-only-file)),

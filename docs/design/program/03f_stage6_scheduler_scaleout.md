@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Depends on | stages 4 and 5 merged ([03b](03b_b2_w2_job_families.md), [03f](03f_b2_s5_gpu_queues.md)) |
+| Depends on | stages 4 and 5 merged ([03d](03d_stage4_job_families.md), [03e](03e_stage5_gpu_queues.md)) |
 | Design | [02b](02b_jobs_locking_events.md) section 4.1 (advisory locks, single beat), [02c](02c_migration_ops_tests.md) section 4 (services) |
 | Lanes | 6A, 6B and ES-C in parallel; then `b2/frontend-spaces` (after ES-C); then 6C; then 6D |
 | Merge order | 6A, 6B, ES-C, `b2/frontend-spaces`, 6C, 6D |
@@ -203,7 +203,7 @@ Red test: `.venv/bin/python scripts/docs/check_docs_vs_code.py` over every touch
 
 ## Lane briefs
 
-Use the common block of [03a](03a_b2_w1_queue_infra.md), with: "B2 stage-6 lane <6A..6D>", "cut
+Use the common block of [03a](03a_stage1_foundation.md), with: "B2 stage-6 lane <6A..6D>", "cut
 from int/b2-control-plane after stages 4 and 5 merged" (6C after 6B, 6D after 6C), this file (your
 lane). 6C adds: "Read the private notes only for SEC-4 and SEC-5; never write a security detail
 into a tracked file, a commit message or PR text." Compose project: none. GPU: none.

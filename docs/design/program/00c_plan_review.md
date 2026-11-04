@@ -4,7 +4,7 @@
 |---|---|
 | Status | review, written 2026-11-04 on `plan/review` (from `plan/master`) |
 | Reviewer | an independent reviewer (operations, Python back-end architecture, PostgreSQL, Celery, Docker) who did not write the plans |
-| Scope | [00_master_plan.md](00_master_plan.md), [00_index.md](00_index.md), [00b_traceability.md](00b_traceability.md), [02](02_control_plane_database.md), [02a](02a_postgres_schema.md), [02b](02b_jobs_locking_events.md), [02c](02c_migration_ops_tests.md), [03](03_b2_overview.md) to [03f](03f_b2_s5_gpu_queues.md), [04](04_b3_ultralytics_one_version.md), [05](05_b4_stateless_api.md), [06](06_release_acceptance.md), the 07 files, [08](08_environment_and_setup.md), [10](10_standards_and_libraries.md), [11](11_risks_cleanup_host.md), [13](13_package_pins.md) |
+| Scope | [00_master_plan.md](00_master_plan.md), [00a_decision_register.md](00a_decision_register.md), [00b_traceability.md](00b_traceability.md), [02](02_control_plane_database.md), [02a](02a_postgres_schema.md), [02b](02b_jobs_locking_events.md), [02c](02c_migration_ops_tests.md), [03](03_b2_overview.md) to [03e](03e_stage5_gpu_queues.md), [04](04_b3_ultralytics_one_version.md), [05](05_b4_stateless_api.md), [07](07_release_acceptance.md), the 07 files, [08](08_environment_and_setup.md), [10](10_standards_and_libraries.md), [11](11_risks_cleanup_host.md), [01](01_package_pins.md) |
 | Ground truth | the code on `plan/master` (`src/`, `scripts/`, compose files, Dockerfiles, `tests/`, `.github/workflows/`, `scripts/codegen/`, `monitoring/`), the `v0.6.0` tag, PyPI metadata and the official docs cited in each finding |
 | Method | every claim checked against the code or a doc, not against the plans' own description; line numbers are from `plan/master` on 2026-11-04 and move, so re-find by symbol |
 
@@ -299,7 +299,7 @@ text.
     upgrade preserves loses its logs.
 - *Evidence.*
   - 02c section 2.2 steps 2-4 and preconditions; section 2.3.
-  - `docs/design/program/06_release_acceptance.md` RF-62, RF-63.
+  - `docs/design/program/07_release_acceptance.md` RF-62, RF-63.
   - `src/core/dependencies.py:140-152`.
   - `docker-compose.yml:876-891` (`OP_TRAIN_JOBS_DIR=/jobs`).
   - `docker/trainer/trainer.py:152` (`tee_to_run_log(spec.run_log_path)`).
@@ -847,7 +847,7 @@ are placed only conditionally (R-22).
 Written by the planner on 2026-11-04, after re-checking the key findings against the code and the
 official docs. Every finding is **fixed** in the plan text (where named below). None is rejected.
 Two are fixed with a different mechanism than the one suggested, with the evidence. The owner's
-answers to section 4 (all "yes", 2026-11-04) are recorded in [00_index.md](00_index.md) section 6
+answers to section 4 (all "yes", 2026-11-04) are recorded in [00a_decision_register.md](00a_decision_register.md) section 6
 as D-64 (Q-1), D-65 (Q-2), D-66 (Q-3) and D-67 (Q-4); Q-5 was answered with MQ-6 and MQ-7.
 
 **Verified first.**
@@ -866,18 +866,18 @@ as D-64 (Q-1), D-65 (Q-2), D-66 (Q-3) and D-67 (Q-4); Q-5 was answered with MQ-6
 
 | Finding | Response | Where |
 |---|---|---|
-| R-1 | fixed: `Depends(get_db, scope="function")`, explicit commits in `project_tx`, no session on SSE routes, red tests "commit failure is a 5xx" and "SSE holds no pooled connection" | [02b](02b_jobs_locking_events.md) section 8; [03a](03a_b2_w1_queue_infra.md) 1A-10; [03e](03e_b2_s3_job_runtime.md) 3B-4 |
-| R-2 | fixed: the heartbeat, fenced writes, event row and Valkey wake-up live in `src/tasks/runtime/` and `src/db/repos/`; the OpenSearch factory is injected by the handler module; a planted-import red test | [02](02_control_plane_database.md) section 6; 02b section 3.1; 03e 3A, 3B; 03a 1A-11; [03b](03b_b2_w2_job_families.md) recipe step 3; [03f](03f_b2_s5_gpu_queues.md) |
-| R-3 | fixed: `name_key` with the partial unique index over active classes; the `ensure_class` rule of today; fixture and test cases | [02a](02a_postgres_schema.md) section 3; [03d](03d_b2_s2_control_data.md) 2B-1; [02c](02c_migration_ops_tests.md) section 2.4 |
+| R-1 | fixed: `Depends(get_db, scope="function")`, explicit commits in `project_tx`, no session on SSE routes, red tests "commit failure is a 5xx" and "SSE holds no pooled connection" | [02b](02b_jobs_locking_events.md) section 8; [03a](03a_stage1_foundation.md) 1A-10; [03c](03c_stage3_job_runtime.md) 3B-4 |
+| R-2 | fixed: the heartbeat, fenced writes, event row and Valkey wake-up live in `src/tasks/runtime/` and `src/db/repos/`; the OpenSearch factory is injected by the handler module; a planted-import red test | [02](02_control_plane_database.md) section 6; 02b section 3.1; 03e 3A, 3B; 03a 1A-11; [03d](03d_stage4_job_families.md) recipe step 3; [03e](03e_stage5_gpu_queues.md) |
+| R-3 | fixed: `name_key` with the partial unique index over active classes; the `ensure_class` rule of today; fixture and test cases | [02a](02a_postgres_schema.md) section 3; [03b](03b_stage2_control_data.md) 2B-1; [02c](02c_migration_ops_tests.md) section 2.4 |
 | R-4 | fixed: lane 1-0 changes `addopts`; 1D changes both `ci.yml` commands, PR #477's shard command, `CONTRIBUTING.md` and the `Makefile`; 6D changes `CLAUDE.md`; 1D-3 asserts the default selection | 03a 1-0, 1D; 02c section 7 |
 | R-5 | fixed: savepoints in `start_job` and per reaper row, the busy-group exclusion, `interrupted -> failed` in the transition table, the red test | 02b sections 1, 2.2, 4; 03e 3A-3, 3A-7 |
 | R-6 | fixed with option (a), owner decision D-65: Valkey pub/sub wake-up, no `LISTEN`, no `NOTIFY` commit lock; the API pool is a deployment total over workers and replicas; the budget test takes scale factors; PgBouncer by formula | 02b sections 6, 8, 8.1; 03e 3B-1, 3B-3, 3B-5; 03a 1D-6; [05](05_b4_stateless_api.md) 4B-2 |
 | R-7 | fixed, with one difference: index creation and mapping migrations move into the one-shot `db-migrate` (OpenSearch step) and the API checks fingerprints read-only. The kNN warm-up also moves there, once per deployment, rather than "one process per replica": the warm-up loads graphs on the OpenSearch side, so one call per deployment warms them for every API process; 5a's cold-query numbers confirm it | 02c section 1.2; 03d 2F-4 |
 | R-8 | fixed: liveness rows, release of the excess, the token bumps only on takeover, sweep step 13 starts the replicas one after the other | 02b section 5; 03e 3A-10; [03](03_b2_overview.md) section 9 step 13 |
-| R-9 | fixed (a-e): the `upgrade_state` gate, `--reset`, rollback abandons the Postgres data, the rollback order, run logs into storage keys; RF-63 reworded | 02c sections 2.2, 2.3, 2.4; 03d 2E-2, 2E-3, 2E-4, 2E-7; [06](06_release_acceptance.md) RF-63 |
-| R-10 | fixed, owner decision D-66: `kombu==5.6.2`, `redis==6.4.0`; the 02b sentence corrected; S1 checks `pip check` | [13](13_package_pins.md) sections 1, 4; 02b section 7.1; 03a 1-0, 1B-1; 02c T-17 |
+| R-9 | fixed (a-e): the `upgrade_state` gate, `--reset`, rollback abandons the Postgres data, the rollback order, run logs into storage keys; RF-63 reworded | 02c sections 2.2, 2.3, 2.4; 03d 2E-2, 2E-3, 2E-4, 2E-7; [07](07_release_acceptance.md) RF-63 |
+| R-10 | fixed, owner decision D-66: `kombu==5.6.2`, `redis==6.4.0`; the 02b sentence corrected; S1 checks `pip check` | [01](01_package_pins.md) sections 1, 4; 02b section 7.1; 03a 1-0, 1B-1; 02c T-17 |
 | R-11 | fixed, owner decision D-64: `api` depends on neither `db-migrate` nor `valkey`; "control plane down" mode; refuse only on a reachable database at the wrong head; `/health` and `/ready` name the dependency; "every Python service except `api`" | 02 rule 7; 02c section 1.2; 03a 1A-9, 1C-2, 1D-1; 03 section 9 steps 8-9, R2-13 |
-| R-12 | fixed with a different discovery mechanism: Prometheus `dns_sd_configs` (type A) on each service name instead of `docker_sd_configs`. Docker's embedded DNS answers a Compose service name with the address of every replica, and Prometheus' DNS discovery makes one target per record ([dns_sd_config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#dns_sd_config)), so each replica is its own `instance` without mounting the Docker socket into Prometheus. Alloy keeps by the `service` label; dashboards select by `service`; 6B owns Alloy and the dashboards; a render test | [03c](03c_b2_w3_beat_reaper_workers.md) 6B owned files, 6B-6 |
+| R-12 | fixed with a different discovery mechanism: Prometheus `dns_sd_configs` (type A) on each service name instead of `docker_sd_configs`. Docker's embedded DNS answers a Compose service name with the address of every replica, and Prometheus' DNS discovery makes one target per record ([dns_sd_config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#dns_sd_config)), so each replica is its own `instance` without mounting the Docker socket into Prometheus. Alloy keeps by the `service` label; dashboards select by `service`; 6B owns Alloy and the dashboards; a render test | [03f](03f_stage6_scheduler_scaleout.md) 6B owned files, 6B-6 |
 | R-13 | fixed: `op_super` for bootstrap only, a non-superuser `op_owner` with `BYPASSRLS`, the `after_begin` scope listener, `op_scope_allows` raises when unset, `FOR SELECT` consumer policies on `model_shares` and `models`, restore with `--no-privileges` | 02a sections 1.4, 1.5, 7; 02c sections 4, 6; 03a 1A-6, 1A-7, 1A-8, 1C-4 |
 | R-14 | fixed: one container shared by the xdist workers, a template per worker, fakes only where no SQL behaviour is checked, each stage lists the fake-based modules it rewrites | 02c section 7; 03a 1A-12; 03d 2A, 2B; 03b recipe step 6 |
 | R-15 | fixed: a sequential scenario with an exact diff and a concurrent one judged by invariants, in the three configurations of 05 | 05 section 7 and done-when; 02c section 7 |

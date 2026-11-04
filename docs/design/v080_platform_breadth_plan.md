@@ -8,10 +8,10 @@
 | Sources | the 0.7.0 program set in `docs/design/program/` (00 index, 02b registry, 03 B2 overview, 04 B3, 05 B4, 09 GitHub actions, 10 standards and libraries, 12 prior plans); [`docs/VISION_AND_GOALS.md`](../VISION_AND_GOALS.md); [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md); [`docs/CURATION.md`](../CURATION.md); [`SECURITY.md`](../../SECURITY.md); issues #8, #84, #348, #351, #365, #367, #368, #369, #370, #402, #435, #436 with their comments (read 2026-11-04); the code on `int/b1-correctness` at `5ca6c5b0` (read only, `rg`); the official docs cited per feature |
 | Research items | #346, #347, #398, #400, #401, #406 and #416 are covered by the separate [clustering research plan](research_clustering_plan.md). This plan only consumes its result for #365 |
 
-Read before you start: the program's `00_index.md` sections 4, 7 and 8.1 (waves, lanes, the test
+Read before you start: the program's `00a_decision_register.md` sections 4, 7 and 8.1 (waves, lanes, the test
 and GPU budget). **The whole `docs/design/program/` folder is deleted after the v0.7.0 tag**
 (program plan lifecycle). By the time this plan executes, read those rules from git history
-(`git show v0.7.0:docs/design/program/00_index.md`) or from `docs/design/engineering_standards.md`,
+(`git show v0.7.0:docs/design/program/00a_decision_register.md`) or from `docs/design/engineering_standards.md`,
 where the lasting rules move. Section 3.1 restates the rules this plan relies on, so it does not
 depend on the deleted files.
 
@@ -876,7 +876,7 @@ migrate command.
 
 ### 2.11 Landings from the post-tag research waves
 
-The 0.7.0 program's research waves RW-1..RW-6 (`docs/design/program/00e_research_track.md`
+The 0.7.0 program's research waves RW-1..RW-6 (`docs/design/program/00f_research_track.md`
 section 5) land these into v0.8.0, each only on its prototype's PASS, and each research window only
 on the owner's OK as short tiered runs (owner, 2026-11-04: about 10 GPU hours before the 0.7.0 tag,
 no long sweeps after it either): F9 reduced (RW-2); F2

@@ -6,7 +6,7 @@ matches), **open** (not started), **partially done** (evidence in the doc), **in
 announced and tracked in GitHub issues; the repository file is the canonical, versioned copy of each plan.
 
 Plan lifecycle: a plan file is deleted once its work is done, in the same PR that closes its batch,
-after the lasting knowledge moves to the reference docs ([`program/00_index.md`](program/00_index.md),
+after the lasting knowledge moves to the reference docs ([`program/00a_decision_register.md`](program/00a_decision_register.md),
 "Plan lifecycle"). Only `curation_api_contract.md`, `curation_design_rationale.md` and
 `engineering_standards.md` stay as living reference.
 
@@ -22,36 +22,36 @@ the master plan; execute one wave at a time from the batch files it links.
 | [program/00b_traceability.md](program/00b_traceability.md) | Every task and ID of the original program plans and every open issue mapped to its wave and lane (or retired with a reason); the fold-in record; the proposed GitHub actions |
 | [program/00c_plan_review.md](program/00c_plan_review.md) | The independent review of the plan set (3 blockers, 9 high, 15 medium, 11 low) and the planner's response to each finding |
 | [program/00d_owner_questions.md](program/00d_owner_questions.md) | The research owner questions in one de-duplicated list (80 from 112), grouped by theme, each with a recommendation; eight to answer before coding |
-| [program/00e_research_track.md](program/00e_research_track.md) | The research prototype track (every prototype with its data, GPU hours, window, decision and landing wave) and the post-tag research waves RW-1..RW-6 |
-| [program/00_index.md](program/00_index.md) | The decision register, the plain-words map, wave exit gates, the production-ready definition, branch and lane model, test and GPU budget rules, legends, superseded plans |
-| [program/01_b0_close_out.md](program/01_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
+| [program/00f_research_track.md](program/00f_research_track.md) | The research prototype track (every prototype with its data, GPU hours, window, decision and landing wave) and the post-tag research waves RW-1..RW-6 |
+| [program/00a_decision_register.md](program/00a_decision_register.md) | The decision register, the plain-words map, wave exit gates, the production-ready definition, branch and lane model, test and GPU budget rules, legends, superseded plans |
+| [program/13_b0_close_out.md](program/13_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
 | [program/02_control_plane_database.md](program/02_control_plane_database.md) | The control plane on PostgreSQL: why, the data-ownership table, the inventory with a destination for every item, the open decisions |
 | [program/02a_postgres_schema.md](program/02a_postgres_schema.md) | The PostgreSQL schema: every table, key, constraint, index and row-level-security policy |
 | [program/02b_jobs_locking_events.md](program/02b_jobs_locking_events.md) | Jobs: state machine, start, claim and fencing, cancel, the reaper, events to the browser, Celery and Valkey settings, connection pools |
 | [program/02c_migration_ops_tests.md](program/02c_migration_ops_tests.md) | Alembic, the 0.6.0 upgrade and rollback, compose services, the storage seam, backup and restore, tests, the trap register |
 | [program/02d_research_seam_schema.md](program/02d_research_seam_schema.md) | The research-seam tables (clustering partitions, the embedding registry, the assist-loop record, near-duplicates, plate text), the fixed revision chain and the reserved DDL |
 | [program/03_b2_overview.md](program/03_b2_overview.md) | B2: the control plane on PostgreSQL, Valkey and Celery, six stages, lanes, the sweep |
-| [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | B2 stage 1: foundation (Postgres, Valkey, the Celery app, the schema, the storage seam, the test database) |
-| [program/03d_b2_s2_control_data.md](program/03d_b2_s2_control_data.md) | B2 stage 2: control data moves to Postgres; the 0.6.0 upgrade step |
-| [program/03e_b2_s3_job_runtime.md](program/03e_b2_s3_job_runtime.md) | B2 stage 3: the job runtime, the reaper and the event feed |
-| [program/03b_b2_w2_job_families.md](program/03b_b2_w2_job_families.md) | B2 stage 4: the API-hosted job families move to Celery |
-| [program/03f_b2_s5_gpu_queues.md](program/03f_b2_s5_gpu_queues.md) | B2 stage 5: training, model export and the evaluator on GPU queues; promotion and the model registry |
-| [program/03c_b2_w3_beat_reaper_workers.md](program/03c_b2_w3_beat_reaper_workers.md) | B2 stage 6: beat and the periodic tasks, the deletions, scale-out compose, hardening, docs |
+| [program/03a_stage1_foundation.md](program/03a_stage1_foundation.md) | B2 stage 1: foundation (Postgres, Valkey, the Celery app, the schema, the storage seam, the test database) |
+| [program/03b_stage2_control_data.md](program/03b_stage2_control_data.md) | B2 stage 2: control data moves to Postgres; the 0.6.0 upgrade step |
+| [program/03c_stage3_job_runtime.md](program/03c_stage3_job_runtime.md) | B2 stage 3: the job runtime, the reaper and the event feed |
+| [program/03d_stage4_job_families.md](program/03d_stage4_job_families.md) | B2 stage 4: the API-hosted job families move to Celery |
+| [program/03e_stage5_gpu_queues.md](program/03e_stage5_gpu_queues.md) | B2 stage 5: training, model export and the evaluator on GPU queues; promotion and the model registry |
+| [program/03f_stage6_scheduler_scaleout.md](program/03f_stage6_scheduler_scaleout.md) | B2 stage 6: beat and the periodic tasks, the deletions, scale-out compose, hardening, docs |
 | [program/04_b3_ultralytics_one_version.md](program/04_b3_ultralytics_one_version.md) | B3: one Ultralytics version and one detection contract |
 | [program/05_b4_stateless_api.md](program/05_b4_stateless_api.md) | B4: stateless API, the worker count becomes a tuning knob; the 1-vs-N workers and replicas check |
-| [program/07_b5_overview.md](program/07_b5_overview.md) | B5 speed on the final stack: overview, shared measurement protocol, #42 side track |
-| [program/07a_b5_baseline.md](program/07a_b5_baseline.md) | B5a: the public baseline, the Triton sweeps and the `/detect` recall question |
-| [program/07b_b5_decode_once.md](program/07b_b5_decode_once.md) | B5b: decode once (GPU-3b, the rest of #40, #407, GPU-12) |
-| [program/07c_b5_crops_ocr_faces.md](program/07c_b5_crops_ocr_faces.md) | B5c: work crops at model size (#219) and OCR on the GPU (#220) |
-| [program/07d_b5_processing_plans.md](program/07d_b5_processing_plans.md) | B5d: request-driven processing plans (#67) |
-| [program/03g_w5e_plate_text.md](program/03g_w5e_plate_text.md) | W5e: registration-plate text (per-box readings, burst consensus, search, privacy modes), its lanes and gate |
-| [program/06_release_acceptance.md](program/06_release_acceptance.md) | Release prep, R-final acceptance run, and the v0.7.0 tag procedure |
+| [program/06_b5_overview.md](program/06_b5_overview.md) | B5 speed on the final stack: overview, shared measurement protocol, #42 side track |
+| [program/06a_b5_baseline.md](program/06a_b5_baseline.md) | B5a: the public baseline, the Triton sweeps and the `/detect` recall question |
+| [program/06b_b5_decode_once.md](program/06b_b5_decode_once.md) | B5b: decode once (GPU-3b, the rest of #40, #407, GPU-12) |
+| [program/06c_b5_crops_ocr_faces.md](program/06c_b5_crops_ocr_faces.md) | B5c: work crops at model size (#219) and OCR on the GPU (#220) |
+| [program/06d_b5_processing_plans.md](program/06d_b5_processing_plans.md) | B5d: request-driven processing plans (#67) |
+| [program/06e_w5e_plate_text.md](program/06e_w5e_plate_text.md) | W5e: registration-plate text (per-box readings, burst consensus, search, privacy modes), its lanes and gate |
+| [program/07_release_acceptance.md](program/07_release_acceptance.md) | Release prep, R-final acceptance run, and the v0.7.0 tag procedure |
 | [program/08_environment_and_setup.md](program/08_environment_and_setup.md) | Cross-cutting: environment, setup, configuration and CI parity |
 | [program/09_github_actions.md](program/09_github_actions.md) | Issues, re-scopes, milestones, closes and dependabot; section 7 is the issue map |
 | [program/10_standards_and_libraries.md](program/10_standards_and_libraries.md) | Cross-cutting: code standards and the "no hand-rolling" library register |
 | [program/11_risks_cleanup_host.md](program/11_risks_cleanup_host.md) | Risk register, cleanup, host, GPU and peer rules |
 | [program/12_prior_plans_reconciliation.md](program/12_prior_plans_reconciliation.md) | What was unfinished in the older plans and where it went; the removal waves |
-| [program/13_package_pins.md](program/13_package_pins.md) | Cross-cutting: exact pins for every Python dependency, new control-plane packages and images, bump order |
+| [program/01_package_pins.md](program/01_package_pins.md) | Cross-cutting: exact pins for every Python dependency, new control-plane packages and images, bump order |
 
 ## Plans after v0.7.0 (research and the next release)
 

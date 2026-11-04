@@ -24,12 +24,12 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | **mapped in total** | **223** |
 | retired, with a reason (section 1.9) | 16 whole items, 2 sub-items |
 
-### 1.2 `00_index.md` (original)
+### 1.2 `00a_decision_register.md` (original)
 
 | Original | Now |
 |---|---|
-| B0-1..B0-5, B0-1b, B0-a..B0-i (the old section 4.1 task list) | kept in [01](01_b0_close_out.md); B0 merged; B0-3 (OCR before/after) is gate step G10 of [04](04_b3_ultralytics_one_version.md) in GPU window 1 (W3); B0-f release prep is RP-1..RP-9 (W6); B0-h the tag (W6) |
-| "#28 rest", #25, #22, #27, GH-1 (#38), #31, #34, B1-0, B1-1A..1E, R-B1, "B2 stages 1-6", B3, B4-4A..4D, R-0.9, "#17/#18 leftovers", B5a..d, "#40 (ledger)" | the old section 4.1 rows: done (B0, B1, #31, #34, B1-0), dropped (R-B1, its checks in [06](06_release_acceptance.md) section 4.3), or the waves of [00_master_plan.md](00_master_plan.md) (B2 = W2.1-W2.4, B3 = W3, B4 = W4, R-0.9 = W6 section 4.4, #220 step 3 = W5c, #67 phase 2+ = W5d, #42 = side track, cleanup per [11](11_risks_cleanup_host.md) section 5) |
+| B0-1..B0-5, B0-1b, B0-a..B0-i (the old section 4.1 task list) | kept in [13](13_b0_close_out.md); B0 merged; B0-3 (OCR before/after) is gate step G10 of [04](04_b3_ultralytics_one_version.md) in GPU window 1 (W3); B0-f release prep is RP-1..RP-9 (W6); B0-h the tag (W6) |
+| "#28 rest", #25, #22, #27, GH-1 (#38), #31, #34, B1-0, B1-1A..1E, R-B1, "B2 stages 1-6", B3, B4-4A..4D, R-0.9, "#17/#18 leftovers", B5a..d, "#40 (ledger)" | the old section 4.1 rows: done (B0, B1, #31, #34, B1-0), dropped (R-B1, its checks in [07](07_release_acceptance.md) section 4.3), or the waves of [00_master_plan.md](00_master_plan.md) (B2 = W2.1-W2.4, B3 = W3, B4 = W4, R-0.9 = W6 section 4.4, #220 step 3 = W5c, #67 phase 2+ = W5d, #42 = side track, cleanup per [11](11_risks_cleanup_host.md) section 5) |
 | W0..W6 wave table (old section 4) | moved to [00_master_plan.md](00_master_plan.md) section 2 (W2 split into W2.1-W2.4; W3-W6 keep their meaning) |
 | PQ-1..PQ-9, PR-01..PR-15 | kept (00_index sections 4 and 5; PR-01, 02, 05, 07, 10, 11, 15 re-worded for Postgres in the re-plan) |
 | D-1..D-16, D-27, D-28, D-34..D-38 | kept unchanged |
@@ -44,9 +44,9 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | Original | Now |
 |---|---|
 | s1 done-when, s2 preconditions, s3 lanes, s4 diagram | moved: [03](03_b2_overview.md) sections 1-5 (stricter done-when: file-lock baseline empty, `rg fcntl src` empty, no `FileJob` or `job_lease`) |
-| s5.1 families 1-6, 7-12, 13-18 | moved: [03b](03b_b2_w2_job_families.md) 4A-1..4A-4, 4B-1..4B-4, 4C-2..4C-7; promote to [03f](03f_b2_s5_gpu_queues.md) 5D-1..5D-3. `dataset_import_resume` is no longer its own kind: 4B-3 resumes the same `dataset_import` job (the rescan moves into the task) |
+| s5.1 families 1-6, 7-12, 13-18 | moved: [03d](03d_stage4_job_families.md) 4A-1..4A-4, 4B-1..4B-4, 4C-2..4C-7; promote to [03e](03e_stage5_gpu_queues.md) 5D-1..5D-3. `dataset_import_resume` is no longer its own kind: 4B-3 resumes the same `dataset_import` job (the rescan moves into the task) |
 | s5.1 "not moved" list | kept in [02](02_control_plane_database.md) section 4.4 (label ops become inline `jobs` rows, 4A-5; legacy repair becomes an upgrade step, 2E) |
-| s5.2 periodic loops, s5.3 workers, s5.4 allowlist, s5.5 lifespan rule | moved: [03c](03c_b2_w3_beat_reaper_workers.md) 6A-1; 02 sections 4.4 and 4.6; 03 section 1; 6A-3 |
+| s5.2 periodic loops, s5.3 workers, s5.4 allowlist, s5.5 lifespan rule | moved: [03f](03f_stage6_scheduler_scaleout.md) 6A-1; 02 sections 4.4 and 4.6; 03 section 1; 6A-3 |
 | s6 queues, s7 Celery config, s8 broker service, s9 job record, lease, marker, wrapper, reaper, cancel | moved: [02b](02b_jobs_locking_events.md) sections 1-4 and 7, 1B-3, 1C-2 (Valkey); the lease became the claim `UPDATE` with a fencing token; reaper rules a-d became a-g |
 | E1-E12, E14, E17-E21, E23-E26 (edge cases) | moved: T-11 and 3A-5 (E1, E2, E6, E9), 3A-3 (E3), 3A-7 rule c (E4, E12), 6A-2 and 6B-3 (E5), 1B-7 (E7), 1B-1 and 1C-2 (E8, E25), 1B-3 (E10, E24), 02b section 3.1 and 4C-5 (E11), 4E (E14), 1C-2 and T-19 (E17), 6B-1 (E18), 6A-4 (E19), 4B-4 (E20), 1C-3 and 6D (E21), 1B-6 (E23), [05](05_b4_stateless_api.md) section 7 (E26) |
 | E11 unit test | restored: 3A-5 now tests `project_unavailable` for a job whose project was archived or deleted while queued |
@@ -67,9 +67,9 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 
 | Original | Now |
 |---|---|
-| W1-0 OPS-2 evidence | moved: [03a](03a_b2_w1_queue_infra.md) 1B-0 |
+| W1-0 OPS-2 evidence | moved: [03a](03a_stage1_foundation.md) 1B-0 |
 | W1-1 spike S1 | moved: 1B-1 (on Valkey; adds the `REDISCLI_AUTH` check) |
-| W1-2 deps, pins, licences | moved: lane 1-0 and [13](13_package_pins.md); ATTRIBUTION rows in 6D |
+| W1-2 deps, pins, licences | moved: lane 1-0 and [01](01_package_pins.md); ATTRIBUTION rows in 6D |
 | W1-3 `src/config/queue.py` | moved: 1B-2 (queue wait and auto-resume are kind-table columns, 02b section 2.1) |
 | W1-4 Celery app | moved: 1B-3 |
 | W1-5 producer | moved: 1B-4 |
@@ -107,8 +107,8 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 | Original | Now |
 |---|---|
 | 4A-0..4A-5, 4B-1..4B-5, 4D-0 and the 4D track, D-29, D-29a, D-32, D-32a, D-33, R4-n, K-18..K-22 | kept (Redis wording became Valkey; the 202 paths use B2's `start_job`; the B4 kinds modules `src/config/job_kinds/b4_fanout.py` and `b4_project.py` (with their `task_routes` and `src/tasks` twins) are now created empty by 1B-2, restored in this pass and split per track by re-check RC-5) |
-| 4A-6 evaluator | moved: [03f](03f_b2_s5_gpu_queues.md) 5C-1..5C-3 |
-| 4C-1 events, the last `flock`, `job_lock.py` | moved: [03e](03e_b2_s3_job_runtime.md) 3B-1..3B-5 and 6A-3; restored in this pass: `tests/events/test_publish_from_worker.py` in 3B-3 |
+| 4A-6 evaluator | moved: [03e](03e_stage5_gpu_queues.md) 5C-1..5C-3 |
+| 4C-1 events, the last `flock`, `job_lock.py` | moved: [03c](03c_stage3_job_runtime.md) 3B-1..3B-5 and 6A-3; restored in this pass: `tests/events/test_publish_from_worker.py` in 3B-3 |
 | FE-7 SSE reconnect | moved: 3B-4 (`Last-Event-ID` resume) |
 | D-30, 4C-0 | retired (section 1.9) |
 
@@ -116,10 +116,10 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 
 | File | IDs | Status |
 |---|---|---|
-| [01](01_b0_close_out.md) | B0-1..B0-5, B0-1b | kept (B0 merged) |
+| [13](13_b0_close_out.md) | B0-1..B0-5, B0-1b | kept (B0 merged) |
 | [04](04_b3_ultralytics_one_version.md) | U-Step 4-9, B3-A1..A5, B3-F1..F3, B3-G1, B3-E1..E7, B3-D1..D3, B3-W1, G0-G10, RF-B3-1..8, U-R1..R8 | kept; this pass adds track `deps` (pins part B), gate steps G11 and G12, and the GPU-15 leftover in B3-D3 (MQ-8, approved) |
-| [07](07_b5_overview.md), [07a](07a_b5_baseline.md)-[07d](07d_b5_processing_plans.md) | M-1..M-10, the parity gates, 5a-S1..S8, 5b-D1, 5b-P1, 5b-G1..G4, 5b-W1, 5b-C1, 5c-K1..K4, 5c-O1..O3, 5c-N1, 5d P0-P6, Q1-Q9, OQ-B5-1..3 | kept |
-| [06](06_release_acceptance.md) | RF-01..RF-76, RP-1..RP-9 | kept (RF-40, 41, 56, 62 and RP-4, RP-5 re-worded for the control-data move) |
+| [06](06_b5_overview.md), [06a](06a_b5_baseline.md)-[06d](06d_b5_processing_plans.md) | M-1..M-10, the parity gates, 5a-S1..S8, 5b-D1, 5b-P1, 5b-G1..G4, 5b-W1, 5b-C1, 5c-K1..K4, 5c-O1..O3, 5c-N1, 5d P0-P6, Q1-Q9, OQ-B5-1..3 | kept |
+| [07](07_release_acceptance.md) | RF-01..RF-76, RP-1..RP-9 | kept (RF-40, 41, 56, 62 and RP-4, RP-5 re-worded for the control-data move) |
 | [08](08_environment_and_setup.md) | ENV-1..ENV-20, Q-1..Q-4 | kept (ENV-4 = 1C-0, ENV-6 = 1B-3, ENV-14 = 1C-4, ENV-16 = 3B-5, ENV-18 = Q-3, decided 2026-11-04, ENV-20 = 4D-3 and 5A-5C) |
 | [09](09_github_actions.md) | GH-0..GH-12, N1-N16, C-n | kept; N11, N12, N16 rows re-pointed to the new stage lanes in this pass |
 | [10](10_standards_and_libraries.md), [11](11_risks_cleanup_host.md), [12](12_prior_plans_reconciliation.md) | STD-n, LIB-1..LIB-3; M-1..M-46; the ADD lists | kept; stale old B2 IDs re-pointed (10, 11) or explained by a note (12 section 0) |
@@ -128,14 +128,14 @@ missing from the re-plan, put back in this pass), **retired** (removed on purpos
 
 | Gap | Closed by |
 |---|---|
-| D-53's stream-worker project claims were designed (02b section 5, 02a `stream_worker_claims`, reaper rule g, sweep step 13) but no lane implemented them | [03e](03e_b2_s3_job_runtime.md) 3A-10 (owns the claim calls in the detection and VLM workers) |
+| D-53's stream-worker project claims were designed (02b section 5, 02a `stream_worker_claims`, reaper rule g, sweep step 13) but no lane implemented them | [03c](03c_stage3_job_runtime.md) 3A-10 (owns the claim calls in the detection and VLM workers) |
 | `tests/test_jobs_single_entry.py` (02b, 10) had no lane | 3A-11 |
 | `tests/config/test_db_connection_budget.py` (02b, 10, 11 M36; 02c called it `tests/db/test_connection_budget.py`) had no lane | 1C-7 (the 02b name is used) |
 | `tests/compose/test_beat_single_instance.py` still asserted a fixed `container_name` (D-54 removes them) | 1C-2 now asserts `deploy.replicas: 1` |
 | the B4 batch kinds module was not created in stage 1 | 1B-2 creates `job_kinds/b4.py`, `task_routes/b4.py`, `src/tasks/b4.py` empty |
 | two different Postgres and Valkey image tags (13 section 4 vs 02c, 03, 03a, 08) | every B2 file now points at 13 section 4; the base (trixie or alpine) is MQ-2 |
-| `00_index.md` held sections 3-6 twice, a malformed second register, and a stale D-18 | de-duplicated; this file and the master plan took the wave and task-list content |
-| RF-42 (R-final): 02b section 4 said it was "updated" to the 150 s busy window, but it still said 120 s and "kill the API container", which no longer kills a job once jobs run in `jobs-worker` (review 00c R-23, section 3.7: "does not hold") | rewritten in [06](06_release_acceptance.md): kill the `jobs-worker` replica, `interrupted` within 150 s, then resume or restart; 02b section 4 now points at the rewritten row |
+| `00a_decision_register.md` held sections 3-6 twice, a malformed second register, and a stale D-18 | de-duplicated; this file and the master plan took the wave and task-list content |
+| RF-42 (R-final): 02b section 4 said it was "updated" to the 150 s busy window, but it still said 120 s and "kill the API container", which no longer kills a job once jobs run in `jobs-worker` (review 00c R-23, section 3.7: "does not hold") | rewritten in [07](07_release_acceptance.md): kill the `jobs-worker` replica, `interrupted` within 150 s, then resume or restart; 02b section 4 now points at the rewritten row |
 | the review [00c](00c_plan_review.md) (R-1..R-38) | every finding applied in the plan files or answered in 00c section 5 "Planner responses" |
 
 Added by the research integration pass (owner-approved gaps of 2026-11-04):
@@ -180,7 +180,7 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 | #84 wheel example | v0.8.0 | v0.8.0 F8: after training is stable; the loop side is `al:AL5` and `feat/loop-retrain` in RW-6 |
 | #219 crops at model size | v0.7.0 | W5c `crops`; the size-variant crop key is lane 1E-4 (GPU S-10) |
 | #220 OCR and faces | v0.7.0 | W5c `ocr` (with `rec_char_min` for W5e; reads `gpu:PR-6` first); faces alignment in W5d `gpu` (reads `gpu:PR-5`) |
-| #231 serving head-to-head | v0.7.0 | GPU window 2 after the 5b gate, under the owner gate of 2026-10-10, or recorded and moved to RW-1 ([07](07_b5_overview.md) section 10) |
+| #231 serving head-to-head | v0.7.0 | GPU window 2 after the 5b gate, under the owner gate of 2026-10-10, or recorded and moved to RW-1 ([06](06_b5_overview.md) section 10) |
 | #268 Triton follow-ups | v0.7.0 | W5a `sweeps`; the two-card and priority rows are RW-1 (`gpu:PR-7`, `PR-8`) |
 | #346 clustering research tracker | none, parked | seams in v0.7.0: the partition tables (1F) and the clustering family on partitions (W2.3b lane 4F); experiments `clu:CL-0..CL-9` and landings L3-L6 in RW-3 (approved, RD-1, RD-6) |
 | #347 embedding-model research | v0.8.0 | research after the tag as `emb:EP-4` in RW-2 under the embeddings plan (RD-37); the registry it needs ships in v0.7.0 (ES-A..ES-C) |
@@ -192,7 +192,7 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 | #370 importers | v0.8.0 | v0.8.0 F1 (only COCO segmentation-only boxes remain) |
 | #398 detector-class roots (Z5) | v0.8.0 | research `al:AL6` in RW-6 (calls RD-80); its seams ship now: the loop reads `(partition_id, cluster_uid)` from `cluster_partitions` (4D, 4F) and `detector_class` is a partition method value |
 | #400 attribute signals | none, parked | `sp:P-2`, `sp:P-3` in RW-5; lane L-A1 only on a PASS (reserved DDL in [02d](02d_research_seam_schema.md) section 5) |
-| #401 plate identity text | none, parked | wave W5e ([03g](03g_w5e_plate_text.md); its revision in W5e approved, RD-4; pending RD-3, RD-61, RD-62); creation-time seams in W2.1 (1C-9) and W2.2 (2F-6, kept by the owner, Q-A), the OCR output in W5c (PP-OCRv6 compared once, Q-B), the privacy baseline in W4; prototypes `pt:P0..P5` as short runs in PW-2 (`pt:P6` cut; UFPR-ALPR and LPLC skipped, RD-10); milestone v0.7.0 on the owner's go |
+| #401 plate identity text | none, parked | wave W5e ([06e](06e_w5e_plate_text.md); its revision in W5e approved, RD-4; pending RD-3, RD-61, RD-62); creation-time seams in W2.1 (1C-9) and W2.2 (2F-6, kept by the owner, Q-A), the OCR output in W5c (PP-OCRv6 compared once, Q-B), the privacy baseline in W4; prototypes `pt:P0..P5` as short runs in PW-2 (`pt:P6` cut; UFPR-ALPR and LPLC skipped, RD-10); milestone v0.7.0 on the owner's go |
 | #403 MPS overlay | v0.7.0, parked | MPS stays off in v0.7.0 (`gpu:PR-4` cut before the tag, review RN-6); moved to RW-1 at W6, where `PR-4` may run on the owner's OK |
 | #406 judge calibration | v0.8.0 | `clu:CL-1` in RW-3 (protocol file section 5) |
 | #407 GPU-prep staged speed | v0.7.0 | W5b `profile` then `prep`; reads `gpu:PR-2` (CV-CUDA) first; 5b-G4 (the C++ bar) is not opened, `PR-4` is post-tag in RW-1 (review RN-6) |
@@ -223,7 +223,7 @@ which the owner decided as "keep current behaviour" (OI-1, OI-2): they close wit
 
 ## 3. Fold-in record (decided items moved into the lane that rewrites their code)
 
-A decided item is an owner-approved D-number of [00_index.md](00_index.md) section 6, an item
+A decided item is an owner-approved D-number of [00a_decision_register.md](00a_decision_register.md) section 6, an item
 marked approved in a research plan, or an issue-plan judgment call whose issue carries the owner's
 approval comment. Only #42 (of the open issues) carries that comment ("Owner decision (2026-11-02):
 all judgment calls in the plan gist are approved as recommended"), and its calls are already
@@ -231,12 +231,12 @@ shipped (#441). No research-plan hypothesis, experiment or v0.8.0 feature is rec
 
 | # | Item | Decision recorded in | Moved into | Edit made |
 |---|---|---|---|---|
-| F-1 | the pin series split: part A in W2.1, part B (the bumps that can change model output) with the B3 GPU gate | owner direction 3 of 2026-11-04; D-44 (approved 2026-11-04) | [13](13_package_pins.md) section 7.1; [03a](03a_b2_w1_queue_infra.md) header; [04](04_b3_ultralytics_one_version.md) track `deps` and brief | the series order kept inside each part; torch-pair CI commands moved from commit 2 to 9; a shrink-only allowlist in commit 1 |
+| F-1 | the pin series split: part A in W2.1, part B (the bumps that can change model output) with the B3 GPU gate | owner direction 3 of 2026-11-04; D-44 (approved 2026-11-04) | [01](01_package_pins.md) section 7.1; [03a](03a_stage1_foundation.md) header; [04](04_b3_ultralytics_one_version.md) track `deps` and brief | the series order kept inside each part; torch-pair CI commands moved from commit 2 to 9; a shrink-only allowlist in commit 1 |
 | F-2 | Pillow and simplejpeg join part B (commit 7) | the owner's own rule ("bumps that can change model output") applied to two image decoders; D-67 (2026-11-04) placed part B with the gate; MQ-4 (approved 2026-11-04) confirms the exact members | 13 section 7.1 | `simplejpeg` was missing from the bisect list; added to commit 7 |
 | F-3 | the Postgres and Valkey images and the test extras of 13 section 4 | D-44; [02](02_control_plane_database.md) says 13 owns every pin; `postgres:18.6-trixie` approved 2026-11-04 (MQ-2) | [03](03_b2_overview.md) header, 03a 1-0, 1C-1, 1D-2, [02c](02c_migration_ops_tests.md) section 4, [08](08_environment_and_setup.md) section 4 | the files now cite 13 section 4; the base image (trixie or alpine) is MQ-2 |
-| F-4 | the image smokes of 13 section 6 and the B2 stage-5 real-GPU smoke in GPU window 1 | D-44 (13 section 6: "GPU and image work is batched into one window"); [03f](03f_b2_s5_gpu_queues.md) "GPU check" | 04 gate steps G11, G12 | budget about 1.5 GPU days |
-| F-5 | #473 part c: the holdout freeze checks near-duplicates | a v0.7.0-milestone bug ("Each needs a red test first. The fix belongs with the curation correctness work (v0.7.0)"); the behaviour approved by the owner on 2026-11-04 (the whole near-duplicate group goes into the holdout together) | [03d](03d_b2_s2_control_data.md) 2D-4 (lane 2D rewrites the freeze) | new task |
-| F-6 | #473 part a: a re-score refreshes the crop `dup_*` fields | as F-5 | [03b](03b_b2_w2_job_families.md) 4A-7 (lane 4A rewrites `item_scores/`) | new task; `near_dup.py` and its fail-closed task (was 4C-8, now 4A-6) moved to 4A so one lane owns the file |
+| F-4 | the image smokes of 13 section 6 and the B2 stage-5 real-GPU smoke in GPU window 1 | D-44 (13 section 6: "GPU and image work is batched into one window"); [03e](03e_stage5_gpu_queues.md) "GPU check" | 04 gate steps G11, G12 | budget about 1.5 GPU days |
+| F-5 | #473 part c: the holdout freeze checks near-duplicates | a v0.7.0-milestone bug ("Each needs a red test first. The fix belongs with the curation correctness work (v0.7.0)"); the behaviour approved by the owner on 2026-11-04 (the whole near-duplicate group goes into the holdout together) | [03b](03b_stage2_control_data.md) 2D-4 (lane 2D rewrites the freeze) | new task |
+| F-6 | #473 part a: a re-score refreshes the crop `dup_*` fields | as F-5 | [03d](03d_stage4_job_families.md) 4A-7 (lane 4A rewrites `item_scores/`) | new task; `near_dup.py` and its fail-closed task (was 4C-8, now 4A-6) moved to 4A so one lane owns the file |
 | F-7 | #473 part b: the core batch grouping race | as F-5 | [05](05_b4_stateless_api.md) 4A-4b (4A-4 rewrites `visual_search/ingest_batch.py`) | new task |
 | F-8 | the fail-closed near-duplicate threshold (clustering plan N-8) | already a program task (03b 4C-8) | 4A-6 | moved with its file |
 
@@ -298,7 +298,7 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 > Dependabot rules) ships with the Ultralytics GPU gate (#458), so the accuracy and speed check runs
 > once for both. Inline image pins move into requirements files that Dependabot can read.
 >
-> Plan: `docs/design/program/13_package_pins.md`.
+> Plan: `docs/design/program/01_package_pins.md`.
 >
 > Acceptance: the pin test passes with an empty allowlist; `pip check` and the smoke imports pass in
 > every image; the image scans pass.
@@ -330,7 +330,7 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 | Item | When | Comment |
 |---|---|---|
 | PR #474 (frontend dev dependencies) | after W2.0 merges | "Re-applied by hand in `<commit>` (pins part A, W2.0), following the rule that dependency bumps land through a reviewed deps lane during the program." |
-| PR #449 (Triton base 26.10) | now, unless the owner places B3-A5 in W3 (D-38) | "The Triton and Python base moves are an owner decision (D-38 in `docs/design/program/00_index.md`): if taken, inside the B3 engine rebuild with the TensorRT pins moved together. Closing; Dependabot opens a fresh PR when due." |
+| PR #449 (Triton base 26.10) | now, unless the owner places B3-A5 in W3 (D-38) | "The Triton and Python base moves are an owner decision (D-38 in `docs/design/program/00a_decision_register.md`): if taken, inside the B3 engine rebuild with the TensorRT pins moved together. Closing; Dependabot opens a fresh PR when due." |
 | #453 | with the B2 PR (closing keyword) | - |
 | #461, #462 | with the B2 PR (closing keywords) | - |
 | #451, #439, #473, #468, #470, #472 | with the B4 PR (closing keywords) | - |
@@ -400,10 +400,10 @@ another RD-n follows that open question's recommendation.
 | X-9 | durable records vs events | every topic's record lives in its own tables; the 24-hour `events` rows are the UI feed only (G-3) | a 24-hour table cannot be an audit log |
 | X-10 | the 0.6.0 upgrade for research data | a step registry (2E-8): W2.3b lanes add `clustering.py` and `near_duplicates.py` as new files; the `source_backfill` job (ND-A, capture step W4) back-fills the exact key and the capture data of upgraded images (review RR-10) | file-disjoint lanes across waves |
 | X-11 | `project_state` keys the clustering plan removes | `region_cluster_*` markers and `last_clustering` are never ported (they become partitions); **`cluster_refresh` stays**, redefined by 4F as the beat's scheduling clock (deferral start, last attempt, backoff) with the trained count read from the serving partition | overrides one line of the clustering plan's section 11: the refresh rule's deferral and backoff need a durable per-project clock that no partition row holds, and 2F deletes the settings index that holds it today in W2.2 |
-| X-12 | prototype IDs (three plans use `P0`) | topic prefixes in program text: `gpu:`, `clu:`, `emb:`, `nd:`, `sp:`, `pt:`, `al:` ([00e](00e_research_track.md) section 1) | unambiguous references across files |
+| X-12 | prototype IDs (three plans use `P0`) | topic prefixes in program text: `gpu:`, `clu:`, `emb:`, `nd:`, `sp:`, `pt:`, `al:` ([00f](00f_research_track.md) section 1) | unambiguous references across files |
 | X-13 | set P | one rule (RD-8, approved): one shared seeded local copy under one manifest, removed after PW-3; public text "met / not met"; aggregates only with the owner's yes per note; never to a hosted model (RD-9) | the plans differed (met/not met, aggregates allowed, per note); the strictest common rule wins until the owner says otherwise |
 | X-14 | GPU windows and locks | short prototype runs in PW-1..PW-3 on idle GPU during W2-W4, about 10 GPU hours in total (RD-2 as answered), research windows RG-1..RG-6 after the tag only on the owner's OK, never overlapping a program window or a live run; one lock file per card `$SCRATCH/locks/gpu<N>.lock` shared by every topic | the plans named three different lock files, which would let two topics share a card |
-| X-15 | research pins | each topic's `scripts/research/<topic>/requirements*.txt` with a lock, never the product manifests; GPL packages never in a product manifest ([13](13_package_pins.md) section 3.9) | reproducibility without changing the product |
+| X-15 | research pins | each topic's `scripts/research/<topic>/requirements*.txt` with a lock, never the product manifests; GPL packages never in a product manifest ([01](01_package_pins.md) section 3.9) | reproducibility without changing the product |
 | X-16 | capture time | the spatial plan's `capture.*` (W4) is the one capture time; the plate plan's `captured_at` (its J13) is replaced by `capture_taken_utc` on items (RD-68); the clustering signals table's `capture_time` and `burst_key` are not added | one owner per value |
 | X-17 | privacy text across W4 lanes | `b4/privacy-hardening` owns `SECURITY.md` in W4 and writes the three statements (external endpoints; location stored per `location_policy` and exports keeping the embedded GPS; identity text); the capture and identity-text lanes hand their text in the plan | one writer per file per wave |
 | X-18 | VLM usage capture across W2.3a lanes | 4D owns `vlm_client.py` and makes `usage_source` a required keyword; 4D merges before the other VLM callers, which add the keyword in their own files against the fixed signature | every VLM call is counted (`vlm_usage_hourly`) with no shared file |
@@ -596,12 +596,12 @@ rebutted with the reason). The owner's answers of the same day changed the plan 
 
 | Change | Where | Test or check |
 |---|---|---|
-| W2.3 split into W2.3a (5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C: ports of today's behaviour) and W2.3b (4F, ND-A, ES-B, then ND-B, then 4E) (RR-13, Q-A) | [03b](03b_b2_w2_job_families.md) header and sections 2-8; [00_master_plan.md](00_master_plan.md) W2.3a and W2.3b | each part closes with its own part check; every W2.3b cross-lane call is against a signature fixed in 03b |
+| W2.3 split into W2.3a (5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C: ports of today's behaviour) and W2.3b (4F, ND-A, ES-B, then ND-B, then 4E) (RR-13, Q-A) | [03d](03d_stage4_job_families.md) header and sections 2-8; [00_master_plan.md](00_master_plan.md) W2.3a and W2.3b | each part closes with its own part check; every W2.3b cross-lane call is against a signature fixed in 03b |
 | the research pieces W2.3a lanes used to call moved to W2.3b: the `near_dup` scorer deletion and every `enqueue_pending` call (ND-A, was 4A-6, 4B-4, 4C), person grouping as a partition (4F-9, was 4C-7), the IVF retrain and the loop's cluster reader (4F-10, was 4D-1, 4D-7) | 03b | `tests/curation/test_no_near_dup_scorer.py`, `tests/test_persons_cluster_partition.py`, `tests/curation/test_assist_loop_reads_partition.py` |
-| every seam kept, the plate normalizer included; its upgrade step safe and bounded (Q-A, RR-8, RR-12 rebutted) | [02c](02c_migration_ops_tests.md) section 2.2; [03d](03d_b2_s2_control_data.md) 2F-6 | `tests/opensearch/test_analysis_settings_failure.py` |
-| GPS coordinates stored now under `project_settings.location_policy` (default `store`; RD-51 reversed); exports keep the embedded GPS (RD-54) except for `drop`-policy projects (CM-5, review RN-4, ExifTool in the jobs image for that path only) | [02a](02a_postgres_schema.md) section 4; [02d](02d_research_seam_schema.md) section 1; [05](05_b4_stateless_api.md) CM-2..CM-4; [06](06_release_acceptance.md) RF-84; [08](08_environment_and_setup.md); [10](10_standards_and_libraries.md) | `tests/curation/test_location_policy.py`; the location canary |
-| short tiered prototype runs, about 10 GPU hours before the tag (RD-2, RD-7); cuts: `gpu:PR-3`, `PR-4` (5b-G4 not opened), `PR-7..PR-9`, `pt:P6`, the SSCD arm of `nd:P2`, `nd:P3..P7`, every `emb:`/`clu:` GPU run, `sp:P-2..P-9`, `al:AL1..AL6` | [00e_research_track.md](00e_research_track.md) sections 2-4; [07b](07b_b5_decode_once.md) 5b-G4; [11](11_risks_cleanup_host.md) rules 9, 10 | the coordinator's GPU ledger |
+| every seam kept, the plate normalizer included; its upgrade step safe and bounded (Q-A, RR-8, RR-12 rebutted) | [02c](02c_migration_ops_tests.md) section 2.2; [03b](03b_stage2_control_data.md) 2F-6 | `tests/opensearch/test_analysis_settings_failure.py` |
+| GPS coordinates stored now under `project_settings.location_policy` (default `store`; RD-51 reversed); exports keep the embedded GPS (RD-54) except for `drop`-policy projects (CM-5, review RN-4, ExifTool in the jobs image for that path only) | [02a](02a_postgres_schema.md) section 4; [02d](02d_research_seam_schema.md) section 1; [05](05_b4_stateless_api.md) CM-2..CM-4; [07](07_release_acceptance.md) RF-84; [08](08_environment_and_setup.md); [10](10_standards_and_libraries.md) | `tests/curation/test_location_policy.py`; the location canary |
+| short tiered prototype runs, about 10 GPU hours before the tag (RD-2, RD-7); cuts: `gpu:PR-3`, `PR-4` (5b-G4 not opened), `PR-7..PR-9`, `pt:P6`, the SSCD arm of `nd:P2`, `nd:P3..P7`, every `emb:`/`clu:` GPU run, `sp:P-2..P-9`, `al:AL1..AL6` | [00f_research_track.md](00f_research_track.md) sections 2-4; [06b](06b_b5_decode_once.md) 5b-G4; [11](11_risks_cleanup_host.md) rules 9, 10 | the coordinator's GPU ledger |
 | datasets: one register; UFPR-ALPR, LPLC and RodoSol skipped (RD-10, Q-C, RR-11) | 00e section 4.1 | each prototype's registration commit records the terms |
-| PP-OCRv6 as one short reader comparison against PP-OCRv5 (Q-B, RR-5) | 00e `pt:P1`; [07c](07c_b5_crops_ocr_faces.md); [03g](03g_w5e_plate_text.md); 10 | `pt:P1`'s registered bar |
-| the `cluster` queue and worker decided (RD-25, Q-D) | [03a](03a_b2_w1_queue_infra.md) 1B-8, 1C-8 | `tests/tasks/test_planned_modules_included.py` |
-| owner answers recorded | [00d](00d_owner_questions.md) section 0; [00_index.md](00_index.md) section 6 | 69 questions stay open; none blocks coding |
+| PP-OCRv6 as one short reader comparison against PP-OCRv5 (Q-B, RR-5) | 00e `pt:P1`; [06c](06c_b5_crops_ocr_faces.md); [06e](06e_w5e_plate_text.md); 10 | `pt:P1`'s registered bar |
+| the `cluster` queue and worker decided (RD-25, Q-D) | [03a](03a_stage1_foundation.md) 1B-8, 1C-8 | `tests/tasks/test_planned_modules_included.py` |
+| owner answers recorded | [00d](00d_owner_questions.md) section 0; [00a_decision_register.md](00a_decision_register.md) section 6 | 69 questions stay open; none blocks coding |

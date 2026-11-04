@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Release | v0.7.0 (inside the release; R-final runs after B5; see `07_b5_overview.md` section 2) |
-| Depends on | B4 merged (the final stack); OQ-B5-1 and OQ-B5-2 answered; the B5 GPU window (`00_index.md` section 8.1) |
+| Release | v0.7.0 (inside the release; R-final runs after B5; see `06_b5_overview.md` section 2) |
+| Depends on | B4 merged (the final stack); OQ-B5-1 and OQ-B5-2 answered; the B5 GPU window (`00a_decision_register.md` section 8.1) |
 | Blocks | 5b, 5c, 5d: no optimization code merges before 5a's reference exists |
 | Decisions applied | owner rule "#45 baseline before any optimization code"; public data only; short tests when the gain is known |
 | Open decisions | **D-35** (GPU-6 `/detect` upscaling), decided on this file's recall numbers |
@@ -57,7 +57,7 @@ written while `ref` runs; their GPU runs wait for it.
 ### Track `ref`
 
 **5a-R0 Baseline headline rows (no code).**
-- Stack per `07_b5_overview.md` M-2; protocol M-3..M-10.
+- Stack per `06_b5_overview.md` M-2; protocol M-3..M-10.
 - Rows (each 1 warm-up + 3 counted repetitions, median and min-max, spread):
 
 | Row | Route and load | Profile |
@@ -112,7 +112,7 @@ written while `ref` runs; their GPU runs wait for it.
   owner's word (OQ-B5-2).
 
 **5a-A4 Protocol text.** `docs/PERFORMANCE.md` "Baseline protocol" still calls set B private; make
-it the public Commons set and point at `07_b5_overview.md` M-1..M-10.
+it the public Commons set and point at `06_b5_overview.md` M-1..M-10.
 
 **5a-A5 OpenSearch merge counters per ladder leg (XS).**
 - Files: `scripts/bench/scale_run.py` (the resource sampler), tests beside it in `tests/`.
@@ -194,7 +194,7 @@ decision and the numbers.
 - T0 (targeted red/green plus static checks on the touched files) for A1, A2, A5, C1, S8; one
   offline sweep on the merged integration head (pre-commit `--all-files`, suite `-n 8`,
   contracts-check, docs check, CHANGELOG rules; frontend only if `frontend/` changed). The
-  baseline is measured once, in the B5 GPU window (`00_index.md` section 8.1); no per-branch runs.
+  baseline is measured once, in the B5 GPU window (`00a_decision_register.md` section 8.1); no per-branch runs.
 - Every row recorded with host load; noisy rows repeated; no default changed without its pass line.
 - `docs/PERFORMANCE.md` sections written; `docs/benchmarks/v080/5a/` with `MANIFEST.sha256`.
 
@@ -205,8 +205,8 @@ decision and the numbers.
 - #268's sweeps are recorded with the winning settings, and only gated defaults changed;
 - D-35 is decided and N13 answered;
 - CI green; the PR merged with a merge commit;
-- this file is deleted in the closing PR after the keep-list below is moved (`00_index.md` "Plan
-  lifecycle"), and its row removed from `00_index.md` and `docs/design/README.md`.
+- this file is deleted in the closing PR after the keep-list below is moved (`00a_decision_register.md` "Plan
+  lifecycle"), and its row removed from `00a_decision_register.md` and `docs/design/README.md`.
 
 ### What to keep after merge
 
@@ -238,8 +238,8 @@ decision and the numbers.
 ## 10. Lane briefs (ready to paste)
 
 Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
-`<repo>-wt-b5a-<track>`, branch `b5a/<track>`, file `docs/design/program/07a_b5_baseline.md`, and
-these additions: "Benchmarks follow `docs/design/program/07_b5_overview.md` M-1..M-10. Stack:
+`<repo>-wt-b5a-<track>`, branch `b5a/<track>`, file `docs/design/program/06a_b5_baseline.md`, and
+these additions: "Benchmarks follow `docs/design/program/06_b5_overview.md` M-1..M-10. Stack:
 `docker compose -p op-b5a-bench` only, GPU 0 only (GPU 2 only if the coordinator says the peer
 agreed). Announce heavy runs through the coordinator. Project slugs start with `b5a-`; never touch
 `baseline-*` projects. Public data only."
@@ -248,7 +248,7 @@ agreed). Announce heavy runs through the coordinator. Project slugs start with `
   start/end, foreign GPU load, binding stage."
 - **`ladders`**: "Do 5a-A1 and 5a-A2 (red tests first), then 5a-A3 runs in the order the
   coordinator schedules, then 5a-A4 and 5a-A5. Do not start a 1M run. Final step: delete this sub-batch's plan files only in
-  the closing PR, per `00_index.md` Plan lifecycle."
+  the closing PR, per `00a_decision_register.md` Plan lifecycle."
 - **`sweeps`**: "Run 5a-S1..S6 and S8 tiered (M-6); propose config changes only with their pass line met;
   each change is one commit with its numbers in the body. 5a-S7 only with written consent from the
   GPU 1 owner session."

@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Depends on | stage 3 merged ([03e](03e_b2_s3_job_runtime.md)) |
+| Depends on | stage 3 merged ([03c](03c_stage3_job_runtime.md)) |
 | Design | [02b](02b_jobs_locking_events.md) sections 2.1, 3 and 7.3; [02a](02a_postgres_schema.md) section 7 |
 | Decisions | D-41 (owner decision 4: training and model export run on Celery; the file protocols are deleted), D-31 (the evaluator on `gpu_eval`, approved), D-22b (promote `wait=true` deleted) |
 | Lanes | 5A, 5B, 5C, 5D in parallel |
@@ -95,7 +95,7 @@ new `scripts/curation/bakeoff/celery_tasks.py`; the bake-off routers and the sta
 
 The stage's real-GPU smoke (one short training run on COCO-sized public data, one export of a small
 model with its contract columns recorded, one bake-off on a 20-image set) runs inside **GPU window 1** (the B3 gate,
-[00_index.md](00_index.md) section 8.1) on the merged B2 + B3 stack, not as an extra window: B3's
+[00a_decision_register.md](00a_decision_register.md) section 8.1) on the merged B2 + B3 stack, not as an extra window: B3's
 engine export already exercises the export worker, and the training smoke takes about 30 minutes.
 
 ## Stage 5 exit criteria
@@ -108,7 +108,7 @@ engine export already exercises the export worker, and the training smoke takes 
 
 ## Lane briefs
 
-Use the common block of [03a](03a_b2_w1_queue_infra.md), with: "B2 stage-5 lane <5A..5D>", "cut
+Use the common block of [03a](03a_stage1_foundation.md), with: "B2 stage-5 lane <5A..5D>", "cut
 from int/b2-control-plane after stage 3 merged", this file (your lane) and [02b](02b_jobs_locking_events.md)
 sections 2-3 and 7.3; "No GPU: handlers are tested with fakes"; for 5A: "B3 also edits
 `docker/trainer/`: touch only the files listed for 5A; leave the Ultralytics pin and the fit code to

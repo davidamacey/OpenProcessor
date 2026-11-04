@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Release | part of the single **v0.7.0** release (B0-B5 plus R-final; D-37 approved in [00_index.md](00_index.md) section 6). No tag at the end of B3. R-final (`06_release_acceptance.md`) validates it last, after B5 |
-| Depends on | B2 merged into main (decision D-13 order: B0, B1, B2, B3, B4, B5, R-final); B1-1E done (B1 1E (merged; see CHANGELOG.md)); B0 exact pin `ultralytics==8.4.197` in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (commit `d1c6bab0`) and `tests/test_requirements_contract.py` (`01_b0_close_out.md`); GPU window 1 ([00_index.md](00_index.md) section 8.1; `11_risks_cleanup_host.md`) |
-| Blocks | B4 (`05_b4_stateless_api.md`) retakes its 32-worker baseline on the B3 engine; B5 (`07_b5_overview.md`) measures the stack as it stands after B4 |
+| Release | part of the single **v0.7.0** release (B0-B5 plus R-final; D-37 approved in [00a_decision_register.md](00a_decision_register.md) section 6). No tag at the end of B3. R-final (`07_release_acceptance.md`) validates it last, after B5 |
+| Depends on | B2 merged into main (decision D-13 order: B0, B1, B2, B3, B4, B5, R-final); B1-1E done (B1 1E (merged; see CHANGELOG.md)); B0 exact pin `ultralytics==8.4.197` in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (commit `d1c6bab0`) and `tests/test_requirements_contract.py` (`13_b0_close_out.md`); GPU window 1 ([00a_decision_register.md](00a_decision_register.md) section 8.1; `11_risks_cleanup_host.md`) |
+| Blocks | B4 (`05_b4_stateless_api.md`) retakes its 32-worker baseline on the B3 engine; B5 (`06_b5_overview.md`) measures the stack as it stands after B4 |
 | Decisions applied | D-2 (B0 pin 8.4.197 is the starting point), D-10 (B1-1E minimal; trainer `nms`, export module, full matrix are here), D-11 option b (original YOLOv5 = bring-your-own ONNX for probe and secondary only), D-12 (`nms` by capability), D-13 (order), owner decisions of 2026-11-03 items 2, 5, 6, 7 |
-| Open decisions | **D-27** (U-J1 staging and U-J5..J8), **D-28** (pin choice rule and freeze date); status in [00_index.md](00_index.md) section 6, needed at B3 kick-off; section 3 holds the detail |
+| Open decisions | **D-27** (U-J1 staging and U-J5..J8), **D-28** (pin choice rule and freeze date); status in [00a_decision_register.md](00a_decision_register.md) section 6, needed at B3 kick-off; section 3 holds the detail |
 | Source IDs | former master plan section 7.3 (moved here), U-Step 4-9, U-J1, U-J4..J8, U-C3, U-C6, U-C7, U-C9, U-C11, U-R1..R8, U-6.1, U-6.2 (`docs/design/model_family_versions_plan.md`); GPU-14 final, GPU-18 (`docs/design/codebase_audit_plan.md` 4.3); N8; #368 first slice; #447 trainer part |
 | Verified | Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03 (read-only `rg`, nothing run). Line numbers move; re-find every site by the symbol or the `rg` pattern given |
 | Consolidated | Consolidated 2026-11-03 |
@@ -44,7 +44,7 @@ then speed (no throughput loss; B5 then measures on this engine once).
 
 At `af62c947` P2 and P3 are **not** met yet (expected: B0 and B1 come first). See Corrections.
 
-## 3. Decision detail (D-27, D-28, D-38; status lives only in [00_index.md](00_index.md) section 6)
+## 3. Decision detail (D-27, D-28, D-38; status lives only in [00a_decision_register.md](00a_decision_register.md) section 6)
 
 ### D-27: U-J1 staging, and U-J5..J8
 
@@ -68,7 +68,7 @@ GPU day and a second engine rebuild for users. Not recommended.
 Evidence: 8.4.201 passed every CPU check on 2026-11-03 (`model_family_versions_plan.md` 3.3);
 Ultralytics ships several 8.4 releases a day (U-R2), hence the freeze.
 
-### D-38 (owned by `00_index.md`; affects B3 only if placed here)
+### D-38 (owned by `00a_decision_register.md`; affects B3 only if placed here)
 
 The base-image bump of #432 (Python 3.13 -> 3.14, `nvidia/tritonserver` 26.06 -> 26.09) moves
 TensorRT and rebuilds every engine. `09_github_actions.md` recommends taking it in B3, which already
@@ -90,7 +90,7 @@ B3 does not touch the base images.
 
 | Order | Track | Stage | Scope | Size | Based on |
 |---|---|---|---|---|---|
-| 0 | `deps` (branch `deps/pins-part-b`) | A | pins part B of [13](13_package_pins.md) section 7: the bumps that can change model output (numeric stack with numpy and pandas, OpenCV 5 with Pillow and simplejpeg, the Hugging Face stack, torch and torchvision, the onnx, onnxruntime, modelopt and TensorRT set, CuPy 14, the image-only pins), then the MLflow and Dependabot tail. Owner direction 3 of 2026-11-04: they ride this GPU gate so parity runs once. Skips `requirements-export-y11.txt` (B3-A2 deletes it) | M | `int/b3-ultralytics` (parallel with `frame`) |
+| 0 | `deps` (branch `deps/pins-part-b`) | A | pins part B of [01](01_package_pins.md) section 7: the bumps that can change model output (numeric stack with numpy and pandas, OpenCV 5 with Pillow and simplejpeg, the Hugging Face stack, torch and torchvision, the onnx, onnxruntime, modelopt and TensorRT set, CuPy 14, the image-only pins), then the MLflow and Dependabot tail. Owner direction 3 of 2026-11-04: they ride this GPU gate so parity runs once. Skips `requirements-export-y11.txt` (B3-A2 deletes it) | M | `int/b3-ultralytics` (parallel with `frame`) |
 | 1 | `stagea` | A | pin `X`; venv and re-exec deleted; patch runs in the main env; trainer on `X` with `nms` by capability; `pytorch_utils.py` deleted | M | `int/b3-ultralytics` after `deps` merged (both edit the manifests) |
 | 2 | `families` | A | `src/domain/model_families.py` (#368 slice) and its readers; full U-6.1 matrix in `tests/export/`; CI `families` job extended | M | `b3/stagea` (needs the pin) |
 | 3 | `frame` | A | GPU-14 final: each adapter declares its box frame, the `max() > 1.0` guess deleted | S | `int/b3-ultralytics` |
@@ -381,7 +381,7 @@ Run by the coordinator (or one gate agent) after merges 1-5, on the integration 
 |---|---|
 | Compose project | `-p op-b3-gpu`, own port base, own volumes |
 | GPU | 0 (`TRITON_GPU_ID=0`, `API_GPU_ID=0` in the stack's own env); GPU 2 only if agreed with peers |
-| Budget | GPU window 1 of exactly three ([00_index.md](00_index.md) section 8.1): one GPU day for G0-G9, plus G10 (about 2 h), G11 (about 2 h) and G12 (about 1 h); announce start and end to peer sessions |
+| Budget | GPU window 1 of exactly three ([00a_decision_register.md](00a_decision_register.md) section 8.1): one GPU day for G0-G9, plus G10 (about 2 h), G11 (about 2 h) and G12 (about 1 h); announce start and end to peer sessions |
 | Images | local-only tags (never `:latest`, Watchtower re-pulls it): `openprocessor-local/<image>:b3-ref` (main before B3), `:b3-stagea` (Stage A point), `:b3-stageb` (integration head) |
 | Data | public only: COCO val2017 (5,000 images, about 1 GB, CC BY 4.0 annotations, per-image Flickr licences), the pinned set A (`coco_bench_2000`), the two Ultralytics sample images |
 | Host record | `/proc/loadavg` at start and end of every run, foreign GPU processes (`nvidia-smi --query-compute-apps`), GPU sampled every 500 ms; a run with 1-minute load above 16 is noisy and repeated |
@@ -402,9 +402,9 @@ Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
 | G7 | embeddings unaffected: PE, MobileCLIP and ArcFace cosine >= 0.999 median (p01 >= 0.995) against `:b3-ref` engines on set A (`scripts/bench/parity.py capture`/`compare`, profile `precision`); research embeddings plan section 11: the measured PE and MobileCLIP parity is written into the catalog (`embedding_model_versions.engine_parity_min_cos`); below 0.999 the catalog gets a **new model version** instead of an in-place engine swap, so every stored vector stays tied to the engine that wrote it | pass (export image pip set changed) |
 | G8 | original YOLOv5 ONNX as the ingest secondary on a 500-image COCO subset: ingest completes, classes resolved by name (U-C10) | pass |
 | G9 | image audit: export image size before/after (expect about -0.9 GB), `pip check` in each image, `importlib.metadata.version('ultralytics') == X` in API, export and trainer images, Trivy, image-vs-git audit | all pass |
-| G10 | **B0 OCR before/after comparison** (moved out of B0; procedure and pass rule owned by `01_b0_close_out.md` B0-3, run unchanged). "Before" = the pre-B0 tree (`5b95591f`, API and Triton images plus its `models/ocr_pipeline/1/*.py`); "after" = the merged tree at the integration head. Needs: both image sets under local-only tags, the OCR engines built once and shared (B0 changes no engine), compose project `op-ocr-b0` (own ports), GPU 0 (GPU 2 per the host rules), the public image set of B0-3 step 4 (COCO-Text ids, EXIF 6 and 8 copies, RGBA PNGs). Compare boxes, text and `image_size` per image | B0-3's pass rule (boxes overlay the text on 10 opened images, rotated copies match `image_size`, no new errors), about 2 h. Result goes to `docs/PERFORMANCE.md`; a rejected OCR change is reverted by the OCR-only path in `01_b0_close_out.md` |
-| G11 | **pins part B GPU smokes** ([13](13_package_pins.md) section 6; review fix R-17: the parts that need no GPU, `pip check` in each built image, the plain imports, the segmenter's weight download and the PE weight download script, run earlier in the W3 sweep on CPU image builds): the API image lists the CUDA execution provider; the export image imports `tensorrt` and both CuPy wheels on the GPU and runs one ModelOpt AutoCast export; the Triton image runs the GPU decode tests on CuPy 14; the segmenter starts on the GPU; MLflow client and server on one minor (checked inside G6's training run); the OpenCV 5 parity set includes `cv2.dnn.blobFromImage` in `src/utils/scrfd_decode.py` (reworked in OpenCV 5) through the face gate of G7 | every check passes; a failure names the bump and its fallback from 13 section 8 |
-| G12 | **B2 stage-5 real-GPU smoke** ([03f](03f_b2_s5_gpu_queues.md) "GPU check"): one short training run through `gpu_train`, one export of a small model through `gpu_export`, one 20-image bake-off through `gpu_eval` | each job ends `completed`, its progress reached the SSE stream, its artifacts are under its storage prefix |
+| G10 | **B0 OCR before/after comparison** (moved out of B0; procedure and pass rule owned by `13_b0_close_out.md` B0-3, run unchanged). "Before" = the pre-B0 tree (`5b95591f`, API and Triton images plus its `models/ocr_pipeline/1/*.py`); "after" = the merged tree at the integration head. Needs: both image sets under local-only tags, the OCR engines built once and shared (B0 changes no engine), compose project `op-ocr-b0` (own ports), GPU 0 (GPU 2 per the host rules), the public image set of B0-3 step 4 (COCO-Text ids, EXIF 6 and 8 copies, RGBA PNGs). Compare boxes, text and `image_size` per image | B0-3's pass rule (boxes overlay the text on 10 opened images, rotated copies match `image_size`, no new errors), about 2 h. Result goes to `docs/PERFORMANCE.md`; a rejected OCR change is reverted by the OCR-only path in `13_b0_close_out.md` |
+| G11 | **pins part B GPU smokes** ([01](01_package_pins.md) section 6; review fix R-17: the parts that need no GPU, `pip check` in each built image, the plain imports, the segmenter's weight download and the PE weight download script, run earlier in the W3 sweep on CPU image builds): the API image lists the CUDA execution provider; the export image imports `tensorrt` and both CuPy wheels on the GPU and runs one ModelOpt AutoCast export; the Triton image runs the GPU decode tests on CuPy 14; the segmenter starts on the GPU; MLflow client and server on one minor (checked inside G6's training run); the OpenCV 5 parity set includes `cv2.dnn.blobFromImage` in `src/utils/scrfd_decode.py` (reworked in OpenCV 5) through the face gate of G7 | every check passes; a failure names the bump and its fallback from 13 section 8 |
+| G12 | **B2 stage-5 real-GPU smoke** ([03e](03e_stage5_gpu_queues.md) "GPU check"): one short training run through `gpu_train`, one export of a small model through `gpu_export`, one 20-image bake-off through `gpu_eval` | each job ends `completed`, its progress reached the SSE stream, its artifacts are under its storage prefix |
 
 **Verdict.**
 - All pass: ship Stage B.
@@ -444,7 +444,7 @@ Local CI parity before the push: every CI job's command runs green locally first
 - G10 (the B0 OCR comparison) recorded;
 - CI green; the PR merged with a merge commit;
 - the closing PR moves the keep-list below to its targets and deletes this file and its row in
-  `00_index.md` and `docs/design/README.md` ([00_index.md](00_index.md) "Plan lifecycle").
+  `00a_decision_register.md` and `docs/design/README.md` ([00a_decision_register.md](00a_decision_register.md) "Plan lifecycle").
 
 ### 8.1 What to keep after merge
 
@@ -485,7 +485,7 @@ v0.7.0 release.
 
 ## 12. Release checks handed to R-final
 
-`06_release_acceptance.md` must include these; they are B3's contribution to the v0.7.0 acceptance.
+`07_release_acceptance.md` must include these; they are B3's contribution to the v0.7.0 acceptance.
 
 | # | Check |
 |---|---|
@@ -586,7 +586,7 @@ output and green output, files touched, anything you could not do and why.
 ```
 
 **`deps`** (worktree `<repo>-wt-b3-deps`, branch `deps/pins-part-b` from `int/b3-ultralytics`):
-"Do the part B commits of `docs/design/program/13_package_pins.md` section 7, in that order, one
+"Do the part B commits of `docs/design/program/01_package_pins.md` section 7, in that order, one
 commit each, with the targeted check of section 6 after each (CPU resolver runs; no image build,
 no GPU). Leave `requirements-export-y11.txt` alone (B3-A2 deletes it) and the Ultralytics pin to
 `stagea`. Empty the pin test's part-B allowlist in the last numeric commit that needs it. Record in
