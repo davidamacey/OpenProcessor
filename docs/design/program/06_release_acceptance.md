@@ -134,7 +134,7 @@ time and an evidence path. A failing row becomes a finding; never relax a criter
 | RF-59 | `API_WORKERS` (B4) | `.env` of install B after the upgrade; install A's `.env` | the key is present with the D-33 default |
 | RF-60 | Events (B4-4C) | a live page in the browser; restart the API; watch the page | the page reconnects and resumes from `Last-Event-ID` with no lost or duplicated event |
 | RF-61 | Queue outage | stop `redis` for 30 s | `/health` shows `queue: down` as degraded; the UI shows the outage; job starts answer 503; recovery after restart |
-| RF-62 | Rollback to 0.6.0 after the registry migration (owner-facing item: owner is B1-1B; its open question is Q-1B-1 in B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) section 14, recommendation: the rollback runs the reverse registry step automatically, so 0.6.0 never starts with an empty registry) | `setup-openprocessor.sh --dir <B> --rollback --yes` on install B after RF-40 | 0.6.0 API healthy; no 0.7.0-only container (Redis, workers, beat) left running; the projects' classes are readable without a manual step (the automatic reverse step; if Q-1B-1 is answered "manual note only", the documented downgrade step: rename `class_registry.json.migrated` back); 0.6.0 does not refuse the configs index that now holds lease and registry docs |
+| RF-62 | Rollback to 0.6.0 after the registry migration (owner-facing item: owner is B1-1B; its open question is Q-1B-1 in B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) section 14, recommendation: the rollback runs the reverse registry step automatically, so 0.6.0 never starts with an empty registry) | `setup-openprocessor.sh --dir <B> --rollback --yes` on install B after RF-40 | 0.6.0 API healthy; no 0.7.0-only container (Redis, workers, beat) left running; the projects' classes are readable without a manual step (the automatic reverse step; if Q-1B-1 is answered "manual note only", the documented downgrade step: rename `class_registry.json.migrated` back); 0.6.0 does not refuse the configs index that now holds lease and registry docs |
 | RF-63 | Re-upgrade | upgrade install B again after RF-62 | migration is a no-op on equal docs; ids unchanged |
 
 ### 4.5 Checks carried from `release_acceptance_plan.md`
@@ -144,7 +144,7 @@ Phases D, E, H, I, K and the notes of the old plan that no scripted phase covers
 
 | ID | Check | How | Pass |
 |---|---|---|---|
-| RF-70 | Dataset import | `acceptance_run.sh --only dataset_import` (script task 1B-12b in B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md))) on install A | PASS |
+| RF-70 | Dataset import | `acceptance_run.sh --only dataset_import` (script task 1B-12b in B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))) on install A | PASS |
 | RF-71 | Combine | `acceptance_run.sh --only combine` (1B-12b) | PASS; both sources unchanged |
 | RF-72 | Project isolation, live | two projects with data on install A; follow the event stream of one while ingesting into the other; `docker compose -p op-rfinal logs api` and the metrics endpoint filtered by the first project's slug | nothing of the second project appears in the first's stream, its log lines or its labelled metrics |
 | RF-73 | Day-2 operations | a reprocess over items with a human label; archive the protected default project; delete a project while a job runs; with the monitoring tier on, open a dashboard, a log search and the experiment-tracking run of the `train` phase | reprocess reports the skipped locked items and changes none; the guards refuse; the three UIs show this run's data |
@@ -298,7 +298,7 @@ is moved:
 | Risk | Mitigation |
 |---|---|
 | The single upgrade carries everything at once (registry migration, Redis, new services, engine rebuild, `API_WORKERS`) | Install B tests exactly that path from a real 0.6.0 install with real registries; RF-62 tests the way back |
-| Rollback after the registry migration loses classes in 0.6.0 | RF-62; the downgrade note in the release notes; B1-1B owns the rollback behaviour (B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md))) |
+| Rollback after the registry migration loses classes in 0.6.0 | RF-62; the downgrade note in the release notes; B1-1B owns the rollback behaviour (B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))) |
 | 0.6.0 refuses the configs index after rollback because of the new lease and registry docs | RF-62 checks it; if it fails, B1-1B adds the rollback step and RF-62 re-runs |
 | `./openprocessor upgrade` in a 0.6.0 install runs the 0.6.0 CLI, which must hand off to the 0.7.0 installer for the migration hook to run | B1-1B tests the hand-off from a 0.6.0 install offline; RF-40 proves it live (the migration report exists under `.install/`) |
 | Host load skews the run or delays it (M1) | one heavy run at a time; peers told first; budget per step |

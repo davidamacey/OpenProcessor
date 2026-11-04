@@ -360,7 +360,7 @@ only writer in it. Do not push, merge or tag; report back.
   families is resumable). The planned "dead holder does not block `selection.start_job`" and
   "stale dataset import still resumes" tests were not added; the resume path is covered by the
   existing `tests/curation/dataset_import/test_stale_and_undo_gate.py`. B1-1A replaces this path
-  with leases and its tests cover the dead-holder start (B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md))),
+  with leases and its tests cover the dead-holder start (B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))),
   so no B0 test is added.
 - The former master plan (5.2 step 7) ran the OCR comparison on the live harness; the harness
   has no Triton (B0-3 above uses a real stack, in GPU window 1).

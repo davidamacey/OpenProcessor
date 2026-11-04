@@ -150,7 +150,7 @@ Common exit criteria, required by every wave ("PQ" gates):
 | GH-1 (#38) | GitHub actions | before W1 | to do, on the owner's go (D-36) |
 | #31, #34 | audit plan, Ultralytics plan | - | done (committed, D-14) |
 | B1-0 | commit the source plans | - | done (D-14); the header pointers of the three source plans are repointed to this set in the plan-set commit |
-| B1-1A..1E, deps | B1 lanes | W1 | to do |
+| B1-1A..1E, deps | B1 lanes | W1 | done (merged) |
 | R-B1 | 0.8.0 acceptance subset | - | dropped (owner decision 3); its checks are in R-final section 4.3 |
 | B2-W1..W3 | B2 stages | W2 | to do |
 | B3 | B3 | W3 | to do |
@@ -196,14 +196,14 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-5 | #42 timing | approved | runs when GPU 1 frees; never a tag blocker; release notes say so if unrun | side | [07](07_b5_overview.md) section 11 |
 | D-6 | Known-issue lines for #447, CC-2, CC-4 | dropped | no release ships before B1-B4 fix them | - | |
 | D-7 | Release train (early v0.8.0 after B1) | replaced | by owner decisions 2-3 and D-37: one release v0.7.0 after B5 and R-final | - | [06](06_release_acceptance.md) |
-| D-8 | J-LEASE | approved | OpenSearch lease docs in the SETTINGS role, thread heartbeat 15 s, TTL 120 s, cooperative fencing | B1 | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
-| D-9 | J-REG and its upgrade path | approved | registry doc with OCC (5 attempts, 10,000 classes), 409 `registry_not_migrated`, `upgrade` hook, `.migrated` rename, downgrade note. Only 0.6.0 -> 0.7.0 is tested (no 0.7.0 install exists) | B1 | B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
+| D-8 | J-LEASE | approved | OpenSearch lease docs in the SETTINGS role, thread heartbeat 15 s, TTL 120 s, cooperative fencing | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| D-9 | J-REG and its upgrade path | approved | registry doc with OCC (5 attempts, 10,000 classes), 409 `registry_not_migrated`, `upgrade` hook, `.migrated` rename, downgrade note. Only 0.6.0 -> 0.7.0 is tested (no 0.7.0 install exists) | B1 | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | D-10 | B1-1E scope | approved | minimal in B1; trainer `nms`, export module and full matrix in B3 | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | D-11 | U-J3 YOLOv5 scope | approved, option b | bring-your-own original-YOLOv5 ONNX for probe and secondary; YOLOv5u for serving | B1 | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | D-12 | U-J4 `nms` by capability | approved | `nms=False` with `one2one_cv2`, else `nms=True`, class-agnostic | B1 (export), B3 (trainer) | B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)), [04](04_b3_ultralytics_one_version.md) |
 | D-13 | Order (Q-J8) | approved; amended by D-37 | B0, B1, B2, B3, B4, B5, then R-final last | - | section 3 |
 | D-14 | Commit the plans | done | committed on `fix/411-r2-round` | - | |
-| D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
+| D-15 | Trainer claim (Q-P1.6) | approved | create-only generation files; API `training/jobs.py` `O_EXCL` create | B1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | D-16 | Tag | replaced | one tag decision: v0.7.0 after R-final PASS (R-final runs after B5), on the owner's word (absorbs the old D-34) | R-final | [06](06_release_acceptance.md) section 7 |
 | D-17 | Q-J1 Celery 5.6 | open per decision 6 | the owner already chose Celery (task plan J1); confirm the 5.6 line at B2 kick-off | B2 | [03](03_b2_overview.md) |
 | D-18 | Q-J2 broker | open | Redis 8 (AGPLv3 option); Valkey only if a redistributor objects | B2 | [03a](03a_b2_w1_queue_infra.md) |
@@ -245,6 +245,11 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
   `int/b3-ultralytics`, `int/b4-stateless`, `int/b5a-baseline` and so on) cut from `main` after
   the previous batch merged. A lane may branch from the previous integration branch's frozen
   head while that batch's PR is open; B3 is cut from `main` after B1 and rebased after B2.
+- **Lane-brief rules (include in every brief).** Never use `git stash`: the stash is shared by
+  every worktree of a repository, so a lane commits work in progress to its own branch instead.
+  The file-size guard (700 lines) is a guide: a file that is one cohesive concern may exceed it
+  with a `cohesive: <reason>` entry in `scripts/codegen/baselines/file_size.txt`, reviewed at
+  merge; split by concern, never to dodge the number; existing baselines otherwise only shrink.
 - **Each lane** is one agent in its own worktree `<repo>-wt-bN-<lane>` on branch `bN/<lane>`.
   Never two writers in one worktree. Lanes run only the targeted red/green tests of their own
   changes plus static checks on the files they touch. No full suites, no `--all-files` in a lane.
@@ -405,16 +410,16 @@ The former master plan (rev 4) is deleted in the plan-set commit and stays in gi
 | 2 Mission check | this file section 2 (Correct/Fast columns); detail in each batch file |
 | 2 "Deferred, and why" | this file section 10 |
 | 3 Owner rules applied | [10_standards_and_libraries.md](10_standards_and_libraries.md) |
-| 3a Replacement for the Celery plan's Phase 1 | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) (B0/B1 rows), [03a](03a_b2_w1_queue_infra.md) (Celery exclusive starts row) |
-| 3b Every `flock` site (19 files, 55 hits) | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) (B1 rows, the ratchet), [03c](03c_b2_w3_beat_reaper_workers.md) (dispatcher, sweeper, cache prune), [05](05_b4_stateless_api.md) (event hub, `job_lock.py`) |
+| 3a Replacement for the Celery plan's Phase 1 | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B0/B1 rows), [03a](03a_b2_w1_queue_infra.md) (Celery exclusive starts row) |
+| 3b Every `flock` site (19 files, 55 hits) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) (B1 rows, the ratchet), [03c](03c_b2_w3_beat_reaper_workers.md) (dispatcher, sweeper, cache prune), [05](05_b4_stateless_api.md) (event hub, `job_lock.py`) |
 | 3c Q-D1..D15 cross-reference | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) (B1 rows) and [03](03_b2_overview.md) (B2 rows); D1, D10, D11, D13 are B0 fixes recorded in [01](01_b0_close_out.md) |
-| 3d Superseded source-plan tests | B0 rows: [01](01_b0_close_out.md) section 3 and Corrections; B1 rows: B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
+| 3d Superseded source-plan tests | B0 rows: [01](01_b0_close_out.md) section 3 and Corrections; B1 rows: B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | 4 Release strategy | replaced by owner decisions 2-3 and D-37; this file section 6 (D-7, D-16, D-34, D-37) and [06](06_release_acceptance.md) |
 | 5 B0 (5.1 scope, 5.2 gate cycle) | [01](01_b0_close_out.md) |
 | 5.3 R3 live acceptance | [06](06_release_acceptance.md) sections 4.1, 4.2, 5 |
 | 5.4 Tag decision point | [06](06_release_acceptance.md) section 7 |
-| 6.1 J-LEASE, 6.3 trainer claims | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
-| 6.2 J-REG | B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
+| 6.1 J-LEASE, 6.3 trainer claims | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| 6.2 J-REG | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | 7 Common rules | this file section 7 |
 | 7.1 B1 | B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)); "Release: R-B1" -> [06](06_release_acceptance.md) section 4.3 |
 | 7.2 B2 | [03](03_b2_overview.md), 03a-03c |
@@ -467,41 +472,41 @@ lives now:
 
 | Review items | Disposition and owner file |
 |---|---|
-| M-1 (#8, #346, #348, #365, #400, #401) | every open issue mapped: [09](09_github_actions.md) section 7; #365 interplay in B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
+| M-1 (#8, #346, #348, #365, #400, #401) | every open issue mapped: [09](09_github_actions.md) section 7; #365 interplay in B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | M-2 (audit Appendix C/D) | [11](11_risks_cleanup_host.md) section 4 |
 | M-3 (#17/#18 leftovers) | [07c](07c_b5_crops_ocr_faces.md) (#220 step 3), [07d](07d_b5_processing_plans.md) (#67 phase 2+) |
 | M-4 (per-process limits) | BA-8 documented in B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)); pools sized per `API_WORKERS` in [05](05_b4_stateless_api.md) |
 | M-5 (CC-4 interim) | the jitter shipped in B0; the known-issue line is dropped (D-6); CC-4 is fixed in B2 |
 | M-6 (PR-3/4/6 as 0.7.x) | replaced by owner decision 2 (one release) |
-| M-7, M-8 (superseded tests, Q-D cross-reference) | [01](01_b0_close_out.md), B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)), [03](03_b2_overview.md) |
-| M-9 (installer/upgrade for B1) | B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)); live in [06](06_release_acceptance.md) RF-40..RF-41 |
+| M-7, M-8 (superseded tests, Q-D cross-reference) | [01](01_b0_close_out.md), B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)), [03](03_b2_overview.md) |
+| M-9 (installer/upgrade for B1) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); live in [06](06_release_acceptance.md) RF-40..RF-41 |
 | M-10 (docs per batch) | this file section 9 and each batch file |
 | M-11 (installer YOLO11 config divergence, U-C11) | accepted until B3, which deletes the heredoc: [04](04_b3_ultralytics_one_version.md) |
 | M-12, M-13 (baselines only shrink; image audit) | PQ-2, PQ-8 (section 4) |
 | W-1 (head/commit counts) | no hard-coded SHAs (section 7) |
 | W-2 (CHANGELOG step done) | [01](01_b0_close_out.md) section 3 |
-| W-3, W-4, W-5, W-9 (lease index, O_EXCL "added", B1 done-when, flock count) | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
+| W-3, W-4, W-5, W-9 (lease index, O_EXCL "added", B1 done-when, flock count) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), B1 (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | W-6 (8.4.197 shipped) | done: the pin commit `d1c6bab0` |
 | W-7 (GPU-15 leftover) | review partly not adopted: kept in the backlog with its source (section 10) |
 | W-8 (#447 premise) | [09](09_github_actions.md) C-447; B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | C-1 (release gap) | replaced by owner decision 2 |
 | C-2 (one large B1 PR) | one merge commit per lane, revert coupling (section 7, M21); the single PR is kept |
-| C-3 (CC-1 and resume) | [01](01_b0_close_out.md) Corrections; B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
-| C-4, C-5 (TTL and heartbeat; stale reclaim race) | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
+| C-3 (CC-1 and resume) | [01](01_b0_close_out.md) Corrections; B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| C-4, C-5 (TTL and heartbeat; stale reclaim race) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | C-6 (OpenTranscribe alignment) | [03a](03a_b2_w1_queue_infra.md) re-reads it; listed unverified in [11](11_risks_cleanup_host.md) 3.1 |
 | C-7, C-8 (trainer untested on GPU; three versions) | trainer moves in B3 behind U-6.2 ([04](04_b3_ultralytics_one_version.md)); the pin is done |
 | A.4 executability gaps 1-7 (CHANGELOG, red-test names, pyclipper pin, OCR rollback, OCR image set, heavy-run scheduling, CC-1 resume test) | [01](01_b0_close_out.md); [11](11_risks_cleanup_host.md) section 1 |
-| A.4 gaps 8-11, 18 (lease location, kind/scope, busy window, no-doc jobs, live race budget) | B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
-| A.4 gaps 12-14 (registry upgrade, bounds, trainer ordering) | B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) |
+| A.4 gaps 8-11, 18 (lease location, kind/scope, busy window, no-doc jobs, live race budget) | B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
+| A.4 gaps 12-14 (registry upgrade, bounds, trainer ordering) | B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) |
 | A.4 gaps 15, 16 (cachetools licence, BA-5 contracts; `families` CI) | B1 1D (merged; see [CHANGELOG](../../../CHANGELOG.md)), B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | A.4 gap 17 (who rebuilds images for the pin) | resolved: the pin is done; R-final builds the images |
 | A.4 gaps 19-21 (B2 compose/env/upgrade, jobs over 6 h, forward-only) | [03](03_b2_overview.md) |
 | A.4 gaps 22-24 (B3 pin rule, B4 spike, B5 thresholds) | [04](04_b3_ultralytics_one_version.md), [05](05_b4_stateless_api.md), [07](07_b5_overview.md) |
 | A.4 cross-cutting (docs per batch, contracts, upgrades) | section 9; [06](06_release_acceptance.md) (0.6.0 -> 0.7.0) |
-| A.5 churn 1, 2, 4, 6, 7 | pin once then B3 ([04](04_b3_ultralytics_one_version.md)); minimal 1E (B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md))); one heartbeat class (B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)), [03a](03a_b2_w1_queue_infra.md)); baseline retaken on the B3 engine ([05](05_b4_stateless_api.md)); #365 out of scope (B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md))) |
+| A.5 churn 1, 2, 4, 6, 7 | pin once then B3 ([04](04_b3_ultralytics_one_version.md)); minimal 1E (B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md))); one heartbeat class (B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)), [03a](03a_b2_w1_queue_infra.md)); baseline retaken on the B3 engine ([05](05_b4_stateless_api.md)); #365 out of scope (B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))) |
 | A.5 churn 3 | not adopted, accepted cost (section 7) |
 | A.5 churn 5 (Cropwright three times) | moot: everything ships in one release (M24) |
-| A.6 doc suggestions (soft shutdown, uvicorn floor, fencing, wall clock, `nms`-only tests) | [03a](03a_b2_w1_queue_infra.md); done (`6a53673c`); B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)); B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
+| A.6 doc suggestions (soft shutdown, uvicorn floor, fencing, wall clock, `nms`-only tests) | [03a](03a_b2_w1_queue_infra.md); done (`6a53673c`); B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)); B1 1E (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
 | A.7 specific edits 1-18 | applied in revision 2; their content now lives where the rows above say |
 
 ## 15. Revision log

@@ -102,6 +102,13 @@ never run this against the repo-root `docker-compose.yml` from a
 worktree that might collide with a real deployment's container names or
 ports (4600–4610).
 
+## Parallel lanes and worktrees
+
+When several agents or people work in git worktrees of one repository, each uses its own
+worktree on its own branch, and no two writers share a worktree. Never use `git stash` there:
+the stash is shared by every worktree of a repository, so one lane can pop another's work.
+Commit work in progress to your own branch instead and amend or rework it before the merge.
+
 ## Contracts
 
 `contracts/` holds generated files: the curation OpenAPI schema, the item wire
@@ -186,7 +193,7 @@ Never add a line to hide a new finding; fix it.
 
 | Guard | Rule |
 |---|---|
-| `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400); a file in the 640-700 band is split by concern when you touch it, never by collapsing lines |
+| `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400) is a guide, not a target. A file in the 640-700 band is split by concern when you touch it, never by collapsing lines and never to dodge the number. A file that is one cohesive concern may exceed it with a `cohesive: <reason>` entry in `scripts/codegen/baselines/file_size.txt`, reviewed at merge; existing baselines otherwise only shrink |
 | `check_layering.py` | routers import services and clients, never the reverse; clients never import services; `src/domain`, `config`, `utils` and `schemas` import neither; only routers import `fastapi`. No baseline: the one permanent exception (the guarded OpenSearch client factory) is listed with its reason in the script |
 | `check_ruff_ratchet.py` | no function above complexity 15, no new `except Exception` |
 | `check_file_locks.py` | no `fcntl.flock`, `exclusive_*_lock` or `filelock` guarding cross-process state: claim it with an OpenSearch job lease (`src/clients/job_lease.py`) |

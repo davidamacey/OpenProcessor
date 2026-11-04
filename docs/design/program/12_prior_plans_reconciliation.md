@@ -491,7 +491,7 @@ visual search).
 
 **B1 1B (merged; see ARCHITECTURE.md): 1B-12b Acceptance phases `dataset_import` and `combine` (S).** The
 registry migration touches import and combine (`dataset_import/prepare.py`, `combine/execute.py`),
-and no scripted phase covers either today. *Folded into B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) 1B-12b.*
+and no scripted phase covers either today. *Folded into B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) 1B-12b.*
 - File: `scripts/release/acceptance_phases.sh` (two new `ph_` functions, registered for `--list`).
 - `dataset_import`: build a YOLO dataset from the run's own `export` phase output and a COCO
   dataset from the license-filtered COCO subset (`scripts/datasets/fetch_coco_subset.py` already
@@ -510,9 +510,9 @@ and no scripted phase covers either today. *Folded into B1 1B (merged; see [ARCH
 
 **B1 1B (merged; see ARCHITECTURE.md) 1B-14 Docs: add** `docs/design/curation_design_rationale.md` sections
 2.1 and 12 (the registry is an OpenSearch document; the file is an export snapshot). *Folded into
-B1 1B (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) 1B-14.*
+B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) 1B-14.*
 
-**B1 1A (merged; see ARCHITECTURE.md) 1A-8 Label operations: add** *(folded into B1 1A (merged; see [ARCHITECTURE](../../../ARCHITECTURE.md)) 1A-8)* "update
+**B1 1A (merged; see ARCHITECTURE.md) 1A-8 Label operations: add** *(folded into B1 1A (merged; see [ARCHITECTURE](../../ARCHITECTURE.md)) 1A-8)* "update
 `docs/design/cq3_label_operations.md` sections 3 (the locks row), 6.4 and 9 (crash during undo) to
 name the leases `label_op` and `label_undo` instead of `write.lock`, `undo.lock` and `flock`".
 
