@@ -220,3 +220,63 @@ def test_trained_models_for_dataset(env: dict[str, Path], client: TestClient) ->
 
 
 # =============================================================================
+
+
+def _bump(path: Path, seconds: int) -> None:
+    import os
+
+    st = path.stat()
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + seconds * 10**9))
+
+
+def test_eval_datasets_listing_follows_registry_and_dataset_edits(
+    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A registry rename, a new test image and an edited data.yaml all show on
+    the next listing: the cache key covers every input, and registry names are
+    resolved when the wire row is built, not baked into the cached record."""
+    from src.services.curation import eval_datasets
+
+    class _Cls:
+        def __init__(self, class_id: int, class_name: str) -> None:
+            self.class_id = class_id
+            self.class_name = class_name
+
+    names = {'cat': 'cat'}
+
+    class _FakeRegistry:
+        def load(self) -> object:
+            return type('L', (), {'classes': [_Cls(1, names['cat'])]})()
+
+    monkeypatch.setattr(eval_datasets, 'get_class_registry', _FakeRegistry)
+    d = make_export(
+        env['exports'], 'e1', nc=1, test_labels={'a': [0]}, export_id_map={1: 0}, names=['cat']
+    )
+
+    def row() -> dict:
+        [r] = client.get('/curation/projects/default/bakeoff/eval_datasets').json()['datasets']
+        return r
+
+    first = row()
+    assert (first['classes'][0]['registry_class_name'], first['n_images']) == ('cat', 1)
+
+    names['cat'] = 'feline'
+    (d / 'images' / 'test' / 'extra.jpg').write_bytes(b'img')
+    _bump(d / 'images' / 'test', 5)
+    (d / 'data.yaml').write_text('nc: 1\nnames:\n  0: tabby\n')
+    _bump(d / 'data.yaml', 5)
+
+    second = row()
+    assert second['classes'][0]['registry_class_name'] == 'feline'
+    assert second['classes'][0]['name'] == 'tabby'
+    assert second['n_images'] == 2
+
+
+def test_eval_datasets_unchanged_inputs_return_the_same_record(env: dict[str, Path]) -> None:
+    from src.services.curation import eval_datasets
+
+    make_export(env['exports'], 'e1', nc=1, test_labels={'a': [0]})
+    [a] = eval_datasets.list_eval_datasets()
+    [b] = eval_datasets.list_eval_datasets()
+
+    assert a is b

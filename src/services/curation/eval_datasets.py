@@ -18,7 +18,8 @@ Everything the comparison relies on is computed from the files (class counts,
 test-split identity and content hashes), not trusted from manifest counts;
 only ``dataset_sha`` / ``exported_at`` / ``unlabeled_items_on_exported_images``
 come from the export manifest. Results are cached per directory, keyed by the
-test labels' and the manifest's mtimes.
+test labels', the manifest's, ``data.yaml``'s and the test image directory's mtimes.
+Registry class names are resolved per response, not cached.
 """
 
 from __future__ import annotations
@@ -62,7 +63,6 @@ class EvalClassCount:
     eval_class_id: int
     name: str
     registry_class_id: int | None
-    registry_class_name: str | None
     n_objects: int
     n_images: int
 
@@ -103,6 +103,20 @@ class EvalDatasetRecord:
         return self.id.replace(':', '__').replace('/', '__')
 
     def to_wire(self) -> dict[str, Any]:
+        # Registry names are looked up per call, never cached with the record, so a
+        # rename shows up on the next listing.
+        registry_names = _registry_names_by_id()
+        classes = [
+            {
+                **c.__dict__,
+                'registry_class_name': (
+                    registry_names.get(c.registry_class_id)
+                    if c.registry_class_id is not None
+                    else None
+                ),
+            }
+            for c in self.classes
+        ]
         return {
             'id': self.id,
             'source': self.source,
@@ -112,7 +126,7 @@ class EvalDatasetRecord:
             'is_current': self.is_current,
             'dataset_kind': self.dataset_kind,
             'nc': len(self.class_names),
-            'classes': [c.__dict__ for c in self.classes],
+            'classes': classes,
             'n_images': self.n_images,
             'n_objects': self.n_objects,
             'n_background_images': self.n_background_images,
@@ -158,8 +172,15 @@ def _label_files(d: Path) -> list[Path]:
     return sorted((d / 'labels' / 'test').rglob('*.txt'))
 
 
+def _mtime_ns(path: Path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
 def _cache_key(d: Path, lock: Path) -> tuple[Any, ...]:
-    """Directory + newest label mtime + manifest/lock mtime.
+    """Directory + newest label mtime + manifest/lock, ``data.yaml`` and test-image dir mtimes.
 
     The newest label-file mtime is included (not only the dir mtime, which a
     content edit does not change) so an edited test label invalidates the
@@ -169,7 +190,15 @@ def _cache_key(d: Path, lock: Path) -> tuple[Any, ...]:
     files = _label_files(d)
     newest = max((f.stat().st_mtime_ns for f in files), default=0)
     lock_mtime = lock.stat().st_mtime_ns if lock.is_file() else 0
-    return (str(d.resolve()), labels.stat().st_mtime_ns, newest, len(files), lock_mtime)
+    return (
+        str(d.resolve()),
+        labels.stat().st_mtime_ns,
+        newest,
+        len(files),
+        lock_mtime,
+        _mtime_ns(d / 'data.yaml'),
+        _mtime_ns(d / 'images' / 'test'),
+    )
 
 
 def _count_split(d: Path) -> tuple[Counter[int], Counter[int], int, int, frozenset[str]]:
@@ -244,7 +273,6 @@ def _build(
     names = read_names(d / 'data.yaml')
     export_id_map = read_export_id_map(d)
     registry_of = {e: r for r, e in export_id_map.items()}
-    registry_names_by_id = _registry_names_by_id()
     objects, images_per_class, n_images, n_background, stems = _count_split(d)
 
     def _eval_class_count(cid: int) -> EvalClassCount:
@@ -253,7 +281,6 @@ def _build(
             eval_class_id=cid,
             name=names.get(cid, str(cid)),
             registry_class_id=rid,
-            registry_class_name=registry_names_by_id.get(rid) if rid is not None else None,
             n_objects=objects[cid],
             n_images=images_per_class[cid],
         )
