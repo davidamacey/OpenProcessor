@@ -29,6 +29,9 @@ Do not add per-feature history here.
   mapping, winner, class kind or capability client-side. A control whose backend feature is
   not served is absent, not disabled. A failed read shows its error; never fabricate a
   default list or id.
+  Known fallback: `TrainDatasetSection` sums the classes store's `validated_count` for the
+  "global pool" chip, because `/train` does not load `getStats().validated_crops`; use the
+  served total when `/train` loads stats.
 
 ## Layout
 
