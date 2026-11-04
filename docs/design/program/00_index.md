@@ -606,6 +606,7 @@ lives now:
 | program set 3 (control plane) | 2026-11-04 | owner decisions of 2026-11-04 applied (D-39..D-45; D-17, D-18, D-31 approved; D-21, D-30 replaced; D-22 widened); files 02, 02a, 02b, 02c added; B2 re-planned in six stages (03, 03a-03f); B4's events track moved into B2; 05, 08, 10, 11 updated; open decisions D-46..D-63 |
 | program set 4 (master plan) | 2026-11-04 | `00_master_plan.md` (execution order, waves W2.1-W6, GPU-window budget, wave procedure, owner questions) and `00b_traceability.md` added; this file became the register and legends (sections 3-4 point to the master plan, the duplicated sections 3-6 and the stale D-18 row removed); MQ-1..MQ-10 added; decided items folded into their lanes (00b section 3) |
 | program set 5 (review fixes) | 2026-11-04 | the independent review [00c_plan_review.md](00c_plan_review.md) applied (R-1..R-38; planner responses in its section 5); the owner's answers of 2026-11-04 recorded (D-64..D-68, the open B2 recommendations as a block, MQ-1, 2, 5, 6, 7, 9, 10); OI-1, OI-2 opened; pins part A became its own wave W2.0 |
+| program set 6 (re-check fixes) | 2026-11-04 | the re-check of [00c_plan_review.md](00c_plan_review.md) section 6 applied (RC-1..RC-13; responses in its section 5.1); D-64 replaced by D-69 (every service requires PostgreSQL, Valkey and OpenSearch, no degraded mode); OI-1, OI-2, MQ-3, MQ-4, MQ-8 and Q-3 answered by the owner; the open list reduced to the B3, B4, B5 and tag kick-off questions |
 
 ## 16. Corrections found while splitting
 

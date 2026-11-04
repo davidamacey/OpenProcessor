@@ -907,6 +907,33 @@ as D-64 (Q-1), D-65 (Q-2), D-66 (Q-3) and D-67 (Q-4); Q-5 was answered with MQ-6
 | section 3.4 note (`src/routers` imports no `src.db.repos`) | fixed: a layering contract and a planted red test | 02 section 6; 03a 1A-11 |
 | section 3.7 caveats (E15, the visibility-timeout sub-item) | fixed: both caveats added to the retired rows | 00b section 1.9 |
 
+### 5.1 Responses to the re-check (section 6) and to the owner correction of 2026-11-04
+
+The owner corrected decision D-64 the same day ("the system only works if everything is up, seems
+silly to run the app with no backend databases"). D-69 replaces it: the API and every worker require
+PostgreSQL, Valkey and OpenSearch (plus Triton for inference), wait with bounded retries, then
+refuse to start naming the missing dependency; `/live` and `/ready` keep the liveness and readiness
+split; there is no degraded mode. The plan text, tests and tasks that existed only for the degraded
+mode are deleted: the `api` exemption from `db-migrate` and `valkey`, `test_control_plane_down.py`,
+the `/detect`-during-outage assertions of live steps 8 and 9, and risk R2-13.
+
+| Finding | Response | Where |
+|---|---|---|
+| RC-1 | fixed, re-evaluated under D-69: with every service waiting on `db-migrate`, the OpenSearch step stays in `db-migrate` after Alembic (no separate service). It reads the projects from Postgres, does only the global indexes while the 0.6.0 data is not loaded (`upgrade_state` `in_progress` or `op_projects` present), and the installer runs `db-migrate` again after the control-data step, so the upgraded projects are stamped before `up`. Each index's `_meta` carries the existing `SCHEMA_META_KEY` fingerprint (`index_bootstrap.py`); the lifespan reads all stamps in one `_mapping` call and refuses on any mismatch. `project_create` stamps its own indexes | 02c section 1.2; 03d 2E-5, 2F-4; 05 section 6; 00_index D-69 |
+| RC-2 | fixed: `src.tasks.runtime` is a leaf layer that `src/services`, `src/tasks`, `docker/trainer`, `export` and `scripts/curation/bakeoff` may import; any other `src.tasks` module stays private to `src/tasks`; 1A-11 plants both directions | 02 section 6; 03a 1A-11 |
+| RC-3 | fixed: beat schedules the `gpu_arbiter` tick only when `OP_GPU_ARBITER_CONTAINERS` is set (the overlay sets it; checked in `src/config/gpu_arbiter.py`, the only arbiter settings that exist); the consumers test treats overlay queues as conditional; the rule "no periodic message to a queue without a consumer" is written down | 02b sections 2.1, 7.3; 03c 6A-1 |
+| RC-4 | fixed: `deploy.replicas: ${OP_API_REPLICAS:-1}` is the one source of the replica count (no `openprocessor scale`); `pool_timeout` 5 s maps to 503 `database_busy`; the two polls get their own one-connection engine, counted in the budget (total 197); the budget test also fails when workers times replicas exceed the total; 4B-5 records pool wait | 02b section 8; 02c section 4; 03a 1A-6, 1C-2, 1D-6; 05 4B-2, 4B-5 |
+| RC-5 | fixed: two modules, `b4_fanout` (track 4A) and `b4_project` (track 4D), in `job_kinds`, `task_routes` and `src/tasks`, all created empty by 1B-2, so W4 ownership is disjoint | 03a 1B-2; 05 section 6 and the 4A brief (section 17); 00b section 1 |
+| RC-6 | fixed: the socket goes into `gpu-arbiter-worker` only in all three places | 03 section 9 step 17; 08 stage-6 row; 03c 6D |
+| RC-7 | accepted, documented: the first query after an OpenSearch restart pays the graph load; INSTALLATION says so and 5a measures the cold query. No re-warm task (it would need restart detection for a one-time cost) | 02c section 1.2; 03c 6D |
+| RC-8 | fixed: dashboards select and aggregate by `service` or `job`, never `container` or `instance`; Prometheus joins the stack's Compose network | 03c 6B-6 |
+| RC-9 | fixed: the policy is `(SELECT op_scope_is_deployment()) OR project_id = (SELECT op_scope_project())`; each scalar subquery is an InitPlan evaluated once per statement, so `project_id` indexes apply; `op_scope_project()` keeps the `scope_not_set` raise; `op_scope_allows` remains a SQL wrapper for the EXISTS policies; an `EXPLAIN` test checks the plan shape | 02a section 1.4 |
+| RC-10 | fixed: the W2.1 lanes are cut after the W2.0 PR merges; the "may code from `main`" line is gone | 00_master_plan W2.0 |
+| RC-11 | fixed: K-20 names one Valkey pub/sub subscription per API process (D-65) | 05 section 14 |
+| RC-12 | fixed: 2B-1 tests that restoring a deprecated name with an active twin answers 409 `class_name_taken` through a savepoint | 03d 2B-1 |
+| RC-13 | fixed in docs: INSTALLATION states that messages for a queue whose profile never started stay in Valkey after the reaper fails the job | 02b section 7.3; 03c 6D |
+| owner answers (OI-1, OI-2, MQ-3, MQ-4, MQ-8, Q-3) | recorded and applied: #469 and #471 close as "decided: keep current behaviour" with no code change and leave the privacy lane, which gains a SECURITY.md statement (the CURATION.md sentence goes to track 4D, which owns that file in W4); the 4-shard offline suite at every B2 part check; Pillow, simplejpeg, the Hugging Face stack and MLflow in pins part B; GPU-15 leftover in B3-D3; Flower on loopback 4613 and the gateway subpath under `monitoring` | 00_index section 6; 00_master_plan sections 6, 9; 00b sections 2, 4; 03 section 4; 04 B3-D3; 08 ENV-18, Q-3; 13 section 7.1 |
+
 ## 6. Re-check (2026-11-04)
 
 Written by the independent reviewer on `plan/recheck` (from `plan/master` at `88b09f2df`), after the
