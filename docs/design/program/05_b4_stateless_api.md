@@ -146,7 +146,7 @@ classified:
 - **4A-4b, #473 part b (folded in, [00b](00b_traceability.md) section 3):** the core batch near-duplicate
   grouping in `visual_search/ingest_batch.py` is racy across concurrent batches; while 4A-4 rewrites
   that file, make the grouping decision inside one batch-scoped step whose result does not depend on
-  another batch's in-flight writes (read [issue-416-plan.md](../issue_plans/issue-416-plan.md) for the case first). Red:
+  another batch's in-flight writes (read [research_near_duplicates_plan.md](../research_near_duplicates_plan.md) section 5 for the case first). Red:
   `tests/visual_search/test_batch_grouping_race.py`: two concurrent batches with a shared
   near-duplicate pair give one group, not two; red today. Control: a single batch is unchanged.
 - **Red test (CC-7):** a stubbed `ingest_one` raising for the representative leaves no pending
