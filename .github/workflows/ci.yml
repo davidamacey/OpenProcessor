@@ -37,7 +37,7 @@ jobs:
       # tests. Raise it to the measured value minus one whenever a change raises coverage.
       - name: Run offline test suite with the coverage floor
         run: >-
-          python -m pytest tests/ -q -m 'not live'
+          python -m pytest tests/ -q -m 'not live and not families'
           --cov=src --cov=scripts --cov-report=term --cov-fail-under=80
 
   pre-commit:

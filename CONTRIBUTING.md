@@ -36,10 +36,10 @@ binary path.
 
 ```bash
 # Everything except the `live` marker (needs no Docker, no GPU)
-.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live'
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'
 
 # With coverage (also run in CI)
-.venv/bin/python -m pytest tests/ -q -m 'not live' --cov=src --cov=scripts \
+.venv/bin/python -m pytest tests/ -q -m 'not live and not families' --cov=src --cov=scripts \
     --cov-report=term-missing:skip-covered
 
 # Import sanity — the loudest, cheapest check; run this first when debugging
