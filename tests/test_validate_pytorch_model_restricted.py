@@ -50,7 +50,7 @@ def test_legitimate_yolo_checkpoint_still_validates(tmp_path: Path) -> None:
     assert ok, msg
     assert info['task'] == 'detect'
     assert info['num_classes'] == 80
-    assert info['end2end'] is False
+    assert info['head_kind'] == 'nms'
 
 
 def test_upload_is_refused_when_restricted_loading_is_unsupported(

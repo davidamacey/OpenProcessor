@@ -23,11 +23,13 @@ curation-specific, so its directory setting lives on the base ``Settings`` class
 
 import json
 import logging
+import pickletools  # nosec B403 - only disassembles a pickle stream, never loads it
 import re
 import shutil
 import tempfile
 import time
 import uuid
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -118,6 +120,44 @@ def load_tasks_from_disk() -> int:
     return loaded
 
 
+YOLOV5_ORIGINAL_MESSAGE = (
+    'Original YOLOv5 checkpoints are not supported by Ultralytics; retrain from YOLOv5u '
+    '(yolov5su.pt), or export an ONNX with the official ultralytics/yolov5 export.py for the '
+    'probe or the ingest secondary detector'
+)
+_YOLOV5_REPO_MODULES = ('models.yolo', 'models.common', 'models.experimental')
+
+
+def _is_original_yolov5(path: Path) -> bool:
+    """True when the checkpoint pickles classes from the original yolov5 repo.
+
+    The pickle stream is only disassembled (``pickletools``), never executed.
+    """
+    try:
+        with zipfile.ZipFile(path) as archive:
+            member = next((n for n in archive.namelist() if n.endswith('data.pkl')), None)
+            if member is None:
+                return False
+            data = archive.read(member)
+    except (OSError, zipfile.BadZipFile):
+        return False
+    try:
+        return any(
+            isinstance(arg, str) and arg.startswith(_YOLOV5_REPO_MODULES)
+            for _, arg, _ in pickletools.genops(data)
+        )
+    except (ValueError, EOFError, IndexError):  # a stream pickletools cannot read
+        return False
+
+
+def _head_kind(model: Any) -> str:
+    """``one2one`` for the NMS-free head (YOLO26, YOLOv10), else ``nms``.
+
+    ``model.end2end`` is not reliable: a loaded ``yolo26n.pt`` reports ``False`` on 8.4.197.
+    """
+    return 'one2one' if hasattr(model.model[-1], 'one2one_cv2') else 'nms'
+
+
 def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
     """
     Validate uploaded file is a valid YOLO11 detection model.
@@ -144,7 +184,12 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
         # Restricted load: torch.load(weights_only=True) plus the Ultralytics
         # allow-list of model classes, requested per call (not via the
         # ULTRALYTICS_SAFE_LOAD env var alone). Anything else in the file is refused.
-        ckpt, _ = torch_safe_load(file_path, safe_only=True)
+        try:
+            ckpt, _ = torch_safe_load(file_path, safe_only=True)
+        except TypeError:
+            if _is_original_yolov5(file_path):
+                return False, YOLOV5_ORIGINAL_MESSAGE, {}
+            raise
         model = ckpt.get('model') if isinstance(ckpt, dict) else None
         if model is None or not hasattr(model, 'names'):
             return False, 'Not an Ultralytics model checkpoint', {}
@@ -154,10 +199,10 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
             'task': getattr(model, 'task', 'detect'),
             'num_classes': len(names),
             'class_names': list(names.values()) if isinstance(names, dict) else [],
-            # End-to-end (NMS-free) architectures — YOLO26 — export through
-            # the native toolchain; classic YOLO11-family models go through
-            # the EfficientNMS toolchain. run_export() routes on this flag.
-            'end2end': bool(getattr(model, 'end2end', False)),
+            # The NMS-free head (YOLO26, YOLOv10) exports through the native toolchain; the
+            # other heads go through the EfficientNMS toolchain. The export worker routes on it.
+            'head_kind': _head_kind(model),
+            'ultralytics_version': ckpt.get('version'),
         }
 
         if model_info['task'] != 'detect':
@@ -229,7 +274,7 @@ def create_export_task(
         'formats_pending': formats,
         'num_classes': model_info.get('num_classes'),
         'class_names': model_info.get('class_names'),
-        'end2end': model_info.get('end2end', False),
+        'head_kind': model_info.get('head_kind'),
         'triton_loaded': False,
     }
     persist_task(task_id)
@@ -314,7 +359,7 @@ def enqueue_export_job(
         'formats': formats,
         'normalize_boxes': normalize_boxes,
         'auto_load': auto_load,
-        'end2end': bool(task.get('end2end', False)),
+        'head_kind': task.get('head_kind'),
     }
     queue = queue_dir()
     queue.mkdir(parents=True, exist_ok=True)
