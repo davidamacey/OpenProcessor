@@ -1,5 +1,5 @@
 # Core Web Framework
-fastapi==0.143.3  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
+fastapi==0.162.0  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
 uvicorn[standard]>=0.41.0
 python-multipart
 orjson  # 2-3x faster JSON encoding/decoding vs stdlib json
@@ -12,7 +12,7 @@ tritonclient[all]
 # ONNX runtime stack. The engine-build toolchain (TensorRT, ModelOpt, onnxsim, ...) is NOT here:
 # it ships only in the export image (requirements-export.txt).
 onnx>=1.12.0,<1.22  # scripts/curation/seed_class_registry.py; upper bound tracks nvidia-modelopt in the export image
-onnxruntime-gpu>=1.24.2,<1.25  # nvidia-modelopt (export image) requires ~=1.24.2; the runtime and export images must resolve one version
+onnxruntime-gpu>=1.24.2,<1.32  # nvidia-modelopt (export image) requires ~=1.24.2; the runtime and export images must resolve one version
 
 # PyTorch
 torch
