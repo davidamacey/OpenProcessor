@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Dev dependency bumps (dependabot #433, re-applied by hand): `@sveltejs/adapter-static` 4.0.1, `@sveltejs/kit` 3.1.1, `@types/node` 26.6.6, `knip` 6.44.0; the `node` and `nginx-unprivileged` image digests (#423).
+
 - Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
 
 ### Added

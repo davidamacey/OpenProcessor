@@ -86,6 +86,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
+- Dependency bumps (dependabot #423, #433, #434 re-applied by hand): ruff 0.17.3 (with the `ruff-pre-commit` hook), mypy 2.4.1, pydantic 2.14.2, fastapi 0.162.0 (the segmenter image pin follows), the e2e `pytest` 9.2.0, and the `node` and `nginx-unprivileged` image digests. `onnxruntime-gpu` stays below 1.25 (`nvidia-modelopt` requires `~=1.24.2`); `.github/dependabot.yml` now ignores that cap, interpreter minor/major moves and Triton minor/major moves.
+
 - **Ultralytics is pinned to one exact release, 8.4.197**, in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (it was `>=8.4.174,<8.5`), the release the current images already resolve. The detection export head changed inside 8.4.x without notice (#447), so a range let two builds export different heads. A test keeps the three files on one `==` pin. The isolated YOLO11 export venv keeps its own pin until the single-version move.
 - **TensorRT workspace and engine max batch are decided in one module** (`export/trt_build_settings.py`, `scripts/lib/trt_settings.sh`) instead of ten literals; the defaults are the old values. The unconditional 8 GB workspace of `scripts/export_paddleocr.sh` is gone: det builds with 4 GB and rec with 8 GB like the Python exporters.
 - The engine stamp's compute capability is read from the card that built the engine (`API_GPU_ID` for the export container, `TRITON_GPU_ID` for the PE trtexec) instead of always the Triton card.
