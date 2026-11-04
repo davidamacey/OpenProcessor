@@ -21,14 +21,17 @@ from typing import TYPE_CHECKING, Any
 from src.config.env import env_path
 from src.config.project_context import ensure_marked_dir, mark_project_dir, project_jobs_dir
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.services.curation.assist.models import ACTIVE_STATUSES, AssistRunState
 from src.services.curation.file_job import FileJob
-from src.services.curation.job_lock import exclusive_start_lock
+from src.services.curation.lease_heartbeat import acquire_heartbeat
 from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from src.services.curation.lease_heartbeat import LeaseHeartbeat
 
 logger = get_logger(__name__)
 
@@ -67,27 +70,35 @@ def reconcile_orphaned_jobs() -> bool:
     return repaired
 
 
-def create_run(
+def _busy(run_id: str | None) -> Exception:
+    return rejection(
+        409,
+        'assist_busy',
+        'an assist run is already running for this project; cancel it or wait',
+        run_id=run_id,
+    )
+
+
+async def create_run(
+    opensearch: Any,
     *,
     state: dict[str, Any],
     request: dict[str, Any],
     members: list[str] | None,
-) -> FileJob:
-    """Claim the per-project singleton and persist the run. ``state`` is the
-    ``queued`` :class:`AssistRunState` dump without ``run_id``. Raises the 409
-    ``assist_busy`` refusal when a run is live."""
-    root = ensure_marked_dir(jobs_root())
-    with exclusive_start_lock(root / 'start.lock') as acquired:
-        live = live_run_ids()
-        if not acquired or live:
-            raise rejection(
-                409,
-                'assist_busy',
-                'an assist run is already running for this project; cancel it or wait',
-                run_id=live[0] if live else None,
-            )
-        run_id = f'asr_{datetime.now(UTC):%Y%m%dT%H%M%S%f}_{uuid.uuid4().hex[:6]}'
-        job = _job(run_id)
+) -> tuple[FileJob, LeaseHeartbeat]:
+    """Claim the per-project singleton (the ``assist_run`` lease) and persist the run.
+    ``state`` is the ``queued`` :class:`AssistRunState` dump without ``run_id``. Raises the
+    409 ``assist_busy`` refusal when a run is live. The caller starts the heartbeat."""
+    ensure_marked_dir(jobs_root())
+    live = live_run_ids()
+    if live:
+        raise _busy(live[0])
+    run_id = f'asr_{datetime.now(UTC):%Y%m%dT%H%M%S%f}_{uuid.uuid4().hex[:6]}'
+    job = _job(run_id)
+    beat = await acquire_heartbeat(
+        opensearch, LeaseKind.ASSIST_RUN, None, run_id, job=job, busy=_busy
+    )
+    try:
         job.directory.mkdir(parents=True)
         (job.directory / 'request.json').write_text(json.dumps(request), encoding='utf-8')
         if members is not None:
@@ -95,8 +106,11 @@ def create_run(
         job.clear_signals()
         job.write({**state, 'run_id': run_id})
         job.touch_heartbeat()
+    except BaseException:
+        await beat.release(opensearch)
+        raise
     _prune(keep=run_id)
-    return job
+    return job, beat
 
 
 def _prune(*, keep: str) -> None:

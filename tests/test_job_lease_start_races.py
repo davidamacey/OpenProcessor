@@ -105,6 +105,18 @@ async def _start_reprocess(client: Any) -> str:
     return 'started'
 
 
+async def _start_assist(client: Any) -> str:
+    from src.core.exceptions import RequestRejectedError
+    from src.services.curation.assist import job
+
+    _widen_check(job, 'live_run_ids')
+    try:
+        await job.create_run(client, state={'status': 'queued'}, request={}, members=None)
+    except RequestRejectedError:
+        return 'busy'
+    return 'started'
+
+
 async def _start_region_job(client: Any, which: str) -> str:
     """The region jobs return a snapshot either way, so a run counts as started when its
     own body ran in this process."""
@@ -141,6 +153,7 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'selection': (_start_selection, {'OP_SELECT_JOBS_DIR': 'selection'}),
     'embedding_viz': (_start_embedding_viz, {'OP_VIZ_JOBS_DIR': 'viz'}),
     'reprocess': (_start_reprocess, {'OP_REPROCESS_JOBS_DIR': 'reprocess'}),
+    'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
     'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),
     'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
     'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),
