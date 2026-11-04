@@ -291,7 +291,7 @@ Inputs and returns per route: [Core routes](docs-site/docs/api-reference/core.md
 | | `/search/text` | POST | Text-to-image search |
 | | `/search/face` | POST | Face similarity |
 | | `/search/ocr` | POST | Images by recognized text |
-| | `/search/object` | POST | Object-level search |
+| | `/search/object` | POST | Object-level search (vehicles and people; any other class is `422 object_class_not_indexed`) |
 | Ingest | `/ingest` | POST | Ingest one image (indexes faces, OCR, objects) |
 | | `/ingest/batch` | POST | Batch ingest (up to 64 images) |
 | | `/ingest/directory` | POST | Bulk ingest from a server directory |
