@@ -309,7 +309,7 @@ class TritonPromoter(TritonHttpControl):
                 'sha256': None,
             },
         }
-        await asyncio.to_thread(write_promote_backpointer, promote_json_path, backpointer)
+        await write_promote_backpointer(promote_json_path, backpointer)
 
         # Copy the resolved remap into the served model dir too, alongside
         # config.pbtxt/labels.txt, so an operator inspecting the served

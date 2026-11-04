@@ -50,7 +50,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _script_client() -> Any:
+def new_lease_client() -> Any:
+    """A guarded OpenSearch client of its own (the caller closes it): for the heartbeat
+    thread and for a short lease taken where no request client is at hand."""
     from src.services.projects.guard import make_script_opensearch
 
     settings = get_settings()
@@ -65,7 +67,7 @@ class LeaseHeartbeat:
         lease: HeldLease,
         *,
         job: FileJob | None = None,
-        client_factory: Callable[[], Any] = _script_client,
+        client_factory: Callable[[], Any] = new_lease_client,
     ) -> None:
         self.lease = lease
         self.lost = threading.Event()

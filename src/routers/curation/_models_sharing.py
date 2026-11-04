@@ -7,7 +7,6 @@ ratchet.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Annotated, Any, Literal
 
 from fastapi import Query
@@ -137,8 +136,7 @@ async def set_model_sharing(
         )
 
     try:
-        revision = await asyncio.to_thread(
-            update_sharing,
+        revision = await update_sharing(
             _promote_json_path(model_name),
             shared=payload.shared,
             expected_revision=payload.expected_revision,
