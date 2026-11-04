@@ -3,7 +3,7 @@
 The API runs many uvicorn workers and each runs its startup bootstrap, so a
 repair that rewrites index data must not run in all of them at once (that
 flooded a small-heap node with ``update_by_query`` tasks, most rejected 429).
-The per-project lock is a non-blocking ``flock``: the worker that gets it
+The per-project claim is the ``legacy_repair`` job lease: the worker that gets it
 repairs the project, the rest skip it. Every step is idempotent and cheap
 when there is nothing to do, so a worker that starts after the winner
 finished simply finds nothing left.

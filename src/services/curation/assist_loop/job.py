@@ -9,7 +9,7 @@ oldest.
 The API creates a loop as ``queued`` and writes the project's ``trigger.json`` naming it;
 the worker claims the trigger by unlinking it and runs the loop. A resume re-queues a
 stopped loop the same way. One loop per project is live at a time (``queued`` or
-``running`` with a fresh heartbeat); the check and the claim happen under one start lock.
+``running`` with a fresh heartbeat); the check and the claim happen under the ``assist_loop`` lease.
 A queued loop has no heartbeat yet, which counts as live: it waits for the worker as long
 as the worker takes.
 """

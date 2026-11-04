@@ -8,8 +8,7 @@ task and persists its phase under the project's train jobs dir
 :class:`~src.services.curation.file_job.FileJob` convention: atomic
 ``state.json`` + heartbeat on the shared volume, so any API worker answers
 the status poll, a restart leaves ``failed`` (never a stuck active phase),
-and the per-run singleton claim is the same ``flock`` start lock the other
-file-backed jobs use. Only the process that accepted the POST runs the task.
+and the per-run singleton claim is the ``promote`` job lease (scope: the run). Only the process that accepted the POST runs the task.
 """
 
 from __future__ import annotations

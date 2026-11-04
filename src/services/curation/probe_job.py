@@ -28,13 +28,10 @@ use, resolved fresh per call from ``OP_PROBE_JOBS_DIR`` (default
 process mounts, consistent with ``item_scores``' ``/jobs/scores`` and
 ``embedding_viz``'s ``/jobs/viz``).
 
-Singleton start is additionally guarded by an ``fcntl.flock`` lock file
-(:mod:`src.services.curation.job_lock`) so the check-is-busy +
-write-'running' sequence is atomic across processes, not just within one
--- see that module's docstring. The same cross-process gap existed in
-``item_scores.job.start_job`` (a bare ``_is_busy()`` check with no lock at
-all) and is fixed there too, in the same change that introduced this
-module's rewrite.
+Singleton start is guarded by the ``probe`` job lease
+(:mod:`src.clients.job_lease`), so the check-is-busy + write-'running'
+sequence is atomic across processes, not just within one; a heartbeat thread
+keeps the lease and the file heartbeat alive for the whole run.
 
 GPU: this module never decides whether to use one -- the caller passes
 ``gpu`` (a ``cuda_visible_devices`` string) or ``None`` for CPU. When a
