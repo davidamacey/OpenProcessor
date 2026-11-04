@@ -24,7 +24,7 @@ import {
   validateSegmenterPrompt,
 } from '$lib/api_profiles';
 import { ConfigEditor } from '$lib/config/configEditor.svelte';
-import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
+import { subscribeConfigEvents, type CurationEvent } from '$lib/sse';
 import type { ValidationReport } from '$lib/types_config';
 import type {
   ConfigVocabulary,
@@ -44,7 +44,10 @@ export interface ProfileEditorDeps extends ProfileActiveDeps {
   validateRegionProfile: typeof validateRegionProfile;
   validateSegmenterPrompt: typeof validateSegmenterPrompt;
   getConfigVocabulary: typeof getConfigVocabulary;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
+  subscribe: (
+    onEvent: (e: CurationEvent) => void,
+    onResync?: () => void,
+  ) => { close(): void };
 }
 
 export class ProfileEditor extends ConfigEditor<
@@ -78,9 +81,7 @@ export class ProfileEditor extends ConfigEditor<
         update: (n, body) => (deps.updateRegionProfile ?? updateRegionProfile)(n, body),
         validate: (body, signal) =>
           (deps.validateRegionProfile ?? validateRegionProfile)(body, false, signal),
-        subscribe:
-          deps.subscribe ??
-          ((onEvent) => subscribeCurationEvents({ topic: 'config', onEvent })),
+        subscribe: deps.subscribe ?? subscribeConfigEvents,
         isEvent: isProfileConfigEvent,
       },
       new ProfileActive(deps),

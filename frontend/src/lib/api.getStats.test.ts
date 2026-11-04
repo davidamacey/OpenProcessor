@@ -133,4 +133,47 @@ describe('getStats', () => {
       aug_target_max: 3000,
     });
   });
+
+  it('serves by_source from the one /stats/dataset request', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/stats/classes')) return Promise.resolve(ok({ classes: [] }));
+      return Promise.resolve(
+        ok({
+          total_crops: 5,
+          validated: 1,
+          test_holdout: 0,
+          by_source: [{ key: 'nas1', doc_count: 5 }],
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getStats();
+
+    expect(result.by_source).toEqual([{ key: 'nas1', doc_count: 5 }]);
+    const datasetCalls = fetchMock.mock.calls.filter(([u]) =>
+      String(u).includes('/stats/dataset'),
+    );
+    expect(datasetCalls).toHaveLength(1);
+  });
+
+  it('has no sources when /stats/dataset fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url.includes('/stats/dataset')
+              ? new Response('{}', { status: 503 })
+              : ok({ classes: [] }),
+          ),
+        ),
+    );
+
+    const result = await getStats();
+
+    expect(result.by_source).toEqual([]);
+    expect(result.dataset_error).toMatch(/503/);
+  }, 10_000);
 });

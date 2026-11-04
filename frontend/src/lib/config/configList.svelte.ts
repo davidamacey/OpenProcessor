@@ -23,7 +23,7 @@ export interface ConfigListBackend<L, D, E = CurationEvent> {
   remove: (name: string, expectedRevision: number) => Promise<void>;
   /** `E` is the event type of the stream the resource follows: the scoped
    *  `CurationEvent`, or (the VLM registry) the global stream's. */
-  subscribe: (onEvent: (e: E) => void) => { close(): void };
+  subscribe: (onEvent: (e: E) => void, onResync?: () => void) => { close(): void };
   isEvent: (e: E) => boolean;
 }
 
@@ -68,9 +68,12 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
 
   start(): void {
     void this.load();
-    this.#sub = this.backend.subscribe((e) => {
-      if (this.backend.isEvent(e)) void this.load();
-    });
+    this.#sub = this.backend.subscribe(
+      (e) => {
+        if (this.backend.isEvent(e)) void this.load();
+      },
+      () => void this.load(),
+    );
   }
 
   stop(): void {

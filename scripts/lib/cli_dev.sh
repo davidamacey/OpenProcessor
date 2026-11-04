@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# cli_dev.sh - checkout-only commands: profile, test, bench, clean
+# cli_dev.sh - checkout-only commands: profile, test, clean
 # =============================================================================
 # Sourced lazily by the `openprocessor` CLI, which supplies dc(), _env_value(),
 # log_*(), require_checkout(), PROJECT_DIR, SCRIPT_DIR and IS_CHECKOUT.
@@ -107,22 +107,6 @@ cmd_test() {
             return 1
             ;;
     esac
-}
-
-cmd_bench() {
-    local mode="${1:-quick}"
-
-    cd "$PROJECT_DIR"
-
-    if [[ ! -f "$PROJECT_DIR/benchmarks/triton_bench" ]]; then
-        log_info "Building benchmark tool..."
-        cd "$PROJECT_DIR/benchmarks"
-        ./build.sh
-        cd "$PROJECT_DIR"
-    fi
-
-    log_step "Running benchmark ($mode mode)..."
-    "$PROJECT_DIR/benchmarks/triton_bench" --mode "$mode"
 }
 
 # =============================================================================

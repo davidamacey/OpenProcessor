@@ -113,9 +113,10 @@ def create_app() -> FastAPI:
         # Add timing header (always)
         response.headers['X-Process-Time'] = f'{duration_ms:.2f}ms'
 
-        # Inject timing into JSON response body for inference endpoints
+        # Inject timing into JSON response body for core inference endpoints. Curation
+        # has its own serializer and wire names, and no /v1 twin.
         content_type = response.headers.get('content-type', '')
-        is_inference_endpoint = any(
+        is_inference_endpoint = not request.url.path.startswith('/curation') and any(
             path in request.url.path
             for path in [
                 '/detect',
@@ -234,7 +235,6 @@ def create_app() -> FastAPI:
             content={
                 'detail': 'Internal server error',
                 'request_id': req_id,
-                'error_type': type(exc).__name__,
             },
             headers={'X-Request-ID': req_id},
         )

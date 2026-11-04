@@ -103,6 +103,7 @@
     <span class="grow"></span>
     {#if home}
       <a
+        data-sveltekit-preload-data="tap"
         href={resolve(projectHref('/dashboard', home.slug))}
         class="min-w-0 truncate text-sm text-zinc-300 hover:text-white"
         title="Open {home.display_name}"
@@ -252,6 +253,7 @@
                 <div class="flex flex-wrap justify-end gap-1.5 max-md:justify-start">
                   {#if p.selectable}
                     <a
+                      data-sveltekit-preload-data="tap"
                       href={resolve(projectHref('/dashboard', p.slug))}
                       class="btn btn-sm"
                       data-testid="project-open-{p.slug}">Open</a

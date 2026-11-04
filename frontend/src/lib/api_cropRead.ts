@@ -95,6 +95,24 @@ export async function getCrop(cropId: string, signal?: AbortSignal): Promise<Cro
 }
 
 /**
+ * `GET {API_PREFIX}/crops?ids=a,b,c` — exactly these items in this order
+ * (the server drops ids it no longer has; max 500 ids). One request for a
+ * whole page of known ids, instead of a `getCrop` per id.
+ */
+export async function getCropsByIds(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<Crop[]> {
+  if (ids.length === 0) return [];
+  const raw = await apiFetch<{ crops: RawCrop[] }>(
+    `${scoped()}/crops${qs({ ids: ids.join(',') })}`,
+    {},
+    signal,
+  );
+  return raw.crops.map(mapRawCrop);
+}
+
+/**
  * Free-text semantic search over crops (P2-14). Backend:
  * `GET {API_PREFIX}/search/text`, gated behind the `semantic_search` overlay in
  * `{API_PREFIX}/methods` (see `isSemanticSearchAvailable` in `./strategies`) — a

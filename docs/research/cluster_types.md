@@ -35,7 +35,7 @@ The curation routes are project-scoped (`/curation/projects/{project}/...`) and 
 Data flow:
 
 1. `POST /clusters/train/{index}` (`index` is `global`, `vehicles`, `people` or `faces`) reads every embedding from the OpenSearch index (`max_samples` caps it), trains a FAISS IVF index on the GPU when one is available, assigns every document to its nearest centroid and writes `cluster_id` and `cluster_distance` back.
-2. The trained index is saved atomically to `data/faiss_indexes/<index>.index` plus `<index>.meta.npy` (relative to the API working directory, `/app` in the container, where `./data` is a bind mount, so the indexes survive a container recreate; the directory is git-ignored).
+2. The trained index is saved atomically to `data/faiss_indexes/<index>.index` plus `<index>.meta.json` (relative to the API working directory, `/app` in the container, where `./data` is a bind mount, so the indexes survive a container recreate; the directory is git-ignored).
 3. At ingest, a document whose index is trained gets `cluster_id`, `cluster_distance` and `clustered_at` from a nearest-centroid lookup (`src/clients/opensearch/ingest.py`, `bulk.py`). A failing assigner is logged and skipped; ingest never fails on clustering.
 4. `POST /clusters/assign/{index}` assigns documents that have no `cluster_id` yet. `GET /clusters/stats/{index}`, `GET /clusters/balance/{index}`, `POST /clusters/rebalance/{index}` (a retrain), `GET /clusters/{index}/{cluster_id}` (members) and `GET /clusters/albums` (global-index clusters of at least `min_size` images, default 5, as "albums") complete the surface.
 

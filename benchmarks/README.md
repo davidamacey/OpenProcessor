@@ -1,6 +1,6 @@
 # Benchmarks
 
-This directory contains benchmarking tools and results for OpenProcessor. The `./openprocessor bench` subcommand is not available yet because `triton_bench` and `benchmarks/build.sh` are not in the repository; use the tools below. This page is the tool list; method and measurements are in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md#benchmarking).
+This directory contains benchmarking tools and results for OpenProcessor. This page is the tool list; method and measurements are in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md#benchmarking).
 
 ## Directory Structure
 

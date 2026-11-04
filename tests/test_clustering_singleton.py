@@ -8,6 +8,7 @@ straight restoration, not a genericization port.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -81,8 +82,8 @@ def test_load_index_success_populates_indexes_and_metadata(tmp_path: Path) -> No
 
     index_path = tmp_path / f'{ClusterIndex.GLOBAL.value}.index'
     faiss.write_index(index, str(index_path))
-    meta_path = tmp_path / f'{ClusterIndex.GLOBAL.value}.meta.npy'
-    np.save(meta_path, {'trained_at': '2026-01-01T00:00:00'})
+    meta_path = tmp_path / f'{ClusterIndex.GLOBAL.value}.meta.json'
+    meta_path.write_text(json.dumps({'trained_at': '2026-01-01T00:00:00'}))
 
     assert svc.load_index(ClusterIndex.GLOBAL) is True
     assert ClusterIndex.GLOBAL in svc._indexes
@@ -125,3 +126,15 @@ def test_dimension_mismatched_persisted_index_is_rejected(tmp_path: Path) -> Non
     wrong = ClusteringService(index_dir=tmp_path, use_gpu=False, embedding_dim=16)
     assert wrong.is_trained(ClusterIndex.GLOBAL) is False
     assert ClusterIndex.GLOBAL not in wrong._indexes
+
+
+def test_saved_metadata_is_plain_json_and_a_pickled_file_is_not_loaded(tmp_path: Path) -> None:
+    """Metadata persists as JSON (arrays plus parameters); a pickled array in the
+    old location is neither read nor executed."""
+    _trained_service(tmp_path)
+    meta = json.loads((tmp_path / f'{ClusterIndex.GLOBAL.value}.meta.json').read_text())
+    assert meta['n_clusters'] == 4
+
+    (tmp_path / f'{ClusterIndex.GLOBAL.value}.meta.json').write_bytes(b'\x80\x04not json')
+    restarted = ClusteringService(index_dir=tmp_path, use_gpu=False, embedding_dim=8)
+    assert restarted.is_trained(ClusterIndex.GLOBAL) is False

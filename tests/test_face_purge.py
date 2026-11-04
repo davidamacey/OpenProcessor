@@ -116,7 +116,7 @@ class FakeOpenSearch:
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     index_dir = tmp_path / 'faiss'
     index_dir.mkdir()
-    for name in ('faces.index', 'faces.meta.npy', 'faces.index.tmp', 'global.index'):
+    for name in ('faces.index', 'faces.meta.json', 'faces.index.tmp', 'global.index'):
         (index_dir / name).write_bytes(b'x')
     monkeypatch.chdir(tmp_path)
     fake = FakeOpenSearch()
@@ -133,7 +133,7 @@ async def test_counts_report_exactly_what_is_stored(env: dict[str, Any]) -> None
     assert counts.named_persons == 2
     assert counts.thumbnails == 1
     assert counts.people_face_links == 1
-    assert sorted(counts.faiss_files) == ['faces.index', 'faces.index.tmp', 'faces.meta.npy']
+    assert sorted(counts.faiss_files) == ['faces.index', 'faces.index.tmp', 'faces.meta.json']
 
 
 def test_dry_run_prints_the_counts_and_changes_nothing(

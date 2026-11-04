@@ -4,8 +4,6 @@
    * YOLO export. The export run and the freeze live in `$lib/export/`
    * controllers; the sections in `$lib/components/export/` render them.
    */
-  import { apiErrorText } from '$lib/api_errors';
-  import { apiBase, scoped } from '$lib/api';
   import { exportStatus, getTestHoldoutStats, listDatasets } from '$lib/api_export';
   import { getStats } from '$lib/api_stats';
   import type { TestHoldoutStats } from '$lib/types_export';
@@ -81,51 +79,9 @@
 
   const rows = $derived(buildExportRows(stats?.per_class, holdout));
 
-  // ---- HDD source distribution ------------------------------------------
+  // ---- source distribution ----------------------------------------------
 
-  interface HddBucket {
-    key: string;
-    doc_count: number;
-  }
-  let hddSources = $state<HddBucket[]>([]);
-  // m16 (2026-09-24 interactive pass): this fetch used to fail silently —
-  // a 503/non-JSON response just left hddSources empty with no visible
-  // sign anything had gone wrong, so the "totals failed" case looked
-  // identical to "no source data at all".
-  let hddSourcesError = $state<string | null>(null);
-  // Pull from the same {API_PREFIX}/stats/dataset response — the existing `getStats`
-  // surface only exposes per_class summary; we hit the
-  // dataset-stats endpoint directly via fetch for the by_source bucket.
-  // The thin {API_PREFIX}/stats/dataset response carries an `by_source` HDD bucket
-  // array which `getStats` (typed to StatsSummary) doesn't surface. Hit it
-  // directly so we can render the source-distribution chip row.
-  $effect(() => {
-    void (async () => {
-      try {
-        const res = await fetch(`${apiBase}${scoped()}/stats/dataset`, {
-          method: 'GET',
-        });
-        if (!res.ok) {
-          hddSourcesError = `Dataset totals unavailable (API ${res.status}) — by-source breakdown may be stale or missing.`;
-          return;
-        }
-        const ct = res.headers.get('content-type') ?? '';
-        if (!ct.includes('application/json')) {
-          hddSourcesError = 'Dataset totals unavailable (non-JSON response).';
-          return;
-        }
-        const json = (await res.json()) as { by_source?: HddBucket[]; error?: string };
-        if (json.error) {
-          hddSourcesError = `Dataset totals unavailable: ${json.error}`;
-          return;
-        }
-        hddSourcesError = null;
-        if (Array.isArray(json.by_source)) hddSources = json.by_source;
-      } catch (e) {
-        hddSourcesError = `Dataset totals unavailable: ${apiErrorText(e)}`;
-      }
-    })();
-  });
+  const hddSources = $derived(stats?.by_source ?? []);
 </script>
 
 <div class="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
@@ -144,11 +100,11 @@
   <HoldoutStatusCard {holdout} {rows} onFreeze={freeze.openFreeze} />
 
   <!-- HDD source distribution -->
-  {#if hddSourcesError}
+  {#if stats?.dataset_error}
     <section
       class="surface border-orange-500/40 bg-orange-500/10 p-3 text-xs text-orange-200"
     >
-      {hddSourcesError}
+      Dataset totals unavailable: {stats.dataset_error}
     </section>
   {:else if hddSources.length > 0}
     <section class="surface p-4">

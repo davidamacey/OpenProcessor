@@ -197,6 +197,16 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         registry_mod.set_project_registry(None)
 
 
+@pytest.fixture(scope='session', autouse=True)
+def _bind_real_keymap_functions() -> None:
+    """Import the keymap router before any test patches the keymap service by dotted path.
+
+    The router binds ``get_keymap_doc`` and ``save_keymap_doc`` with ``from ... import`` at
+    import time; if the first import happened inside a patched test it would keep the fakes
+    for every later test in the process."""
+    import src.routers.curation.keymap  # noqa: F401 - bind the real functions first
+
+
 # Module-level TTL caches (module, attribute). Production keys each by
 # project, but every unit test binds the same ``default`` record, so a cache
 # one test fills would answer the next test's first request.
@@ -208,6 +218,7 @@ _PROCESS_CACHES = (
     ('src.clients.curation_opensearch.ensure_overlay_fields', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
+    ('src.services.projects.stats', '_disk_cache'),
     # Config-store snapshots: one ConfigStore per project, keyed by
     # slug in a module-level dict -- every test binds the same ``default``
     # project, so a store one test mutates would leak into the next.

@@ -37,6 +37,7 @@ from src.services.labeling.vlm_url_policy import parse_endpoint_url
 logger = get_logger(__name__)
 
 STEP_TIMEOUT_S = 10.0
+# Per API worker process, not cluster-wide: N worker processes admit N times this many.
 MAX_CONCURRENT_PROBES = 2
 _ACTIVE_PROBES = 0
 _UPSTREAM_MESSAGE_CHARS = 500

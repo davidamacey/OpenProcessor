@@ -10,7 +10,7 @@
  */
 
 import { onMount } from 'svelte';
-import { getCrop } from '$lib/api_cropRead';
+import { getCropsByIds } from '$lib/api_cropRead';
 import { apiErrorText } from '$lib/api_errors';
 import { cancelSelect, getSelectStatus, selectDiverse } from '$lib/api_select';
 import { endpointForTab, tabHonorsPinnedSortDefault } from '$lib/reviewTabs';
@@ -184,11 +184,11 @@ export function createReviewDiverseController(opts: ReviewDiverseOptions) {
   /**
    * Diverse mode replaces the queue's item source entirely — the pager's
    * fetchPage slices `diverseSelection.crop_ids` into page_size chunks
-   * and hydrates each id via getCrop, since {API_PREFIX}/select/diverse only
+   * and hydrates the page's ids with one getCropsByIds read, since {API_PREFIX}/select/diverse only
    * returns ids, not full crop records. Each hydrated crop already
    * carries its own served `proposed_class_id`/`_name` (item 11,
    * 2026-09-24 logic-moves — promoted onto `Crop`/`mapRawCrop`, so
-   * `getCrop` returns it same as `getReviewQueue`) — no client fill-in
+   * `getCropsByIds` returns it same as `getReviewQueue`) — no client fill-in
    * needed. resolveConfirmClassId/canConfirm falls back to the crop's
    * existing class_id when it's null (classPicker.ts), so Enter still
    * does the right thing either way: confirms the proposal or existing
@@ -204,7 +204,7 @@ export function createReviewDiverseController(opts: ReviewDiverseOptions) {
     }
     const start = (page - 1) * pageSize;
     const ids = selection.crop_ids.slice(start, start + pageSize);
-    const crops = await Promise.all(ids.map((id) => getCrop(id)));
+    const crops = await getCropsByIds(ids);
     const items: ReviewItem[] = crops.map((crop) => ({
       ...crop,
       reason: 'diverse selection (k-center-greedy)',

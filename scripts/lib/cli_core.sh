@@ -347,8 +347,6 @@ Configuration:
 Testing:
   test [type]         Run tests
                       Options: quick (default), full, visual
-  bench [mode]        Run benchmarks
-                      Options: quick (default), full
 
 Face data (OP_FACES_ENABLED):
   faces purge [--dry-run] [--yes]
@@ -441,9 +439,9 @@ cmd_config() {
         show)
             local env_file="${PROJECT_DIR}/.env"
             [[ -f "$env_file" ]] || { log_error "no .env at ${env_file}"; return 1; }
-            # Redact every token/key/secret/password value, with or
+            # Redact every token/key/secret/password/credential/auth value, with or
             # without a leading `export`.
-            sed -E 's/^([[:space:]]*(export[[:space:]]+)?[A-Z0-9_]*(TOKEN|KEY|SECRET|PASSWORD)[A-Z0-9_]*)=.*/\1=***/' "$env_file"
+            sed -E 's/^([[:space:]]*(export[[:space:]]+)?[A-Z0-9_]*(TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH)[A-Z0-9_]*)=.*/\1=***/' "$env_file"
             ;;
         *)
             log_error "unknown config subcommand: $sub"

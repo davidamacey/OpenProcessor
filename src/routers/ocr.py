@@ -6,7 +6,8 @@ Provides OCR endpoints using PP-OCRv5 for text extraction from images.
 Endpoints:
 - POST /ocr/predict - Extract text from single image
 - POST /ocr/batch - Batch OCR processing
-- POST /ocr/search - Search images by text content
+
+Text search over the OCR index is POST /search/ocr (src/routers/search/ocr.py).
 """
 
 import logging
@@ -15,7 +16,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
-from src.core.wire_json import WireJSONResponse
 from src.routers._errors import server_error
 from src.schemas.detection import ImageMetadata
 from src.services.ocr_service import OcrService
@@ -363,54 +363,3 @@ def ocr_batch(
         total_text_regions=total_text_regions,
         images_with_text=images_with_text,
     )
-
-
-@router.post('/search')
-async def search_by_ocr(
-    text: str = Query(..., min_length=1, description='Text to search for'),
-    page: int = Query(0, ge=0, description='Page number (0-indexed)'),
-    size: int = Query(20, ge=1, le=100, description='Results per page'),
-    fuzzy: bool = Query(True, description='Enable fuzzy matching'),
-) -> WireJSONResponse:
-    """
-    Search images by OCR text content.
-
-    Searches the visual_search_ocr index for images containing the specified
-    text. Uses OpenSearch full-text search with optional fuzzy matching.
-
-    Args:
-        text: Text to search for
-        page: Page number (0-indexed)
-        size: Results per page (max 100)
-        fuzzy: Match on any word of the query (prefix/substring); false
-            matches the whole recognised line verbatim
-
-    Returns:
-        One result per matching image (its best-matching text line) and the
-        number of matching images.
-    """
-    # Import here to avoid circular imports
-    from src.core.dependencies import get_visual_search_service
-
-    try:
-        search_service = await get_visual_search_service()
-        hits, total = await search_service.opensearch.search_ocr_page(
-            text, offset=page * size, size=size, exact=not fuzzy
-        )
-
-        return WireJSONResponse(
-            {
-                'status': 'success',
-                'query': text,
-                'total_results': total,
-                'page': page,
-                'size': size,
-                'results': hits,
-            }
-        )
-
-    except (RetryExhaustedError, UpstreamError):
-        raise
-    except Exception as e:
-        logger.error(f'OCR search failed for "{text}": {e}')
-        raise server_error(500, 'Search failed', e) from e

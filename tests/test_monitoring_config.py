@@ -171,8 +171,9 @@ def test_rendered_compose_config_sets_the_alloy_project(tmp_path: Path) -> None:
         text=True,
         timeout=60,
     )
-    if result.returncode != 0:
-        pytest.skip(f'docker compose config unavailable: {result.stderr[:200]}')
+    if 'docker: unknown command' in result.stderr or 'is not a docker command' in result.stderr:
+        pytest.skip('docker compose plugin unavailable')
+    assert result.returncode == 0, result.stderr
     alloy = json.loads(result.stdout)['services']['alloy']
     assert alloy['environment']['OP_LOG_PROJECT'] == 'opinst-test'
     blocks = _blocks()

@@ -191,11 +191,13 @@
         {/if}
         {#if job.completed && target}
           <a
+            data-sveltekit-preload-data="tap"
             class="btn btn-primary"
             href={resolve(projectHref('/dashboard', target))}
             data-testid="combine-open-project">Open project</a
           >
           <a
+            data-sveltekit-preload-data="tap"
             class="btn"
             href={resolve(projectHref('/review?tab=all&combine_conflict=true', target))}
             data-testid="combine-review-conflicts">Review flagged conflicts</a

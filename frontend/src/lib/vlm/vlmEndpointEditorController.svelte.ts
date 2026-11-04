@@ -57,7 +57,7 @@ export interface VlmEditorDeps extends VlmActiveDeps {
   probeVlmEndpoint: typeof probeVlmEndpoint;
   listVlmEndpoints: typeof listVlmEndpoints;
   getVlmCatalog: typeof getVlmCatalog;
-  subscribe: (onEvent: (e: VlmEvent) => void) => { close(): void };
+  subscribe: (onEvent: (e: VlmEvent) => void, onResync?: () => void) => { close(): void };
 }
 
 export class VlmEndpointEditor extends ConfigEditor<
@@ -93,7 +93,7 @@ export class VlmEndpointEditor extends ConfigEditor<
         update: (n, body) => (deps.updateVlmEndpoint ?? updateVlmEndpoint)(n, body),
         // `name: null`: the endpoint's own name would read as taken.
         validate: (body, signal) => checks.validate(body.name, body.body, signal),
-        subscribe: (onEvent) =>
+        subscribe: (onEvent, onResync) =>
           (deps.subscribe ?? subscribeVlmEvents)((e) => {
             // A registry write may carry no endpoint name (A-4): treat it
             // as possibly this one, and re-read.
@@ -102,7 +102,7 @@ export class VlmEndpointEditor extends ConfigEditor<
             } else {
               onEvent(e);
             }
-          }),
+          }, onResync),
         isEvent: (e) => isVlmRegistryEvent(e) || isVlmActiveEvent(e),
       },
       new VlmActive(deps),

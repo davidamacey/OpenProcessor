@@ -11,6 +11,8 @@ export interface StatsSummary {
   total_crops: number;
   validated_crops: number;
   test_holdout_crops: number;
+  /** Crop counts per ingest source (`/stats/dataset`); empty when it failed. */
+  by_source: Array<{ key: string; doc_count: number }>;
   per_class: Array<{
     class_id: number;
     class_name: string;

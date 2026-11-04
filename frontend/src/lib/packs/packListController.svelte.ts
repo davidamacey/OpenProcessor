@@ -8,7 +8,7 @@
 import { clonePromptPack, deletePromptPack, listPromptPacks } from '$lib/api_packs';
 import { ConfigList } from '$lib/config/configList.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
-import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
+import { subscribeConfigEvents, type CurationEvent } from '$lib/sse';
 import type { PromptPackDoc, PromptPackList } from '$lib/types_packs';
 import { PackActive, type PackActiveDeps } from './packActive.svelte';
 
@@ -16,7 +16,10 @@ export interface PackListDeps extends PackActiveDeps {
   listPromptPacks: typeof listPromptPacks;
   clonePromptPack: typeof clonePromptPack;
   deletePromptPack: typeof deletePromptPack;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
+  subscribe: (
+    onEvent: (e: CurationEvent) => void,
+    onResync?: () => void,
+  ) => { close(): void };
 }
 
 export class PackList extends ConfigList<PromptPackList, PromptPackDoc, PackActive> {
@@ -26,9 +29,7 @@ export class PackList extends ConfigList<PromptPackList, PromptPackDoc, PackActi
         list: () => (deps.listPromptPacks ?? listPromptPacks)(),
         clone: (name, body) => (deps.clonePromptPack ?? clonePromptPack)(name, body),
         remove: (name, rev) => (deps.deletePromptPack ?? deletePromptPack)(name, rev),
-        subscribe:
-          deps.subscribe ??
-          ((onEvent) => subscribeCurationEvents({ topic: 'config', onEvent })),
+        subscribe: deps.subscribe ?? subscribeConfigEvents,
         isEvent: (e) => isConfigAxisEvent(e, 'prompt_pack'),
       },
       new PackActive(deps),

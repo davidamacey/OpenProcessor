@@ -31,6 +31,9 @@ python-multipart
 orjson
 pydantic-settings
 
+# tests/test_pe_rearrange_shim.py compares the shim with einops.rearrange (it skips without it)
+einops>=0.8
+
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
 torch
 torchvision
@@ -54,6 +57,7 @@ pyyaml
 requests
 
 # src/core/logging.py (imported by src/main.py)
+cachetools>=7.2
 structlog>=24.1.0
 
 # src/clients/opensearch/client.py (imported transitively via src/clients/__init__.py
