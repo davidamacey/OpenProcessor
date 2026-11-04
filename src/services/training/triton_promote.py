@@ -351,14 +351,6 @@ class TritonPromoter(TritonHttpControl):
             triton_name, input_size, max_batch_size, on_phase=on_phase
         )
 
-        # drop any
-        # cached class-name mapping for this model name so the very next
-        # detection response reads the labels.txt just written above,
-        # not a stale mapping from a prior promote under the same name.
-        from src.utils.class_names import invalidate_class_names
-
-        invalidate_class_names(triton_name)
-
         logger.info(
             'train_promote_ok',
             job_id=status.job_id,
@@ -455,13 +447,6 @@ class TritonPromoter(TritonHttpControl):
 
         await asyncio.to_thread(shutil.rmtree, model_dir, ignore_errors=False)
         logger.info('train_unload_ok', triton_name=triton_name, model_dir=str(model_dir))
-
-        # same cache-invalidation as promote() -- an unloaded
-        # model's labels must not linger in memory either (harmless if
-        # the name is never reused, but stale otherwise).
-        from src.utils.class_names import invalidate_class_names
-
-        invalidate_class_names(triton_name)
 
         return UnloadResult(
             triton_name=triton_name,

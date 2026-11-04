@@ -10,6 +10,7 @@ no GPU.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 import pytest
@@ -152,35 +153,69 @@ class TestStockCocoFallback:
 
 
 class TestCaching:
-    def test_result_is_cached_across_calls(
+    def test_rewritten_labels_file_is_seen_without_any_invalidation(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """Another worker process promotes: this process never gets a call,
+        only the file changes."""
         models_dir = _point_at(tmp_path, monkeypatch)
         model_dir = models_dir / 'cached_v1'
         model_dir.mkdir()
-        (model_dir / 'labels.txt').write_text('car\n')
+        labels = model_dir / 'labels.txt'
+        labels.write_text('car\n')
+        before = labels.stat().st_mtime_ns
+        assert cn.get_class_names('cached_v1') == {0: 'car'}
 
-        first = cn.get_class_names('cached_v1')
-        (model_dir / 'labels.txt').write_text('truck\n')  # changed on disk
-        second = cn.get_class_names('cached_v1')
-
-        assert first == second == {0: 'car'}  # still the cached value
-
-    def test_invalidate_forces_a_re_read(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """The promote/unload hooks call this so a freshly promoted
-        model's labels are visible on its very first request."""
-        models_dir = _point_at(tmp_path, monkeypatch)
-        model_dir = models_dir / 'cached_v1'
-        model_dir.mkdir()
-        (model_dir / 'labels.txt').write_text('car\n')
-        cn.get_class_names('cached_v1')
-
-        (model_dir / 'labels.txt').write_text('truck\n')
-        cn.invalidate_class_names('cached_v1')
+        labels.write_text('car\n')
+        labels.write_text('truck\n')
+        os.utime(labels, ns=(before + 1_000_000, before + 1_000_000))
 
         assert cn.get_class_names('cached_v1') == {0: 'truck'}
 
-    def test_invalidate_is_a_no_op_for_an_uncached_model(self) -> None:
-        cn.invalidate_class_names('never_requested_model')  # must not raise
+    def test_same_size_rewrite_with_new_mtime_is_seen(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        models_dir = _point_at(tmp_path, monkeypatch)
+        model_dir = models_dir / 'cached_v1'
+        model_dir.mkdir()
+        labels = model_dir / 'labels.txt'
+        labels.write_text('car\n')
+        before = labels.stat().st_mtime_ns
+        cn.get_class_names('cached_v1')
+
+        labels.write_text('bus\n')
+        os.utime(labels, ns=(before + 5_000_000, before + 5_000_000))
+
+        assert cn.get_class_names('cached_v1') == {0: 'bus'}
+
+    def test_unchanged_file_is_not_re_read(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        models_dir = _point_at(tmp_path, monkeypatch)
+        model_dir = models_dir / 'cached_v1'
+        model_dir.mkdir()
+        (model_dir / 'labels.txt').write_text('car\n')
+        real = cn._read_labels_file
+        calls: list[Path] = []
+
+        def counting(path: Path):
+            calls.append(path)
+            return real(path)
+
+        monkeypatch.setattr(cn, '_read_labels_file', counting)
+        cn.get_class_names('cached_v1')
+        cn.get_class_names('cached_v1')
+
+        assert len(calls) == 1
+
+    def test_missing_labels_file_is_not_cached(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        models_dir = _point_at(tmp_path, monkeypatch)
+        model_dir = models_dir / 'late_v1'
+        model_dir.mkdir()
+        assert cn.get_class_names('late_v1') == {}
+
+        (model_dir / 'labels.txt').write_text('car\n')
+
+        assert cn.get_class_names('late_v1') == {0: 'car'}
