@@ -4,15 +4,13 @@ An independent, latest-version NVIDIA **Triton Inference Server** build hardened
 **CRITICAL/HIGH CVE scan gate** while still doing real work (load models → build TensorRT
 engines → serve/infer). This is a stricter, opt-in alternative to the production
 [`Dockerfile.triton`](../../Dockerfile.triton) — that file already applies Tier 1 (`apt upgrade`,
-Nsight purge, `starlette` upgrade); this variant additionally applies Tier 2 (purge the entire
+Nsight purge, `starlette` upgrade) and removes the NGC base's unused `-dev` packages; this variant additionally applies Tier 2 (purge the entire
 compile-time toolchain) for a deployment with a strict "zero unwaived CRITICAL/HIGH" scan gate.
 
 Companion analysis: [`../../docs/security/triton_cve_hardening.md`](../../docs/security/triton_cve_hardening.md).
 
 Note: an earlier version of this directory also hardened a DeepStream image. DeepStream is not
-part of this product — that half of the work now lives in the `run_deepstream` project, which
-built on this same methodology and has since gone further (per-image baseline scans, remediation
-log). See that project's `docs/security/cve-remediation.md`.
+part of this product, and that work is no longer tracked here.
 
 ## Results
 

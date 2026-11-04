@@ -84,6 +84,15 @@ def test_scan_a_catches_initials_after_an_underscore(tmp_path: Path) -> None:
     assert any(f'test_{LEAK}thing' in h for h in hits['A'])
 
 
+def test_scan_a_catches_the_private_sibling_project_name(tmp_path: Path) -> None:
+    sibling = codecs.decode('eha_qrrcfgernz', 'rot13')
+    repo = _init_repo(tmp_path)
+    _write_and_track(repo, 'docs/note.md', f'That half now lives in the `{sibling}` project.\n')
+    allowlist = _allowlist(repo, '')
+    hits, _ = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
+    assert any(sibling in h for h in hits['A'])
+
+
 def test_whole_path_allowlist_entry_exempts_every_hit_in_that_file(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     _write_and_track(repo, 'src/thing.py', f"NAME = '{LEAK}stuff'\nOTHER = '{LEAK}other'\n")
