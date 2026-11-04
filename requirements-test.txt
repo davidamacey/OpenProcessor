@@ -31,6 +31,9 @@ python-multipart
 orjson
 pydantic-settings
 
+# tests/test_pe_rearrange_shim.py compares the shim with einops.rearrange (it skips without it)
+einops>=0.8
+
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
 torch
 torchvision
