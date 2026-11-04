@@ -7,11 +7,11 @@ ordinary class edits. Each goes through the store's versioned seams (``create_do
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from src.clients.curation_opensearch.base import logger
 from src.clients.curation_opensearch.registry import ClassRegistryError, RegistryDoc
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -19,10 +19,6 @@ if TYPE_CHECKING:
 
     from src.clients.curation_opensearch import ClassRegistryFile
     from src.clients.curation_opensearch.registry import ClassRegistry
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _next_id_after(file_doc: ClassRegistryFile) -> int:
@@ -54,8 +50,8 @@ async def seed_from_file(
     ``False`` when a document appeared meanwhile (the caller re-reads)."""
     doc = RegistryDoc(
         classes=[c.model_copy(deep=True) for c in file_doc.classes],
-        updated_at=_now(),
-        migrated_from_file_at=_now(),
+        updated_at=now_iso(),
+        migrated_from_file_at=now_iso(),
         next_class_id=_next_id_after(file_doc),
     )
     return await store.create_document(client, doc)
@@ -74,7 +70,7 @@ async def replace_from_file(
         doc.classes = [c.model_copy(deep=True) for c in file_doc.classes]
         doc.next_class_id = max(doc.next_class_id, _next_id_after(file_doc))
         doc.reversed_to_file_at = None
-        doc.migrated_from_file_at = _now()
+        doc.migrated_from_file_at = now_iso()
 
     await store.mutate(client, fn)
 
@@ -83,6 +79,6 @@ async def mark_reversed(client: AsyncOpenSearch, store: ClassRegistry) -> None:
     """Record that the classes were written back to the file (rollback)."""
 
     def fn(doc: RegistryDoc) -> None:
-        doc.reversed_to_file_at = _now()
+        doc.reversed_to_file_at = now_iso()
 
     await store.mutate(client, fn)
