@@ -55,6 +55,7 @@ the master plan; execute one wave at a time from the batch files it links.
 |---|---|---|
 | [research_gpu_pipeline_plan.md](research_gpu_pipeline_plan.md) | plan (research; after B5) | Where image-processing time goes per stage, a hypothesis register (batched GPU decode, per-card replicas, native resident-frame backend, faces in-graph, a last INT8 round), experiments in three GPU windows, the target architecture and stop rules |
 | [research_clustering_plan.md](research_clustering_plan.md) | plan (research; after B2/B5) | Clustering for curation on real data: detector-class roots, near-duplicate thresholds, judge calibration, crop preprocessing and encoders, global graph refinement, face grouping; libraries, evaluation protocol, pass bars and stop rules |
+| [research_auto_label_assist_plan.md](research_auto_label_assist_plan.md) | plan (seams for B2 now; research after the tag; features v0.8.0) | The auto-label assist loop on the new foundation: loop tables, pause/resume/cancel and budget control on Celery, events, token budgets, the lock rule, the UI wire; literature review; prototypes AL0-AL6 (label rate, VLM precision, review cost, strategy replay, teacher-student, Z5 from #398) |
 | [v080_platform_breadth_plan.md](v080_platform_breadth_plan.md) | plan (v0.8.0, not started) | Platform breadth after v0.7.0: COCO segmentation import, search by image, model-family training, API authentication, a second segmenter, video files as a source, the wheel example and the embedding swap, in waves with a test and GPU budget |
 
 ## Per-issue plans (published as gists on the issues)
@@ -69,7 +70,6 @@ closes.
 | [issue-346-plan.md](issue_plans/issue-346-plan.md) | #346 | Clustering research program, umbrella plan |
 | [issue-347-plan.md](issue_plans/issue-347-plan.md) | #347 | Evaluate a second public embedding model for similarity and text search (the earlier protocol is [`docs/research/embedding_model_eval_plan.md`](../research/embedding_model_eval_plan.md)) |
 | [issue-348-plan.md](issue_plans/issue-348-plan.md) | #348 | Spatial scene discovery and photogrammetry: feasibility study and staged plan |
-| [issue-398-plan.md](issue_plans/issue-398-plan.md) | #398 | Detector-class roots with a hold-back guard as the auto-label loop partition |
 | [issue-400-plan.md](issue_plans/issue-400-plan.md) | #400 | Attribute-signal layer for clustering |
 | [issue-401-plan.md](issue_plans/issue-401-plan.md) | #401 | Registration-plate text as a per-box attribute, with privacy modes |
 | [issue-406-plan.md](issue_plans/issue-406-plan.md) | #406 | Finish the visual-judge calibration, the blind 5 % human re-judge and the label check |
