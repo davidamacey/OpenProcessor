@@ -346,6 +346,9 @@ Measured scaling is in [docs/PERFORMANCE.md](docs/PERFORMANCE.md#multi-gpu-pe-en
 
 ---
 
+A multi-host deployment is not supported. Job leases compare wall-clock times of one host; on
+several hosts the lease TTL (120 s) would have to exceed the clock skew.
+
 ## Install from source
 
 For development, or to build the images yourself.

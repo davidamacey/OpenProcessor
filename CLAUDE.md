@@ -181,6 +181,9 @@ body. The core route list is in [README.md](README.md#api-endpoints).
   import-validated class or box, or an item in the frozen test holdout
   (`src/clients/occ_locks.py`). Use the OCC read/merge/write helpers, not a
   blind update.
+- **Singleton jobs.** The cross-process claim is the OpenSearch job lease
+  (`src/clients/job_lease.py`, kept alive by `services/curation/lease_heartbeat.py`), never a
+  file lock: `scripts/codegen/check_file_locks.py` ratchets the few that remain.
 - **Class identity is the name.** Never carry a raw class index across a
   boundary (import, combine, export, train, promote, model sharing).
 - **Config store.** Prompt packs, region profiles and the VLM activation are

@@ -271,6 +271,11 @@ The config store, one document per row, discriminated by `doc_type`
 `kind` (`prompt_pack`, `region_profile`, ...), `name`, `revision`, `body`
 (stored, not indexed), `description`, `created_at`, `updated_at`, `updated_by`,
 `cloned_from`, `axis`, `previous`, `config_revision`, `process`, `applied_at`.
+Two object keys with `enabled: false` (stored, never indexed) share this index by fixed id,
+on a legacy project's separate settings index as well: `lease` (a job lease document, id
+`lease:<kind>` or `lease:<kind>:<scope>`, with `kind`, `scope`, `job_id`, `owner`,
+`generation`, `acquired_at`, `heartbeat_at`, `ttl_s`, `state` (`held` or `released`)) and
+`class_registry`. Leases are read by id with a realtime `get`, never searched.
 The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `clustering` parts and a revision counter; the detector is an ingest profile in the config store, not a policy part, addressed by id `default`; the cluster-refresh daemon's growth state sits beside it under `cluster_refresh`) and the
 UMAP projection state (id `current`: `projection_version`, `scope`, `n_points`,
 `fitted_at`, ...) are stored in this same index, by fixed id and never searched,
