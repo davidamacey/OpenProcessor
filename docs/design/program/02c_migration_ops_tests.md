@@ -15,7 +15,7 @@
 | Path | What |
 |---|---|
 | `alembic.ini` (repo root) | `script_location = %(here)s/src/db/migrations`; no URL in the file (the URL is built at runtime from the owner secret) |
-| `src/db/migrations/env.py` | the async template (`alembic init --template async`, [tutorial](https://alembic.sqlalchemy.org/en/latest/tutorial.html)), reading `target_metadata = src.db.base.Base.metadata` and running on the connection passed in `config.attributes["connection"]` ([sharing a connection](https://alembic.sqlalchemy.org/en/latest/cookbook.html#sharing-a-connection-across-one-or-more-programmatic-migration-commands)) |
+| `src/db/migrations/env.py` | the **sync** template (review fix R-29: the runner is a one-shot sync script that holds a session advisory lock on one psycopg connection, so the async template's `run_sync` plumbing buys nothing), reading `target_metadata = src.db.base.Base.metadata` and running on the connection passed in `config.attributes["connection"]` ([sharing a connection](https://alembic.sqlalchemy.org/en/latest/cookbook.html#sharing-a-connection-across-one-or-more-programmatic-migration-commands), [tutorial](https://alembic.sqlalchemy.org/en/latest/tutorial.html)) |
 | `src/db/migrations/versions/0001_control_plane.py` | the whole schema of [02a](02a_postgres_schema.md); later changes add revisions, never edit a released one |
 | `scripts/db/migrate.py` | the runner (`upgrade`, `current`, `check`); used by `db-migrate` and the CLI |
 
@@ -30,17 +30,38 @@ RLS policies, the `op_scope_allows` function and the generated `CHECK` lists are
 - **Only the one-shot `db-migrate` service.** No API or worker process runs DDL (FastAPI: "you would
   probably use a migration script that runs before you start your app",
   [SQL databases](https://fastapi.tiangolo.com/tutorial/sql-databases/)).
-- `db-migrate` (api image, `restart: "no"`) connects as `op_owner` on the direct host, takes
-  `pg_advisory_lock(MIGRATE = 2, 0)` on that session for the whole run (the OpenTranscribe runner's
-  pattern), runs `command.upgrade(cfg, "head")` on the same connection, ensures the `op_app` role and
-  grants, unlocks, exits 0. Two migrators started at once serialize; the second finds the schema at
-  head.
-- Every other service has `depends_on: db-migrate: condition: service_completed_successfully`
-  ([depends_on](https://docs.docker.com/reference/compose-file/services/#depends_on)).
+- `db-migrate` (api image, `restart: "no"`) bootstraps the roles as `op_super` ([02a](02a_postgres_schema.md)
+  section 1.5), then connects as `op_owner` on the direct host, takes `pg_advisory_lock(MIGRATE = 2, 0)`
+  on that session for the whole run (the OpenTranscribe runner's pattern), runs
+  `command.upgrade(cfg, "head")` on the same connection, re-applies the `op_app` grants, unlocks.
+  Review fix R-7: it then runs the **OpenSearch step** (`scripts/opensearch/migrate.py`, idempotent):
+  creates the global indexes and every project's `images` and `items` indexes that are missing,
+  applies the mapping migrations, writes each index's mapping fingerprint, and runs the kNN warm-up
+  once (server-side, so once per deployment is enough). It exits 0. Two migrators started at once
+  serialize; the second finds everything at head. No API process creates indexes, migrates mappings
+  or warms kNN any more; the API lifespan only checks the fingerprints read-only and refuses to start
+  on a mismatch (`opensearch_mapping_not_current`), like the Alembic check. Project creation creates
+  its two indexes inside its job (B4 4D).
+- **Who waits on whom (owner decision 2026-11-04 after review R-11):** every Python service except
+  `api` and `db-migrate` itself has `depends_on: db-migrate: condition: service_completed_successfully`
+  ([depends_on](https://docs.docker.com/reference/compose-file/services/#depends_on)); `db-migrate`
+  waits on `postgres` and `opensearch` healthy. The `api` service depends on neither `db-migrate` nor
+  `valkey`: the inference routes (`/detect`, `/faces`, `/embed`, `/ocr`, `/search`, `/health`) keep
+  serving when PostgreSQL or Valkey is down.
 - **Startup check, fail closed:** every process reads `SELECT version_num FROM alembic_version` and
   compares it with the head of the bundled `src/db/migrations` (`ScriptDirectory.get_current_head()`);
-  a mismatch exits with `schema_not_current` naming both revisions. A new image never runs on an old
-  schema, and an old image never runs on a newer one.
+  a reachable database at another revision exits with `schema_not_current` naming both revisions,
+  and an `upgrade_state` row of `in_progress` exits with `upgrade_incomplete` (section 2.2). A new
+  image never runs on an old schema, and an old image never runs on a newer one. Workers and beat
+  also exit when the database is unreachable (compose restarts them). The API does not: an
+  unreachable database at start means "control plane down": the curation and job routes (everything
+  under `/curation`, `/jobs`, the job-start routes of `/models`, `/ingest/directory`,
+  `/persons/cluster`) answer 503 `database_unavailable` (or `queue_unavailable` for Valkey), the
+  inference routes serve, and `/health` and `/ready` name the dependency that is down. The check
+  runs again when the database becomes reachable, and a wrong head then stops the process.
+- **Upgrades are stop-the-world in 0.7.0** (review R-26): the strict head equality means old and new
+  processes never run together. From v0.8.0 migrations follow expand-then-contract, so the check can
+  become "the database head is at or ahead of the code head and marked compatible".
 - `openprocessor upgrade` order: back up Postgres if it exists (section 6) -> pull and verify images
   -> `up -d postgres valkey opensearch` -> `run --rm db-migrate` -> (from 0.6.0 only) the control-data
   step of section 2 -> `up -d --remove-orphans` for the rest.
@@ -81,16 +102,35 @@ and **no** class-registry document; it has `class_registry.json` files. A develo
 ### 2.2 The steps (`scripts/db/upgrade_from_060.py`, called by the installer; code in `src/services/upgrade/from_060/`)
 
 Preconditions: the 0.6.0 API and workers are stopped; OpenSearch is up; Postgres is at head; no
-`upgrade_runs` row for `(0.6.0, delete_sources)` is `completed`.
+`upgrade_runs` row for `(0.6.0, delete_sources)` is `completed`. The load is the one sanctioned large
+transaction (review fix R-25): nothing else runs during it (the precondition), and its expected size
+and time are measured on a 1,000,000-row ledger fixture.
+
+**The gate (review fix R-9a).** Step 1 first writes `deployment_settings('upgrade_state') =
+{"from": "0.6.0", "state": "in_progress"}`; step 4 sets it to `completed` in the transaction that
+records `delete_sources`. While it is `in_progress` (or while `op_projects` still exists in
+OpenSearch), every 0.7.0 process refuses to start with `upgrade_incomplete`, so nothing can write to
+Postgres while the operator fixes a failed verify. `openprocessor status` prints the state and the
+next command.
 
 1. **export_bundle**: read every source above (OpenSearch through an unguarded admin client that
    only issues `GET`, `search` with `search_after`, and `_mapping` reads; files read only) and write
-   `.install/upgrade-0.6.0-<utc>/control_bundle.jsonl.zst` with one record per source document or
-   file, the index mappings and settings of every control index, and a `MANIFEST.json` with counts
-   and the bundle's sha256. Record `upgrade_runs(export_bundle)`.
+   `.install/upgrade-0.6.0-<utc>/control_bundle.jsonl.gz` (gzip from the standard library; review
+   fix R-31: Python 3.13 has no standard-library zstd and no zstd package is pinned) with one record
+   per source document or file, the index mappings and settings of every control index, and a
+   `MANIFEST.json` with counts and the bundle's sha256. The training-run logs (`<id>.run.log`) and
+   any other `/jobs` file a kept row points to are copied to storage keys
+   (`projects/<slug>/training/<run>/run.log`) and listed in the manifest (review fix R-9e), before
+   the `openprocessor-jobs` volume can be removed. Record `upgrade_runs(export_bundle)`.
 2. **load**: one Postgres transaction under deployment scope that inserts everything from the bundle
-   (natural keys, so a re-run after a failure starts clean: the transaction either committed or
-   not). Record `upgrade_runs(load)` in the same transaction.
+   (natural keys); the ledger tables (`dataset_import_images`, `label_operation_members`,
+   `ingest_source_files`) are loaded with `COPY` through psycopg's `cursor.copy()`
+   ([COPY](https://www.psycopg.org/psycopg3/docs/basic/copy.html)), not row inserts (R-25). Record
+   `upgrade_runs(load)` in the same transaction. A load that failed rolled back, so a re-run starts
+   clean. **After a committed load whose verify failed**, the re-run path is
+   `upgrade_from_060 --reset` (review fix R-9b): one transaction that truncates the control tables and
+   deletes the `upgrade_runs` rows, allowed only while `delete_sources` has not completed; then the
+   step runs again from the bundle.
 3. **verify**: counts per table equal the manifest; per project, class ids and names equal the
    source; every config revision body's sha256 equals the source; every `project_indexes.index_name`
    exists in OpenSearch; a class reconciliation over items reports items whose `class_id` is not in
@@ -111,14 +151,23 @@ project is.
 
 ### 2.3 Rollback to 0.6.0
 
-`openprocessor upgrade --rollback` (the existing `backup_install` restore) gains one step:
-`scripts/db/rollback_to_060.py --bundle <path>` recreates each deleted control index from the
-mappings in the bundle, re-indexes the source documents, restores the job files and state files, and
-renames `class_registry.json.migrated-0.7.0` back. The Postgres and Valkey volumes are left unused
-(removable with `openprocessor uninstall --purge-volumes`). Anything created after the upgrade
-(classes, configs, jobs) exists only in Postgres and is not carried back; INSTALLATION's downgrade
-note says to export first. R-final rehearses upgrade, rollback, re-upgrade on a real 0.6.0 install
-(RF-40, RF-62).
+`openprocessor upgrade --rollback` (the existing `backup_install` restore) gains these steps, in
+this order (review fix R-9d), with every 0.6.0 and 0.7.0 API and worker stopped:
+1. start OpenSearch only;
+2. `scripts/db/rollback_to_060.py --bundle <path>` recreates each deleted control index from the
+   mappings in the bundle, re-indexes the source documents, restores the job files and state files
+   (the run logs from their storage keys), and renames `class_registry.json.migrated-0.7.0` back;
+3. verify the recreated documents against the bundle manifest;
+4. mark the Postgres data abandoned (review fix R-9c): after a confirmation, the installer drops and
+   recreates the `openprocessor` database (the Valkey volume is left unused), so a later re-upgrade
+   is a fresh upgrade and cannot collide with the first one's rows;
+5. only then start the 0.6.0 services (a 0.6.0 API that started earlier would create the missing
+   control indexes empty).
+
+Anything created after the upgrade (classes, configs, jobs) exists only in Postgres and is not
+carried back; INSTALLATION's downgrade note says to export first. R-final rehearses upgrade,
+rollback and re-upgrade on a real 0.6.0 install (RF-40, RF-62, RF-63: the re-upgrade gives the same
+counts and ids as the first upgrade).
 
 ### 2.4 Tests
 
@@ -134,6 +183,13 @@ note says to export first. R-final rehearses upgrade, rollback, re-upgrade on a 
 - `tests/upgrade/test_delete_sources_idempotent.py`: delete twice; the second is a no-op.
 - `tests/upgrade/test_rollback_bundle_roundtrip.py`: bundle -> recreate -> the recreated documents
   equal the fixture.
+- `tests/upgrade/test_upgrade_gate.py` (`db`): with `upgrade_state = in_progress` a process start
+  refuses with `upgrade_incomplete`; `--reset` after a committed load and a forced verify failure
+  gives the same rows on the re-run; `--reset` after `delete_sources` refuses.
+- `tests/upgrade/test_load_large_ledger.py` (`db`): a 1,000,000-row ledger loads through `COPY` in
+  one transaction; the time is recorded in the PR.
+- The fixture holds a deprecated class and an active class with the same name, and names that differ
+  only by case, spaces and underscores (review fix R-3).
 - Live: R-final `installer_upgrade` from a real 0.6.0 install with real class registries and an
   in-flight job, then rollback, then re-upgrade.
 
@@ -155,27 +211,29 @@ without capabilities (stage 6 verifies each), `restart: unless-stopped` (except 
 
 | Service | Image | Command and settings | Healthcheck | Volumes | Notes |
 |---|---|---|---|---|---|
-| `postgres` | the Postgres image and digest of [13](13_package_pins.md) section 4 (owner question MQ-2: `18.6-trixie` recommended over `18-alpine`) ([image](https://hub.docker.com/_/postgres)) | `postgres -c max_connections=${OP_PG_MAX_CONNECTIONS:-300} -c shared_buffers=${OP_PG_SHARED_BUFFERS:-512MB} -c password_encryption=scram-sha-256`; env `POSTGRES_USER=op_owner`, `POSTGRES_DB=openprocessor`, `POSTGRES_PASSWORD_FILE=/run/secrets/op_pg/owner_password`; `shm_size: 256m`; `stop_grace_period: 60s` | `pg_isready -h 127.0.0.1 -U op_owner -d openprocessor` (TCP, so the socket-only server the entrypoint runs during first init does not count; spike S0 verifies) | `openprocessor-pg:/var/lib/postgresql` (**18 moved `PGDATA` to `/var/lib/postgresql/18/docker` and the volume to `/var/lib/postgresql`**; 17 and older mount `/var/lib/postgresql/data`) | the entrypoint starts as root and drops to `postgres`; the secret must be readable by that user (S0 records the ownership rule) |
-| `valkey` | the Valkey image and digest of [13](13_package_pins.md) section 4 (`9.1.3-alpine3.24`) ([image](https://hub.docker.com/r/valkey/valkey)) | `valkey-server /run/secrets/op_valkey/valkey.conf --appendonly yes --appendfsync everysec --maxmemory-policy noeviction` (the conf holds only `requirepass`) | `sh -c 'REDISCLI_AUTH="$(cat /run/secrets/op_valkey/password)" valkey-cli ping \| grep -q PONG'` (password not in argv; S1 verifies `valkey-cli` honours the variable, else `redis-cli`, which the image also ships, as Immich uses) | `openprocessor-queue:/data` | no backup (D-24) |
-| `db-migrate` | api image | `python -m scripts.db.migrate upgrade`; `restart: "no"`; mounts the owner and app password files | none (one-shot) | none | every service below `depends_on` it with `service_completed_successfully` |
-| `jobs-worker` | api image | `celery -A src.tasks.app worker -Q jobs --concurrency=${OP_JOBS_CONCURRENCY:-4} --max-tasks-per-child=50 --hostname jobs@%h -E`; `REMAP_SIGTERM=SIGQUIT`; `stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s`; own `PROMETHEUS_MULTIPROC_DIR` tmpfs | the ported pool healthcheck (`scripts/healthcheck/celery_pool_healthcheck.py`) | storage roots as `api`, no `/jobs` | `API_GPU_ID` reservation |
-| `periodic-worker` | api image | `-Q periodic -c 2 --max-tasks-per-child=200 --hostname periodic@%h -E` | pool healthcheck | as `api` | the GPU-arbiter overlay mounts the Docker socket here, not in `api` |
+| `postgres` | `postgres:18.6-trixie` by the digest of [13](13_package_pins.md) section 4 (owner decision 2026-11-04) ([image](https://hub.docker.com/_/postgres)) | `postgres -c max_connections=${OP_PG_MAX_CONNECTIONS:-300} -c shared_buffers=${OP_PG_SHARED_BUFFERS:-512MB} -c password_encryption=scram-sha-256`; env `POSTGRES_USER=op_super`, `POSTGRES_DB=openprocessor`, `POSTGRES_PASSWORD_FILE=/run/secrets/op_pg/super_password`; `shm_size: 256m`; `stop_grace_period: 60s`; `deploy.resources.limits.memory: ${OP_PG_MEM_LIMIT:-4g}` (R-19) | `pg_isready -h 127.0.0.1 -U op_super -d openprocessor` (TCP, so the socket-only server the entrypoint runs during first init does not count; spike S0 verifies) | `openprocessor-pg:/var/lib/postgresql` (**18 moved `PGDATA` to `/var/lib/postgresql/18/docker` and the volume to `/var/lib/postgresql`**; 17 and older mount `/var/lib/postgresql/data`) | the entrypoint starts as root and drops to `postgres`; the secret must be readable by that user (S0 records the ownership rule) |
+| `valkey` | the Valkey image and digest of [13](13_package_pins.md) section 4 (`9.1.3-alpine3.24`) ([image](https://hub.docker.com/r/valkey/valkey)) | `valkey-server /run/secrets/op_valkey/valkey.conf --appendonly yes --appendfsync everysec --maxmemory ${OP_VALKEY_MAXMEMORY:-1gb} --maxmemory-policy noeviction` (the conf holds only `requirepass`); `deploy.resources.limits.memory` above `maxmemory` (R-19) | `sh -c 'REDISCLI_AUTH="$(cat /run/secrets/op_valkey/password)" valkey-cli ping \| grep -q PONG'` (password not in argv; S1 verifies `valkey-cli` honours the variable, else `redis-cli`, which the image also ships, as Immich uses) | `openprocessor-queue:/data` | no backup (D-24) |
+| `db-migrate` | api image | `python -m scripts.db.migrate upgrade` (Postgres, then the OpenSearch step, R-7); `restart: "no"`; mounts the superuser, owner and app password files; waits on `postgres` and `opensearch` healthy | none (one-shot) | none | every Python service below except `api` `depends_on` it with `service_completed_successfully` (R-11) |
+| `jobs-worker` | api image | `celery -A src.tasks.app worker -Q jobs --concurrency=${OP_JOBS_CONCURRENCY:-4} --max-tasks-per-child=50 --max-memory-per-child=${OP_JOBS_MAX_MEMORY_PER_CHILD_KB:-8000000} --hostname jobs@%h -E`; `REMAP_SIGTERM=SIGQUIT`; `stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s`; own `PROMETHEUS_MULTIPROC_DIR` tmpfs; `deploy.resources.limits.memory: ${OP_JOBS_MEM_LIMIT:-24g}` (R-19) | the ported pool healthcheck (`scripts/healthcheck/celery_pool_healthcheck.py`) | storage roots as `api`, no `/jobs` | `API_GPU_ID` reservation |
+| `periodic-worker` | api image | `-Q periodic -c 2 --max-tasks-per-child=200 --hostname periodic@%h -E`; memory limit `${OP_PERIODIC_MEM_LIMIT:-2g}` (R-19) | pool healthcheck | as `api` | never mounts the Docker socket (R-20) |
+| `gpu-arbiter-worker` (GPU-arbiter overlay only) | api image | `-Q arbiter -c 1 --hostname arbiter@%h` | pool healthcheck | as `api` | the only service that mounts the Docker socket; consumes only `arbiter` (review fix R-20) |
 | `open-vocab-worker` | api image | `-Q open_vocab -c 1 --max-tasks-per-child=50` | pool healthcheck | as `api` | |
-| `jobs-beat` | api image | `celery -A src.tasks.app beat -s /run/beat/celerybeat-schedule` (tmpfs) | newest mtime of `/run/beat/celerybeat-schedule*` under 300 s, failing on an empty glob | tmpfs only | single-beat lock (D-60); `deploy.replicas: 1` |
+| `jobs-beat` | api image | `celery -A src.tasks.app beat -s /run/beat/celerybeat-schedule` (tmpfs); memory limit `${OP_BEAT_MEM_LIMIT:-512m}` (R-19) | newest mtime of `/run/beat/celerybeat-schedule*` under 300 s, failing on an empty glob | tmpfs only | single-beat lock (D-60); `deploy.replicas: 1` |
 | `curation-auto-label-worker`, `curation-assist-loop-worker` (`curation`) | api image | `-Q autolabel -c 1 --max-tasks-per-child=20`, `-Q assist_loop -c 1 --max-tasks-per-child=20` | pool healthcheck | as today minus `/jobs` | |
 | `curation-trainer` (`training`) | trainer image | `celery -A src.tasks.runtime.gpu_app worker -Q gpu_train -c 1 --max-tasks-per-child=1` | pool healthcheck | storage roots, `/jobs` removed | |
 | `model-export-worker` (`export`) | export image | `celery -A src.tasks.runtime.gpu_app worker -Q gpu_export -c 1 --max-tasks-per-child=1` | pool healthcheck | models, storage roots | |
 | `curation-evaluator` (`evaluator`) | evaluator image | `-Q gpu_eval -c 1 --max-tasks-per-child=5` | pool healthcheck | storage roots | |
-| `flower` (`monitoring`) | api image | `celery -A src.tasks.app flower --basic-auth-file=/run/secrets/op_flower/auth` (or the env form Flower documents), URL prefix for the gateway | HTTP `/healthcheck` | none | published only on `${OP_BIND_ADDRESS:-127.0.0.1}:4613` (ENV-18) |
+| `flower` (`monitoring`) | api image | `celery -A src.tasks.app flower --conf=/app/scripts/flower/flowerconfig.py` (review fix R-30: Flower documents `--basic-auth` and `FLOWER_BASIC_AUTH`, not a file option; its `--conf` Python file reads `/run/secrets/op_flower/auth` at start, so the secret is never in argv or the environment; spike S1 verifies), URL prefix for the gateway | HTTP `/healthcheck` | none | published only on `${OP_BIND_ADDRESS:-127.0.0.1}:4613` (ENV-18) |
 
 Secrets (generated by the installer with `umask 077` before compose runs, so Docker never creates a
 root-owned directory; never rotated on upgrade; created on `upgrade` and `repair` when missing;
 redacted by `config show`): `secrets/postgres/owner_password`, `secrets/postgres/app_password`,
-`secrets/valkey/password`, `secrets/valkey/valkey.conf`, `secrets/flower/auth`. They are mounted
+`secrets/postgres/super_password` (R-13), `secrets/valkey/password`, `secrets/valkey/valkey.conf`,
+`secrets/flower/auth`. They are mounted
 read-only as directories (`/run/secrets/op_pg`, `/run/secrets/op_valkey`, `/run/secrets/op_flower`),
 the pattern `secrets/vlm` already uses. Services get only the files they need: the API and workers
 get the app password and the Valkey password; only `db-migrate` and the backup command get the owner
-password.
+password; only `postgres` and `db-migrate` get the superuser password.
 
 Named volumes: new `openprocessor-pg`, `openprocessor-queue`; deleted `openprocessor-jobs`.
 
@@ -218,7 +276,7 @@ under its own project name; because no service has a `container_name`, the harne
 | Command | Does |
 |---|---|
 | `openprocessor db backup [--out <dir>]` | `docker compose -p <p> exec -T postgres pg_dump -U op_owner -d openprocessor -Fc` to `<install>/backups/postgres/openprocessor-<utc>.dump` (custom format: compressed, restorable selectively; consistent without blocking writers: [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html)); keeps the newest `OP_DB_BACKUP_KEEP` (default 7) |
-| `openprocessor db restore <file> [--yes]` | stops the API and workers, `pg_restore --clean --if-exists --no-owner --role=op_owner -d openprocessor`, runs `db-migrate` (a dump from an older schema is upgraded), runs `openprocessor db verify`, starts the stack |
+| `openprocessor db restore <file> [--yes]` | stops the API and workers, runs `db-migrate`'s role bootstrap (so `op_owner` and `op_app` exist on a fresh host), `pg_restore --clean --if-exists --no-owner --no-privileges --role=op_owner -d openprocessor` (review fix R-13: no grant is restored before its role exists), runs `db-migrate` (it re-applies the grants and upgrades a dump from an older schema), runs `openprocessor db verify`, starts the stack |
 | `openprocessor db verify` | the D-47 class reconciliation, `project_indexes` vs OpenSearch, `storage_key` existence for promotions and training runs; report only |
 | `openprocessor upgrade` | always takes a backup first when Postgres exists |
 | optional beat task | `op.periodic.db_backup` when `OP_DB_BACKUP_INTERVAL_H` is set (off by default) |
@@ -232,14 +290,18 @@ scope (unchanged).
 
 | Tier | What | How |
 |---|---|---|
-| Offline, Docker-free (`-m 'not live and not families and not db'`, the command CLAUDE.md names) | everything that does not need SQL semantics: services against in-memory repository fakes, wire models, config, the kind table, compose renders, Celery config | unchanged command; nothing new needs Docker here |
+| Offline, Docker-free (`-m 'not live and not families and not db'`) | everything whose outcome depends on no SQL behaviour: wire models, config, the kind table, compose renders, Celery config, and services whose test checks no constraint, lock or RLS (in-memory fakes only there; every service test whose outcome depends on a constraint, lock or RLS is `db`, review fix R-14) | review fix R-4: today every entry point says `-m 'not live and not families'` (`pyproject.toml` addopts, `.github/workflows/ci.yml` twice, `CONTRIBUTING.md`, `CLAUDE.md`), and an explicit `-m` replaces the addopts one. Lane 1-0 changes the addopts expression to `not live and not families and not db`; lane 1D changes both `ci.yml` commands (and PR #477's shard command), `CONTRIBUTING.md` and the `Makefile` `test` target's help text; lane 6D changes `CLAUDE.md`; `tests/test_db_marker_policy.py` asserts the default selection holds no `db` test |
 | `db` (new marker) | repositories, the claim, heartbeat and fencing statements, unique and partial indexes, RLS, the transition trigger, the reaper rules, the events cursor, migrations, the 0.6.0 upgrade | a real Postgres 18 from **testcontainers-python** (`PostgresContainer`, image pinned as in compose) on a developer machine, or from `OP_TEST_DATABASE_URL` (a CI service container: [PostgreSQL service containers](https://docs.github.com/en/actions/use-cases-and-examples/using-containerized-services/creating-postgresql-service-containers)). Selected with `-m db`; when selected and no database can be reached, the fixture **fails** (never skips) |
 | Live harness | the job and event behaviour with real workers | `docker/test/compose.yml` with the new services |
 
 Fixture design (`tests/db/conftest.py`, registered for the whole suite):
-- one container per test session (one per xdist worker), migrated once to head into a template
-  database `op_template`;
-- each test module gets `CREATE DATABASE op_t_<n> TEMPLATE op_template` (fast copy) so concurrency
+- one container per test session **shared by all xdist workers** (review fix R-14; 24 containers at
+  `-n 24` would load the shared host): the controller starts it in `pytest_configure` and passes the
+  URL to the workers through the environment; in CI the service container plays that role through
+  `OP_TEST_DATABASE_URL`;
+- each xdist worker migrates its own template database `op_template_<worker>` (keyed by
+  `PYTEST_XDIST_WORKER`) once to head, so workers never race on one template;
+- each test module gets `CREATE DATABASE op_t_<n> TEMPLATE op_template_<worker>` (fast copy) so concurrency
   tests can commit from several connections; dropped at module end;
 - helpers `project_tx`/`deployment_tx` as in production; a `two_sessions` fixture for races.
 
@@ -258,13 +320,22 @@ Required `db` tests (each red first where it guards a behaviour):
   that polls between the commits emits every event exactly once.
 - `tests/db/test_class_registry.py`: 10 concurrent `ensure_class` for 50 names: 50 classes, unique
   ids, `next_class_id = 50`; rename writes the outbox row in the same transaction.
-- `tests/db/test_connection_budget.py` (pure, no database): section 8 of [02b](02b_jobs_locking_events.md).
+- `tests/config/test_db_connection_budget.py` (pure, no database; the name 02b, 10 and 11 use): section 8 of
+  [02b](02b_jobs_locking_events.md), with the scale factors (R-6).
+
+Each stage file lists the fake-based test modules it deletes or rewrites (review fix R-14):
+`tests/_fake_project_registry.py` (2A), `tests/_registry_doc_fake.py` (2B),
+`tests/_fake_lease_opensearch.py` (6A deletes it with the leases), and the 13 `FileJob` test modules
+(rewritten by the stage-4 and stage-5 lane that owns each family).
 
 The 1-vs-N replica equivalence test runs in B4's live run (the third budgeted run,
-[05_b4_stateless_api.md](05_b4_stateless_api.md) section 7): one scripted scenario with
-`api=1 replica x API_WORKERS=1, jobs-worker=1` and with `api=2 replicas x API_WORKERS=4,
-jobs-worker=2`; the normalized outcomes (job rows, class ids by name, config revisions, event
-sequences per project) must be identical.
+[05_b4_stateless_api.md](05_b4_stateless_api.md) section 7), in the three configurations of 05
+(`API_WORKERS=1`, one `api`, one `jobs-worker`; `API_WORKERS=32`, one replica; `API_WORKERS=4`, two
+`api` and two `jobs-worker` replicas), as two scenarios (review fix R-15): (a) a **sequential**
+scenario whose normalized records (class ids by name, config revisions, terminal job states) must be
+identical across the configurations; (b) a **concurrent** scenario judged by invariants (exactly one
+winner per singleton start, no lost or duplicated event per cursor, `next_class_id` equals the number
+of distinct names), because which racer wins legitimately differs between runs.
 
 ## 8. Trap register (ways it looks done but is not)
 
@@ -284,9 +355,9 @@ sequences per project) must be identical.
 | T-12 | Lease expiry compared on a worker clock | expiry only in SQL with `now()` |
 | T-13 | A long transaction around an OpenSearch or VLM call holds row locks and the events `xmin` | rule 4; a ratchet over `src/services` for network clients used inside `project_tx` blocks (AST: calls on `OpenSearch*`, `httpx`, Triton clients inside `async with project_tx`) |
 | T-14 | A bulk insert of a million `ingest_source_files` rows in one transaction stalls the event feed | batches of 5,000 per transaction |
-| T-15 | `NOTIFY` assumed durable | the consumer always re-reads from its cursor; the 2 s safety tick |
-| T-16 | `LISTEN`, the beat lock or the migration lock sent through a transaction pooler | `OP_DB_DIRECT_HOST`; a test that the pooled engine never issues `LISTEN` or session locks |
-| T-17 | kombu 5.7 pulled under Celery 5.6, or a redis-py the transport does not accept | exact pins (file 13); `pip check` in each image; spike S1 on the pins |
+| T-15 | the Valkey wake-up assumed durable | the consumer always re-reads from its cursor; the 2 s safety tick; a test drops every wake-up and still delivers every event |
+| T-16 | the beat lock or the migration lock sent through a transaction pooler | `OP_DB_DIRECT_HOST`; a test that the pooled engine never issues session locks |
+| T-17 | kombu 5.7 pulled under Celery 5.6, or a redis-py the transport does not accept | exact pins `kombu==5.6.2`, `redis==6.4.0` (file 13, owner decision 2026-11-04); `pip check` in each image; spike S1 on the pins |
 | T-18 | `valkey://` in a URL | `QueueSettings` refuses any scheme but `redis` and `rediss`; test |
 | T-19 | Valkey started with `appendonly no` (its default) or an eviction policy | compose render test asserts the flags |
 | T-20 | Postgres 18 volume mounted at `/var/lib/postgresql/data` (the 17 path) | compose render test; S0 |

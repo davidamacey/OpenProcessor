@@ -64,6 +64,10 @@ Integration branch `int/b5d-processing-plans` from main after 5c merged. Tracks 
 | 4 | `gpu` | P5 | L | based on the integration head after `analyze` merged |
 | 5 | `docs` | P6 | S | last |
 
+Typed responses (#465, owner decision 2026-11-04): the `analyze` and `curation` tracks give every
+operation of the routers they rewrite a `response_model=` (audit BA-6), so #465 closes with the 5d
+PR; the other routers are typed by the W5a-W5c lanes of [00_master_plan.md](00_master_plan.md).
+
 Wire changes (`make contracts` in the same commit): `PlanReport` in route responses, the removed
 legacy flags, `faces_enabled` removed from the analyze responses (#379), curation request narrowing.
 Tracks that change wire models merge last in their wave (risk M19 in `11_risks_cleanup_host.md`).

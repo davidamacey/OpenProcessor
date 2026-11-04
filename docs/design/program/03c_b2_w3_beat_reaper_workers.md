@@ -38,7 +38,7 @@ and the advisory lock of [02b](02b_jobs_locking_events.md) section 4.1.
 | `op.periodic.ingest_dispatch` | `OP_INGEST_DISPATCH_S` (5 s) | `dispatcher.py` `_loop`, `start_ingest_dispatcher`, the `dispatch.lock` flock | `INGEST_DISPATCH, <project lock_key>`; busy -> skip the project |
 | `op.periodic.open_vocab_sweep` | `OP_OPEN_VOCAB_SWEEP_S` (120 s) | `open_vocab_sweeper.py` `_loop`, the `open_vocab_sweep.lock` flock | `OPEN_VOCAB_SWEEP, <project>`; starts `open_vocab_drain` (coalesced by the unique index) |
 | `op.periodic.cache_prune` | the cache's interval | the `.prune.lock` flock and the inline prune from ingest | `CACHE_PRUNE, 0` |
-| `op.periodic.gpu_arbiter` | 15 s | `lifespan._arbiter_reconcile_loop`, `_start_gpu_arbiter`; `training_gpus.lock` and `pause.sentinel` become `gpu_reservations` and `deployment_settings('vlm_paused_for_training')` | `GPU_ARBITER, 0`; intent and outcome in two transactions around the Docker calls |
+| `op.periodic.gpu_arbiter` | 15 s | `lifespan._arbiter_reconcile_loop`, `_start_gpu_arbiter`; `training_gpus.lock` and `pause.sentinel` become `gpu_reservations` and `deployment_settings('vlm_paused_for_training')` | `GPU_ARBITER, 0`; intent and outcome in two transactions around the Docker calls; routed to the dedicated `arbiter` queue, consumed only by `gpu-arbiter-worker` (review fix R-20), so no other periodic task runs in a process that holds the Docker socket |
 | `op.periodic.reload_promoted` | 15 s | the reload in the arbiter loop and `lifespan._reload_promoted_models` (the on-demand route stays) | none (idempotent) |
 | `op.periodic.cluster_refresh` | `OP_CLUSTER_REFRESH_INTERVAL_S` | `cluster_refresh_daemon.py` and its service; the schedule logic stays in `refresh_schedule.py` over `project_state` | `CLUSTER_REFRESH, <project>`; starts `autolabel` through `start_job` only when an `autolabel` consumer is live (`inspect(timeout=1).active_queues()`), else skips |
 | `op.periodic.ivf_retrain_check` | `OP_IVF_RETRAIN_CHECK_S` | the auto-label worker's `_next_retrain` and `last_check` (deleted with the worker in 4D) | `IVF_RETRAIN, <project>`; same consumer gate |
@@ -50,8 +50,10 @@ behaviour and never queues work nothing drains.
 ### 6A-2 Single beat (D-60)
 
 `beat_init` handler: the session advisory lock on a direct connection; exit 3 when held; exit when
-the connection drops. Red: `tests/periodic/test_single_beat_lock.py` (`db`): a second beat process
-exits with `beat_already_running`; killing the first lets a restarted second one take the lock.
+the connection drops; the lock connection carries TCP keepalives and `tcp_user_timeout` (review fix
+R-32, [02b](02b_jobs_locking_events.md) section 4.1). Red: `tests/periodic/test_single_beat_lock.py`
+(`db`): a second beat process exits with `beat_already_running`; killing the first lets a restarted
+second one take the lock; the lock connection's DSN carries the keepalive parameters.
 
 ### 6A-3 Deletions (the old job infrastructure, now without callers)
 
@@ -82,7 +84,8 @@ scrape target (6B).
 ## Lane 6B `b2/scale-out-compose`
 
 **Owns:** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.gpu-arbiter.yml`, new
-`docker-compose.pgbouncer.yml`, `docker/test/compose.yml`, `monitoring/prometheus.yml`, the shell
+`docker-compose.pgbouncer.yml`, `docker/test/compose.yml`, `monitoring/prometheus.yml`,
+`monitoring/alloy-config.alloy`, `monitoring/dashboards/**` (review fix R-12), the shell
 helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|triton|trainer|vlm|opensearch)" scripts/lib openprocessor`),
 `src/services/labeling/vlm_url_policy.py` (own-container recognition), `tests/compose/**`
 (new tests), `tests/installer/test_container_lookup_by_label.py`.
@@ -92,9 +95,9 @@ helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|tr
 | 6B-1 | the stage-4 and stage-5 service changes from the PR notes: `curation-auto-label-worker`, `curation-assist-loop-worker`, `curation-trainer`, `model-export-worker`, `curation-evaluator` run their Celery consumers with the pool healthcheck, `REMAP_SIGTERM=SIGQUIT` and a `stop_grace_period` above the soft timeout; `curation-cluster-refresh` deleted; every `/jobs` mount and the `openprocessor-jobs` volume deleted; `OP_API_LOOPBACK_URL=http://api:8000` on `jobs-worker` | `tests/compose/test_consumers_after_b2.py`: each queue of `TaskQueues.ALL` has exactly the service of [02b](02b_jobs_locking_events.md) section 7.3; no service mounts `/jobs`; `tests/test_queue_consumers_from_compose.py` | `tests/compose/test_overlay_render.py` |
 | 6B-2 | D-54: no service has a `container_name`; scripts and the CLI find containers through Compose (`docker compose -p <p> ps -q <service>`) or the labels `com.docker.compose.project` and `com.docker.compose.service` ([compose labels](https://docs.docker.com/reference/compose-file/services/#labels)); the GPU arbiter's `OP_GPU_ARBITER_CONTAINERS` names services, resolved by label | `tests/compose/test_no_container_name.py`; `tests/installer/test_container_lookup_by_label.py` (fake docker output) | the CLI status test |
 | 6B-3 | scale: `docker compose up --scale api=2 --scale jobs-worker=2` renders; `jobs-beat` stays one replica (`deploy.replicas: 1`); the live harness scales `jobs-worker` instead of declaring two services | `tests/compose/test_scale_render.py` (offline `docker compose config` with the scale flags) | - |
-| 6B-4 | the GPU-arbiter overlay mounts the Docker socket into `periodic-worker` only; its header rewritten (the trade-off text stays, naming the worker) | `tests/compose/test_arbiter_overlay.py` | - |
-| 6B-5 | `docker-compose.pgbouncer.yml` (D-50, opt-in): PgBouncer in transaction mode for the pooled DSN, `OP_DB_POOLER=pgbouncer`, `OP_DB_DIRECT_HOST=postgres` kept for `LISTEN` and the locks; header explains when to use it | `tests/compose/test_pgbouncer_overlay.py`: the API's pooled host is the pooler and its direct host is Postgres | - |
-| 6B-6 | `monitoring/prometheus.yml` scrape targets for the renamed workers (6A-4) | render test | - |
+| 6B-4 | the GPU-arbiter overlay adds the one-process `gpu-arbiter-worker` (queue `arbiter` only) and mounts the Docker socket into it alone; `periodic-worker` never gets the socket (review fix R-20); its header rewritten (the trade-off text stays, naming the worker) | `tests/compose/test_arbiter_overlay.py`: only `gpu-arbiter-worker` mounts the socket and it consumes only `arbiter` | - |
+| 6B-5 | `docker-compose.pgbouncer.yml` (D-50, opt-in): PgBouncer in transaction mode for the pooled DSN, `OP_DB_POOLER=pgbouncer`, `OP_DB_DIRECT_HOST=postgres` kept for the beat and migration locks; the header gives the formula of [02b](02b_jobs_locking_events.md) section 8.1 for when it becomes required (R-6) | `tests/compose/test_pgbouncer_overlay.py`: the API's pooled host is the pooler and its direct host is Postgres | - |
+| 6B-6 | monitoring for replicas and the new services (review fix R-12; the static `api:8000` target sees one replica per scrape and mixes their counters): Prometheus uses `dns_sd_configs` (type A) on each scaled service name, which Docker's embedded DNS answers with every replica, so each replica is its own `instance` (chosen over `docker_sd_configs`, which would need the Docker socket in Prometheus); Alloy keeps logs by the Compose `service` label for every Python service, `postgres` and `valkey`; the dashboards select by `service`, not `container`; an alert on Valkey `used_memory` near `maxmemory` (R-19) | `tests/compose/test_monitoring_targets.py`: every service that consumes a queue of `TaskQueues.ALL`, plus `api`, has a scrape rule and a log rule; no dashboard query selects by `container` | render test |
 
 ## Lane 6C `b2/hardening` (after 6B merged; it edits every service block)
 
@@ -123,7 +126,12 @@ the Celery conventions block in `CLAUDE.md` (routes in `src/config/task_routes/`
 `queue=`, no I/O in `worker_process_init`, no `terminate=True`, restart the worker after task edits,
 one Alembic head, `project_tx` for every project query); INSTALLATION (services, secrets and their
 ownership rule, `max_connections`, backup and restore, PgBouncer overlay, multi-host with a shared
-volume, the 0.6.0 upgrade, the downgrade note); SECURITY (neutral preconditions: the broker and the
+volume, the 0.6.0 upgrade, the downgrade note; review fixes R-26 and R-36: upgrades are stop-the-world
+in 0.7.0 (old and new processes never run together), the GPU-arbiter overlay is single-host, from
+v0.8.0 migrations follow expand-then-contract; a PostgreSQL major version moves only with a release,
+through `db backup` and `db restore`; the operator checklist of the review (back up `secrets/` and the
+Postgres volume, size `OP_PG_MAX_CONNECTIONS` with replicas, `db verify` after any restore, a shared
+POSIX volume for multi-host); the inference API keeps serving without Postgres and Valkey, R-11); SECURITY (neutral preconditions: the broker and the
 database are internal-only with required passwords, JSON-only messages, whoever reaches the broker
 can enqueue work); ATTRIBUTION rows (SQLAlchemy MIT, Alembic MIT, psycopg LGPL-3.0, Celery, kombu,
 billiard BSD-3, redis-py MIT, Flower BSD-3, testcontainers Apache-2.0 (test only), Valkey BSD-3,

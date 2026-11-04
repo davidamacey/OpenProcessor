@@ -33,7 +33,7 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
   4B-4 enforces it);
 - no request handler fans out (`rg -n "asyncio\.gather" src/routers` is empty; services reached
   only from a handler have no `gather` except the J7 ingest data plane, written as `TaskGroup`);
-- the 1-vs-32 live diff (section 7) is empty;
+- the 1-vs-N live check (section 7) passes: an empty diff for the sequential scenario and every invariant for the concurrent one (R-15);
 - the installer default `API_WORKERS` (D-33) is set provisionally as `min(nproc, 32)`, and its
   benchmark against the 32-worker baseline retaken on the B3 engine is recorded in
   `docs/PERFORMANCE.md` in GPU window 2 (step 4B-5; it needs Triton, and only three GPU windows
@@ -206,9 +206,10 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
   `WEB_CONCURRENCY` (the same value uvicorn uses) and fails closed when it is not a positive int.
   Record in INSTALLATION that `--limit-concurrency=512` stays per process (the benchmark shows
   whether it needs sizing too).
-- The database pool follows the same rule: `OP_DB_API_CONNECTIONS_TOTAL` divided by `API_WORKERS`
-  ([02b](02b_jobs_locking_events.md) section 8); the connection-budget test of B2 is re-run with the
-  chosen default.
+- The database pool follows the same rule as a real deployment total (review fix R-6):
+  `floor(OP_DB_API_CONNECTIONS_TOTAL / (API_WORKERS * OP_API_REPLICAS))`, at least 1, no overflow
+  ([02b](02b_jobs_locking_events.md) section 8); the connection-budget test of B2 (1D-6, which takes
+  the scale factors) is re-run with the chosen default and with two replicas.
 - **Red test:** `tests/config/test_api_pools.py`: `API_WORKERS=1` gives the totals, 32 gives
   today's per-process values, 0 or junk fails. **Control:** the lifespan smoke test.
 
@@ -259,8 +260,12 @@ numbers are its first rows).
   and the create service it calls) with `src/utils/stage_timing.py` `stage_timer` (the #414
   pattern); run it 10 times inside the single B4 live run (`-p op-b4-live`, section 7; CPU is enough, no extra harness run) and post the stage
   table to #439 (the coordinator posts; the lane writes the text).
-- **D-32 recommendation:** project creation becomes a `project_create` Celery job (the B2 recipe,
-  plain task idempotent by the project record's `op_type=create`): the route returns 202 with the
+- **D-32 recommendation:** project creation becomes a `jobs` row of kind `project_create` through
+  `start_job` (review fix R-21: the `op_type=create` record was an OpenSearch concept B2 deletes, and
+  the single-entry ratchet refuses a plain task): deployment-level (`project_id` NULL, scope = slug),
+  exclusive per slug, auto-resume (each step checks what already exists: the Postgres rows from 2A,
+  then the two OpenSearch indexes, R-7), registered in `src/config/job_kinds/b4.py` (created empty by
+  B2 lane 1B) and listed in the 02b kind table; the route returns 202 with the
   record in **`building`** (D-32a: reuse the existing project status, which combine already uses
   for a target being built, instead of a new `creating` value); Cropwright shows `building` as it
   does for combine. Alternative: keep it synchronous if one slow step explains the time and can be
@@ -273,7 +278,7 @@ numbers are its first rows).
 
 ## 6b. Events (moved)
 
-The event transport is decided (D-48: a Postgres `events` table plus `NOTIFY`, resumable SSE ids) and
+The event transport is decided (D-48 as approved 2026-11-04: a Postgres `events` table, a Valkey pub/sub wake-up, resumable SSE ids) and
 built in B2 stage 3 ([03e](03e_b2_s3_job_runtime.md)); the JSONL log, its `flock` and `job_lock.py`
 are deleted there. B4 has no events track.
 
@@ -290,9 +295,14 @@ are deleted there. B4 has no events track.
     `API_WORKERS=4` with two `api` replicas and two `jobs-worker` replicas (no `container_name`
     since B2, so `--scale` works). In each run: start, cancel and race jobs; edit, rename and merge classes; save and
     activate configs; resolve and undo a 600-crop batch (sync and 202 paths); create a project;
-    subscribe to SSE and reconnect; read resource links and health. Diff the normalized outcomes
-    (records, class ids by name, config revisions, event sequences per stream). **Pass: an empty
-    diff.**
+    subscribe to SSE and reconnect; read resource links and health. Review fix R-15: two
+    scenarios per configuration. (a) **Sequential**: the same steps one at a time; diff the
+    normalized records (class ids by name, config revisions, terminal job states). **Pass: an empty
+    diff.** (b) **Concurrent**: the races (20 starts of one singleton, concurrent class edits, two
+    SSE clients) judged by invariants, because which racer wins legitimately differs between runs:
+    exactly one winner per singleton start, no lost or duplicated event per cursor, `next_class_id`
+    equals the number of distinct class names, no 5xx. **Pass: every invariant holds** in all three
+    configurations.
   - SSE reconnect with `Last-Event-ID` across replicas (a client moved from one replica to the other
     misses no event).
 - **Benchmarks (4B-5)** are not part of this gate: they run in GPU window 2 (the B5 window).
@@ -327,7 +337,7 @@ are deleted there. B4 has no events track.
 |---|---|---|---|---|
 | D-29 | Q-J7 request fan-out | handler fan-outs become bulk OCC (`occ_update_bulk`); the ingest data plane is the one documented `TaskGroup` exemption | `/ingest` keeps its latency; review and undo batches use two round trips instead of N | B4 kick-off |
 | D-29a | the VLM batch routes (`label_batch`, `verify_region_batch`) (new) | 202 + Celery job; the bounded `TaskGroup` runs in the worker | two wire changes; small UI cost (few Cropwright callers). Alternative: widen the J7 exemption to these two routes (the owner must say so) | 4A-3 |
-| D-30 | Q-J13 event transport | replaced by D-48 (Postgres `events` + `NOTIFY`), built in B2 stage 3 | - | - |
+| D-30 | Q-J13 event transport | replaced by D-48 (Postgres `events` + a Valkey wake-up), built in B2 stage 3 | - | - |
 | D-31 | Q-J6 evaluator | approved 2026-11-04 (owner decision 4); built in B2 stage 5 | - | - |
 | D-32 | #439 approach | measure first (4D-0); then project creation as a Celery job (202); alternative: keep it synchronous if one slow step explains the time | | after 4D-0 |
 | D-32a | the status during creation (new) | reuse `building` (already used for a combine target) instead of a new `creating` | no new status vocabulary | 4D |

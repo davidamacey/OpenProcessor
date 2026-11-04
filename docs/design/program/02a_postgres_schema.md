@@ -79,38 +79,51 @@ CREATE POLICY p_<t>_project ON <t>
   USING      (op_scope_allows(project_id))
   WITH CHECK (op_scope_allows(project_id));
 
+-- review fix R-13: an unset scope raises (still fail closed, but loud, never a silent empty result)
 CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
-  LANGUAGE sql STABLE AS $$
-    SELECT CASE current_setting('op.scope', true)
-             WHEN 'project'    THEN pid = nullif(current_setting('op.project_id', true), '')::uuid
-             WHEN 'deployment' THEN true
-             ELSE false
-           END $$;
+  LANGUAGE plpgsql STABLE AS $$
+  BEGIN
+    CASE current_setting('op.scope', true)
+      WHEN 'project'    THEN RETURN pid = nullif(current_setting('op.project_id', true), '')::uuid;
+      WHEN 'deployment' THEN RETURN true;
+      ELSE RAISE EXCEPTION 'scope_not_set' USING ERRCODE = 'insufficient_privilege';
+    END CASE;
+  END $$;
 ```
 
 - `src/db/session.py` exposes exactly two ways to open a transaction: `project_tx(session, project)`
-  runs `SELECT set_config('op.scope','project',true), set_config('op.project_id', :id, true)` first;
+  runs `SELECT set_config('op.scope','project',true), set_config('op.project_id', :id, true)` first.
+  Review fix R-13: the scope is held in a context variable and re-applied by a SQLAlchemy
+  `after_begin` session event ([session events](https://docs.sqlalchemy.org/en/21/orm/events.html#sqlalchemy.orm.SessionEvents.after_begin)),
+  so a scoped session that commits and auto-begins again keeps its scope instead of silently losing
+  it;
   `deployment_tx(session, reason)` sets `op.scope = 'deployment'` and is allowed only in the modules a
   ratchet lists (the reaper, beat tasks, the project registry, the upgrade step, admin CLIs).
   `set_config(..., true)` is transaction-local, so it also works behind a transaction pooler.
-- A session that sets neither sees no project rows and can insert none: fail closed.
+- A session that sets neither gets the `scope_not_set` error on its first row-level-secured
+  statement: fail closed, and loud (a bug shows up as an error, not as a wrong 404).
 - Tables with a nullable `project_id` (`jobs`, `events`, `config_documents`, `models`) allow
   `project_id IS NULL` rows only under `deployment` scope (the function returns false for NULL in
   `project` scope).
-- The application role `op_app` is not the table owner, and `FORCE` makes the policy apply to the
-  owner as well (owners bypass RLS unless forced).
+- The application role `op_app` is not the table owner and has `NOBYPASSRLS`. Review fix R-13:
+  "Superusers and roles with the BYPASSRLS attribute always bypass the row security system"
+  ([row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)), so `FORCE` only
+  matters for a non-superuser owner; section 1.5 makes the schema owner a non-superuser.
 - Tests: `tests/db/test_row_level_security.py` (a project-scoped transaction cannot read, update or
-  insert another project's row in every RLS table; an unscoped session sees zero rows).
+  insert another project's row in every RLS table; an unscoped statement raises `scope_not_set`; a
+  scoped session keeps its scope across commit and auto-begin).
 
 ### 1.5 Roles
 
 | Role | Used by | Rights |
 |---|---|---|
-| `op_owner` (the image's `POSTGRES_USER`, a superuser) | `db-migrate`, `openprocessor db backup/restore` only | DDL; owns the schema |
+| `op_super` (the image's `POSTGRES_USER`: the Docker image creates it "with superuser power", [postgres image](https://hub.docker.com/_/postgres)) | bootstrap only: `db-migrate` creates `op_owner` and `op_app` with it, then never again | everything |
+| `op_owner` | `db-migrate` (DDL), `openprocessor db backup/restore` | owns the schema; not a superuser; `BYPASSRLS` so `pg_dump` sees every row (review fix R-13) |
 | `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_allows`; no DDL, not a superuser, `NOBYPASSRLS` |
 
-`db-migrate` creates or updates `op_app` (password from its secret file) idempotently in a `DO`
-block after `alembic upgrade head`, and re-applies the grants.
+`db-migrate` connects as `op_super` only to create `op_owner` and `op_app` idempotently (passwords
+from their secret files), then runs `alembic upgrade head` as `op_owner`, and re-applies the grants.
+The superuser password file is mounted only into `postgres` and `db-migrate`.
 
 ## 2. Projects and deployment tables
 
@@ -212,13 +225,17 @@ CREATE TABLE project_classes (
   added_at       timestamptz NOT NULL DEFAULT now(),
   updated_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (project_id, class_id),
-  UNIQUE (project_id, name),
+  name_key       text NOT NULL CHECK (name_key ~ '^[a-z0-9_]+$'),  -- normalize_class_name(name); R-3
   FOREIGN KEY (project_id, merged_into) REFERENCES project_classes(project_id, class_id),
   CHECK (merged_into IS NULL OR merged_into <> class_id),
   CHECK (merged_into IS NULL OR deprecated)
 );
 CREATE UNIQUE INDEX uq_project_classes_hotkey
   ON project_classes (project_id, hotkey_letter) WHERE hotkey_letter IS NOT NULL;
+-- review fix R-3: names compare by their normalized key, and a name may be reused after deprecation
+CREATE UNIQUE INDEX uq_project_classes_active_name
+  ON project_classes (project_id, name_key) WHERE NOT deprecated;
+CREATE INDEX ix_project_classes_name_key ON project_classes (project_id, name_key);
 
 CREATE TABLE search_projection_tasks (       -- outbox for the class-name projection (D-47)
   id          uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -235,16 +252,25 @@ CREATE INDEX ix_search_projection_tasks_pending ON search_projection_tasks (crea
 Rules:
 
 - **`ensure_class(project, name)`** (import, combine, the VLM and open-vocabulary passes):
-  `SELECT class_id FROM project_classes WHERE project_id = :p AND name = :n`; if absent, lock the
-  registry row (`SELECT next_class_id FROM class_registries WHERE project_id = :p FOR UPDATE`),
-  re-check the name, insert with `class_id = next_class_id`, increment `next_class_id` and
-  `revision`, commit. Two writers serialize on the registry row; ids are never reused; the unique
-  name constraint is the last line of defence. `add_class` (the route) answers 409 on an existing
-  name, as today.
-- **Name matching** keeps the current registry's rule: the stage-2 lane re-reads it
-  (`rg -n "def (ensure_class|add_class|_normalize|normalize)" src/clients/curation_opensearch`) and
-  encodes the same normalization before the unique comparison; a test pins it on "Car", "car",
-  "car " and a non-ASCII name.
+  `key = normalize_class_name(name)` (an empty key refuses with `class_name_invalid`);
+  `SELECT ... FROM project_classes WHERE project_id = :p AND name_key = :key`, choosing as
+  `resolve_class_by_name` does today: an active class wins over a deprecated one, then the exact
+  spelling, then the lowest id. No active match: lock the registry row
+  (`SELECT next_class_id FROM class_registries WHERE project_id = :p FOR UPDATE`), re-check, insert
+  `(class_id = next_class_id, name = btrim(name), name_key = key)`, increment `next_class_id` and
+  `revision`, commit. Two writers serialize on the registry row; ids are never reused; the partial
+  unique index `uq_project_classes_active_name` is the last line of defence. `add_class` (the route)
+  answers 409 when an active class has the same key, as today.
+- **Name matching** is the current rule, read from the code (review fix R-3):
+  `src/utils/class_names.py::normalize_class_name` lowercases, turns every run of characters outside
+  `[a-z0-9]` into one `_` and trims edge underscores, so "Car", "car", "car " and "CAR" are one class
+  and "traffic light" equals "traffic_light"; `resolve_class_by_name` says "a name may be reused
+  after deprecation, so both can exist" (an active class wins); `registry.py::_add` strips the name and
+  refuses a duplicate only against an active class. `name_key` is written only by
+  `src/services/classes/resolve.py` from `normalize_class_name`; the stored `name` keeps the
+  spelling. The 2E fixture includes a deprecated class and an active class with the same name, and
+  2B-1's test pins "Car" / "car" / "car " / "traffic light" vs "traffic_light", a reused name after
+  deprecation, and a name with no slug-safe character (refused).
 - **No cap** (D-57): the 10,000-class limit and `registry_full` existed for the size of one
   OpenSearch document; both go. `registry_conflict` and `registry_not_migrated` go too (no OCC loop,
   no migration state at runtime).
@@ -744,8 +770,12 @@ CREATE TABLE bakeoff_runs (
 ```
 
 Rules: a model shared into another project maps classes by name (`models.labels` against the
-consumer's `project_classes.name`), never by position, as today; `model_shares` rows are visible to
-the consumer project through a second RLS policy (`USING (op_scope_allows(consumer_project_id))`).
+consumer's `project_classes.name_key`), never by position, as today. Review fix R-13: the consumer
+reads its shares through a second policy that is `FOR SELECT` only
+(`CREATE POLICY p_model_shares_consumer ON model_shares FOR SELECT USING (op_scope_allows(consumer_project_id))`),
+so a consumer can never insert a share of a model it does not own (foreign-key checks bypass RLS);
+only the owning project's scope inserts or deletes shares. The consumer reads the shared `models`
+row through `CREATE POLICY p_models_shared ON models FOR SELECT USING (EXISTS (SELECT 1 FROM model_shares s WHERE s.model_id = models.id AND op_scope_allows(s.consumer_project_id)))`.
 
 ## 8. Upgrade bookkeeping
 

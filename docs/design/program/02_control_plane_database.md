@@ -5,7 +5,7 @@
 | Status | plan, not started. Owner decisions 1-8 of 2026-11-04 are applied (approved) |
 | Release | part of the single v0.7.0 release; built by B2 ([03_b2_overview.md](03_b2_overview.md)) |
 | Files | this file (why, rules, the data-ownership table, the inventory with a destination for every item, the decisions); [02a_postgres_schema.md](02a_postgres_schema.md) (every table); [02b_jobs_locking_events.md](02b_jobs_locking_events.md) (jobs, claims, cancel, reaper, events, queues, pools); [02c_migration_ops_tests.md](02c_migration_ops_tests.md) (Alembic, the 0.6.0 upgrade and rollback, compose services, backup, storage seam, tests, traps) |
-| Decisions | the register in [00_index.md](00_index.md) section 6: approved D-39..D-45 (the owner decisions), open D-46..D-63 (section 7 below has the plain question and the recommendation for each) |
+| Decisions | the register in [00_index.md](00_index.md) section 6: approved D-39..D-45 (the owner decisions), D-46..D-63 approved 2026-11-04 as a block (section 7 below keeps the plain question and the recommendation for each), D-64..D-67 added after the review [00c](00c_plan_review.md) |
 | Package versions | not here: `13_package_pins.md` (written on its own branch) owns every exact pin. This set only names the packages |
 
 Verified against `origin/main` at `7f3453de` on 2026-11-04 (read only, with `rg`). Line numbers move;
@@ -56,9 +56,12 @@ models, datasets, exports), addressed by storage keys that Postgres records.
 6. **Class identity is the name at every boundary.** Inside one project the registry's `class_id`
    is a stable foreign key (ids are never reused); import, combine, export, train, promote and model
    sharing map by name, as today.
-7. **Fail closed.** Postgres unreachable: every write route and every job start answers 503;
-   `/health` reports `database: down`. A schema that is not at the code's Alembic head refuses to
-   start the process (`schema_not_current`). An unbound project matches no row.
+7. **Fail closed.** Postgres unreachable: every curation write route and every job start answers
+   503; `/health` and `/ready` report `database: down`. The inference routes (`/detect`, `/faces`,
+   `/embed`, `/ocr`, `/search`, `/health`) need neither Postgres nor Valkey and keep serving (owner
+   decision 2026-11-04, review R-11). A reachable database whose schema is not at the code's Alembic
+   head refuses to start the process (`schema_not_current`). An unbound project raises
+   `scope_not_set` in the database (R-13).
 8. **Stateless processes.** The API, every Celery worker and beat keep no state another process
    needs: shared state lives in Postgres, Valkey or OpenSearch; blobs behind the storage seam.
    Scalable services carry no fixed `container_name` (D-54).
@@ -114,7 +117,7 @@ models, datasets, exports), addressed by storage keys that Postgres records.
 | bake-off jobs and results | `bakeoff_jobs/*.job.json` + `status.json` (`bakeoff_runner.py:385-421`) | Postgres `jobs` (kind `bakeoff`) + `bakeoff_runs`; result files in storage | - |
 | GPU reservations and the VLM pause sentinel | `training_gpus.lock`, `vlm_worker/pause.sentinel` (`gpu_arbiter_policy.py:28-154`) | Postgres `gpu_reservations` (keyed by host and GPU index) | - |
 | trainer capabilities | `.trainer_capabilities.json` (`preflight_checks.py:292`) | Postgres `worker_capabilities` (written by the `gpu_train` worker at start) | - |
-| events for the UI | `events.jsonl` with `flock` (`event_hub.py:77,186,238,261`) | Postgres `events` + `NOTIFY` (D-48) | SSE `id:` is the `events.id` |
+| events for the UI | `events.jsonl` with `flock` (`event_hub.py:77,186,238,261`) | Postgres `events` + a Valkey wake-up (D-48) | SSE `id:` is the `events.id` |
 | person names and merges on the global faces index | `visual_search_faces` (`src/clients/opensearch/indexes.py`) | stays in OpenSearch for this program | out of scope: core inference data, not project control data |
 
 ### 3.3 The class name on items
@@ -164,7 +167,7 @@ workers keep using `region_status` as their item state machine (D-53).
 | `curation/assist_loop/job.py:28`, `store.py:26` | assist loop | kind `assist_loop` (4D) |
 | `curation/autolabel/job.py:67` | auto-label | kind `autolabel` (4D) |
 | `training/promote_job.py:23` | promote | kind `promote` + `promotions` (stage 5, lane 5D) |
-| `curation/lease_heartbeat.py:42` | fence and heartbeat | deleted; `src/services/jobs/heartbeat.py` (stage 3) |
+| `curation/lease_heartbeat.py:42` | fence and heartbeat | deleted; `src/tasks/runtime/heartbeat.py` (stage 3; in the runtime package so the GPU images can import it, R-2) |
 | `projects/busy.py:204,216,364` (reads state files) | "is this project busy" | one query on `jobs` (stage 3) |
 
 The 13 test modules that import `FileJob` (agent inventory of 2026-11-04) are rewritten with the
@@ -191,7 +194,7 @@ family that owns them; none survives as a file-protocol test.
 | Code | Destination |
 |---|---|
 | `src/clients/job_lease.py` (`acquire`, `takeover_expired`, `renew`, `release`, `is_live`; `transfer` has no callers) and `src/domain/job_lease.py` (19 kinds; `BULK_INGEST`, `SOURCE_SCAN` have no callers) | deleted in stage 3; the job claim, heartbeat and fencing in Postgres replace them ([02b](02b_jobs_locking_events.md) sections 2-4) |
-| `src/services/curation/lease_heartbeat.py` (thread with its own loop and client, `may_write()` self-fence) | replaced by `src/services/jobs/heartbeat.py`: the same thread shape with its own database connection; `may_write()` stays for OpenSearch writes (stage 3) |
+| `src/services/curation/lease_heartbeat.py` (thread with its own loop and client, `may_write()` self-fence) | replaced by `src/tasks/runtime/heartbeat.py` (R-2): the same thread shape with its own database connection; `may_write()` stays for OpenSearch writes (stage 3) |
 | lease callers outside jobs: `LABEL_OP`, `LABEL_UNDO` (`label_ops/record.py:39`, `undo.py:192-201`), `LEGACY_REPAIR` (`legacy_repair.py:95`), `PROMOTE_JSON` (`promote_json.py:52`), the `ASSIST_LOOP` short lease (`assist_loop/job.py:180,204`) | label op and undo become exclusive `jobs` rows with `requested_by='api'` that run inline (short, no Celery: [02b](02b_jobs_locking_events.md) section 2.5); legacy repair becomes a migration-time step and is deleted with the rest of the 0.6.0 repair code (stage 2); the other two disappear with their files |
 | class registry: `registry.py`, `registry_mirror.py`, `registry_transfer.py`, `scripts/curation/migrate_class_registry.py`, `scripts/lib/registry_migration.sh`, CLI `curation migrate-registry` (`scripts/lib/cli_core.sh:236-258`), 409 `registry_not_migrated`, `registry_full`, `registry_conflict` | deleted in stage 2; `src/services/classes/` over `src/db/repos/classes.py`. The 0.6.0 file migrates in the upgrade step ([02c](02c_migration_ops_tests.md) section 2). `class_registry.json` stays only inside exports and training pins (the six readers in the inventory) |
 | config store: `src/services/config_store/` (`index.py`, `store.py`, `global_store.py`, `store_poll.py`), `vlm_endpoints.py`, `vlm_activation.py`, `vlm_snapshot.py`, `keymap.py`, `settings_doc.py`, `policy_doc_store.py` | rewritten over `src/db/repos/config.py` and `settings.py` (stage 2); the poll stays (5 s, `OP_CONFIG_POLL_S`) but reads one integer, `projects.config_epoch` |
@@ -203,7 +206,7 @@ family that owns them; none survives as a file-protocol test.
 |---|---|
 | registry poll (`projects/bootstrap.py:211,266`, 1 s) | stays per process; reads `deployment_counters('projects_revision')` |
 | config poll (`config_store/store_poll.py:132,149`, 5 s) | stays per process; reads `config_epoch` |
-| event-hub tail (`event_hub.py:444`, 0.25 s) | replaced by one `LISTEN` connection per API process (stage 3) |
+| event-hub tail (`event_hub.py:444`, 0.25 s) | replaced by one Valkey pub/sub subscription per API process plus a 2 s safety tick over the Postgres `events` table (stage 3; owner decision 2026-11-04, R-6) |
 | ops-metrics refresh (`ops_metrics_refresh.py:248-267`) | stays (writes only its own Prometheus files) |
 | kNN warm-up (`core/dependencies.py:160`) | stays |
 | startup reconcile (`lifespan.py:143`) | deleted; reaper (stage 3) |
@@ -276,7 +279,7 @@ Per project: 6 indexes become 2, so the shard budget per project drops from 6 to
 | D-21: status, progress and cancel stay in job files; `/jobs` stays single-host | former 03 section 12 | replaced by D-39 |
 | D-22: the trainer, the export worker and the evaluator keep their file protocols | former 03 sections 5.3, 23 | all three become Celery GPU consumers (owner decision 4) |
 | global serialization comes from `-c 1` and one container with a fixed `container_name` | former 03 section 6 | correctness comes from database exclusivity; `-c 1` is only a capacity choice, so every worker can scale |
-| B4-4C moves events to Redis Streams after a spike (D-30) | 05 section 6b | events are a Postgres table plus `NOTIFY`, built in B2 stage 3 (D-48); the JSONL log and the last `flock` go in B2 |
+| B4-4C moves events to Redis Streams after a spike (D-30) | 05 section 6b | events are a Postgres table plus a Valkey wake-up (it was `NOTIFY` until the review), built in B2 stage 3 (D-48); the JSONL log and the last `flock` go in B2 |
 | B1's registry migration (`migrate-registry`, `.migrated` rename, 409 `registry_not_migrated`) is the upgrade path | B1, 08 section 5 step 11 | B1 never shipped in a release; 0.7.0 migrates `class_registry.json` straight to Postgres in the upgrade step, and the B1 registry document code is deleted |
 | "Valkey only if a redistributor objects" (D-18) | 00 section 6 | Valkey 9 is approved (owner, 2026-11-04) |
 | the queued marker and lease state live in OpenSearch documents | former 03 section 9 | the job row holds queue state; the queued marker stays a Valkey key because it must share fate with the broker message ([02b](02b_jobs_locking_events.md) section 3.2) |
@@ -295,10 +298,10 @@ Per project: 6 indexes become 2, so the shard budget per project drops from 6 to
 | `src/db/repos/` | db | repositories: every SQL statement lives here | as above, plus `src/db/models` |
 | `src/db/migrations/` + `alembic.ini` at the repo root | db | Alembic environment and versions | as above |
 | `src/core/db_session.py` | core | the FastAPI dependency (`DbSessionDep`) | `src/db`, `fastapi` |
-| `src/services/jobs/` | services | start, cancel, resume, status, progress, reaper rules, the heartbeat thread | `src/db`, `src/clients/task_queue.py` |
+| `src/services/jobs/` | services | API side: start, cancel, resume, status, the reaper rules | `src/db`, `src/clients/task_queue.py`, `src/tasks/runtime/` (the heartbeat class, for inline jobs) |
 | `src/services/classes/`, `src/services/events/` | services | class registry, events and SSE fan-out | `src/db` |
 | `src/tasks/` | tasks | Celery app, the `JobTask` wrapper, task modules | services, db, config |
-| `src/tasks/runtime/` | tasks | the wrapper and its bookkeeping, importable without FastAPI, OpenSearch or torch (the trainer image imports it) | `src/db`, `src/config`, `src/domain`, `src/utils` only |
+| `src/tasks/runtime/` | tasks | the wrapper and its bookkeeping, the heartbeat thread, progress and checkpoint writes (fenced, through `src/db/repos/jobs.py`), the event row (through `src/db/repos/events.py`) and the Valkey wake-up (`event_wakeup.py`); importable without FastAPI, OpenSearch or torch (the trainer image imports it); the OpenSearch client factory is injected by the handler module (review fix R-2) | `src/db`, `src/config`, `src/domain`, `src/utils` only (plus `redis`, `celery`) |
 | `src/clients/storage/` | clients | the storage seam (local backend) | `src/config`, `src/utils` |
 | `src/clients/task_queue.py` | clients | producer, revoke, queued marker | `celery`, `redis`, `src/config` |
 
@@ -306,7 +309,9 @@ Layering contracts added to `scripts/codegen/check_layering.py` (stage 1): `src/
 `src.services`, `src.clients`, `src.routers`, `fastapi`; `src/{config,domain,utils,schemas}` import no
 `src.db`; nothing under `src/` except `src/tasks/` imports `src.tasks`; `src/tasks/runtime/` imports
 only `src.db`, `src.config`, `src.domain`, `src.utils` (checked by a fresh-interpreter test, as in
-`tests/tasks/test_no_cuda_import.py`).
+`tests/tasks/test_no_cuda_import.py`, and by a planted-import red test in 1A-11: a runtime module
+importing `src.services` fails, review R-2); `src/routers` imports no `src.db.repos` (handlers go
+through services, review section 3.4).
 
 ## 7. Decisions (plain question first, then the code)
 
@@ -317,15 +322,16 @@ export included, and every file protocol is deleted (D-22's scope); **D-42** clo
 **D-44** exact pins at the latest installable versions (file 13); **D-45** plain names first. Also
 approved that day: **D-17** Celery 5.6, **D-18** Valkey, **D-31** the evaluator on `gpu_eval`.
 
-Open, with this plan's recommendation:
+Approved by the owner on 2026-11-04 as a block (the rows below keep their text for the record; D-48
+and D-50 as amended after the review of [00c](00c_plan_review.md)):
 
 | ID | Plain question | Recommendation | Why | Detail |
 |---|---|---|---|---|
 | D-46 | Where do images, crops, models and exports live when there is more than one host: a shared volume, or an S3-compatible object store? | 0.7.0 ships the storage seam with the local backend, so a shared POSIX volume (NFS or similar) is the multi-host answer now; an S3-compatible backend follows in v0.8.0 | the seam (keys in Postgres, no absolute paths) is what avoids a structural change later; an S3 backend now would touch the trainer, Triton loading and every image read in the same release | [02c](02c_migration_ops_tests.md) section 5 |
 | D-47 | Should items keep the class name next to the class id? | yes, as a search projection owned by Postgres, rewritten by one job after a rename or merge, checked by a verifier | removing it touches 210 files; the projection has one writer path and cannot be forgotten (outbox row in the same transaction) | section 3.3 |
-| D-48 | How do job progress and other events reach the browser? | a Postgres `events` table plus `NOTIFY`, one listener connection per API process, SSE ids are event ids | one store for state and its feed, project-scoped rows, works across hosts; no second system on the UI path | [02b](02b_jobs_locking_events.md) section 6 |
+| D-48 | How do job progress and other events reach the browser? | a Postgres `events` table (the durable record and the resume cursor), woken by Valkey pub/sub (owner, 2026-11-04, review R-6; not a per-process `LISTEN`), SSE ids are event ids | one store for state and its feed, project-scoped rows, works across hosts; no second system on the UI path | [02b](02b_jobs_locking_events.md) section 6 |
 | D-49 | Does Celery keep task results anywhere? | no result backend (`task_ignore_result=True`); the `jobs` table is the only truth | a second state store would drift from the first | [02b](02b_jobs_locking_events.md) section 7 |
-| D-50 | Does the default install include a connection pooler (PgBouncer)? | no; document an opt-in overlay for multi-host scale-out | one host fits `max_connections` (section 8 of 02b); a pooler forbids session features we use for `LISTEN` and the migration lock | [02b](02b_jobs_locking_events.md) section 8 |
+| D-50 | Does the default install include a connection pooler (PgBouncer)? | no; an opt-in overlay, required when the connection formula of 02b section 8 with the planned scale factors exceeds `max_connections` (R-6) | one host fits `max_connections` (section 8 of 02b); a pooler forbids the session features the beat and migration locks use | [02b](02b_jobs_locking_events.md) section 8 |
 | D-51 | What happens to jobs that were running when a 0.6.0 install is upgraded? | they are recorded as `interrupted` without automatic resume; the user restarts them | resuming a 0.6.0 cursor in 0.7.0 code is untested ground | [02c](02c_migration_ops_tests.md) section 2 |
 | D-52 | Which 0.6.0 job histories are moved into Postgres? | the ones with lasting meaning: training runs, promotions, models, dataset imports (undo needs them), exports, label operations, combine provenance; the transient ones (reprocess, probe, scores, selection, viz, cluster, assist runs) stay only in the upgrade bundle | keeps the migration small and tested | [02c](02c_migration_ops_tests.md) section 2 |
 | D-53 | Do the detection and VLM workers become Celery tasks? | no: they stay stream workers over item states, and each replica claims whole projects through a Postgres lease so two replicas never work one project | one message per item would duplicate OpenSearch state and lose batching; project claims are the smallest change that makes replicas safe | [02b](02b_jobs_locking_events.md) section 5 |

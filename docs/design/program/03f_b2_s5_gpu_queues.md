@@ -12,7 +12,13 @@
 | Compose project | none in the lanes; no GPU in any lane (handlers are tested with fakes; the GPU smoke runs in a budgeted GPU window, below) |
 
 The three GPU images (trainer, export, evaluator) import only `src/tasks/runtime/` and the database
-layer, and build their Celery app with `src/tasks/runtime/gpu_app.py::make_app(include=[<handler module>])`.
+layer (the heartbeat, the fenced job writes, the event row and the Valkey wake-up all live there,
+review fix R-2), and build their Celery app with `src/tasks/runtime/gpu_app.py::make_app(include=[<handler module>])`
+(the same `broker_transport_options` as every other app, R-33). Review fix R-27: each GPU image gets
+`psycopg[c,pool]` like the api image, so 5A adds the build step (compiler and `libpq-dev` in the
+trainer's builder stage) and `libpq5` in its runtime stage, and 5B does the same for the `export`
+and `evaluator` targets of the root `Dockerfile`; a fresh-interpreter test in each image imports
+`psycopg` and reports `psycopg.pq.__impl__ == "c"`.
 Each GPU consumer runs `-c 1 --max-tasks-per-child=1` (5 for the evaluator), so every run gets a
 fresh child and releases GPU memory when it ends.
 

@@ -21,7 +21,7 @@
    `start_job`'s `with_rows=` hook in the same transaction. Delete the module's `asyncio.create_task`,
    its `_tasks` / `_active_tasks` / `_TASKS` dict, its B1 lease acquire and release, its
    `reconcile_orphaned_jobs`, and its entry in `startup_reconcile.JOB_MODULES`.
-3. **Task.** In `src/tasks/<lane module>.py`: `register_job('<kind>', handler)` where `handler(ctx)`
+3. **Task.** In `src/tasks/<lane module>.py`: `register_job('<kind>', handler, client_factories=...)` (the OpenSearch factory is injected here, never imported by `src/tasks/runtime/`, R-2) where `handler(ctx)`
    calls the **existing** run coroutine with clients from `ctx` (never from a request).
 4. **State.** Replace `FileJob` reads and writes: progress through `ctx.progress`, resume cursors
    through `ctx.checkpoint`, cancel through `ctx.cancelled()`, results as the handler's return value.
@@ -29,7 +29,11 @@
 5. **Status and cancel routes** read the `jobs` row (plus the family's domain row) through the one
    serializer; add `queued` to the status union where it is missing (`rg -n "Literal\[" src/routers/curation/_*_models.py src/schemas/curation | rg running`),
    `make contracts` in the same commit. Cancel calls `cancel_job`.
-6. **Bounded concurrency (CC-9).** Where the family's code has an uncapped `gather` over a large
+6. **Tests that used fakes (review fix R-14).** The family's `FileJob` test modules (13 today) are
+   rewritten in the same commit: a test whose outcome depends on a constraint, lock or RLS becomes a
+   `db` test; only tests that check no SQL behaviour keep an in-memory fake. The lane's PR notes list
+   every test module it deleted or rewrote.
+7. **Bounded concurrency (CC-9).** Where the family's code has an uncapped `gather` over a large
    list, rewrite it as `asyncio.TaskGroup` with an `asyncio.Semaphore` bound
    ([task groups](https://docs.python.org/3/library/asyncio-task.html#task-groups)).
 

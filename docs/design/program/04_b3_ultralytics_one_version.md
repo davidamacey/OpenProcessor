@@ -78,8 +78,12 @@ B3 does not touch the base images.
 ## 4. Branches, worktrees, tracks and merge order
 
 - Integration branch: `int/b3-ultralytics`, cut from main **after B2 merged** (owner decision 6).
-  Lane coding may start earlier from main-after-B1 only on the coordinator's say-so (B3 touches no
-  B2 file); such lanes rebase onto main-after-B2 before their merge.
+  Lane coding may start earlier only on the coordinator's say-so; such lanes rebase onto
+  main-after-B2 before their merge. Review fix R-18: B3 **does** touch B2 files: B3-E2 edits
+  `export/export_worker.py`, which B2 lane 5B rewrites, and Stage A edits `docker/trainer/Dockerfile`
+  and the root `Dockerfile`, which 5A and 5B edit. So every B3 track re-verifies each file and symbol
+  it names on the post-B2 head before coding (this file's "verified against" note predates B2), and
+  only `frame` (adapters and `affine.py`, no B2 file) may code before B2 merges.
 - Each track: branch `b3/<track>`, worktree `<repo>-wt-b3-<track>`, one Sonnet agent.
 - Tracks merge into `int/b3-ultralytics` with `git merge --no-ff`, one merge commit per track, in
   this order. A failed stage reverts as a group (`git revert -m 1 <merge>` per track).
@@ -399,7 +403,7 @@ Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
 | G8 | original YOLOv5 ONNX as the ingest secondary on a 500-image COCO subset: ingest completes, classes resolved by name (U-C10) | pass |
 | G9 | image audit: export image size before/after (expect about -0.9 GB), `pip check` in each image, `importlib.metadata.version('ultralytics') == X` in API, export and trainer images, Trivy, image-vs-git audit | all pass |
 | G10 | **B0 OCR before/after comparison** (moved out of B0; procedure and pass rule owned by `01_b0_close_out.md` B0-3, run unchanged). "Before" = the pre-B0 tree (`5b95591f`, API and Triton images plus its `models/ocr_pipeline/1/*.py`); "after" = the merged tree at the integration head. Needs: both image sets under local-only tags, the OCR engines built once and shared (B0 changes no engine), compose project `op-ocr-b0` (own ports), GPU 0 (GPU 2 per the host rules), the public image set of B0-3 step 4 (COCO-Text ids, EXIF 6 and 8 copies, RGBA PNGs). Compare boxes, text and `image_size` per image | B0-3's pass rule (boxes overlay the text on 10 opened images, rotated copies match `image_size`, no new errors), about 2 h. Result goes to `docs/PERFORMANCE.md`; a rejected OCR change is reverted by the OCR-only path in `01_b0_close_out.md` |
-| G11 | **pins part B image smokes** ([13](13_package_pins.md) section 6): `pip check` in each built image (builder stage where the runtime has no pip); the API image imports `cv2, faiss, cupy, onnxruntime, torch, transformers, open_clip, huggingface_hub` and lists the CUDA provider; the export image also imports `tensorrt` and both CuPy wheels and runs one ModelOpt AutoCast export; the Triton image prints its numpy version and runs the GPU decode tests on CuPy 14; the segmenter starts and downloads its weights with `huggingface-hub` 2; the PE weight download script runs; MLflow client and server on one minor (checked inside G6's training run) | every import and test passes; a failure names the bump and its fallback from 13 section 8 |
+| G11 | **pins part B GPU smokes** ([13](13_package_pins.md) section 6; review fix R-17: the parts that need no GPU, `pip check` in each built image, the plain imports, the segmenter's weight download and the PE weight download script, run earlier in the W3 sweep on CPU image builds): the API image lists the CUDA execution provider; the export image imports `tensorrt` and both CuPy wheels on the GPU and runs one ModelOpt AutoCast export; the Triton image runs the GPU decode tests on CuPy 14; the segmenter starts on the GPU; MLflow client and server on one minor (checked inside G6's training run); the OpenCV 5 parity set includes `cv2.dnn.blobFromImage` in `src/utils/scrfd_decode.py` (reworked in OpenCV 5) through the face gate of G7 | every check passes; a failure names the bump and its fallback from 13 section 8 |
 | G12 | **B2 stage-5 real-GPU smoke** ([03f](03f_b2_s5_gpu_queues.md) "GPU check"): one short training run through `gpu_train`, one export of a small model through `gpu_export`, one 20-image bake-off through `gpu_eval` | each job ends `completed`, its progress reached the SSE stream, its artifacts are under its storage prefix |
 
 **Verdict.**
@@ -409,6 +413,12 @@ Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
   the TensorRT plugin deprecation note; take the G4 numbers to the owner (U-J1). Re-run only
   G2 and G9 on the reverted head.
 - EA fails: stop. Report to the owner; nothing merges to main.
+- **Contingency (review fix R-17):** the window has a written cap of its 1.5 GPU days plus one day.
+  On an EA failure the first action is the named fallback pins of 13 section 8 for the bumps the
+  failing step points at (for example torch 2.14.1 on `cu130`, OpenCV 4.14.0.94, CuPy 13.6.0), as one
+  commit on the integration branch, then a re-run of the failing steps only; a bisect over the part B
+  commits is the second action, and only inside the cap. Past the cap, the coordinator reports to
+  the owner instead of extending the window.
 
 ## 7. Test cycle (once per batch)
 
@@ -417,7 +427,7 @@ Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
 | T0 | each task's red test and control | its lane |
 | CI `families` | full U-6.1 at `X` | CI, plus once locally in the export image from the head (CPU, `--cpus 8`) |
 | T3 | the GPU gate above, G0-G10 (GPU window 1) | coordinator, GPU 0 |
-| T1 | `.venv/bin/pre-commit run --all-files`; offline suite `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live' -n 8`; `make contracts-check`; docs check; CHANGELOG rules; frontend set only if `frontend/` changed | coordinator, once, on the final head after `docs` |
+| T1 | `.venv/bin/pre-commit run --all-files`; offline suite `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not db'` in the CI shards; `-m db`; `make contracts-check`; docs check; CHANGELOG rules; frontend set only if `frontend/` changed; the CPU part of G11 (image builds, `pip check`, imports, weight downloads; R-17) | coordinator, once, on the final head after `docs` |
 | T2 | none (no cross-process change; the live harness is not run for B3) | |
 
 Local CI parity before the push: every CI job's command runs green locally first.

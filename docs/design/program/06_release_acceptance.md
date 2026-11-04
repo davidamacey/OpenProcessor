@@ -112,7 +112,7 @@ time and an evidence path. A failing row becomes a finding; never relax a criter
 |---|---|---|---|
 | RF-40 | Upgrade from 0.6.0 with real class registries, configs and an in-flight job | Install B (section 5.2) | the control-data step ran from `openprocessor upgrade` ([02c](02c_migration_ops_tests.md) section 2): the bundle and its report are under `.install/`; every project's class ids and names, config revisions and activations are equal before and after; the OpenSearch control indexes are gone; `class_registry.json.migrated-0.7.0` exists; the in-flight job reads `interrupted` |
 | RF-41 | Upgrade stops on a failed verify | Install B, a second project whose source data is made inconsistent before the upgrade (the offline fixture's forced-mismatch case) | the upgrade stops at verify with the report path; nothing was deleted from OpenSearch; `--rollback` returns to a working 0.6.0 |
-| RF-42 | Lease busy and takeover | two concurrent POSTs that start one singleton job (for example item scores) on install A; then kill the API container mid-job | exactly one start, the other 409 `job_busy`; after at most `LEASE_TTL_S` (120 s) a new start takes the lease over |
+| RF-42 | Job busy and takeover (rewritten after review R-23: jobs now run in `jobs-worker`, so killing the API no longer kills a job) | two concurrent POSTs that start one singleton job (for example item scores) on install A; then `docker kill` the `jobs-worker` replica running it | exactly one start, the other 409 `job_busy`; the job is `interrupted` within 150 s (`LEASE_TTL_S` 120 s plus one 30 s reaper tick, [02b](02b_jobs_locking_events.md) section 4) and then resumes or can be restarted per its kind; a new start is accepted once no job of the group is active |
 | RF-43 | Registry concurrency | 8 parallel `add_class` calls with distinct names, then 8 with one shared name | 8 distinct ids; the shared name yields one id |
 | RF-44 | Filtered kNN (OS-6) | a curation search with a `class_name` filter and `k=50` on a project with at least 50 matches | 50 hits returned |
 | RF-45 | B1-1D pages | export page stats refresh; diverse review loads with one batch read (browser network panel) | stats change after a label; one `?ids=` request instead of 30 |
@@ -135,7 +135,7 @@ time and an evidence path. A failing row becomes a finding; never relax a criter
 | RF-60 | Events (B4-4C) | a live page in the browser; restart the API; watch the page | the page reconnects and resumes from `Last-Event-ID` with no lost or duplicated event |
 | RF-61 | Queue outage | stop `redis` for 30 s | `/health` shows `queue: down` as degraded; the UI shows the outage; job starts answer 503; recovery after restart |
 | RF-62 | Rollback to 0.6.0 after the control-data move | `setup-openprocessor.sh --dir <B> --rollback --yes` on install B after RF-40 | 0.6.0 API healthy; no 0.7.0-only container (Postgres, Valkey, workers, beat) left running; the control indexes and job files recreated from the bundle; the projects' classes and configs readable without a manual step; then a re-upgrade succeeds |
-| RF-63 | Re-upgrade | upgrade install B again after RF-62 | migration is a no-op on equal docs; ids unchanged |
+| RF-63 | Re-upgrade (reworded after review R-9: rollback abandons the Postgres data, so this is a fresh upgrade) | upgrade install B again after RF-62 | the same counts and ids as the first upgrade; `upgrade_state` completed; no `upgrade_incomplete` refusal |
 
 ### 4.5 Checks carried from `release_acceptance_plan.md`
 
@@ -298,9 +298,9 @@ is moved:
 | Risk | Mitigation |
 |---|---|
 | The single upgrade carries everything at once (the control-data move, Postgres, Valkey, new services, engine rebuild, `API_WORKERS`) | Install B tests exactly that path from a real 0.6.0 install with real registries; RF-62 tests the way back |
-| Rollback after the registry migration loses classes in 0.6.0 | RF-62; the downgrade note in the release notes; B1-1B owns the rollback behaviour (B1 1B (merged; see [ARCHITECTURE](../../ARCHITECTURE.md))) |
-| 0.6.0 refuses the configs index after rollback because of the new lease and registry docs | RF-62 checks it; if it fails, B1-1B adds the rollback step and RF-62 re-runs |
-| `./openprocessor upgrade` in a 0.6.0 install runs the 0.6.0 CLI, which must hand off to the 0.7.0 installer for the migration hook to run | B1-1B tests the hand-off from a 0.6.0 install offline; RF-40 proves it live (the migration report exists under `.install/`) |
+| Rollback after the control-data move loses classes in 0.6.0 | RF-62; the downgrade note in the release notes; B2 lane 2E owns the rollback ([03d](03d_b2_s2_control_data.md) 2E-4, [02c](02c_migration_ops_tests.md) section 2.3; re-pointed from B1-1B, review R-23) |
+| a 0.6.0 API started before the rollback re-index creates the control indexes empty | the rollback order of 02c section 2.3 (OpenSearch only, recreate, verify, then 0.6.0 services); RF-62 checks it; if it fails, 2E fixes the step and RF-62 re-runs |
+| `./openprocessor upgrade` in a 0.6.0 install runs the 0.6.0 CLI, which must hand off to the 0.7.0 installer for the upgrade step to run | 2E-5 tests the hand-off from a 0.6.0 install offline (the v0.6.0 bootstrap downloads the newest installer, review section 3.1); RF-40 proves it live (the upgrade report exists under `.install/`) |
 | Host load skews the run or delays it (M1) | one heavy run at a time; peers told first; budget per step |
 | A local tag is clobbered by a public pull (watchtower) | local-only names for every candidate image |
 | A secret appears in evidence or the report | RF-10; HF token passed without printing it |

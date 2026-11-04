@@ -26,6 +26,8 @@ few that deliberately stay below the newest release are listed with the reason a
 | TensorRT (`tensorrt-cu13`) | `11.1.0.106` | 11.4.0.106 | Must equal the Triton image TensorRT; `Dockerfile.triton` asserts `TRT_VERSION`. Moves only with the Triton base (ENV-12) |
 | `onnx` | `1.21.0` | 1.23.2 | `nvidia-modelopt` 0.48.0 requires `onnx~=1.21.0` on Linux |
 | `onnxruntime` / `onnxruntime-gpu` | `1.30.0` | 1.31.1 | `nvidia-modelopt` 0.48.0 requires `onnxruntime-gpu<1.31,>=1.29` on Linux x86_64; runtime and export images must resolve one version |
+| kombu | `5.6.2` | 5.7.0 | Owner decision 2026-11-04 (review R-10): Celery 5.6.3 (the newest Celery) declares `kombu>=5.6.0` with no cap, and kombu 5.7.0 (2026-11-03) has no Celery release against it. Moves when a Celery release declares kombu 5.7 support |
+| redis (redis-py) | `6.4.0` | 8.1.0 | kombu 5.6.2's `redis` extra accepts `redis>=4.5.2,<6.5` (excluding 4.5.5 and 5.0.2); 6.4.0 is the newest inside it. Moves with kombu |
 | `numpy` in the segmenter image only | `1.26.4` | 2.5.4 | Upstream SAM 3 declares `numpy>=1.26,<2` |
 | `opencv-python-headless` in the segmenter image only | `4.11.0.86` | 5.0.0.93 | OpenCV 4.12 and later need `numpy>=2` |
 | `torch` / `torchvision` in the segmenter image | base image: `2.14.1` | 2.15.0 / 0.29.2 | Not a pip pin: the `pytorch/pytorch:2.14.1-cuda12.6` base ships it. Moves only with a base image bump |
@@ -298,11 +300,11 @@ supplies versions and licenses. All resolve together with the runtime set on Pyt
 | Package | Latest | Proposed | License | Notes |
 |---|---|---|---|---|
 | celery (extra `redis`) | 5.6.3 (2026-03-26) | `celery[redis]==5.6.3` | BSD-3-Clause | the `redis` extra pulls `kombu[redis]`; needs billiard 4.3.2, vine 5.1.0, click 8.5.0 |
-| kombu | 5.7.0 | `==5.7.0` | BSD-3-Clause | accepts `redis>=6.4,<9`; its `redis` extra pins `packaging==26.3`, so packaging must stay at 26.3 while the extra is used. Released yesterday |
-| redis (redis-py) | 8.1.0 | `==8.1.0` | MIT | client for the Valkey server (Valkey speaks the Redis protocol). A major version in the fast-moving 8.x line; additions in 8.0.0 are async cluster pub/sub, keyspace notifications and array commands. Release notes: https://github.com/redis/redis-py/releases/tag/v8.0.0 |
+| kombu | 5.7.0 | `==5.6.2` (held; owner decision 2026-11-04 after review R-10) | BSD-3-Clause | 5.6.2 (2025-12-29) accepts `redis>=4.5.2,<6.5` minus 4.5.5 and 5.0.2. 5.7.0 (2026-11-03) would accept `redis>=6.4,<9` but its `redis` extra pins `packaging==26.3`, and no Celery release has been tested against it |
+| redis (redis-py) | 8.1.0 | `==6.4.0` (held with kombu) | MIT | client for the Valkey server (Valkey speaks the Redis protocol); the newest release inside kombu 5.6.2's range; the 8.x line waits for kombu 5.7. Async pub/sub (used by the event wake-up) is in 6.4 |
 | SQLAlchemy | 2.1.8 | `==2.1.8` | MIT | needs Python 3.11 or newer. Migration notes: https://docs.sqlalchemy.org/en/21/changelog/migration_21.html (read before writing models; MLflow 3.18.0 already resolves it in the trainer) |
 | Alembic | 1.20.1 | `==1.20.1` | MIT | resolves with SQLAlchemy 2.1.8 (checked together with MLflow) |
-| psycopg | 3.3.8 | `psycopg[c,pool]==3.3.8` in images; `psycopg[binary,pool]==3.3.8` in the dev and test venvs | LGPL-3.0-only | Recommendation: the C build in images. The psycopg documentation advises building from source for production, and the multi-stage API builder already has compilers; the runtime stage then needs `libpq5` only. `binary` needs no system libpq and is fine for tests. The version is identical; the extra differs by environment, like `opensearch-py[async]`. Use SQLAlchemy URLs `postgresql+psycopg://` (async works natively) |
+| psycopg | 3.3.8 | `psycopg[c,pool]==3.3.8` in images; `psycopg[binary,pool]==3.3.8` in the dev and test venvs | LGPL-3.0-only | Recommendation: the C build in images. The psycopg documentation advises building from source for production, and the multi-stage API builder already has compilers; the runtime stage then needs `libpq5` only. Review fix R-27: the trainer, export and evaluator images also import `src/db`, so they get the same builder step and `libpq5` (B2 lanes 5A and 5B). `binary` needs no system libpq and is fine for tests. The version is identical; the extra differs by environment, like `opensearch-py[async]`. Use SQLAlchemy URLs `postgresql+psycopg://` (async works natively) |
 | psycopg-pool | 3.3.3 | `==3.3.3` (the `pool` extra) | LGPL-3.0-only | LGPL is OSI-approved copyleft and is dynamically linked, which is compatible with this project's AGPL; record it in ATTRIBUTION.md |
 | testcontainers | 4.15.0 | `testcontainers[postgres,redis]==4.15.0` in the test set only | Apache-2.0 | has `postgres`, `redis` and `valkey` extras; the `redis` module starts any image, so a Valkey image works. Needs Docker at test time, so it belongs to the live or integration marker, not the offline suite |
 | flower | 2.2.0 | `==2.2.0`, only if Flower runs | BSD | needs `tornado<7,>=6.5.7`; optional (ENV-14) |
@@ -450,7 +452,7 @@ therefore cut in two lanes, keeping the order above inside each:
 
 | Part | Wave and lane | Commits | Why there |
 |---|---|---|---|
-| A | W2.1, lane `deps/pins-part-a` (after B2 lane 1-0, before 1D) | 1, 2, 3, 4 without `pillow`, 5 | nothing here decodes images or computes model inputs; they run under the B2 sweep at W2.4 |
+| A | **W2.0, its own PR to `main` before W2.1** (owner decision 2026-11-04 after review R-16), lane `deps/pins-part-a` | 1, 2, 3, 4 without `pillow`, 5 | nothing here decodes images or computes model inputs; one CPU offline sweep closes it, so a dependency regression never blocks or muddies the B2 PR |
 | B | W3, lane `deps/pins-part-b` (B3 track `deps`, first, before `stagea`) | 6, 7 with `pillow` and `simplejpeg` added, 8, 9, 10, 11, then 12 and 13 | 6, 7, 9, 10 and 11 are the owner's list (numpy and pandas with the numeric stack, OpenCV 5, torch, the onnx set, the image pins with CuPy 14); Pillow and simplejpeg decode images, so by the same rule they join commit 7 (owner question MQ-4); 8 (Hugging Face stack) sits inside that run and 12 (MLflow) and 13 (Dependabot, docs) after it in the bisect order; the GPU gate of [04](04_b3_ultralytics_one_version.md) section 6 (step G11) checks them |
 
 Adjustments the split needs (each in the commit named):
@@ -459,7 +461,7 @@ Adjustments the split needs (each in the commit named):
   allowlist in the commit that pins it, and the last part B commit asserts the allowlist is empty.
 - The CPU torch-pair commands in `CONTRIBUTING.md` and `.github/workflows/ci.yml` (listed in commit 2)
   move to commit 9, where the torch pin moves; part A does not touch those two files (B2 lane 1D owns
-  them in W2.1).
+  them in W2.1, after part A merged).
 - `simplejpeg` (in section 3.1, missing from the list above) is pinned in commit 7.
 - `requirements-export-y11.txt` is skipped by part B: B3-A2 deletes it in the same wave.
 - PR #477 (CI shards) edits `requirements-test.txt` and `pyproject.toml`; it merges before part A starts.
