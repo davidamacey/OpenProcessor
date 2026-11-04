@@ -34,7 +34,7 @@ integration branch, one PR, one full sweep) in four parts; each part ends with a
 
 | Wave | Plain name | Batch and files | Integration branch | GPU | Closing check | Issues it closes |
 |---|---|---|---|---|---|---|
-| **W2.0** | Dependency pins part A: the bumps that cannot change model output, as their own PR | [13](13_package_pins.md) section 7.1, part A (D-67) | `deps/pins-part-a`, PR to `main` | none | one offline sweep (CPU) | - (N20 stays open for part B) |
+| **W2.0** | Dependency pins part A: the bumps that cannot change model output, as their own PR | [13](13_package_pins.md) section 7.1, part A (D-67) | `deps/pins-part-a`, PR to `main` | none | one offline sweep (CPU) | - (N20 (#480) stays open for part B) |
 | **W2.1** | Foundation: PostgreSQL, Valkey, the Celery app, the schema, the storage seam, the test database | B2 stage 1 ([03a](03a_b2_w1_queue_infra.md)) | `int/b2-control-plane` | none | part check | - |
 | **W2.2** | Control data moves into PostgreSQL; the job machinery and the event feed | B2 stages 2 and 3 ([03d](03d_b2_s2_control_data.md), [03e](03e_b2_s3_job_runtime.md)) | same | none | part check | - |
 | **W2.3** | Every long job onto the queue, training, model export and the evaluator included | B2 stages 4 and 5 ([03b](03b_b2_w2_job_families.md), [03f](03f_b2_s5_gpu_queues.md)) | same | none (real-GPU smoke deferred to GPU window 1) | part check | - |
@@ -98,7 +98,7 @@ versions in a small PR of their own, so a dependency regression never blocks or 
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Pins part A: tooling, pure-Python libraries, web layer, clients | `deps/pins-part-a` (from `main`) | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (existing dependency lines only), `tests/test_requirements_contract.py`, `frontend/package.json` and its lock (re-applies PR #474) | [13](13_package_pins.md) section 7.1, part A | N20 |
+| 1 | Pins part A: tooling, pure-Python libraries, web layer, clients | `deps/pins-part-a` (from `main`) | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (existing dependency lines only), `tests/test_requirements_contract.py`, `frontend/package.json` and its lock (re-applies PR #474) | [13](13_package_pins.md) section 7.1, part A | N20 (#480) |
 
 **Sweep and exit.** One CPU offline sweep (the 4 CI shards), pre-commit `--all-files`,
 `make contracts-check`, the frontend set (the #474 re-apply touches `frontend/`); the CPU image
@@ -122,11 +122,11 @@ offline command deselects the database tests (R-4). No job family moves yet.
 | Order | Lane (plain name) | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
 | 0 | Control-plane package pins, the `db` marker and its deselection in `addopts` (coordinator commit) | on `int/b2-control-plane` | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (the new packages with kombu 5.6.2 and redis-py 6.4.0, the `db` marker, the `addopts` expression), `tests/test_control_plane_pins.py` | [03a](03a_b2_w1_queue_infra.md) lane 1-0 | #451 |
-| 1 | The schema and the database layer | `b2/db-core` | [03a](03a_b2_w1_queue_infra.md) lane 1A (minus the `pyproject.toml` marker, now in lane 0) | 03a lane 1A | N19 |
+| 1 | The schema and the database layer | `b2/db-core` | [03a](03a_b2_w1_queue_infra.md) lane 1A (minus the `pyproject.toml` marker, now in lane 0) | 03a lane 1A | N19 (#479) |
 | 1 | The Celery app, queues, the producer | `b2/queue-core` | 03a lane 1B | 03a lane 1B | #451, #464 (OPS-2 box) |
-| 1 | Services, secrets, installer, CLI | `b2/compose-installer` | 03a lane 1C | 03a lane 1C | N19 |
-| 1 | The storage seam | `b2/storage-seam` | 03a lane 1E | 03a lane 1E | N19 |
-| 2 | Health, readiness, the CI database job, the offline commands, the worker-start schema check, the connection budget | `b2/health-ci` (after 1A and 1B merged) | 03a lane 1D (adds `Makefile`, the `ci.yml` and `CONTRIBUTING.md` marker commands, `src/tasks/app.py`'s worker-start call, `tests/config/test_db_connection_budget.py`) | 03a lane 1D | N19 |
+| 1 | Services, secrets, installer, CLI | `b2/compose-installer` | 03a lane 1C | 03a lane 1C | N19 (#479) |
+| 1 | The storage seam | `b2/storage-seam` | 03a lane 1E | 03a lane 1E | N19 (#479) |
+| 2 | Health, readiness, the CI database job, the offline commands, the worker-start schema check, the connection budget | `b2/health-ci` (after 1A and 1B merged) | 03a lane 1D (adds `Makefile`, the `ci.yml` and `CONTRIBUTING.md` marker commands, `src/tasks/app.py`'s worker-start call, `tests/config/test_db_connection_budget.py`) | 03a lane 1D | N19 (#479) |
 
 Merge order: lane 0, 1A, 1E, 1B, 1C, then 1D. The pieces that need 1A's code while 1A is still
 coding moved into 1D (R-18).
@@ -158,14 +158,14 @@ yet).
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Projects, slugs, index ownership, pause | `b2/projects-pg` | [03d](03d_b2_s2_control_data.md) lane 2A | 03d 2A | N19 |
-| 1 | The class registry | `b2/classes-pg` | 03d lane 2B | 03d 2B | N19 |
-| 1 | Config store, VLM endpoints, settings, keymap, view state | `b2/config-pg` | 03d lane 2C | 03d 2C | N19 |
-| 1 | Holdout freezes, label-operation records, project markers | `b2/records-pg` | 03d lane 2D | 03d 2D | N19, #473 (part c) |
-| 1 | The one-step 0.6.0 upgrade and its rollback | `b2/upgrade-060` | 03d lane 2E | 03d 2E | N19 |
+| 1 | Projects, slugs, index ownership, pause | `b2/projects-pg` | [03d](03d_b2_s2_control_data.md) lane 2A | 03d 2A | N19 (#479) |
+| 1 | The class registry | `b2/classes-pg` | 03d lane 2B | 03d 2B | N19 (#479) |
+| 1 | Config store, VLM endpoints, settings, keymap, view state | `b2/config-pg` | 03d lane 2C | 03d 2C | N19 (#479) |
+| 1 | Holdout freezes, label-operation records, project markers | `b2/records-pg` | 03d lane 2D | 03d 2D | N19 (#479), #473 (part c) |
+| 1 | The one-step 0.6.0 upgrade and its rollback | `b2/upgrade-060` | 03d lane 2E | 03d 2E | N19 (#479) |
 | 1 | The job runtime and the reaper | `b2/job-runtime` | [03e](03e_b2_s3_job_runtime.md) lane 3A | 03e 3A | #451 |
 | 1 | Events in PostgreSQL and resumable SSE | `b2/events-pg` | 03e lane 3B | 03e 3B | #451 |
-| 2 | Remove the OpenSearch control indexes | `b2/opensearch-control-removal` (after 2A-2E merged) | 03d lane 2F | 03d 2F | N19 |
+| 2 | Remove the OpenSearch control indexes | `b2/opensearch-control-removal` (after 2A-2E merged) | 03d lane 2F | 03d 2F | N19 (#479) |
 
 Cuts: 2A-2E and 3B from the merged W2.1 head; **3A after 2A merged** (it reads projects through
 2A's repository, R-18); 2F after 2A-2E merged. Merge order: 2A, 2B, 2C, 2D, 2E, 2F, then 3B, then 3A
@@ -234,7 +234,7 @@ hardened; the permanent docs describe the control plane. Then the one B2 sweep.
 | 1 | Periodic work to beat; old infrastructure deleted | `b2/beat-periodic` | [03c](03c_b2_w3_beat_reaper_workers.md) lane 6A | 03c 6A | #451, #453, #464 (OPS-2 act part) |
 | 1 | Scale-out compose and monitoring (with `monitoring/alloy-config.alloy` and the dashboards, R-12; the `gpu-arbiter-worker` in the arbiter overlay, R-20) | `b2/scale-out-compose` | 03c lane 6B | 03c 6B | #451 |
 | 2 | Hardening (after 6B merged) | `b2/hardening` | 03c lane 6C | 03c 6C | #461, #462 |
-| 3 | Docs (last) | `b2/docs` | 03c lane 6D | 03c 6D | N19 |
+| 3 | Docs (last) | `b2/docs` | 03c lane 6D | 03c 6D | N19 (#479) |
 
 **Sweep (the one B2 sweep).** Exactly [03](03_b2_overview.md) section 9 (its T1 offline set, the
 **live harness run 2 of 3** with the steps and budget stated there, the image audit, Trivy and
@@ -258,7 +258,7 @@ MLflow and Dependabot tail of the pin series.
 
 | Order | Lane | Branch | Owns | Brief | Issues |
 |---|---|---|---|---|---|
-| 1 | Pins part B: the model-output set and the image pins (D-67) | `deps/pins-part-b` | the three manifests, `requirements-export.txt` and the `export` extra (versions only), `docker/trainer/requirements.txt`, `scripts/curation/bakeoff/requirements.txt`, `Dockerfile.triton`, `docker/hardened/triton/Dockerfile`, `docker/segmenter/Dockerfile`, new `docker/triton/requirements.txt` and `docker/segmenter/requirements.txt`, the root `Dockerfile` (the evaluator's inline `mlflow`), `docker-compose.yml` (`MLFLOW_IMAGE` only), `CONTRIBUTING.md` and `.github/workflows/ci.yml` (the CPU torch-pair commands only), `.github/dependabot.yml`, `tests/test_requirements_contract.py` | [13](13_package_pins.md) section 7, part B; [04](04_b3_ultralytics_one_version.md) track `deps` | N20, #458 |
+| 1 | Pins part B: the model-output set and the image pins (D-67) | `deps/pins-part-b` | the three manifests, `requirements-export.txt` and the `export` extra (versions only), `docker/trainer/requirements.txt`, `scripts/curation/bakeoff/requirements.txt`, `Dockerfile.triton`, `docker/hardened/triton/Dockerfile`, `docker/segmenter/Dockerfile`, new `docker/triton/requirements.txt` and `docker/segmenter/requirements.txt`, the root `Dockerfile` (the evaluator's inline `mlflow`), `docker-compose.yml` (`MLFLOW_IMAGE` only), `CONTRIBUTING.md` and `.github/workflows/ci.yml` (the CPU torch-pair commands only), `.github/dependabot.yml`, `tests/test_requirements_contract.py` | [13](13_package_pins.md) section 7, part B; [04](04_b3_ultralytics_one_version.md) track `deps` | N20 (#480), #458 |
 | 1 | Each adapter declares its box frame (GPU-14 final; the only B3 track that touches no B2 file, R-18) | `b3/frame` | 04 track `frame` | 04 B3-G1 | #458 |
 | 2 | Stage A: the pin, the second environment deleted, the trainer on the pin | `b3/stagea` (from the pins part B merge) | 04 track `stagea` | 04 B3-A1..A4 (A5 only if D-38 yes) | #458 |
 | 3 | The family registry and the full CPU matrix | `b3/families` (from `b3/stagea`) | 04 track `families` | 04 B3-F1..F3 | #458, #368 (first slice) |
