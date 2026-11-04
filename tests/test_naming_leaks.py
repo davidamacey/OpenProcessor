@@ -215,3 +215,13 @@ def test_scan_d_bans_the_owner_lan_address_but_not_other_private_addresses(
     hits, _ = leaks.run_scans(repo, allowlist, scans={'D': leaks.SCAN_D})
     assert len(hits['D']) == 1
     assert hits['D'][0].startswith('docs/a.md:')
+
+
+def test_directory_entry_whose_regex_ends_in_a_slash_keeps_its_regex(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    allowlist = _allowlist(repo, 'docs/plans/:example\\.com/data/ # public URL prefix\n')
+    (entry,) = leaks.load_allowlist(allowlist)
+    assert entry.raw_path == 'docs/plans/'
+    assert entry.is_dir_prefix
+    assert entry.allows('docs/plans/a.md', 'see https://example.com/data/x.csv')
+    assert not entry.allows('docs/plans/a.md', 'an unrelated line')
