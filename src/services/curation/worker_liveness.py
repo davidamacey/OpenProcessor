@@ -38,8 +38,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.utils.atomic_write import atomic_write_json
-
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -72,6 +70,7 @@ def write_heartbeat(name: str, tasks: Mapping[str, bool], stall: str | None = No
     # Lazy: the healthcheck CLI runs this file by path under a 5 s timeout and
     # only ever calls check_heartbeat, never this writer.
     from src.services.curation.ops_metrics import record_worker_heartbeat
+    from src.utils.atomic_write import atomic_write_json
 
     record_worker_heartbeat(name, tasks, now)
     path = _heartbeat_path(name)
