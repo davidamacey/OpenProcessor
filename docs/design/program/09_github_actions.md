@@ -742,3 +742,11 @@ unmilestoned open issues are exactly the parked ones: #8, #346, #348, #400, #401
   issues close when their batch PR merges to `main`.
 - N13 and N15 were on v0.8.0 (speed); with D-37 they are on v0.7.0.
 - The old issue map named #231 by a product name; it is "serving head-to-head research" here.
+
+## Research integration (2026-11-04)
+
+The research plans asked for comments on #346, #347, #348, #365, #398, #400, #401, #406, #416,
+#435, #466 and #473 and for one new issue (N21, the S3-compatible storage backend). Their exact text
+is in [00b_traceability.md](00b_traceability.md) sections 4.5 and 4.6; the comments wait for the
+owner's answers to RD-1 and RD-2 ([00d](00d_owner_questions.md)); N21 is approved (2026-11-04) and
+filed by the coordinator.

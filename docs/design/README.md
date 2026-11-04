@@ -21,12 +21,15 @@ the master plan; execute one wave at a time from the batch files it links.
 | [program/00_master_plan.md](program/00_master_plan.md) | **Read first**: the execution order from now to the v0.7.0 tag: waves W2.1-W6, lanes and file ownership, folded-in decided items, sweeps and exit gates, the GPU-window budget, how a session runs one wave, the owner questions |
 | [program/00b_traceability.md](program/00b_traceability.md) | Every task and ID of the original program plans and every open issue mapped to its wave and lane (or retired with a reason); the fold-in record; the proposed GitHub actions |
 | [program/00c_plan_review.md](program/00c_plan_review.md) | The independent review of the plan set (3 blockers, 9 high, 15 medium, 11 low) and the planner's response to each finding |
+| [program/00d_owner_questions.md](program/00d_owner_questions.md) | The research owner questions in one de-duplicated list (80 from 112), grouped by theme, each with a recommendation; eight to answer before coding |
+| [program/00e_research_track.md](program/00e_research_track.md) | The research prototype track (every prototype with its data, GPU hours, window, decision and landing wave) and the post-tag research waves RW-1..RW-6 |
 | [program/00_index.md](program/00_index.md) | The decision register, the plain-words map, wave exit gates, the production-ready definition, branch and lane model, test and GPU budget rules, legends, superseded plans |
 | [program/01_b0_close_out.md](program/01_b0_close_out.md) | B0: close out the R2 round, gate cycle, push, merge to main |
 | [program/02_control_plane_database.md](program/02_control_plane_database.md) | The control plane on PostgreSQL: why, the data-ownership table, the inventory with a destination for every item, the open decisions |
 | [program/02a_postgres_schema.md](program/02a_postgres_schema.md) | The PostgreSQL schema: every table, key, constraint, index and row-level-security policy |
 | [program/02b_jobs_locking_events.md](program/02b_jobs_locking_events.md) | Jobs: state machine, start, claim and fencing, cancel, the reaper, events to the browser, Celery and Valkey settings, connection pools |
 | [program/02c_migration_ops_tests.md](program/02c_migration_ops_tests.md) | Alembic, the 0.6.0 upgrade and rollback, compose services, the storage seam, backup and restore, tests, the trap register |
+| [program/02d_research_seam_schema.md](program/02d_research_seam_schema.md) | The research-seam tables (clustering partitions, the embedding registry, the assist-loop record, near-duplicates, plate text), the fixed revision chain and the reserved DDL |
 | [program/03_b2_overview.md](program/03_b2_overview.md) | B2: the control plane on PostgreSQL, Valkey and Celery, six stages, lanes, the sweep |
 | [program/03a_b2_w1_queue_infra.md](program/03a_b2_w1_queue_infra.md) | B2 stage 1: foundation (Postgres, Valkey, the Celery app, the schema, the storage seam, the test database) |
 | [program/03d_b2_s2_control_data.md](program/03d_b2_s2_control_data.md) | B2 stage 2: control data moves to Postgres; the 0.6.0 upgrade step |
@@ -41,6 +44,7 @@ the master plan; execute one wave at a time from the batch files it links.
 | [program/07b_b5_decode_once.md](program/07b_b5_decode_once.md) | B5b: decode once (GPU-3b, the rest of #40, #407, GPU-12) |
 | [program/07c_b5_crops_ocr_faces.md](program/07c_b5_crops_ocr_faces.md) | B5c: work crops at model size (#219) and OCR on the GPU (#220) |
 | [program/07d_b5_processing_plans.md](program/07d_b5_processing_plans.md) | B5d: request-driven processing plans (#67) |
+| [program/03g_w5e_plate_text.md](program/03g_w5e_plate_text.md) | W5e: registration-plate text (per-box readings, burst consensus, search, privacy modes), its lanes and gate |
 | [program/06_release_acceptance.md](program/06_release_acceptance.md) | Release prep, R-final acceptance run, and the v0.7.0 tag procedure |
 | [program/08_environment_and_setup.md](program/08_environment_and_setup.md) | Cross-cutting: environment, setup, configuration and CI parity |
 | [program/09_github_actions.md](program/09_github_actions.md) | Issues, re-scopes, milestones, closes and dependabot; section 7 is the issue map |

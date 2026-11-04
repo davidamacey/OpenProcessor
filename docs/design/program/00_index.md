@@ -279,7 +279,7 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-43 | 0.6.0 -> 0.7.0 in one step: the OpenSearch control data moves into Postgres by a tested upgrade step, then the OpenSearch copies are deleted (no dual read) | approved 2026-11-04 (owner decision 6) | bundle, load, verify, delete; rollback from the bundle | B2 | [02c](02c_migration_ops_tests.md) section 2 |
 | D-44 | Packages exact-pinned at the latest installable versions | approved 2026-11-04 (owner decision 7) | `13_package_pins.md` | B2 | - |
 | D-45 | Plain names first, codes after, in every plan text | approved 2026-11-04 (owner decision 8) | each decision has a one-line plain question (section 2.1) | - | - |
-| D-46 | Multi-host files: shared volume or object store? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | the storage seam with a local backend in 0.7.0 (a shared POSIX volume for several hosts); an S3-compatible backend in v0.8.0 | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 5 |
+| D-46 | Multi-host files: shared volume or object store? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | the storage seam with a local backend in 0.7.0 (a shared POSIX volume for several hosts); an S3-compatible backend in v0.8.0, planned as feature F10 of [v080_platform_breadth_plan.md](../v080_platform_breadth_plan.md) (owner-approved addition 2026-11-04; issue text in [00b](00b_traceability.md) section 4.6) | B2 stage 1 | [02c](02c_migration_ops_tests.md) section 5 |
 | D-47 | Do items keep the class name? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | yes, as a projection owned by Postgres: one writer path, an outbox row in the same transaction, a sync job, a verifier | B2 stage 2 | [02](02_control_plane_database.md) section 3.3 |
 | D-48 | How do progress and events reach the browser? | approved 2026-11-04 (owner), as amended after the review (00c R-6) | a Postgres `events` table is the durable record and the `(xid, id)` cursor is the SSE id; the wake-up goes through Valkey pub/sub (`op:events:<project>`), not a per-process Postgres `LISTEN` (replaces D-30) | B2 stage 3 | [02b](02b_jobs_locking_events.md) section 6 |
 | D-49 | Does Celery keep results? | approved 2026-11-04 (owner, the open B2 recommendations accepted as a block) | no result backend; the `jobs` row is the only truth | B2 stage 1 | [02b](02b_jobs_locking_events.md) section 7.1 |
@@ -314,7 +314,8 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | MQ-7 | #465 typed response models (BA-6): CPU lanes during W5a-W5c, merged into the B5 sub-batch PRs | approved 2026-11-04 (owner decision 7) | CPU lanes during W5a-W5c | before W5a | [05](05_b4_stateless_api.md) section 13 |
 | MQ-8 | Fold the GPU-15 leftover (refuse an undeclared region head at profile validation) into B3-D3 | approved 2026-11-04 (owner) | yes: part of B3-D3 | W3 | [04](04_b3_ultralytics_one_version.md) B3-D3 |
 | Q-3 / ENV-18 | Flower: loopback port 4613, the gateway subpath, or both? | approved 2026-11-04 (owner) | both: port 4613 on loopback and the gateway subpath, only when the `monitoring` profile runs | B2 stage 1 | [08](08_environment_and_setup.md) ENV-18 |
-| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | approved 2026-11-04 (owner decision 9) | after the tag; their already-decided items stay folded into the rewrite | before W5a | [00_master_plan.md](00_master_plan.md) section 10 |
+| MQ-9 | The research plans' experiments run after the tag, except what B5 already carries | approved 2026-11-04 (owner decision 9); **an amendment is proposed** by RD-2 (the decision-feeding prototypes on idle GPU during W2-W4) | after the tag; their already-decided items stay folded into the rewrite | before W5a | [00_master_plan.md](00_master_plan.md) section 10 |
+| RD-1..RD-80 | The research plans' owner questions, de-duplicated (112 raw, 80 after merging); eight to answer before coding (RD-1, RD-2, RD-4, RD-7, RD-8, RD-10, RD-23, RD-51) | open (asked 2026-11-04) | as in the list; the plan follows each recommendation and marks the place "pending RD-n"; each answer becomes its own row here | RD-1, RD-2, RD-4, RD-7, RD-8, RD-10, RD-23, RD-51 before W2.1; the rest at the wave named | [00d_owner_questions.md](00d_owner_questions.md) |
 | MQ-10 | Move #42 to v0.8.0 if the 12 GB run has not happened by the tag (D-5) | approved 2026-11-04 (owner decision 10) | yes | W6 | [07](07_b5_overview.md) section 11 |
 | OQ-B5-1..3 | B5 open questions (public replacement for private acceptance bars, the 1M run, GPU 2 for two-card rows) | open | see the owning file | before B5a | [07](07_b5_overview.md) section 9 |
 | OC-1 | Shared OCR detector-size helper for `/ocr` and the cascade (open choice from the B0 fixes) | open | it changes `/ocr` behaviour; decide in B1-1C | B1 | B1 1C (merged; see [CHANGELOG](../../../CHANGELOG.md)) |
@@ -436,9 +437,14 @@ Config added or removed per batch (env keys, compose services, installer steps) 
   before B2); CC-10 (measured before B4) (N14).
 - #369 API authentication stays blocked; B2 adds no public surface (the broker has no published
   port).
-- Research and platform breadth are out of this program: #8, #346, #348 (parked); #365, #400,
-  #401; #347, #398, #406, #416, #366 (done), #367, #370, #84, #402, #435, #436, #231, #403
-  ([09_github_actions.md](09_github_actions.md) section 7 gives each one's milestone and reason).
+- Research and platform breadth: the research **seams** are in this program (pending RD-1:
+  [02d](02d_research_seam_schema.md), the lanes listed in [00b](00b_traceability.md) section 5.2),
+  registration-plate text lands as wave W5e (#401, pending RD-3), and the decision-feeding
+  prototypes run on idle GPU in W2-W4 (pending RD-2). The **experiments and their landings** are
+  the post-tag research waves RW-1..RW-6 ([00e](00e_research_track.md)): #346, #347, #348, #365,
+  #398, #400, #406, #416, #435, #436, #466 (remainder), #84, #231, #403. Still out of this program:
+  #8 (parked), #366 (done), #367, #370, #402 (v0.8.0 features)
+  ([09_github_actions.md](09_github_actions.md) section 7 and 00b section 5.3 give each one's place).
 - Refuted and cut audit items stay refuted and cut ([11_risks_cleanup_host.md](11_risks_cleanup_host.md)
   section 4).
 
@@ -607,6 +613,7 @@ lives now:
 | program set 4 (master plan) | 2026-11-04 | `00_master_plan.md` (execution order, waves W2.1-W6, GPU-window budget, wave procedure, owner questions) and `00b_traceability.md` added; this file became the register and legends (sections 3-4 point to the master plan, the duplicated sections 3-6 and the stale D-18 row removed); MQ-1..MQ-10 added; decided items folded into their lanes (00b section 3) |
 | program set 5 (review fixes) | 2026-11-04 | the independent review [00c_plan_review.md](00c_plan_review.md) applied (R-1..R-38; planner responses in its section 5); the owner's answers of 2026-11-04 recorded (D-64..D-68, the open B2 recommendations as a block, MQ-1, 2, 5, 6, 7, 9, 10); OI-1, OI-2 opened; pins part A became its own wave W2.0 |
 | program set 6 (re-check fixes) | 2026-11-04 | the re-check of [00c_plan_review.md](00c_plan_review.md) section 6 applied (RC-1..RC-13; responses in its section 5.1); D-64 replaced by D-69 (every service requires PostgreSQL, Valkey and OpenSearch, no degraded mode); OI-1, OI-2, MQ-3, MQ-4, MQ-8 and Q-3 answered by the owner; the open list reduced to the B3, B4, B5 and tag kick-off questions |
+| research integration | 2026-11-04 | the seven research plans folded into the program on `research/master`: [02d](02d_research_seam_schema.md) (research-seam tables), [03g](03g_w5e_plate_text.md) (wave W5e), [00d](00d_owner_questions.md) (80 owner questions), [00e](00e_research_track.md) (prototype track and research waves); new lanes 1F, ES-A, ES-B, ES-C, 4F, ND-A, ND-B, ND-C, `b4/capture-metadata`, `b4/identity-text-privacy`, `tools/make-gate`, `b2/frontend-spaces`; 2D-4 moved to ND-B; the `NO ACTION` foreign-key rule (02a 1.2); resolutions X-1..X-20 and the issue map in [00b](00b_traceability.md) section 5; F10 (S3 storage) in the v0.8.0 plan |
 
 ## 16. Corrections found while splitting
 
