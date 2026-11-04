@@ -72,7 +72,6 @@ from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.probe_models import (  # noqa: F401 - re-exported for callers and tests
     PROBE_ARCHITECTURES,
-    YOLOV5_OBJ_INPUT_SIZE,
     _build_predictor,
     _build_raw_predictor,
     _PredictFn,

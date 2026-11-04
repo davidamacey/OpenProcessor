@@ -26,8 +26,9 @@ from src.services.curation import probe_models as pm
 
 
 class _FakeIO:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, shape: list[Any]) -> None:
         self.name = name
+        self.shape = shape
 
 
 class _FakeModelMeta:
@@ -50,10 +51,10 @@ class _FakeSession:
         self._winning_index = winning_index
 
     def get_inputs(self) -> list[_FakeIO]:
-        return [_FakeIO('images')]
+        return [_FakeIO('images', [1, 3, 1280, 1280])]
 
     def get_outputs(self) -> list[_FakeIO]:
-        return [_FakeIO('output0')]
+        return [_FakeIO('output0', [1, 'anchors', 5 + self._num_classes])]
 
     def get_modelmeta(self) -> _FakeModelMeta:
         meta = {} if self._names_metadata is None else {'names': self._names_metadata}
