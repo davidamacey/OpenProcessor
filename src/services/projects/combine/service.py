@@ -202,7 +202,7 @@ def job_state(job_id: str) -> dict[str, Any]:
     store = job_store.open_job(job_id)
     if store is None:
         raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
-    state = store.job.repair_if_stale(job_store.ACTIVE_STATUSES, error_prefix='combine')
+    state = store.job.served_state(job_store.ACTIVE_STATUSES, error_prefix='combine')
     return {'job_id': job_id, **state}
 
 

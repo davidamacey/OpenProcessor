@@ -113,7 +113,7 @@ def read_state(run_id: str) -> AssistRunState | None:
         return None
     if not job.read():
         return None
-    state = job.repair_if_stale(ACTIVE, error_prefix='assist run')
+    state = job.served_state(ACTIVE, error_prefix='assist run')
     return AssistRunState.model_validate(state)
 
 

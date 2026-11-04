@@ -1,10 +1,12 @@
 """The file-backed job-runner convention, as one small class.
 
-``state.json`` (atomic temp+rename), ``heartbeat``, ``cancel.flag`` and a
-cross-process start lock under one directory, on the shared ``/jobs``
-volume: every ``api`` worker process sees the same files, so status,
-cancel and singleton start are correct whichever process a request lands
-on (the multi-worker fix ``probe_job`` documents).
+``state.json`` (atomic temp+rename), ``heartbeat`` and ``cancel.flag`` under one
+directory, on the shared ``/jobs`` volume: every ``api`` worker process sees the same
+files, so status and cancel are correct whichever process a request lands on.
+
+Singleton start is not decided here but by the job lease (``src/clients/job_lease.py``).
+Only the lease holder writes ``state.json``: a read-modify-write needs no file lock, and a
+reader never writes (:meth:`served_state` derives ``interrupted`` for a dead run).
 
 Used by the dataset-import, reprocess, probe, item-score, selection,
 embedding-viz and auto-label jobs.
@@ -14,27 +16,24 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import fcntl
 import json
-import os
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.domain.job_lease import LEASE_TTL_S
 from src.services.curation.job_reconcile import reconcile_stale_running
 from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
 
 logger = get_logger(__name__)
 
-HEARTBEAT_STALE_S = 30.0
-HEARTBEAT_TICK_S = 10.0
+HEARTBEAT_STALE_S = LEASE_TTL_S
 
 
 @dataclass(frozen=True)
@@ -80,24 +79,12 @@ class FileJob:
     def write(self, state: dict[str, Any]) -> None:
         atomic_write_json(self.state_file, state)
 
-    @contextlib.contextmanager
-    def _state_lock(self) -> Iterator[None]:
-        """Blocking cross-process lock around a read-modify-write of the state
-        (held for file operations only, never across a job's work)."""
-        self.directory.mkdir(parents=True, exist_ok=True)
-        fd = os.open(self.directory / 'state.lock', os.O_CREAT | os.O_RDWR, 0o644)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            yield
-        finally:
-            os.close(fd)
-
     def update(self, **fields: Any) -> dict[str, Any]:
-        with self._state_lock():
-            state = self.read()
-            state.update(fields)
-            self.write(state)
-            return state
+        """Read-modify-write of the state; only the lease holder calls it."""
+        state = self.read()
+        state.update(fields)
+        self.write(state)
+        return state
 
     def touch_heartbeat(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -122,33 +109,21 @@ class FileJob:
         state = self.read()
         return state.get('status') in active_statuses and not self._is_stale(state, active_statuses)
 
-    def repair_if_stale(
-        self, active_statuses: frozenset[str], *, error_prefix: str
-    ) -> dict[str, Any]:
-        """The current state, after rewriting one left active by a dead
-        process (an active status whose heartbeat went stale) to
-        ``interrupted``. The lazy twin of :meth:`reconcile`: it runs on
-        whatever reads the job, so a worker killed and restarted inside the
-        liveness window (which the startup reconcile leaves alone) is still
-        resumable once its heartbeat has aged out. A job that has not
-        ticked once yet is not stale. The write re-checks staleness under the
-        state lock, so a claim that lands in between
-        (resume rewriting the state to ``queued``) is never overwritten with
-        ``interrupted``."""
+    def served_state(self, active_statuses: frozenset[str], *, error_prefix: str) -> dict[str, Any]:
+        """The current state as a reader should see it: a run left active by a dead process
+        (an active status whose heartbeat went stale) is reported ``interrupted``, so it can
+        be resumed or undone. The view only: a reader never writes state. Persisting the
+        repair belongs to whoever takes the lease over (a resume, the startup reconcile). A
+        job that has not ticked once yet is not stale."""
         state = self.read()
         if not self._is_stale(state, active_statuses):
-            return state  # the common read: no lock, nothing created
-        with self._state_lock():
-            state = self.read()
-            if not self._is_stale(state, active_statuses):
-                return state
-            state.update(
-                status='interrupted',
-                error=state.get('error') or f'{error_prefix} heartbeat stale',
-                finished_at=datetime.now(UTC).isoformat(),
-            )
-            self.write(state)
             return state
+        return {
+            **state,
+            'status': 'interrupted',
+            'error': state.get('error') or f'{error_prefix} heartbeat stale',
+            'finished_at': state.get('finished_at') or datetime.now(UTC).isoformat(),
+        }
 
     def _is_stale(self, state: dict[str, Any], active_statuses: frozenset[str]) -> bool:
         if state.get('status') not in active_statuses:
@@ -184,8 +159,8 @@ class FileJob:
 async def heartbeat_ticker(job: FileJob) -> None:
     """Keep the heartbeat fresh for the whole run, not only between steps."""
     while True:
-        await asyncio.sleep(HEARTBEAT_TICK_S)
+        await asyncio.sleep(10.0)
         job.touch_heartbeat()
 
 
-__all__ = ['HEARTBEAT_STALE_S', 'HEARTBEAT_TICK_S', 'FileJob', 'heartbeat_ticker']
+__all__ = ['HEARTBEAT_STALE_S', 'FileJob', 'heartbeat_ticker']

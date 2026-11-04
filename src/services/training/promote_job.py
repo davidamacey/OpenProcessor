@@ -95,7 +95,7 @@ def read_job(promote_id: str) -> dict[str, Any] | None:
         return None
     if not job.read():
         return None
-    state = job.repair_if_stale(ACTIVE, error_prefix='promote job')
+    state = job.served_state(ACTIVE, error_prefix='promote job')
     return _wire(promote_id, state)
 
 

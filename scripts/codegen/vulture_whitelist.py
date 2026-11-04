@@ -104,6 +104,5 @@ _.ProcessingPlan  # src/schemas/processing_plan.py, request model of the plan-aw
 _.to_request  # ProcessingPlan.to_request, called by the route that parses the plan (P2)
 
 # Temporary, removed with the reconcile conversion that calls it
-_.takeover_expired  # src/clients/job_lease.py, called by the reconcile takeover
 _.LeaseHeartbeat  # src/services/curation/lease_heartbeat.py, used by the job start sites
 _.may_write  # src/services/curation/lease_heartbeat.py, used by the job progress writes

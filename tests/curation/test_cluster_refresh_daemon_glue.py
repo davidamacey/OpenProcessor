@@ -86,5 +86,5 @@ def test_a_dead_workers_job_is_repaired_to_interrupted_for_the_retry(tmp_path: P
     job.touch_heartbeat()
     old = time.time() - HEARTBEAT_STALE_S - 5
     os.utime(job.heartbeat_file, (old, old))
-    state = job.repair_if_stale(frozenset({'running'}), error_prefix='auto_label')
+    state = job.served_state(frozenset({'running'}), error_prefix='auto_label')
     assert state['status'] == 'interrupted'

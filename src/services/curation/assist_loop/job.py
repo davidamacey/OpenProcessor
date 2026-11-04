@@ -122,7 +122,7 @@ def read_state(loop_id: str) -> dict[str, Any] | None:
         return None
     if not loop.read():
         return None
-    return loop.repair_if_stale(ACTIVE, error_prefix='assist loop')
+    return loop.served_state(ACTIVE, error_prefix='assist loop')
 
 
 def _write_trigger(loop_id: str) -> None:

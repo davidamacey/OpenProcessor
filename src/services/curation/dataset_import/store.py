@@ -99,7 +99,7 @@ class ImportStore:
     def repaired_state(self) -> dict[str, Any]:
         """The job state, with a run left active by a dead worker rewritten
         to ``interrupted`` first (so it can be resumed or undone)."""
-        return self.job.repair_if_stale(ACTIVE_STATUSES, error_prefix='dataset import')
+        return self.job.served_state(ACTIVE_STATUSES, error_prefix='dataset import')
 
     # ------------------------------------------------------------- documents
 
