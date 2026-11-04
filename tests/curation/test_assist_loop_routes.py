@@ -25,9 +25,6 @@ CLUSTER = 10000
 
 @pytest.fixture(autouse=True)
 def _env(stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        'src.services.curation.registry_access.get_class_registry', lambda: stack.registry
-    )
     monkeypatch.setenv('OP_ASSIST_LOOP_JOBS_DIR', str(tmp_path / 'loops'))
 
 
@@ -156,11 +153,11 @@ def test_no_cluster_big_enough_is_no_roots(stack: Any) -> None:
 def test_a_project_without_item_classes_is_refused(
     stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from _registry_doc_fake import InMemoryRegistry
+    from _registry_doc_fake import InMemoryRegistry, use_registry
 
     _seed(stack)
     empty = InMemoryRegistry()
-    monkeypatch.setattr('src.services.curation.registry_access.get_class_registry', lambda: empty)
+    use_registry(empty)
 
     assert _error(stack.post(LOOPS, **_body())) == (422, 'no_class_names')
 

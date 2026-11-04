@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from _registry_doc_fake import InMemoryRegistry
+from _registry_doc_fake import InMemoryRegistry, use_registry
 from PIL import Image
 
 from curation.conftest import SCOPED, HybridOpenSearch, VlmApi, good_probe
@@ -171,6 +171,7 @@ def build_stack(vlm_api: VlmApi, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     registry.add('widget')
     registry.add('gadget')
     monkeypatch.setattr(config_test_mod, 'get_class_registry', lambda: registry)
+    use_registry(registry)
 
     items = QueryFakeOpenSearch({ITEMS: {}})
     hybrid = HybridOpenSearch(vlm_api.fake_os, items)

@@ -25,14 +25,7 @@ MAKE = {'key': 'make', 'description': 'car manufacturer', 'values': []}
 
 
 @pytest.fixture(autouse=True)
-def _registry(stack: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry', lambda: stack.registry
-    )
-
-
-@pytest.fixture(autouse=True)
-def _jobs_dir(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def _jobs_dir(stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
 
 
