@@ -118,6 +118,8 @@ OpenSearch is down the start answers 503; a job never starts without its lease.
 - **Fencing.** A holder that finds its lease taken over, or cannot renew for 90 seconds,
   stops writing its job state. A holder that stalls for longer than the margin between its
   check and a write can still write once; a write takes milliseconds, so this is accepted.
+- **Probe cap.** At most two VLM endpoint probes run at a time per API worker process, not
+  across the cluster; the `429 probe_busy` text says so.
 - **Not yet leased.** The bulk-ingest runner, the source scan and the ingest dispatcher still
   use a file lock (B2 moves them).
 
@@ -292,6 +294,14 @@ schedules the cluster retrain, and when:
 ## Export and training
 
 Freeze a holdout, export, run preflight, train, promote, compare in the bake-off.
+
+A model upload is routed by its detection head, not by `model.end2end`: `one2one` (YOLO26,
+YOLOv10, NMS-free, one `[batch, 300, 6]` output) goes to the NMS-free export, `nms` (the rest)
+to the YOLO11 toolchain; an export or promote whose head is not `[batch, 300, 6]` is refused.
+An original YOLOv5 checkpoint is refused with a message to retrain from YOLOv5u or export an
+ONNX with the official `ultralytics/yolov5` `export.py` (usable by the probe and the ingest
+secondary detector). An export job queued before the upgrade carries no head kind and fails
+closed: upload the model again.
 [Exports and retention](../docs-site/docs/operations/exports-and-retention.mdx),
 [Training and promote](../docs-site/docs/operations/training-and-promote.mdx).
 

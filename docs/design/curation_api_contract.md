@@ -121,6 +121,20 @@ surfaces raise a typed body:
 `force_allowed`; an issue has `code`, `severity`, `message`, `field`, `detail`,
 `bypassable`).
 
+Error bodies carry no exception class name: a 500 and the Triton-unavailable 503 hold
+`detail` and `request_id` only (the server log records the class). `/curation` JSON bodies
+carry no `total_time_ms` or `request_id`; the `X-Process-Time` and `X-Request-ID` response
+headers remain, and core inference routes and their `/v1` aliases keep the body keys.
+
+A singleton job that is already running answers `409` with the family's busy code
+(`reprocess_busy`, `import_busy`, `assist_busy`, `assist_loop_busy`, `label_op_busy`, or a
+plain 409 for scores, selection and projection). If OpenSearch cannot be reached to take the
+job lease the start answers `503`. The class routes of a project whose registry is not yet
+migrated answer `409 registry_not_migrated`; a class write that loses five compare-and-set
+races in a row answers `409 registry_conflict`, and one past 10000 classes
+`409 registry_full`. `POST /search/object` (a core route) answers
+`422 object_class_not_indexed` for a box whose class is neither a vehicle nor a person.
+
 Older routes (crops, classes, review, export, training, clusters) raise
 `{"detail": "<string>"}` or `{"detail": {"error": "<code>", ...}}`. Validation
 failures of a request body are the standard FastAPI `422` list.

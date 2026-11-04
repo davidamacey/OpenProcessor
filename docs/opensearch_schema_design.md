@@ -78,6 +78,12 @@ embedding only. `GET /query/stats` returns counts for every index and
 | `POST /search/face`, `POST /faces/search`, `POST /faces/identify` | `visual_search_faces` |
 | `POST /search/ocr` | `visual_search_ocr` |
 
+A class or cluster filter on a legacy visual-search query sits inside the `knn` clause
+(`knn[field].filter`), so the k nearest are taken from the matching documents and a
+restrictive filter still returns `k` hits. Wrapped in `bool.filter` beside the `knn` clause,
+the filter runs after the k nearest are chosen and returns fewer
+([filtering in k-NN search](https://docs.opensearch.org/latest/vector-search/filter-search-knn/)).
+
 ### FAISS IVF clustering
 
 The four embedding indexes (`global`, `vehicles`, `people`, `faces`) can be

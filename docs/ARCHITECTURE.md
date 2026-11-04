@@ -260,7 +260,9 @@ See [opensearch_schema_design.md](opensearch_schema_design.md#the-class-registry
 **Class identity is the name.** The class registry assigns indexes, but every boundary maps by
 name: dataset import and export, combine, training, promotion and sharing a
 trained model with another project. An index is only a position inside one
-registry at one moment.
+registry at one moment. The ingest secondary detector, and the primary when
+`OP_INGEST_PRIMARY_ASSIGNS_CLASS` is set, resolve the registry class named like the model's
+output, never the output index.
 
 The global indexes (`visual_search_global`, `_vehicles`, `_people`, `_faces`,
 `_ocr`) belong to the inference API and are described in
@@ -442,6 +444,20 @@ time. Single-target forms:
   good renew. Startup reconcile is a lease takeover, so a sibling's live job is never marked
   `interrupted`. No file lock guards cross-process state (`scripts/codegen/check_file_locks.py`
   lists the few left). The trainer claims a job with create-only generation claim files.
+- **Per-process caches.** Each API worker process keeps its own caches, so a rule must not
+  depend on another process noticing a change. The class-name cache
+  (`src/utils/class_names.py`) is keyed by the `(st_mtime_ns, st_size)` of the model's
+  `labels.txt`, one `stat` per lookup, so every worker sees a promote on its next request and a
+  missing file is never cached. The settings document cache holds a value for 5 s and raises
+  on a failed read instead of caching an empty document. The diverse-order and outlier caches
+  are bounded `cachetools` TTL caches. The eval-dataset listing resolves class names at read
+  time, and its cache key includes the mtimes of `data.yaml` and `images/test`. The VLM probe
+  cap (two at a time) is per API worker process.
+- **OCR detector input size.** `/ocr` (`src/clients/triton_ocr.py`) follows PaddleOCR
+  `DetResizeForTest`: long side scaled into 640-960, each side rounded to a multiple of 32.
+  The region cascade (`ocr_det_input_size`) sizes crops to 320-960 per side. The two stay
+  separate on purpose: the default detector engine profile is 32x32 to 960x960
+  (`scripts/export_paddleocr.sh`), so `/ocr` cannot send a thin image the engine refuses.
 - **File protocols.** The API and the workers share the state volumes. Training
   and auto-label jobs are JSON files the API writes and the long-lived worker
   claims; status flows back as files. A heartbeat marks a live claim; a job
