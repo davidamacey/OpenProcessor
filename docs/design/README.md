@@ -59,6 +59,7 @@ the master plan; execute one wave at a time from the batch files it links.
 | [research_embeddings_search_plan.md](research_embeddings_search_plan.md) | plan (research after the tag; its seams in v0.7.0 B2/B4) | Embeddings and semantic search: measured baseline, encoder candidates (#347), the embedding registry and dual-field swap seams for the rebuild (#365), frame search and group-by-image (#435, #436), kNN settings at 1M real vectors, prototype protocol, bars and stop rules |
 | [research_near_duplicates_plan.md](research_near_duplicates_plan.md) | plan (research and v0.7.0 seams; #416, #473) | Near-duplicate detection for the clean rebuild: literature (Immich, PDQ, DISC21, SSCD, DINOv2, FiftyOne), candidate designs, the PostgreSQL runs and groups, Celery jobs, OpenSearch fields, the holdout rule, per-project profiles, the prototype protocol and stop rules; absorbs the former #416 issue plan |
 | [research_spatial_attributes_plan.md](research_spatial_attributes_plan.md) | plan (research; capture metadata seam in W4, the rest after the tag) | Spatial scenes and attribute signals (#348, #400): capture metadata at ingest as the one v0.7.0 seam, colour and view signals with measured bars, same-place discovery and photogrammetry as registered research, the reserved schema, the prototype protocol and the location-privacy rules |
+| [research_plate_text_plan.md](research_plate_text_plan.md) | plan (research first; product in W5e, #401) | Registration-plate text as a per-box attribute: reader bake-off, per-character confidence, burst consensus, normalized exact/fuzzy/fragment search, identity groups, privacy modes and purge; the seams the v0.7.0 rebuild must include, the prototype protocol and the landing lanes |
 | [v080_platform_breadth_plan.md](v080_platform_breadth_plan.md) | plan (v0.8.0, not started) | Platform breadth after v0.7.0: COCO segmentation import, search by image, model-family training, API authentication, a second segmenter, video files as a source, the wheel example and the embedding swap, in waves with a test and GPU budget |
 
 ## Per-issue plans (published as gists on the issues)
@@ -71,7 +72,6 @@ closes.
 |---|---|---|
 | [issue-42-plan.md](issue_plans/issue-42-plan.md) | #42 | Smaller-workspace TensorRT builds and 12 GB GPU guidance |
 | [issue-398-plan.md](issue_plans/issue-398-plan.md) | #398 | Detector-class roots with a hold-back guard as the auto-label loop partition |
-| [issue-401-plan.md](issue_plans/issue-401-plan.md) | #401 | Registration-plate text as a per-box attribute, with privacy modes |
 
 ## Reference docs
 
