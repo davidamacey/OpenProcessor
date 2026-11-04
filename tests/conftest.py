@@ -191,6 +191,7 @@ _PROCESS_CACHES = (
     ('src.clients.curation_opensearch.ensure_overlay_fields', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
+    ('src.services.projects.stats', '_disk_cache'),
     # Config-store snapshots: one ConfigStore per project, keyed by
     # slug in a module-level dict -- every test binds the same ``default``
     # project, so a store one test mutates would leak into the next.
