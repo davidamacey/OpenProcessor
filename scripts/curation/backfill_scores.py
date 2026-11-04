@@ -97,8 +97,14 @@ async def _async_main(args: argparse.Namespace) -> int:
         for name in requested:
             scorer = get_scorer(name)
             result = await scorer.score(ids, embeddings, opensearch=client)
-            await bulk_write_result(client, result)
-            logger.info('scorer=%s n_scored=%d extra=%s', name, result.n_scored, result.extra)
+            refused = await bulk_write_result(client, result)
+            logger.info(
+                'scorer=%s n_scored=%d refused=%d extra=%s',
+                name,
+                result.n_scored,
+                refused,
+                result.extra,
+            )
 
         index = index_name(get_curation_config(), IndexRole.ITEMS)
         await client.indices.refresh(index=index)

@@ -18,6 +18,7 @@ from logutil import get_logger
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -177,13 +178,22 @@ def write_status_now(status_path: Path, state: StatusState) -> None:
     _atomic_write_json(status_path, build_status_payload(state))
 
 
-def _heartbeat_loop(stop_event: threading.Event, state: StatusState, status_path: Path) -> None:
+def _heartbeat_loop(
+    stop_event: threading.Event,
+    state: StatusState,
+    status_path: Path,
+    superseded: Callable[[], bool] = lambda: False,
+) -> None:
     """Daemon-thread body: write status.json every ``HEARTBEAT_INTERVAL_S``.
 
     The API flips a run to ``lost`` when ``heartbeat_at`` goes stale, so this
-    loop must keep running for the whole job.
+    loop must keep running for the whole job. It stops writing once ``superseded()``
+    says another replica reclaimed the job (see :mod:`job_claim`).
     """
     while not stop_event.is_set():
+        if superseded():
+            logger.warning('heartbeat: job reclaimed by another trainer; no more status writes')
+            return
         try:
             _atomic_write_json(status_path, build_status_payload(state))
         except OSError:

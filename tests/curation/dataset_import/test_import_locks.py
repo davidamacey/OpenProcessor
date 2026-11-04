@@ -79,7 +79,7 @@ async def test_a_human_edit_between_plan_and_write_still_wins(tmp_path: Path, mo
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.4 0.4']})
     prepared = h.prepare(h.request(root, map_all(h.registry, 'car')))
     request = h.request(root, map_all(h.registry, 'car'))
-    store, _ = runner.claim_import(request, prepared)
+    store, _ = await runner.claim_import(object(), request, prepared)
     ctx = h.context(store, request, prepared)
     machine = _doc(class_source='vlm', label_source='vlm', class_validated=False)
     h.items[machine['crop_id']] = dict(machine)

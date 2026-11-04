@@ -11,6 +11,7 @@ from src.domain.label_ops import LABEL_OP_ID_RE, current_query
 from src.services.curation.label_ops.store import (
     LABEL_OPS_KEEP,
     LabelOpRecord,
+    ServedStatus,
     iter_ops,
     served_status,
 )
@@ -49,9 +50,9 @@ async def current_counts(opensearch: Any, records: Iterable[LabelOpRecord]) -> d
     return counts
 
 
-def label_op_wire(record: LabelOpRecord, current: int) -> dict[str, Any]:
-    """The one storage-to-wire mapping of an operation (:class:`LabelOp`)."""
-    status = served_status(record)
+def label_op_wire(record: LabelOpRecord, current: int, status: ServedStatus) -> dict[str, Any]:
+    """The one storage-to-wire mapping of an operation (:class:`LabelOp`); ``status`` is
+    :func:`~src.services.curation.label_ops.store.served_status`."""
     return {
         'op_id': record.op_id,
         'kind': record.kind,
@@ -86,7 +87,7 @@ async def list_label_ops(
         page = window[:limit]
         counts = await current_counts(opensearch, page)
         return _list_body(
-            [label_op_wire(r, counts[r.op_id]) for r in page],
+            [label_op_wire(r, counts[r.op_id], await served_status(opensearch, r)) for r in page],
             limit,
             page[-1].op_id if len(window) > limit else None,
         )
@@ -98,7 +99,9 @@ async def list_label_ops(
             break
         counts = await current_counts(opensearch, chunk)
         for record in chunk:
-            wire = label_op_wire(record, counts[record.op_id])
+            wire = label_op_wire(
+                record, counts[record.op_id], await served_status(opensearch, record)
+            )
             if wire['undoable'] and len(served) <= limit:
                 served.append(wire)
     page_items = served[:limit]

@@ -16,6 +16,7 @@ from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.clients.occ_bulk import occ_bulk_rounds
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.domain.label_ops import UndoOutcome, undo_outcome
 from src.services.curation.class_undo import UNDO_READ_FIELDS, class_undo_update
 from src.services.curation.item_selection import MAX_BULK_SELECTION
@@ -27,10 +28,9 @@ from src.services.curation.label_ops.store import (
     read_op,
     save_op,
     served_status,
-    undo_lock,
-    write_lock,
 )
 from src.services.curation.label_ops.views import current_counts
+from src.services.curation.lease_heartbeat import leased
 from src.services.curation.reprocess_targets import scan_items
 from src.services.rejections import rejection
 from src.utils.timeutil import now_iso
@@ -181,32 +181,48 @@ async def undo_label_op(
         ids, known = await _members(opensearch, record)
         outcomes = await _classify(opensearch, record, ids, registry_name)
         return _response(
-            record, outcomes, dry_run=True, members_known=known, status=served_status(record)
+            record,
+            outcomes,
+            dry_run=True,
+            members_known=known,
+            status=await served_status(opensearch, record),
         )
-    read_op(op_id)  # 404 before any lock file is created
-    with undo_lock() as got:
-        if not got:
-            raise rejection(409, 'label_op_busy', 'another undo is running in this project')
+    read_op(op_id)  # 404 before any lease is taken
+    async with (
+        leased(
+            opensearch,
+            LeaseKind.LABEL_UNDO,
+            None,
+            op_id,
+            busy=lambda _h: rejection(
+                409, 'label_op_busy', 'another undo is running in this project'
+            ),
+        ),
+        leased(
+            opensearch,
+            LeaseKind.LABEL_OP,
+            op_id,
+            op_id,
+            busy=lambda _h: rejection(
+                409, 'label_op_in_progress', f'{op_id} is still being written'
+            ),
+        ),
+    ):
         record = read_op(op_id)  # fresh: a pass that just finished changed it
-        with write_lock(op_id) as writing:
-            if not writing:
-                raise rejection(409, 'label_op_in_progress', f'{op_id} is still being written')
-            await _refuse_if_nothing_left(opensearch, record)
-            ids, known = await _members(opensearch, record)
-            record.status = 'undoing'
-            save_op(record)
-            outcomes = await _restore(opensearch, record, ids, registry_name)
-            response = _response(
-                record, outcomes, dry_run=False, members_known=known, status='undone'
-            )
-            record.status = 'undone'
-            record.undo_passes = [
-                *record.undo_passes,
-                {
-                    'at': now_iso(),
-                    **{k: response[k] for k in _PASS_KEYS},
-                },
-            ][-UNDO_PASSES_KEPT:]
-            save_op(record)
+        await _refuse_if_nothing_left(opensearch, record)
+        ids, known = await _members(opensearch, record)
+        record.status = 'undoing'
+        save_op(record)
+        outcomes = await _restore(opensearch, record, ids, registry_name)
+        response = _response(record, outcomes, dry_run=False, members_known=known, status='undone')
+        record.status = 'undone'
+        record.undo_passes = [
+            *record.undo_passes,
+            {
+                'at': now_iso(),
+                **{k: response[k] for k in _PASS_KEYS},
+            },
+        ][-UNDO_PASSES_KEPT:]
+        save_op(record)
     logger.info('label_op_undone', op_id=op_id, **{k: response[k] for k in _PASS_KEYS})
     return response

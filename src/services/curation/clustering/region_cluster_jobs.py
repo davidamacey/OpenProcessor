@@ -12,17 +12,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.domain.job_lease import LeaseKind
 from src.services.curation.clustering.region_box_clustering import (
     auto_assign_fp_from_centroids,
     build_region_fp_centroids,
     cluster_region_residuals,
     count_false_positive_boxes,
 )
+from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
 from src.utils.atomic_write import atomic_write_json
 
 
@@ -53,7 +56,18 @@ def _job_file() -> Path:
     return _region_state_dir() / 'job.json'
 
 
-_JOB_STALE_S = 1800.0  # a 'running' flag older than this is treated as dead
+class _Busy(Exception):  # noqa: N818 - control-flow signal, not an error
+    """The job's lease is held by a live run."""
+
+    def __init__(self, _holder: str | None) -> None:
+        super().__init__('region job already running')
+
+
+def _new_job_id() -> str:
+    return uuid.uuid4().hex
+
+
+_JOB_STALE_S = 1800.0  # a 'running' flag older than this is treated as dead (status view only)
 _DEFAULT_JOB: dict[str, Any] = {
     'running': False,
     'started_at': None,
@@ -179,13 +193,18 @@ async def start_region_cluster_job(
          ``force_repartition`` or at least ``fp_bust_delta`` new FPs have
          accumulated since the last partition (a substantial change busts the TTL).
 
-    Returns the job snapshot immediately so the caller never blocks. If a run is
-    already in flight, returns its snapshot without starting another.
+    Returns the job snapshot immediately so the caller never blocks. The run holds the
+    ``region_cluster`` lease: if another process holds it, the snapshot of that run is
+    returned and nothing starts.
     """
-    state = _read_region_cluster_job()
-    if state.get('running'):
-        return state
+    try:
+        beat = await acquire_heartbeat(
+            client, LeaseKind.REGION_CLUSTER, None, _new_job_id(), job=None, busy=_Busy
+        )
+    except _Busy:
+        return _read_region_cluster_job()
     started = datetime.now(UTC).isoformat()
+    beat.start()
     _write_region_cluster_job(
         {'running': True, 'started_at': started, 'finished_at': None, 'result': None, 'error': None}
     )
@@ -253,7 +272,7 @@ async def start_region_cluster_job(
                 }
             )
 
-    task = asyncio.create_task(_run())
+    task = asyncio.create_task(run_leased(beat, client, _run()))
     _job_tasks.add(task)
     task.add_done_callback(_job_tasks.discard)
     return _read_region_cluster_job()
@@ -311,11 +330,16 @@ def region_fp_centroid_job_status() -> dict[str, Any]:
 
 
 async def start_region_fp_centroid_job(client: AsyncOpenSearch) -> dict[str, Any]:
-    """Launch :func:`build_region_fp_centroids` in the background (single-flight)."""
-    state = _read_region_fp_job()
-    if state.get('running'):
-        return state
+    """Launch :func:`build_region_fp_centroids` in the background, single-flight under the
+    ``region_fp_centroids`` lease."""
+    try:
+        beat = await acquire_heartbeat(
+            client, LeaseKind.REGION_FP_CENTROIDS, None, _new_job_id(), job=None, busy=_Busy
+        )
+    except _Busy:
+        return _read_region_fp_job()
     started = datetime.now(UTC).isoformat()
+    beat.start()
     _write_region_fp_job(
         {'running': True, 'started_at': started, 'finished_at': None, 'result': None, 'error': None}
     )
@@ -339,7 +363,7 @@ async def start_region_fp_centroid_job(client: AsyncOpenSearch) -> dict[str, Any
                 }
             )
 
-    task = asyncio.create_task(_run())
+    task = asyncio.create_task(run_leased(beat, client, _run()))
     _job_tasks.add(task)
     task.add_done_callback(_job_tasks.discard)
     return region_fp_centroid_job_status()

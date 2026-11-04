@@ -425,6 +425,14 @@ time. Single-target forms:
 
 ## Workers, jobs and events
 
+- **Job leases.** A singleton job is claimed by an OpenSearch lease document
+  (`lease:<kind>[:<scope>]` in the project's settings-role index), written create-only and
+  with `if_seq_no`/`if_primary_term`. A holder renews it every 15 s on a thread with its own
+  event loop and client (a blocked request loop cannot cost a live job its lease); the lease
+  expires 120 s after the last renew, and a holder stops writing state 90 s after its last
+  good renew. Startup reconcile is a lease takeover, so a sibling's live job is never marked
+  `interrupted`. No file lock guards cross-process state (`scripts/codegen/check_file_locks.py`
+  lists the few left). The trainer claims a job with create-only generation claim files.
 - **File protocols.** The API and the workers share the state volumes. Training
   and auto-label jobs are JSON files the API writes and the long-lived worker
   claims; status flows back as files. A heartbeat marks a live claim; a job

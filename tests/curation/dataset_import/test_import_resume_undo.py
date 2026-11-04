@@ -51,7 +51,7 @@ async def test_same_key_completed_import_is_reused_and_writes_nothing(
     store, _ = await h.run(request)
     before = {k: dict(v) for k, v in h.items.items()}
     writes = h.os.bulk_calls
-    again, reused = runner.claim_import(request, h.prepare(request))
+    again, reused = await runner.claim_import(object(), request, h.prepare(request))
     assert reused
     assert again.import_id == store.import_id
     assert h.os.bulk_calls == writes
@@ -66,12 +66,12 @@ async def test_only_one_import_runs_per_project(tmp_path: Path, monkeypatch) -> 
     root = tmp_path / 'ds'
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))
-    store, _ = runner.claim_import(request, h.prepare(request))
+    store, _ = await runner.claim_import(object(), request, h.prepare(request))
     other = tmp_path / 'ds2'
     write_yolo(other, names=['car'], images={'z': ['0 0.5 0.5 0.2 0.2']})
     req2 = h.request(other, map_all(h.registry, 'car'))
     with pytest.raises(runner.ImportBusyError) as busy:
-        runner.claim_import(req2, h.prepare(req2))
+        await runner.claim_import(object(), req2, h.prepare(req2))
     assert busy.value.import_id == store.import_id
 
 

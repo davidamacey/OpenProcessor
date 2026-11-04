@@ -133,7 +133,8 @@ async def pipeline_auto_label_start(
         if run_vlm:
             require_run_vlm(vlm_run)
     try:
-        return auto_label_job.start_job(
+        return await auto_label_job.start_job(
+            opensearch,
             # R6-m1 fix: the worker must invoke the internal implementation
             # directly, not the public route wrapper -- `pipeline_auto_label`
             # now always forces `prompt_pack_resolved=False`, which would

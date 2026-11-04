@@ -163,7 +163,7 @@ async def test_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_omit
 
     captured: dict[str, Any] = {}
 
-    def _fake_start(_fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'args': {k: v for k, v in kwargs.items() if k != 'opensearch'}}
 
@@ -210,7 +210,7 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
 
     captured: dict[str, Any] = {}
 
-    def _fake_start(_fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'job_id': 'x'}
 

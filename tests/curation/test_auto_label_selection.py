@@ -146,7 +146,7 @@ async def test_start_ignores_a_stale_settings_doc_pack_when_omitted(
 
     captured: dict[str, Any] = {}
 
-    def _fake_start(_fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'args': kwargs}
 

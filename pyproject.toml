@@ -346,6 +346,7 @@ markers = [
     "live: write-path tests that require the docker/test/ verification harness to be running",
     "families: tests that need the official Ultralytics weights or the official YOLOv5 ONNX (CI job `families`); run with -m families",
     "unbound: opt out of the autouse `default` project binding (tests/conftest.py)",
+    "real_lease_io: opt out of the in-memory lease store (tests/conftest.py); the test supplies its own lease client",
 ]
 
 # =============================================================================

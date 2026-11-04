@@ -43,8 +43,8 @@ from src.core.logging import get_logger
 from src.services.training import lineage
 from src.services.training.job_files import (
     STALE_HEARTBEAT_SECONDS,
-    _atomic_write_json,
     _cancel_path,
+    _create_json,
     _job_path,
     _log_path,
     _read_json,
@@ -110,6 +110,16 @@ def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
 # =============================================================================
 # Public API -- write + read
 # =============================================================================
+
+
+async def _create_new_job(target: Path, payload: dict[str, Any], job_id: str) -> None:
+    """Create the job file create-only: of two submits of one id, one wins and the other gets
+    the duplicate error."""
+    try:
+        await _create_json(target, payload)
+    except FileExistsError:
+        msg = f'job_id already exists: {job_id}'
+        raise ValueError(msg) from None
 
 
 async def write_job(job: TrainJobSpec) -> str:
@@ -187,7 +197,7 @@ async def write_job(job: TrainJobSpec) -> str:
 
     payload['project'] = current_project().record.slug
 
-    await _atomic_write_json(target, payload)
+    await _create_new_job(target, payload, spec.job_id)
     logger.info(
         'curation_train_job_written',
         job_id=spec.job_id,

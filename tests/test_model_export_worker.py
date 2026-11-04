@@ -270,6 +270,38 @@ def test_startup_fails_the_tasks_a_dead_worker_left_claimed(task_dir: Path) -> N
     assert export_worker.reconcile_claimed() == 0
 
 
+def test_startup_leaves_a_claimed_task_another_worker_is_running(task_dir: Path) -> None:
+    task_id = _enqueue(task_dir)
+    assert export_worker.claim_next() is not None
+    task = model_export.get_export_task(task_id)
+    task['status'] = ExportStatus.EXPORTING.value
+    model_export.persist_task(task_id)
+    (task_dir / 'claimed' / f'{task_id}.heartbeat').touch()  # a sibling replica is exporting it
+
+    assert export_worker.reconcile_claimed() == 0
+    assert model_export.get_export_task(task_id)['status'] == ExportStatus.EXPORTING.value
+    assert (task_dir / 'claimed' / f'{task_id}.job.json').exists()
+
+
+def test_startup_fails_a_claimed_task_whose_own_heartbeat_went_stale(task_dir: Path) -> None:
+    import os
+    import time
+
+    task_id = _enqueue(task_dir)
+    assert export_worker.claim_next() is not None
+    task = model_export.get_export_task(task_id)
+    task['status'] = ExportStatus.EXPORTING.value
+    model_export.persist_task(task_id)
+    beat = task_dir / 'claimed' / f'{task_id}.heartbeat'
+    beat.touch()
+    old = time.time() - export_worker.TASK_STALE_S - 30
+    os.utime(beat, (old, old))
+
+    assert export_worker.reconcile_claimed() == 1
+    assert model_export.get_export_task(task_id)['status'] == ExportStatus.FAILED.value
+    assert not beat.exists()
+
+
 def test_heartbeat_makes_the_api_see_a_live_worker(task_dir: Path) -> None:
     assert not model_export.export_worker_alive()
     export_worker.write_heartbeat()

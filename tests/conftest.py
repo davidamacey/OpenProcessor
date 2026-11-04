@@ -128,6 +128,29 @@ def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _in_memory_leases(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Job leases (``src/clients/job_lease.py``) live in OpenSearch; offline tests run the
+    real lease logic against an in-memory store by swapping the client the three I/O
+    functions use. A test of the lease client itself opts out with ``real_lease_io``."""
+    if request.node.get_closest_marker('real_lease_io') is not None:
+        return
+    import threading
+
+    from _fake_lease_opensearch import FakeLeaseOpenSearch
+
+    from src.clients import job_lease
+
+    fake = FakeLeaseOpenSearch({}, threading.Lock())
+    for name in ('_get', '_create', '_replace'):
+        real = getattr(job_lease, name)
+
+        def _bound(client: object, *args: object, _real: object = real, **kw: object) -> object:
+            return _real(fake, *args, **kw)  # type: ignore[operator]
+
+        monkeypatch.setattr(job_lease, name, _bound)
+
+
+@pytest.fixture(autouse=True)
 def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Every ``TestClient`` request runs in a fresh ``contextvars.Context``,
     the way uvicorn serves it: the test's own binding (above) never leaks

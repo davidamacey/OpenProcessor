@@ -37,6 +37,7 @@ from pydantic import BaseModel
 from src.config.env import env_bool, env_int
 from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation.index_bootstrap import ensure_indexes
+from src.utils.upstream_errors import UpstreamError
 
 
 DEFAULT_MAX_N = 20_000
@@ -77,9 +78,11 @@ async def viz_projection_rebuild(
     from src.services.curation import embedding_viz
 
     try:
-        state = embedding_viz.start_job(
+        state = await embedding_viz.start_job(
             opensearch, scope=scope, cluster_id=cluster_id, max_n=_max_n()
         )
+    except UpstreamError:
+        raise
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return JSONResponse(status_code=202, content=state)

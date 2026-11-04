@@ -53,7 +53,6 @@ is for provenance only, not a functional requirement.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import io
 import time
 import uuid
@@ -69,7 +68,9 @@ from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
-from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob, heartbeat_ticker
+from src.domain.job_lease import LeaseKind
+from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
+from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
 
 
 if TYPE_CHECKING:
@@ -184,7 +185,7 @@ def reconcile_orphaned_jobs() -> bool:
 def get_state() -> dict[str, Any]:
     """Read-only snapshot. A stale heartbeat is reported as ``failed`` in the returned view
     only: a status poll never writes state (persisting stays with the lease/startup
-    reconcile and ``FileJob.repair_if_stale``; mirrors ``item_scores.job.get_state``'s contract)."""
+    reconcile and ``FileJob.served_state``; mirrors ``item_scores.job.get_state``'s contract)."""
     state = _read_state()
     if state.status == 'running':
         age = _job().heartbeat_age()
@@ -195,37 +196,48 @@ def get_state() -> dict[str, Any]:
     return state.to_dict()
 
 
-def start_job(
+async def start_job(
     opensearch: AsyncOpenSearch,
     *,
     scope: str,
     cluster_id: int | None = None,
     max_n: int = DEFAULT_MAX_N,
 ) -> dict[str, Any]:
-    """Write 'running' state synchronously, then schedule the background
-    fit job. Raises ``RuntimeError`` if a run is already in flight — the
-    router surfaces this as HTTP 409 (same contract as
-    ``item_scores.job.start_job`` / ``selection.job.start_job``).
+    """Take the projection lease, write 'running' state, then schedule the background fit
+    job. Raises ``RuntimeError`` if a run is already in flight -- the router surfaces this
+    as HTTP 409 (same contract as ``item_scores.job.start_job``).
     """
     if scope not in {'residual', 'cluster'}:
         raise ValueError(f"scope must be 'residual' or 'cluster', got {scope!r}")
     if scope == 'cluster' and cluster_id is None:
         raise ValueError("cluster_id is required when scope='cluster'")
+    busy = RuntimeError('viz projection job already in progress')
     if _is_busy():
-        raise RuntimeError('viz projection job already in progress')
-    _job().clear_signals()
-
+        raise busy
     job_id = uuid.uuid4().hex
-    state = _JobState(
-        job_id=job_id,
-        status='running',
-        scope=scope,
-        cluster_id=cluster_id,
-        started_at=time.time(),
+    beat = await acquire_heartbeat(
+        opensearch, LeaseKind.EMBEDDING_VIZ, None, job_id, job=_job(), busy=lambda _holder: busy
     )
-    _job().write(state.to_dict())
+    try:
+        _job().clear_signals()
+        state = _JobState(
+            job_id=job_id,
+            status='running',
+            scope=scope,
+            cluster_id=cluster_id,
+            started_at=time.time(),
+        )
+        _job().write(state.to_dict())
+    except BaseException:
+        await beat.release(opensearch)
+        raise
+    beat.start()
     _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
-        run_projection_job(job_id, opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n)
+        run_leased(
+            beat,
+            opensearch,
+            run_projection_job(job_id, opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n),
+        )
     )
     return state.to_dict()
 
@@ -386,6 +398,8 @@ async def _bulk_write_coordinates(
     """Write ``viz_x``/``viz_y``/``viz_projection_version`` only -- never
     ``cluster_id``/``cluster_subid``/``cluster_distance`` (guarded by
     ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``)."""
+    from src.clients.opensearch.bulk import failed_bulk_items
+
     index = items_index()
     n_written = 0
     for start in range(0, len(ids), chunk_size):
@@ -404,8 +418,12 @@ async def _bulk_write_coordinates(
                 }
             )
         if bulk:
-            await opensearch.bulk(body=bulk, refresh=False)
-            n_written += len(chunk_ids)
+            resp = await opensearch.bulk(body=bulk, refresh=False)
+            refused = len(failed_bulk_items(resp)) if isinstance(resp, dict) else 0
+            n_written += len(chunk_ids) - refused
+    if ids and n_written == 0:
+        msg = f'no viz coordinate was written ({len(ids)} bulk items refused)'
+        raise RuntimeError(msg)
     return n_written
 
 
@@ -440,7 +458,6 @@ async def run_projection_job(
     if state.job_id != job_id:
         return
     _job().touch_heartbeat()
-    ticker = asyncio.create_task(heartbeat_ticker(_job()))
     try:
         ids, embeddings = await _fetch_pool(
             opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n
@@ -496,10 +513,6 @@ async def run_projection_job(
         state.error = str(exc)
         state.finished_at = time.time()
         _job().write(state.to_dict())
-    finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
 
 
 __all__ = [

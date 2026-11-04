@@ -69,3 +69,11 @@ def test_folded_doc_ids_never_collide_with_config_store_ids() -> None:
     for doc_id in config_store_ids:
         assert ':' in doc_id
         assert doc_id not in (CURATION_SETTINGS_DOC_ID, umap_viz_doc_id)
+
+
+def test_lease_and_class_registry_ids_never_collide_with_config_store_ids() -> None:
+    from src.services.config_store.index import config_doc_id
+
+    # Lease docs live on the same index and are read by id only; no config-store kind is
+    # named ``lease`` or ``class_registry``, so ``kind:name`` ids cannot meet them.
+    assert not config_doc_id('prompt_pack', 'x').startswith(('lease:', 'class_registry'))

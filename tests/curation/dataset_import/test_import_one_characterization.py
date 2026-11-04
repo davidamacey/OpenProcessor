@@ -137,7 +137,7 @@ async def _size_mismatch(h: Harness, tmp: Path) -> dict[str, Any]:
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2'], 'b': ['0 0.5 0.5 0.2 0.2']})
     request = h.request(root, map_all(h.registry, 'car'))
     prepared = h.prepare(request)
-    store, _ = runner.claim_import(request, prepared)
+    store, _ = await runner.claim_import(object(), request, prepared)
     h.last_store = store
     runner.persist_pinned(store, prepared)
     ctx = h.context(store, request, prepared)
@@ -257,7 +257,7 @@ async def _resumed_image(h: Harness, tmp: Path) -> dict[str, Any]:
     write_yolo(root, names=['car'], images={'a': [SAME, FAR], 'b': ['0 0.5 0.5 0.1 0.1']})
     request = h.request(root, map_all(h.registry, 'car'))
     prepared = h.prepare(request)
-    store, _ = runner.claim_import(request, prepared)
+    store, _ = await runner.claim_import(object(), request, prepared)
     h.last_store = store
     runner.persist_pinned(store, prepared)
     ctx = h.context(store, request, prepared)

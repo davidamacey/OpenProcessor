@@ -68,22 +68,24 @@ def test_subsample_deterministic_and_capped() -> None:
 # =============================================================================
 
 
-def test_start_job_rejects_unknown_scope(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_start_job_rejects_unknown_scope(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from src.services.curation import embedding_viz
 
     monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
     with pytest.raises(ValueError, match='scope'):
-        embedding_viz.start_job(AsyncMock(), scope='bogus')
+        await embedding_viz.start_job(AsyncMock(), scope='bogus')
 
 
-def test_start_job_requires_cluster_id_for_cluster_scope(
+@pytest.mark.asyncio
+async def test_start_job_requires_cluster_id_for_cluster_scope(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from src.services.curation import embedding_viz
 
     monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
     with pytest.raises(ValueError, match='cluster_id'):
-        embedding_viz.start_job(AsyncMock(), scope='cluster', cluster_id=None)
+        await embedding_viz.start_job(AsyncMock(), scope='cluster', cluster_id=None)
 
 
 # =============================================================================
@@ -145,7 +147,7 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
     fake_os.bulk = AsyncMock(side_effect=_capture_bulk)
     fake_os.index = AsyncMock(return_value=None)
 
-    state = embedding_viz.start_job(fake_os, scope='residual', max_n=100)
+    state = await embedding_viz.start_job(fake_os, scope='residual', max_n=100)
     job_id = state['job_id']
     await _await_active_task()
 
@@ -192,7 +194,7 @@ async def test_run_projection_job_empty_pool_completes_with_zero_written(
     monkeypatch.setattr(embedding_viz, 'fit_projection', _boom)
 
     fake_os = AsyncMock()
-    embedding_viz.start_job(fake_os, scope='residual', max_n=100)
+    await embedding_viz.start_job(fake_os, scope='residual', max_n=100)
     await _await_active_task()
 
     final_state = embedding_viz.get_state()
@@ -216,9 +218,9 @@ async def test_double_start_raises_runtime_error(tmp_path, monkeypatch: pytest.M
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run)
 
     fake_os = AsyncMock()
-    embedding_viz.start_job(fake_os, scope='residual')
+    await embedding_viz.start_job(fake_os, scope='residual')
     with pytest.raises(RuntimeError, match='already in progress'):
-        embedding_viz.start_job(fake_os, scope='residual')
+        await embedding_viz.start_job(fake_os, scope='residual')
 
     assert embedding_viz.cancel_job() is True
     hang_forever.set()

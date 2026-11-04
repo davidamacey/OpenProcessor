@@ -91,6 +91,27 @@ decided, or an item in the frozen test holdout. Skipped items are reported as
 `locked_skipped`. See "Concurrency and the lock rule" in
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
+## Singleton jobs and the job lease
+
+A job that may run once per project (a reprocess, an assist run, a dataset import, a score,
+selection or projection job, a probe, a promote, a combine, an auto-label loop, a label
+operation, the region-cluster jobs) starts under a lease: an OpenSearch document in the
+project, taken create-only, renewed every 15 seconds by a thread of its own and released at
+the end. Two requests on two workers cannot both start the job; the second gets the family's
+409 busy refusal (`reprocess_busy`, `import_busy`, `assist_busy`, `assist_loop_busy`,
+`probe_busy`, `label_op_busy`, or a plain 409 for scores, selection and projection). If
+OpenSearch is down the start answers 503; a job never starts without its lease.
+
+- **Busy window after a crash.** A holder that dies stops renewing; a new start of the same
+  kind is refused for at most 120 seconds after its last renew, then takes over.
+- **Label operations.** A write or undo that died is served `interrupted` or
+  `undo_interrupted` once its lease has expired (up to 120 seconds, no longer instantly).
+- **Fencing.** A holder that finds its lease taken over, or cannot renew for 90 seconds,
+  stops writing its job state. A holder that stalls for longer than the margin between its
+  check and a write can still write once; a write takes milliseconds, so this is accepted.
+- **Not yet leased.** The bulk-ingest runner, the source scan and the ingest dispatcher still
+  use a file lock (B2 moves them).
+
 ## Region profiles
 
 How regions are found inside an item. Data, stored per project, no built-in default.

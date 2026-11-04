@@ -9,7 +9,6 @@ through :func:`api_error`.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -58,7 +57,6 @@ from src.services.curation.dataset_import.upload import (
     UploadTooLargeError,
     receive_archive,
 )
-from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_detector import (
@@ -276,7 +274,7 @@ async def start_dataset_import(
         )
     _refuse_unmapped_or_blocked(prepared, body)
     try:
-        store, reused = runner.claim_import(body, prepared)
+        store, reused = await runner.claim_import(opensearch, body, prepared)
     except runner.ImportBusyError as exc:
         raise api_error(
             409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
@@ -298,20 +296,25 @@ async def start_dataset_import(
         materialize_created_classes(prepared.resolved, registry, new_groups=new_groups)
     except Exception as exc:
         store.job.update(status='failed', error=str(exc)[:300], finished_at=now_iso())
+        await runner.abandon_claim(opensearch, store)
         raise api_error(422, 'class_mapping_invalid', f'could not create a class: {exc}') from None
-    runner.persist_pinned(store, prepared)
-    runner.persist_scan_summary(
-        store, prepared, [i.model_dump() for i in issues_to_wire(prepared.issues)]
-    )
-    freeze = runner.freeze_default(prepared, body)
-    store.job.update(freeze_test=freeze)
-    ctx = await _context(
-        store,
-        body,
-        (prepared.resolved, prepared.view.profile, prepared.parents),
-        opensearch,
-        registry,
-    )
+    try:
+        runner.persist_pinned(store, prepared)
+        runner.persist_scan_summary(
+            store, prepared, [i.model_dump() for i in issues_to_wire(prepared.issues)]
+        )
+        freeze = runner.freeze_default(prepared, body)
+        store.job.update(freeze_test=freeze)
+        ctx = await _context(
+            store,
+            body,
+            (prepared.resolved, prepared.view.profile, prepared.parents),
+            opensearch,
+            registry,
+        )
+    except BaseException:
+        await runner.abandon_claim(opensearch, store)
+        raise
     runner.spawn(ctx, store, runner.ordered_entries(prepared.scan.entries))
     return job_wire(store, project=_slug())
 
@@ -440,7 +443,7 @@ async def resume_dataset_import(
 ) -> DatasetImportJob:
     store = _open(import_id)
     try:
-        prior = runner.claim_resume(store)
+        prior = await runner.claim_resume(opensearch, store)
     except runner.ImportNotResumableError:
         raise api_error(
             409,
@@ -453,9 +456,6 @@ async def resume_dataset_import(
         raise api_error(
             409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
         ) from None
-    # The claim is live only while its heartbeat is: a rescan of a big dataset
-    # outlasts the stale window, and a stale claim is repairable by anyone.
-    ticker = asyncio.create_task(heartbeat_ticker(store.job))
     try:
         request = DatasetImportRequest(**store.read_request())
         try:
@@ -475,12 +475,8 @@ async def resume_dataset_import(
         runner.prepare_resume(store, registry)
         ctx = await _context(store, request, runner.load_pinned(store), opensearch, registry)
     except BaseException:
-        runner.release_resume(store, prior)
+        await runner.release_resume(opensearch, store, prior)
         raise
-    finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker
     runner.spawn(ctx, store, entries)
     return job_wire(store, project=_slug())
 
@@ -498,7 +494,7 @@ async def undo_dataset_import(
         if body.dry_run:
             runner.check_undoable(store)
         else:
-            runner.claim_undo(store)
+            await runner.claim_undo(opensearch, store)
     except runner.ImportNotUndoableError:
         raise api_error(
             409,

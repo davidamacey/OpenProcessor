@@ -104,7 +104,7 @@ def _run_job(c, monkeypatch, query):
 
     captured = {}
 
-    def fake_start(fn, args):
+    async def fake_start(_os, fn, args):
         captured.update(args)
         return {'job_id': 'x'}
 
@@ -163,7 +163,7 @@ def _start_args(c, monkeypatch, query):
 
     captured: dict[str, Any] = {}
 
-    def fake_start(fn, args):
+    async def fake_start(_os, fn, args):
         captured.update(args)
         return {'job_id': 'x'}
 

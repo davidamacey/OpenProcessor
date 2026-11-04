@@ -41,6 +41,10 @@ def _async_step(world: World, name: str, result: Any = None):
     return _run
 
 
+async def _fake_lease_client() -> object:
+    return object()
+
+
 def _sync_step(world: World, name: str, result: Any = None):
     def _run(*_a: Any, **_k: Any) -> Any:
         world.step(name)
@@ -153,7 +157,12 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         (
             'src.services.curation.startup_reconcile',
             'reconcile_all_jobs',
-            _sync_step(w, 'reconcile_jobs'),
+            _async_step(w, 'reconcile_jobs'),
+        ),
+        (
+            'src.services.projects.guard',
+            'make_curation_opensearch',
+            _fake_lease_client,
         ),
         ('src.config', 'get_gpu_arbiter_config', fake_get_arbiter_config),
         ('src.services.training.gpu_arbiter', 'reconcile_on_startup', fake_reconcile_on_startup),
