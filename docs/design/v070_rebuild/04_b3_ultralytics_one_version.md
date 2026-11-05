@@ -4,9 +4,9 @@
 |---|---|
 | Status | plan, not started |
 | Release | part of the single **v0.7.0** release (B0-B5 plus R-final; D-37 approved in [decision_register.md](reference/decision_register.md) section 6). No tag at the end of B3. R-final (`07_release_acceptance.md`) validates it last, after B5 |
-| Depends on | B2 merged into main (decision D-13 order: B0, B1, B2, B3, B4, B5, R-final); B1-1E done (B1 1E (merged; see CHANGELOG.md)); B0 exact pin `ultralytics==8.4.197` in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (commit `d1c6bab0`) and `tests/test_requirements_contract.py` (`b0_close_out_done.md`); GPU window 1 ([decision_register.md](reference/decision_register.md) section 8.1; `risks_cleanup_host.md`) |
+| Depends on | B2 merged into main (decision D-13 order: B0, B1, B2, B3, B4, B5, R-final); B1-1E done (B1 1E (merged; see CHANGELOG.md)); B0 exact pin `ultralytics==<pin>` (the one value `requirements.txt` carries today, `8.4.197` at commit `d1c6bab0`; B3 reads the current value, it does not hard-code it) in `requirements.txt`, `requirements-test.txt` and `pyproject.toml` (commit `d1c6bab0`) and `tests/test_requirements_contract.py` (`b0_close_out_done.md`); GPU window 1 ([decision_register.md](reference/decision_register.md) section 8.1; `risks_cleanup_host.md`) |
 | Blocks | B4 (`05_b4_stateless_api.md`) retakes its 32-worker baseline on the B3 engine; B5 (`06_b5_overview.md`) measures the stack as it stands after B4 |
-| Decisions applied | D-2 (B0 pin 8.4.197 is the starting point), D-10 (B1-1E minimal; trainer `nms`, export module, full matrix are here), D-11 option b (original YOLOv5 = bring-your-own ONNX for probe and secondary only), D-12 (`nms` by capability), D-13 (order), owner decisions of 2026-11-03 items 2, 5, 6, 7 |
+| Decisions applied | D-2 (the B0 exact pin, whatever `requirements.txt` carries at B3's start, is the starting point), D-10 (B1-1E minimal; trainer `nms`, export module, full matrix are here), D-11 option b (original YOLOv5 = bring-your-own ONNX for probe and secondary only), D-12 (`nms` by capability), D-13 (order), owner decisions of 2026-11-03 items 2, 5, 6, 7 |
 | Open decisions | **D-27** (U-J1 staging and U-J5..J8), **D-28** (pin choice rule and freeze date); status in [decision_register.md](reference/decision_register.md) section 6, needed at B3 kick-off; section 3 holds the detail |
 | Source IDs | former master plan section 7.3 (moved here), U-Step 4-9, U-J1, U-J4..J8, U-C3, U-C6, U-C7, U-C9, U-C11, U-R1..R8, U-6.1, U-6.2 (`docs/design/model_family_versions_plan.md`); GPU-14 final, GPU-18 (`docs/design/codebase_audit_plan.md` 4.3); N8; #368 first slice; #447 trainer part |
 | Verified | Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03 (read-only `rg`, nothing run). Line numbers move; re-find every site by the symbol or the `rg` pattern given |
@@ -37,7 +37,7 @@ then speed (no throughput loss; B5 then measures on this engine once).
 |---|---|---|
 | P1 | B2 merged into main | `git log --oneline -1 main`; the B2 PR merge commit is present |
 | P2 | B1-1E merged: `nms=False` in `export_yolo26.export_fused_onnx`, `inspect_fused_output` refuses non-`[300,6]`, `head_kind` recorded by `validate_pytorch_model`, the export worker routes on `head_kind`, class by name on the secondary, YOLOv5 probe input read from the ONNX, CI job `families` exists | `rg -n "nms=False" export/export_yolo26.py`; `rg -n "head_kind" src/services/model_export.py export/export_worker.py`; `rg -n "families" .github/workflows/` |
-| P3 | B0 exact pin: every requirements file says `ultralytics==8.4.197`; `tests/test_requirements_contract.py::test_ultralytics_is_one_exact_version_everywhere` exists | `rg -n "ultralytics" requirements*.txt pyproject.toml`; `rg -n "exact_version" tests/test_requirements_contract.py` |
+| P3 | B0 exact pin: every requirements file carries the same exact `ultralytics==<pin>`, equal to the current pin in `requirements.txt` (`8.4.197` when the plan was written); `tests/test_requirements_contract.py::test_ultralytics_is_one_exact_version_everywhere` exists | `rg -n "ultralytics" requirements*.txt pyproject.toml`; `rg -n "exact_version" tests/test_requirements_contract.py` |
 | P4 | D-27 and D-28 answered by the owner; freeze date written into the B3 PR description | owner message |
 | P5 | GPU window booked: GPU 0 for about one GPU day, announced to peer sessions; nothing else heavy from this repo at the same time | `risks_cleanup_host.md` |
 | P6 | Reference artifacts exist or are scheduled as gate step G0 (images from main before B3, a checkpoint from the 8.4.48 trainer) | section 6 |
@@ -116,11 +116,11 @@ in the same commit as any wire change; lane checks only (section 9).
 ### Track `stagea` (Stage A: one version, no second environment)
 
 **B3-A1 Pin `X` everywhere.** Size S.
-- Files: `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (`ultralytics==8.4.197`
-  today in the dependency list), `tests/test_requirements_contract.py` (from B0, `test_ultralytics_is_one_exact_version_everywhere`).
+- Files: `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (the current exact pin
+  in the dependency list), `tests/test_requirements_contract.py` (from B0, `test_ultralytics_is_one_exact_version_everywhere`).
 - Pattern: exact `==` pin (U-J2); PyPI JSON for the release list
   (`https://pypi.org/pypi/ultralytics/json`).
-- Steps: replace `8.4.197` with `X` in each file; rewrite the `requirements.txt` comment (it still
+- Steps: replace the current pin (read it from `requirements.txt`) with `X` in each file; rewrite the `requirements.txt` comment (it still
   says the YOLO11 toolchain needs `<8.4`, false per U-C4).
 - Red: extend the pin test to also read the trainer's `ULTRALYTICS_VERSION` comment (B3-A3) and
   fail on any mismatch; red because the trainer is on 8.4.48. Control: the requirements files
@@ -546,7 +546,7 @@ v0.7.0 release.
    `yolo_export_report.py`, and the wire field `src/schemas/model_admin.py::normalize_boxes`.
 5. `src/utils/pytorch_utils.py` is also named in `src/utils/README.md` and
    `scripts/codegen/baselines/broad_except.txt`.
-6. All three files are pinned `ultralytics==8.4.197` since commit `d1c6bab0` (`requirements.txt`,
+6. All three files are pinned to one exact `ultralytics` version (8.4.197 at the time) since commit `d1c6bab0` (`requirements.txt`,
    `requirements-test.txt` and `pyproject.toml`, with a test in
    `tests/test_requirements_contract.py`); the earlier statement that only `pyproject.toml` was
    pinned is obsolete. B3 moves all three together.

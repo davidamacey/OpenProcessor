@@ -32,7 +32,10 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 - no lifespan side effects (the B2 rule in `03_b2_overview.md` section 5.5 holds; the ratchet in
   4B-4 enforces it);
 - no request handler fans out (`rg -n "asyncio\.gather" src/routers` is empty; services reached
-  only from a handler have no `gather` except the J7 ingest data plane, written as `TaskGroup`);
+  only from a handler have no `gather` except the J7 ingest data plane, written as `TaskGroup`; the exempt
+  modules are exactly the four of 4A-4 (`ingest_batch.py`, `ingest_detect.py`, `ingest_index.py`
+  `_cache_crops`, `visual_search/ingest_batch.py`), and the no-`create_task`, no-`gather` AST test of
+  4A-5 covers every other module, `routers/health.py` among them);
 - the 1-vs-N live check (section 7) passes: an empty diff for the sequential scenario and every invariant for the concurrent one (R-15);
 - the installer default `API_WORKERS` (D-33) is set provisionally as `min(nproc, 32)`, and its
   benchmark against the 32-worker baseline retaken on the B3 engine is recorded in
@@ -136,6 +139,8 @@ classified:
 
 ### 4A-4 The ingest data plane as `TaskGroup` (J7 exemption, CC-7)
 
+Why `TaskGroup` and why only here: the Python documentation says that when a task in a `TaskGroup` fails, the group cancels the remaining tasks, while `gather` leaves its siblings running ([asyncio Task Groups](https://docs.python.org/3/library/asyncio-task.html#task-groups)); a bounded, awaited-before-the-response group is the only fan-out the request path keeps, and the four modules named in 4A-4 are the whole exemption list.
+
 - **Doc:** Python asyncio "Task Groups" (a child failure cancels the siblings; errors arrive as an
   `ExceptionGroup`).
 - **Steps:** rewrite the `gather`s in `ingest_batch.py`, `ingest_detect.py`, `ingest_index.py`
@@ -174,7 +179,7 @@ classified:
   space (research embeddings 5.4, ES-C's `embedding_space()`). Red: one client call instead of two
   concurrent ones.
 - `routers/health.py`: probes run sequentially with their existing timeouts (health is not
-  latency-critical). Red: no `create_task` or `gather` in the module (AST test).
+  latency-critical). Red: no `create_task` or `gather` in the module (AST test; `routers/health.py` is not one of the four 4A-4 exempt ingest modules, and it is latency-insensitive, so it has no reason to fan out).
 - `resource_links.py`: `op.periodic.resource_reachability` (beat, 30 s) probes the services and
   writes `op:resource_reachability` (Valkey, `SET ... EX 90`; a short-lived cache, the kind of value Valkey owns per [02](02_control_plane_database.md) section 3.1); the routes read it; a missing key
   reads "unknown", never "down". Delete the per-process `_cache.inflight` task. Red: two API
@@ -199,7 +204,7 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
 - **Doc:** uvicorn settings: `--workers` "Defaults to the `$WEB_CONCURRENCY` environment variable
   if available, or 1" [U1]; FastAPI "Server Workers" and "FastAPI in Containers" (one process per
   container under an orchestrator; several in one container on a single Compose host) [F2][F3].
-- **Steps:** remove `--workers=32` and the "64" and "benchmark" comments from the `api` command in
+- **Steps:** remove `--workers=32` and the stale "64 workers" and "benchmark" comments (the plan's number is 32: `docker-compose.yml` near line 260 says 64 in a comment) from the `api` command in
   `docker-compose.yml`; add `WEB_CONCURRENCY=${API_WORKERS:-8}` to the `api` environment; remove
   `"--workers", "16"` from the Dockerfile `CMD` (the image default becomes uvicorn's
   `WEB_CONCURRENCY`, else 1, which is what an orchestrator wants); keep
@@ -229,8 +234,8 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
   replica count has one source, `.env` `OP_API_REPLICAS` read by compose as `deploy.replicas`
   (B2 1C-2); the pool timeout answer 503 `database_busy` and the separate poll engine come from
   B2 1A-6; 4B adds no scale command.
-- **Red test:** `tests/config/test_api_pools.py`: `API_WORKERS=1` gives the totals, 32 gives
-  today's per-process values, 0 or junk fails. **Control:** the lifespan smoke test.
+- **Red test:** `tests/config/test_api_pools.py`: `API_WORKERS=1` gives the totals (database pool 128 per process), `API_WORKERS=8` (the compose fallback) gives 16 database connections per process, 32 gives
+  today's per-process thread and channel values and 4 database connections per process (the 128 total of [02b](02b_jobs_locking_events.md) section 8; was 2 of 64), 0 or junk fails; every size times its worker count stays at or below the total. **Control:** the lifespan smoke test.
 
 ### 4B-3 Document the remaining per-process limits
 
