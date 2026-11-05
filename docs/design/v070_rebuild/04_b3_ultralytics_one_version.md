@@ -63,7 +63,7 @@ GPU day and a second engine rebuild for users. Not recommended.
 
 | Recommendation | Consequence | Needed by |
 |---|---|---|
-| `X` = the newest **8.4.x** release on PyPI that is at least 3 days old on the **freeze date** (set by the coordinator at B3 kick-off and written into the PR) and passes U-6.1 at that version. If no release passes, `X` = the newest that does; if none since 8.4.197 passes, `X` = 8.4.197 and Stage A/B still run on it. An 8.5.x release needs a separate owner yes. Any bump after the freeze reruns U-6.1 and U-6.2 | deterministic for an agent; the PR records `X`, the freeze date, the release-note scan and the matrix output | B3 kick-off |
+| **Answered by the owner 2026-11-05 (D-82): the latest release.** `X` = the newest Ultralytics release on PyPI on the **freeze date** (set by the coordinator at B3 kick-off and written into the PR), whatever its minor version, with the newest YOLO model family it ships. U-6.1 and the GPU gate check that it works (export, the `[300, 6]` contract, no broken accuracy); they are not a comparison to pick an older version. A failure is fixed forward on the latest release (the named fallbacks of 01 section 8 only for a dependency that blocks it), never by staying on an older Ultralytics. Any bump after the freeze reruns U-6.1 and U-6.2 | deterministic for an agent; the PR records `X`, the freeze date, the release-note scan and the matrix output | B3 kick-off |
 
 Evidence: 8.4.201 passed every CPU check on 2026-11-03 (`model_family_versions_plan.md` 3.3);
 Ultralytics ships several 8.4 releases a day (U-R2), hence the freeze.

@@ -136,7 +136,7 @@ W2.3b research families ---> W2.4 rest of stage 6, docs, sweep ==> PR3 to main (
 side: #42 on GPU 1 whenever its owner frees it (never blocks)
 side (RD-2): short prototype runs on idle GPU, never inside a program window or live run; about 10 GPU h in total
    PW-1 during W2.1-W2.2:   gpu:PR-0..2, nd:P0..2 (3.4 h) --> W5a/W5b decoder choice; nd:P1 seeds ND-A's defaults (W2.3b)
-   PW-2 during W2.3a-W2.4:  pt:P1..5 with PP-OCRv6 (2.9 h) --> W5c OCR model, W5e reader, tier, consensus
+   PW-2 during W2.3a-W2.4:  pt:P1..5 on PP-OCRv6 (1.9 h) --> W5e reader, tier, consensus (W5c takes PP-OCRv6, D-82)
    PW-3 during W4:          gpu:PR-5..6, al:AL0 (1.5 h)    --> W5c, W5d; budget defaults later
    reserve:                 about 2.2 h, tier-2 confirmations only; beyond the cap only on the owner's OK
    CPU slots any time:      clu:CL-0, emb:EP-0, sp:P-0..1 (sp:P-1 gates the W4 capture lane), pt:P0
@@ -573,7 +573,7 @@ prototypes are simple local-venv GPU scripts (no Docker builds) on set P and fre
 public sets (the dataset register, 08 section 4.1), tracked under `scripts/research/<topic>/` with
 exact pins and a committed lock file (RD-7); every run is a short tiered run on a small seeded sample
 with early stop (08 section 2.1); the default is today's approach, replaced only on a clear
-short-run win. PW-1 (W2.1-W2.2, about 3.4 GPU h), PW-2 (W2.3a-W2.4, about 2.9) and PW-3 (W4, about
+short-run win. PW-1 (W2.1-W2.2, about 3.4 GPU h), PW-2 (W2.3a-W2.4, about 1.9) and PW-3 (W4, about
 1.5) plus a 2.2 h reserve make **about 10 GPU hours before the tag**; anything beyond needs the
 owner's OK. Cut before the tag: `gpu:PR-3`, `PR-4` (5b-G4 not opened), `PR-7..PR-9`, `pt:P6`, the SSCD
 arm of `nd:P2`, `nd:P3..P7`, every `emb:` and `clu:` GPU run, `sp:P-2..P-9`, `al:AL1..AL6`. The
@@ -607,7 +607,7 @@ window or a live-harness run (rows PW-1..PW-3; RD-2: short runs, about 10 GPU ho
 |---|---|---|---|
 | 1 | W3 | 04 G0 (reference images, an 8.4.48-trainer checkpoint), G1-G9 (engines, Triton contract, COCO parity, throughput, families, promote, embeddings with the OpenCV 5 face path, YOLOv5 secondary, image audit), G10 (B0 OCR before/after), G11 (the GPU part of the pins part B smokes: the CUDA provider, both CuPy wheels, one ModelOpt export, the GPU decode tests, segmenter start-up), G12 (the B2 stage-5 smoke: one short training run, one export, one 20-image bake-off; MLflow client and server together). The CPU parts of G11 run in the W3 sweep (R-17) | about 1.5 GPU days, cap plus one day (R-17) |
 | PW-1 | W2.1-W2.2 (research) | `gpu:PR-0`, `PR-1`, `PR-2`; `nd:P0`, `P1`, `P2` | about 3.4 GPU hours |
-| PW-2 | W2.3a-W2.4 (research), outside live run 2 | `pt:P1` (with PP-OCRv6), `P2`, `P3`, `P4`, `P5` | about 2.9 GPU hours |
+| PW-2 | W2.3a-W2.4 (research), outside live run 2 | `pt:P1` (PP-OCRv6, D-82), `P2`, `P3`, `P4`, `P5` | about 1.9 GPU hours |
 | PW-3 | W4 (research), outside live run 3 and before the 4B-5 benchmark | `gpu:PR-5`, `PR-6`; `al:AL0` (shortened) | about 1.5 GPU hours |
 | reserve | any PW window | tier-2 confirmations only | about 2.2 GPU hours |
 | 2 | W5a-W5e | the 4B-5 benchmark; 5a `ref`, then `ladders`, `sweeps` (tiered), `recall`; 5b `profile`, then the 5b gate; the #231 head-to-head (optional, after 5b); the 5c gate (one day); 5d `p0` and the 5d gate; the W5e gate (about 2 h) | several GPU days spread over the B5 waves, one run at a time |
@@ -753,7 +753,7 @@ owner's OK; RD-4 the plate tables in their own W5e revision; RD-5 capture metada
 tracked prototype code with pins and a lock file; RD-8 set P local only, one shared copy; RD-10 the
 datasets, without UFPR-ALPR and LPLC; RD-23 cluster memberships in PostgreSQL; RD-25 the `cluster`
 queue (Q-D); RD-51 reversed, GPS coordinates stored now under a per-project `location_policy`
-(default keep); RD-54 exports keep the embedded GPS; review Q-B, PP-OCRv6 as one short reader
+(default keep); RD-54 exports keep the embedded GPS; review Q-B, PP-OCRv6 as one short reader (superseded 2026-11-05 by D-82: the latest models, PP-OCRv6 and the latest Ultralytics, adopted with no comparison run)
 comparison.
 
 **Answered by the owner on 2026-11-05:** every other open question, as recommended (D-78): the six that the

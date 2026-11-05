@@ -64,8 +64,8 @@ entry `op.periodic.region_text_consensus_sweep` (60 s) in `src/tasks/beat_schedu
 
 The Triton model directory of the reader, its export step, the installer model group (opt-in, off by
 default), `ATTRIBUTION.md` with the provenance gap stated; red: the P5 numbers reproduced on Triton
-within the 2x-spread rule. Without an adoption this lane does not exist and PP-OCRv5 stays the reader
-(or PP-OCRv6, if `pt:P1` and [06c](06c_b5_crops_ocr_faces.md) adopted it in W5c).
+within the 2x-spread rule. Without an adoption this lane does not exist and the pipeline's PP-OCRv6 stays the reader
+(PP-OCRv6 from W5c, D-82).
 
 ## Lane `w5e/frontend-text` (only if `rg -n "text_engine_version" frontend/src` finds a reader)
 

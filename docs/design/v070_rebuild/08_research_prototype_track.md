@@ -48,7 +48,7 @@ own, so the program writes every prototype with its topic first (resolution X-12
 |---|---|---|---|---|---|
 | CPU slots | any time from W2.0 | none | a sweep's T1 run on the same host (nice 19, at most 8 threads) | `clu:CL-0`, `emb:EP-0`, `nd:P0` (its CPU part only), `pt:P0`, `sp:P-0`, `sp:P-1` | 0 (the 0.2 GPU hours of `nd:P0` are its parity run, counted in PW-1) |
 | **PW-1** | during W2.1 and W2.2 (the rebuild uses no GPU) | GPU 0; GPU 2 when agreed | the W2.1 and W2.2 part-check bring-ups (CPU, but they run the stack) | `gpu:PR-0`, `gpu:PR-1`, `gpu:PR-2`, `nd:P0`, `nd:P1`, `nd:P2` (SSCD arm cut) | about 3.4 |
-| **PW-2** | during W2.3a, W2.3b and W2.4, outside live harness run 2 | GPU 0; GPU 2 when agreed | live run 2 (W2.4) | `pt:P1` (with PP-OCRv6, Q-B), `pt:P2`, `pt:P3`, `pt:P4`, `pt:P5` | about 2.9 |
+| **PW-2** | during W2.3a, W2.3b and W2.4, outside live harness run 2 | GPU 0; GPU 2 when agreed | live run 2 (W2.4) | `pt:P1` (PP-OCRv6, D-82), `pt:P2`, `pt:P3`, `pt:P4`, `pt:P5` | about 2.9 |
 | (W3) | GPU window 1 holds GPU 0 for about 1.5 days | none | GPU window 1 on GPU 0 | nothing | 0 |
 | **PW-3** | during W4, outside live harness run 3 | GPU 0; GPU 2 when agreed | live run 3 (W4), the 4B-5 benchmark (first job of GPU window 2) | `gpu:PR-5`, `gpu:PR-6`, `al:AL0` (shortened) | about 1.5 |
 | reserve | any PW window | as the window | as the window | tier-2 confirmations only | about 2.2 |
@@ -132,7 +132,7 @@ Every "Data" entry is a row of the dataset register (section 4.1).
 | priors and cross-time (`sp:P-8`) | MSLS, Aachen, RobotCar, YFCC geotagged | 0.5 | - | P-4 | RG-5 | reported, not gated | RW-5 |
 | set P, owner-run (`sp:P-9`) | set P, frozen sample | owner's | owner's | P-1, P-4..P-6 | owner's window | counts only, no location value | RW-5 |
 | data and harness (`pt:P0`) | train split, manifests, local transcription | 0 | CPU, person | none | CPU slot | every pt read | - |
-| which reader (`pt:P1`) | 1,000 plate crops: Open Images, the OpenALPR benchmark, CCPD strata, set P; arms PP-OCRv5 (today, control), PP-OCRv6 (owner Q-B, one comparison), one dedicated plate reader | 1.5 | - | P0 | PW-2 | the W5e reader (RD-11) and the B5c OCR model ([06c](06c_b5_crops_ocr_faces.md)) | W5c, W5e |
+| which reader (`pt:P1`) | 1,000 plate crops: Open Images, the OpenALPR benchmark, CCPD strata, set P; PP-OCRv6 only (D-82: the latest model, no v5 comparison); one dedicated plate reader as the only other arm | 0.5 | - | P0 | PW-2 | the W5e reader (RD-11) and the B5c OCR model ([06c](06c_b5_crops_ocr_faces.md)) | W5c, W5e |
 | the confident tier (`pt:P2`) | P1's dev halves | 0.5 | - | P1 | PW-2 | `text_confident_char_min`; the script computes the per-character minimum from the recognition logits in its own venv, so it does not wait for W5c's `rec_char_min` output (review RR-24) | W5e |
 | how much bursts add (`pt:P3`) | set P bursts only (UFPR-ALPR skipped by the owner) | 0.3 | - | P1 | PW-2 | the consensus method | W5e |
 | which frames are one vehicle (`pt:P4`) | set P capture times | 0.3 | - | P0, `sp:P-1` | PW-2 | the consensus basis (RD-68) | W5e |
@@ -151,10 +151,10 @@ Every "Data" entry is a row of the dataset register (section 4.1).
 | Part | GPU hours |
 |---|---|
 | PW-1 | about 3.4 (`gpu:PR-0` 0.5, `PR-1` 1.5, `PR-2` 0.5; `nd:P0` 0.2, `P1` 0.5, `P2` 0.2) |
-| PW-2 | about 2.9 (`pt:P1` 1.5, `P2` 0.5, `P3` 0.3, `P4` 0.3, `P5` 0.3) |
+| PW-2 | about 1.9 (`pt:P1` 0.5, `P2` 0.5, `P3` 0.3, `P4` 0.3, `P5` 0.3) |
 | PW-3 | about 1.5 (`gpu:PR-5` 0.5, `PR-6` 0.5; `al:AL0` 0.5) |
 | reserve (tier-2 confirmations only) | about 2.2 |
-| **before the tag, total** | **about 10, the owner's cap** (was about 31); per topic: GPU pipeline 3.5, plate 2.9, near-duplicates 0.9, auto-label 0.5, spatial, embeddings and clustering 0 (CPU only) |
+| **before the tag, total** | **about 10, the owner's cap** (was about 31); per topic: GPU pipeline 3.5, plate 1.9, near-duplicates 0.9, auto-label 0.5, spatial, embeddings and clustering 0 (CPU only) |
 | after the tag | not scheduled; the plans' upper estimates sum to about 70 (RG-1..RG-6), each window on the owner's OK with tier 1 at most 2 GPU hours per prototype |
 
 CPU-hours cap for the CPU-slot prototypes: the host is shared, so each runs at `nice 19` with at most 8
