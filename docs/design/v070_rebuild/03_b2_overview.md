@@ -3,21 +3,21 @@
 | Field | Value |
 |---|---|
 | Status | plan, not started |
-| Release | part of the single v0.7.0 release (no intermediate tag; R-final in [07_release_acceptance.md](07_release_acceptance.md)) |
-| Depends on | B1 merged into `main` (done); the owner's go for B2 |
+| Release | part of the single v0.7.0 release (no intermediate tag; R-final in [07_release_acceptance.md](07_release_acceptance.md)); B2 itself merges to `main` as three PRs (section 1) |
+| Depends on | B0 and B1 merged into `main` (done); the plan set, PR #477 (4 CI shards) and W2.0 (pins part A) on `main`; the owner's go for B2 |
 | Design | [02_control_plane_database.md](02_control_plane_database.md), [02a](02a_postgres_schema.md) (schema), [02b](02b_jobs_locking_events.md) (jobs, events, queues, pools), [02c](02c_migration_ops_tests.md) (migrations, upgrade, services, storage, tests, traps). This file and the stage files say **who builds what, in which order, proven how** |
-| Decisions applied | approved 2026-11-04: D-17 (Celery 5.6), D-18 (Valkey), D-31 (evaluator on `gpu_eval`), D-39..D-45 (the owner decisions). Also approved 2026-11-04 as a block: D-19, D-20, D-20a, D-20b, D-22a, D-22b, D-23, D-24, D-25, D-26, D-46..D-63 (D-48 and D-50 as amended), and after the review [00c](reference/review_1_control_plane.md): D-64 (inference without the control plane; replaced the same day by D-69: every service requires the control plane), D-65 (Valkey wake-up), D-66 (kombu and redis-py held), D-67 (pins part A first). Register: [decision_register.md](reference/decision_register.md) section 6 |
-| Packages | named here, pinned in `01_package_pins.md` (written on its own branch): SQLAlchemy (with the `asyncio` extra), Alembic, psycopg 3 (`psycopg[binary]`), Celery, kombu, billiard, redis-py, Flower, testcontainers (`testcontainers[postgres,redis]`); the Postgres and Valkey images and digests of `01_package_pins.md` section 4 (Postgres base: owner question MQ-2) |
-| Source IDs | `task_queue_plan.md` Phases 2-5 and E1-E26 (task detail where still valid); audit CC-4, CC-5, CC-9, CC-11, OPS-2, SEC-4, SEC-5; ENV-4, ENV-6, ENV-14, ENV-18, ENV-20 of [08](reference/environment_and_setup.md) |
+| Decisions applied | approved 2026-11-04: D-17 (Celery; the latest release at bump time, 5.7.0, since D-66 was reversed on 2026-11-05, D-70), D-18 (Valkey), D-31 (evaluator on `gpu_eval`), D-39..D-45 (the owner decisions). Also approved 2026-11-04 as a block: D-19, D-20, D-20a, D-20b, D-22a, D-22b, D-23, D-24, D-25, D-26, D-46..D-63 (D-48 and D-50 as amended), and after the review [review_1](reference/review_1_control_plane.md): D-64 (inference without the control plane; replaced the same day by D-69: every service requires the control plane), D-65 (Valkey wake-up), D-66 (kombu and redis-py held; reversed by the owner on 2026-11-05: the latest releases at bump time, Celery 5.7.0, kombu 5.7.0, redis-py 8.1.0), D-67 (pins part A first). Register: [decision_register.md](reference/decision_register.md) section 6 |
+| Packages | named here, pinned in [01_package_pins.md](01_package_pins.md) (on `main`): SQLAlchemy (with the `asyncio` extra), Alembic, psycopg 3 (`psycopg[binary]`), Celery, kombu, billiard, redis-py, Flower, testcontainers (`testcontainers[postgres,redis]`); the Postgres and Valkey images and digests of `01_package_pins.md` section 4 (Postgres base `postgres:18.6-trixie`, MQ-2 answered) |
+| Source IDs | `task_queue_plan.md` Phases 2-5 and E1-E26 (task detail where still valid); audit CC-4, CC-5, CC-9, CC-11, OPS-2, SEC-4, SEC-5; ENV-4, ENV-6, ENV-14, ENV-18, ENV-20 of [environment_and_setup](reference/environment_and_setup.md) |
 
-Verified against `origin/main` at `7f3453de` on 2026-11-04 (read only).
+Verified against `origin/main` at `7f3453de` on 2026-11-04 (read only). `main` has moved since (the plan set and the CI shards landed, 2026-11-04/05); a symbol or path that moved is re-found by concept at the cut.
 
 ---
 
 ## 1. Goal and done-when
 
 **Goal.** PostgreSQL holds every control record; every long job runs on Celery (Valkey broker),
-training and model export included; the API and every worker are stateless and can run as several
+training, model export, label operations and their undo included; the API and every worker are stateless and can run as several
 replicas; `FileJob`, every file protocol, the `/jobs` volume and every file lock are gone.
 
 **Why (mission).** Jobs die when an API worker recycles (CC-4); periodic side effects run once per
@@ -26,7 +26,7 @@ documents cannot be queried, constrained or shared across hosts ([02](02_control
 section 1).
 
 **B2 is done when:**
-- `rg -n "file_job|FileJob|job_lease|lease_heartbeat|job_lock|trigger\.json|running\.lock|cancel\.flag|claim\.g|\.job\.json|/jobs/" src scripts docker export` is empty (outside `src/services/upgrade/from_060/` and its tests, which read 0.6.0 files);
+- `rg -n "file_job|FileJob|job_lease|lease_heartbeat|job_lock|trigger\.json|running\.lock|cancel\.flag|claim\.g|\.job\.json|/jobs/(model_export|scores|select|viz|auto_label|imports|reprocess|assist|assist_loop|combine|region_drain|bulk_ingest|probe)\b|:/jobs\b" src scripts docker export docker-compose*.yml` is empty (outside `src/services/upgrade/from_060/` and its tests, which read 0.6.0 files). The `/jobs/<name>` alternatives are the thirteen directory names under today's shared `/jobs` volume and `:/jobs\b` its compose mounts (checked against the repo on 2026-11-05); a bare `/jobs/` would never pass, because the new `GET /jobs` routes (lane 3A-9: `src/routers/jobs.py`, `src/routers/curation/jobs.py`) and the surviving API paths `/reprocess/jobs/{job_id}` and `/promote/{job_id}/jobs/{promote_id}` contain it;
 - `scripts/codegen/baselines/file_locks.txt` is empty and the ratchet asserts zero;
   `rg -n "fcntl" src` is empty (this was B4's done-when; B2 meets it);
 - no job runs inside an API worker: `rg -n "create_task\(" src/services src/routers src/app` lists
@@ -38,10 +38,12 @@ section 1).
   roles are gone from the code);
 - no service in `docker-compose.yml` has a `container_name`; `docker compose up --scale
   jobs-worker=2 --scale api=2` starts (D-54);
-- the B2 sweep (section 9) is green, including the one B2 live run;
-- the closing PR moves the keep-list (section 11) into the permanent docs and deletes the B2 and 02
+- the PR3 sweep (section 9) is green, including the one full B2 live run (run 2 of 3);
+- the closing PR (PR3) moves the keep-list (section 11) into the permanent docs and deletes the B2 and 02
   plan files and their rows in `decision_register.md` and `docs/design/README.md` ([decision_register.md](reference/decision_register.md)
   section 8.2); merged with a merge commit; no tag.
+
+**Delivery: three PRs to `main` (owner decision 2026-11-05, D-76).** One integration branch, `int/b2-control-plane`, three PRs from its head, each leaving `main` bootable, no tag between them. After a merge the branch is an ancestor of `main`, so the next lanes merge without a rebase. PR1 = stages 1 and 2 and the job runtime of stage 3 (W2.1 + W2.2: database, control data, job runtime; job execution unchanged): part check plus a short live smoke (steps 1, 8, 9, 11). PR2 = stages 4 and 5 as ports (W2.3a) plus the stage-6 lanes they make possible, 6A and 6B part 1 ([03f](03f_stage6_scheduler_scaleout.md) "Delivery in two parts"): part check plus a live smoke (steps 3-7 and 12-18). PR3 = W2.3b, ES-C, the frontend lanes, 6A and 6B part 2, 6C, docs, then the full sweep of section 9 with live run 2. Each PR: local CI parity first, the owner's yes before the push, merge commit.
 
 ## 2. Preconditions
 
@@ -49,7 +51,7 @@ section 1).
 |---|---|---|
 | B1 on main | `git log --oneline origin/main \| rg -i "b1\|lease\|registry"` | the B1 merges |
 | the code B2 replaces still exists | `rg -ln "class FileJob" src/services/curation/file_job.py`; `rg -n "def (acquire\|takeover_expired\|renew\|release)" src/clients/job_lease.py` | present |
-| package pins | `01_package_pins.md` merged into the integration branch | exact versions for every package in the header |
+| package pins | pins part A merged to `main` (W2.0), [01](01_package_pins.md) | exact versions for every package in the header |
 | decisions | [decision_register.md](reference/decision_register.md) section 6 | the "needed by B2" rows answered or the recommendation accepted |
 | host | [risks_cleanup_host.md](reference/risks_cleanup_host.md) section 1 | peers told before the spikes and the live run; no GPU needed except stage 5's optional smoke (none in lanes) |
 
@@ -64,10 +66,10 @@ If a symbol moved, re-find it by concept and record the new name in the lane's P
 | 3 | Job runtime, the reaper and the event feed | [03c_stage3_job_runtime.md](03c_stage3_job_runtime.md) | 3A, 3B | stage 2 (codes from the stage-1 head) | stage 2 |
 | 4 | The API-hosted job families move to Celery, in two parts | [03d_stage4_job_families.md](03d_stage4_job_families.md) | W2.3a: 4A, 4B, 4C, 4D. W2.3b (after the W2.3a part check): 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard), then 4E (frontend) | stage 5 (W2.3a only) | stage 3 |
 | 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03e_stage5_gpu_queues.md](03e_stage5_gpu_queues.md) | 5A, 5B, 5C, 5D (W2.3a) | stage 4 W2.3a | stage 3 |
-| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md) | 6A, 6B and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) | - | stages 4 and 5 |
+| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md) | 6A and 6B part 1 (close W2.3a, PR2); then 6A and 6B part 2 and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) (PR3) | - | stages 4 and 5 |
 
-(The file names keep their earlier stage letters so links elsewhere stay valid; the table above is
-the order.)
+(Stage n is the file with the n-th letter: stage 1 = 03a ... stage 6 = 03f. Older text elsewhere may
+still use the earlier letters, see the "Old short names" note in [00_master_plan.md](00_master_plan.md).)
 
 ## 4. Branch, lanes and file ownership
 
@@ -77,22 +79,27 @@ the order.)
 - **Disjoint files.** Every lane owns a file list (in its stage file); no two lanes running at the
   same time edit the same file. Shared registries are split into per-lane modules created empty in
   stage 1, so later lanes only edit their own module:
-  - job kinds: `src/config/job_kinds/{__init__,infra,families_a,families_b,families_c,trigger,gpu_train,gpu_export,gpu_eval,promote}.py`;
+  - job kinds: `src/config/job_kinds/{__init__,infra,families_a,families_b,families_c,trigger,gpu_train,gpu_export,gpu_eval,promote,b4_fanout,b4_project}.py` and the research modules `{clustering,b2_embedding,near_dup,near_dup_core,source_backfill,region_text}.py` (review RR-4: created empty in stage 1 by lane 1B, so no later lane edits an aggregator);
   - task routes: `src/config/task_routes/` with the same module names plus `periodic.py`;
-  - task modules: `src/tasks/{infra,reaper,jobs_a,jobs_b,jobs_c,trigger,promote,periodic}.py` and
+  - task modules: `src/tasks/{infra,reaper,jobs_a,jobs_b,jobs_c,trigger,promote,periodic,b4_fanout,b4_project}.py`, the research
+    modules `src/tasks/{clustering,embedding_reindex,near_dup,near_dup_core,source_backfill,region_text}.py`, and
     `src/tasks/beat_schedule.py`, all listed in the
     Celery `include=` from stage 1; each GPU image builds its own app with
-    `src/tasks/runtime/gpu_app.py::make_app(include=[...])` from its own handler module (stage 5).
-- **One Alembic head.** The whole schema lands in `0001_control_plane` (lane 1A). A later schema
-  change is a coordinator commit on the integration branch (one revision per stage, before the lanes
-  that need it start); lanes never add revisions, and `tests/db/test_migrations.py` asserts a single
-  head.
-- **Append-only shared files.** `env.template`, `src/config/retired_env.py` and the baselines in
-  `scripts/codegen/baselines/` are edited by many lanes because the env-surface test and the ratchets
+    `src/tasks/runtime/gpu_app.py::make_app(include=[...])` from its own handler module (stage 5; the
+    one signature, `make_app(include, device_uuid=None)`, is fixed in [03a](03a_stage1_foundation.md) 1B-8).
+- **One Alembic head, four fixed revision ids.** The base schema, research seams included, lands in
+  `0001_control_plane` (lane 1A). Each wave has at most one revision-writing lane, with a fixed id
+  ([02d](02d_research_seam_schema.md) section 0): `0002_research_seams` (lane 1F, W2.1), `0003_near_duplicates`
+  (lane ND-A, W2.3b), `0004_region_text` (W5e, after B2). Every other lane adds no revision; any other
+  schema change is a coordinator commit on the integration branch before the lanes that need it start.
+  `tests/db/test_migrations.py` asserts a single head.
+- **Append-only shared files.** `env.template`, `src/config/retired_env.py`, the baselines in
+  `scripts/codegen/baselines/` and `src/routers/curation/__init__.py` (the register-by-import list of the
+  curation routers: a lane that adds a router adds one import line) are edited by many lanes because the env-surface test and the ratchets
   require the change in the same commit. Each lane adds or removes only its own lines; the
   coordinator resolves a textual conflict at merge by keeping both sides.
 - **Compose after stage 1.** Every `docker-compose*.yml` and `docker/test/compose.yml` change of
-  stages 4 and 5 is made by lane 6B (stage 6), from the facts the stage-4 and stage-5 lanes write in
+  stages 4 and 5 is made by lane 6B (stage 6, part 1 at the close of W2.3a), from the facts the stage-4 and stage-5 lanes write in
   their PR notes; no stage-4 or stage-5 lane edits a compose file.
 - **The one allowed overlap** is generated output: `contracts/`. A lane that changes a wire model
   runs `make contracts` in the same commit; if two merged lanes both regenerated it, the coordinator
@@ -111,7 +118,7 @@ the order.)
   lane reverts alone with `git revert -m 1 <merge>`). After each stage merge: the touched lanes'
   tests, `make contracts-check`, the `db` tier (`-m db`, minutes, no GPU; D-63) and the Docker-free
   offline suite in its 4 shards (owner decision 2026-11-04, MQ-3). One full sweep
-  for the batch (section 9).
+  for the batch, in PR3 (section 9; PR1 and PR2 carry a part check and a short smoke).
 - Opus plans; Sonnet implements and reviews. Every brief forbids `pgrep -f`, `pkill -f` and
   sleep/until loops, and names its compose project (`-p`), its GPU (none for every B2 lane), its
   worktree and its deadline. Spikes use their own `-p` and run `down -v` at the end.
@@ -125,16 +132,20 @@ browser --SSE--> api (N replicas x API_WORKERS)   --SQL (project_tx, RLS)--> pos
                   v
                valkey (redis:// transport, AOF everysec, noeviction, password, no port)
                   |
-  +---------+------------+-------------+-----------+--------------+-----------+-----------+-----------+
-  v         v            v             v           v              v           v           v
- jobs    periodic    open_vocab    autolabel   assist_loop     gpu_train   gpu_export   gpu_eval
- worker  worker      worker        worker      worker          (trainer    (export      (evaluator
- (core)  (core)      (core)        (curation)  (curation)      image)      image)       image)
+  +---------+------------+-------------+-----------+--------------+-----------+-----------+-----------+-----------+
+  v         v            v             v           v              v           v           v           v
+ jobs    periodic    open_vocab    autolabel   assist_loop      cluster     gpu_train   gpu_export   gpu_eval
+ worker  worker      worker        worker      worker           worker      (trainer    (export      (evaluator
+ (core)  (core)      (core)        (curation)  (curation)       (curation,  image)      image)       image)
+                                                                CPU)
+ (the jobs worker also runs the research families: near-duplicate, source backfill, embedding
+  re-index; the `arbiter` queue is consumed only by gpu-arbiter-worker, see below)
    | JobTask: claim UPDATE (fencing_token+1) -> heartbeat thread -> asyncio.run(handler)
    |          -> progress/checkpoint (fenced, 1/s) -> terminal UPDATE (fenced) -> events row + Valkey wake-up
  jobs-beat (one; session advisory lock): reaper, ingest dispatch, open-vocab sweep, cache prune,
    GPU arbiter (queue `arbiter`, consumed only by gpu-arbiter-worker, R-20), promoted reload,
-   cluster refresh, IVF retrain check, retention
+   serving inventory, cluster refresh (starts `cluster_run`; there is no IVF tick), near-duplicate
+   ticks, retention
 
  stream workers (detection, VLM): claim projects in stream_worker_claims, item state machine in OpenSearch
  opensearch: images + items per project, visual_search_*; blobs: storage seam (local backend)
@@ -164,10 +175,21 @@ lane's merge on the integration branch). After v0.7.0, the only earlier release 
 indexes and files from the upgrade bundle ([02c](02c_migration_ops_tests.md) section 2.3); changes
 made after the upgrade are not carried back.
 
-## 9. The B2 sweep (once, after stage 6 merged)
+## 9. The B2 checks: a smoke per early PR, one full sweep in PR3
 
 Run by the coordinator on `int/b2-control-plane`, announced to the peer sessions; one heavy run at a
-time; never overlapping B3's GPU window. Budget rules: [decision_register.md](reference/decision_register.md) section 8.1.
+time; never overlapping B3's GPU window or a research prototype window. Budget rules: [decision_register.md](reference/decision_register.md) section 8.1.
+
+**PR1 check (W2.1 + W2.2).** The part check of [00_master_plan.md](00_master_plan.md) W2.2 and a short live
+smoke, `-p op-b2-smoke1`: steps 1, 8, 9 and 11 of the T2 table below, using the no-op job and the
+sleeping no-op of `tests/live/` (no family has moved yet); budget 55 minutes (15 + 10 + 15 + 15).
+
+**PR2 check (W2.3a and stage-6 part 1).** The W2.3a part check and a live smoke, `-p op-b2-smoke2`: steps 3-7
+(80 minutes) and 12-18 (115 minutes) of the T2 table, on the kinds, queues and phases that exist at PR2
+(the research kinds of step 14 and the `cluster` phase of step 16 run as today's ports); budget 3 h 15 min.
+
+**PR3 sweep (the full B2 sweep, after every lane merged).** T1 and T2 below, with the image and browser
+checks; PR1 and PR2 smokes are not counted as numbered live runs and every step runs again here.
 
 **T1 offline (about 40 min):** `.venv/bin/pre-commit run --all-files` and the pre-push hooks; the
 Docker-free suite `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not db' -n 8`;
@@ -176,8 +198,7 @@ container per xdist worker); `make contracts-check`; `.venv/bin/python scripts/d
 the frontend full set (4E changed `frontend/`): `npm ci`, `npm run check`, lint, knip, `npm run test`,
 `npm run build`, `npm run test:e2e`.
 
-**T2 live harness, `-p op-b2-live`, budget 5 h 30 min (4 h 30 min plus the research-seam steps
-19-23, approved by the owner 2026-11-04, RD-1), the one run that covers B1 and B2.** The harness gains
+**T2 live harness, `-p op-b2-live`, budget 5 h 50 min = 350 minutes, the sum of the step budgets below (steps 1-18: 265 minutes, 4 h 25 min; the research-seam steps 19-23, approved by the owner 2026-11-04, RD-1: 85 minutes), the one run that covers B1 and B2 (live run 2 of 3).** The harness gains
 `postgres`, `valkey`, `db-migrate`, `jobs-worker` (scaled to 2), `periodic-worker`,
 `open-vocab-worker`, `jobs-beat`, the two curation consumers and a fake GPU consumer per GPU queue
 (no GPU: the fake handlers sleep and write progress). Wait with healthchecks or the Monitor tool; no
@@ -190,7 +211,7 @@ sleep loops.
 | 3 | race: 20 concurrent starts of one reprocess; two sends of one job id | one row, 19 x 409 `job_busy`; one run; the other delivery logs `claim_skipped` | 10 min |
 | 4 | kill mid-job: reprocess of 2,000 images, `docker kill` one `jobs-worker` replica after progress > 0 | `interrupted` within 150 s, then `running` on the other replica with `attempt = 2`, completes; image count equals the total; no duplicate writes | 25 min |
 | 5 | cold-shutdown requeue: `docker stop` one replica mid-job (`REMAP_SIGTERM`, soft shutdown) | `interrupted` at once, resumed by the reaper without waiting for the lease TTL | 15 min |
-| 6 | cancel running; cancel queued (workers stopped, start, cancel, start workers) | `cancelled` within one progress step; the queued job never runs | 15 min |
+| 6 | cancel running; cancel queued (workers stopped, start, cancel, start workers) | `cancelled` within one progress step; the queued job never runs (the claim refuses the cancelled row; Celery `revoke` is not used) | 15 min |
 | 7 | API recycle: `--limit-max-requests=50`, 500 requests during a reprocess | the job completes | 15 min |
 | 8 | broker loss: stop Valkey, delete its volume, start it | `/ready` answers 503 naming `queue` during the outage and 200 after; queued jobs dispatched again by the reaper (rule c); running jobs keep their lease; SSE events arrive on the 2 s tick (owner decisions 2026-11-04, R-6, D-69) | 10 min |
 | 9 | Postgres restart mid-job | the heartbeat reconnects (`pool_pre_ping`); the job completes or is resumed; during the outage starts answer 503, `/ready` answers 503 naming `database` and `/live` answers 200; after it `/ready` is 200 again (D-69) | 15 min |
@@ -207,7 +228,7 @@ sleep loops.
 | 20 | clustering on partitions (research clustering 5.1): `cluster_run` for items on a public project, activation, projection; a second run with the same vectors in another order | the served view equals the first run's; every `cluster_uid` survives; a stale activation is 409 | 15 min |
 | 21 | near-duplicates and the holdout (research near-duplicates 5.4): a full `image` and `item` build on a constructed public copy set; freeze a holdout | every leak-group member of a held-out item is held out and counted; a freeze with pending rows answers 409 `near_dup_stale` | 15 min |
 | 22 | the embedding re-index rehearsal in small (research embeddings 5.5): register a second public encoder as a candidate `item` space on 2,000 items, kill a worker mid-build, resume, promote, retire | resume re-encodes nothing finished; served search answers during the build; the flip is visible to every worker within one config poll | 15 min |
-| 23 | the five stale Cropwright screenshots (owner-approved gap, 2026-11-04; [00b](reference/traceability.md) section 1.8): with the docs overlay of `docs-site/docs/developer-guide/screenshots.mdx` on public data, capture only `projects-1600.png` (phone layout), `ingest-policy-1600.png`, `ingest-policy-preview-1600.png`, `dashboard-1600.png` (button label) and `clusters-1600.png` (filter bar and loop panel) with `frontend/scripts/capture_docs_screenshots.py` | each viewed full-page at desktop and 430 px before commit; the five files replace the stale ones under `docs-site/static/img/screenshots/cropwright/` in the B2 closing commit; `tests/test_docs_screenshot_seed.py` green | 20 min |
+| 23 | the five stale Cropwright screenshots (owner-approved gap, 2026-11-04; [traceability](reference/traceability.md) section 1.8): with the docs overlay of `docs-site/docs/developer-guide/screenshots.mdx` on public data, capture only `projects-1600.png` (phone layout), `ingest-policy-1600.png`, `ingest-policy-preview-1600.png`, `dashboard-1600.png` (button label) and `clusters-1600.png` (filter bar and loop panel) with `frontend/scripts/capture_docs_screenshots.py` | each viewed full-page at desktop and 430 px before commit; the five files replace the stale ones under `docs-site/static/img/screenshots/cropwright/` in the B2 closing commit; `tests/test_docs_screenshot_seed.py` green | 20 min |
 
 A step that overruns stops the run; the coordinator reports instead of extending the budget.
 
@@ -219,13 +240,13 @@ job) at 1440 and 430 px, full-page screenshots viewed; and the research pages 4E
 pause, budget dialog and event log; the clusters pages; the near-duplicate status and the freeze
 refusal).
 
-Then one PR from `int/b2-control-plane` against `main`, local CI parity first, CI green, merge commit.
+Then PR3 from `int/b2-control-plane` against `main`, local CI parity first, the owner's yes, CI green, merge commit. The closing chores are the coordinator's ([00_master_plan.md](00_master_plan.md) section 7).
 
 ## 10. Risks
 
 | # | Risk | Mitigation |
 |---|---|---|
-| R2-1 | the batch is large (six stages) | stages merge separately with the `db` tier each; lanes revert alone; stage 3 codes alongside stage 2 |
+| R2-1 | the batch is large (six stages) | three PRs, each bootable with its own check; stages merge separately with the `db` tier each; lanes revert alone; stage 3 codes alongside stage 2 |
 | R2-2 | the 0.6.0 upgrade loses or corrupts control data | bundle first, one-transaction load, verify before any delete, rollback from the bundle, the fixture tests, R-final on a real install ([02c](02c_migration_ops_tests.md) section 2) |
 | R2-3 | a project row leaks to another project's request | RLS fails closed; `tests/db/test_row_level_security.py`; the OpenSearch guard unchanged |
 | R2-4 | connection exhaustion with 32 API processes | the budget table and its test; `OP_PG_MAX_CONNECTIONS`; PgBouncer overlay for scale-out |
@@ -235,7 +256,7 @@ Then one PR from `int/b2-control-plane` against `main`, local CI parity first, C
 | R2-8 | Cropwright misses `queued` or the SSE id format | contracts per family; 4E; the browser check |
 | R2-9 | a secret file unreadable by a container user | spikes S0 and S1 record the ownership rule; installer tests |
 | R2-10 | Celery and kombu versions drift | exact pins, `pip check`, spike S1 on the pins (trap T-17) |
-| R2-11 | the live run overruns its 4 h 30 min budget | stop and report |
+| R2-11 | the live run overruns its 5 h 50 min budget (the PR1 and PR2 smokes: 55 min and 3 h 15 min) | stop and report |
 | R2-12 | projects starve each other on the `jobs` queue (carried from the original E13) | FIFO with `OP_JOBS_CONCURRENCY` (4) plus the per-project exclusive kinds; per-project routing is added only if the live run or a user report measures starvation |
 
 ## 11. What to keep after merge
@@ -251,7 +272,7 @@ Then one PR from `int/b2-control-plane` against `main`, local CI parity first, C
 
 ## 12. Config handed to [environment_and_setup.md](reference/environment_and_setup.md)
 
-08 section 4 carries the table (its B2 rows); the names are defined in the stage files and
+[environment_and_setup](reference/environment_and_setup.md) section 4 carries the table (its B2 rows); the names are defined in the stage files and
 [02c](02c_migration_ops_tests.md) section 4.
 
 ## 13. Release checks handed to R-final
@@ -268,7 +289,7 @@ Then one PR from `int/b2-control-plane` against `main`, local CI parity first, C
 
 ## 14. Old task IDs used in other files
 
-Files 09 and 12 still cite the task IDs of the former three-stage B2 and of B4's events track. They
+[github_actions.md](reference/github_actions.md) and [prior_plans_reconciliation.md](reference/prior_plans_reconciliation.md) still cite the task IDs of the former three-stage B2 and of B4's events track. They
 map to the lanes of this plan as follows (the old content is replaced, not kept):
 
 | Old ID | Now |

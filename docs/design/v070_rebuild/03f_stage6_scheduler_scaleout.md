@@ -5,13 +5,27 @@
 | Status | plan, not started |
 | Depends on | stages 4 and 5 merged ([03d](03d_stage4_job_families.md), [03e](03e_stage5_gpu_queues.md)) |
 | Design | [02b](02b_jobs_locking_events.md) section 4.1 (advisory locks, single beat), [02c](02c_migration_ops_tests.md) section 4 (services) |
-| Lanes | 6A, 6B and ES-C in parallel; then `b2/frontend-spaces` (after ES-C); then 6C; then 6D |
-| Merge order | 6A, 6B, ES-C, `b2/frontend-spaces`, 6C, 6D |
-| Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [00d](reference/owner_questions.md)): 6A gains the serving inventory, the cluster-run refresh and the near-duplicate ticks and loses the IVF retrain check; 6B the per-card Triton shape and the DCGM profiling fields; 6D the research docs; new lanes ES-C (readers to the embedding registry) and `b2/frontend-spaces`; the five stale Cropwright screenshots are recaptured in the B2 sweep ([03](03_b2_overview.md) section 9, step 23) |
+| Lanes | 6A and 6B, each in two parts (below); ES-C in parallel with part 2; then `b2/frontend-spaces` (after ES-C); then 6C; then 6D |
+| Merge order | part 1: 6A, 6B (close W2.3a, PR2). Part 2: 6A, 6B, ES-C, `b2/frontend-spaces`, 6C, 6D (PR3) |
+| Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [owner_questions](reference/owner_questions.md)): 6A gains the serving inventory, the cluster-run refresh and the near-duplicate ticks and loses the IVF retrain check; 6B the per-card Triton shape and the DCGM profiling fields; 6D the research docs; new lanes ES-C (readers to the embedding registry) and `b2/frontend-spaces`; the five stale Cropwright screenshots are recaptured in the B2 sweep ([03](03_b2_overview.md) section 9, step 23) |
 | Compose project | none in the lanes (offline renders); the B2 sweep follows this stage |
 | Decisions | D-19, D-20b, D-24, D-50, D-54, D-60, D-61; SEC-4, SEC-5 (neutral) |
 
 ---
+
+## Delivery in two parts (owner decision 2026-11-05: B2 ships as three PRs)
+
+Stage 6 is not one block at the end. `main` must boot after PR2, so the lanes that the ported families
+need run at the close of W2.3a, and the rest ride with PR3 ([00_master_plan.md](00_master_plan.md) section 4).
+
+| Part | When | 6A (`b2/beat-periodic`) | 6B (`b2/scale-out-compose`) | Why |
+|---|---|---|---|---|
+| 1 | after the eight W2.3a lanes merged; PR2 | every task of 6A-1 except `op.periodic.cluster_refresh`, `op.periodic.near_dup_rescore`, `op.periodic.near_dup_full_build` and `op.periodic.near_dup_prune`; 6A-2; 6A-3 (every deletion, the file-lock baseline becomes empty); 6A-4 | 6B-1 (without deleting `curation-cluster-refresh`), 6B-2, 6B-3, 6B-4, and the harness services in `docker/test/compose.yml` | the ported consumers need their services, the old job paths and locks have no callers left, and the PR2 live smoke (steps 3-7 and 12-18) runs on this compose |
+| 2 | after W2.3b merged; PR3 | the four deferred ticks (they start `cluster_run` and the near-duplicate tasks, which exist only after W2.3b); `cluster_refresh_daemon.py` deleted with its service; `tests/periodic/test_beat_schedule.py` gains the four names | 6B-5 (PgBouncer overlay), 6B-6 (monitoring), 6B-7 and 6B-8 (research), the `curation-cluster-refresh` service deleted | research-dependent or not needed to boot |
+
+Each part has its own branch from the integration head (`b2/beat-periodic`, `b2/beat-research-ticks`,
+`b2/scale-out-compose`, `b2/scale-out-monitoring`) and its own part check. ES-C, `b2/frontend-spaces`, 6C and 6D
+are PR3 only.
 
 ## Lane 6A `b2/beat-periodic`: periodic work to beat, and the old infrastructure deleted
 
@@ -25,6 +39,8 @@ prune call), `scripts/curation/cluster_refresh_daemon.py` (deleted), `src/servic
 `scripts/codegen/check_file_locks.py` and `scripts/codegen/baselines/file_locks.txt`,
 `src/services/curation/ops_metrics*.py` (OPS-2 act part only), tests under `tests/periodic/`,
 `tests/test_lifespan_has_no_side_effects.py`.
+
+Part 1 and part 2 are named in "Delivery in two parts" above.
 
 ### 6A-1 The beat schedule
 
@@ -108,7 +124,7 @@ helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|tr
 | 6B-5 | `docker-compose.pgbouncer.yml` (D-50, opt-in): PgBouncer in transaction mode for the pooled DSN, `OP_DB_POOLER=pgbouncer`, `OP_DB_DIRECT_HOST=postgres` kept for the beat and migration locks; the header gives the formula of [02b](02b_jobs_locking_events.md) section 8.1 for when it becomes required (R-6) | `tests/compose/test_pgbouncer_overlay.py`: the API's pooled host is the pooler and its direct host is Postgres | - |
 | 6B-6 | monitoring for replicas and the new services (review fix R-12; the static `api:8000` target sees one replica per scrape and mixes their counters): Prometheus uses `dns_sd_configs` (type A) on each scaled service name, which Docker's embedded DNS answers with every replica, so each replica is its own `instance` (chosen over `docker_sd_configs`, which would need the Docker socket in Prometheus); Alloy keeps logs by the Compose `service` label for every Python service, `postgres` and `valkey`; the dashboards select and aggregate by `service` (or `job`), never by `container` or `instance`, because a `dns_sd` `instance` is a container IP that changes when the container is recreated (RC-8), and Prometheus joins the stack's Compose network so the names resolve; an alert on Valkey `used_memory` near `maxmemory` (R-19) | `tests/compose/test_monitoring_targets.py`: every service that consumes a queue of `TaskQueues.ALL`, plus `api`, has a scrape rule and a log rule; no dashboard query selects by `container` | render test |
 | 6B-7 | research GPU S-16: the `triton-server` service reads its card and NUMA node from the env the installer generates from the active serving profile (`TRITON_GPU_ID` today); a second card is a second generated service `triton-server-<slot>`, never a hand edit; the `cluster-worker` consumer of 1C-8 joins the consumers test | `tests/compose/test_triton_service_shape.py`: no fixed `container_name`, the card from the generated env; `tests/compose/test_consumers_after_b2.py` lists `cluster` | the one-card render unchanged |
-| 6B-8 | research GPU S-22 (pending RD-18): the DCGM exporter field list in the `monitoring` profile adds `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY`, `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_PROF_PCIE_TX_BYTES`, `DCGM_FI_PROF_PCIE_RX_BYTES`; the Grafana GPU dashboard shows them beside utilization; off in the minimal install | `tests/compose/test_dcgm_profiling_fields.py` | the monitoring render test |
+| 6B-8 | research GPU S-22 (RD-18 answered as recommended (D-78)): the DCGM exporter field list in the `monitoring` profile adds `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY`, `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_PROF_PCIE_TX_BYTES`, `DCGM_FI_PROF_PCIE_RX_BYTES`; the Grafana GPU dashboard shows them beside utilization; off in the minimal install | `tests/compose/test_dcgm_profiling_fields.py` | the monitoring render test |
 
 ## Lane ES-C `b2/embedding-readers`: every reader resolves its vector field through the registry (research embeddings plan 5.4, 8.1; approved, RD-1)
 
@@ -167,7 +183,7 @@ the rebuild by [09e_research_auto_label_assist.md](09e_research_auto_label_assis
 
 Content: the keep-list of [03_b2_overview.md](03_b2_overview.md) section 11; the services table and
 the Celery conventions block in `CLAUDE.md` (routes in `src/config/task_routes/`, no decorator
-`queue=`, no I/O in `worker_process_init`, no `terminate=True`, restart the worker after task edits,
+`queue=`, no I/O in `worker_process_init`, no call to `revoke` (cancel and pause are database writes), restart the worker after task edits,
 one Alembic head, `project_tx` for every project query); INSTALLATION (services, secrets and their
 ownership rule, `max_connections`, backup and restore, PgBouncer overlay, multi-host with a shared
 volume, the 0.6.0 upgrade, the downgrade note; review fixes R-26 and R-36: upgrades are stop-the-world
@@ -176,19 +192,19 @@ v0.8.0 migrations follow expand-then-contract; messages for a queue whose profil
 (RC-13); the kNN warm-up is lost on an OpenSearch restart and the first query pays it (RC-7);
 a PostgreSQL major version moves only with a release,
 through `db backup` and `db restore`; the operator checklist of the review (back up `secrets/` and the
-Postgres volume, size `OP_PG_MAX_CONNECTIONS` with replicas, `db verify` after any restore, a shared
+Postgres volume, size `OP_PG_MAX_CONNECTIONS` (default 400, D-74) with replicas, set `OP_DB_BACKUP_DIR` to a disk other than the Postgres volume's, `db verify` after any restore, a shared
 POSIX volume for multi-host); every service requires Postgres, Valkey and OpenSearch, and `/ready` names the one that is down, D-69); SECURITY (neutral preconditions: the broker and the
 database are internal-only with required passwords, JSON-only messages, whoever reaches the broker
 can enqueue work); ATTRIBUTION rows (SQLAlchemy MIT, Alembic MIT, psycopg LGPL-3.0, Celery, kombu,
 billiard BSD-3, redis-py MIT, Flower BSD-3, testcontainers Apache-2.0 (test only), Valkey BSD-3,
 PostgreSQL licence; each confirmed from the installed wheel's metadata and Trivy's licence scanner
-at pin time, [08](reference/environment_and_setup.md) section 7.3); CHANGELOG `[Unreleased]`: Added
+at pin time, [environment_and_setup](reference/environment_and_setup.md) section 7.3); CHANGELOG `[Unreleased]`: Added
 (Postgres, Valkey, Celery workers, beat, job listing routes, `Idempotency-Key`), Changed (jobs
 survive API recycling; events over SSE with resumable ids), Removed (file protocols, the
 cluster-refresh service, four index roles, `op_projects`, `op_global_configs`, the registry
 migration CLI), Breaking (new core services and secrets, `queued` status, 202 for upload extraction,
 directory ingest and person grouping, settings writes need `expected_revision`, promote `wait=true`
-gone, removed error codes and the sync route, the GPU-arbiter overlay now mounts the Docker socket
+gone, label operations, their undo and the batch relabel and move routes answer 202 with a job id, removed error codes and the sync route, the GPU-arbiter overlay now mounts the Docker socket
 into the new `gpu-arbiter-worker` only (RC-6) and must be re-applied by users who enabled it, carried from the original 2D-3
 with a matching INSTALLATION note), Security (the two neutral lines).
 
