@@ -62,6 +62,10 @@ Each is removed in the PR of the batch named (removal waves R-2 and R-3 of `v070
 | [release_acceptance_plan.md](release_acceptance_plan.md) | open (method for R-final, `v070_rebuild/07_release_acceptance.md`; the run is mostly scripted in `acceptance_run.sh`); remove at R-final RP-9 | #54 | The scripted clean-install-to-uninstall run that gates each release |
 | [cluster_search_makemodel_plan.md](cluster_search_makemodel_plan.md) | open (parked research; W2, the W3 privacy part and W4 shipped; v0.8.0 and later) | #341 to #346, #347, #353, #354, #356, #372, #379 | Clustering and semantic search for faces, objects, whole images and items; fine-grained make/model workflow; attribute signals and plate identity text; measurement standard |
 
+## Deletions of 2026-11-05
+
+None. The superseded-plan check found no top-level plan whose still-needed content is fully carried in `v070_rebuild/`: `task_queue_plan.md`, `codebase_audit_plan.md` and `model_family_versions_plan.md` are the source of the `Q-`, `BA-`/`OS-`/`GPU-`/`FE-`/`T-`/`OPS-`/`CC-`/`SEC-` and `U-` IDs the lane files cite; the open plans are removed by the batch that finishes them; `release_acceptance_plan.md` is the method the R-final run follows (removed at RP-9). `task_queue_plan.md` carries a banner marking its Redis, lease and file-lock design as superseded.
+
 ## Issues without a plan doc
 
 See [`v070_rebuild/reference/github_actions.md`](v070_rebuild/reference/github_actions.md) section 7 (the issue map).

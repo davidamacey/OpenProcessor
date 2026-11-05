@@ -22,6 +22,7 @@ Consolidated 2026-11-03.
   "Folded into" line. The counts in section 3.7 are final.
 - **Master plan.** `docs/design/master_plan.md` is deleted; the C14 note in section 3.0 is resolved
   (the program cites it only as "the former master plan (rev 4, in git history)").
+- **Check of 2026-11-05.** Every remaining top-level plan was re-checked against the program: none was deleted, because the lane files still cite the `Q-`, audit and `U-` IDs of the three source plans, the open plans wait for their batch (R-2, R-3), and `release_acceptance_plan.md` is the R-final method until RP-9. `task_queue_plan.md` now carries a banner that its Redis 8, lease and file-lock design is superseded. See [docs/design/README.md](../../README.md).
 - **README.** Section 5 is applied: `docs/design/README.md` has the "Program plan (current)" section and
   the updated statuses.
 
