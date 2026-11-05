@@ -108,7 +108,6 @@ described in [decision_register.md](decision_register.md) "Plan lifecycle".
 | `tests/curation/test_no_embedding_field_literals.py` (research embeddings) | B2 stage 6 (ES-C1) | no `pe_embedding`, `region_box_embeddings` or `ITEM_EMBEDDING_FIELD` literal outside the registry modules, the upgrade loader and the mapping builders | about 40 files today | enforced |
 | `tests/curation/test_assist_loop_record_in_tables.py` (research auto-label, G-3) | B2 stage 4 (4D) | no loop budget, node or answer read from `jobs.params`, `jobs.checkpoint` or `events` | the loop reads files today | enforced |
 | `tests/test_no_legacy_near_dup_fields.py` (research near-duplicates) | B2 stage 4 (ND-5) | no `dup_*` field and no `imohash` read in `src/` | present today | enforced |
-| `tests/region_text/test_sink_inventory.py` (research plate) | B4 (identity-text privacy), extended in W5e | every sink of identity text is listed; a new sink without a row fails | none | enforced |
 
 ## 3. Library-per-mechanism register
 

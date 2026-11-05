@@ -59,9 +59,8 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 | 4A fan-out | `b4/bulk-occ`, `<repo>-wt-b4-bulk-occ` | section 4 | 1 |
 | 4D #439 | `b4/project-create`, `<repo>-wt-b4-project-create` | section 6 | 2 |
 | 4B worker knob | `b4/worker-knob`, `<repo>-wt-b4-worker-knob` | section 5 | last (its ratchet allowlist must see every other track's final code) |
-| privacy and security items | `b4/privacy-hardening` | [00_master_plan.md](00_master_plan.md) W4; owns `SECURITY.md` in W4, so it also writes the location rules of section 6c (coordinates stored under the project's `location_policy`, default `store`; exports keep the embedded GPS, as today; owner 2026-11-04, RD-51 reversed, RD-54) and the identity-text section's operator text | after 4D |
+| privacy and security items | `b4/privacy-hardening` | [00_master_plan.md](00_master_plan.md) W4; owns `SECURITY.md` in W4, so it also writes the location rules of section 6c (coordinates stored under the project's `location_policy`, default `store`; exports keep the embedded GPS, as today; owner 2026-11-04, RD-51 reversed, RD-54) | after 4D |
 | capture metadata and the location policy at ingest (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` | section 6c | after the privacy lane (cut after 4A, 4D and the privacy lane merged: 4A rewrites the ingest data plane, 4D owns `docs/CURATION.md` until it merges, the privacy lane may edit `src/services/curation/wire.py` for #470) |
-| identity-text privacy baseline (research plate 5.8) | `b4/identity-text-privacy` | section 6c | after the capture lane, before 4B |
 
 Same branch model as B2: one agent per worktree, lanes run only targeted red/green tests and static
 checks on touched files, the coordinator merges `--no-ff` (one merge commit per track) and runs
@@ -353,17 +352,12 @@ parser against ExifTool) read before the cut.
 | CM-4 | the location policy (owner 2026-11-04, RD-51 reversed): the writer and the image wire go through the one helper; a switch to `drop` starts the location-purge step (every `capture.location*` value of the project cleared, counts-only audit); exports keep the embedded GPS by default (RD-54), and a `drop` project's exports strip it (CM-5) | `tests/curation/test_location_policy.py`: under `drop` no coordinate reaches the images index; `store_coarse` rounds; a switch to `drop` purges every coordinate and a re-run writes nothing | `has_location` is unchanged by the policy |
 | CM-5 | exports honour the project's own policy (review RN-4; the owner's rule "exports keep embedded GPS" is the default, and `drop` is the project choosing otherwise, so no new question): under `store` and `store_coarse` the export copies bytes as today; under `drop` the export copy path removes the GPS IFD losslessly with ExifTool (`exiftool -gps:all= -o <out> <in>`, [ExifTool](https://exiftool.org/), in the jobs image; chosen over a hand-written EXIF rewriter, and Pillow would re-encode the pixels); the policy is read once per export job; `SECURITY.md`, the settings wire description and `docs/CURATION.md` say that `drop` covers the index, the wire and exports, while the stored originals keep their bytes | `tests/curation/test_export_gps_by_policy.py`: under `drop` an exported copy of the GPS fixture has no GPS IFD and its pixels and every other tag are byte-identical; under `store` the copy is byte-identical to the original | a fixture without GPS exports byte-identical under every policy |
 
-**`b4/identity-text-privacy`** (research plate plan 5.8; a separate lane from `b4/privacy-hardening`,
-which is scoped from private notes; the coordinator checks the two own disjoint files before the
-cut). Owns: `src/core/logging.py` (the structlog processor `redact_region_text` in
-`shared_processors`, so structlog and foreign stdlib records both pass through it), new
-`src/config/identity_text.py` (`OP_IDENTITY_TEXT_MAX_MODE`, `OP_IDENTITY_TEXT_SECRETS_DIR`;
-malformed refuses startup), the sink-inventory canary `tests/region_text/test_sink_inventory.py`,
-`env.template` (append rule). Red: a log record carrying `text`, `text_raw`, `text_frame`,
-`text_vlm`, `text_ocr` or a model reply under those keys is masked (red today); a malformed
-`OP_IDENTITY_TEXT_MAX_MODE` refuses startup; the master file must be a regular non-symlink file of
-exactly 32 bytes. The `SECURITY.md` text ("Privacy: identity text") is written by
-`b4/privacy-hardening`, which owns that file in W4.
+Owner decision 2026-11-05: registration-plate text is ordinary searchable label data (readable
+text, exact, fuzzy and fragment search); the former `b4/identity-text-privacy` lane (log redaction
+processor, `OP_IDENTITY_TEXT_MAX_MODE`, secrets dir, sink-inventory canary, the `SECURITY.md`
+identity-text statement) is removed from B4 and has no replacement. Project delete removes plate text
+like any other project data.
+Plate boxes come from a plate detector the deployment supplies: the owner runs a private one in their own deployments, other users bring their own (for example from Hugging Face) through the existing model upload path (`POST /models/upload`), and no private model ships in the repository or in any image.
 
 ## 6b. Events (moved)
 

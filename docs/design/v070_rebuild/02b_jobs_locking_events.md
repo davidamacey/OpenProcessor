@@ -15,10 +15,9 @@
 | From | To | Who | Condition |
 |---|---|---|---|
 | (new) | `queued` | job service `start` | insert; the partial unique index `uq_jobs_one_active` refuses a second active job of the same exclusive group and scope |
-| (new) | `running` | job service `run_inline` | inline kinds only (section 2.5) |
 | `queued` | `running` | task wrapper `claim` | `cancel_requested_at IS NULL` and `retry_count < max_attempts` (research G-1: a pause, resume or yield never spends an attempt) |
-| `queued` | `paused` | pause route | pausable kinds only; `pause_reason` set (auto-label plan 5.2); **no revoke** (review RR-1: a revoked id stays in worker memory for up to 10,800 s, and the resumed job is dispatched under the same id, so a revoke would drop it); the stale message finds `paused` at the claim and is acked |
-| `queued` | `cancelled` | cancel route | - |
+| `queued` | `paused` | pause route | pausable kinds only; `pause_reason` set (auto-label plan 5.2); **no revoke** (Celery keeps revoked ids only in worker memory, [revoking tasks](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks), and a resumed job is dispatched under the same id, so a revoke would drop it; review RR-1); the stale message finds `paused` at the claim and is acked |
+| `queued` | `cancelled` | cancel route | a database write only (section 3.3): there is no revoke; the stale message finds `cancelled` at the claim and is acked |
 | `queued` | `failed` | reaper (`queue_wait_exceeded`), start (`queue_unavailable`), wrapper (`project_unavailable`, `attempts_exhausted`) | - |
 | `running` | `completed`, `completed_with_errors`, `failed` | wrapper, fenced | the handler returned or raised |
 | `running` | `cancelling` | cancel route | - |
@@ -66,7 +65,7 @@ pending RD-70): "stop for now" is pause.
 | `near_dup_core_group` (lane ND-C, W4) | NULL | `jobs` | `near_dup_core`, '' | yes | 3 h / 3 h 15 m | 1 h |
 | `source_backfill` (lane ND-A creates it with the content-key step; the W4 capture lane adds the capture step; review RR-10; RD-53) | yes | `jobs` | `source_backfill`, '' | yes; pausable; `slice_s` 600 | 30 m / 35 m per slice | 24 h |
 | `region_text_reread` (W5e) | yes | `text_read` | `region_text_write`, '' | yes | 24 h / 24 h 15 m | 24 h |
-| `region_text_consensus`, `identity_text_rekey` (W5e) | yes | `jobs` | `region_text_write`, '' | yes | consensus 3 h / 3 h 15 m, rekey 24 h / 24 h 15 m | 24 h |
+| `region_text_consensus` (W5e) | yes | `jobs` | `region_text_write`, '' | yes | 3 h / 3 h 15 m | 24 h |
 | `dataset_import`, `dataset_import_undo` | yes | `jobs` | `dataset_import`, '' | import yes, undo no | 24 h / 24 h 15 m | 24 h |
 | `dataset_upload_extract` | yes | `jobs` | `dataset_upload`, upload id | no | 3 h / 3 h 15 m | 24 h |
 | `combine` | target | `jobs` | `combine`, '' | yes | 24 h / 24 h 15 m | 24 h |
@@ -83,7 +82,7 @@ pending RD-70): "stop for now" is pause.
 | `project_delete` | NULL, scope slug | `jobs` | `project_delete`, slug | yes (idempotent) | 3 h / 3 h 15 m | 24 h |
 | `directory_ingest` | NULL | `jobs` | none | no | 24 h / 24 h 15 m | 24 h |
 | `persons_cluster` (keeps its name in 0.7.0; see the note below the table) | NULL | `jobs` | `persons_cluster`, '' | no | 3 h / 3 h 15 m | 24 h |
-| `label_op`, `label_undo` | yes | inline | `label_op`, op id; `label_undo`, '' | no | request-bound | - |
+| `label_op`, `label_undo` (owner decision 2026-11-05: Celery jobs like every other long job; they leave the request) | yes | `jobs` | `label_op`, op id; `label_undo`, '' | no | 1 h / 1 h 5 m | 1 h |
 | `project_create` (B4 4D, R-21) | NULL, scope slug | `jobs` | `project_create`, slug | yes (idempotent: each step checks what exists) | 1 h / 1 h 5 m | 1 h |
 | `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`, `vlm_verify_region_batch` (B4 4A) | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 1 h |
 | `gpu_arbiter` tick (R-20) | NULL | `arbiter` (periodic task, not a `jobs` row); scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set, which the overlay sets (RC-3) | advisory lock | - | 120 s / 150 s | - |
@@ -154,14 +153,16 @@ Every start goes through `start_job`; a ratchet (`tests/test_jobs_single_entry.p
 on any `INSERT INTO jobs` or `jobs` model construction outside `src/db/repos/jobs.py`, and on any
 `send_task` outside `src/clients/task_queue.py`.
 
-### 2.5 Inline jobs
+### 2.5 No inline jobs
 
-`label_op` and `label_undo` stay request-bound (today they run in the request under B1's
-`LABEL_OP`/`LABEL_UNDO` leases, `label_ops/record.py:39`, `undo.py:192-201`).
-`start_inline_job` inserts the row directly as `running` with the API process as owner, runs the
-heartbeat thread for its duration, and writes the terminal state fenced. A crash leaves an expired
-lease that the reaper marks `interrupted`, which the label-op routes already serve as
-`interrupted` / `undo_interrupted`.
+Owner decision 2026-11-05: `label_op` and `label_undo` are Celery jobs of the `jobs` queue (kind table,
+section 2.1), started through `start_job` like every other long job; the route answers 202 with the
+job id and the existing label-op status route (`interrupted` / `undo_interrupted` come from the job
+status). `start_inline_job` and the inline `running` insert are not built: nothing else needs a job row
+that is born `running` with the API process as its owner, and the API process runs no heartbeat thread
+and holds no sync heartbeat connection (the budget of section 8 loses that row). Today they run in the
+request under B1's `LABEL_OP`/`LABEL_UNDO` leases (`label_ops/record.py:39`, `undo.py:192-201`); those
+leases go with the OpenSearch lease.
 
 ## 3. Running a job (`src/tasks/runtime/job_task.py`)
 
@@ -169,7 +170,10 @@ lease that the reaper marks `interrupted`, which the label-op routes already ser
 
 1. Read `job_id` from the message (the only argument). Open a project-scoped session for the job's
    project (a NULL project uses deployment scope; the row is read first under deployment scope with
-   only `SELECT project_id, kind`).
+   only `SELECT project_id, kind`). Job connections raise the role's API-sized timeouts on connect
+   (an engine `connect` event runs `SET statement_timeout = '30min'` and `SET lock_timeout = '30s'`;
+   `idle_in_transaction_session_timeout` stays at the role's 60 s, so a wrapper never idles inside a
+   transaction: [02a](02a_postgres_schema.md) section 8.1).
 2. **Claim**, one statement:
 
    ```sql
@@ -188,7 +192,7 @@ lease that the reaper marks `interrupted`, which the label-op routes already ser
 3. **Heartbeat thread** (`src/tasks/runtime/heartbeat.py`, review fix R-2: it runs in the GPU
    images too, which import only `src/tasks/runtime/`, `src/db`, `src/config`, `src/domain`,
    `src/utils`; the shape of B1's `LeaseHeartbeat`: its own thread and its own database connection;
-   never the task's; the inline jobs of section 2.5 use the same class from the API process): every
+   never the task's; only task wrappers use it now): every
    `HEARTBEAT_TICK_S` (15 s)
 
    ```sql
@@ -245,6 +249,8 @@ remain guarded by `may_write()` and the OCC rule.
 
 ### 3.2 Why the queued marker stays in Valkey
 
+`op:queued:<id>` is a **derived hint, never truth**: the `jobs` row is the only truth. The marker may be missing (Valkey lost) or stale (the row already moved on); the only consumer is reaper rule c, and a wrong marker only costs one duplicate dispatch, which the claim absorbs.
+
 `op:queued:<id>` (TTL = the kind's max queue wait) shares fate with the broker message: if the
 Valkey volume is lost, both disappear, and the reaper's rule c sees a `queued` row without a marker
 and dispatches again. A Postgres flag could not tell "waiting behind four long jobs" from "message
@@ -256,7 +262,7 @@ admits one.
 
 | Status | Cancel route effect |
 |---|---|
-| `queued`, `paused`, `interrupted` | `cancelled` at once (`finished_at = now()`); best-effort `revoke(job_id)` (never `terminate=True`: "you must never call this programmatically", [workers guide](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks)); `DEL` the marker |
+| `queued`, `paused`, `interrupted` | `cancelled` at once (`finished_at = now()`); a database write only, **no `revoke`**; `DEL` the marker; the stale message is acked at the claim |
 | `running` | `cancelling`, `cancel_requested_at = now()`; the handler sees it on its next progress write (within about 1 s) or heartbeat (15 s) and stops; the wrapper writes `cancelled` |
 | `cancelling` | no-op 202 |
 | terminal | 409 `job_finished` (existing per-family behaviour where a family already answers differently is kept and listed in stage 4) |
@@ -266,12 +272,10 @@ One statement does it:
 ('queued','paused','interrupted') THEN 'cancelled' ELSE 'cancelling' END, finished_at = CASE WHEN
 status IN ('queued','paused','interrupted') THEN now() END WHERE id = :id AND status IN
 ('queued','running','paused','interrupted','cancelling') RETURNING status`.
-Revoked ids are held in worker memory only ([persistent revokes](https://docs.celeryq.dev/en/stable/userguide/workers.html#persistent-revokes));
-the row's status is the truth, which is why the claim checks `status = 'queued'`.
+Cancel never calls Celery `revoke`: the Celery workers guide says revoked ids are kept in worker memory ("if all workers restart the list of revoked ids will also vanish"; [revoking tasks](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks), [persistent revokes](https://docs.celeryq.dev/en/stable/userguide/workers.html#persistent-revokes)), so a revoke is a hint that can be lost, while the row's status is the truth. The claim checks `status = 'queued'` and acks a message whose row is `cancelled`, `paused` or any terminal state, so the stale message needs no revoke, and one mechanism (the claim) covers cancel, pause and every restart. `tests/test_no_revoke_terminate.py` ([03a](03a_stage1_foundation.md) 1B-7) is widened to fail on any `revoke` call.
 
 Pause (pausable kinds only, else 409 `job_not_pausable`): `queued` -> `paused` at once, with
-**no revoke** (review RR-1; revoke is kept only for cancel, which is terminal, so a revoked id never
-comes back; [revoking tasks](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks)); `running` -> `pause_requested_at = now()`, `pause_reason = 'user'` (or the
+**no revoke** (review RR-1; the claim acks the stale message); `running` -> `pause_requested_at = now()`, `pause_reason = 'user'` (or the
 handler's own reason), answer 202 with `control.state = 'pausing'`; the handler reads `ctx.paused()`
 before every budget reservation and before admitting a unit of work, so a pause lands within one
 upstream request timeout plus 1 s; the wrapper writes `paused`. `paused` -> 200 no-op; `cancelling`
@@ -290,8 +294,7 @@ section 5.3.
 | `tests/tasks/test_two_project_slices.py` | with one consumer, project B's loop waits for project A's whole run (gap G-2) | B's first node starts within one slice of A's |
 | `tests/db/test_reaper_system_resume.py` | a `project_paused` job stays paused after the project resumes | rule h re-queues it; a `user` pause is never resumed by the reaper |
 | `tests/jobs/test_pause_not_pausable.py` | a pause of `reprocess` is accepted | 409 `job_not_pausable` |
-| `tests/jobs/test_queued_pause.py` | a queued job cannot be paused | `queued` -> `paused` with no revoke; the stale message is acked as `claim_skipped` |
-| `tests/tasks/test_pause_resume_after_revoke_registry.py` (review RR-1) | with a fake worker control that remembers revoked ids, `queued -> paused -> queued` never runs | it claims and runs; only cancel calls `revoke` |
+| `tests/jobs/test_queued_pause.py` | a queued job cannot be paused | `queued` -> `paused`; the stale message is acked as `claim_skipped`; resuming it dispatches under the same id and the job runs |
 
 ## 4. The reaper and stuck-job recovery
 

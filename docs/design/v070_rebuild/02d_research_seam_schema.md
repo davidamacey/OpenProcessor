@@ -410,14 +410,14 @@ the insert is the duplicate check, replacing the `imohash` lookup, pending RD-43
 The DDL is the registration-plate plan's section 5.2, with one change: `region_text_runs` refers to
 its profile by `(profile_config_id, profile_revision) REFERENCES config_revisions(config_id,
 revision)` (X-1) instead of a `config_documents` reference with `SET NULL`. Tables:
-`identity_text_policies` (mode, salt, key version, raw retention; the salt is read only through
-`identity_text_keys.project_key()`), `region_text_runs`, `region_text_consensus_groups`
+`region_text_runs`, `region_text_consensus_groups`
 (`basis IN ('near_dup','capture_window','human')`: X-16 says the `near_dup` basis reads the image
 level `dedup` groups of the current near-duplicate run, and `capture_window` reads the
 `capture_taken_utc` item field of the W4 capture lane), `region_text_consensus_members`. The same
-revision adds `region_text_consensus_marker` to the `project_state.key` `CHECK`. **No plate text is
-stored in PostgreSQL** (a schema test asserts these tables hold no text-valued column besides the
-listed codes).
+revision adds `region_text_consensus_marker` to the `project_state.key` `CHECK`. Owner decision 2026-11-05: plate text is ordinary label data, so there is no policy, salt, key-version or
+raw-retention table or column; the readable text lives in the OpenSearch region boxes and is searchable. These tables
+hold only codes, run bookkeeping and group membership (a schema test asserts they hold no text-valued column
+besides the listed codes; the text itself stays in OpenSearch).
 
 ## 5. Reserved, not created in v0.7.0 (the DDL exists so the later lane does not redesign it)
 
