@@ -31,6 +31,33 @@ with `--rev-id`, so two lanes never guess the chain:
 A wave that needs a schema change has exactly one revision-writing lane. Downgrade is tested to base
 and back (1A-3), so every revision has a real `downgrade()`.
 
+## 0.1 Table index: who writes, who reads, in which wave
+
+Owner rule: every seam goes in now, so every table below has a stated 0.7.0 writer and reader, or a
+schema-test assertion standing in for the reader. A test (`tests/db/test_research_schema_matches_plan.py`)
+asserts that every table created by revisions 0002-0004 has an entry in `src/db/table_use.py`
+(`TABLE_USE[table] = (writer, reader, wave)`, pure data), so a new table cannot land without one.
+
+| Table | 0.7.0 writer | 0.7.0 reader | Wave |
+|---|---|---|---|
+| `serving_reports` | `op.periodic.serving_inventory` | the Triton router of B4 4B (a server whose report lacks the model gets no call) | W2.1 |
+| `cluster_calibrations` | `cluster_run` and `persons_cluster` through 4F (kind `assign_bands`) | `assign.place_new` of 4F-5 (incremental bands) | W2.3b |
+| `cluster_partitions`, `partition_clusters`, `cluster_memberships` | `cluster_run` and `persons_cluster` (`record_partition`, 4F) | the cluster routes, the activation transaction, `cluster_projection_sync`, the assist loop (`pinned.partition`) | W2.3b |
+| `cluster_identities` | 4F (a new identity per new cluster, a name on human or import anchoring) | the cluster routes and promotion to a class | W2.3b |
+| `cluster_activations`, `cluster_activation_events` | 4F's activation transaction | the cluster serving routes, `cluster_projection_sync`, the assist loop | W2.3b |
+| `cluster_backend_validations` | the GPU agreement validation tool (a research script; a row is the owner's gate) | the `cluster_run` start: `backend = 'gpu'` is refused without a passing row | W2.3b (reader), research wave RW-3 (first row) |
+| `embedding_model_versions` | the catalog sync in `db-migrate`; the W3 gate G7 writes `engine_parity_min_cos` once | `embedding_space()` and the search builder (ES-A, ES-C) | W2.2 |
+| `embedding_spaces` | project create (three default spaces) and the 0.6.0 upgrade | the search builder (ES-C), `embedding_reindex` | W2.2 |
+| `embedding_reindex_runs` | the `embedding_reindex` job (ES-B) | the job status route | W2.3b |
+| `embedding_evaluation_runs` | none in 0.7.0 (the evaluation job is a later lane) | **schema-test assertion only**: `tests/db/test_embedding_registry_schema.py` inserts a row, and the equal-baseline-and-candidate `CHECK` refuses | W2.1 (schema) |
+| `assist_loop_runs`, `assist_loop_iterations`, `assist_loop_nodes`, `assist_loop_selections`, `assist_loop_proposals`, `assist_loop_budgets`, `assist_loop_budget_ledger` | the `assist_loop` job (lane 4D) | the loop routes (status, metrics), the budget gate | W2.3a |
+| `assist_loop_reviews` | none in 0.7.0 (v0.8.0 routes) | **schema-test assertion only**: the blind-audit `CHECK` test and the metrics function of lane 4D | W2.1 (schema) |
+| `vlm_usage_hourly` | every VLM caller | the assist loop's budget gate (4D) and the VLM usage figures | W2.3a |
+| `image_contents` | the content-key step of `source_backfill` and ingest | the ingest duplicate check (replaces the `imohash` lookup) | W2.3b |
+| `near_dup_runs`, `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending` | ND-A scorer, grouper and rescore | the duplicate routes, the holdout guard (ND-B) | W2.3b |
+| `holdout_near_dup_moves` | the holdout near-duplicate move path of ND-B, the only writer path for near-dup holdout moves; it goes through the lock rule (`src/clients/occ_locks.py`) | the holdout report and the undo of a move | W2.3b |
+| `region_text_runs`, `region_text_consensus_groups`, `region_text_consensus_members` | the W5e reader and consensus jobs | plate search and the consensus review | W5e |
+
 ## 1. In-place changes to 02a tables (made in 0001 by lane 1A; the DDL is edited in 02a itself)
 
 | 02a table | Change | Source seam | 0.7.0 writer and reader |
@@ -92,7 +119,7 @@ CREATE TABLE cluster_calibrations (           -- immutable (trigger cluster_cali
   embedding_field  text NOT NULL,
   embedding_model  text NOT NULL,             -- X-5: the space_key for project spaces, the catalog key for core
   preprocess_id    text NOT NULL,             -- X-5: embedding_model_versions.input_spec_sha256
-  kind             text NOT NULL CHECK (kind IN ('cut','cpm_gamma','assign_bands','core_point')),
+  kind             text NOT NULL CHECK (kind IN ('assign_bands')),   -- the one value a 0.7.0 path writes (4F-5); later kinds come with their own migration
   fitted_on        text NOT NULL,             -- 'pin:<manifest_sha256>' or 'project:<id>@holdout:<freeze id>'
   body             jsonb NOT NULL,            -- ClusterCalibrationBody (thresholds, isotonic knots, bands)
   dev_metrics      jsonb NOT NULL,
@@ -146,7 +173,7 @@ CREATE TABLE cluster_identities (             -- stable identity of a cluster ac
   cluster_uid        uuid PRIMARY KEY DEFAULT uuidv7(),
   project_id         uuid NULL REFERENCES projects(id) ON DELETE CASCADE,
   target text NOT NULL CHECK (target IN ('item','region_box','face','image')),   -- review RR-17
-  level  text NOT NULL CHECK (level IN ('class','identity','scene')),
+  level  text NOT NULL CHECK (level IN ('class','identity')),   -- values a 0.7.0 path writes (class: items and boxes; identity: faces); 'scene' comes with its own migration
   name               text NULL,
   name_source        text NULL CHECK (name_source IN ('human','import','vlm')),
   anchored_at        timestamptz NULL,
@@ -235,7 +262,7 @@ CREATE TABLE cluster_backend_validations (    -- deployment data, no RLS, writte
 
 Reader of `cluster_backend_validations` in 0.7.0: the `cluster_run` start refuses `backend = 'gpu'`
 without a passing row (the agreement gate as a constraint). Rules (activation transaction, id
-carry-over, auto-activation, retention): clustering plan section 5.1, implemented by lane 4F. The
+carry-over, auto-activation, retention): clustering plan section 5.1, implemented by lane 4F. `cluster_calibrations.kind` and `cluster_identities.level` carry only the values a v0.7.0 code path writes, the same discipline as the `method` `CHECK`; the other calibration kinds (`cut`, `cpm_gamma`, `core_point`) and identities of level `scene` arrive with the lane that writes them, each in its own migration that alters the `CHECK` and the matching list in `src/domain/clustering_vocab.py` together. The
 closed lists (`target`, `level`, `method`, `state`, `transition`) live in `src/domain/clustering_vocab.py`
 (lane 1F) and a test asserts each `CHECK` equals it.
 
@@ -367,7 +394,7 @@ lane 4D), `assist_loop_budgets` (with the over-reserve `CHECK`), `assist_loop_bu
 by `fencing_token`), `vlm_usage_hourly` (every VLM caller). RLS: `assist_loop_runs` and
 `vlm_usage_hourly` carry `project_id` (direct policy); the other loop tables reach the project
 through `run_id` with the `EXISTS` policy of 02a section 5 (they are bounded by the run's budget, so
-the per-row `EXISTS` is acceptable; contrast X-1's rule for unbounded membership tables). The
+the per-row `EXISTS` is acceptable; contrast X-1's rule for unbounded membership tables). No `assist_loop_budgets` column default depends on the outcome of the prototype `al:AL0`: every default is a constant of the plan or of the preset document, and a changed prototype result changes the preset, never the schema. The
 `pinned.partition` value names a `cluster_partitions` row (X-1: the loop reads
 `(partition_id, cluster_uid)`, never an integer `cluster_id`).
 
@@ -400,10 +427,10 @@ ALTER TABLE holdout_freezes
 ```
 
 Tables: `image_contents` (the exact key: `UNIQUE NULLS NOT DISTINCT (project_id, content_sha256)`;
-the insert is the duplicate check, replacing the `imohash` lookup, pending RD-43), `near_dup_runs`
+the insert is the duplicate check, replacing the `imohash` lookup, RD-43 answered as recommended (D-78)), `near_dup_runs`
 (one `current` and one `building` per project and level by partial unique indexes),
 `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending`,
-`holdout_near_dup_moves`.
+`holdout_near_dup_moves`. `holdout_near_dup_moves` is the only writer path for near-duplicate holdout moves, and it goes through the lock rule of `src/clients/occ_locks.py` (an automated writer never overwrites a human- or import-validated class or box, or an item in the frozen holdout); a test moves a locked item and expects a refusal.
 
 ## 4. Revision `0004_region_text` (lane `w5e/region-text-store`, W5e; approved, RD-4)
 
@@ -413,7 +440,7 @@ revision)` (X-1) instead of a `config_documents` reference with `SET NULL`. Tabl
 `region_text_runs`, `region_text_consensus_groups`
 (`basis IN ('near_dup','capture_window','human')`: X-16 says the `near_dup` basis reads the image
 level `dedup` groups of the current near-duplicate run, and `capture_window` reads the
-`capture_taken_utc` item field of the W4 capture lane), `region_text_consensus_members`. The same
+`capture_taken_utc` item field of the W4 capture lane), `region_text_consensus_members`. Owner decision 2026-11-05: a plate reading carries the **issuing jurisdiction** (for example a US state name read in the same OCR pass): `jurisdiction text NULL` with its own `jurisdiction_conf real NULL CHECK (jurisdiction_conf BETWEEN 0 AND 1)`, both nullable (a plate with no readable jurisdiction stores NULL, never a guess). They sit on `region_text_consensus_groups` (the consensus value) in this revision, and per reading next to the other `text*` fields on the OpenSearch region box (mapped as a keyword, so it is filterable and searchable with the plate text); `jurisdiction` is one of the listed codes in the no-text-column test below. The same
 revision adds `region_text_consensus_marker` to the `project_state.key` `CHECK`. Owner decision 2026-11-05: plate text is ordinary label data, so there is no policy, salt, key-version or
 raw-retention table or column; the readable text lives in the OpenSearch region boxes and is searchable. These tables
 hold only codes, run bookkeeping and group membership (a schema test asserts they hold no text-valued column

@@ -151,7 +151,7 @@ Why `TaskGroup` and why only here: the Python documentation says that when a tas
 - **Document** the exemption in `docs/design/engineering_standards.md`: request-scoped, bounded by
   the batch, awaited before the response, `TaskGroup` only, and the only exemption.
 - **4A-4b, #473 part b, rewritten as ND-C1..ND-C4 (research near-duplicates plan sections 5.2, 5.6
-  and 8, lane ND-C; pending RD-44, RD-50; the core pending rows and runs are written under
+  and 8, lane ND-C; RD-44, RD-50 answered as recommended (D-78); the core pending rows and runs are written under
   `core_tx`, the `core` RLS scope of [02a](02a_postgres_schema.md) section 1.4, review RR-3; the job
   kind and task go in the modules 1B pre-created, `src/config/job_kinds/near_dup_core.py`,
   `src/config/task_routes/near_dup_core.py` and `src/tasks/near_dup_core.py`, review RR-4):** while 4A-4 rewrites `visual_search/ingest_batch.py`,
@@ -268,7 +268,7 @@ Red: `tests/clients/test_triton_router.py`: with two fake servers 100 concurrent
 10 %; a server whose report lacks the model gets no call; one image's follow-up calls stay on its
 server. Control: one server behaves as today.
 
-### 4B-7 The in-process text encoders are deleted (research embeddings ES-E; D-69 consequence; pending RD-31)
+### 4B-7 The in-process text encoders are deleted (research embeddings ES-E; D-69 consequence; RD-31 answered as recommended (D-78))
 
 Under D-69 every API process requires Triton, so the in-process `torch` and `onnx` PE text backends
 are dead code. Delete them from `src/clients/pe_text_backends.py` (keep only Triton) and
@@ -332,7 +332,7 @@ numbers are its first rows).
 **`b4/capture-metadata`** (research spatial plan sections 5.1 and 8, lane L-C1; RD-51 reversed and
 RD-54 answered by the owner 2026-11-04: GPS coordinates are stored now under the project's
 `location_policy`, default `store`, and exports keep the embedded GPS as today; RD-5 approved;
-pending RD-52, RD-53). Why at ingest: the capture-date filter on the crops list and the capture time that
+RD-52, RD-53 answered as recommended (D-78)). Why at ingest: the capture-date filter on the crops list and the capture time that
 the plate burst consensus of W5e groups by (review 3.6; the upgrade backfill reads the stored files,
 so waiting loses nothing for files still present). Owns: new `src/domain/capture_metadata.py` (`CaptureMetadata`,
 `parse_capture(exif_ifd0, exif_ifd, gps_ifd)`, pure, no Pillow import); the header read in
@@ -353,7 +353,7 @@ parser against ExifTool) read before the cut.
 |---|---|---|---|
 | CM-1 | the parse rules of spatial 5.1: IFD0 `DateTime` is never capture time; the offset only from `OffsetTimeOriginal` (or the digitized pair) or the GPS UTC delta rounded to 15 minutes within -12:00..+14:00; (0, 0) and out-of-range coordinates are no location; a malformed date gives `exif_status = malformed`, never a failed ingest; the broad-except ratchet does not grow | `tests/domain/test_capture_metadata.py`, one case per rule | a clean header parses |
 | CM-2 | every ingest path carries `capture` (upload, directory and bulk, dataset import, combine copies `capture.*` verbatim); items get `capture_taken_local` and `capture_taken_utc`; the coordinates go to the images index only, through `apply_location_policy` (`store` as parsed, `store_coarse` rounded to 0.01 degree, about 1 km, `drop` none); **no coordinate is ever copied to items, labels, manifests, training files, a VLM call or a log** | `tests/curation/test_capture_paths.py`; the location canary appears only in the image `capture` block under `store` or `store_coarse` and never in an item response, manifest, training file, VLM request or log | - |
-| CM-3 | the capture step of `source_backfill` for upgraded projects (header-only read through the storage `source` root, in the same pass as ND-A's content step; a missing file counted, not failed; pending RD-53) | `tests/curation/test_capture_backfill.py` | a re-run writes nothing |
+| CM-3 | the capture step of `source_backfill` for upgraded projects (header-only read through the storage `source` root, in the same pass as ND-A's content step; a missing file counted, not failed; RD-53 answered as recommended (D-78)) | `tests/curation/test_capture_backfill.py` | a re-run writes nothing |
 | CM-4 | the location policy (owner 2026-11-04, RD-51 reversed): the writer and the image wire go through the one helper; a switch to `drop` starts the location-purge step (every `capture.location*` value of the project cleared, counts-only audit); exports keep the embedded GPS by default (RD-54), and a `drop` project's exports strip it (CM-5) | `tests/curation/test_location_policy.py`: under `drop` no coordinate reaches the images index; `store_coarse` rounds; a switch to `drop` purges every coordinate and a re-run writes nothing | `has_location` is unchanged by the policy |
 | CM-5 | exports honour the project's own policy (review RN-4; the owner's rule "exports keep embedded GPS" is the default, and `drop` is the project choosing otherwise, so no new question): under `store` and `store_coarse` the export copies bytes as today; under `drop` the export copy path removes the GPS IFD losslessly with ExifTool (`exiftool -gps:all= -o <out> <in>`, [ExifTool](https://exiftool.org/), in the jobs image; chosen over a hand-written EXIF rewriter, and Pillow would re-encode the pixels); the policy is read once per export job; `SECURITY.md`, the settings wire description and `docs/CURATION.md` say that `drop` covers the index, the wire and exports, while the stored originals keep their bytes | `tests/curation/test_export_gps_by_policy.py`: under `drop` an exported copy of the GPS fixture has no GPS IFD and its pixels and every other tag are byte-identical; under `store` the copy is byte-identical to the original | a fixture without GPS exports byte-identical under every policy |
 

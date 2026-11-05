@@ -8,14 +8,18 @@ Decisions applied: owner decisions 2 and 3 of 2026-11-03 (one release acceptance
 v0.7.0, no intermediate tags, supported upgrade 0.6.0 -> 0.7.0 directly); D-37 (B5 inside the
 release, R-final after it); D-3 and D-4 (R3 checks and the segmenter tier move here); D-5 (#42
 never blocks); D-16 (one tag decision, replacing the old D-16 and D-34); D-6 dropped.
-Source IDs: the old R3 (sections 5.3 and 5.4 of the former master plan, rev 4, in git history),
-R-B1 (7.1 "Release"), R-0.9 (7.4); task-plan upgrade notes (Q-Phase 2, Q-E14, Q-E25); U-6.2,
-U-R3; `docs/design/release_acceptance_plan.md` (#54; removed at RP-9);
-`docs/releases/RELEASE_CHECKLIST.md`; R2 report (private notes).
+Sources (all in this repository): [decision_register.md](reference/decision_register.md) (D-3, D-4,
+D-5, D-16, D-37), [traceability.md](reference/traceability.md) (where each older item went),
+[00_master_plan.md](00_master_plan.md) (the waves), `docs/design/release_acceptance_plan.md` (#54;
+removed at RP-9) and `docs/releases/RELEASE_CHECKLIST.md`. The earlier "R3" release checks, "R-B1",
+"R-0.9" and the "R2 report" named in older drafts are folded into the rows below; nothing outside
+the repository is needed to run this file.
 
-Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03 (scripts, phases, flags and
-checklist steps named here exist on that tree; the B1-B5 features they test do not exist yet).
-Consolidated 2026-11-03.
+Re-verified against `main` at `34337c60a` on 2026-11-05: `scripts/release/acceptance_run.sh`,
+`acceptance_phases.sh`, `acceptance_phases_import.sh`, `acceptance_phases_review.sh`,
+`acceptance_lib.sh` and `docs/releases/RELEASE_CHECKLIST.md` exist on that tree; the phases and flags
+are checked by the run itself, and the B1-B5 features they test do not exist yet. Consolidated
+2026-11-03, revised 2026-11-05.
 
 ## 1. Goal
 
@@ -177,7 +181,7 @@ PostgreSQL, not a log.
 | RF-82 | Near-duplicates and the holdout | a full build on a constructed public copy set, then a freeze | every leak-group member of a held-out item is held out and counted in `holdout_near_dup_moves`; a freeze with pending rows answers 409 `near_dup_stale`; on install B, after the `source_backfill` job, a re-ingest of an upgraded image is refused as an exact duplicate (review RR-10) |
 | RF-83 | Embedding registry | a new project has three primary ready spaces; an upgraded project records the live `knn_method`; a search with a wrong `space` refuses | as stated |
 | RF-84 | Capture metadata (W4) | ingest the EXIF fixture set (orientations 1-8, offsets, a GPS fixture) | `capture.*` correct; `has_location` true; under the default `location_policy = store` the image `capture.location` holds the fixture's coordinates and no item, manifest, training file or log holds one; after a switch to `drop` the purge leaves no coordinate in the images index; an exported copy of the GPS fixture keeps its GPS block under `store`, as today (owner 2026-11-04, RD-51 reversed, RD-54), and has none under `drop` (CM-5, review RN-4); a resized export of an orientation-6 fixture lands its boxes on the object (W5b) |
-| RF-85 | Registration-plate text (W5e) | read a public plate sample, run consensus on a constructed public burst (re-encoded and cropped copies of one Open Images plate; UFPR-ALPR is skipped, RD-10), search exact, fuzzy and fragment | readings and tiers written as readable text; the three searches find the plate; project delete removes it; the sample uses a public detector uploaded through `POST /models/upload`, no plate detector ships in the repo or images |
+| RF-85 | Registration-plate text (W5e) | read a public plate sample, run consensus on a constructed public burst (re-encoded and cropped copies of one Open Images plate; UFPR-ALPR is skipped, RD-10), search exact, fuzzy and fragment, and filter by jurisdiction | readings, tiers and the issuing jurisdiction (with its confidence, nullable) written as readable text; the three searches find the plate; project delete removes it; the sample uses a public detector uploaded through `POST /models/upload`, no plate detector ships in the repo or images |
 | RF-86 | Serving profile and engine contracts | `openprocessor gpu plan` and the active serving profile on install A | every ready engine row has a contract and a measured device memory; `serving_reports` lists every loaded model |
 
 Run RF-80 to RF-86 with the install A phases (RF-81's upgrade half on install B), in GPU window 3.
