@@ -15,10 +15,9 @@
 | From | To | Who | Condition |
 |---|---|---|---|
 | (new) | `queued` | job service `start` | insert; the partial unique index `uq_jobs_one_active` refuses a second active job of the same exclusive group and scope |
-| (new) | `running` | job service `run_inline` | inline kinds only (section 2.5) |
 | `queued` | `running` | task wrapper `claim` | `cancel_requested_at IS NULL` and `retry_count < max_attempts` (research G-1: a pause, resume or yield never spends an attempt) |
-| `queued` | `paused` | pause route | pausable kinds only; `pause_reason` set (auto-label plan 5.2); **no revoke** (review RR-1: a revoked id stays in worker memory for up to 10,800 s, and the resumed job is dispatched under the same id, so a revoke would drop it); the stale message finds `paused` at the claim and is acked |
-| `queued` | `cancelled` | cancel route | - |
+| `queued` | `paused` | pause route | pausable kinds only; `pause_reason` set (auto-label plan 5.2); **no revoke** (Celery keeps revoked ids only in worker memory, [revoking tasks](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks), and a resumed job is dispatched under the same id, so a revoke would drop it; review RR-1); the stale message finds `paused` at the claim and is acked |
+| `queued` | `cancelled` | cancel route | a database write only (section 3.3): there is no revoke; the stale message finds `cancelled` at the claim and is acked |
 | `queued` | `failed` | reaper (`queue_wait_exceeded`), start (`queue_unavailable`), wrapper (`project_unavailable`, `attempts_exhausted`) | - |
 | `running` | `completed`, `completed_with_errors`, `failed` | wrapper, fenced | the handler returned or raised |
 | `running` | `cancelling` | cancel route | - |
@@ -46,7 +45,7 @@ where it lacks it (contracts per family, stage 4).
 `retry_count` counts failed deliveries only: it grows when an attempt ends `interrupted` (worker
 shutdown), `lost` (reaper rule a) or `time_limit`, and never on `paused` or `yielded`; `attempt`
 still numbers the `job_attempts` rows. Cancel is terminal for every kind (research auto-label J4,
-pending RD-70): "stop for now" is pause.
+RD-70 answered as recommended (D-78)): "stop for now" is pause.
 
 ## 2. Starting a job
 
@@ -66,7 +65,7 @@ pending RD-70): "stop for now" is pause.
 | `near_dup_core_group` (lane ND-C, W4) | NULL | `jobs` | `near_dup_core`, '' | yes | 3 h / 3 h 15 m | 1 h |
 | `source_backfill` (lane ND-A creates it with the content-key step; the W4 capture lane adds the capture step; review RR-10; RD-53) | yes | `jobs` | `source_backfill`, '' | yes; pausable; `slice_s` 600 | 30 m / 35 m per slice | 24 h |
 | `region_text_reread` (W5e) | yes | `text_read` | `region_text_write`, '' | yes | 24 h / 24 h 15 m | 24 h |
-| `region_text_consensus`, `identity_text_rekey` (W5e) | yes | `jobs` | `region_text_write`, '' | yes | consensus 3 h / 3 h 15 m, rekey 24 h / 24 h 15 m | 24 h |
+| `region_text_consensus` (W5e) | yes | `jobs` | `region_text_write`, '' | yes | 3 h / 3 h 15 m | 24 h |
 | `dataset_import`, `dataset_import_undo` | yes | `jobs` | `dataset_import`, '' | import yes, undo no | 24 h / 24 h 15 m | 24 h |
 | `dataset_upload_extract` | yes | `jobs` | `dataset_upload`, upload id | no | 3 h / 3 h 15 m | 24 h |
 | `combine` | target | `jobs` | `combine`, '' | yes | 24 h / 24 h 15 m | 24 h |
@@ -75,15 +74,15 @@ pending RD-70): "stop for now" is pause.
 | `open_vocab_drain` | yes | `open_vocab` | `open_vocab_drain`, '' | no (the sweep re-drains) | 3 h / 3 h 15 m | 1 h |
 | `class_merge`, `class_projection_sync` | yes | `jobs` | `class_registry_write`, '' | sync yes | 3 h / 3 h 15 m | 24 h |
 | `promote` | yes | `jobs` | `promote`, Triton model name | no | 3 h / 3 h 15 m | 24 h |
-| `autolabel` | yes | `autolabel` | `autolabel`, '' | no; pausable between stages and VLM chunks (pending RD-69) | 3 h / 3 h 15 m | 1 h |
-| `assist_loop` | yes | `assist_loop` | `assist_loop`, '' | yes; pausable at node boundaries; `slice_s` 600 (research G-2, pending RD-77) | 30 m / 35 m per slice (was 24 h per run) | 24 h (a yielded slice waits behind other projects' slices) |
+| `autolabel` | yes | `autolabel` | `autolabel`, '' | no; pausable between stages and VLM chunks (RD-69 answered as recommended (D-78)) | 3 h / 3 h 15 m | 1 h |
+| `assist_loop` | yes | `assist_loop` | `assist_loop`, '' | yes; pausable at node boundaries; `slice_s` 600 (research G-2, RD-77 answered as recommended (D-78)) | 30 m / 35 m per slice (was 24 h per run) | 24 h (a yielded slice waits behind other projects' slices) |
 | `train` | yes | `gpu_train` | none | no | 72 h / 72 h 15 m | 7 d |
 | `model_export` | either | `gpu_export` | `model_export`, Triton model name | no | 4 h / 4 h 15 m | 24 h |
 | `bakeoff` | yes | `gpu_eval` | none | no | 24 h / 24 h 15 m | 24 h |
 | `project_delete` | NULL, scope slug | `jobs` | `project_delete`, slug | yes (idempotent) | 3 h / 3 h 15 m | 24 h |
 | `directory_ingest` | NULL | `jobs` | none | no | 24 h / 24 h 15 m | 24 h |
 | `persons_cluster` (keeps its name in 0.7.0; see the note below the table) | NULL | `jobs` | `persons_cluster`, '' | no | 3 h / 3 h 15 m | 24 h |
-| `label_op`, `label_undo` | yes | inline | `label_op`, op id; `label_undo`, '' | no | request-bound | - |
+| `label_op`, `label_undo` (owner decision 2026-11-05: Celery jobs like every other long job; they leave the request) | yes | `jobs` | `label_op`, op id; `label_undo`, '' | no | 1 h / 1 h 5 m | 1 h |
 | `project_create` (B4 4D, R-21) | NULL, scope slug | `jobs` | `project_create`, slug | yes (idempotent: each step checks what exists) | 1 h / 1 h 5 m | 1 h |
 | `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`, `vlm_verify_region_batch` (B4 4A) | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 1 h |
 | `gpu_arbiter` tick (R-20) | NULL | `arbiter` (periodic task, not a `jobs` row); scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set, which the overlay sets (RC-3) | advisory lock | - | 120 s / 150 s | - |
@@ -154,14 +153,16 @@ Every start goes through `start_job`; a ratchet (`tests/test_jobs_single_entry.p
 on any `INSERT INTO jobs` or `jobs` model construction outside `src/db/repos/jobs.py`, and on any
 `send_task` outside `src/clients/task_queue.py`.
 
-### 2.5 Inline jobs
+### 2.5 No inline jobs
 
-`label_op` and `label_undo` stay request-bound (today they run in the request under B1's
-`LABEL_OP`/`LABEL_UNDO` leases, `label_ops/record.py:39`, `undo.py:192-201`).
-`start_inline_job` inserts the row directly as `running` with the API process as owner, runs the
-heartbeat thread for its duration, and writes the terminal state fenced. A crash leaves an expired
-lease that the reaper marks `interrupted`, which the label-op routes already serve as
-`interrupted` / `undo_interrupted`.
+Owner decision 2026-11-05 (D-75): `label_op` and `label_undo` are Celery jobs of the `jobs` queue (kind table,
+section 2.1), started through `start_job` like every other long job; the route answers 202 with the
+job id and the existing label-op status route (`interrupted` / `undo_interrupted` come from the job
+status). `start_inline_job` and the inline `running` insert are not built: nothing else needs a job row
+that is born `running` with the API process as its owner, and the API process runs no heartbeat thread
+and holds no sync heartbeat connection (the budget of section 8 loses that row). Today they run in the
+request under B1's `LABEL_OP`/`LABEL_UNDO` leases (`label_ops/record.py:39`, `undo.py:192-201`); those
+leases go with the OpenSearch lease.
 
 ## 3. Running a job (`src/tasks/runtime/job_task.py`)
 
@@ -169,7 +170,10 @@ lease that the reaper marks `interrupted`, which the label-op routes already ser
 
 1. Read `job_id` from the message (the only argument). Open a project-scoped session for the job's
    project (a NULL project uses deployment scope; the row is read first under deployment scope with
-   only `SELECT project_id, kind`).
+   only `SELECT project_id, kind`). Job connections raise the role's API-sized timeouts on connect
+   (an engine `connect` event runs `SET statement_timeout = '30min'` and `SET lock_timeout = '30s'`;
+   `idle_in_transaction_session_timeout` stays at the role's 60 s, so a wrapper never idles inside a
+   transaction: [02a](02a_postgres_schema.md) section 8.1).
 2. **Claim**, one statement:
 
    ```sql
@@ -188,7 +192,7 @@ lease that the reaper marks `interrupted`, which the label-op routes already ser
 3. **Heartbeat thread** (`src/tasks/runtime/heartbeat.py`, review fix R-2: it runs in the GPU
    images too, which import only `src/tasks/runtime/`, `src/db`, `src/config`, `src/domain`,
    `src/utils`; the shape of B1's `LeaseHeartbeat`: its own thread and its own database connection;
-   never the task's; the inline jobs of section 2.5 use the same class from the API process): every
+   never the task's; only task wrappers use it now): every
    `HEARTBEAT_TICK_S` (15 s)
 
    ```sql
@@ -245,6 +249,8 @@ remain guarded by `may_write()` and the OCC rule.
 
 ### 3.2 Why the queued marker stays in Valkey
 
+`op:queued:<id>` is a **derived hint, never truth**: the `jobs` row is the only truth. The marker may be missing (Valkey lost) or stale (the row already moved on); the only consumer is reaper rule c, and a wrong marker only costs one duplicate dispatch, which the claim absorbs.
+
 `op:queued:<id>` (TTL = the kind's max queue wait) shares fate with the broker message: if the
 Valkey volume is lost, both disappear, and the reaper's rule c sees a `queued` row without a marker
 and dispatches again. A Postgres flag could not tell "waiting behind four long jobs" from "message
@@ -256,7 +262,7 @@ admits one.
 
 | Status | Cancel route effect |
 |---|---|
-| `queued`, `paused`, `interrupted` | `cancelled` at once (`finished_at = now()`); best-effort `revoke(job_id)` (never `terminate=True`: "you must never call this programmatically", [workers guide](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks)); `DEL` the marker |
+| `queued`, `paused`, `interrupted` | `cancelled` at once (`finished_at = now()`); a database write only, **no `revoke`**; `DEL` the marker; the stale message is acked at the claim |
 | `running` | `cancelling`, `cancel_requested_at = now()`; the handler sees it on its next progress write (within about 1 s) or heartbeat (15 s) and stops; the wrapper writes `cancelled` |
 | `cancelling` | no-op 202 |
 | terminal | 409 `job_finished` (existing per-family behaviour where a family already answers differently is kept and listed in stage 4) |
@@ -266,12 +272,10 @@ One statement does it:
 ('queued','paused','interrupted') THEN 'cancelled' ELSE 'cancelling' END, finished_at = CASE WHEN
 status IN ('queued','paused','interrupted') THEN now() END WHERE id = :id AND status IN
 ('queued','running','paused','interrupted','cancelling') RETURNING status`.
-Revoked ids are held in worker memory only ([persistent revokes](https://docs.celeryq.dev/en/stable/userguide/workers.html#persistent-revokes));
-the row's status is the truth, which is why the claim checks `status = 'queued'`.
+Cancel never calls Celery `revoke` (D-71): the Celery workers guide says revoked ids are kept in worker memory ("if all workers restart the list of revoked ids will also vanish"; [revoking tasks](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks), [persistent revokes](https://docs.celeryq.dev/en/stable/userguide/workers.html#persistent-revokes)), so a revoke is a hint that can be lost, while the row's status is the truth. The claim checks `status = 'queued'` and acks a message whose row is `cancelled`, `paused` or any terminal state, so the stale message needs no revoke, and one mechanism (the claim) covers cancel, pause and every restart. `tests/test_no_revoke_terminate.py` ([03a](03a_stage1_foundation.md) 1B-7) is widened to fail on any `revoke` call.
 
 Pause (pausable kinds only, else 409 `job_not_pausable`): `queued` -> `paused` at once, with
-**no revoke** (review RR-1; revoke is kept only for cancel, which is terminal, so a revoked id never
-comes back; [revoking tasks](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoking-tasks)); `running` -> `pause_requested_at = now()`, `pause_reason = 'user'` (or the
+**no revoke** (review RR-1; the claim acks the stale message); `running` -> `pause_requested_at = now()`, `pause_reason = 'user'` (or the
 handler's own reason), answer 202 with `control.state = 'pausing'`; the handler reads `ctx.paused()`
 before every budget reservation and before admitting a unit of work, so a pause lands within one
 upstream request timeout plus 1 s; the wrapper writes `paused`. `paused` -> 200 no-op; `cancelling`
@@ -290,8 +294,7 @@ section 5.3.
 | `tests/tasks/test_two_project_slices.py` | with one consumer, project B's loop waits for project A's whole run (gap G-2) | B's first node starts within one slice of A's |
 | `tests/db/test_reaper_system_resume.py` | a `project_paused` job stays paused after the project resumes | rule h re-queues it; a `user` pause is never resumed by the reaper |
 | `tests/jobs/test_pause_not_pausable.py` | a pause of `reprocess` is accepted | 409 `job_not_pausable` |
-| `tests/jobs/test_queued_pause.py` | a queued job cannot be paused | `queued` -> `paused` with no revoke; the stale message is acked as `claim_skipped` |
-| `tests/tasks/test_pause_resume_after_revoke_registry.py` (review RR-1) | with a fake worker control that remembers revoked ids, `queued -> paused -> queued` never runs | it claims and runs; only cancel calls `revoke` |
+| `tests/jobs/test_queued_pause.py` | a queued job cannot be paused | `queued` -> `paused`; the stale message is acked as `claim_skipped`; resuming it dispatches under the same id and the job runs |
 
 ## 4. The reaper and stuck-job recovery
 
@@ -432,6 +435,27 @@ SELECT xid, id, type, payload FROM events
  ORDER BY xid, id LIMIT 500;
 ```
 
+The global stream (`op:events:global`, rows with `project_id IS NULL`) needs its own form, because
+`project_id = :p` never matches NULL:
+
+```sql
+SELECT xid, id, type, payload FROM events
+ WHERE project_id IS NULL AND (xid, id) > (:last_xid, :last_id)
+   AND xid < pg_snapshot_xmin(pg_current_snapshot())
+ ORDER BY xid, id LIMIT 500;
+```
+
+[02a](02a_postgres_schema.md) carries the two indexes that serve them: `(project_id, xid, id)` and the
+partial `(xid, id) WHERE project_id IS NULL`; a test runs `EXPLAIN` on both queries and expects an
+index scan.
+
+**The cursor does not survive a restore (D-73).** `events.xid` defaults to `pg_current_xact_id()`, an
+`xid8` that belongs to one cluster's transaction counter ([transaction ID functions](https://www.postgresql.org/docs/current/functions-info.html#FUNCTIONS-PG-SNAPSHOT));
+after a dump and restore into a new cluster the counter restarts and old cursors compare wrongly.
+The `events` rows are only the 24-hour UI feed (the tables of the topics are the record), so
+`openprocessor db restore` and the 0.6.0 upgrade both `TRUNCATE events`, and a client holding an old
+`Last-Event-ID` gets the explicit `reset` event below and reloads its state
+([02c](02c_migration_ops_tests.md) tests: restore into a second cluster, then resume).
 Every transaction below the snapshot's `xmin` has finished, so no later row can sort before the
 cursor ([transaction ID and snapshot functions](https://www.postgresql.org/docs/current/functions-info.html#FUNCTIONS-PG-SNAPSHOT)).
 The cost: a long write transaction anywhere delays the feed until it ends, which rule 4 of
@@ -464,11 +488,11 @@ connection between queries (review fix R-1).
 
 ### 7.1 Celery (`src/tasks/app.py`; the producer in `src/clients/task_queue.py` builds its own minimal app from `src/config/queue.py`)
 
-Carried unchanged from the former 03 section 7 (it was checked against the Celery 5.6 docs and
+Carried unchanged from the former 03 section 7 (it was checked against the Celery docs and
 OpenTranscribe): `task_queues` from `TaskQueues.ALL`, `task_create_missing_queues=False`,
 `task_routes` from the route table only (never `queue=` in a decorator), JSON only,
-`task_acks_late=True`, `task_reject_on_worker_lost=True`, `worker_prefetch_multiplier=1`,
-`broker_transport_options.visibility_timeout=21600` (6 h), the socket keepalive and timeout options
+`task_acks_late=True`, `task_retry_on_worker_lost=True` (Celery 5.7; replaces `task_reject_on_worker_lost`, section 7.1.1), `worker_prefetch_multiplier=1`,
+`broker_transport_options.visibility_timeout=21600` (6 h; redeliveries of tasks that run longer than that are expected, section 7.1.2), the socket keepalive and timeout options
 with `retry_on_timeout=False`, `broker_connection_retry_on_startup=True`,
 `broker_connection_max_retries=None`, default `task_soft_time_limit=10800` and `task_time_limit=11700`
 with per-kind overrides from the kind table, `worker_proc_alive_timeout=30`,
@@ -498,13 +522,42 @@ Changed:
 | `worker_init`, `beat_init` handlers | `reject_retired_env()`; `beat_init` also takes the single-beat lock | ENV-6 of [08](reference/environment_and_setup.md); D-60 |
 | `worker_ready` handler | refuses to start when a registered task has no route or no kind | OpenTranscribe `_validate_task_routes` |
 
-Package pins (owner decision 2026-11-04 after review R-10; [01](01_package_pins.md) section 4):
-Celery 5.6.3 requires `kombu>=5.6.0` without a cap, and kombu 5.7.0 (released 2026-11-03) has not
-been released against by any Celery version, so **kombu is held at 5.6.2** and **redis-py at 6.4.0**
-(kombu 5.6.2's `redis` extra accepts `redis>=4.5.2,<6.5`, excluding 4.5.5 and 5.0.2; kombu 5.7.0's
-would accept `<9.0`), until a Celery release declares support for kombu 5.7. billiard is pinned at
-4.3.1 or newer (the cold-shutdown requeue). Spike S1 runs on exactly these pins, and `pip check`
-passes in the api image with the `redis` extra.
+Package pins (owner direction 2026-11-05, "use the latest"; [01](01_package_pins.md) section 4): Celery
+5.7.0 (requires `kombu>=5.7.0`; [what is new](https://docs.celeryq.dev/en/latest/history/whatsnew-5.7.html)),
+kombu 5.7.0 (its `redis` extra accepts `redis<9,>=6.4.0`) and redis-py 8.1.0. Decision D-66 (hold kombu
+5.6.2 and redis-py 6.4.0) is **reversed 2026-11-05 by D-70**. redis-py 8 speaks RESP3 by default and Valkey
+supports `HELLO`/RESP3; spike S1 therefore runs a Celery round trip, the pub/sub wake-up and a plain
+`SET`/`GET` against the Valkey image on exactly these pins, with `protocol=2` as the documented
+fallback ([redis-py issue 4089](https://github.com/redis/redis-py/issues/4089)). billiard 4.3.2 (the
+cold-shutdown requeue). `pip check` passes in the api image with the `redis` extra.
+
+#### 7.1.1 Bounding redelivery after a lost worker (`task_retry_on_worker_lost`)
+
+`task_reject_on_worker_lost` requeues the original message with no bound, and Celery's own
+configuration page warns it "can cause message loops" and points to `task_retry_on_worker_lost` for
+limiting them. Celery 5.7 adds that setting: when a pool child dies abruptly (for example the OOM
+killer), the task is sent again "the way `Task.retry()` would send it", `max_retries` and
+`default_retry_delay` apply, it takes precedence over `task_reject_on_worker_lost`, and it applies
+even when `task_acks_late` is off
+([configuration](https://docs.celeryq.dev/en/latest/userguide/configuration.html#task-retry-on-worker-lost)).
+Use: `task_retry_on_worker_lost=True`, `max_retries = max_attempts - 1 = 2` on the job task and the
+default 180 s retry delay, which is longer than the lease TTL (120 s), so by the time the retry
+message arrives the reaper has already decided the row's fate and the claim only acks or runs it by
+row status. The two bounds are layered and neither is custom code: Celery's `max_retries` bounds
+**messages**, the claim's `retry_count < max_attempts` bounds **rows**. A task that kills its worker
+every time (a poison job) therefore stops after three deliveries at the broker and is failed
+(`attempts_exhausted`) by the claim or reaper rule b, with no counter of our own in the message.
+`tests/tasks/test_poison_redelivery.py` kills the child three times (a handler that calls
+`os._exit`) and asserts the job ends `failed` with `attempts_exhausted` and no message remains.
+
+#### 7.1.2 Visibility timeout
+
+The Redis transport redelivers a message that is not acknowledged within `visibility_timeout`
+([Celery Redis broker: visibility timeout](https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/redis.html#visibility-timeout)).
+The value is 6 h and **redeliveries of long tasks every 6 h are expected**: tasks acknowledge late, so a
+24 h `reprocess` is delivered again every 6 h while it runs; the claim finds the row `running` and
+acks each copy (`claim_skipped`). Do not tune the value up to the longest task: a longer value delays
+recovery of a message that was really lost.
 
 ### 7.2 Valkey
 
@@ -569,6 +622,15 @@ and reads `worker_capabilities`; this replaces the container-name probe and the
 
 ## 8. Connection pools per process type
 
+**One rule for which engine a piece of code uses.** Inside a Celery child, *everything that runs
+on the task's event loop* (the handler and the repositories it awaits) uses the per-task **async
+engine with `NullPool`**, built inside the loop and disposed before it ends; *everything that runs on a
+thread or outside the loop* (the claim, the heartbeat thread, the terminal write, the progress write
+from `ctx.progress`) uses the **sync engine** of the child (`pool_size=2`). In the API process every
+request-path query uses the async engine, and only the startup/registry/config polls use the one
+sync connection. Nothing crosses: an async session is never handed to a thread, and a sync
+connection is never used from the loop.
+
 SQLAlchemy 2.1 with the psycopg 3 driver (`postgresql+psycopg://`), engines created lazily per
 process (never at import, never in a Celery parent). Async in the API: one `AsyncSession` per
 request through a `yield` dependency declared with **`scope="function"`**:
@@ -588,9 +650,8 @@ notes first ([migration_21](https://docs.sqlalchemy.org/en/21/changelog/migratio
 
 | Process | Engine | Per process | Count (default install) | Connections |
 |---|---|---|---|---|
-| API worker | async, `pool_size = max(1, OP_DB_API_CONNECTIONS_TOTAL // (API_WORKERS * OP_API_REPLICAS))`, `max_overflow = 0`, `pool_timeout = 5` s mapped to 503 `database_busy` (RC-4); no `LISTEN` connection (the wake-up is on Valkey, section 6) | 2 (the 64 total over 32 processes and 1 replica) | 32 processes, 1 replica, `OP_DB_API_CONNECTIONS_TOTAL=64` | 64 |
+| API worker | async, `pool_size = max(1, OP_DB_API_CONNECTIONS_TOTAL // (API_WORKERS * OP_API_REPLICAS))`, `max_overflow = 0`, `pool_timeout = 5` s mapped to 503 `database_busy` (RC-4); no `LISTEN` connection (the wake-up is on Valkey, section 6) | 4 (the 128 total over 32 processes and 1 replica; owner-approved 2026-11-05, D-74, was 2) | 32 processes, 1 replica, `OP_DB_API_CONNECTIONS_TOTAL=128` | 128 |
 | API worker, polls | a separate sync engine with one connection for the 1 s registry poll and the 5 s config poll (RC-4), so the polls never wait behind requests | 1 | 32 | 32 |
-| API worker, inline jobs (label op, undo) | the heartbeat thread's own sync connection while an inline job runs (R-35) | 0-1 | at most one per process at a time | 32 (worst case) |
 | Celery child (job wrapper) | sync, `pool_size=2` (wrapper + heartbeat thread), `max_overflow=0`; plus a per-task async engine with `NullPool` for handler queries (at most 2 at once) | 4 | 4 + 2 + 1 + 1 + 1 children in core and curation; + 3 GPU children | 48 |
 | Celery parent, Flower | none | 0 | - | 0 |
 | beat | 1 direct connection (single-beat lock) + sync `pool_size=1` | 2 | 1 | 2 |
@@ -598,14 +659,16 @@ notes first ([migration_21](https://docs.sqlalchemy.org/en/21/changelog/migratio
 | `db-migrate`, backup | 1 direct, exits | 1 | - | 2 |
 | reserve (maintenance, `psql`) | | | | 10 |
 | `superuser_reserved_connections` | | | | 3 |
-| **Total** | | | | **197** |
+| **Total** | | | | **229** |
 
-`postgres` runs with `max_connections=${OP_PG_MAX_CONNECTIONS:-300}` (default 100 is too low for 32 API
-processes; it needs a restart to change:
+The plan's number is **32 API workers** (`API_WORKERS`, B4's default for the full-size install; the compose file today says "64 workers" in a comment near `docker-compose.yml` line 260, which is a stale comment, not the plan: B4 4B-1 corrects it). The sum is 128 + 32 + 48 + 2 + 4 + 2 + 10 + 3 = 229 (the inline-job heartbeat row is gone: section 2.5).
+
+`postgres` runs with `max_connections=${OP_PG_MAX_CONNECTIONS:-400}` (default 100 is too low for 32 API
+processes; 229 plus the headroom of 13 fits 400 with room to scale a replica of the workers; it needs a restart to change:
 [connection settings](https://www.postgresql.org/docs/current/runtime-config-connection.html#GUC-MAX-CONNECTIONS)).
 `tests/config/test_db_connection_budget.py` computes the table from the compose file, the settings
 and **the scale factors** (`deploy.replicas` per service, `${OP_API_REPLICAS:-1}` for `api` being the
-single source; review fix R-6 and RC-4) and fails when the sum exceeds `OP_PG_MAX_CONNECTIONS - 13`,
+single source; review fix R-6 and RC-4) and fails when the sum exceeds `OP_PG_MAX_CONNECTIONS - 13` (387 by default; the 229 above passes, and a second API replica at the same total does not change it because the total is divided),
 including when `workers x replicas` exceeds the total so the per-process floor of 1 takes over.
 `OP_DB_API_CONNECTIONS_TOTAL` is a real deployment total: every API process takes
 `floor(total / (API_WORKERS * OP_API_REPLICAS))`, at least 1, no overflow (B4-4B folds it into its
@@ -619,7 +682,7 @@ The default install has no pooler. It becomes necessary (review fix R-6: the for
 replicas") when the connection sum of section 8 with the planned scale factors exceeds
 `OP_PG_MAX_CONNECTIONS - 13` and raising `max_connections` is not wanted; then an opt-in overlay
 (`docker-compose.pgbouncer.yml`, written in stage 6) puts PgBouncer in transaction mode in front of
-Postgres for the pooled connections. Rules that make the code ready for it now:
+Postgres for the pooled connections. The design stays **PgBouncer-ready** (transaction mode) but v0.7.0 ships **no pooler**: one API replica needs none. A pooler is added when the API runs as several replicas (the v0.8.0 multi-host work, [10](10_v080_platform_breadth.md)). psycopg 3 prepared statements work through PgBouncer 1.22 or newer with `max_prepared_statements > 0` and libpq 17 or newer ([psycopg: prepared statements and PgBouncer](https://www.psycopg.org/psycopg3/docs/advanced/prepare.html)). Rules that make the code ready for it now:
 
 - no session state on pooled connections: only `set_config(..., true)` (transaction-local), only
   `pg_try_advisory_xact_lock` (session advisory locks, `LISTEN` and SQL `PREPARE` are "never" in

@@ -17,6 +17,32 @@ unique constraint, partial index and row-level-security policy named here.
 
 ---
 
+## 0.1 Table index: who writes, who reads, in which wave
+
+Tables of this file (the research tables are indexed in [02d](02d_research_seam_schema.md) section 0.1). Wave names are those of [00_master_plan.md](00_master_plan.md); all of them are created in revision `0001_control_plane` (W2.1) and filled by the stage that owns the writer.
+
+| Table | Writer | Reader | Wave |
+|---|---|---|---|
+| `project_slugs`, `projects`, `project_indexes` | project service (create, patch, delete job) | every route (scope), the OpenSearch guard, workers | W2.1 stage 2 |
+| `deployment_counters`, `deployment_settings` | project and settings routes, the VLM pause and serving profile activation | API and worker snapshot polls | W2.1 stage 2 |
+| `class_registries`, `project_classes`, `search_projection_tasks` | class service (`ensure_class`, rename, merge); outbox rows in the same transaction | class routes, import, export, `class_projection_sync` and the reaper rules e and i | W2.1 stage 2 |
+| `config_documents`, `config_revisions`, `config_activations`, `config_activation_events` | the config store | the config readers (region, VLM, ingest, prompt packs), the activation routes | W2.1 stage 2 |
+| `vlm_endpoint_probes`, `config_runtime_reports` | the probe task and each process at start | health, settings and the config-epoch check | W2.1 stage 2 |
+| `project_settings`, `project_keymaps`, `project_state`, `projection_states` | the settings and keymap routes; workers (markers); the UMAP job | the same routes, workers, the UMAP view | W2.1 stage 2 |
+| `jobs`, `job_attempts`, `job_items` | `start_job` and the task wrapper | job routes, the reaper, the heartbeat | W2.1 stage 3 |
+| `events` | job runtime and lifecycle routes | the SSE routes | W2.1 stage 3 |
+| `stream_worker_claims`, `worker_capabilities` | detection and VLM stream workers; every worker at start | the same replicas; `openprocessor gpu plan`, consumer checks | W2.1 stage 3 |
+| `gpu_devices`, `gpu_reservations` | GPU workers, `op.periodic.serving_inventory`; the arbiter and training | `openprocessor gpu plan`, the arbiter | W2.1 stage 5 |
+| `dataset_uploads`, `dataset_imports`, `dataset_import_images` | the upload and import jobs | import status and undo routes | W2.3a |
+| `combine_runs`, `combine_sources` | the combine job | combine status routes | W2.3a |
+| `ingest_sources`, `ingest_source_files` | source poll and bulk ingest | bulk ingest status | W2.3a |
+| `label_operations`, `label_operation_members` | `label_op` and `label_undo` jobs (Celery, D-75) | undo routes and status | W2.3a |
+| `holdout_freezes` | the holdout freeze route and near-duplicate lanes | the holdout guard, export | W2.3a |
+| `dataset_exports`, `training_runs`, `models`, `model_engines`, `promotions`, `model_shares`, `bakeoff_runs` | export, train, promote, model-export and bake-off jobs | model, promotion and training routes, Triton router, `gpu plan` | W2.1 stage 5 |
+| `upgrade_runs` | the 0.6.0 upgrade steps | `openprocessor upgrade`, `db verify` | W2.1 stage 2 |
+
+---
+
 ## 1. Conventions
 
 ### 1.1 Names, keys, types
@@ -158,10 +184,14 @@ CREATE FUNCTION op_project_delete_allows(pid uuid) RETURNS boolean
   statement: fail closed, and loud (a bug shows up as an error, not as a wrong 404).
 - Review RC-9: each function call in the policy is a scalar subquery, which PostgreSQL evaluates
   once per statement as an InitPlan, so the policy costs one call per statement instead of one per
-  row, and `project_id = <constant>` can use the `project_id` indexes. The planner cannot inline a
-  plpgsql function, which is why the raising function is wrapped this way. The repositories keep
-  their explicit `project_id = :p` filters as well. Test: `EXPLAIN` of a scoped select on `images`
-  shows an InitPlan and an index condition on `project_id`.
+  row. That is all the InitPlan does: the policy is an OR over the scope functions, and an OR over
+  an InitPlan result is **not** what lets the planner use a `project_id` index. The index is usable
+  because every repository adds the explicit `project_id = :p` filter to its statement (the policy is
+  the safety net, the filter is the access path). The planner cannot inline a plpgsql function, which
+  is why the raising function is wrapped this way. Test: `EXPLAIN` of a scoped select **with the
+  explicit `project_id = :p` filter** on `images`, `jobs` and `events` shows an index condition on
+  `project_id`; a second case without the filter asserts only that the result is still correct (RLS
+  hides other projects), not that an index is used.
 - Tables with a nullable `project_id` (`jobs`, `events`, `config_documents`, `models`, and the
   research tables `cluster_partitions`, `partition_clusters`, `cluster_memberships`,
   `cluster_identities`, `cluster_activations`, `cluster_activation_events`, `cluster_calibrations`,
@@ -194,6 +224,32 @@ CREATE FUNCTION op_project_delete_allows(pid uuid) RETURNS boolean
 | `op_owner` | `db-migrate` (DDL), `openprocessor db backup/restore` | owns the schema; not a superuser; `BYPASSRLS` so `pg_dump` sees every row (review fix R-13) |
 | `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_project`, `op_scope_is_deployment`, `op_scope_is_core`, `op_scope_allows` and `op_project_delete_allows` (review RN-2); no DDL, not a superuser, `NOBYPASSRLS` |
 
+#### 1.5.1 Session settings per role (D-72)
+
+Set once in the role bootstrap of `db-migrate`, with `ALTER ROLE ... SET`, so they apply to every new
+session of the role and are not repeated in application code. The parameters are ordinary
+client-connection settings ([client connection defaults](https://www.postgresql.org/docs/current/runtime-config-client.html):
+`idle_in_transaction_session_timeout` terminates a session idle inside an open transaction,
+`statement_timeout` aborts a statement, `lock_timeout` aborts a lock wait, each with 0 meaning off by
+default; the same page says not to set the latter two in `postgresql.conf` because that affects all
+sessions, hence per role):
+
+| Role | `idle_in_transaction_session_timeout` | `statement_timeout` | `lock_timeout` | `timezone` |
+|---|---|---|---|---|
+| `op_app` (API, workers, beat, stream workers) | 60 s | 30 s | 5 s | `UTC` |
+| `op_owner` (`db-migrate`, `db backup/restore`) | 5 min | 0 (off: a migration may rebuild an index) | 60 s (a migration waits for a lock, never forever) | `UTC` |
+| the reaper | not a role: its tick sets `SET LOCAL statement_timeout = '20s'` and `SET LOCAL lock_timeout = '2s'` inside its transaction, so one stuck row cannot hold the 30 s tick | | | |
+
+Job workers need longer statements than the API (a batched backfill, a retention delete, a bulk
+insert): the job wrapper raises `statement_timeout` to 30 min and `lock_timeout`
+to 30 s on its own connections at connect time ([02b](02b_jobs_locking_events.md) section 3.1 step 1);
+the API role keeps the short values, so a runaway request query ends in seconds. Every process sets
+`application_name` in its connection arguments (`op-api-<pid>`, `op-job-<queue>-<pid>`, `op-beat`,
+`op-migrate`), so `pg_stat_activity` names who holds a lock. Test (`tests/db/test_role_settings.py`):
+a new `op_app` session shows the four values in `SHOW`; a statement that sleeps 31 s is cancelled; a
+transaction idle for 61 s is terminated; the job wrapper's connection shows 30 min; a connection
+shows its `application_name`.
+
 `db-migrate` connects as `op_super` only to create `op_owner` and `op_app` idempotently (passwords
 from their secret files), then runs `alembic upgrade head` as `op_owner`, and re-applies the grants.
 The superuser password file is mounted only into `postgres` and `db-migrate`.
@@ -210,7 +266,7 @@ CREATE TABLE project_slugs (
 
 CREATE TABLE projects (
   id                 uuid PRIMARY KEY DEFAULT uuidv7(),
-  lock_key           integer GENERATED ALWAYS AS IDENTITY UNIQUE,  -- second key of advisory locks
+  lock_key           integer GENERATED ALWAYS AS IDENTITY UNIQUE,  -- second key of advisory locks; never reused
   slug               text NOT NULL UNIQUE REFERENCES project_slugs(slug),
   display_name       text NOT NULL,
   description        text NOT NULL DEFAULT '',
@@ -255,6 +311,13 @@ CREATE TABLE deployment_settings (        -- 'local_vlm_desired', 'vlm_paused_fo
   updated_by  text NOT NULL
 );
 ```
+
+`projects.lock_key` is an identity column: the database hands each project a new value and never
+reissues one, so deleting a project leaves a gap and a later project with the same slug can never get
+the same key (the slug is retired too, `project_slugs.retired_at`, and never reused). A leftover
+advisory lock on a deleted project's key therefore cannot collide with a new project. A test creates,
+deletes and recreates a slug and asserts the new `lock_key` is different. The 32-bit range is the
+documented two-key advisory lock form, `pg_advisory_xact_lock(class, lock_key)`.
 
 Rules:
 
@@ -566,9 +629,11 @@ CREATE UNIQUE INDEX uq_jobs_idempotency
   ON jobs (project_id, kind, idempotency_key) NULLS NOT DISTINCT
   WHERE idempotency_key IS NOT NULL;
 CREATE INDEX ix_jobs_project_recent ON jobs (project_id, kind, created_at DESC);
-CREATE INDEX ix_jobs_lease ON jobs (lease_expires_at) WHERE status IN ('running','cancelling');
+CREATE INDEX ix_jobs_live ON jobs (status) WHERE status IN ('running','cancelling');   -- rule a of the reaper; deliberately NOT on lease_expires_at (see below)
 CREATE INDEX ix_jobs_queued ON jobs (queued_at) WHERE status = 'queued';
 CREATE INDEX ix_jobs_interrupted ON jobs (updated_at) WHERE status = 'interrupted' AND auto_resume;
+ALTER TABLE jobs SET (fillfactor = 70, autovacuum_vacuum_scale_factor = 0.02,
+                      autovacuum_vacuum_threshold = 50, autovacuum_vacuum_cost_delay = 2);
 -- trigger jobs_status_transition_guard: BEFORE UPDATE OF status; raises unless (OLD.status, NEW.status)
 -- is in the transition table of 02b section 1 (generated from src/domain/job_states.py)
 
@@ -603,8 +668,10 @@ CREATE TABLE events (
   payload     jsonb NOT NULL CHECK (octet_length(payload::text) <= 7000),
   created_at  timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX ix_events_cursor ON events (project_id, xid, id);   -- the SSE cursor is (xid, id)
+CREATE INDEX ix_events_cursor ON events (project_id, xid, id);   -- the SSE cursor is (xid, id); per-project stream
+CREATE INDEX ix_events_cursor_global ON events (xid, id) WHERE project_id IS NULL;   -- the global stream: `project_id = :p` never matches NULL (02b section 6.3)
 CREATE INDEX ix_events_created ON events (created_at);
+ALTER TABLE events SET (autovacuum_vacuum_scale_factor = 0.05, autovacuum_vacuum_insert_scale_factor = 0.05);
 
 CREATE TABLE stream_worker_claims (         -- D-53: detection and VLM worker replicas claim projects
   worker_kind      text NOT NULL CHECK (worker_kind IN ('detection','vlm')),
@@ -657,6 +724,37 @@ the `gpu_uuid` label), and in the same transaction as every `gpu_reservations` i
 with no Celery GPU worker can still be reserved; `openprocessor gpu plan` only reads; review RR-9,
 00b section 5.5). Research S-12: a GPU worker's
 `worker_capabilities` row names the card's `gpu_uuid`.
+
+**Hot-row churn on `jobs`** (review fix, 2026-11-05). A running job is updated about once a second
+(progress, [02b](02b_jobs_locking_events.md) section 3.1) and every 15 s (heartbeat). A normal `UPDATE`
+writes a whole new row version and a new entry in every index; a heap-only tuple (HOT) update avoids
+both, but only when no indexed column changes and the page has free room
+([HOT updates](https://www.postgresql.org/docs/current/storage-hot.html)). Three rules follow:
+
+1. **`ix_jobs_lease` is dropped.** It indexed `lease_expires_at`, which every heartbeat changes, so
+   every heartbeat was a non-HOT update. Reaper rule a now reads the small set of live jobs through
+   `ix_jobs_live` (a partial index on `status`, which changes only at a state transition) and filters
+   `lease_expires_at < now()` on those rows: there are at most a few dozen live jobs.
+2. The columns heartbeat, progress and checkpoint write (`heartbeat_at`, `lease_expires_at`,
+   `progress`, `progress_updated_at`, `checkpoint`) are in **no index**, and those writes never set
+   `updated_at`, `status`, `queued_at` or any other indexed column; a test
+   (`tests/db/test_jobs_hot_updates.py`) runs 1,000 progress updates and asserts
+   `pg_stat_user_tables.n_tup_hot_upd` is at least 95 % of `n_tup_upd` for `jobs`.
+3. `fillfactor = 70` keeps 30 % of each page free for the new row versions
+   ([CREATE TABLE storage parameters](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-STORAGE-PARAMETERS):
+   a lower fillfactor "makes heap-only tuple updates more likely"), and per-table autovacuum
+   (`scale_factor` 0.02, `threshold` 50, `cost_delay` 2 ms) vacuums the churning table far sooner than the
+   server default of 20 %.
+
+**`events`: batched deletes, not day partitions (decided 2026-11-05).** Retention is 24 h. A partition
+per day would let the reaper drop a whole partition instead of deleting rows, but it forces the
+partition key into the primary key and every unique constraint, complicates the `(xid, id)` cursor across
+partitions, and costs a partition-creation job. The volume does not need it: at most one progress row
+per second per running job is about 90,000 rows a day per job, and with the default install's few
+concurrent jobs the table holds under a million rows. Rule f deletes 10,000 rows per statement, and the
+`events` autovacuum settings above reclaim the space. Revisit (a new decision, not a tuning knob) if the
+measured table exceeds about 20 million live rows or the delete batch cannot keep up; the first sign is
+`n_dead_tup` growing across ticks, which the monitoring overlay already scrapes.
 
 `job_attempts`, `job_items` and `gpu_reservations` reach the project through `jobs`; their RLS
 policy is `USING (EXISTS (SELECT 1 FROM jobs j WHERE j.id = job_id AND op_scope_allows(j.project_id)))`.

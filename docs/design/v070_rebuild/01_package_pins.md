@@ -1,8 +1,8 @@
-# 13. Exact pins for every Python dependency (inventory and bump plan)
+# 01: exact pins for every Python dependency (inventory and bump plan)
 
 Status: plan only. This file changes no manifest. It is the work order for the commits in section 7.
 
-Date of the survey: 2026-11-04. Versions are the newest non-yanked, non-pre-release files on PyPI that day.
+Date of the survey: 2026-11-05 (first drawn 2026-11-04, re-surveyed against PyPI and Docker Hub on 2026-11-05 after Celery 5.7.0 was released). Versions are the newest non-yanked, non-pre-release files on PyPI that day. **The survey is a snapshot: W2.0 starts with the step "re-survey every pin on bump day" (section 7, step 0): for each package read `info.version` from `https://pypi.org/pypi/<package>/json`, skip pre-releases, and re-check the declared ranges of section 2 before any pin is written.**
 "Installs" was checked by resolving each candidate set with a throwaway resolver run (uv and pip, outside
 the repository, for the target Python of each image) and, for the CPU test set, a full `pip install
 --dry-run --report`. Nothing was run on a GPU and no image was built, so every "works" below still needs
@@ -21,13 +21,11 @@ few that deliberately stay below the newest release are listed with the reason a
 
 | Held back | Pin | Newest | Why (hard constraint) |
 |---|---|---|---|
-| Ultralytics | `8.4.197` | 8.4.202 | The program pins it; it moves in B3 (`04_b3_ultralytics_one_version.md`). Moves in B3 |
-| Ultralytics (YOLO11 export venv) | `8.3.253` | 8.4.202 (8.3.253 is the last 8.3.x) | The vendored end2end patch targets the 8.3 exporter; removal planned in `model_family_versions_plan.md` |
+| Ultralytics | the current pin in `requirements.txt` (`8.4.197` at the survey) | 8.4.203 | The program pins it; B3 re-picks the newest at its start ([04](04_b3_ultralytics_one_version.md)). Part A never touches it |
+| Ultralytics (YOLO11 export venv) | `8.3.253` | 8.4.203 (8.3.253 is the last 8.3.x) | The vendored end2end patch targets the 8.3 exporter. Void once B3-A2 deletes `requirements-export-y11.txt`: every y11 row below then disappears with the file |
 | TensorRT (`tensorrt-cu13`) | `11.1.0.106` | 11.4.0.106 | Must equal the Triton image TensorRT; `Dockerfile.triton` asserts `TRT_VERSION`. Moves only with the Triton base (ENV-12) |
 | `onnx` | `1.21.0` | 1.23.2 | `nvidia-modelopt` 0.48.0 requires `onnx~=1.21.0` on Linux |
 | `onnxruntime` / `onnxruntime-gpu` | `1.30.0` | 1.31.1 | `nvidia-modelopt` 0.48.0 requires `onnxruntime-gpu<1.31,>=1.29` on Linux x86_64; runtime and export images must resolve one version |
-| kombu | `5.6.2` | 5.7.0 | Owner decision 2026-11-04 (review R-10): Celery 5.6.3 (the newest Celery) declares `kombu>=5.6.0` with no cap, and kombu 5.7.0 (2026-11-03) has no Celery release against it. Moves when a Celery release declares kombu 5.7 support |
-| redis (redis-py) | `6.4.0` | 8.1.0 | kombu 5.6.2's `redis` extra accepts `redis>=4.5.2,<6.5` (excluding 4.5.5 and 5.0.2); 6.4.0 is the newest inside it. Moves with kombu |
 | `numpy` in the segmenter image only | `1.26.4` | 2.5.4 | Upstream SAM 3 declares `numpy>=1.26,<2` |
 | `opencv-python-headless` in the segmenter image only | `4.11.0.86` | 5.0.0.93 | OpenCV 4.12 and later need `numpy>=2` |
 | `torch` / `torchvision` in the segmenter image | base image: `2.14.1` | 2.15.0 / 0.29.2 | Not a pip pin: the `pytorch/pytorch:2.14.1-cuda12.6` base ships it. Moves only with a base image bump |
@@ -38,7 +36,7 @@ Findings worth knowing before reading the tables:
    rules for `onnxruntime-gpu` (says `~=1.24.2`; modelopt now allows 1.29 to 1.30) and for `huggingface-hub`
    major (says tokenizers needs hub below 2; `tokenizers` 0.23.3 and `transformers` 5.22.1 now accept hub 2.x).
    `docs/design/v070_rebuild/reference/environment_and_setup.md` section 7.1 still shows `fastapi==0.143.3`; the
-   manifests already carry `0.162.0` and `pydantic==2.14.2`.
+   manifests already carry `0.162.0` and `pydantic==2.14.2` (the survey now finds 2.14.3; `pydantic-core==2.50.4`, `fastapi` 0.162.0 accepts `pydantic>=2.9.0`).
 2. The trainer image installs torch with `--extra-index-url .../cu128`. That index now stops at torch
    2.11, while PyPI has 2.15.0, so pip silently takes the PyPI wheel (CUDA 13.2 libraries). The index is
    decorative today. The plan moves it to `cu132`, which has 2.15.0 (section 3.5).
@@ -48,8 +46,8 @@ Findings worth knowing before reading the tables:
 4. `nvidia-modelopt[onnx]` pulls `cupy-cuda13x`, while the runtime set pins `cupy-cuda12x`. Both install
    into the export image and both provide the top-level `cupy` module (pre-existing; a smoke test is in
    section 6).
-5. About 15 pins are less than a week old (for example `ultralytics` 8.4.202, `tritonclient` 2.74.0,
-   `kombu` 5.7.0, `SQLAlchemy` 2.1.8, `psycopg` 3.3.8, `filelock` 4.2.8, `virtualenv` 21.15.5). The owner
+5. About 15 pins are less than a week old (for example `celery` 5.7.0 and `kombu` 5.7.0 (released 2026-11-05 and 2026-11-03), `ultralytics` 8.4.203, `tritonclient` 2.74.0,
+   `SQLAlchemy` 2.1.8, `psycopg` 3.3.8, `filelock` 4.2.9, `virtualenv` 21.15.5). The owner
    asked for newest; the register notes them so an implementer can fall back one patch if a fresh release
    is pulled or yanked before the bump lands.
 
@@ -70,8 +68,8 @@ the offline suite is not new to those.
 | `tensorrt-cu13` must equal the Triton TensorRT, asserted at image build; also pinned in `requirements-export.txt`, `requirements-export-y11.txt` and the `export` extra | `Dockerfile.triton`, `tests/test_requirements_contract.py::test_tensorrt_pin_matches_the_triton_image_everywhere` |
 | `nvidia-modelopt` 0.48.0 `[onnx]`: `onnx~=1.21.0`, `onnxruntime-gpu>=1.29,<1.31`, `onnxslim>=0.1.78`, `onnx-graphsurgeon>=0.6.1`, Python `<3.15` | PyPI metadata |
 | torch and torchvision move as a pair: torch 2.15.0 with torchvision 0.29.2 (torchvision requires `torch>=2.14`); the same pair exists on PyPI, the CPU index and the `cu132` index | PyPI, download.pytorch.org |
-| Ultralytics 8.4.197 needs `numpy>=1.23`, `opencv-python!=4.13.0.90,>=4.7`, `torch>=1.8`, `polars`, `ultralytics-platform` | PyPI metadata |
-| NumPy 2.5.4 with OpenCV 5.0.0.93 (needs `numpy>=2`), faiss 1.14.1.post1 (`numpy<3`), SciPy 1.18.1, pandas 3.1.0 | resolver run |
+| Ultralytics (8.4.197 at the survey; 8.4.203 now) needs `numpy>=1.23`, `opencv-python!=4.13.0.90,>=4.7`, `torch>=1.8`, `polars`, `ultralytics-platform` | PyPI metadata |
+| NumPy 2.5.4 with OpenCV 5.0.0.93 (needs `numpy>=2`), faiss 1.14.1.post1 (`numpy<3`), SciPy 1.18.1, pandas 3.1.1 | resolver run |
 | `fastapi` pin is tied to the committed OpenAPI; bump only with `make contracts`; `pydantic` must be the version fastapi was tested with | `requirements-test.txt` header, `CLAUDE.md` |
 | `mlflow` client must share a major with the MLflow server image (`ghcr.io/mlflow/mlflow:v3.17.0` in `docker-compose.yml`) | `docker/trainer/requirements.txt` comment |
 | Segmenter: SAM 3 declares `timm>=1.0.17`, `numpy>=1.26,<2`, `ftfy==6.1.1`, `iopath>=0.1.10` | upstream `pyproject.toml` of the pinned SAM 3 source |
@@ -92,9 +90,9 @@ Legend. "Major" means the pin crosses a major version against the manifest's cur
 | uvicorn[standard] | `>=0.41.0` | 0.54.0 | `==0.54.0` | the images already resolve 0.54.0 | |
 | python-multipart | none | 0.0.33 | `==0.0.33` | needs Python 3.11 or newer; released 4 days ago | |
 | orjson | none | 3.13.0 | `==3.13.0` | license MPL-2.0 AND (Apache-2.0 OR MIT) | |
-| pydantic | via fastapi | 2.14.2 | `==2.14.2` (new explicit line) | must equal the tested fastapi pairing; test file already pins it | |
+| pydantic | via fastapi | 2.14.3 | `==2.14.3` (new explicit line) | must equal the tested fastapi pairing (fastapi 0.162.0 needs `pydantic>=2.9.0`; pydantic 2.14.3 needs `pydantic-core==2.50.4`, `typing-extensions>=4.16.0`); the test file pins 2.14.2 today and moves with it | |
 | pydantic-settings | none | 2.16.2 | `==2.16.2` | | |
-| ultralytics | `==8.4.197` | 8.4.202 | `==8.4.197` | held: moves in B3 | |
+| ultralytics | `==8.4.197` | 8.4.203 | unchanged (the current pin) | held: moves in B3, which re-picks the newest at its start | |
 | tritonclient[all] | none | 2.74.0 | `==2.74.0` | client versus Triton 26.06 server skew is tolerated by the KServe v2 protocol; released 2 days ago | |
 | onnx | `>=1.12.0,<1.22` | 1.23.2 | `==1.21.0` | held by modelopt `~=1.21.0` | |
 | onnxruntime-gpu | `>=1.24.2,<1.25` | 1.31.1 | `==1.30.0` | held by modelopt `<1.31`. The 1.30 wheel is a CUDA 13 build (has `cuda` and `cudnn` extras); GPU provider loading needs the smoke test | |
@@ -108,16 +106,16 @@ Legend. "Major" means the pin crosses a major version against the manifest's cur
 | aiohttp | none | 3.14.5 | `==3.14.5` | | |
 | httpx | none | 0.28.1 | `==0.28.1` | newest release is from 2024-12; `huggingface-hub` 2 uses its own `httpx2`, so this stays | |
 | httpcore | none | 1.0.9 | `==1.0.9` | imported by `vlm_pinning.py` | |
-| boto3 | none | 1.43.123 | `==1.43.123` | must equal botocore | |
-| botocore | none | 1.43.123 | `==1.43.123` | must equal boto3 | |
+| boto3 | none | 1.43.125 | `==1.43.125` | must equal botocore | |
+| botocore | none | 1.43.125 | `==1.43.125` | must equal boto3 | |
 | matplotlib | none | 3.11.2 | `==3.11.2` | | |
 | seaborn | none | 0.13.2 | `==0.13.2` | last release 2024-01; no license metadata (BSD-3-Clause upstream) | |
-| pandas | none | 3.1.0 | `==3.1.0` | Major (the trainer floor is 2.2). In `src/` only `ultralytics_patches/end2end_export.py` imports it | https://pandas.pydata.org/docs/whatsnew/v3.0.0.html |
+| pandas | none | 3.1.1 | `==3.1.1` | Major (the trainer floor is 2.2). In `src/` only `ultralytics_patches/end2end_export.py` imports it | https://pandas.pydata.org/docs/whatsnew/v3.0.0.html |
 | psutil | none | 7.2.2 | `==7.2.2` | | |
 | tqdm | none | 4.70.1 | `==4.70.1` | MPL-2.0 AND MIT | |
 | tabulate | none | 0.10.0 | `==0.10.0` | | |
 | pyyaml | none | 6.0.3 | `==6.0.3` | | |
-| cachetools | `>=7.2` | 7.2.8 | `==7.2.8` | | |
+| cachetools | `>=7.2` | 7.3.0 | `==7.3.0` | | |
 | structlog | `>=24.1.0` | 26.1.0 | `==26.1.0` | calendar-versioned; `.venv` already runs it | |
 | tenacity | `>=8.2` | 9.2.1 | `==9.2.1` | `.venv` already runs it | |
 | prometheus-client | `>=0.20` | 0.26.0 | `==0.26.0` | | |
@@ -159,7 +157,7 @@ faiss (see below), umap-learn, hdbscan, joblib, imohash, docker, pillow. The ful
 | pytest-timeout | `>=2.4.0` | 2.4.0 | `==2.4.0` | already latest | |
 | pytest-xdist | not listed (CONTRIBUTING installs it) | 3.8.0 | `==3.8.0` | add to the file so CI and CONTRIBUTING stop installing it ad hoc; same pin as the e2e file | |
 | mypy | `==2.4.1` | 2.4.1 | `==2.4.1` | already latest | |
-| ruff | `==0.17.3` | 0.17.3 | `==0.17.3` | already latest; must equal the `.pre-commit-config.yaml` rev | |
+| ruff | `==0.17.3` | 0.17.4 | `==0.17.4` | must equal the `.pre-commit-config.yaml` rev (`ruff-pre-commit` `v0.17.4`; part A bumps both in one commit) | |
 | vulture | `==2.16` | 2.16 | `==2.16` | already latest | |
 | types-PyYAML | none | 6.0.12.20261103 | `==6.0.12.20261103` | | |
 | types-requests | none | 2.33.0.20261030 | `==2.33.0.20261030` | | |
@@ -189,7 +187,7 @@ polygraphy 0.53.6, lief 1.0.0, onnx-ir 1.1.0 come in transitively). `requirement
 
 | Package | Current spec | Latest | Proposed pin | Constraint / notes | Link |
 |---|---|---|---|---|---|
-| ultralytics | `==8.3.253` | 8.4.202 | `==8.3.253` | held (last 8.3.x) | |
+| ultralytics | `==8.3.253` | 8.4.203 | `==8.3.253` | held (last 8.3.x) | |
 | torch / torchvision | none (CPU index) | 2.15.0 / 0.29.2 | `==2.15.0` / `==0.29.2` | CPU wheels; same version as the other manifests | |
 | onnx | `>=1.12.0,<1.22` | 1.23.2 | `==1.21.0` | modelopt | |
 | onnxslim, onnxsim, onnx-graphsurgeon | floors | 0.1.99, 0.8.1, 0.6.1 | `==0.1.99`, `==0.8.1`, `==0.6.1` | same as 3.3 | |
@@ -210,7 +208,7 @@ polygraphy 0.53.6, lief 1.0.0, onnx-ir 1.1.0 come in transitively). `requirement
 | PyYAML | `>=6.0` | 6.0.3 | `==6.0.3` | | |
 | requests | `>=2.32` | 2.34.2 | `==2.34.2` | | |
 | scipy | `>=1.13` | 1.18.1 | `==1.18.1` | | |
-| pandas | `>=2.2` | 3.1.0 | `==3.1.0` | Major; Ultralytics and MLflow both use it | pandas 3.0 notes above |
+| pandas | `>=2.2` | 3.1.1 | `==3.1.1` | Major; Ultralytics and MLflow both use it | pandas 3.0 notes above |
 | matplotlib | `>=3.9` | 3.11.2 | `==3.11.2` | | |
 | psutil | `>=6.0` | 7.2.2 | `==7.2.2` | | |
 | tqdm | `>=4.66` | 4.70.1 | `==4.70.1` | | |
@@ -221,7 +219,7 @@ polygraphy 0.53.6, lief 1.0.0, onnx-ir 1.1.0 come in transitively). `requirement
 | mlflow | `>=3.17,<4` | 3.18.0 | `==3.18.0` | lockstep: bump `MLFLOW_IMAGE` in `docker-compose.yml` from `v3.17.0` to `v3.18.0` (pin by digest) in the same commit; fallback is `mlflow==3.17.2` with no server change. mlflow 3.18.0 resolves `SQLAlchemy` 2.1.8 and `alembic` 1.20.1 | |
 | pynvml | `>=11.5` | 13.0.1 | `==13.0.1` | deprecated upstream in favour of `nvidia-ml-py` (13.615.71); keep unless the code is changed | |
 | structlog | `>=24.1` | 26.1.0 | `==26.1.0` | | |
-| ultralytics | git SHA `8f5d355c...` (build arg) | 8.4.202 | unchanged | not a pip pin; moves with the git SHA to the tag in B3 | |
+| ultralytics | git SHA `8f5d355c...` (build arg) | 8.4.203 | unchanged | not a pip pin; moves with the git SHA to the tag in B3 | |
 
 The CUDA index default is a Dockerfile edit (`docker/trainer/Dockerfile`, `ARG TORCH_CUDA_INDEX`), not a
 requirements edit. Confirm the host driver supports CUDA 13.2 wheels before changing it.
@@ -240,7 +238,7 @@ requirements edit. Confirm the host driver supports CUDA 13.2 wheels before chan
 ### 3.7 `pyproject.toml`
 
 `[project.dependencies]` carries the same names and the same pins as section 3.1 (one change per package,
-same value), plus the two new lines `pydantic==2.14.2` and `Pillow==13.0.0`. Rows that differ in form:
+same value), plus the two new lines `pydantic==2.14.3` and `Pillow==13.0.0`. Rows that differ in form:
 
 | Item | Current spec | Latest | Proposed pin | Notes |
 |---|---|---|---|---|
@@ -261,14 +259,14 @@ same value), plus the two new lines `pydantic==2.14.2` and `Pillow==13.0.0`. Row
 | `Dockerfile.triton` | opencv-python-headless | `==4.13.0.92` | 5.0.0.93 | `==5.0.0.93` | Major. Needs numpy 2 or newer: read the numpy version of the 26.06 base first, because pip will upgrade it and Triton Python models import it |
 | `Dockerfile.triton` | pyclipper | `==1.4.0` | 1.4.0 | unchanged | |
 | `Dockerfile.triton` | cupy-cuda13x | `==13.6.0` (what the base ships) | 14.2.0 | `==14.2.0` | Major (13 to 14: NumPy 2 semantics; `broadcast_arrays` and `meshgrid` return tuples). Matches the API image's `cupy-cuda12x` 14.2.0, so the GPU decode kernels run on one CuPy generation. Touches `gpu_image_prep`; needs the GPU decode tests |
-| `Dockerfile.triton` | starlette, anyio, certifi, filelock, virtualenv | floors | 1.10.0, 4.16.0, 2026.10.23, 4.2.8, 21.15.5 | exact `==` | CVE floors become exact pins; the last two were released today |
+| `Dockerfile.triton` | starlette, anyio, certifi, filelock, virtualenv | floors | 1.10.0, 4.16.0, 2026.10.23, 4.2.9, 21.15.5 | exact `==` | CVE floors become exact pins; the last two were released today |
 | `docker/hardened/triton/Dockerfile` | starlette, fastapi | `>=1.3.1`, `>=0.139.0` | 1.10.0, 0.162.0 | `==1.10.0`, `==0.162.0` | fastapi 0.162.0 pairs with starlette 1.x |
 | `docker/segmenter/Dockerfile` | fastapi | `==0.162.0` | same | unchanged | |
 | | uvicorn[standard] | `==0.32.0` | 0.54.0 | `==0.54.0` | stale pin |
-| | pydantic | `>=2.7,<3` | 2.14.2 | `==2.14.2` | |
+| | pydantic | `>=2.7,<3` | 2.14.3 | `==2.14.3` | |
 | | numpy | `>=1.26,<2.0` | 2.5.4 | `==1.26.4` | held by SAM 3 |
 | | pillow | `>=13.0.0` | 13.0.0 | `==13.0.0` | |
-| | certifi, filelock, dnspython | floors | 2026.10.23, 4.2.8, 2.9.2 | exact | |
+| | certifi, filelock, dnspython | floors | 2026.10.23, 4.2.9, 2.9.2 | exact | |
 | | opencv-python-headless | `>=4.10` | 5.0.0.93 | `==4.11.0.86` | held: numpy 1.x |
 | | scikit-image | `>=0.24` | 0.26.0 | `==0.26.0` | |
 | | huggingface-hub | `>=0.24` | 2.4.0 | `==2.4.0` | resolves with SAM 3's `timm` 1.0.31; the segmenter does download weights, so run its start-up test |
@@ -316,26 +314,25 @@ supplies versions and licenses. All resolve together with the runtime set on Pyt
 
 | Package | Latest | Proposed | License | Notes |
 |---|---|---|---|---|
-| celery (extra `redis`) | 5.6.3 (2026-03-26) | `celery[redis]==5.6.3` | BSD-3-Clause | the `redis` extra pulls `kombu[redis]`; needs billiard 4.3.2, vine 5.1.0, click 8.5.0 |
-| kombu | 5.7.0 | `==5.6.2` (held; owner decision 2026-11-04 after review R-10) | BSD-3-Clause | 5.6.2 (2025-12-29) accepts `redis>=4.5.2,<6.5` minus 4.5.5 and 5.0.2. 5.7.0 (2026-11-03) would accept `redis>=6.4,<9` but its `redis` extra pins `packaging==26.3`, and no Celery release has been tested against it |
-| redis (redis-py) | 8.1.0 | `==6.4.0` (held with kombu) | MIT | client for the Valkey server (Valkey speaks the Redis protocol); the newest release inside kombu 5.6.2's range; the 8.x line waits for kombu 5.7. Async pub/sub (used by the event wake-up) is in 6.4 |
-| SQLAlchemy | 2.1.8 | `==2.1.8` | MIT | needs Python 3.11 or newer. Migration notes: https://docs.sqlalchemy.org/en/21/changelog/migration_21.html (read before writing models; MLflow 3.18.0 already resolves it in the trainer) |
+| celery (extra `redis`) | 5.7.0 (2026-11-05) | `celery[redis]==5.7.0` | BSD-3-Clause | requires `kombu>=5.7.0`, `billiard>=4.3.2`, `vine<6,>=5.1.0`, `click<9,>=8.3.1`; Python 3.10 or newer. What is new: <https://docs.celeryq.dev/en/latest/history/whatsnew-5.7.html> (adds `task_retry_on_worker_lost`, used in [02b](02b_jobs_locking_events.md) section 4; minimum redis-py 6.4.0 and Redis server 6.2.0). Decision D-66 (hold kombu 5.6.2 and redis-py 6.4.0) is **reversed 2026-11-05 by D-70 (latest pins)** on the owner's instruction to use the latest of Celery, redis and Valkey |
+| kombu | 5.7.0 | `==5.7.0` | BSD-3-Clause | its `redis` extra needs `redis<9.0.0,>=6.4.0` and pins `packaging==26.3` (the newest `packaging`); `vine==5.1.0` exact, which Celery's `vine<6,>=5.1.0` accepts |
+| redis (redis-py) | 8.1.0 | `==8.1.0` | MIT | client for the Valkey server; inside kombu 5.7.0's `<9,>=6.4.0`. redis-py 8.0 made RESP3 the default protocol; Valkey supports `HELLO`/RESP3, but the combination has open reports (<https://github.com/redis/redis-py/issues/4089>), so the Valkey smoke test (section 6) runs a Celery round trip, the pub/sub event wake-up and a `SET`/`GET` with `redis==8.1.0` against `valkey/valkey:9.1.3`; the fallback is `protocol=2` on the client, then `redis==6.4.0` (kombu 5.7.0's floor). Async pub/sub is in the client |
+| SQLAlchemy | 2.1.8 | `==2.1.8` | MIT | `Alembic` 1.20.1 needs `SQLAlchemy>=2.0`, so 2.1.8 is inside it; needs Python 3.11 or newer. Migration notes: https://docs.sqlalchemy.org/en/21/changelog/migration_21.html (read before writing models; MLflow 3.18.0 already resolves it in the trainer) |
 | Alembic | 1.20.1 | `==1.20.1` | MIT | resolves with SQLAlchemy 2.1.8 (checked together with MLflow) |
-| psycopg | 3.3.8 | `psycopg[c,pool]==3.3.8` in images; `psycopg[binary,pool]==3.3.8` in the dev and test venvs | LGPL-3.0-only | Recommendation: the C build in images. The psycopg documentation advises building from source for production, and the multi-stage API builder already has compilers; the runtime stage then needs `libpq5` only. Review fix R-27: the trainer, export and evaluator images also import `src/db`, so they get the same builder step and `libpq5` (B2 lanes 5A and 5B). `binary` needs no system libpq and is fine for tests. The version is identical; the extra differs by environment, like `opensearch-py[async]`. Use SQLAlchemy URLs `postgresql+psycopg://` (async works natively) |
-| psycopg-pool | 3.3.3 | `==3.3.3` (the `pool` extra) | LGPL-3.0-only | LGPL is OSI-approved copyleft and is dynamically linked, which is compatible with this project's AGPL; record it in ATTRIBUTION.md |
+| psycopg | 3.3.8 | `psycopg[c]==3.3.8` in images; `psycopg[binary]==3.3.8` in the dev and test venvs | LGPL-3.0-only | Recommendation: the C build in images. The psycopg documentation advises building from source for production, and the multi-stage API builder already has compilers; the runtime stage then needs `libpq5` only. Review fix R-27: the trainer, export and evaluator images also import `src/db`, so they get the same builder step and `libpq5` (B2 lanes 5A and 5B). `binary` needs no system libpq and is fine for tests. The version is identical; the extra differs by environment, like `opensearch-py[async]`. Use SQLAlchemy URLs `postgresql+psycopg://` (async works natively) | No `pool` extra: connection pooling is SQLAlchemy's (see the next row)
+| psycopg-pool | 3.3.3 | **not added** | LGPL-3.0-only | removed from the plan 2026-11-05: [02b](02b_jobs_locking_events.md) section 8 pools through SQLAlchemy (`QueuePool` in the API, `NullPool` for the async engine in a Celery child), and nothing in 02, 02a-02d uses `psycopg_pool`. Add it only if a later plan uses it, with its LGPL note in ATTRIBUTION.md |
 | testcontainers | 4.15.0 | `testcontainers[postgres,redis]==4.15.0` in the test set only | Apache-2.0 | has `postgres`, `redis` and `valkey` extras; the `redis` module starts any image, so a Valkey image works. Needs Docker at test time, so it belongs to the live or integration marker, not the offline suite |
 | flower | 2.2.0 | `==2.2.0`, only if Flower runs | BSD | needs `tornado<7,>=6.5.7`; optional (ENV-14) |
 
-Replaces the sketch in section 7.1 of `environment_and_setup.md`, which names `redis:8.2.x` as the
-server; use Valkey (below). A Redis 8 server is available under RSALv2/SSPL/AGPLv3 terms; Valkey is BSD-3-Clause
+Replaces the sketch in section 7.1 of `reference/environment_and_setup.md`, which now names Valkey; the server is Valkey (below). A Redis 8 server is available under RSALv2/SSPL/AGPLv3 terms; Valkey is BSD-3-Clause
 and avoids the question.
 
 Container images (digest-pinned; refresh the digests at implementation time):
 
 | Image | Tag | Digest | Reason |
 |---|---|---|---|
-| `postgres` (Docker official image) | `18.6-trixie` | `sha256:3a4264520e121176619f54ff867d12774bc81e95e7b84db58d63bccdb6144b81` | 18 is the newest stable major (19 is at rc1 only). Debian trixie rather than alpine: PostgreSQL's text sort order depends on the C library, and the Debian glibc image is the best-supported one (the docs warn musl differs); the repo's Python images are already trixie, so one OS family to scan. Updated 2026-10-31. Mount the data volume at `/var/lib/postgresql` (PG 18 images changed `PGDATA` to a versioned subdirectory) |
-| `valkey/valkey` | `9.1.3-alpine3.24` | `sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b` | latest stable 9.x (9.2.0 is rc1; 9.0.7 is the older line). Alpine is fine here because Valkey has no collation concern, and the image is small. Updated 2026-10-27 |
+| `postgres` (Docker official image) | `18.6-trixie` | `sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583` | 18 is the newest stable major (19 is at rc1 only; checked on Docker Hub 2026-11-05, the 18.6 tag was rebuilt that day, hence the new digest). Debian trixie rather than alpine: PostgreSQL's text sort order depends on the C library, and the Debian glibc image is the best-supported one (the docs warn musl differs); the repo's Python images are already trixie, so one OS family to scan. Updated 2026-10-31. Mount the data volume at `/var/lib/postgresql` (PG 18 images changed `PGDATA` to a versioned subdirectory) |
+| `valkey/valkey` | `9.1.3-alpine3.24` | `sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b` | latest stable 9.x (9.2.0 is at rc2; 9.0.7 is the older line). Alpine is fine here because Valkey has no collation concern, and the image is small. Re-checked on Docker Hub 2026-11-05, digest unchanged |
 
 ## 5. Shared-package consistency rules
 
@@ -435,10 +432,10 @@ is the lock substitute the owner chose.
 Each line is one commit (or a pair, test first). Run the targeted check named in section 6 after each; the
 full sweep runs once at the end of the series.
 
+0. Re-survey every pin on bump day (PyPI `info.version`, Docker Hub tags, the declared ranges of section 2), and write the result into the PR before commit 1.
 1. `test`: generalize the pin test (ENV-11) and add pillow and pydantic declarations. Red first: it fails on
    today's floors and on bare `fastapi` in `pyproject.toml`.
-2. Dev and test tooling only: pytest family, pytest-xdist, pre-commit, bandit, types-*, CONTRIBUTING and CI
-   torch-pair commands. No runtime code touched.
+2. Dev and test tooling only: pytest family, pytest-xdist, pre-commit, bandit, ruff (with the `.pre-commit-config.yaml` rev), types-*. No runtime code touched. The CPU torch-pair commands in `CONTRIBUTING.md` and `.github/workflows/ci.yml` are not here: section 7.1 moves them to commit 9.
 3. Pure-Python leaf libraries with no ABI: requests, tenacity, structlog, cachetools, tabulate, tqdm, pyyaml,
    psutil, docker, prometheus-client, einops, regex, joblib, imohash, ftfy, httpx, httpcore.
 4. Web layer: uvicorn, python-multipart, orjson, pydantic-settings, pydantic explicit, pillow. Then
@@ -476,11 +473,11 @@ Adjustments the split needs (each in the commit named):
 - Commit 1 (part A) adds the "no floor, no unpinned runtime line" check with a **shrink-only allowlist**
   of the part B packages, so the test is green at every commit; part B removes each package from the
   allowlist in the commit that pins it, and the last part B commit asserts the allowlist is empty.
-- The CPU torch-pair commands in `CONTRIBUTING.md` and `.github/workflows/ci.yml` (listed in commit 2)
-  move to commit 9, where the torch pin moves; part A does not touch those two files (B2 lane 1D owns
+- The CPU torch-pair commands in `CONTRIBUTING.md` and `.github/workflows/ci.yml`
+  belong to commit 9, where the torch pin moves; part A does not touch those two files (B2 lane 1D owns
   them in W2.1, after part A merged).
 - `simplejpeg` (in section 3.1, missing from the list above) is pinned in commit 7.
-- `requirements-export-y11.txt` is skipped by part B: B3-A2 deletes it in the same wave.
+- `requirements-export-y11.txt` is skipped by part B: B3-A2 deletes it in the same wave, so every y11 row in section 3.4 is void once that commit lands.
 - PR #477 (CI shards) edits `requirements-test.txt` and `pyproject.toml`; it merges before part A starts.
 - Part A also re-applies the open frontend Dependabot PR #474 (frontend dev dependencies) in its own
   commit, following the deps-lane rule of [09](reference/github_actions.md) section 8.
@@ -492,12 +489,13 @@ Adjustments the split needs (each in the commit named):
 | 1 | torch 2.15.0 + torchvision 0.29.2 in every GPU image (CUDA 13.2 wheels; the Triton index change `cu130` to `cu132`; trainer index `cu128` to `cu132`) | Driver too old for 13.2 wheels; Python backend models in Triton behave differently; ONNX export graphs change, so engines need a rebuild check; mixed CUDA 12 (`faiss`, `cupy-cuda12x`) and CUDA 13 libraries in the API process (pre-existing) | One GPU window: load every engine, run the export smoke test, compare detection results on the public sample set. Fallback: `2.14.1` / `0.29.1` on the `cu130` index |
 | 2 | OpenCV 5.0.0.93 (api, Triton, trainer, y11) | Nearest-neighbor resize now follows Pillow rounding; warp and remap interpolation revised; 1D array semantics; `cv2.ml` and Darknet/Caffe loaders gone. Letterbox and crop preprocessing could shift scores slightly; pixel-exact test baselines need regeneration. Triton image: needs numpy 2 or newer, which the base may not have | Parity tests on CPU first (`.venv` already runs 5.0.0.93 offline); GPU decode comparison. Fallback: `4.14.0.94` everywhere |
 | 3 | onnx / onnxruntime-gpu / modelopt / tensorrt set (export and runtime) | ONNX 1.21 versus engines built by the older stack; ORT 1.30 CUDA 13 wheel needs CUDA 13 runtime libraries next to CUDA 12 ones; two cupy wheels in the export image | Keep onnx 1.21.0 / ORT 1.30.0 until modelopt allows more; export one model per family and diff engine outputs; import test of `cupy` in the export image |
-| 4 | numpy 2.5.4 across images, with scipy 1.18.1, pandas 3.1.0, scikit-learn 1.9.1 | C-extension ABI in wheels without numpy 2 support (hdbscan, umap, imohash, simplejpeg) | `pip check` plus import of every lazily imported module; the clustering tests already run on numpy 2.5 in `.venv` |
+| 4 | numpy 2.5.4 across images, with scipy 1.18.1, pandas 3.1.1, scikit-learn 1.9.1 | C-extension ABI in wheels without numpy 2 support (hdbscan, umap, imohash, simplejpeg) | `pip check` plus import of every lazily imported module; the clustering tests already run on numpy 2.5 in `.venv` |
 | 5 | huggingface-hub 2.4.0 (and transformers 5.22.1) | New `httpx2` HTTP stack and removed deprecated APIs; proxies or custom CA settings behave differently; segmenter weight download; Dependabot rule said it did not resolve (now it does) | Try the PE weight download script and the segmenter start-up; fallback `huggingface-hub==1.33.0` (transformers 5.22.1 accepts it) |
 | 6 | fastapi / pydantic / starlette | Schema or OpenAPI shape drift; `starlette` 1.10.0 pulled in by fastapi | fastapi and pydantic are already at the target pins; only starlette and uvicorn move; `make contracts-check` |
 | 7 | mlflow 3.18.0 with server image 3.17.0 | Client and server on different minors; registry REST calls | Bump server image and clients in one commit, or hold both at 3.17.x |
 | 8 | cupy-cuda13x 14.2.0 in the Triton image | CuPy 14 NumPy 2 semantics (tuple returns, dtype promotion) in `gpu_image_prep` kernels | Keep `13.6.0` if the GPU decode tests fail; the API image already runs CuPy 14 |
-| 9 | pandas 3.1.0 (trainer, runtime) | Default string dtype and copy-on-write change dataframe behavior in Ultralytics' results handling and the bench scripts | Trainer smoke run of a short training; `src/` has one import |
+| 9 | pandas 3.1.1 (trainer, runtime) | Default string dtype and copy-on-write change dataframe behavior in Ultralytics' results handling and the bench scripts | Trainer smoke run of a short training; `src/` has one import |
 | 10 | pytest 9.2.0, pytest-asyncio 1.4.1, pytest-cov 7.1.0 | Fixture and event-loop changes, coverage option changes | Already running in `.venv` at 9.1.1 / 1.4.0 / 7.1.0 |
-| 11 | Freshly released pins (psycopg, SQLAlchemy, kombu, filelock, virtualenv, onnxslim, ultralytics) | A same-week release gets yanked or has a quick regression patch | Re-run the survey the day the series starts; step back one patch rather than hold the series |
-| 12 | Licenses | No license change found among packages that differ between the repo test venv and the proposal beyond SPDX renames (Pillow: MIT-CMU; setuptools: MIT). New LGPL-3.0 (psycopg); GPL research-only (igraph, leidenalg) must not enter product manifests; NVIDIA proprietary (tensorrt-cu13, CUDA wheels) and AGPL-3.0 (ultralytics) already present | Update ATTRIBUTION.md with psycopg and psycopg-pool |
+| 11 | Freshly released pins (celery, kombu, psycopg, SQLAlchemy, filelock, virtualenv, onnxslim, ultralytics) | A same-week release gets yanked or has a quick regression patch | Re-run the survey the day the series starts; step back one patch rather than hold the series |
+| 12 | Licenses | No license change found among packages that differ between the repo test venv and the proposal beyond SPDX renames (Pillow: MIT-CMU; setuptools: MIT). New LGPL-3.0 (psycopg); GPL research-only (igraph, leidenalg) must not enter product manifests; NVIDIA proprietary (tensorrt-cu13, CUDA wheels) and AGPL-3.0 (ultralytics) already present | Update ATTRIBUTION.md with psycopg |
+| 13 | celery 5.7.0, kombu 5.7.0, redis-py 8.1.0 with a Valkey server | RESP3 default in redis-py 8 against Valkey; Celery 5.7 is a day old | Round-trip smoke test (section 4 redis row); fallback `protocol=2`, then redis-py 6.4.0 (kombu's floor) |
