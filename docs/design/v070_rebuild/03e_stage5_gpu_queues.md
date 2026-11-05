@@ -6,8 +6,8 @@
 | Depends on | stage 3 merged ([03c](03c_stage3_job_runtime.md)) |
 | Design | [02b](02b_jobs_locking_events.md) sections 2.1, 3 and 7.3; [02a](02a_postgres_schema.md) section 7 |
 | Decisions | D-41 (owner decision 4: training and model export run on Celery; the file protocols are deleted), D-31 (the evaluator on `gpu_eval`, approved), D-22b (promote `wait=true` deleted) |
-| Lanes | 5A, 5B, 5C, 5D in parallel |
-| Merge order | 5D, 5A, 5B, 5C |
+| Lanes | 5A, 5B, 5C, 5D in parallel; then 5E (job-directory cleanup) |
+| Merge order | 5D, 5A, 5B, 5C, then 5E last in W2.3a |
 | Runs alongside | stage 4 part W2.3a, disjoint files (merge order 5D first, then 4D, 4A, 4B, 4C, then 5A, 5B, 5C) |
 | Compose project | none in the lanes; no GPU in any lane (handlers are tested with fakes; the GPU smoke runs in a budgeted GPU window, below) |
 | Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [owner_questions](reference/owner_questions.md)): 5A-6 (reservations by card UUID), 5B-4 (the export writes the engine contracts and refuses a mismatch, GPU S-13), 5D-5 (registry rows carry the contracts); the GPU worker shape is 1B-8's `make_app(include, device_uuid=None)` |
@@ -16,7 +16,7 @@ The three GPU images (trainer, export, evaluator) import only `src/tasks/runtime
 layer (the heartbeat, the fenced job writes, the event row and the Valkey wake-up all live there,
 review fix R-2), and build their Celery app with `src/tasks/runtime/gpu_app.py::make_app(include=[<handler module>])` (the one signature `make_app(include, device_uuid=None)` of [03a](03a_stage1_foundation.md) 1B-8: every visible card is upserted, `device_uuid` stays `None`)
 (the same `broker_transport_options` as every other app, R-33). Review fix R-27: each GPU image gets
-`psycopg[c,pool]` like the api image, so 5A adds the build step (compiler and `libpq-dev` in the
+`psycopg[c]` like the api image, so 5A adds the build step (compiler and `libpq-dev` in the
 trainer's builder stage) and `libpq5` in its runtime stage, and 5B does the same for the `export`
 and `evaluator` targets of the root `Dockerfile`; a fresh-interpreter test in each image imports
 `psycopg` and reports `psycopg.pq.__impl__ == "c"`.
@@ -43,7 +43,7 @@ tests under `tests/training/` and `tests/trainer/`.
 |---|---|---|---|
 | 5A-1 | `train/start` calls `start_job('train', ...)` with a `training_runs` row (spec, class names in output order from the registry, the export snapshot key) in the same transaction; no `job.json`, no `atomic_create_bytes` caller | `tests/training/test_train_start_job.py` (`db`): one row each in `jobs` and `training_runs`, one message on `gpu_train`; no file under the old jobs dir | preflight unchanged |
 | 5A-2 | `docker/trainer/celery_tasks.py`: `register_job('train', handler)`; the handler runs the existing fit with progress from the epoch callback (`ctx.progress`), cancel checked between epochs (`ctx.cancelled()`, replacing `<id>.cancel`), the log and checkpoints written through the storage seam under the run's `artifact_prefix`, the manifest stored in `training_runs.manifest` | `tests/trainer/test_train_handler.py` (fake fit): progress per epoch, cancel at an epoch boundary -> `cancelled`, an exception -> `failed` with the message | a fake fit completes |
-| 5A-3 | delete the file protocol: `job_protocol.py`, `job_claim.py` (the `O_EXCL` generations), `job_status.py` status files, the 2 s poll in `trainer.py`, `job_files.py` (the claim-file cleanup in `run_retention.py` is done by 5C-3, which owns that file) | `tests/trainer/test_no_file_protocol.py`: `rg`-equivalent scan of `docker/trainer` and `src/services/training` for `.job.json`, `.status.json`, `claim.g`, `.cancel` is empty | - |
+| 5A-3 | delete the file protocol: `job_protocol.py`, `job_claim.py` (the `O_EXCL` generations), `job_status.py` status files, the 2 s poll in `trainer.py`, `job_files.py` (the claim-file cleanup in `run_retention.py` is done by 5E-3, which owns that file) | `tests/trainer/test_no_file_protocol.py`: `rg`-equivalent scan of `docker/trainer` and `src/services/training` for `.job.json`, `.status.json`, `claim.g`, `.cancel` is empty | - |
 | 5A-4 | trainer reachability and capabilities: at worker start the trainer writes `worker_capabilities` (GPUs, families); `/train/preflight` reports "trainer available" when `inspect().active_queues()` shows a `gpu_train` consumer (timeout 1 s) and its capabilities row is fresh; `.trainer_capabilities.json` and the container-name probe (`trainer_reachability.py`, `lineage.py`'s `containers.get`) deleted; `OP_GPU_ARBITER_TRAINER_CONTAINER` retired | `tests/training/test_trainer_reachability_celery.py` (fake inspect): no consumer -> "not running"; consumer + fresh row -> available | - |
 | 5A-5 | the training image imports: a fresh interpreter in the trainer environment imports `docker/trainer/celery_tasks.py` without FastAPI or OpenSearch (`tests/trainer/test_runtime_import_minimal.py`, run with the trainer requirements in CI's existing trainer job if present, else in the sweep's image check) | the test | - |
 | 5A-6 | research GPU S-7, X-6: training reserves cards by `gpu_uuid` (`gpu_reservations` keyed by UUID, `training_runs.gpu_uuids`); `OP_TRAIN_GPU_ORDER` names cards that are resolved to UUIDs through `gpu_devices` at the start; every `gpu_reservations` insert upserts its card's `gpu_devices` row in the same transaction (review RR-9) | `tests/training/test_reserve_by_uuid.py` (`db`): two cards with swapped CUDA order still reserve the named physical card; `tests/training/test_reserve_card_without_worker.py` (`db`): a reservation for a card with no GPU worker succeeds | one card behaves as today |
@@ -71,14 +71,7 @@ under `tests/models/`.
 
 **Owns:** `scripts/curation/bakeoff/bakeoff_runner.py` (the job-file watch and rename deleted) and
 new `scripts/curation/bakeoff/celery_tasks.py`; `src/routers/curation/bakeoff.py` and the start service `src/services/curation/bakeoff_jobs.py`;
-the files that name the per-project `bakeoff_jobs_dir` today, named one by one (computed on 2026-11-05 from
-the old `rg -ln "bakeoff_jobs|bakeoff/run" src` pattern; 5C merges last, after every other W2.3a lane, and is the single
-owner of the shared per-project job-directory plumbing, so no other lane edits these files: the other lanes list the
-directory fields they orphaned in their PR notes and 5C removes them with its own): `src/config/gpu_arbiter.py`,
-`src/config/curation.py`, `src/config/projects.py`, `src/config/curation_accessors.py`,
-`src/services/projects/registry.py`, `src/services/projects/delete_paths.py`, `src/services/projects/busy.py`,
-`src/routers/curation/_project_views.py`, `src/services/training/arbiter_dirs.py`,
-`src/services/training/run_retention.py`, `src/services/curation/export_retention.py`; the call of
+`src/config/gpu_arbiter.py` (its bake-off fields); the call of
 `active_bakeoffs()` in `src/services/training/gpu_arbiter.py` (its bake-off scan lines only; 6A deletes the loop that
 calls it in W2.4); `src/config/job_kinds/gpu_eval.py`, `src/config/task_routes/gpu_eval.py`; tests under `tests/bakeoff/`.
 
@@ -87,6 +80,34 @@ calls it in W2.4); `src/config/job_kinds/gpu_eval.py`, `src/config/task_routes/g
 | 5C-1 | `bakeoff/run` calls `start_job('bakeoff', ...)` with a `bakeoff_runs` row; no `bakeoff_jobs/*.job.json` | `tests/bakeoff/test_bakeoff_start_job.py` (`db`) | - |
 | 5C-2 | the handler runs the existing evaluation; results under `results_storage_key`; at-least-once re-run removed (a redelivery is a claim no-op) | `tests/bakeoff/test_bakeoff_handler.py` (fake backend): one run for two deliveries | a fake evaluation completes |
 | 5C-3 | `OP_BAKEOFF_JOBS_DIR` and the per-project `bakeoff_jobs` directories retired; 5C adds `src/db/repos/bakeoff.py::active_bakeoffs()`, which the GPU arbiter (`gpu_arbiter.py`, call changed here, loop deleted by 6A) calls instead of scanning job files | retired-env test; `tests/bakeoff/test_active_bakeoffs.py` (`db`) | - |
+
+## Lane 5E `b2/job-dirs-cleanup`: remove the per-project job-directory plumbing (merges last in W2.3a)
+
+**Why a lane of its own.** Every W2.3a lane stops using its job directory (`*_jobs_dir`, trigger
+and status files), but the directory fields, their accessors, their creation at project setup,
+their deletion at project delete and the "busy" scan are shared by all of them. This is the
+"contract" step of the expand/contract pattern: callers move first, then the shared definition is
+removed once, in one reviewable change, after every caller is gone. No other lane edits these
+files; each lane lists in its report the directory fields and helpers it stopped using.
+
+**Cut and merge.** Cut from the W2.3a integration head after 5D, 4D, 4A, 4B, 4C, 5A, 5B and 5C
+merged; merges last in W2.3a.
+
+**Owns:** `src/config/curation.py`, `src/config/projects.py`, `src/config/curation_accessors.py`,
+`src/services/projects/registry.py`, `src/services/projects/delete_paths.py`,
+`src/services/projects/busy.py`, `src/routers/curation/_project_views.py`,
+`src/services/training/arbiter_dirs.py`, `src/services/training/run_retention.py`,
+`src/services/curation/export_retention.py`; `src/config/retired_env.py` and `env.template`
+(append-only rules); tests under `tests/projects/` that cover these files.
+
+| ID | Task | Red test | Control |
+|---|---|---|---|
+| 5E-1 | delete every per-project job-directory field, accessor and creation step the lanes' reports list; the `OP_*_JOBS_DIR` variables go to `retired_env.py` | `tests/projects/test_no_job_dirs.py`: a new project creates no `*_jobs` directory; `rg -n "_jobs_dir" src` is empty outside `src/services/upgrade/from_060/` | creating a project still creates its data directories |
+| 5E-2 | project delete and "busy" read the `jobs` table only (`busy.py` asks for live `jobs` rows of the project; no directory scan) | `tests/projects/test_busy_reads_jobs.py` (`db`): a live job row makes the project busy, a directory file does not | a project with no live row is not busy |
+| 5E-3 | retention (`run_retention.py`, `export_retention.py`) keeps only output retention; claim-file cleanup is gone with the files | `tests/projects/test_retention_no_claim_files.py` | output retention still prunes old outputs |
+
+Done when: the three tests pass; the vulture and file-lock ratchets show no new entries; the
+lanes' "orphaned field" notes are all resolved.
 
 ## Lane 5D `b2/promote-models`: promotion and the model registry
 

@@ -6,7 +6,7 @@
 | Depends on | stage 3 merged ([03c](03c_stage3_job_runtime.md)): `start_job`, `register_job`, `JobContext`, the reaper, `publish` |
 | Design | [02b](02b_jobs_locking_events.md) sections 1-3 (the kind table is authoritative for queue, exclusivity, auto-resume and limits) |
 | Lanes | two parts (review RR-13, owner Q-A 2026-11-04), each closed by a part check. **W2.3a** (the B2 families, ports of today's behaviour): 4A, 4B, 4C, 4D in parallel with stage 5's 5A-5D. **W2.3b** (the research families, cut from the W2.3a head after its part check): 4F, ND-A and ES-B in parallel; then ND-B (cut after ND-A and 4F merged); then 4E (frontend, after every other W2.3a and W2.3b lane merged and `make contracts-check` is green) |
-| Merge order | W2.3a: 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C. W2.3b: 4F, ND-A, ES-B, ND-B, 4E ([00_master_plan.md](00_master_plan.md) W2.3a and W2.3b). Why: 4D fixes the VLM client signature other callers use (4A-8); 4F fixes `record_partition`, `group_lineage` and `assign.place_new` that ND-A calls; ES-B reuses 4A's reprocess decode path (merged in W2.3a) and queues 4F's and ND-A's kinds; ND-B edits the item serializer and query builders after 4F and calls ND-A's groups |
+| Merge order | W2.3a: 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C, 5E. W2.3b: 4F, ND-A, ES-B, ND-B, 4E ([00_master_plan.md](00_master_plan.md) W2.3a and W2.3b). Why: 4D fixes the VLM client signature other callers use (4A-8); 4F fixes `record_partition`, `group_lineage` and `assign.place_new` that ND-A calls; ES-B reuses 4A's reprocess decode path (merged in W2.3a) and queues 4F's and ND-A's kinds; ND-B edits the item serializer and query builders after 4F and calls ND-A's groups |
 | Wave size | W2.3a: 8 lanes, no cross-lane signature except 4D's VLM keyword. W2.3b: 3 lanes at once, then 2 in sequence; every W2.3b cross-lane call is against a signature fixed in this file |
 | Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1, every seam now; [owner_questions](reference/owner_questions.md)): the clustering family becomes its own lane 4F (split from 4B, which keeps import, combine and class merge); the embedding re-index job (ES-B); the near-duplicate machinery (ND-A) and holdout guard (ND-B, replacing 2D-4); the assist loop's own record, pause, budgets and slices in 4D (gaps G-2, G-3); 4E follows every new control and wire. Seam map: [traceability](reference/traceability.md) section 5.2 |
 | Runs alongside | stage 5 ([03e](03e_stage5_gpu_queues.md)), disjoint files |
@@ -310,7 +310,7 @@ and cohort gate call; tests `tests/near_duplicates/test_holdout_*.py`.
 
 ## 7. Merge and gate
 
-**W2.3a.** The coordinator merges 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C (`--no-ff`), running
+**W2.3a.** The coordinator merges 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C, 5E (`--no-ff`), running
 `make contracts-check`, the merged lanes' tests and `-m db` after each, then the W2.3a part check
 (this section's checks and the exit criteria of [03e](03e_stage5_gpu_queues.md), the Docker-free suite in 4 shards),
 which is also the check of PR2 together with the live smoke and the stage-6 deletions of

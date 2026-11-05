@@ -65,7 +65,7 @@ If a symbol moved, re-find it by concept and record the new name in the lane's P
 | 2 | Control data moves to Postgres, and the 0.6.0 upgrade step | [03b_stage2_control_data.md](03b_stage2_control_data.md) | 2A, 2B, 2C, 2D, 2E, ES-A (embedding registry), then 2F | stage 3 | stage 1 |
 | 3 | Job runtime, the reaper and the event feed | [03c_stage3_job_runtime.md](03c_stage3_job_runtime.md) | 3A, 3B | stage 2 (codes from the stage-1 head) | stage 2 |
 | 4 | The API-hosted job families move to Celery, in two parts | [03d_stage4_job_families.md](03d_stage4_job_families.md) | W2.3a: 4A, 4B, 4C, 4D. W2.3b (after the W2.3a part check): 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard), then 4E (frontend) | stage 5 (W2.3a only) | stage 3 |
-| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03e_stage5_gpu_queues.md](03e_stage5_gpu_queues.md) | 5A, 5B, 5C, 5D (W2.3a) | stage 4 W2.3a | stage 3 |
+| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03e_stage5_gpu_queues.md](03e_stage5_gpu_queues.md) | 5A, 5B, 5C, 5D, then 5E (W2.3a) | stage 4 W2.3a | stage 3 |
 | 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md) | 6A and 6B part 1 (close W2.3a, PR2); then 6A and 6B part 2 and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) (PR3) | - | stages 4 and 5 |
 
 (Stage n is the file with the n-th letter: stage 1 = 03a ... stage 6 = 03f. Older text elsewhere may

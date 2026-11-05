@@ -24,7 +24,7 @@ workers and beat, and the API checks the schema head at startup.
   database tests from the moment 1A merges). The explicit `-m` commands are lane 1D's (`ci.yml`,
   `CONTRIBUTING.md`) and 6D's (`CLAUDE.md`).
 - **Adds** the packages named in the overview header at the exact versions of [01](01_package_pins.md) (runtime:
-  SQLAlchemy with the `asyncio` extra, Alembic, `psycopg[c,pool]` in images and `psycopg[binary,pool]`
+  SQLAlchemy with the `asyncio` extra, Alembic, `psycopg[c]` in images and `psycopg[binary]`
   in the test set (01 section 4), Celery, kombu, billiard, redis-py: the latest releases at bump time,
   Celery 5.7.0, kombu 5.7.0, redis-py 8.1.0 (the 2026-11-04 hold on kombu 5.6.2 and redis-py 6.4.0,
   decision D-66, was reversed by the owner on 2026-11-05, D-70);

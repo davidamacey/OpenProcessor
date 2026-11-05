@@ -325,11 +325,12 @@ ported unchanged, in one module each, for W2.3b to replace.
 | 1 | Training as a GPU queue consumer | `b2/gpu-train` | [03e](03e_stage5_gpu_queues.md) lane 5A | 03e 5A | #451 |
 | 1 | Model upload and export as GPU queue jobs | `b2/gpu-export` | 03e lane 5B | 03e 5B | #451 |
 | 1 | The bake-off evaluator as a GPU queue consumer | `b2/gpu-eval` | 03e lane 5C | 03e 5C | #451 |
+| 2 | Remove the shared per-project job-directory plumbing once every caller is gone (the expand/contract "contract" step) | `b2/job-dirs-cleanup` (after every other W2.3a lane merged) | 03e lane 5E | 03e 5E | #451 |
 | 1 | Promotion and the model registry | `b2/promote-models` | 03e lane 5D | 03e 5D | #451 |
 | 2 | Periodic work to beat, part 1; the old job infrastructure deleted | `b2/beat-periodic` (cut after the eight lanes merged) | [03f](03f_stage6_scheduler_scaleout.md) lane 6A part 1 | 03f 6A | #451, #453, #464 (OPS-2 act part) |
 | 2 | Compose for the ported consumers, no `container_name`, scale, the arbiter worker (part 1) | `b2/scale-out-compose` (cut after the eight lanes merged) | 03f lane 6B part 1 | 03f 6B | #451 |
 
-Merge order: 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C (03d header gives the reasons), then 6A part 1, then 6B part 1. Size: 8 lanes, one
+Merge order: 5D, 4D, 4A, 4B, 4C, 5A, 5B, 5C, 5E (03d header gives the reasons), then 6A part 1, then 6B part 1. Size: 9 lanes, one
 cross-lane signature (4D's VLM `usage_source` keyword), then 2.
 Why stage 6 part 1 is here: `main` must boot after PR2, so the ported consumers need their compose services, and the
 PR2 smoke runs on that compose; once every family is ported the old job paths, leases and file locks have no caller
