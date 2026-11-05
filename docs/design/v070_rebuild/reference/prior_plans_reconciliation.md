@@ -22,6 +22,7 @@ Consolidated 2026-11-03.
   "Folded into" line. The counts in section 3.7 are final.
 - **Master plan.** `docs/design/master_plan.md` is deleted; the C14 note in section 3.0 is resolved
   (the program cites it only as "the former master plan (rev 4, in git history)").
+- **Check of 2026-11-05.** Every remaining top-level plan was re-checked against the program: none was deleted, because the lane files still cite the `Q-`, audit and `U-` IDs of the three source plans, the open plans wait for their batch (R-2, R-3), and `release_acceptance_plan.md` is the R-final method until RP-9. `task_queue_plan.md` now carries a banner that its Redis 8, lease and file-lock design is superseded. See [docs/design/README.md](../../README.md).
 - **README.** Section 5 is applied: `docs/design/README.md` has the "Program plan (current)" section and
   the updated statuses.
 
@@ -137,7 +138,7 @@ rollback 138/138, lock rule held). `scripts/bench/vlm_rate.py` does not exist.
 | W6 taxonomy as data and a classification-crop export | defer v0.9.0; must use the B1 registry document by name (B1 1B) |
 | W8 visual judge | #406: `clu:CL-1` in research wave RW-3 ([09c_research_clustering_protocol.md](../09c_research_clustering_protocol.md) section 5) |
 | W-UI review screens | defer v0.9.0, with each feature |
-| W12 identity text (plates) | #401: superseded by [09h_research_plate_text.md](../09h_research_plate_text.md); lands as wave W5e ([06e](../06e_w5e_plate_text.md), pending RD-3) |
+| W12 identity text (plates) | #401: superseded by [09h_research_plate_text.md](../09h_research_plate_text.md); lands as wave W5e ([06e](../06e_w5e_plate_text.md), RD-3 answered as recommended) |
 | 6.7 attribute signals | #400: superseded by [09f_research_spatial_attributes.md](../09f_research_spatial_attributes.md); research wave RW-5 |
 | `target=frame`, `group_by=image` | #435, #436 (v0.9.0) |
 | 10: eleven issues "to create" | do not file now (owner rule: no growing issue list); file each when its wave starts |

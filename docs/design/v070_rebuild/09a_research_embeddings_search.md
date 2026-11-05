@@ -1,5 +1,8 @@
 # Embeddings and semantic search research plan: encoders, dual-field swap, search, kNN at scale
 
+> Contracts (tables, fields, job kinds) live in 02d_research_seam_schema.md and the lane files; this file is the rationale and the prototype design.
+> A coding lane reads 02d and its lane section, not this whole file.
+
 | Field | Value |
 |---|---|
 | Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [03d_stage4_job_families.md](03d_stage4_job_families.md) (W2.3a and W2.3b), [03b_stage2_control_data.md](03b_stage2_control_data.md), [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md), [05_b4_stateless_api.md](05_b4_stateless_api.md) and [06e_w5e_plate_text.md](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([traceability.md](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([v070_rebuild/08_research_prototype_track.md.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
@@ -402,7 +405,7 @@ CREATE TABLE embedding_spaces (
   UNIQUE (project_id, target, space_key),
   UNIQUE (project_id, index_role, vector_field),
   CHECK ((target = 'box') = (nested_path IS NOT NULL)),
-  CHECK ((target = 'frame') = (index_role = 'images')),
+  CHECK ((target = 'frame') = (index_role = 'images')),  -- dropped if #435 closes (RD-38, answered: close #435 if PE frame search misses its bar; then there is no third `target`)
   CHECK (role <> 'primary' OR status = 'ready')
 );
 CREATE UNIQUE INDEX uq_embedding_spaces_one_primary

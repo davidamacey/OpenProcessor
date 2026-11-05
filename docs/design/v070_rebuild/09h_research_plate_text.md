@@ -1,5 +1,13 @@
 # Registration-plate text as a per-box attribute: research and rebuild plan
 
+> Contracts (tables, fields, job kinds) live in 02d_research_seam_schema.md and the lane files; this file is the rationale and the prototype design.
+> A coding lane reads 02d and its lane section, not this whole file.
+
+> **Superseded in part, 2026-11-05 (owner, D-79, D-80).** Plate text is ordinary searchable label data stored as
+> readable text. The privacy machinery of this file (modes `off` and `keyed`, the deployment ceiling, the master secret and
+> per-project salt, the plate-specific purge, the sink-inventory test, `text_key` and the rekey job) is dropped; read
+> [06e_w5e_plate_text.md](06e_w5e_plate_text.md) for what lands. Where the text below still describes it, 06e wins.
+
 | Field | Value |
 |---|---|
 | Superseded parts | the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [03d_stage4_job_families.md](03d_stage4_job_families.md) (W2.3a and W2.3b), [03b_stage2_control_data.md](03b_stage2_control_data.md), [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md), [05_b4_stateless_api.md](05_b4_stateless_api.md) and [06e_w5e_plate_text.md](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([traceability.md](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([v070_rebuild/08_research_prototype_track.md.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first |
@@ -27,12 +35,12 @@ from a region box). Nothing in code names a vehicle or a plate; the naming scan
   with one or two wrong characters, or by a fragment. Boxes with the same plate text can be
   viewed as one identity group, and later feed clustering as a "same vehicle" link.
 - **What exists.** Most of the reading path is already there: the region stage finds plate boxes
-  inside vehicle crops, the PP-OCRv5 pipeline on Triton reads them, a dominant-text selector and
+  inside vehicle crops, the PP-OCRv5 pipeline on Triton (the reader deployed today) reads them, a dominant-text selector and
   validity rules clean the reading, and an optional VLM reading can be compared with the OCR one.
   What is missing: a per-character confidence, burst consensus, normalized search fields, a reader
   benchmark on plates, privacy modes and a purge.
 - **What I recommend.**
-  1. Keep the PP-OCRv5 pipeline as the default reader until a prototype proves a dedicated plate
+  1. Keep the PP-OCRv5 pipeline (the reader deployed today, the baseline arm) until a prototype proves a dedicated plate
      reader is better on public data *and* its licence is clear. The strongest candidate is
      fast-plate-ocr (MIT, ONNX, about 0.5 ms per plate vendor-reported).
   2. Add burst consensus as a confidence-weighted, alignment-based vote over the frames of one
@@ -57,7 +65,7 @@ from a region box). Nothing in code names a vehicle or a plate; the naming scan
 |---|---|---|
 | Plate example profile | the plate example under `examples/region_profiles/` | segmenter-only (SAM 3 text prompt) plus the OCR text-hint re-pass; `text_reader: "both"`; uppercase; charset `[A-Z0-9]`; length 2 to 10; `text_min_confidence: 0.6`; `text_reject_sequences`; US state names and codes as stopwords; parent classes by **name** (car, truck, bus, motorcycle). No detector ships: no permissively licensed plate detector was found |
 | Profile text fields | `src/config/detection_profile.py` (`DetectionProfile`) | `text_reader`, `text_crop_margin`, `text_crop_min_height`, `text_min_height_ratio`, `text_border_margin`, `text_uppercase`, `text_charset`, `text_join`, `text_len_min`/`max`, `text_stopwords`, `text_min_confidence`, `text_format` (full-match regex), `text_placeholders`, `text_reject_sequences`, the text-hint fields |
-| OCR pipeline | `models/ocr_pipeline/` (Python BLS), `models/paddleocr_det_trt/`, `models/paddleocr_rec_trt/` | PP-OCRv5 mobile detection (DB) and multilingual mobile recognition (SVTR-LCNet, 18,385 classes); uint8 inputs since #220 step 1; up to 128 lines per image; outputs `texts`, `text_scores`, `rec_scores`, boxes |
+| OCR pipeline (deployed today; PP-OCRv6 is the comparison arm in `pt:P1`, review Q-B; [PaddleOCR 3.7.0, 2026-06-11, PP-OCRv6 default](https://github.com/PaddlePaddle/PaddleOCR/releases)) | `models/ocr_pipeline/` (Python BLS), `models/paddleocr_det_trt/`, `models/paddleocr_rec_trt/` | PP-OCRv5 mobile detection (DB) and multilingual mobile recognition (SVTR-LCNet, 18,385 classes); uint8 inputs since #220 step 1; up to 128 lines per image; outputs `texts`, `text_scores`, `rec_scores`, boxes |
 | Line confidence | `models/ocr_pipeline/1/ocr_postprocess.py` (`CTCLabelDecode.__call__`) | per character `preds.max(axis=2)`, then **the mean** over the decoded characters. One unreadable character hides inside a high mean |
 | Dominant text | `src/services/detection/region_text.py` (`read_dominant_text`) | tallest line plus lines within a height ratio, border band dropped, stopwords stripped, normalized; reading confidence = `min` of the kept **line** means |
 | Validity rules | `src/services/detection/region_text_rules.py` | placeholder, stock run, charset, length, `text_format` full match |
@@ -187,7 +195,7 @@ Open Images transcriptions plus set P.
 
 | # | Design | Verdict | Why |
 |---|---|---|---|
-| R1 | PP-OCRv5 pipeline on the plate box (today) plus dominant-text selection | ✅ default and baseline | in place, Apache-2.0, already on Triton; handles two-line plates through line detection |
+| R1 | PP-OCRv5 pipeline on the plate box (today) plus dominant-text selection | ✅ baseline arm (the reader deployed today; PaddleOCR 3.7.0 of 2026-06-11 made PP-OCRv6 its own default, so PP-OCRv5 is the baseline, not the vendor default) | in place, Apache-2.0, already on Triton; handles two-line plates through line detection |
 | R2 | PP-OCRv5 recognition only on the plate box (skip text detection) | 🟡 P1 | saves the detection pass; loses line selection, so header and state text may leak into the reading |
 | R3 | `en_PP-OCRv5_mobile_rec` (English dictionary) instead of the multilingual model | 🟡 P1 | vendor reports 85.25 % English against 66.00 % for the multilingual model; the repo already holds `en_ppocrv5_dict.txt`; a smaller softmax (436 classes) is also faster |
 | R4 | fast-plate-ocr global model, served by Triton (ONNX Runtime or a TensorRT plan) | 🟡 P1, then J6 | purpose-built and fastest; ships only if it beats R1/R3 on US-like data and the weights' training-data licence is acceptable |
@@ -721,7 +729,7 @@ Triton and the P-ocr gate for `rec_char_min`).
 | Readings leak through a sink nobody listed | the canary test walks every written body, log, job row and event; a new sink without a row fails CI |
 | Item OCR lines keep the plate after the box is keyed | S3 rule and a search test (`?item_text=`), not only a field test |
 | Consensus merges two vehicles into one group | P4 purity bar; the embedding floor; per-frame `text_frame` kept so a wrong group is reversible |
-| A reader's weights carry unclear training-data terms | J6; default stays Apache-2.0 PP-OCRv5 |
+| A reader's weights carry unclear training-data terms | J6; the baseline stays Apache-2.0 PP-OCRv5 |
 | Request-only datasets restrict use to academic, non-commercial research | J5; only aggregates are published, with citations |
 | US plates are under-represented in public sets | Open Images transcription plus set P; claims are scoped to the sets measured |
 | Confusable folding merges truly different plates (for example a real O and 0) | folding is for matching only; display and raw text are never folded; fuzzy matches are suggestions |
@@ -740,7 +748,7 @@ Triton and the P-ocr gate for `rec_char_min`).
 | J6 | If a dedicated reader (fast-plate-ocr) wins P1 but its training data's terms are not stated, may it ship as an opt-in installer model group, or not at all? | opt-in only, off by default, with the provenance gap stated in `ATTRIBUTION.md` |
 | J7 | The four PostgreSQL tables: their own revision in W5e, or in `0001_control_plane` now? | their own revision in W5e (B2 scope stays tight; Alembic adds them cleanly) |
 | J8 | Keyed-mode distance-1 neighbourhood keys (near-match and veto without text)? | defer; decide on P2's rate of distance-1 misreads among confident readings |
-| J9 | Store the issuing jurisdiction (state or country) when a reader provides it? | not in v0.7.0; P1 records whether the fast-plate-ocr region head is accurate enough to justify a field |
+| J9 | Store the issuing jurisdiction (state or country) when a reader provides it? | **Reversed 2026-11-05 (owner, RD-64, D-81): yes, in v0.7.0.** A nullable issuing-jurisdiction field with its own confidence, read in the OCR pass, stored, searchable and filterable, in revision `0004_region_text`; a separate model only if `pt:P1` shows the reader cannot return it |
 | J10 | Raw-mode retention: optional or required? | optional (NULL keeps text until purge), so `raw` stays today's behaviour |
 | J11 | Consensus writes the group's reading into `text` and keeps the frame's own in `text_frame`: agreed? | yes |
 | J12 | May a detector trained on the private plate-box set be used in P6 and in the owner's deployments (never shipped publicly)? | yes; the public example keeps the segmenter and text hint |

@@ -192,7 +192,7 @@ Added by the research integration pass (owner-approved gaps of 2026-11-04):
 | #370 importers | v0.8.0 | v0.8.0 F1 (only COCO segmentation-only boxes remain) |
 | #398 detector-class roots (Z5) | v0.8.0 | research `al:AL6` in RW-6 (calls RD-80); its seams ship now: the loop reads `(partition_id, cluster_uid)` from `cluster_partitions` (4D, 4F) and `detector_class` is a partition method value |
 | #400 attribute signals | none, parked | `sp:P-2`, `sp:P-3` in RW-5; lane L-A1 only on a PASS (reserved DDL in [02d](../02d_research_seam_schema.md) section 5) |
-| #401 plate identity text | none, parked | wave W5e ([06e](../06e_w5e_plate_text.md); its revision in W5e approved, RD-4; pending RD-3, RD-61, RD-62); creation-time seams in W2.1 (1C-9) and W2.2 (2F-6, kept by the owner, Q-A), the OCR output in W5c (PP-OCRv6 compared once, Q-B), the privacy baseline in W4; prototypes `pt:P0..P5` as short runs in PW-2 (`pt:P6` cut; UFPR-ALPR and LPLC skipped, RD-10); milestone v0.7.0 on the owner's go |
+| #401 plate identity text | none, parked (to v0.7.0, `parked` removed, 2026-11-05) | wave W5e ([06e](../06e_w5e_plate_text.md); its revision in W5e approved, RD-4; RD-3 answered as recommended, RD-61 and RD-62 answered, D-79 and D-80); creation-time seams in W2.1 (1C-9) and W2.2 (2F-6, kept by the owner, Q-A), the OCR output in W5c (PP-OCRv6 compared once, Q-B), the privacy baseline in W4; prototypes `pt:P0..P5` as short runs in PW-2 (`pt:P6` cut; UFPR-ALPR and LPLC skipped, RD-10); milestone v0.7.0 on the owner's go |
 | #403 MPS overlay | v0.7.0, parked | MPS stays off in v0.7.0 (`gpu:PR-4` cut before the tag, review RN-6); moved to RW-1 at W6, where `PR-4` may run on the owner's OK |
 | #406 judge calibration | v0.8.0 | `clu:CL-1` in RW-3 (protocol file section 5) |
 | #407 GPU-prep staged speed | v0.7.0 | W5b `profile` then `prep`; reads `gpu:PR-2` (CV-CUDA) first; 5b-G4 (the C++ bar) is not opened, `PR-4` is post-tag in RW-1 (review RN-6) |
@@ -259,13 +259,14 @@ hypotheses); 07d Q1-Q9 (asked at W5d kick-off); the GPU-15 leftover, folded into
 
 Rules as in [09](github_actions.md) section 1: plain words, neutral security wording (no
 mechanism detail), no private names or paths, fewer issues is better, edit and close rather than
-delete. Post each text exactly as written below; create N19 (#479) and N20 (#480) first and replace those two
-placeholders in the other texts with their issue numbers; record the created numbers in the private
-ledger and then in this file.
+delete. Post each text exactly as written below (N19 is #479 and N20 is #480, created 2026-11-04, and the
+placeholders in the other texts are replaced). The texts of N19 and N20 in 4.1 are the 2026-11-04
+wording and predate the 2026-11-05 decisions (latest pins D-70, no `revoke` D-71); the coordinator
+rewrites those two issue bodies (section 4.7).
 
 ### 4.1 New issues (2)
 
-**Done 2026-11-04:** N19 is #479 and N20 is #480; the 12 re-scope comments in 4.2 are posted (with #479/#480 in place of the placeholders); #469 and #471 are closed as decided; PR #449 is closed. Still to do at their points: the PR #474 close after W2.0, the 4.3 moves at W6, and the closes that ride with their PRs.
+**Done 2026-11-04:** N19 is #479 and N20 is #480; the 12 re-scope comments in 4.2 are posted (with #479/#480 in place of the placeholders); #469 and #471 are closed as decided; PR #449 is closed (PR #474 was closed 2026-11-04 too). Still to do at their points: the 4.3 moves at W6, and the closes that ride with their PRs.
 
 **N19 (#479).** Title: `feat(control-plane): PostgreSQL for all control data, with migrations, row-level security and the one-step 0.6.0 upgrade`.
 Labels: enhancement, area:curation, effort:hard. Milestone: v0.7.0. Body:
@@ -329,16 +330,16 @@ Labels: chore, effort:moderate. Milestone: v0.7.0. Body:
 
 | Item | When | Comment |
 |---|---|---|
-| PR #474 (frontend dev dependencies) | after W2.0 merges | "Re-applied by hand in `<commit>` (pins part A, W2.0), following the rule that dependency bumps land through a reviewed deps lane during the program." |
-| PR #449 (Triton base 26.10) | now, unless the owner places B3-A5 in W3 (D-38) | "The Triton and Python base moves are an owner decision (D-38 in `docs/design/v070_rebuild/reference/decision_register.md`): if taken, inside the B3 engine rebuild with the TensorRT pins moved together. Closing; Dependabot opens a fresh PR when due." |
+| PR #474 (frontend dev dependencies) | closed 2026-11-04 (done; was: after W2.0 merges) | "Re-applied by hand in `<commit>` (pins part A, W2.0), following the rule that dependency bumps land through a reviewed deps lane during the program." |
+| PR #449 (Triton base 26.10) | closed 2026-11-04 (done; was: now, unless the owner places B3-A5 in W3 (D-38)) | "The Triton and Python base moves are an owner decision (D-38 in `docs/design/v070_rebuild/reference/decision_register.md`): if taken, inside the B3 engine rebuild with the TensorRT pins moved together. Closing; Dependabot opens a fresh PR when due." |
 | #453 | with the B2 PR (closing keyword) | - |
 | #461, #462 | with the B2 PR (closing keywords) | - |
 | #451, #439, #473, #468, #470, #472 | with the B4 PR (closing keywords) | - |
-| #469, #471 | now, as "decided: keep current behaviour", with the comment above (owner decision 2026-11-04, OI-1 and OI-2) | - |
+| #469, #471 | closed 2026-11-04 (done), as "decided: keep current behaviour", with the comment above (owner decision 2026-11-04, OI-1 and OI-2) | - |
 | #465 | with the W5d PR | - |
 | #401 | with the W5e PR (closing keyword), on the owner's go (RD-3) | - |
 
-### 4.5 Research comments (drafted 2026-11-04; RD-1 and RD-2 answered the same day; **not yet approved for posting**: post on the owner's go)
+### 4.5 Research comments (drafted 2026-11-04; RD-1 and RD-2 answered the same day; **not yet posted** as of 2026-11-05: post on the owner's go)
 
 Same rules as above. One comment per issue; the plan path is the only link.
 
@@ -373,6 +374,14 @@ Labels: enhancement, effort:hard, plus the existing area label that fits. Milest
 > the release checks of F10.
 
 
+### 4.7 Issue rewrites and milestone moves approved on 2026-11-05 (the coordinator does them)
+
+| What | Detail |
+|---|---|
+| Issue bodies to rewrite | #451, #453, #479, #480, #401 and #466: bring each body to the plan as it now stands (Celery 5.7.0 and the latest pins, D-70; cancel as a database write, D-71; the three-PR B2, D-76; plate text as W5e) |
+| Milestone moves | only #401 to v0.7.0 (approved 2026-11-05; it has none today, remove its `parked` label). #348, #365, #416 and #466 keep their milestones; their v0.7.0 slices are listed in the #479 and #466 bodies. #401's draft text no longer mentions privacy modes (D-79) |
+| Where recorded | [decision_register.md](decision_register.md) D-70..D-78; [github_actions.md](github_actions.md) status line |
+
 ## 5. Research integration (2026-11-04)
 
 The seven research plans (`docs/design/research_*_plan.md`) each listed the seams the rebuild must
@@ -392,10 +401,10 @@ another RD-n follows that open question's recommendation.
 | X-1b | `ON DELETE RESTRICT` between two rows that one project delete cascades to | **`NO ACTION` everywhere for such pairs** (02a section 1.2; also fixes the existing `config_activations`, `promotions` and `training_runs` references) | the documented difference is that `NO ACTION` can be deferred and `RESTRICT` cannot (review RR-6 corrected the earlier wording); the project delete does not rely on one cascade (the batched per-table delete of 4C-5, RR-7), the catalog-enumerated test decides, and a pair that still fails is declared `DEFERRABLE INITIALLY DEFERRED`; `tests/db/test_profile_fk_cascade.py` proves it |
 | X-2 | config kinds | v0.7.0 adds `serving_profile` (deployment), `cluster_profile` (project; a deployment variant only with the faces lane L5), `assist_loop_preset` (project), `near_dup_profile` (project, ND-A's revision). `attribute_profile` and `spatial_profile` are two distinct kinds, both reserved (02d section 5). The plate fields are `region_profile` body fields owned by W5e (not a new kind; the privacy mode is a table, not a document, because it holds a salt). The deployment serving profile is activated through `deployment_settings('active_serving_profile')`, not `config_activations` | `config_activations` is project-scoped by design; a deployment document needs a deployment pointer, like `local_vlm_desired` |
 | X-3 | queues | v0.7.0: `cluster` (W2.1, `cluster-worker`, CPU) and `text_read` (W5e, `text-read-worker`, no GPU); no GPU-prep queue (GPU S-11); device-scoped queues only when a family declares itself so (RW-1); `gpu_spatial` reserved | each new queue exists because a long job must not hold a `jobs` slot that request-started work needs; a queue is declared only with its consumer (no dead route) |
-| X-4 | OpenSearch fields and index-creation settings | families each in their own mapping module registered additively by 2F's registry: `cluster_*` (4F), `near_dup_*` and `content_sha256` (ND-A), `vec_<space_key>` and `boxvec_<space_key>` (ES), `capture.*` on images and `capture_taken_*` on items (W4), the plate `text_*` keys of a region box (W5e); `attr_*`, `scene_ids`, `place_embedding`, `capture.location` reserved. Creation-time settings: the plate normalizer `op_text_compact` in the items body, added to **upgraded** indexes by close, settings, open inside the upgrade window (2F-6); `index.knn = true` on images guarded by a door test (2F-7); k-NN method per field from `KnnMethodSpec` (ES-A3). `imohash` and the writer-less `phash` leave images (pending RD-43) | analysis settings are static, so a later addition would need a close and reopen or a reindex of every project; one module per family keeps W2.3b lanes file-disjoint |
+| X-4 | OpenSearch fields and index-creation settings | families each in their own mapping module registered additively by 2F's registry: `cluster_*` (4F), `near_dup_*` and `content_sha256` (ND-A), `vec_<space_key>` and `boxvec_<space_key>` (ES), `capture.*` on images and `capture_taken_*` on items (W4), the plate `text_*` keys of a region box (W5e); `attr_*`, `scene_ids`, `place_embedding`, `capture.location` reserved. Creation-time settings: the plate normalizer `op_text_compact` in the items body, added to **upgraded** indexes by close, settings, open inside the upgrade window (2F-6); `index.knn = true` on images guarded by a door test (2F-7); k-NN method per field from `KnnMethodSpec` (ES-A3). `imohash` and the writer-less `phash` leave images (RD-43, answered as recommended) | analysis settings are static, so a later addition would need a close and reopen or a reindex of every project; one module per family keeps W2.3b lanes file-disjoint |
 | X-5 | the model registry: the GPU plan's engine contracts vs the embeddings plan's `embedding_model_versions` | **two grains, one contract.** `model_engines` is one built Triton engine (physical facts, `input_contract`, `output_contract`, build profile, measured memory); `embedding_model_versions` is the logical encoder catalog (weights, modalities, dimensions, text prefixes, licence). `EncoderInputSpec.image` **is** an `EngineInputContract` (one pydantic class in `src/schemas/models.py`) and must equal the ready engine's contract (ES-A1 test). Clustering and near-duplicate runs record `embedding_model = space_key` and `preprocess_id = input_spec_sha256`, not free text. The W3 gate G7 writes `engine_parity_min_cos`; a lower parity makes a new model version | one definition of every pixel input for the CPU route, the GPU route, the registry and the research; a contract diff is a gated change, not a hidden edit in two files |
 | X-6 | `gpu_devices` vs GPU reservations | `gpu_devices` (inventory by NVML UUID, written by the GPU workers at start and on every heartbeat, by `serving_inventory` and by the reservation insert; review RR-9) is referenced by `gpu_reservations(gpu_uuid)`; `training_runs.gpu_uuids text[]`; serving-profile servers name UUIDs; research scripts set `CUDA_DEVICE_ORDER=PCI_BUS_ID` | CUDA numbers cards fastest first, so an index is ambiguous across processes (the measured 12 GB-card trap) |
-| X-7 | job control across topics | pausable kinds: `assist_loop`, `autolabel` (pending RD-69), `embedding_reindex`, `source_backfill`; `slice_s` for `assist_loop`, `embedding_reindex` and `source_backfill` (review RR-20); pause never revokes the task id (review RR-1); `retry_count` and cancel-is-terminal apply to every kind | G-1 is a generic claim bug, not a loop bug; pause means the same thing everywhere (RD-70) |
+| X-7 | job control across topics | pausable kinds: `assist_loop`, `autolabel` (RD-69, answered as recommended), `embedding_reindex`, `source_backfill`; `slice_s` for `assist_loop`, `embedding_reindex` and `source_backfill` (review RR-20); pause never revokes the task id (review RR-1); `retry_count` and cancel-is-terminal apply to every kind | G-1 is a generic claim bug, not a loop bug; pause means the same thing everywhere (RD-70) |
 | X-8 | holdout | one rule source (`occ_locks.py`): the loop never selects held-out items; clustering pools exclude them; ND-B owns the near-duplicate closure (replacing 2D-4) | one owner per rule |
 | X-9 | durable records vs events | every topic's record lives in its own tables; the 24-hour `events` rows are the UI feed only (G-3) | a 24-hour table cannot be an audit log |
 | X-10 | the 0.6.0 upgrade for research data | a step registry (2E-8): W2.3b lanes add `clustering.py` and `near_duplicates.py` as new files; the `source_backfill` job (ND-A, capture step W4) back-fills the exact key and the capture data of upgraded images (review RR-10) | file-disjoint lanes across waves |
@@ -434,7 +443,7 @@ change, 5.5).
 | S-17 one geometry module | 5b-G1 (07b amendment) |
 | S-18..S-20 metrics | 5b-D1, 5b (07b amendment) |
 | S-21 plan branch counter | 5d-P2 (07d amendment) |
-| S-22 DCGM profiling fields | 6B-8 (pending RD-18) |
+| S-22 DCGM profiling fields | 6B-8 (RD-18, answered as recommended) |
 
 **Clustering** ([09b_research_clustering.md](../09b_research_clustering.md) section 5.6; 11 seams, 9 folded, 1 changed, 1 reserved):
 
@@ -475,7 +484,7 @@ change, 5.5).
 | 5.4 the holdout rule | ND-B1..ND-B3 (replaces 2D-4) |
 | 5.5 `near_dup_profile` | ND-A (ND-2) |
 | 5.6 routes and wire; core ingest candidates | ND-A (ND-6, ND-7); ND-C2; 07d amendment |
-| 7.2 exact key | ND-A (ND-8), ND-C4 (pending RD-43) |
+| 7.2 exact key | ND-A (ND-8), ND-C4 (RD-43, answered as recommended) |
 
 **Spatial attributes** ([09f_research_spatial_attributes.md](../09f_research_spatial_attributes.md) section 5; 13 seams: 11 folded, 2 reserved; `location_policy` conditional on RD-51):
 
@@ -505,11 +514,11 @@ change, 5.5).
 | 5.3 job kinds and the `text_read` queue | W5e jobs lane PT-J1..PT-J3 |
 | 5.4 queries | PT-F3 |
 | 5.5 `region_profile` fields | **moved** from 2C to the W5e fields lane (5.5) |
-| 5.5 environment | B4 `b4/identity-text-privacy` |
+| 5.5 environment | dropped 2026-11-05 (D-79; was B4 `b4/identity-text-privacy`) |
 | 5.5 secrets (creation time) | 1C-9 |
 | 5.6 routes and wire | PT-F4, PT-J1, PT-M1 |
 | 5.7 `rec_char_min` | W5c track `ocr` (07c amendment) |
-| 5.8 privacy baseline | B4 `b4/identity-text-privacy`; `SECURITY.md` by `b4/privacy-hardening` (X-17) |
+| 5.8 privacy baseline | dropped 2026-11-05 (D-79; was `b4/identity-text-privacy`); `SECURITY.md` by `b4/privacy-hardening` (X-17) |
 
 **The auto-label assistant** ([09e_research_auto_label_assist.md](../09e_research_auto_label_assist.md) section 5; 9 seams, all folded):
 
@@ -540,7 +549,7 @@ The rows of section 2 above are updated for #40, #42, #45, #67, #84, #219, #220,
 | #365 embedding swap | ES-A (W2.2), ES-B (W2.3b), ES-C (W2.4) | RW-2, v0.8.0 F9 reduced |
 | #398 Z5 roots | the partition seam (1F, 4F) and the loop's partition reader (4D) | RW-6 `al:AL6`, `feat/loop-z5i` |
 | #400 attribute signals | none (reserved DDL) | RW-5 L-A1 |
-| #401 plate text | 1C-9, 2F-6, W4 identity-text lane, W5c `rec_char_min`, **W5e** | - |
+| #401 plate text | 1C-9, 2F-6, W5c `rec_char_min`, **W5e** | - |
 | #406 judge calibration | none | RW-3 `clu:CL-1` |
 | #416 near-duplicates | ND-A, ND-B (W2.3b), ND-C (W4); `nd:P0..P2` in PW-1 | RW-4 (`nd:P3..P7`, ND-E) |
 | #435 frame target | none | RW-2 `emb:EP-2` decides |
