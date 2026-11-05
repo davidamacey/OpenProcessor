@@ -584,7 +584,7 @@ CREATE TABLE jobs (
   kind                 text NOT NULL,                        -- validated against src/config/job_kinds/ in code; no CHECK, so a new kind needs no migration
   scope                text NOT NULL DEFAULT '',             -- e.g. a source id, an upload id, a slug
   exclusive_group      text NULL,                            -- from the kind table; NULL: not a singleton
-  queue                text NOT NULL,                        -- from TASK_ROUTES; '' for inline jobs
+  queue                text NOT NULL,                        -- from TASK_ROUTES (every job is queued; D-75)
   status               text NOT NULL CHECK (status IN ('queued','running','paused','cancelling',
                          'completed','completed_with_errors','failed','cancelled','interrupted')),
   params               jsonb NOT NULL DEFAULT '{}',

@@ -435,7 +435,7 @@ change, 5.5).
 | S-8 `JobPerfSummary`; S-9 the resolved plan | 3A-15; 02b section 2.2; filled by 4A, 4C and 5d |
 | S-10 crop size-variant keys | 1E-4; used by 5c-K1 |
 | S-11 no GPU-prep queue, `gpu_affinity` | 1B-8 (field), 3A-15 (wrapper) |
-| S-12 GPU worker shape | **changed**: 1B-8 (`make_app(include, device_uuid)`, CUDA only after fork); queue derivation deferred to RW-1 (5.5) |
+| S-12 GPU worker shape | **changed**: 1B-8 (`make_app(include, device_uuid=None)`, CUDA only after fork); queue derivation deferred to RW-1 (5.5) |
 | S-13 export records and refuses on mismatch | 5B-4 |
 | S-14 serving inventory | 1F-1 (table), 6A (beat task) |
 | S-15 router; S-23 its gauge | B4 4B-6 |

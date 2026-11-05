@@ -35,7 +35,7 @@ then speed (no throughput loss; B5 then measures on this engine once).
 
 | # | Check | How |
 |---|---|---|
-| P1 | B2 merged into main | `git log --oneline -1 main`; the B2 PR merge commit is present |
+| P1 | B2 merged into main (all three B2 PRs) | `git log --oneline main`; the B2 PR3 merge commit is present (B3 lanes may code from the frozen integration head before that) |
 | P2 | B1-1E merged: `nms=False` in `export_yolo26.export_fused_onnx`, `inspect_fused_output` refuses non-`[300,6]`, `head_kind` recorded by `validate_pytorch_model`, the export worker routes on `head_kind`, class by name on the secondary, YOLOv5 probe input read from the ONNX, CI job `families` exists | `rg -n "nms=False" export/export_yolo26.py`; `rg -n "head_kind" src/services/model_export.py export/export_worker.py`; `rg -n "families" .github/workflows/` |
 | P3 | B0 exact pin: every requirements file carries the same exact `ultralytics==<pin>`, equal to the current pin in `requirements.txt` (`8.4.197` when the plan was written); `tests/test_requirements_contract.py::test_ultralytics_is_one_exact_version_everywhere` exists | `rg -n "ultralytics" requirements*.txt pyproject.toml`; `rg -n "exact_version" tests/test_requirements_contract.py` |
 | P4 | D-27 and D-28 answered by the owner; freeze date written into the B3 PR description | owner message |

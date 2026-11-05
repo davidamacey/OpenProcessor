@@ -603,7 +603,7 @@ consumer in core or in the profile `QUEUE_PROFILE` names (OpenTranscribe's "a va
 drained route").
 
 Research GPU S-11, S-12: there is no GPU-prep queue in 0.7.0 (bulk ingest and reprocess call the
-executor in Triton from `jobs` workers that hold no GPU). `gpu_app.make_app(include, device_uuid)`
+executor in Triton from `jobs` workers that hold no GPU). `gpu_app.make_app(include, device_uuid=None)`
 takes the card's UUID and writes it into the worker's `worker_capabilities` row; device-scoped queue
 names (`<family>.<slot>`) are not derived until a family declares itself device-scoped (none does in
 0.7.0; the two-card research landing of RW-1 adds it). CUDA is initialized only in the child after
