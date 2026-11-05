@@ -137,7 +137,7 @@ rollback 138/138, lock rule held). `scripts/bench/vlm_rate.py` does not exist.
 | W6 taxonomy as data and a classification-crop export | defer v0.9.0; must use the B1 registry document by name (B1 1B) |
 | W8 visual judge | #406: `clu:CL-1` in research wave RW-3 ([09c_research_clustering_protocol.md](../09c_research_clustering_protocol.md) section 5) |
 | W-UI review screens | defer v0.9.0, with each feature |
-| W12 identity text (plates) | #401: superseded by [09h_research_plate_text.md](../09h_research_plate_text.md); lands as wave W5e ([06e](../06e_w5e_plate_text.md), pending RD-3) |
+| W12 identity text (plates) | #401: superseded by [09h_research_plate_text.md](../09h_research_plate_text.md); lands as wave W5e ([06e](../06e_w5e_plate_text.md), RD-3 answered as recommended) |
 | 6.7 attribute signals | #400: superseded by [09f_research_spatial_attributes.md](../09f_research_spatial_attributes.md); research wave RW-5 |
 | `target=frame`, `group_by=image` | #435, #436 (v0.9.0) |
 | 10: eleven issues "to create" | do not file now (owner rule: no growing issue list); file each when its wave starts |

@@ -46,7 +46,7 @@ own, so the program writes every prototype with its topic first (resolution X-12
 
 | Window | When | GPU | Never overlaps | Contents (section 3) | GPU hours (tier 1) |
 |---|---|---|---|---|---|
-| CPU slots | any time from W2.0 | none | a sweep's T1 run on the same host (nice 19, at most 8 threads) | `clu:CL-0`, `emb:EP-0`, `nd:P0` (CPU part), `pt:P0`, `sp:P-0`, `sp:P-1` | 0 |
+| CPU slots | any time from W2.0 | none | a sweep's T1 run on the same host (nice 19, at most 8 threads) | `clu:CL-0`, `emb:EP-0`, `nd:P0` (its CPU part only), `pt:P0`, `sp:P-0`, `sp:P-1` | 0 (the 0.2 GPU hours of `nd:P0` are its parity run, counted in PW-1) |
 | **PW-1** | during W2.1 and W2.2 (the rebuild uses no GPU) | GPU 0; GPU 2 when agreed | the W2.1 and W2.2 part-check bring-ups (CPU, but they run the stack) | `gpu:PR-0`, `gpu:PR-1`, `gpu:PR-2`, `nd:P0`, `nd:P1`, `nd:P2` (SSCD arm cut) | about 3.4 |
 | **PW-2** | during W2.3a, W2.3b and W2.4, outside live harness run 2 | GPU 0; GPU 2 when agreed | live run 2 (W2.4) | `pt:P1` (with PP-OCRv6, Q-B), `pt:P2`, `pt:P3`, `pt:P4`, `pt:P5` | about 2.9 |
 | (W3) | GPU window 1 holds GPU 0 for about 1.5 days | none | GPU window 1 on GPU 0 | nothing | 0 |
@@ -113,7 +113,7 @@ Every "Data" entry is a row of the dataset register (section 4.1).
 | hybrid OCR text search (`emb:EP-5`) | D3 with PP-OCRv5 strings | (in RG-5) | - | EP-4 placement A | RG-5 | a text space for OCR | RW-2 |
 | text encode on the GPU and a shared cache (`emb:EP-6`) | D1 captions; set P query log | (in RG-4's 6) | - | EP-1 | RG-4 | RD-21 | RW-2 |
 | the dual-field swap rehearsal (`emb:EP-7`) | D6 subset, `-p op-rs-emb-swap` | 1 | CPU | the v0.7.0 seams shipped | RG-6 | v0.8.0 F9 readiness | v0.8.0 F9 |
-| harness and parity (`nd:P0`) | 200 public images | 0.2 | 2 CPU h | none | PW-1 (CPU part any time) | trust in every nd row | - |
+| harness and parity (`nd:P0`) | 200 public images | 0.2 (parity run, in PW-1) | 2 CPU h (CPU slot, any time) | none | PW-1 for the GPU part | trust in every nd row | - |
 | copy-level cuts per level and space (`nd:P1`) | 2,000 constructed copies of COCO and Open Images, Copydays | 0.5 | 2 CPU h | P0 | PW-1 | `near_dup_profile` seed defaults (RD-47): read before the W2.3b cut, ND-A seeds them; else today's 0.98 | W2.3b |
 | exact and perceptual tiers (`nd:P2`; the SSCD copy-model arm cut) | as P1 | 0.2 | 1 CPU h | P1 | PW-1 | SHA-256 cost (RD-43); PDQ (RD-46) | W2.3b (RD-43), RW-4 (PDQ) |
 | bursts and sequences (`nd:P3`) | California-ND, Holidays, set P | 0.3 | 1 person h | P1 | RG-5 | burst grouping | RW-4 |
@@ -137,7 +137,7 @@ Every "Data" entry is a row of the dataset register (section 4.1).
 | how much bursts add (`pt:P3`) | set P bursts only (UFPR-ALPR skipped by the owner) | 0.3 | - | P1 | PW-2 | the consensus method | W5e |
 | which frames are one vehicle (`pt:P4`) | set P capture times | 0.3 | - | P0, `sp:P-1` | PW-2 | the consensus basis (RD-68) | W5e |
 | reader throughput (`pt:P5`) | 1,000 plate crops | 0.3 | - | P1 | PW-2 | the reader lane | W5e |
-| plate boxes: segmenter vs a private-set detector (`pt:P6`) | set P, Open Images | 4 | - | P0 | RG-3 (cut before the tag) | plate box source (RD-67); W5e uses the segmenter with the text hint | after the tag |
+| plate boxes: segmenter vs a private-set detector (`pt:P6`) | set P, Open Images | 4 | - | P0 | RG-3 (cut before the tag) | plate box source (RD-67, answered yes: the owner's private detector stays in their own deployments; others bring their own through model upload; D-80); W5e uses the segmenter with the text hint | after the tag |
 | label rate (`al:AL0`) | 100 COCO and 100 set-P crops | 0.5 | - | none | PW-3 | budget defaults (4D-5 ships today's limits until then) | RW-6 |
 | VLM precision and noise model (`al:AL1`) | COCO project, OI val pin, LVIS, set P | 1.5 | - | AL0 | RG-3 | the propagation arm | RW-6 |
 | human review cost and precision (`al:AL2`) | public crops in Label Studio | 0 | about 1 person h | AL3 | person slot | review modes (RD-12) | RW-6 |
@@ -156,6 +156,10 @@ Every "Data" entry is a row of the dataset register (section 4.1).
 | reserve (tier-2 confirmations only) | about 2.2 |
 | **before the tag, total** | **about 10, the owner's cap** (was about 31); per topic: GPU pipeline 3.5, plate 2.9, near-duplicates 0.9, auto-label 0.5, spatial, embeddings and clustering 0 (CPU only) |
 | after the tag | not scheduled; the plans' upper estimates sum to about 70 (RG-1..RG-6), each window on the owner's OK with tier 1 at most 2 GPU hours per prototype |
+
+CPU-hours cap for the CPU-slot prototypes: the host is shared, so each runs at `nice 19` with at most 8
+threads, and the CPU slots total **at most 20 CPU hours** before the tag (the tables list about 10 to 15);
+a run that would pass the total stops and the owner is asked.
 
 Person time before the tag: about 3 hours (`pt:P0` transcription checks, `nd:P1` boundary sheets).
 
