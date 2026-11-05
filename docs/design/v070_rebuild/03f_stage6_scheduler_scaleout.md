@@ -192,7 +192,7 @@ v0.8.0 migrations follow expand-then-contract; messages for a queue whose profil
 (RC-13); the kNN warm-up is lost on an OpenSearch restart and the first query pays it (RC-7);
 a PostgreSQL major version moves only with a release,
 through `db backup` and `db restore`; the operator checklist of the review (back up `secrets/` and the
-Postgres volume, size `OP_PG_MAX_CONNECTIONS` with replicas, `db verify` after any restore, a shared
+Postgres volume, size `OP_PG_MAX_CONNECTIONS` (default 400, D-74) with replicas, set `OP_DB_BACKUP_DIR` to a disk other than the Postgres volume's, `db verify` after any restore, a shared
 POSIX volume for multi-host); every service requires Postgres, Valkey and OpenSearch, and `/ready` names the one that is down, D-69); SECURITY (neutral preconditions: the broker and the
 database are internal-only with required passwords, JSON-only messages, whoever reaches the broker
 can enqueue work); ATTRIBUTION rows (SQLAlchemy MIT, Alembic MIT, psycopg LGPL-3.0, Celery, kombu,
