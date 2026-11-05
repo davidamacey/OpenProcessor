@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Status | written 2026-11-04 by the research integration pass; the owner answered 11 rows the same day (section 0, recorded in the [decision_register.md](decision_register.md) register); **69 stay open, and none blocks coding**: each has a recommendation the plan already follows, and each is asked only before the wave named |
+| Status | written 2026-11-04 by the research integration pass; the owner answered 11 rows the same day (section 0, recorded in the [decision_register.md](decision_register.md) register); a further 58 were answered as recommended on 2026-11-05 (section 0b); RD-61, RD-62 and RD-67 were answered by the owner the same day (below); **7 stay open, all asked after the tag (batch 3)**: RD-9, RD-11, RD-12, RD-13, RD-20, RD-26, RD-78, each with a recommendation the plan already follows |
 | Source | the section 10 owner questions of the seven research plans (112 raw: GPU pipeline J1-J12, clustering J1-J17, embeddings J1-J14, near-duplicates J1-J15, spatial J1-J15, plate text J1-J13, auto-label J1-J26). Merged where two plans ask the same thing; the "From" column keeps every source, so no raw question is lost |
-| How to answer | one word per row is enough ("yes", "no", or the other option). Every open row is needed only by the wave named. The plan already follows each recommendation and marks the place "pending RD-n", so a "no" is a small, named removal |
+| How to answer | one word per row is enough ("yes", "no", or the other option). The 7 open rows are asked in small batches. The plan already follows each recommendation and marks the place "pending RD-n", so a "no" is a small, named removal |
 | Where answers go | the decision register of [decision_register.md](decision_register.md) section 6 (one row per answered RD-n), then the research plan's own J-row is marked answered |
 
 ## 0. Answered by the owner on 2026-11-04 (approved; the rows are removed from the tables below)
@@ -31,12 +31,85 @@ and LPLC are skipped (RD-10); **Q-D** the `cluster` queue and worker are decided
 RD-3 (W5e as its own wave) stays open in name, but the RD-4 answer places the plate tables in a W5e
 revision, so the plan treats W5e as settled.
 
+## 0b. Answered as recommended on 2026-11-05 (58 rows)
+
+The owner directed on 2026-11-05 that the planner answers what the docs and best practice can answer, and asks the owner only the rest. Each row below follows the recommendation the plan already carried; the register row is D-78 in [decision_register.md](decision_register.md). A later owner "no" is still a small, named removal. The "pending RD-n" marks in the plans are cleared for these rows.
+
+| ID | Question in plain words | Answer | Needed by | From |
+|---|---|---|---|---|
+| RD-3 | Land registration-plate text inside v0.7.0 as its own wave W5e, after W5d and before W6? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes (you named plate text a must; it needs W5c's OCR output first) | before W5c | pt J3 |
+| RD-6 | One GitHub milestone per post-tag research wave (RW-1..RW-6), with #466 and #398 staying on v0.8.0? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | after the tag | gpu J11; al J16 |
+| RD-14 | If CPU Huffman frees enough GPU time, let a deployment choose CPU or GPU Huffman in its serving profile (never adaptive at run time)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes, one measured default | W5b | gpu J5 |
+| RD-15 | A C++ Triton backend in the repository if the through-Triton gap reaches the bar? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): only on the bar, with its own plan file | W5b | gpu J6 |
+| RD-16 | One Triton per card as the two-GPU default? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): decide after `gpu:PR-7`; either answer is a configuration change | RW-1 | gpu J7 |
+| RD-17 | Keep the custom ctypes nvJPEG lanes until a library reaches GPU Huffman at real batch sizes with equal pixels? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes; re-test at every Triton image move | W5b | gpu J8 |
+| RD-18 | DCGM profiling fields in the bench and monitoring stacks (the exporter may need extra capabilities)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes; off in the minimal install | W2.4 | gpu J9 |
+| RD-19 | One INT8 second round (3 GPU hours) after the tag, closing the line for good if it fails? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-1 | gpu J10 |
+| RD-21 | May the PE text tower move to a GPU TensorRT plan if it passes, with the CPU plan kept selectable per deployment? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-2 | emb J8 |
+| RD-22 | A VRAM budget for an optional embedder (2 GiB text, 4 GiB vision); PE-Core-G not offered unless you ask? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-2 | emb J9 |
+| RD-24 | Activate a new partition automatically when it moves no anchored or validated item and keeps id stability at 0.95 or more, else wait for a person? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | clu J3 |
+| RD-27 | Average-linkage clustering above 150k items: block-wise with scikit-learn, no C++ build in this repository? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-3 | clu J6 |
+| RD-28 | Verification tables and a local `cluster_verify` job in the product with the Cropwright review screens (v0.8.0)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes, later | v0.8.0 | clu J16 |
+| RD-29 | Move the cluster-refresh and IVF-retrain environment values into the `cluster_profile` and retire the variables? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes, with the partition change in W2.3b | W2.3b | clu J17 |
+| RD-30 | Keep the 0.6.0 vector field names as registry data instead of renaming them in the upgrade? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): keep (a rename rewrites every vector for no behaviour change) | W2.2 | emb J2 |
+| RD-31 | Delete the in-process torch and onnx text encoders in W4 (every service requires Triton under D-69)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W4 | emb J3 |
+| RD-32 | Bump OpenSearch 3.6 to 3.9 only after the 1M index runs, as its own change with a parity gate? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes, not inside v0.7.0 | RW-2 | emb J4 |
+| RD-33 | Combine across different embedding spaces: copy matching spaces and mark the rest deferred (refuse only when the target lacks a target type)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3a | emb J7 |
+| RD-34 | The core `visual_search_*` indexes stay outside the registry in v0.7.0? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.2 | emb J10 |
+| RD-35 | The in-product evaluation is a hard gate for a space flip, with `force=true` as your waiver? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.2 | emb J11 |
+| RD-36 | New box spaces as separate nested fields (write isolation) rather than a second leaf? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.2 | emb J12 |
+| RD-37 | Adopt the #347 plan's calls as a block (staged A-D with its stop rule, generic names in tracked files, publish aggregates, the catalog's default VLM for captions, multilingual skipped), with the embeddings plan owning the encoder and frame experiments and clustering reading their verdicts? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-2 | emb J5, J13 |
+| RD-38 | Close #435 if PE frame search misses its bar, else build a frame route over the images index (no third `target`)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-2 | emb J14 |
+| RD-39 | At a holdout freeze, move the held-out item's item-level group only (not every object on near-duplicate frames)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J2 |
+| RD-40 | A separate looser "leak" cut for the holdout, equal to the dedup cut until the leakage prototype? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J3 |
+| RD-41 | Freeze and training export refuse on stale near-duplicate state (409, with a rescore button) instead of starting a rescore themselves? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J4 |
+| RD-42 | After a freeze, move new near-duplicates of held-out items into the holdout automatically (audited), rather than only excluding them from training? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J5 |
+| RD-43 | SHA-256 of the bytes replaces `imohash` as the exact duplicate key, enforced by a unique constraint? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes; the cost is measured | W2.3b | nd J6 |
+| RD-44 | Core `/ingest` groups asynchronously (the response lists candidates; the group appears after the core job)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes (a wire change for core clients) | W4 | nd J7 |
+| RD-45 | Export: `collapse_near_duplicates` reading the stored groups replaces the per-request `dedup_threshold`? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J8 |
+| RD-46 | A perceptual hash tier: PDQ only if it passes, else none; a copy-detection model only past its stop rule? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-4 | nd J9 |
+| RD-47 | Per-project thresholds through a revisioned `near_dup_profile`, seeded from today's values? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J10 |
+| RD-48 | Region boxes inherit their item's group (no region-level grouping)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J13 |
+| RD-49 | Retire `OP_CROP_DUP_THRESHOLD` instead of validating it? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3b | nd J14 |
+| RD-50 | Rename the core index fields to `near_dup_*`, keeping the `/query/duplicates` answers? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W4 | nd J15 |
+| RD-52 | Never store a camera body serial raw (a keyed hash only if bursts need it)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W4 | sp J3 |
+| RD-53 | Back-fill capture metadata on upgraded 0.6.0 projects (header-only read; a missing file counted)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W4 | sp J4 |
+| RD-55 | Colour and view tags after the tag, each only after its prototype bar? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-5 | sp J6 |
+| RD-56 | pycolmap only for matching and reconstruction (Kornia only if throughput is too low)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-5 | sp J8 |
+| RD-57 | Dense reconstruction, splats and a viewer only after a GO (COLMAP dense plus gsplat first; OpenMVS only with its AGPL terms reviewed)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-5 | sp J12 |
+| RD-58 | A geo-photo timeline in v0.8.0 under the location policy; reverse geocoding only if it needs place names? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | v0.8.0 | sp J13 |
+| RD-59 | A scene product lives in curation, project-scoped, not in the core API? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-5 | sp J14 |
+| RD-60 | The former #400 calls: run the attribute experiments on the research harness now, and file "one vote per near-duplicate group" as its own loop item? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes to both | RW-5 | sp J15 |
+| RD-63 | Defer keyed-mode near-match keys until the misread rate is measured? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J8 |
+| RD-64 | No issuing-jurisdiction field in v0.7.0? | **Reversed by the owner 2026-11-05 (D-81): add the field.** The plate reading gets a nullable issuing jurisdiction (for example the state name, read in the OCR pass from the plate text and layout) with its own confidence, stored, searchable and filterable, in the W5e revision `0004_region_text`; a separate model only if `pt:P1` shows the reader cannot return it | W5e | pt J9 |
+| RD-65 | Raw-mode retention optional (none keeps text until a purge)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J10 |
+| RD-66 | Consensus writes the group's reading into `text` and keeps each frame's own reading in `text_frame`? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J11 |
+| RD-68 | Burst grouping for plates reads the W4 capture time (no separate `captured_at` field), if the linking prototype shows time windows beat near-duplicate groups? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J13; sp section 5.1 |
+| RD-69 | Make the `autolabel` job pausable at stage and chunk boundaries too (assist runs stay cancel-only)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3a | al J3 |
+| RD-70 | Cancel is final for every job kind; "stop for now" is pause (today a cancelled loop can resume)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.2 | al J4 |
+| RD-71 | When a budget limit is reached, pause the run so the budget can be raised, rather than completing it? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): pause | W2.3a | al J5 |
+| RD-72 | Propagated labels stay out of the training export until a person accepts them (revisit after the teacher-student prototype)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3a | al J6 |
+| RD-73 | Fold the `autolabel` job's VLM sweep into the loop as `strategy: sweep` in v0.8.0? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | v0.8.0 | al J7 |
+| RD-74 | Read the daily VLM cap from `vlm_usage_hourly` and allow an optional price per million tokens on an endpoint, both in v0.8.0? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | v0.8.0 | al J9 |
+| RD-75 | Retention: loop proposals and selections deleted 90 days after the run, `vlm_usage_hourly` kept 400 days? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.1 | al J10 |
+| RD-76 | Box proposals stay in the region stage, not in the loop (revisit after #84)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | - | al J12 |
+| RD-77 | Loop slice length 600 s with a 30 / 35 minute slice limit, tuned after the live test? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W2.3a | al J13 |
+| RD-79 | The loop starts a training run only on a click (never by itself, never a promotion) in the first release? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | v0.8.0 | al J15 |
+| RD-80 | Adopt the detector-class-roots (Z5) protocol calls as a block: about 35,200 train images with ids and hashes only; bar A; `within_key` unbarred; the `k<hash>` root key with `root_name` on the wire; `detector_class` with hold-back as the default after adoption; the IVF pool including `none`; no root cap but an audit above 20,000 members; a held-back review set; keys by normalized name; the hosted judge only after its agreement check? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-6 | al J17-J26 |
+
+
+### Answered by the owner on 2026-11-05 (RD-61, RD-62, RD-67; D-80)
+
+| ID | Question in plain words | Answer | From |
+|---|---|---|---|
+| RD-61 | Default privacy mode and deployment ceiling `raw` (today's behaviour), operators lowering the ceiling? | **Answered by the owner 2026-11-05: raw text, no privacy modes.** Plate text is ordinary searchable label data; there is no deployment ceiling. | pt J1 |
+| RD-62 | Approve the privacy model (modes off, keyed, raw; the ceiling; master secret plus per-project salt; a CLI-only purge; the sink test)? | **Answered by the owner 2026-11-05: no privacy model.** Dropped: keyed and off modes, master secret, per-project salt, plate-specific CLI purge, sink-inventory test (project delete removes the text). | pt J2 |
+| RD-67 | A detector trained on your private plate-box set may be used in the plate-box prototype and in your deployments, never shipped publicly? | **Answered by the owner 2026-11-05: yes.** The owner uses a private plate detector in their own deployments; other users bring their own (for example from Hugging Face) through the existing model upload path; no private model ships in the repository or the images. | pt J12 |
+
 ## A. Placement in the program
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-3 | Land registration-plate text inside v0.7.0 as its own wave W5e, after W5d and before W6? | yes (you named plate text a must; it needs W5c's OCR output first) | before W5c | pt J3 |
-| RD-6 | One GitHub milestone per post-tag research wave (RW-1..RW-6), with #466 and #398 staying on v0.8.0? | yes | after the tag | gpu J11; al J16 |
 
 ## B. Research rules: code, data, people
 
@@ -51,104 +124,43 @@ revision, so the plan treats W5e as settled.
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-14 | If CPU Huffman frees enough GPU time, let a deployment choose CPU or GPU Huffman in its serving profile (never adaptive at run time)? | yes, one measured default | W5b | gpu J5 |
-| RD-15 | A C++ Triton backend in the repository if the through-Triton gap reaches the bar? | only on the bar, with its own plan file | W5b | gpu J6 |
-| RD-16 | One Triton per card as the two-GPU default? | decide after `gpu:PR-7`; either answer is a configuration change | RW-1 | gpu J7 |
-| RD-17 | Keep the custom ctypes nvJPEG lanes until a library reaches GPU Huffman at real batch sizes with equal pixels? | yes; re-test at every Triton image move | W5b | gpu J8 |
-| RD-18 | DCGM profiling fields in the bench and monitoring stacks (the exporter may need extra capabilities)? | yes; off in the minimal install | W2.4 | gpu J9 |
-| RD-19 | One INT8 second round (3 GPU hours) after the tag, closing the line for good if it fails? | yes | RW-1 | gpu J10 |
 | RD-20 | Hardware with a JPEG decoder (A100 or H100 class) in scope? | no; the `hw_jpeg_decoder` column keeps the door open | - | gpu J12 |
-| RD-21 | May the PE text tower move to a GPU TensorRT plan if it passes, with the CPU plan kept selectable per deployment? | yes | RW-2 | emb J8 |
-| RD-22 | A VRAM budget for an optional embedder (2 GiB text, 4 GiB vision); PE-Core-G not offered unless you ask? | yes | RW-2 | emb J9 |
 
 ## D. Clustering
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-24 | Activate a new partition automatically when it moves no anchored or validated item and keeps id stability at 0.95 or more, else wait for a person? | yes | W2.3b | clu J3 |
 | RD-26 | igraph and leidenalg (GPL) as product dependencies if Leiden wins? | decide only on a Leiden PASS; fallback scikit-learn average linkage | RW-3 | clu J5 |
-| RD-27 | Average-linkage clustering above 150k items: block-wise with scikit-learn, no C++ build in this repository? | yes | RW-3 | clu J6 |
-| RD-28 | Verification tables and a local `cluster_verify` job in the product with the Cropwright review screens (v0.8.0)? | yes, later | v0.8.0 | clu J16 |
-| RD-29 | Move the cluster-refresh and IVF-retrain environment values into the `cluster_profile` and retire the variables? | yes, with the partition change in W2.3b | W2.3b | clu J17 |
 
 ## E. Embeddings and search
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-30 | Keep the 0.6.0 vector field names as registry data instead of renaming them in the upgrade? | keep (a rename rewrites every vector for no behaviour change) | W2.2 | emb J2 |
-| RD-31 | Delete the in-process torch and onnx text encoders in W4 (every service requires Triton under D-69)? | yes | W4 | emb J3 |
-| RD-32 | Bump OpenSearch 3.6 to 3.9 only after the 1M index runs, as its own change with a parity gate? | yes, not inside v0.7.0 | RW-2 | emb J4 |
-| RD-33 | Combine across different embedding spaces: copy matching spaces and mark the rest deferred (refuse only when the target lacks a target type)? | yes | W2.3a | emb J7 |
-| RD-34 | The core `visual_search_*` indexes stay outside the registry in v0.7.0? | yes | W2.2 | emb J10 |
-| RD-35 | The in-product evaluation is a hard gate for a space flip, with `force=true` as your waiver? | yes | W2.2 | emb J11 |
-| RD-36 | New box spaces as separate nested fields (write isolation) rather than a second leaf? | yes | W2.2 | emb J12 |
-| RD-37 | Adopt the #347 plan's calls as a block (staged A-D with its stop rule, generic names in tracked files, publish aggregates, the catalog's default VLM for captions, multilingual skipped), with the embeddings plan owning the encoder and frame experiments and clustering reading their verdicts? | yes | RW-2 | emb J5, J13 |
-| RD-38 | Close #435 if PE frame search misses its bar, else build a frame route over the images index (no third `target`)? | yes | RW-2 | emb J14 |
 
 ## F. Near-duplicates
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-39 | At a holdout freeze, move the held-out item's item-level group only (not every object on near-duplicate frames)? | yes | W2.3b | nd J2 |
-| RD-40 | A separate looser "leak" cut for the holdout, equal to the dedup cut until the leakage prototype? | yes | W2.3b | nd J3 |
-| RD-41 | Freeze and training export refuse on stale near-duplicate state (409, with a rescore button) instead of starting a rescore themselves? | yes | W2.3b | nd J4 |
-| RD-42 | After a freeze, move new near-duplicates of held-out items into the holdout automatically (audited), rather than only excluding them from training? | yes | W2.3b | nd J5 |
-| RD-43 | SHA-256 of the bytes replaces `imohash` as the exact duplicate key, enforced by a unique constraint? | yes; the cost is measured | W2.3b | nd J6 |
-| RD-44 | Core `/ingest` groups asynchronously (the response lists candidates; the group appears after the core job)? | yes (a wire change for core clients) | W4 | nd J7 |
-| RD-45 | Export: `collapse_near_duplicates` reading the stored groups replaces the per-request `dedup_threshold`? | yes | W2.3b | nd J8 |
-| RD-46 | A perceptual hash tier: PDQ only if it passes, else none; a copy-detection model only past its stop rule? | yes | RW-4 | nd J9 |
-| RD-47 | Per-project thresholds through a revisioned `near_dup_profile`, seeded from today's values? | yes | W2.3b | nd J10 |
-| RD-48 | Region boxes inherit their item's group (no region-level grouping)? | yes | W2.3b | nd J13 |
-| RD-49 | Retire `OP_CROP_DUP_THRESHOLD` instead of validating it? | yes | W2.3b | nd J14 |
-| RD-50 | Rename the core index fields to `near_dup_*`, keeping the `/query/duplicates` answers? | yes | W4 | nd J15 |
 
 ## G. Spatial attributes and capture metadata
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-52 | Never store a camera body serial raw (a keyed hash only if bursts need it)? | yes | W4 | sp J3 |
-| RD-53 | Back-fill capture metadata on upgraded 0.6.0 projects (header-only read; a missing file counted)? | yes | W4 | sp J4 |
-| RD-55 | Colour and view tags after the tag, each only after its prototype bar? | yes | RW-5 | sp J6 |
-| RD-56 | pycolmap only for matching and reconstruction (Kornia only if throughput is too low)? | yes | RW-5 | sp J8 |
-| RD-57 | Dense reconstruction, splats and a viewer only after a GO (COLMAP dense plus gsplat first; OpenMVS only with its AGPL terms reviewed)? | yes | RW-5 | sp J12 |
-| RD-58 | A geo-photo timeline in v0.8.0 under the location policy; reverse geocoding only if it needs place names? | yes | v0.8.0 | sp J13 |
-| RD-59 | A scene product lives in curation, project-scoped, not in the core API? | yes | RW-5 | sp J14 |
-| RD-60 | The former #400 calls: run the attribute experiments on the research harness now, and file "one vote per near-duplicate group" as its own loop item? | yes to both | RW-5 | sp J15 |
 
 ## H. Registration-plate text
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-61 | Default privacy mode and deployment ceiling `raw` (today's behaviour), operators lowering the ceiling? | yes | W4 | pt J1 |
-| RD-62 | Approve the privacy model (modes off, keyed, raw; the ceiling; master secret plus per-project salt; a CLI-only purge; the sink test)? | yes | W4 | pt J2 |
-| RD-63 | Defer keyed-mode near-match keys until the misread rate is measured? | yes | W5e | pt J8 |
-| RD-64 | No issuing-jurisdiction field in v0.7.0? | yes | W5e | pt J9 |
-| RD-65 | Raw-mode retention optional (none keeps text until a purge)? | yes | W5e | pt J10 |
-| RD-66 | Consensus writes the group's reading into `text` and keeps each frame's own reading in `text_frame`? | yes | W5e | pt J11 |
-| RD-67 | A detector trained on your private plate-box set may be used in the plate-box prototype and in your deployments, never shipped publicly? | yes | PW-3 | pt J12 |
-| RD-68 | Burst grouping for plates reads the W4 capture time (no separate `captured_at` field), if the linking prototype shows time windows beat near-duplicate groups? | yes | W5e | pt J13; sp section 5.1 |
 
 ## I. The auto-label assistant
 
 | ID | Question in plain words | Recommendation | Needed by | From |
 |---|---|---|---|---|
-| RD-69 | Make the `autolabel` job pausable at stage and chunk boundaries too (assist runs stay cancel-only)? | yes | W2.3a | al J3 |
-| RD-70 | Cancel is final for every job kind; "stop for now" is pause (today a cancelled loop can resume)? | yes | W2.2 | al J4 |
-| RD-71 | When a budget limit is reached, pause the run so the budget can be raised, rather than completing it? | pause | W2.3a | al J5 |
-| RD-72 | Propagated labels stay out of the training export until a person accepts them (revisit after the teacher-student prototype)? | yes | W2.3a | al J6 |
-| RD-73 | Fold the `autolabel` job's VLM sweep into the loop as `strategy: sweep` in v0.8.0? | yes | v0.8.0 | al J7 |
-| RD-74 | Read the daily VLM cap from `vlm_usage_hourly` and allow an optional price per million tokens on an endpoint, both in v0.8.0? | yes | v0.8.0 | al J9 |
-| RD-75 | Retention: loop proposals and selections deleted 90 days after the run, `vlm_usage_hourly` kept 400 days? | yes | W2.1 | al J10 |
-| RD-76 | Box proposals stay in the region stage, not in the loop (revisit after #84)? | yes | - | al J12 |
-| RD-77 | Loop slice length 600 s with a 30 / 35 minute slice limit, tuned after the live test? | yes | W2.3a | al J13 |
 | RD-78 | The first product precision claim needs a Wilson lower bound of at least 0.93 and a point estimate of at least 0.95 against a blind human audit, on a public 10,000-image project? | yes | RW-6 | al J14 |
-| RD-79 | The loop starts a training run only on a click (never by itself, never a promotion) in the first release? | yes | v0.8.0 | al J15 |
-| RD-80 | Adopt the detector-class-roots (Z5) protocol calls as a block: about 35,200 train images with ids and hashes only; bar A; `within_key` unbarred; the `k<hash>` root key with `root_name` on the wire; `detector_class` with hold-back as the default after adoption; the IVF pool including `none`; no root cap but an audit above 20,000 members; a held-back review set; keys by normalized name; the hosted judge only after its agreement check? | yes | RW-6 | al J17-J26 |
 
 ## Count
 
-112 raw questions; 80 after merging (6 placement, 7 rules, 9 GPU, 7 clustering, 9 embeddings,
-12 near-duplicates, 10 spatial, 8 plate text, 12 auto-label). **11 answered on 2026-11-04**
-(section 0: RD-1, RD-2, RD-4, RD-5, RD-7, RD-8, RD-10, RD-23, RD-25, RD-51, RD-54); **69 open**
-(2 placement, 4 rules, 9 GPU, 5 clustering, 9 embeddings, 12 near-duplicates, 8 spatial, 8 plate
-text, 12 auto-label). **None blocks coding:** every former "answer before coding" row is answered.
+112 raw questions; 80 after merging. **11 answered by the owner on 2026-11-04** (section 0), **58 answered as
+recommended on 2026-11-05** (section 0b, planner, per owner direction), **4 answered by the owner on
+2026-11-05** (RD-61, RD-62, RD-67 and RD-64 reversed to "add the field"); **7 open**: RD-9, RD-11, RD-12, RD-13, RD-20, RD-26, RD-78, all
+asked after the tag (batch 3). None is needed before any wave.

@@ -1,6 +1,14 @@
 # GitHub actions: issues, re-scopes, milestones, closes and dependabot
 
-Status: plan, not started. Nothing in this file has been executed.
+Status: partly executed; state read with `gh` on 2026-11-05. Done: GH-1 to GH-6, GH-9, GH-10 and GH-11
+(milestones: v0.7.0 and v0.8.0 open, v0.9.0 and v0.10.0 closed empty; #366 and #402 closed; #447
+retitled; #422, #423, #432, #433, #434 closed); new issues #479 (N19, control plane), #480 (N20,
+exact pins) and #483 (the S3-compatible storage backend) created on 2026-11-04; the re-scope comments
+on #451, #453, #458, #464, #465, #466, #468, #470, #472, #473 posted 2026-11-04; #469 and #471 closed
+2026-11-04; PRs #449 and #474 closed 2026-11-04. Pending: the research comments of
+[traceability.md](traceability.md) section 4.5 (not posted); the issue-body rewrites of #451, #453,
+#479, #480, #401 and #466 and the milestone move #401 to v0.7.0 with its `parked` label removed (approved
+2026-11-05; #348, #365, #416 and #466 keep theirs; the coordinator does them); the closes tied to merges (section 4.4); GH-12 verify.
 Depends on: the owner's approval of this plan set, then the owner's go for D-36 (owner decision 4).
 Decisions applied: owner decisions 2, 3, 5 and 9 of 2026-11-03 and D-37 = yes (one release
 v0.7.0 = B0-B5 + R-final, tagged only when every plan is implemented and tested; v0.8.0 =
@@ -14,7 +22,7 @@ What to keep after merge: the milestone descriptions and issue bodies are the pe
 (they carry what is open); the issue map (section 7) is not copied anywhere. The plan files go
 as described in [decision_register.md](decision_register.md) "Plan lifecycle".
 
-Verified against `fix/411-r2-round` at `af62c947` on 2026-11-03; GitHub state read the same day
+Verified on 2026-11-03 against the then-current branch; GitHub state read the same day
 with `gh api repos/davidamacey/OpenProcessor/milestones?state=all`, `gh issue list --state open
 --limit 100 --json number,title,milestone,labels` and `gh pr list --state open`.
 Consolidated 2026-11-03.
@@ -135,7 +143,7 @@ done
 
 ## 4. New issues N1-N16
 
-Every body ends with the same footer: "Plan: `docs/design/program/<file>`. Task detail by ID in
+Every body ends with the same footer: "Plan: `docs/design/v070_rebuild/<file>`. Task detail by ID in
 `<source plan>`. Tracked in the 0.7.0 program (`docs/design/v070_rebuild/reference/decision_register.md`)."
 
 | N | Title | Labels | Milestone | Batch | Closes when |
@@ -390,7 +398,7 @@ docs/design/model_family_versions_plan.md Steps 4-9, sections 6.1 and 6.2.
 Hardening item from the 0.7.0 audit. Details are in the maintainers' private notes, not in this
 issue. It is fixed in batch <B1 | B2> of the 0.7.0 program, and the PR references this issue.
 
-Plan: docs/design/program/<B1 1D (merged; see CHANGELOG.md) | 03f_stage6_scheduler_scaleout.md>.
+Plan: docs/design/v070_rebuild/<B1 1D (merged; see CHANGELOG.md) | 03f_stage6_scheduler_scaleout.md>.
 ```
 
 N9 and N10 use 02d (B1); N11 and N12 use 03c (B2).
@@ -584,7 +592,7 @@ path: "The design doc `<old>` was retired; the content now lives in `<new>`."
 | Issue | Old doc | New place |
 |---|---|---|
 | #40, #67, #219, #231, #268 | `v060_wave_plan.md` | `docs/PERFORMANCE.md` section "Wave 0 parity and FP16 gates" |
-| #398, #400, #401, #402 (closed by C-402), #403, #406 | `improvement_backlog.md` | #407 and the issue itself; lessons in `docs/design/engineering_standards.md` section 5 |
+| #398, #400, #401, #402 (closed by C-402), #403, #406 | `improvement_backlog.md` (deleted; its content is in the issues) | #407 and the issue itself; lessons in `docs/design/engineering_standards.md` section 5 |
 | #365-#370 | `program_plan.md` | `docs/design/v070_rebuild/reference/decision_register.md` (this program) |
 | #40 | `ingest_write_path_investigation.md`, `v060_vector_db_evaluation_plan.md`, `v060_serving_backend_trade_study.md` | the same names under `docs/research/` |
 | #45 | `storage_sizing_and_ingest_baselines.md` | `docs/research/storage_sizing_and_ingest_baselines.md` |

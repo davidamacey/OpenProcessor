@@ -1,5 +1,8 @@
 # Auto-label assist loop: research and the seams for the clean rebuild
 
+> Contracts (tables, fields, job kinds) live in 02d_research_seam_schema.md and the lane files; this file is the rationale and the prototype design.
+> A coding lane reads 02d and its lane section, not this whole file.
+
 **Superseded parts:** the landing lanes, waves and file ownership of this plan's section 8, its GPU lock and its GPU-hour estimates are superseded by the program (review RR-16, owner answers of 2026-11-04): lanes in [03d_stage4_job_families.md](03d_stage4_job_families.md) (W2.3a and W2.3b), [03b_stage2_control_data.md](03b_stage2_control_data.md), [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md), [05_b4_stateless_api.md](05_b4_stateless_api.md) and [06e_w5e_plate_text.md](06e_w5e_plate_text.md); one lock `gpu<N>.lock` per card shared by every topic ([traceability.md](reference/traceability.md) X-14); short tiered runs under a cap of about 10 GPU hours before the tag ([v070_rebuild/08_research_prototype_track.md.md](08_research_prototype_track.md) section 2.1). A fresh agent loads those files first.
 
 Status: plan, research. Nothing here is implemented. Written 2026-11-04 against `origin/main` at
@@ -504,9 +507,9 @@ the optional `Idempotency-Key` on start (D-58), and are added to the cross-proje
 |---|---|---|---|
 | Plan | `POST /curation/projects/{project}/assist/loops` with `dry_run: true` (exists) | none; returns the plan | none |
 | Start | same route, `dry_run: false` (exists) | one transaction: `jobs` row `queued` (via `start_job`), `assist_loop_runs`, `assist_loop_budgets` rows, iteration 1; 202; 409 `assist_loop_busy` from `uq_jobs_one_active` | `send_task` after commit (02b section 2.2) |
-| Pause | `{P}/assist/loops/{loop_id}/pause` (new, POST) | `queued` -> `paused` at once; `running` -> `pause_requested_at = now()`, `pause_reason = 'user'`, answer 202 with `control.state = 'pausing'`; `paused` -> 200 no-op; `cancelling` -> 409 `job_cancelling`; terminal -> 409 `job_finished` | none for running (cooperative); revoke for queued |
+| Pause | `{P}/assist/loops/{loop_id}/pause` (new, POST) | `queued` -> `paused` at once; `running` -> `pause_requested_at = now()`, `pause_reason = 'user'`, answer 202 with `control.state = 'pausing'`; `paused` -> 200 no-op; `cancelling` -> 409 `job_cancelling`; terminal -> 409 `job_finished` | none: pause is cooperative; a queued job's stale message is acked by the claim (no `revoke`, D-71) |
 | Resume | `POST /curation/projects/{project}/assist/loops/{loop_id}/resume` (exists) | `paused` or `interrupted` -> `queued`, `pause_reason = NULL`; 409 `resume_blocked` with the reason when the project is paused or the VLM is unavailable | dispatch |
-| Cancel | `POST /curation/projects/{project}/assist/loops/{loop_id}/cancel` (exists) | 02b section 3.3 exactly | revoke only on cancel (terminal, so the id is never reused); never terminate |
+| Cancel | `POST /curation/projects/{project}/assist/loops/{loop_id}/cancel` (exists) | 02b section 3.3 exactly | no `revoke` (D-71): cancel is a database write and the claim acks the stale message; never terminate |
 | Edit budget | `{P}/assist/loops/{loop_id}/budget` (new, PATCH) | body `{limits: [{pool, unit, limit_value}]}`; allowed in `queued`, `running`, `paused`; a limit below `spent + reserved` answers 409 `budget_below_spent`; emits `assist_loop.budget`; never resumes by itself | none |
 | Rollback | `POST /curation/projects/{project}/assist/loops/{loop_id}/rollback` (exists) | becomes a label-operation undo over the run's propagation ops (section 5.6); dry run first | the undo kind of 02b (`label_undo`) |
 

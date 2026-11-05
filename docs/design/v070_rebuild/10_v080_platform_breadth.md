@@ -89,7 +89,7 @@ W8.0 kick-off (decisions, GH actions, spikes in GPU window V0)
 | B1 job leases (OpenSearch lease docs, thread heartbeat, fencing) | F3, F7, F9, F5 bootstrap | one start per video, per migration, per loop pause; the first-admin create is create-only like a lease acquire |
 | B1 class registry document with OCC, class by name | F1, F4, F7, F8 | imports, training, promote and the wheel example resolve classes by name through the registry |
 | B1 upgrade-hook pattern (`registry_not_migrated`, `.migrated` rename, rollback step) | F5 basic-auth migration, F9 | same shape: dry run, migrate, rename, reverse step on rollback |
-| B2 Celery 5.6 on Redis 8, beat, reaper, `queued` state | F3, F7, F8, F9 | new task families `op.jobs.video_extract`, `op.jobs.embedding_migrate`; a new `video` queue; F3 runs on the `assist_loop` consumer |
+| B2 Celery 5.7 on Valkey (D-70), beat, reaper, `queued` state | F3, F7, F8, F9 | new task families `op.jobs.video_extract`, `op.jobs.embedding_migrate`; a new `video` queue; F3 runs on the `assist_loop` consumer |
 | B2 Redis (internal network, password, AOF) | F5 | sessions, login rate limits, token cache |
 | B3 one Ultralytics version, fused `[batch,300,6]` contract | F4, F6, F8 | every trained family exports to the one contract; the YOLOE backend uses the same pin |
 | B3 `src/domain/model_families.py` | F4 | training reads `trainable` and per-family settings from the registry module |

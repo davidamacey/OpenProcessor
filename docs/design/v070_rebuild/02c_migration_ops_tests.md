@@ -177,7 +177,7 @@ W2.3b lanes add their steps as new files without editing 2E's code:
 | Step module | Lane | Writes | Verify adds |
 |---|---|---|---|
 | `serving_profile.py` | 2E | the deployment `serving_profile` document, revision 1, generated from the installed `config_templates/profiles/*.json` and the `config.pbtxt` instance counts, and `deployment_settings('active_serving_profile')` (research GPU S-5) | the generated body equals today's values (one server, load lists, instance counts) |
-| `embedding_spaces.py` | 2E | the catalog rows (if `db-migrate` has not) and three `pe_core_l14_336_v1` spaces per loaded project, `created_by = 'upgrade'`, `knn_method` read from each live index mapping (faiss for old projects, Lucene for new); the 0.6.0 physical names kept (pending RD-30) | a space per (project, target); the recorded engine equals the live mapping |
+| `embedding_spaces.py` | 2E | the catalog rows (if `db-migrate` has not) and three `pe_core_l14_336_v1` spaces per loaded project, `created_by = 'upgrade'`, `knn_method` read from each live index mapping (faiss for old projects, Lucene for new); the 0.6.0 physical names kept (RD-30 answered as recommended (D-78)) | a space per (project, target); the recorded engine equals the live mapping |
 | `clustering.py` | 4F (W2.3b) | per project, one `ready` partition (`method = 'ivf'`, activation reason `upgrade`) built from the items' existing assignment so the served view does not change at the upgrade; `last_clustering.json` and the region-cluster marker files deleted with the other state files | the partition's member count equals the items with a cluster id |
 | `near_duplicates.py` | ND-A (W2.3b) | one `update_by_query` per 0.6.0 index clearing the `dup_*` and `duplicate_*` values (mappings cannot be dropped without a reindex); the `near_dup_profile` revision 1 per project from the code defaults; the levels marked `rebuild_required`, so a full build runs after the upgrade; the upgrade report offers the pausable `source_backfill` job, whose content step writes `content_sha256` for every carried-over image (review RR-10; the W4 capture step joins the same pass) | no document keeps a non-empty `dup_*` value; after the backfill a re-ingest of an upgraded image is refused as an exact duplicate |
 
@@ -340,11 +340,13 @@ under its own project name; because no service has a `container_name`, the harne
 
 | Command | Does |
 |---|---|
-| `openprocessor db backup [--out <dir>]` | `docker compose -p <p> exec -T postgres pg_dump -U op_owner -d openprocessor -Fc` to `<install>/backups/postgres/openprocessor-<utc>.dump` (custom format: compressed, restorable selectively; consistent without blocking writers: [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html)); keeps the newest `OP_DB_BACKUP_KEEP` (default 7) |
-| `openprocessor db restore <file> [--yes]` | stops the API and workers, runs `db-migrate`'s role bootstrap (so `op_owner` and `op_app` exist on a fresh host), `pg_restore --clean --if-exists --no-owner --no-privileges --role=op_owner -d openprocessor` (review fix R-13: no grant is restored before its role exists), runs `db-migrate` (it re-applies the grants and upgrades a dump from an older schema), runs `openprocessor db verify`, starts the stack |
+| `openprocessor db backup [--out <dir>]` | `docker compose -p <p> exec -T postgres pg_dump -U op_owner -d openprocessor -Fc` to `${OP_DB_BACKUP_DIR:-<install>/backups/postgres}/openprocessor-<utc>.dump` (`OP_DB_BACKUP_DIR` may name another mount or disk, so a backup does not share the failure of the data volume; the directory must be writable by the backup user and `db verify` reports a backup directory on the same filesystem as the Postgres volume; custom format: compressed, restorable selectively; consistent without blocking writers: [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html)); keeps the newest `OP_DB_BACKUP_KEEP` (default 7) |
+| `openprocessor db restore <file> [--yes]` | stops the API and workers, runs `db-migrate`'s role bootstrap (so `op_owner` and `op_app` exist on a fresh host), `pg_restore --clean --if-exists --no-owner --no-privileges --role=op_owner -d openprocessor` (review fix R-13: no grant is restored before its role exists), runs `db-migrate` (it re-applies the grants and upgrades a dump from an older schema), **`TRUNCATE events`** (D-73: `events.xid` defaults to `pg_current_xact_id()`, which belongs to one cluster's transaction counter and does not carry across a restore into a new cluster, so old cursors would compare wrongly; the rows are only the 24-hour UI feed and the tables of each topic are the record), runs `openprocessor db verify`, starts the stack |
 | `openprocessor db verify` | the D-47 class reconciliation, `project_indexes` vs OpenSearch, `storage_key` existence for promotions and training runs; report only |
 | `openprocessor upgrade` | always takes a backup first when Postgres exists |
 | optional beat task | `op.periodic.db_backup` when `OP_DB_BACKUP_INTERVAL_H` is set (off by default) |
+
+**Recovery point, stated plainly.** After a failure you get back the state of the **last `pg_dump`**: with the default (a backup at each `openprocessor upgrade`, plus `op.periodic.db_backup` when `OP_DB_BACKUP_INTERVAL_H` is set, off by default) that can be hours or days old, and everything written since is lost. **Point-in-time recovery (continuous WAL archiving) is a conscious non-goal for v0.7.0**: it needs an archive target, a base-backup schedule and a restore drill that this release does not budget; it is a candidate for v0.8.0 multi-host. The 0.6.0 upgrade also `TRUNCATE`s `events` after the load (the table is new in 0.7.0; the rule is the same as for restore, so no code path depends on a cursor from another cluster).
 
 Order rule (Immich: "back up the database first, then the files"): a database restored to an older
 point than the OpenSearch data can name a class id the registry does not have; `db verify` reports
@@ -382,7 +384,9 @@ Required `db` tests (each red first where it guards a behaviour):
   fencing token changes nothing; an expired lease is taken over by the reaper only.
 - `tests/db/test_reaper_rules.py`: rules a-g, including two reapers at once (no double requeue).
 - `tests/db/test_events_cursor.py`: two transactions commit their events out of id order; a reader
-  that polls between the commits emits every event exactly once.
+  that polls between the commits emits every event exactly once; the global stream (`project_id IS NULL`) has its own case and its own `EXPLAIN` index check.
+- `tests/db/test_events_restore_resume.py` (D-73): write events, `pg_dump`, `pg_restore` into a **second cluster** (a second test container), run `db restore`'s truncate, write new events there, and assert a reader resumed with a cursor from the first cluster gets the `reset` event once and then every new event exactly once.
+- `tests/db/test_role_settings.py` and `tests/db/test_jobs_hot_updates.py` of [02a](02a_postgres_schema.md) sections 1.5.1 and 5; `tests/tasks/test_poison_redelivery.py` of [02b](02b_jobs_locking_events.md) section 7.1.1.
 - `tests/db/test_class_registry.py`: 10 concurrent `ensure_class` for 50 names: 50 classes, unique
   ids, `next_class_id = 50`; rename writes the outbox row in the same transaction.
 - `tests/config/test_db_connection_budget.py` (pure, no database; the name 02b, 10 and 11 use): section 8 of
@@ -423,13 +427,13 @@ of distinct names), because which racer wins legitimately differs between runs.
 | T-8 | `set_config(..., false)` (session level) leaks a project binding to the next request on a pooled connection | only `is_local = true`; a test reuses one pooled connection for two projects |
 | T-9 | The message is sent before the commit, and the worker cannot see the row | `start_job` commits first; a test with a fake producer asserts the order |
 | T-10 | A duplicate delivery runs the job twice | the claim `UPDATE ... WHERE status = 'queued'`; Celery does not de-duplicate by `task_id` |
-| T-11 | A visibility-timeout redelivery during a 24 h job | the claim finds `running` and acks; documented for every kind above 6 h |
+| T-11 | A visibility-timeout redelivery during a 24 h job | the claim finds `running` and acks; expected every 6 h for any task longer than that and **not to be tuned** ([02b](02b_jobs_locking_events.md) section 7.1.2) |
 | T-12 | Lease expiry compared on a worker clock | expiry only in SQL with `now()` |
 | T-13 | A long transaction around an OpenSearch or VLM call holds row locks and the events `xmin` | rule 4; a ratchet over `src/services` for network clients used inside `project_tx` blocks (AST: calls on `OpenSearch*`, `httpx`, Triton clients inside `async with project_tx`) |
 | T-14 | A bulk insert of a million `ingest_source_files` rows in one transaction stalls the event feed | batches of 5,000 per transaction |
 | T-15 | the Valkey wake-up assumed durable | the consumer always re-reads from its cursor; the 2 s safety tick; a test drops every wake-up and still delivers every event |
 | T-16 | the beat lock or the migration lock sent through a transaction pooler | `OP_DB_DIRECT_HOST`; a test that the pooled engine never issues session locks |
-| T-17 | kombu 5.7 pulled under Celery 5.6, or a redis-py the transport does not accept | exact pins `kombu==5.6.2`, `redis==6.4.0` (file 13, owner decision 2026-11-04); `pip check` in each image; spike S1 on the pins |
+| T-17 | a kombu or redis-py the Celery release does not accept, or redis-py 8's RESP3 default misbehaving against Valkey | exact pins `celery==5.7.0`, `kombu==5.7.0`, `redis==8.1.0` ([01](01_package_pins.md) section 4, D-70); `pip check` in each image; spike S1 on the pins includes a Valkey round trip with `protocol=2` as the fallback |
 | T-18 | `valkey://` in a URL | `QueueSettings` refuses any scheme but `redis` and `rediss`; test |
 | T-19 | Valkey started with `appendonly no` (its default) or an eviction policy | compose render test asserts the flags |
 | T-20 | Postgres 18 volume mounted at `/var/lib/postgresql/data` (the 17 path) | compose render test; S0 |

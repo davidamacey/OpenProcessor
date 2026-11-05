@@ -32,7 +32,10 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 - no lifespan side effects (the B2 rule in `03_b2_overview.md` section 5.5 holds; the ratchet in
   4B-4 enforces it);
 - no request handler fans out (`rg -n "asyncio\.gather" src/routers` is empty; services reached
-  only from a handler have no `gather` except the J7 ingest data plane, written as `TaskGroup`);
+  only from a handler have no `gather` except the J7 ingest data plane, written as `TaskGroup`; the exempt
+  modules are exactly the four of 4A-4 (`ingest_batch.py`, `ingest_detect.py`, `ingest_index.py`
+  `_cache_crops`, `visual_search/ingest_batch.py`), and the no-`create_task`, no-`gather` AST test of
+  4A-5 covers every other module, `routers/health.py` among them);
 - the 1-vs-N live check (section 7) passes: an empty diff for the sequential scenario and every invariant for the concurrent one (R-15);
 - the installer default `API_WORKERS` (D-33) is set provisionally as `min(nproc, 32)`, and its
   benchmark against the 32-worker baseline retaken on the B3 engine is recorded in
@@ -59,9 +62,8 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 | 4A fan-out | `b4/bulk-occ`, `<repo>-wt-b4-bulk-occ` | section 4 | 1 |
 | 4D #439 | `b4/project-create`, `<repo>-wt-b4-project-create` | section 6 | 2 |
 | 4B worker knob | `b4/worker-knob`, `<repo>-wt-b4-worker-knob` | section 5 | last (its ratchet allowlist must see every other track's final code) |
-| privacy and security items | `b4/privacy-hardening` | [00_master_plan.md](00_master_plan.md) W4; owns `SECURITY.md` in W4, so it also writes the location rules of section 6c (coordinates stored under the project's `location_policy`, default `store`; exports keep the embedded GPS, as today; owner 2026-11-04, RD-51 reversed, RD-54) and the identity-text section's operator text | after 4D |
+| privacy and security items | `b4/privacy-hardening` | [00_master_plan.md](00_master_plan.md) W4; owns `SECURITY.md` in W4, so it also writes the location rules of section 6c (coordinates stored under the project's `location_policy`, default `store`; exports keep the embedded GPS, as today; owner 2026-11-04, RD-51 reversed, RD-54) | after 4D |
 | capture metadata and the location policy at ingest (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` | section 6c | after the privacy lane (cut after 4A, 4D and the privacy lane merged: 4A rewrites the ingest data plane, 4D owns `docs/CURATION.md` until it merges, the privacy lane may edit `src/services/curation/wire.py` for #470) |
-| identity-text privacy baseline (research plate 5.8) | `b4/identity-text-privacy` | section 6c | after the capture lane, before 4B |
 
 Same branch model as B2: one agent per worktree, lanes run only targeted red/green tests and static
 checks on touched files, the coordinator merges `--no-ff` (one merge commit per track) and runs
@@ -137,6 +139,8 @@ classified:
 
 ### 4A-4 The ingest data plane as `TaskGroup` (J7 exemption, CC-7)
 
+Why `TaskGroup` and why only here: the Python documentation says that when a task in a `TaskGroup` fails, the group cancels the remaining tasks, while `gather` leaves its siblings running ([asyncio Task Groups](https://docs.python.org/3/library/asyncio-task.html#task-groups)); a bounded, awaited-before-the-response group is the only fan-out the request path keeps, and the four modules named in 4A-4 are the whole exemption list.
+
 - **Doc:** Python asyncio "Task Groups" (a child failure cancels the siblings; errors arrive as an
   `ExceptionGroup`).
 - **Steps:** rewrite the `gather`s in `ingest_batch.py`, `ingest_detect.py`, `ingest_index.py`
@@ -147,7 +151,7 @@ classified:
 - **Document** the exemption in `docs/design/engineering_standards.md`: request-scoped, bounded by
   the batch, awaited before the response, `TaskGroup` only, and the only exemption.
 - **4A-4b, #473 part b, rewritten as ND-C1..ND-C4 (research near-duplicates plan sections 5.2, 5.6
-  and 8, lane ND-C; pending RD-44, RD-50; the core pending rows and runs are written under
+  and 8, lane ND-C; RD-44, RD-50 answered as recommended (D-78); the core pending rows and runs are written under
   `core_tx`, the `core` RLS scope of [02a](02a_postgres_schema.md) section 1.4, review RR-3; the job
   kind and task go in the modules 1B pre-created, `src/config/job_kinds/near_dup_core.py`,
   `src/config/task_routes/near_dup_core.py` and `src/tasks/near_dup_core.py`, review RR-4):** while 4A-4 rewrites `visual_search/ingest_batch.py`,
@@ -175,7 +179,7 @@ classified:
   space (research embeddings 5.4, ES-C's `embedding_space()`). Red: one client call instead of two
   concurrent ones.
 - `routers/health.py`: probes run sequentially with their existing timeouts (health is not
-  latency-critical). Red: no `create_task` or `gather` in the module (AST test).
+  latency-critical). Red: no `create_task` or `gather` in the module (AST test; `routers/health.py` is not one of the four 4A-4 exempt ingest modules, and it is latency-insensitive, so it has no reason to fan out).
 - `resource_links.py`: `op.periodic.resource_reachability` (beat, 30 s) probes the services and
   writes `op:resource_reachability` (Valkey, `SET ... EX 90`; a short-lived cache, the kind of value Valkey owns per [02](02_control_plane_database.md) section 3.1); the routes read it; a missing key
   reads "unknown", never "down". Delete the per-process `_cache.inflight` task. Red: two API
@@ -200,7 +204,7 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
 - **Doc:** uvicorn settings: `--workers` "Defaults to the `$WEB_CONCURRENCY` environment variable
   if available, or 1" [U1]; FastAPI "Server Workers" and "FastAPI in Containers" (one process per
   container under an orchestrator; several in one container on a single Compose host) [F2][F3].
-- **Steps:** remove `--workers=32` and the "64" and "benchmark" comments from the `api` command in
+- **Steps:** remove `--workers=32` and the stale "64 workers" and "benchmark" comments (the plan's number is 32: `docker-compose.yml` near line 260 says 64 in a comment) from the `api` command in
   `docker-compose.yml`; add `WEB_CONCURRENCY=${API_WORKERS:-8}` to the `api` environment; remove
   `"--workers", "16"` from the Dockerfile `CMD` (the image default becomes uvicorn's
   `WEB_CONCURRENCY`, else 1, which is what an orchestrator wants); keep
@@ -230,8 +234,8 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
   replica count has one source, `.env` `OP_API_REPLICAS` read by compose as `deploy.replicas`
   (B2 1C-2); the pool timeout answer 503 `database_busy` and the separate poll engine come from
   B2 1A-6; 4B adds no scale command.
-- **Red test:** `tests/config/test_api_pools.py`: `API_WORKERS=1` gives the totals, 32 gives
-  today's per-process values, 0 or junk fails. **Control:** the lifespan smoke test.
+- **Red test:** `tests/config/test_api_pools.py`: `API_WORKERS=1` gives the totals (database pool 128 per process), `API_WORKERS=8` (the compose fallback) gives 16 database connections per process, 32 gives
+  today's per-process thread and channel values and 4 database connections per process (the 128 total of [02b](02b_jobs_locking_events.md) section 8; was 2 of 64), 0 or junk fails; every size times its worker count stays at or below the total. **Control:** the lifespan smoke test.
 
 ### 4B-3 Document the remaining per-process limits
 
@@ -264,7 +268,7 @@ Red: `tests/clients/test_triton_router.py`: with two fake servers 100 concurrent
 10 %; a server whose report lacks the model gets no call; one image's follow-up calls stay on its
 server. Control: one server behaves as today.
 
-### 4B-7 The in-process text encoders are deleted (research embeddings ES-E; D-69 consequence; pending RD-31)
+### 4B-7 The in-process text encoders are deleted (research embeddings ES-E; D-69 consequence; RD-31 answered as recommended (D-78))
 
 Under D-69 every API process requires Triton, so the in-process `torch` and `onnx` PE text backends
 are dead code. Delete them from `src/clients/pe_text_backends.py` (keep only Triton) and
@@ -328,7 +332,7 @@ numbers are its first rows).
 **`b4/capture-metadata`** (research spatial plan sections 5.1 and 8, lane L-C1; RD-51 reversed and
 RD-54 answered by the owner 2026-11-04: GPS coordinates are stored now under the project's
 `location_policy`, default `store`, and exports keep the embedded GPS as today; RD-5 approved;
-pending RD-52, RD-53). Why at ingest: the capture-date filter on the crops list and the capture time that
+RD-52, RD-53 answered as recommended (D-78)). Why at ingest: the capture-date filter on the crops list and the capture time that
 the plate burst consensus of W5e groups by (review 3.6; the upgrade backfill reads the stored files,
 so waiting loses nothing for files still present). Owns: new `src/domain/capture_metadata.py` (`CaptureMetadata`,
 `parse_capture(exif_ifd0, exif_ifd, gps_ifd)`, pure, no Pillow import); the header read in
@@ -349,21 +353,16 @@ parser against ExifTool) read before the cut.
 |---|---|---|---|
 | CM-1 | the parse rules of spatial 5.1: IFD0 `DateTime` is never capture time; the offset only from `OffsetTimeOriginal` (or the digitized pair) or the GPS UTC delta rounded to 15 minutes within -12:00..+14:00; (0, 0) and out-of-range coordinates are no location; a malformed date gives `exif_status = malformed`, never a failed ingest; the broad-except ratchet does not grow | `tests/domain/test_capture_metadata.py`, one case per rule | a clean header parses |
 | CM-2 | every ingest path carries `capture` (upload, directory and bulk, dataset import, combine copies `capture.*` verbatim); items get `capture_taken_local` and `capture_taken_utc`; the coordinates go to the images index only, through `apply_location_policy` (`store` as parsed, `store_coarse` rounded to 0.01 degree, about 1 km, `drop` none); **no coordinate is ever copied to items, labels, manifests, training files, a VLM call or a log** | `tests/curation/test_capture_paths.py`; the location canary appears only in the image `capture` block under `store` or `store_coarse` and never in an item response, manifest, training file, VLM request or log | - |
-| CM-3 | the capture step of `source_backfill` for upgraded projects (header-only read through the storage `source` root, in the same pass as ND-A's content step; a missing file counted, not failed; pending RD-53) | `tests/curation/test_capture_backfill.py` | a re-run writes nothing |
+| CM-3 | the capture step of `source_backfill` for upgraded projects (header-only read through the storage `source` root, in the same pass as ND-A's content step; a missing file counted, not failed; RD-53 answered as recommended (D-78)) | `tests/curation/test_capture_backfill.py` | a re-run writes nothing |
 | CM-4 | the location policy (owner 2026-11-04, RD-51 reversed): the writer and the image wire go through the one helper; a switch to `drop` starts the location-purge step (every `capture.location*` value of the project cleared, counts-only audit); exports keep the embedded GPS by default (RD-54), and a `drop` project's exports strip it (CM-5) | `tests/curation/test_location_policy.py`: under `drop` no coordinate reaches the images index; `store_coarse` rounds; a switch to `drop` purges every coordinate and a re-run writes nothing | `has_location` is unchanged by the policy |
 | CM-5 | exports honour the project's own policy (review RN-4; the owner's rule "exports keep embedded GPS" is the default, and `drop` is the project choosing otherwise, so no new question): under `store` and `store_coarse` the export copies bytes as today; under `drop` the export copy path removes the GPS IFD losslessly with ExifTool (`exiftool -gps:all= -o <out> <in>`, [ExifTool](https://exiftool.org/), in the jobs image; chosen over a hand-written EXIF rewriter, and Pillow would re-encode the pixels); the policy is read once per export job; `SECURITY.md`, the settings wire description and `docs/CURATION.md` say that `drop` covers the index, the wire and exports, while the stored originals keep their bytes | `tests/curation/test_export_gps_by_policy.py`: under `drop` an exported copy of the GPS fixture has no GPS IFD and its pixels and every other tag are byte-identical; under `store` the copy is byte-identical to the original | a fixture without GPS exports byte-identical under every policy |
 
-**`b4/identity-text-privacy`** (research plate plan 5.8; a separate lane from `b4/privacy-hardening`,
-which is scoped from private notes; the coordinator checks the two own disjoint files before the
-cut). Owns: `src/core/logging.py` (the structlog processor `redact_region_text` in
-`shared_processors`, so structlog and foreign stdlib records both pass through it), new
-`src/config/identity_text.py` (`OP_IDENTITY_TEXT_MAX_MODE`, `OP_IDENTITY_TEXT_SECRETS_DIR`;
-malformed refuses startup), the sink-inventory canary `tests/region_text/test_sink_inventory.py`,
-`env.template` (append rule). Red: a log record carrying `text`, `text_raw`, `text_frame`,
-`text_vlm`, `text_ocr` or a model reply under those keys is masked (red today); a malformed
-`OP_IDENTITY_TEXT_MAX_MODE` refuses startup; the master file must be a regular non-symlink file of
-exactly 32 bytes. The `SECURITY.md` text ("Privacy: identity text") is written by
-`b4/privacy-hardening`, which owns that file in W4.
+Owner decision 2026-11-05: registration-plate text is ordinary searchable label data (readable
+text, exact, fuzzy and fragment search); the former `b4/identity-text-privacy` lane (log redaction
+processor, `OP_IDENTITY_TEXT_MAX_MODE`, secrets dir, sink-inventory canary, the `SECURITY.md`
+identity-text statement) is removed from B4 and has no replacement. Project delete removes plate text
+like any other project data.
+Plate boxes come from a plate detector the deployment supplies: the owner runs a private one in their own deployments, other users bring their own (for example from Hugging Face) through the existing model upload path (`POST /models/upload`), and no private model ships in the repository or in any image.
 
 ## 6b. Events (moved)
 

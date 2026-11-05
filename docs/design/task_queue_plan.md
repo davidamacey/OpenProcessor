@@ -2,6 +2,8 @@
 
 > **Execution order and overrides:** see `docs/design/v070_rebuild/reference/decision_register.md` (the program set replaced the former master plan, rev 4, in git history), which wins where the two disagree. It REPLACES this plan's Phase 1 file locks (P1.0, P1.3, and `exclusive_start_lock` in P1.1/P1.2/P1.6) with OpenSearch leases and the class-registry document (B1, merged; see `docs/ARCHITECTURE.md`). It schedules Phases 2-5 in B2 and the API worker model in B4.
 
+> **Superseded recommendations (2026-11-05):** this file is kept only as the source of the `Q-` task, defect and edge-case IDs that the lane files cite. Its Redis 8 broker, OpenSearch job leases, job files and file-lock phases are replaced by Valkey, PostgreSQL and Celery ([02_control_plane_database.md](v070_rebuild/02_control_plane_database.md), [01_package_pins.md](v070_rebuild/01_package_pins.md)); cancel is a database write only (D-71). Do not implement from its design text.
+
 Status: plan only; owner decisions are in the master plan's decision register. Committed 2026-11-03.
 Code read from main at `5b95591f` (pinned tree `.claude/worktrees/audit-r2`).
 All `file:line` references are to that tree.

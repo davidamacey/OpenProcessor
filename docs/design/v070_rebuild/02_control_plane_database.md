@@ -5,8 +5,8 @@
 | Status | plan, not started. Owner decisions 1-8 of 2026-11-04 are applied (approved) |
 | Release | part of the single v0.7.0 release; built by B2 ([03_b2_overview.md](03_b2_overview.md)) |
 | Files | this file (why, rules, the data-ownership table, the inventory with a destination for every item, the decisions); [02a_postgres_schema.md](02a_postgres_schema.md) (every table); [02b_jobs_locking_events.md](02b_jobs_locking_events.md) (jobs, claims, cancel, reaper, events, queues, pools); [02c_migration_ops_tests.md](02c_migration_ops_tests.md) (Alembic, the 0.6.0 upgrade and rollback, compose services, backup, storage seam, tests, traps) |
-| Decisions | the register in [decision_register.md](reference/decision_register.md) section 6: approved D-39..D-45 (the owner decisions), D-46..D-63 approved 2026-11-04 as a block (section 7 below keeps the plain question and the recommendation for each), D-64..D-67 added after the review [00c](reference/review_1_control_plane.md) |
-| Package versions | not here: `01_package_pins.md` (written on its own branch) owns every exact pin. This set only names the packages |
+| Decisions | the register in [decision_register.md](reference/decision_register.md) section 6: approved D-39..D-45 (the owner decisions), D-46..D-63 approved 2026-11-04 as a block (section 7 below keeps the plain question and the recommendation for each), D-64..D-67 added after the review (D-64 was replaced by D-69 on 2026-11-04, and D-66 by D-70 on 2026-11-05) [00c](reference/review_1_control_plane.md) |
+| Package versions | not here: [01_package_pins.md](01_package_pins.md) owns every exact pin. This set only names the packages |
 
 Verified against `origin/main` at `7f3453de` on 2026-11-04 (read only, with `rg`). Line numbers move;
 re-find code by the symbol named.
@@ -69,8 +69,8 @@ models, datasets, exports), addressed by storage keys that Postgres records.
 9. **No shims, no dual paths.** `FileJob`, the job files, the file protocols, the OpenSearch control
    documents and every file lock are deleted in the change that replaces them. The 0.6.0 data is
    moved once by the upgrade step and its OpenSearch copies deleted, never dual-read.
-10. **Official docs and maintained libraries first.** SQLAlchemy 2.0, Alembic, psycopg 3, Celery
-    5.6 with kombu's documented `redis://` transport and redis-py, FastAPI's own SSE support,
+10. **Official docs and maintained libraries first.** SQLAlchemy 2.1 (the pin of [01](01_package_pins.md); the 2.0-style API, read its [2.1 migration notes](https://docs.sqlalchemy.org/en/21/changelog/migration_21.html)), Alembic, psycopg 3, Celery
+    5.7 with kombu's documented `redis://` transport and redis-py, FastAPI's own SSE support,
     testcontainers-python. Custom code is justified against them in
     [standards_and_libraries.md](reference/standards_and_libraries.md) section 3.
 
@@ -80,7 +80,7 @@ models, datasets, exports), addressed by storage keys that Postgres records.
 
 | Store | Owns | Never owns |
 |---|---|---|
-| **PostgreSQL** | projects and their settings, slugs, index names, pause; class registries; revisioned config (prompt packs, region and ingest profiles, open-vocabulary sets, VLM endpoints, activations, probes); jobs, attempts, progress, cancel, checkpoints, events; dataset uploads, imports and their ledgers; combine runs; ingest sources and their file queues; label operations; holdout freezes; training runs, models, engines (with their input and output contracts), promotions, shares, exports, bake-off runs; GPU devices and reservations; upgrade runs; the research-seam records of [02d](02d_research_seam_schema.md) (cluster partitions, identities, memberships, activations and calibrations; the embedding catalog, spaces and their re-index and evaluation runs; near-duplicate runs, groups, edges, decisions, pending rows and holdout moves; the assist-loop record and VLM usage; serving reports; later the plate reader runs, consensus groups and identity-text policies); later users and tokens | vectors, item documents, region boxes, item text, cluster assignments as search data |
+| **PostgreSQL** | projects and their settings, slugs, index names, pause; class registries; revisioned config (prompt packs, region and ingest profiles, open-vocabulary sets, VLM endpoints, activations, probes); jobs, attempts, progress, cancel, checkpoints, events; dataset uploads, imports and their ledgers; combine runs; ingest sources and their file queues; label operations; holdout freezes; training runs, models, engines (with their input and output contracts), promotions, shares, exports, bake-off runs; GPU devices and reservations; upgrade runs; the research-seam records, listed with their writer, reader and wave in the table index of [02d](02d_research_seam_schema.md) section 0.1; later users and tokens | vectors, item documents, region boxes, item text, cluster assignments as search data |
 | **OpenSearch** | `images` and `items` per project: every field a search, filter, kNN query or aggregation reads (geometry, class reference, region boxes and their text, OCR text, captions, VLM label text, vectors in the registry-named fields, the served cluster assignment, the near-duplicate projection, capture metadata, review flags such as `test_holdout`, `class_validated`, `class_excluded`); the five global visual-search indexes. Registration-plate text values live only here (never in PostgreSQL: one place to purge) | anything with a lifecycle, revision, owner or exclusivity |
 | **Valkey** | Celery messages (kombu `redis://` transport); the queued marker per job (`op:queued:<job_id>`); short-lived caches with a TTL (resource reachability) | any record a restart may not lose; Celery results (no result backend, D-49) |
 | **Files behind the storage seam** | source images (read only), uploads, crops cache, exports and their frozen snapshots (`class_registry.json` inside an export, `data.yaml`, `manifest.json`), training artifacts and logs, model files and engines, UMAP reducers, the upgrade bundle | any state that is read-modify-written; any absolute path in a database row |
@@ -114,7 +114,7 @@ models, datasets, exports), addressed by storage keys that Postgres records.
 | region drain, dependency health | files (`region_drain.py:68`; `region_dependency_health.py:54`) | Postgres `project_state` keys | - |
 | region-cluster markers, `last_clustering.json`, the IVF retrain state inside `autolabel`, the `cluster_id`/`class_id` namespace overload | files (`region_cluster_jobs.py:56,123-127,284`; `last_run.py:28`), `cluster_ids.py` offsets | Postgres `cluster_partitions`, `cluster_identities`, `cluster_memberships`, `cluster_activations` (lane 4F, research clustering plan 5.1); the markers are never ported to `project_state` | items and region boxes carry the **served** assignment (`cluster_partition_id`, `cluster_uid`, `cluster_state`, `cluster_score`, `cluster_margin`, `cluster_assigned_by`) as a projection written by `cluster_projection_sync`; integer `cluster_id` and `cluster_subid` are deleted |
 | encoder identity, per-project embedding spaces, re-index and evaluation runs | constants (`ITEM_EMBEDDING_FIELD`, `DEFAULT_KNN_FIELD`); combine compares only the dimension | Postgres `embedding_model_versions`, `embedding_spaces`, `embedding_reindex_runs`, `embedding_evaluation_runs` (lanes ES-A, ES-B) | the vectors and per-item state fields stay in OpenSearch under the registry-named fields; 0.6.0 names (`pe_embedding`, `embedding_state`, `region_box_embeddings`) stay as registry data |
-| near-duplicate groups (curation export, crop scorer, core ingest) | per request, per IVF bucket, or online in the request; `dup_*` and `duplicate_*` fields | Postgres `near_dup_runs`, `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending`, `holdout_near_dup_moves`, the exact key `image_contents` (lanes ND-A, ND-B, ND-C) | the `near_dup_*` fields and `content_sha256` are a search projection rewritten from the current run; images lose `imohash` and `phash` (pending RD-43) |
+| near-duplicate groups (curation export, crop scorer, core ingest) | per request, per IVF bucket, or online in the request; `dup_*` and `duplicate_*` fields | Postgres `near_dup_runs`, `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending`, `holdout_near_dup_moves`, the exact key `image_contents` (lanes ND-A, ND-B, ND-C) | the `near_dup_*` fields and `content_sha256` are a search projection rewritten from the current run; images lose `imohash` and `phash` (RD-43 answered as recommended (D-78)) |
 | assist-loop budget, event log, node state, proposals | `budget.json`, `events.jsonl`, the loop job directory | Postgres `assist_loop_*` tables and `vlm_usage_hourly` (lane 4D); the `events` table is the 24-hour UI feed only (research G-3) | items keep the label-operation ids of the loop's propagations |
 | training jobs, status, manifest, registry snapshot, log | `<id>.{job,status,manifest,registry_snapshot}.json`, `<id>.run.log`, claim files (`training/job_files.py:30-87`) | Postgres `jobs` + `training_runs` (spec, class names in output order, lineage); the log and checkpoints in storage | - |
 | model upload/export tasks | `/jobs/model_export/{queue,claimed}` (`model_export.py:8-52`) | Postgres `jobs` (kind `model_export`) + `models`, `model_engines` | Triton model names in `model_engines` |
@@ -202,7 +202,7 @@ family that owns them; none survives as a file-protocol test.
 |---|---|
 | `src/clients/job_lease.py` (`acquire`, `takeover_expired`, `renew`, `release`, `is_live`; `transfer` has no callers) and `src/domain/job_lease.py` (19 kinds; `BULK_INGEST`, `SOURCE_SCAN` have no callers) | deleted in stage 3; the job claim, heartbeat and fencing in Postgres replace them ([02b](02b_jobs_locking_events.md) sections 2-4) |
 | `src/services/curation/lease_heartbeat.py` (thread with its own loop and client, `may_write()` self-fence) | replaced by `src/tasks/runtime/heartbeat.py` (R-2): the same thread shape with its own database connection; `may_write()` stays for OpenSearch writes (stage 3) |
-| lease callers outside jobs: `LABEL_OP`, `LABEL_UNDO` (`label_ops/record.py:39`, `undo.py:192-201`), `LEGACY_REPAIR` (`legacy_repair.py:95`), `PROMOTE_JSON` (`promote_json.py:52`), the `ASSIST_LOOP` short lease (`assist_loop/job.py:180,204`) | label op and undo become exclusive `jobs` rows with `requested_by='api'` that run inline (short, no Celery: [02b](02b_jobs_locking_events.md) section 2.5); legacy repair becomes a migration-time step and is deleted with the rest of the 0.6.0 repair code (stage 2); the other two disappear with their files |
+| lease callers outside jobs: `LABEL_OP`, `LABEL_UNDO` (`label_ops/record.py:39`, `undo.py:192-201`), `LEGACY_REPAIR` (`legacy_repair.py:95`), `PROMOTE_JSON` (`promote_json.py:52`), the `ASSIST_LOOP` short lease (`assist_loop/job.py:180,204`) | label op and undo become exclusive Celery `jobs` rows like every other long job (owner decision 2026-11-05, D-75; [02b](02b_jobs_locking_events.md) section 2.5); legacy repair becomes a migration-time step and is deleted with the rest of the 0.6.0 repair code (stage 2); the other two disappear with their files |
 | class registry: `registry.py`, `registry_mirror.py`, `registry_transfer.py`, `scripts/curation/migrate_class_registry.py`, `scripts/lib/registry_migration.sh`, CLI `curation migrate-registry` (`scripts/lib/cli_core.sh:236-258`), 409 `registry_not_migrated`, `registry_full`, `registry_conflict` | deleted in stage 2; `src/services/classes/` over `src/db/repos/classes.py`. The 0.6.0 file migrates in the upgrade step ([02c](02c_migration_ops_tests.md) section 2). `class_registry.json` stays only inside exports and training pins (the six readers in the inventory) |
 | config store: `src/services/config_store/` (`index.py`, `store.py`, `global_store.py`, `store_poll.py`), `vlm_endpoints.py`, `vlm_activation.py`, `vlm_snapshot.py`, `keymap.py`, `settings_doc.py`, `policy_doc_store.py` | rewritten over `src/db/repos/config.py` and `settings.py` (stage 2); the poll stays (5 s, `OP_CONFIG_POLL_S`) but reads one integer, `projects.config_epoch` |
 | projects: `src/config/projects.py`, `project_context.py`, `src/services/projects/{registry,bootstrap,lifecycle,delete,delete_paths,busy,legacy_repair}.py`, `guard.py`, `guard_policy.py` | registry and lifecycle over `src/db/repos/projects.py`; the guard's ownership map built from `project_indexes`; `op_projects` and `op_global_configs` leave the guard policy (stage 2) |
@@ -265,7 +265,7 @@ caches) behind the storage seam.
 
 | Role | Fields | Verdict |
 |---|---|---|
-| `images` | identity, geometry, `content_sha256` (the exact key; `imohash` and the writer-less `phash` deleted, pending RD-43), vectors, import and combine provenance, the `capture.*` object (W4) | stays (search data) |
+| `images` | identity, geometry, `content_sha256` (the exact key; `imohash` and the writer-less `phash` deleted, RD-43 answered as recommended (D-78)), vectors, import and combine provenance, the `capture.*` object (W4) | stays (search data) |
 | `items` | see the schema doc; control-looking fields stay per section 3.4 | stays |
 | `classes` | mirror of the registry | deleted (D-56) |
 | `labels_confirmed` | no writer | deleted (D-56) |
@@ -305,12 +305,12 @@ Per project: 6 indexes become 2, so the shard budget per project drops from 6 to
 | `src/db/repos/` | db | repositories: every SQL statement lives here | as above, plus `src/db/models` |
 | `src/db/migrations/` + `alembic.ini` at the repo root | db | Alembic environment and versions | as above |
 | `src/core/db_session.py` | core | the FastAPI dependency (`DbSessionDep`) | `src/db`, `fastapi` |
-| `src/services/jobs/` | services | API side: start, cancel, resume, status, the reaper rules | `src/db`, `src/clients/task_queue.py`, `src/tasks/runtime/` (the heartbeat class, for inline jobs) |
+| `src/services/jobs/` | services | API side: start, cancel, resume, status, the reaper rules | `src/db`, `src/clients/task_queue.py`, `src/tasks/runtime/` (task-wrapper types only; label ops are Celery jobs, D-75) |
 | `src/services/classes/`, `src/services/events/` | services | class registry, events and SSE fan-out | `src/db` |
 | `src/tasks/` | tasks | Celery app, the `JobTask` wrapper, task modules | services, db, config |
 | `src/tasks/runtime/` | tasks | the wrapper and its bookkeeping, the heartbeat thread, progress and checkpoint writes (fenced, through `src/db/repos/jobs.py`), the event row (through `src/db/repos/events.py`) and the Valkey wake-up (`event_wakeup.py`); importable without FastAPI, OpenSearch or torch (the trainer image imports it); the OpenSearch client factory is injected by the handler module (review fix R-2) | `src/db`, `src/config`, `src/domain`, `src/utils` only (plus `redis`, `celery`) |
 | `src/clients/storage/` | clients | the storage seam (local backend) | `src/config`, `src/utils` |
-| `src/clients/task_queue.py` | clients | producer, revoke, queued marker | `celery`, `redis`, `src/config` |
+| `src/clients/task_queue.py` | clients | producer, queued marker (a derived hint; no revoke, D-71) | `celery`, `redis`, `src/config` |
 
 Layering contracts added to `scripts/codegen/check_layering.py` (stage 1): `src/db` imports no
 `src.services`, `src.clients`, `src.routers`, `fastapi`; `src/{config,domain,utils,schemas}` import no
@@ -329,7 +329,7 @@ Approved by the owner on 2026-11-04: **D-39** PostgreSQL holds all control data 
 export included, and every file protocol is deleted (D-22's scope); **D-42** cloud-ready scale-out;
 **D-43** one-step 0.6.0 upgrade that moves the OpenSearch control data and then deletes it;
 **D-44** exact pins at the latest installable versions (file 13); **D-45** plain names first. Also
-approved that day: **D-17** Celery 5.6, **D-18** Valkey, **D-31** the evaluator on `gpu_eval`.
+approved that day: **D-17** Celery (5.7.0 since 2026-11-05, D-70), **D-18** Valkey, **D-31** the evaluator on `gpu_eval`.
 
 Approved by the owner on 2026-11-04 as a block (the rows below keep their text for the record; D-48
 and D-50 as amended after the review of [00c](reference/review_1_control_plane.md)):
