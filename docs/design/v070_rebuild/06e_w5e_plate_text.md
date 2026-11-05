@@ -26,7 +26,7 @@ survive the alphanumeric normalizer are 12 characters long, longer than any plat
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
-| PT-S1 | the four tables of the plate plan 5.2 with the X-1 change of 02d section 4; `region_text_consensus_marker` in the `project_state` key `CHECK`; RLS | `tests/db/test_region_text_schema.py`: every table, index and policy present; the tables hold no text-valued column besides the listed codes; a box in two current groups is a unique violation | `alembic` one head; downgrade to 0003 and up |
+| PT-S1 | the four tables of the plate plan 5.2 with the X-1 change of 02d section 4, plus the nullable issuing-jurisdiction column with its confidence (RD-64 reversed, D-81); `region_text_consensus_marker` in the `project_state` key `CHECK`; RLS | `tests/db/test_region_text_schema.py`: every table, index and policy present; the tables hold no text-valued column besides the listed codes; a box in two current groups is a unique violation | `alembic` one head; downgrade to 0003 and up |
 | PT-S2 | repositories: runs (one open `region_pass` run per reader configuration by the partial unique index), consensus groups replaced in one project-scoped transaction | `tests/db/test_region_text_repo.py`: a second open run for one configuration is a unique violation | read after write |
 
 ## Lane `w5e/region-text-fields` (after the store lane merged)
@@ -42,6 +42,7 @@ under `tests/region_text/`.
 | ID | Task | Red test | Control |
 |---|---|---|---|
 | PT-F1 | per-box fields of plate plan 5.1 written by the reader and the consensus; `text` stays the resolved reading, `text_frame` the frame's own (RD-66, answered as recommended) | `tests/region_text/test_box_fields.py`: a reading writes `text_norm` and `text_fold` from `text`; `text_engine_version` is gone | existing region-stage tests |
+| PT-F2a | the issuing jurisdiction (for example the state name) is read in the OCR pass from the plate text and layout, stored nullable with its own confidence, on the wire, and searchable and filterable (exact and prefix); if `pt:P1` shows the chosen reader cannot return it, a separate small classifier is a decision for the owner, not a default | `tests/region_text/test_jurisdiction.py`: a fixture reading with a state fills the field and the filter finds it; a reading without one is null, never guessed | no jurisdiction filter: search unchanged |
 | PT-F2 | the domain fold agrees with the index normalizer `op_text_compact` (2F-6) on a fixture list | `tests/region_text/test_fold_matches_normalizer.py` (fake `_analyze` or live) | - |
 | PT-F3 | search: `term`, `fuzzy` (fuzziness 1, transpositions, `max_expansions` 50) and `wildcard` on `text_fold.sub`, metacharacters escaped; the regions-tab text filter moves to the same builder | `tests/region_text/test_plate_search.py` | a non-identity profile's text search unchanged |
 | PT-F4 | wire: the new keys added, `text_engine_version` dropped; the text values are on the wire as readable text; `text_norm` and `text_fold` stay storage-only; `make contracts` | `tests/region_text/test_wire_key_set.py` pins the key set | - |

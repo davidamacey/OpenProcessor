@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | written 2026-11-04 by the research integration pass; the owner answered 11 rows the same day (section 0, recorded in the [decision_register.md](decision_register.md) register); a further 59 were answered as recommended on 2026-11-05 (section 0b); RD-61, RD-62 and RD-67 were answered by the owner the same day (below); **7 stay open, all asked after the tag (batch 3)**: RD-9, RD-11, RD-12, RD-13, RD-20, RD-26, RD-78, each with a recommendation the plan already follows |
+| Status | written 2026-11-04 by the research integration pass; the owner answered 11 rows the same day (section 0, recorded in the [decision_register.md](decision_register.md) register); a further 58 were answered as recommended on 2026-11-05 (section 0b); RD-61, RD-62 and RD-67 were answered by the owner the same day (below); **7 stay open, all asked after the tag (batch 3)**: RD-9, RD-11, RD-12, RD-13, RD-20, RD-26, RD-78, each with a recommendation the plan already follows |
 | Source | the section 10 owner questions of the seven research plans (112 raw: GPU pipeline J1-J12, clustering J1-J17, embeddings J1-J14, near-duplicates J1-J15, spatial J1-J15, plate text J1-J13, auto-label J1-J26). Merged where two plans ask the same thing; the "From" column keeps every source, so no raw question is lost |
 | How to answer | one word per row is enough ("yes", "no", or the other option). The 7 open rows are asked in small batches. The plan already follows each recommendation and marks the place "pending RD-n", so a "no" is a small, named removal |
 | Where answers go | the decision register of [decision_register.md](decision_register.md) section 6 (one row per answered RD-n), then the research plan's own J-row is marked answered |
@@ -31,7 +31,7 @@ and LPLC are skipped (RD-10); **Q-D** the `cluster` queue and worker are decided
 RD-3 (W5e as its own wave) stays open in name, but the RD-4 answer places the plate tables in a W5e
 revision, so the plan treats W5e as settled.
 
-## 0b. Answered as recommended on 2026-11-05 (59 rows)
+## 0b. Answered as recommended on 2026-11-05 (58 rows)
 
 The owner directed on 2026-11-05 that the planner answers what the docs and best practice can answer, and asks the owner only the rest. Each row below follows the recommendation the plan already carried; the register row is D-78 in [decision_register.md](decision_register.md). A later owner "no" is still a small, named removal. The "pending RD-n" marks in the plans are cleared for these rows.
 
@@ -81,7 +81,7 @@ The owner directed on 2026-11-05 that the planner answers what the docs and best
 | RD-59 | A scene product lives in curation, project-scoped, not in the core API? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | RW-5 | sp J14 |
 | RD-60 | The former #400 calls: run the attribute experiments on the research harness now, and file "one vote per near-duplicate group" as its own loop item? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes to both | RW-5 | sp J15 |
 | RD-63 | Defer keyed-mode near-match keys until the misread rate is measured? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J8 |
-| RD-64 | No issuing-jurisdiction field in v0.7.0? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J9 |
+| RD-64 | No issuing-jurisdiction field in v0.7.0? | **Reversed by the owner 2026-11-05 (D-81): add the field.** The plate reading gets a nullable issuing jurisdiction (for example the state name, read in the OCR pass from the plate text and layout) with its own confidence, stored, searchable and filterable, in the W5e revision `0004_region_text`; a separate model only if `pt:P1` shows the reader cannot return it | W5e | pt J9 |
 | RD-65 | Raw-mode retention optional (none keeps text until a purge)? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J10 |
 | RD-66 | Consensus writes the group's reading into `text` and keeps each frame's own reading in `text_frame`? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J11 |
 | RD-68 | Burst grouping for plates reads the W4 capture time (no separate `captured_at` field), if the linking prototype shows time windows beat near-duplicate groups? | **As recommended** (planner, per owner direction 2026-11-05: answer from docs and best practice): yes | W5e | pt J13; sp section 5.1 |
@@ -160,7 +160,7 @@ The owner directed on 2026-11-05 that the planner answers what the docs and best
 
 ## Count
 
-112 raw questions; 80 after merging. **11 answered by the owner on 2026-11-04** (section 0), **59 answered as
-recommended on 2026-11-05** (section 0b, planner, per owner direction), **3 answered by the owner on
-2026-11-05** (RD-61, RD-62, RD-67); **7 open**: RD-9, RD-11, RD-12, RD-13, RD-20, RD-26, RD-78, all
+112 raw questions; 80 after merging. **11 answered by the owner on 2026-11-04** (section 0), **58 answered as
+recommended on 2026-11-05** (section 0b, planner, per owner direction), **4 answered by the owner on
+2026-11-05** (RD-61, RD-62, RD-67 and RD-64 reversed to "add the field"); **7 open**: RD-9, RD-11, RD-12, RD-13, RD-20, RD-26, RD-78, all
 asked after the tag (batch 3). None is needed before any wave.

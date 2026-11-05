@@ -748,7 +748,7 @@ Triton and the P-ocr gate for `rec_char_min`).
 | J6 | If a dedicated reader (fast-plate-ocr) wins P1 but its training data's terms are not stated, may it ship as an opt-in installer model group, or not at all? | opt-in only, off by default, with the provenance gap stated in `ATTRIBUTION.md` |
 | J7 | The four PostgreSQL tables: their own revision in W5e, or in `0001_control_plane` now? | their own revision in W5e (B2 scope stays tight; Alembic adds them cleanly) |
 | J8 | Keyed-mode distance-1 neighbourhood keys (near-match and veto without text)? | defer; decide on P2's rate of distance-1 misreads among confident readings |
-| J9 | Store the issuing jurisdiction (state or country) when a reader provides it? | not in v0.7.0; P1 records whether the fast-plate-ocr region head is accurate enough to justify a field |
+| J9 | Store the issuing jurisdiction (state or country) when a reader provides it? | **Reversed 2026-11-05 (owner, RD-64, D-81): yes, in v0.7.0.** A nullable issuing-jurisdiction field with its own confidence, read in the OCR pass, stored, searchable and filterable, in revision `0004_region_text`; a separate model only if `pt:P1` shows the reader cannot return it |
 | J10 | Raw-mode retention: optional or required? | optional (NULL keeps text until purge), so `raw` stays today's behaviour |
 | J11 | Consensus writes the group's reading into `text` and keeps the frame's own in `text_frame`: agreed? | yes |
 | J12 | May a detector trained on the private plate-box set be used in P6 and in the owner's deployments (never shipped publicly)? | yes; the public example keeps the segmenter and text hint |
