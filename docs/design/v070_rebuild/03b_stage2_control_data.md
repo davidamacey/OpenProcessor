@@ -7,7 +7,7 @@
 | Design | [02](02_control_plane_database.md) sections 3-4, [02a](02a_postgres_schema.md) sections 2-4 and 6, [02c](02c_migration_ops_tests.md) sections 2-3 |
 | Lanes | 2A, 2B, 2C, 2D, 2E and ES-A in parallel; then 2F |
 | Merge order | 2A, 2B, 2C, 2D, 2E, ES-A, 2F |
-| Research seams | folded 2026-11-04, approved by the owner 2026-11-04, RD-1 ([00d](reference/owner_questions.md)): 2A-7, 2C-7, 2D-5, 2E-8, 2F-6..2F-8, the new lane ES-A (embedding registry), and **2D-4 moved out** to lane ND-B in W2.3b (reason below) |
+| Research seams | folded 2026-11-04, approved by the owner 2026-11-04, RD-1 ([owner_questions](reference/owner_questions.md)): 2A-7, 2C-7, 2D-5, 2E-8, 2F-6..2F-8, the new lane ES-A (embedding registry), and **2D-4 moved out** to lane ND-B in W2.3b (reason below) |
 | Runs alongside | stage 3 lanes code from the stage-1 head in parallel (disjoint files) and merge after this stage |
 | Compose project | none in the lanes (unit and `db` tests only) |
 
@@ -52,7 +52,7 @@ every call site of the registry API (`rg -ln "get_registry|ensure_class|add_clas
 outside files another stage-2 lane owns, including the scripts no lane owned before (review fix
 R-18): `scripts/curation/repair_merged_active_classes.py`, `scripts/curation/seed_class_registry.py`,
 `scripts/curation/seed_live_harness.py` (the live harness seed would break otherwise); tests under
-`tests/classes/`; the fake it retires: `tests/_registry_doc_fake.py` (R-14).
+`tests/classes/`, `tests/db/test_class_registry.py`; the fake it retires: `tests/_registry_doc_fake.py` (R-14).
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
@@ -68,14 +68,14 @@ R-18): `scripts/curation/repair_merged_active_classes.py`, `scripts/curation/see
 ## Lane 2C `b2/config-pg`: config store, VLM endpoints, settings, keymap, view state
 
 **Owns:** `src/db/repos/{config,settings}.py`; `src/services/config_store/**`;
-`src/services/curation/{keymap,settings_doc,policy_doc_store}.py`; the VLM endpoint, activation and
+`src/services/curation/{keymap,policy_doc_store}.py`, `src/clients/curation_opensearch/settings_doc.py`; the VLM endpoint, activation and
 snapshot modules (`rg -ln "def (save_endpoint|probe_endpoint|activate_vlm|local_vlm)" src/services`);
-`src/services/curation/clustering/refresh_state_store.py`; `src/services/curation/umap_state.py` and
+`src/services/curation/clustering/refresh_state_store.py`; `src/services/curation/clustering/umap_state.py` and
 the projection-state read and write in `embedding_viz_read.py`; `scripts/curation/worker/runtime.py`
 (runtime reports); the config routers (`src/routers/curation/{settings,vlm,vlm_activation,vlm_catalog,config_test,config_vocabulary,_models_vlm,_vlm_endpoint_models}.py`
 and the prompt-pack, region-profile, ingest-profile and keymap routers:
 `rg -ln "prompt_packs|region_profiles|ingest_profiles|keymap" src/routers/curation`); tests under
-`tests/config_store/`.
+`tests/config_store/`, `tests/db/test_config_repo.py`, `tests/db/test_activation_repo.py`.
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
@@ -91,7 +91,7 @@ and the prompt-pack, region-profile, ingest-profile and keymap routers:
 
 ## Lane 2D `b2/records-pg`: holdout freezes, label-operation records, project markers
 
-**Owns:** `src/db/repos/records.py`; `src/services/curation/holdout.py`, `holdout_freeze.py`;
+**Owns:** `src/db/repos/records.py`; `src/services/curation/holdout.py`, `src/routers/curation/holdout_freeze.py`;
 `src/services/curation/label_ops/store.py` (records and members only: the lease and the in-request
 execution stay until stage 4A); `src/services/curation/region_drain.py`,
 `region_dependency_health.py`; tests under `tests/records/`. (`clustering/last_run.py` is no longer
@@ -129,11 +129,11 @@ Uses the ORM models of stage 1 directly (not the stage-2 repositories, which are
 | 2E-5 | installer: `upgrade` from 0.6.0 runs backup -> `db-migrate` -> `upgrade_from_060` -> `db-migrate` again (its OpenSearch step now finds the loaded projects and stamps their indexes, RC-1) -> start; prints the report; `--rollback` runs `rollback_to_060`; the B1 registry hooks and CLI removed | `tests/installer/test_upgrade_060_hook.py`: the order of calls (fake compose); a failed verify stops before `up` with the report path | a fresh install never runs the step |
 | 2E-6 | `openprocessor db verify` ([02c](02c_migration_ops_tests.md) section 6) | `tests/upgrade/test_verify_reports_class_drift.py` | a clean fixture reports nothing |
 | 2E-7 | the start gate (R-9a): `src/db/schema_check.py::check_control_plane()` (1A's module; 2E owns it in this wave) also refuses with `upgrade_incomplete` while `upgrade_state` is `in_progress` or `op_projects` still exists | `tests/upgrade/test_upgrade_gate.py` | a completed upgrade starts |
-| 2E-8 | research seams ([02c](02c_migration_ops_tests.md) section 2.2): the load becomes a registry of step modules under `src/services/upgrade/from_060/steps/` (`ORDER`, `run(ctx)`, discovered with `pkgutil.iter_modules`), so the W2.3b lanes add `clustering.py` and `near_duplicates.py` as new files; 2E writes `serving_profile.py` (the default deployment profile from `config_templates/profiles/*.json` and `config.pbtxt`) and `embedding_spaces.py` (catalog rows and three spaces per project, `knn_method` read from the live mapping); [pkgutil.iter_modules](https://docs.python.org/3/library/pkgutil.html#pkgutil.iter_modules) | `tests/upgrade/test_research_steps.py`: steps run in `ORDER` and are idempotent; the generated serving profile equals today's values; an upgraded faiss project records `engine: faiss` and a Lucene one `engine: lucene` | the fixture round trip |
+| 2E-8 | research seams ([02c](02c_migration_ops_tests.md) section 2.2): the load becomes a registry of step modules under `src/services/upgrade/from_060/steps/` (`ORDER`, `run(ctx)`, discovered with `pkgutil.iter_modules`), so the W2.3b lanes add `clustering.py` and `near_duplicates.py` as new files; 2E writes `serving_profile.py` (the default deployment profile from `config_templates/profiles/*.json` and `config.pbtxt`) and `embedding_spaces.py` (catalog rows and three spaces per project, `knn_method` read from the live mapping); [pkgutil.iter_modules](https://docs.python.org/3/library/pkgutil.html#pkgutil.iter_modules) | one test file per upgrade step, each owned by the lane that writes the step (so no two lanes edit one test file): `tests/upgrade/test_step_order.py` (2E: the steps run in `ORDER` and each is idempotent), `tests/upgrade/test_step_serving_profile.py` (2E: the generated serving profile equals today's values), `tests/upgrade/test_step_embedding_spaces.py` (2E: an upgraded faiss project records `engine: faiss` and a Lucene one `engine: lucene`); 4F adds `test_step_clustering.py` and ND-A `test_step_near_duplicates.py` in W2.3b | the fixture round trip |
 
 **2E done when:** the four upgrade tests and the installer test are green; `rg -n "migrate-registry|registry_migration|migrate_class_registry|legacy_repair" src scripts setup-openprocessor.sh openprocessor` lists only `src/services/upgrade/`.
 
-## Lane 2F `b2/opensearch-control-removal` (cut after 2A-2E merged)
+## Lane 2F `b2/opensearch-control-removal` (cut after 2A-2E and ES-A merged)
 
 **Owns:** `src/clients/curation_opensearch/{bodies_other.py,lifecycle.py,bodies_core.py}` (the last for 2F-6 and 2F-8 only),
 `src/config/curation_roles.py`, `src/services/curation/index_bootstrap.py`, the capacity and shard
@@ -142,7 +142,7 @@ code (`rg -ln "shards_after_create|shard_budget" src`), the remaining readers of
 `src/config/retired_env.py` (the stage's retirements), `env.template` (the same), the OpenSearch
 bootstrap in `src/core/dependencies.py` and new `scripts/opensearch/migrate.py` plus its call in
 `scripts/db/migrate.py` (R-7, RC-1; 1A merged it in W2.1), `src/services/upgrade/**` for 2F-5 (2E
-has merged), tests under `tests/opensearch/`.
+has merged), tests under `tests/opensearch/`, `tests/config/test_retired_env.py` (additions only).
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
@@ -183,6 +183,6 @@ tests under `tests/embedding_spaces/`. The readers move in W2.4 (lane ES-C), the
 ## Lane briefs
 
 Use the common block of [03a](03a_stage1_foundation.md) ("Lane brief"), with: "B2 stage-2 lane",
-"cut from int/b2-control-plane after stage 1 merged" (2F: "after 2A-2E merged"), the reading list
+"cut from int/b2-control-plane after stage 1 merged" (2F: "after 2A-2E and ES-A merged"), the reading list
 `03b_stage2_control_data.md` (your lane) plus the 02 sections it cites, and "Edit only the files your
 lane owns; a file you need but do not own goes to the coordinator." Compose project: none. GPU: none.
