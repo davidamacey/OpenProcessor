@@ -8,8 +8,10 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.logging import get_logger
+from src.services.training import model_registry
 from src.services.training.promote_errors import TritonLoadError
 from src.services.training.triton_promote import TritonPromoter
 from src.services.training.triton_repo import UNLOADED_MARKER
@@ -24,9 +26,8 @@ async def reload_promoted_models(
     """Re-``/load`` every promoted model Triton doesn't report READY.
 
     Triton in explicit-control mode only loads its ``--load-model`` list
-    at startup. A model promoted through this module stays on disk (its
-    ``promote.json`` marker is how :func:`src.routers.curation.models.
-    _discover_promoted_models` finds it) but drops to UNAVAILABLE after
+    at startup. A model promoted through this module stays on disk (its live
+    ``promotions`` row is how it is found) but drops to UNAVAILABLE after
     any Triton restart until someone POSTs ``/load`` again. Call this
     once at API startup (see ``src/main.py``'s lifespan) so a Triton
     restart doesn't silently strand every previously-promoted model.
@@ -41,17 +42,16 @@ async def reload_promoted_models(
     """
     p = promoter or TritonPromoter()
     try:
-        entries = sorted(p.triton_models_dir.iterdir())
-    except OSError as exc:
+        live = await model_registry.all_live()
+    except SQLAlchemyError as exc:
         logger.warning('reload_promoted_models_scan_failed', error=str(exc))
         return {'status': 'error', 'error': str(exc), 'reloaded': [], 'failed': []}
 
     promoted_names = [
-        e.name
-        for e in entries
-        if e.is_dir()
-        and (e / 'promote.json').is_file()
-        and not (honor_unloaded and (e / UNLOADED_MARKER).exists())
+        name
+        for name in (m.promotion.triton_model_name for m in live)
+        if (p.triton_models_dir / name).is_dir()
+        and not (honor_unloaded and (p.triton_models_dir / name / UNLOADED_MARKER).exists())
     ]
     if not promoted_names:
         return {'status': 'ok', 'reloaded': [], 'failed': []}

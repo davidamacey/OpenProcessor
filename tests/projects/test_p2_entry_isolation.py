@@ -34,14 +34,18 @@ def _client(env: LeakEnv) -> TestClient:
     return TestClient(env.app, raise_server_exceptions=False)
 
 
-def _promote_json(env: LeakEnv, slug: str) -> dict[str, Any]:
-    path = env.root / 'models' / f'{slug}__model' / 'promote.json'
-    return json.loads(path.read_text(encoding='utf-8'))
+def _consumers(slug: str) -> list[str]:
+    """Who ``slug``'s model is shared with (its ``model_shares`` rows)."""
+    import asyncio
+
+    from src.services.training import model_registry
+
+    return asyncio.run(model_registry.consumers(f'{slug}__model'))
 
 
 def test_a_project_cannot_share_or_delete_another_projects_model(leak_env: LeakEnv) -> None:
     _promoted_model(leak_env, 'alpha')
-    before = _promote_json(leak_env, 'alpha')
+    before = _consumers('alpha')
     client = _client(leak_env)
 
     r = client.put(
@@ -56,13 +60,13 @@ def test_a_project_cannot_share_or_delete_another_projects_model(leak_env: LeakE
         json={'shared': True, 'expected_revision': 1},
     )
     assert r.status_code == 404, r.text
-    assert _promote_json(leak_env, 'alpha') == before
+    assert _consumers('alpha') == before == []
 
     r = client.put(
         f'{API}/alpha/models/alpha__model/sharing', json={'shared': True, 'expected_revision': 1}
     )
     assert r.status_code == 200, r.text
-    assert _promote_json(leak_env, 'alpha')['shared'] is True
+    assert _consumers('alpha') != []
 
 
 def test_default_does_not_inherit_a_model_whose_project_left_the_registry(
@@ -70,7 +74,7 @@ def test_default_does_not_inherit_a_model_whose_project_left_the_registry(
 ) -> None:
     """``default`` owns every name without a *known* project prefix. Once
     ``alpha`` is gone from the registry (deleted, or not yet loaded),
-    ``alpha__model``'s promote.json still names alpha as its owner, and
+    ``alpha__model``'s live promotion still names alpha as its owner, and
     default must not be able to share or unload it."""
     from src.services.projects.registry import get_project_registry
 
@@ -81,7 +85,7 @@ def test_default_does_not_inherit_a_model_whose_project_left_the_registry(
         json={'shared': True, 'expected_revision': 1},
     )
     assert r.status_code == 404, r.text
-    assert _promote_json(leak_env, 'alpha')['shared'] is False
+    assert _consumers('alpha') == []
 
 
 def test_pausing_one_project_leaves_the_others_running(leak_env: LeakEnv) -> None:

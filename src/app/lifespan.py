@@ -213,7 +213,7 @@ async def _reload_promoted_models() -> None:
     # Triton in explicit-control mode only loads its --load-model
     # list at startup. A model promoted through POST
     # {api_prefix}/train/promote/{job_id} stays on disk (with a
-    # promote.json marker) but drops to UNAVAILABLE after any Triton
+    # live promotion row) but drops to UNAVAILABLE after any Triton
     # restart until something POSTs /load again -- without this, a
     # Triton bounce silently strands every previously-promoted model.
     # One-shot, best-effort: never blocks API startup. Also re-run on

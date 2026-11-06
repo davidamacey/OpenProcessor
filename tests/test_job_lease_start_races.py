@@ -133,17 +133,6 @@ async def _start_dataset_import(client: Any) -> str:
     return 'started'
 
 
-async def _start_promote(client: Any) -> str:
-    from src.services.training import promote_job
-
-    _widen_check(promote_job, '_active_for_run')
-    try:
-        _job, created = await promote_job.claim(client, run_job_id='run1', triton_name='m')
-    except promote_job.PromoteJobConflictError:
-        return 'busy'
-    return 'started' if created else 'busy'
-
-
 def _autolabel_pipeline() -> None:
     """Only its import path is recorded in the trigger."""
 
@@ -209,7 +198,6 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'reprocess': (_start_reprocess, {'OP_REPROCESS_JOBS_DIR': 'reprocess'}),
     'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
     'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
-    'promote': (_start_promote, {'OP_TRAIN_JOBS_DIR': 'train'}),
     'autolabel': (_start_autolabel, {'OP_AUTO_LABEL_STATE_DIR': 'autolabel'}),
     'assist_loop': (_start_assist_loop, {'OP_ASSIST_LOOP_JOBS_DIR': 'loops'}),
     'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),

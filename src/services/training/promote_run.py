@@ -1,6 +1,6 @@
 """Promote a finished training run into the Triton model repo: the validation gates and the
-build/load step. The route validates synchronously (every 4xx a caller can fix) and runs
-:func:`execute_promote` inline or as a background job."""
+build/load step. The route validates synchronously (every 4xx a caller can fix); the `promote`
+job runs :func:`execute_promote`."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
     from src.services.training.class_remap import ClassRemapResult
     from src.services.training.job_models import TrainJobStatus
+    from src.services.training.triton_promote import PromotionRecorder
 
 logger = get_logger(__name__)
 
@@ -305,7 +306,10 @@ async def _stamp_lineage(plan: PromotePlan, result_triton_name: str, *, force: b
 
 
 async def execute_promote(
-    plan: PromotePlan, payload: PromoteRequest, on_phase: Callable[[str], None] | None = None
+    plan: PromotePlan,
+    payload: PromoteRequest,
+    recorder: PromotionRecorder,
+    on_phase: Callable[[str], None] | None = None,
 ) -> PromoteResponse:
     """Build the Triton model for ``plan``, load it, and stamp the run's lineage."""
     from src.services.training.promote_errors import (
@@ -320,13 +324,11 @@ async def execute_promote(
         result = await promote_yolo26_to_triton(
             status=plan.job_status,
             triton_name=plan.triton_name,
-            class_id_to_name=plan.class_id_to_name,
+            recorder=recorder,
             max_batch_size=payload.max_batch_size,
             input_size=payload.input_size,
             fp16=payload.fp16,
             overwrite=payload.overwrite,
-            class_remap=plan.class_remap,
-            project=get_curation_config().project_slug,
             on_phase=on_phase,
         )
     except CheckpointNotFoundError as exc:

@@ -224,7 +224,7 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
             'ready': state.get('state') == 'READY',
             'versions': [state['version']] if state.get('version') else [],
         }
-    for promoted in discover_promoted_models():
+    for promoted in await discover_promoted_models():
         name = promoted['name']
         state = state_by_name.get(name, {})
         raw[name] = {
@@ -238,7 +238,7 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
             'job_id': promoted.get('job_id'),
         }
     if include_other_projects:
-        for shared in discover_foreign_shared_models():
+        for shared in await discover_foreign_shared_models():
             name = shared['name']
             if name in raw:
                 continue
@@ -257,7 +257,7 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
     out: list[DetectorEntry] = []
     for name in sorted(raw):
         entry = raw[name]
-        entry.update(listing_fields(name, registry))
+        entry.update(await listing_fields(name, registry))
         out.append(DetectorEntry(**entry))
     return out
 

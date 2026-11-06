@@ -10,7 +10,6 @@ the ONNX intermediate ``{name}_end2end``).
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from src.services.model_export import check_triton_name
@@ -59,12 +58,9 @@ def resolve_load_dir(models_dir: Path, name: str) -> Path | None:
     return None
 
 
-def promoted_owner(model_dir: Path) -> str | None:
-    """The project that promoted the model in ``model_dir`` (``promote.json``),
-    ``None`` for an engine no project promoted."""
-    try:
-        raw = json.loads((model_dir / 'promote.json').read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return None
-    project = raw.get('project') if isinstance(raw, dict) else None
-    return str(project) if project else None
+async def promoted_owner(name: str) -> str | None:
+    """The project that promoted the model ``name`` (its live ``promotions`` row), ``None`` for
+    an engine no project promoted."""
+    from src.services.training.model_registry import owner_slug
+
+    return await owner_slug(name)

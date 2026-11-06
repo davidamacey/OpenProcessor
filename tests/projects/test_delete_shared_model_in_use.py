@@ -10,7 +10,6 @@ names the models and the projects whose ACTIVE detection profile uses them;
 from __future__ import annotations
 
 import asyncio
-import json
 
 import pytest
 
@@ -44,8 +43,10 @@ def _env(tmp_path, monkeypatch):
 def _write_promote_json(tmp_path, model_name: str, *, project: str, shared: bool) -> None:
     model_dir = tmp_path / 'triton_models' / model_name
     model_dir.mkdir(parents=True, exist_ok=True)
-    (model_dir / 'promote.json').write_text(
-        json.dumps({'project': project, 'shared': shared}), encoding='utf-8'
+    import _fake_model_registry
+
+    _fake_model_registry.CURRENT.promote(
+        model_name, owner=project, shared_with=['someone_else'] if shared else []
     )
 
 

@@ -21235,7 +21235,7 @@
         "type": "object"
       },
       "PromoteJobStatus": {
-        "description": "A background promote (``POST /train/promote/{job_id}`` without ``wait=true``).",
+        "description": "A promote job (``POST /train/promote/{job_id}``).",
         "properties": {
           "error": {
             "anyOf": [
@@ -21247,18 +21247,6 @@
               }
             ],
             "title": "Error"
-          },
-          "error_status": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "HTTP status a synchronous promote would have returned",
-            "title": "Error Status"
           },
           "finished_at": {
             "anyOf": [
@@ -58841,8 +58829,8 @@
     },
     "/curation/projects/{project}/train/promote/{job_id}": {
       "post": {
-        "description": "Promote a finished training run into the Triton model repo.\n\nReads the run's ``status.json`` for the ONNX export the trainer\nproduced during the ``exporting`` state, copies it into\n``models/<triton_name>/1/model.onnx``, writes ``config.pbtxt``\nusing the YOLO26 single-output template (no NMS plugin — NMS is\ninternal to the YOLO26 forward pass), writes\n``labels.txt`` honoring any subset-training class_remap, and POSTs\nTriton's load endpoint to make the model active immediately.\n\nErrors:\n    404: job not found, or its ONNX export hasn't been written\n    409: a Triton model with this name already exists (use\n          ``overwrite=true`` to clobber)\n    422: status.json shows the run isn't in a promote-ready state, or\n          the promote gate failed. The ``detail`` body always matches\n          ``PromoteGateFailedResponse``: ``failures`` is a list of\n          ``{code, message}`` (plus ``class_name`` where relevant) so\n          a caller never has to string-parse a message, and\n          ``force_allowed`` says whether resubmitting with\n          ``force=true`` can get past this specific failure.\n    502: Triton refused the load (config or weights mismatch)",
-        "operationId": "promote_run_curation_projects__project__train_promote__job_id__post",
+        "description": "Promote a finished training run into the Triton model repo, as a job.\n\nEvery 4xx a caller can fix is answered here, before anything is queued; the\nbuild, load and warm-up (2-3 minutes) run as a ``promote`` job. Poll\n``GET {api_prefix}/train/promote/{job_id}/jobs/{promote_id}`` with the\nreturned ``promote_id``: ``queued`` -> ``exporting`` -> ``loading`` ->\n``building`` -> ``warming`` -> ``done`` | ``failed``.\n\nThe job reads the run's ``status.json`` for the ONNX export the trainer\nproduced during the ``exporting`` state, copies it into\n``models/<triton_name>/<version>/model.onnx``, stores the ``models`` and\n``promotions`` rows (the previous live promotion of the name is superseded),\nwrites ``config.pbtxt`` and ``labels.txt`` from the stored labels and\nPOSTs Triton's load endpoint.\n\nErrors:\n    404: job not found, or its ONNX export hasn't been written\n    409: ``job_busy``: a promote of this name is already queued or running;\n          or a Triton model with this name already exists (use\n          ``overwrite=true`` to clobber)\n    422: status.json shows the run isn't in a promote-ready state, or\n          the promote gate failed. The ``detail`` body always matches\n          ``PromoteGateFailedResponse``: ``failures`` is a list of\n          ``{code, message}`` (plus ``class_name`` where relevant) so\n          a caller never has to string-parse a message, and\n          ``force_allowed`` says whether resubmitting with\n          ``force=true`` can get past this specific failure.",
+        "operationId": "promote_run_job_curation_projects__project__train_promote__job_id__post",
         "parameters": [
           {
             "description": "Training job_id from {api_prefix}/train/runs",
@@ -58862,18 +58850,6 @@
             "schema": {
               "title": "Project",
               "type": "string"
-            }
-          },
-          {
-            "description": "true: block until the model is loaded and warmed (2-3 minutes; raise client/proxy timeouts to >= 300 s) and return the full PromoteResponse with 200. false (default): return 202 with a promote_id to poll.",
-            "in": "query",
-            "name": "wait",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "true: block until the model is loaded and warmed (2-3 minutes; raise client/proxy timeouts to >= 300 s) and return the full PromoteResponse with 200. false (default): return 202 with a promote_id to poll.",
-              "title": "Wait",
-              "type": "boolean"
             }
           },
           {
@@ -58900,33 +58876,18 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PromoteResponse"
-                }
-              }
-            },
-            "description": "wait=true, or an already-active job"
-          },
           "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/PromoteResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/PromoteJobStatus"
-                    }
-                  ],
-                  "title": "Response Promote Run Curation Projects  Project  Train Promote  Job Id  Post"
+                  "$ref": "#/components/schemas/PromoteJobStatus"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "a promote of this Triton model name is already active (`job_busy`)"
           },
           "422": {
             "content": {
@@ -58939,7 +58900,7 @@
             "description": "Unprocessable Entity"
           }
         },
-        "summary": "Promote Run",
+        "summary": "Promote Run Job",
         "tags": [
           "Curation - Train"
         ]
@@ -58947,7 +58908,7 @@
     },
     "/curation/projects/{project}/train/promote/{job_id}/jobs/{promote_id}": {
       "get": {
-        "description": "Phase of a background promote: ``queued`` -> ``exporting`` -> ``loading``\n-> ``building`` -> ``warming`` -> ``done`` | ``failed``. ``result`` (the\nsynchronous :class:`PromoteResponse` shape) is set on ``done``; ``error``\nand ``error_status`` (the HTTP status a synchronous promote would have\nreturned) on ``failed``. 404 for an unknown id or one that belongs to a\ndifferent run.",
+        "description": "Phase of a promote job: ``queued`` -> ``exporting`` -> ``loading``\n-> ``building`` -> ``warming`` -> ``done`` | ``failed``. ``result`` (the\n:class:`PromoteResponse` shape) is set on ``done``; ``error`` on ``failed``.\n404 for an unknown id or one that belongs to a different run.",
         "operationId": "promote_job_status_curation_projects__project__train_promote__job_id__jobs__promote_id__get",
         "parameters": [
           {
@@ -58968,6 +58929,7 @@
             "required": true,
             "schema": {
               "description": "promote_id from the 202 response",
+              "format": "uuid",
               "title": "Promote Id",
               "type": "string"
             }
@@ -59012,7 +58974,7 @@
     },
     "/curation/projects/{project}/train/reload_promoted": {
       "post": {
-        "description": "Re-``/load`` every promoted model Triton doesn't report READY.\n\nTriton in explicit-control mode only loads its ``--load-model`` list\nat startup, so a bare Triton restart (``make restart-triton``, or any\n``docker compose restart``/recreate of the Triton service) silently\nstrands every previously-promoted model at UNAVAILABLE until someone\nPOSTs ``/load`` again. The API already runs this once at its own\nstartup and on its periodic reconcile tick (see ``src/app/lifespan.py``); this\nroute lets an operator trigger it on demand right after bouncing\nTriton, without needing a full API restart. ``make reload-promoted``\ncalls this.\n\nA model that's been through ``DELETE {api_prefix}/models/{name}`` is\nnever resurrected here -- that route removes the whole model\ndirectory, ``promote.json`` included, which is exactly what this\nscan keys off.",
+        "description": "Re-``/load`` every promoted model Triton doesn't report READY.\n\nTriton in explicit-control mode only loads its ``--load-model`` list\nat startup, so a bare Triton restart (``make restart-triton``, or any\n``docker compose restart``/recreate of the Triton service) silently\nstrands every previously-promoted model at UNAVAILABLE until someone\nPOSTs ``/load`` again. The API already runs this once at its own\nstartup and on its periodic reconcile tick (see ``src/app/lifespan.py``); this\nroute lets an operator trigger it on demand right after bouncing\nTriton, without needing a full API restart. ``make reload-promoted``\ncalls this.\n\nA model that's been through ``DELETE {api_prefix}/models/{name}`` is\nnever resurrected here -- that route removes the whole model\ndirectory, which ends its live promotion, and the scan only reloads\nlive promotions.",
         "operationId": "reload_promoted_curation_projects__project__train_reload_promoted_post",
         "parameters": [
           {

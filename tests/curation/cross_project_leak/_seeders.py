@@ -70,17 +70,59 @@ def _promoted_model(env: LeakEnv, slug: str) -> None:
     (model_dir / '1').mkdir(parents=True, exist_ok=True)
     (model_dir / '1' / 'model.plan').write_bytes(b'fake plan')
     (model_dir / 'labels.txt').write_text(f'{CLASS_NAMES[slug]}\n', encoding='utf-8')
-    (model_dir / 'promote.json').write_text(
-        json.dumps(
-            {
-                'project': slug,
-                'shared': False,
-                'sharing_revision': 1,
-                'classes': [{'model_id': 0, 'name': CLASS_NAMES[slug]}],
-            }
-        ),
-        encoding='utf-8',
-    )
+    _record_promotion(env, slug, [CLASS_NAMES[slug]])
+
+
+def set_promoted_classes(env: LeakEnv, slug: str, names: list[str]) -> None:
+    """Replace the labels of ``slug``'s promoted model (what the class mapping reads)."""
+    import asyncio
+
+    from sqlalchemy import update
+
+    from src.db.models.training import Model
+    from src.db.session import async_session_factory, project_tx
+
+    async def run() -> None:
+        async with async_session_factory()() as session, project_tx(session, env.records[slug].id):
+            await session.execute(
+                update(Model).where(Model.name == f'{slug}__model').values(labels=names)
+            )
+
+    asyncio.run(run())
+
+
+def _record_promotion(env: LeakEnv, slug: str, labels: list[str]) -> None:
+    """The model's live promotion in PostgreSQL (the sweep runs on the migrated database)."""
+    import asyncio
+
+    from src.db.repos import models as repo
+    from src.db.session import async_session_factory, project_tx
+
+    project = env.records[slug].id
+    name = f'{slug}__model'
+
+    async def run() -> None:
+        async with async_session_factory()() as session, project_tx(session, project):
+            await repo.record_promotion(
+                session,
+                model=repo.NewModel(
+                    project_id=project,
+                    name=name,
+                    origin='trained',
+                    family='yolo26',
+                    task='detect',
+                    labels=labels,
+                    artifact_storage_key=f'models/{name}/1/model.onnx',
+                    created_by='test',
+                ),
+                triton_model_name=name,
+                triton_version=1,
+                class_remap=None,
+                job_id=None,
+                promoted_by='test',
+            )
+
+    asyncio.run(run())
 
 
 def _region_box_seeded(env: LeakEnv, slug: str) -> None:

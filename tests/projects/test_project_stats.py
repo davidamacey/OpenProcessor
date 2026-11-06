@@ -87,7 +87,9 @@ def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, mo
         ('cars__det_v2', 'cars'),
     ):
         (models / name).mkdir(parents=True)
-        (models / name / 'promote.json').write_text(f'{{"project": "{owner}"}}')
+        import _fake_model_registry
+
+        _fake_model_registry.CURRENT.promote(name, owner=owner)
     monkeypatch.setattr(
         'src.services.training.triton_repo.resolve_triton_models_dir', lambda: models
     )

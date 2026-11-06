@@ -26,6 +26,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._promote_start_fake import install as install_start_fake, no_database
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -51,6 +53,7 @@ def app_client(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    no_database(monkeypatch)
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation.train import router as curation_train_router
@@ -93,25 +96,9 @@ def _gapped_registry():
 
 
 def _mock_promote(
-    monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any], triton_name: str
+    monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any], _triton_name: str
 ) -> None:
-    async def _fake_promote(**kwargs: Any) -> Any:
-        from src.services.training.triton_promote import PromoteResult
-
-        captured.update(kwargs)
-        status_obj = kwargs.get('status')
-        return PromoteResult(
-            job_id=status_obj.job_id if status_obj is not None else 'job',
-            triton_name=triton_name,
-            onnx_path=f'/triton-models/{triton_name}/1/model.onnx',
-            config_path=f'/triton-models/{triton_name}/config.pbtxt',
-            labels_path=f'/triton-models/{triton_name}/labels.txt',
-            triton_loaded=True,
-        )
-
-    monkeypatch.setattr(
-        'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
-    )
+    install_start_fake(monkeypatch, captured)
 
 
 def test_full_class_promote_uses_class_remap_over_a_registry_gap(
@@ -167,10 +154,10 @@ def test_full_class_promote_uses_class_remap_over_a_registry_gap(
     _mock_promote(monkeypatch, captured, 'yolo26m_gap_test')
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/gap-job?wait=true',
+        '/curation/projects/default/train/promote/gap-job',
         json={'triton_name': 'yolo26m_gap_test'},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
 
     class_id_to_name = captured['class_id_to_name']
     assert class_id_to_name == {0: 'car', 1: 'truck', 2: 'van'}
@@ -204,7 +191,7 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     monkeypatch.setattr('src.services.training.jobs.read_status', _fake_read_status)
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/gap-no-remap-job?wait=true',
+        '/curation/projects/default/train/promote/gap-no-remap-job',
         json={'triton_name': 'yolo26m_gap_no_remap'},
     )
     assert r.status_code == 422, r.text
@@ -213,10 +200,10 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
     captured: dict[str, Any] = {}
     _mock_promote(monkeypatch, captured, 'yolo26m_gap_no_remap')
     r = app_client.post(
-        '/curation/projects/default/train/promote/gap-no-remap-job?wait=true',
+        '/curation/projects/default/train/promote/gap-no-remap-job',
         json={'triton_name': 'yolo26m_gap_no_remap', 'force': True},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
 
 
 def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
@@ -266,10 +253,10 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
     _mock_promote(monkeypatch, captured, 'yolo26m_contiguous')
 
     r = app_client.post(
-        '/curation/projects/default/train/promote/contiguous-no-remap-job?wait=true',
+        '/curation/projects/default/train/promote/contiguous-no-remap-job',
         json={'triton_name': 'yolo26m_contiguous'},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     assert captured['class_id_to_name'] == {0: 'car', 1: 'truck', 2: 'van'}
 
 
@@ -301,11 +288,11 @@ def test_promote_force_is_accepted_as_a_query_parameter_too(
     captured: dict[str, Any] = {}
     _mock_promote(monkeypatch, captured, 'yolo26m_qforce')
 
-    url = f'/curation/projects/default/train/promote/{job_id}?wait=true'
+    url = f'/curation/projects/default/train/promote/{job_id}'
     refused = app_client.post(url, json={'triton_name': 'yolo26m_qforce'})
     assert refused.status_code == 422, refused.text
     assert '?force=true' in refused.json()['detail']['override']
 
-    r = app_client.post(url + '&force=true', json={'triton_name': 'yolo26m_qforce'})
-    assert r.status_code == 200, r.text
-    assert r.json()['force_used'] is True
+    r = app_client.post(url + '?force=true', json={'triton_name': 'yolo26m_qforce'})
+    assert r.status_code == 202, r.text
+    assert captured['payload'].force is True

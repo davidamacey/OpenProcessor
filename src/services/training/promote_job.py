@@ -1,256 +1,241 @@
-"""Background promote jobs (``POST /train/promote/{job_id}`` without ``wait=true``).
+"""The `promote` job: start it, read it, and record what it promoted.
 
-A promote copies the ONNX into the Triton repo, asks Triton to load it, then
-pays the TensorRT engine build with throwaway inferences: 2-3 minutes, too
-long for one proxied HTTP request. This runs the same work as an in-process
-task and persists its phase under the project's train jobs dir
-(``<train_jobs_dir>/promote/<promote_id>/``) with the shared
-:class:`~src.services.curation.file_job.FileJob` convention: atomic
-``state.json`` + heartbeat on the shared volume, so any API worker answers
-the status poll, a restart leaves ``failed`` (never a stuck active phase),
-and the per-run singleton claim is the ``promote`` job lease (scope: the run). Only the process that accepted the POST runs the task.
+A promote copies the ONNX into the Triton repo, asks Triton to load it, then pays the TensorRT
+engine build with throwaway inferences: 2-3 minutes, so it is always a job on ``jobs`` (queue
+``jobs``, exclusive per Triton model name, 02b section 2.1). The route validates first (every 4xx
+a caller can fix is synchronous), :func:`start_promote` stores the validated plan as the job's
+parameters, and the handler (``src/tasks/promote.py``) rebuilds the plan and runs the existing
+:func:`~src.services.training.promote_run.execute_promote`.
+
+What a promote records lives in PostgreSQL (``models``, ``promotions``): :class:`DbPromotionRecorder`
+inserts the rows once the version directory is known, so ``labels.txt`` and the class remap are
+written from the rows, and withdraws them when a later step fails.
 """
 
 from __future__ import annotations
 
-import asyncio
-import uuid
-from datetime import UTC, datetime
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.core.logging import get_logger
-from src.domain.job_lease import LeaseKind
-from src.services.curation.file_job import FileJob
-from src.services.curation.lease_heartbeat import acquire_heartbeat, hold, run_leased, take
-from src.utils.timeutil import now_iso
+from src.db.repos import models as repo
+from src.db.session import project_tx
+from src.schemas.train_promote import PromoteJobStatus, PromoteRequest, PromoteResponse
+from src.services.jobs import status as job_status
+from src.services.jobs.service import start_job
+from src.services.training.class_remap import ClassRemapResult
+from src.services.training.job_models import TrainJobStatus
+from src.services.training.promote_gate import PromoteGateFailure
+from src.services.training.promote_run import PromotePlan
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-    from pathlib import Path
+    import uuid
+    from collections.abc import Callable, Mapping
+    from contextlib import AbstractAsyncContextManager
 
-logger = get_logger(__name__)
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-# Order is the order a healthy promote moves through. ``building`` is the
-# first warm-up inference (the TensorRT accelerator compiles the engine
-# there, not in Triton's /load); ``warming`` is the max-batch pass.
+    from src.schemas.jobs import JobView
+    from src.services.jobs.service import StartResult
+
+KIND = 'promote'
+# Order is the order a healthy promote moves through. ``building`` is the first warm-up
+# inference (the TensorRT accelerator compiles the engine there, not in Triton's /load);
+# ``warming`` is the max-batch pass.
 PHASES = ('queued', 'exporting', 'loading', 'building', 'warming', 'done', 'failed')
-ACTIVE = frozenset({'queued', 'exporting', 'loading', 'building', 'warming'})
-
-_tasks: dict[str, asyncio.Task[None]] = {}
-
-
-class PromoteJobConflictError(Exception):
-    """A promote of the same run is already active under another triton_name."""
-
-    def __init__(self, promote_id: str, triton_name: str) -> None:
-        super().__init__(
-            f'promote {promote_id} of this run is already active as {triton_name!r}; '
-            'wait for it to finish'
-        )
-        self.promote_id = promote_id
-        self.triton_name = triton_name
+RUNNING_PHASES = ('exporting', 'loading', 'building', 'warming')
+_FAILED = frozenset({'failed', 'cancelled', 'interrupted', 'completed_with_errors'})
 
 
-def jobs_root() -> Path:
-    from src.services.training.job_files import _resolve_jobs_dir
-
-    return _resolve_jobs_dir() / 'promote'
-
-
-def _job(promote_id: str) -> FileJob:
-    if not promote_id or '/' in promote_id or '\\' in promote_id or promote_id.startswith('.'):
-        raise KeyError(promote_id)
-    return FileJob(jobs_root() / promote_id)
-
-
-def _dirs() -> list[Path]:
-    root = jobs_root()
-    return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
-
-
-def _active_for_run(run_job_id: str) -> tuple[str, dict[str, Any]] | None:
-    for path in _dirs():
-        job = FileJob(path)
-        state = job.read()
-        if state.get('job_id') == run_job_id and job.is_live(ACTIVE):
-            return path.name, state
-    return None
-
-
-def reconcile_orphaned_jobs() -> bool:
-    repaired = False
-    for path in _dirs():
-        repaired |= FileJob(path).reconcile(active_statuses=ACTIVE, error_prefix='promote job')
-    return repaired
-
-
-def read_job(promote_id: str) -> dict[str, Any] | None:
-    """The wire-shaped state, or ``None``. A job whose process died reads
-    ``failed`` (the file says ``interrupted``) with the reason in ``error``."""
-    try:
-        job = _job(promote_id)
-    except KeyError:
-        return None
-    if not job.read():
-        return None
-    state = job.served_state(ACTIVE, error_prefix='promote job')
-    return _wire(promote_id, state)
-
-
-def latest_for_run(run_job_id: str) -> dict[str, Any] | None:
-    """The most recently started promote of ``run_job_id`` (for train status)."""
-    best: tuple[str, str] | None = None
-    for path in _dirs():
-        state = FileJob(path).read()
-        if state.get('job_id') == run_job_id:
-            key = (str(state.get('started_at') or ''), path.name)
-            if best is None or key > best:
-                best = key
-    return read_job(best[1]) if best else None
-
-
-def _wire(promote_id: str, state: dict[str, Any]) -> dict[str, Any]:
-    status = state.get('status', 'failed')
-    if status == 'interrupted':
-        status = 'failed'
+def plan_to_params(plan: PromotePlan, payload: PromoteRequest) -> dict[str, Any]:
+    """The job parameters: the validated plan and the request, both JSON-able."""
     return {
-        'promote_id': promote_id,
-        'job_id': state.get('job_id'),
-        'triton_name': state.get('triton_name'),
-        'status': status,
-        'error': state.get('error'),
-        'error_status': state.get('error_status'),
-        'result': state.get('result'),
-        'started_at': state.get('started_at'),
-        'updated_at': state.get('updated_at'),
-        'finished_at': state.get('finished_at')
-        if isinstance(state.get('finished_at'), str | None)
-        else datetime.fromtimestamp(state['finished_at'], UTC).isoformat(),
-        'poll_after_s': 3 if status in ACTIVE else None,
+        'run_job_id': plan.job_id,
+        'triton_name': plan.triton_name,
+        'request': payload.model_dump(),
+        'job_status': plan.job_status.model_dump(mode='json'),
+        'class_id_to_name': {str(i): n for i, n in plan.class_id_to_name.items()},
+        'class_remap': asdict(plan.class_remap),
+        'gate_report': plan.gate_report,
+        'gate_failures': [f.model_dump() for f in plan.gate_failures],
     }
 
 
-async def claim(opensearch: Any, *, run_job_id: str, triton_name: str) -> tuple[FileJob, bool]:
-    """Claim the per-run singleton (the ``promote`` lease, scoped to the run). Returns
-    ``(job, created)``: when a promote of this run is already live, that job and ``False``.
-    Raises :class:`PromoteJobConflictError` when the live one targets another name."""
-    root = jobs_root()
-    root.mkdir(parents=True, exist_ok=True)
-    active = _active_for_run(run_job_id)
-    if active is not None:
-        promote_id, state = active
-        if state.get('triton_name') != triton_name:
-            raise PromoteJobConflictError(promote_id, str(state.get('triton_name')))
-        return _job(promote_id), False
-    promote_id = f'pm_{datetime.now(UTC):%Y%m%dT%H%M%S}_{uuid.uuid4().hex[:6]}'
-    job = _job(promote_id)
-    beat = await acquire_heartbeat(
-        opensearch,
-        LeaseKind.PROMOTE,
-        run_job_id,
-        promote_id,
-        job=job,
-        # the holder's job record is not visible yet: another process is mid-claim
-        busy=lambda _holder: PromoteJobConflictError('starting', triton_name),
+def plan_from_params(params: Mapping[str, Any]) -> tuple[PromotePlan, PromoteRequest]:
+    remap = params['class_remap']
+    plan = PromotePlan(
+        job_id=str(params['run_job_id']),
+        triton_name=str(params['triton_name']),
+        job_status=TrainJobStatus.model_validate(params['job_status']),
+        class_id_to_name={int(i): str(n) for i, n in params['class_id_to_name'].items()},
+        class_remap=ClassRemapResult(
+            mapping={int(k): int(v) for k, v in remap['mapping'].items()},
+            names=remap['names'],
+            single_cls=bool(remap['single_cls']),
+            include_classes=remap['include_classes'],
+            source=str(remap['source']),
+        ),
+        gate_report=dict(params['gate_report']),
+        gate_failures=[PromoteGateFailure.model_validate(f) for f in params['gate_failures']],
     )
-    try:
-        job.directory.mkdir(parents=True)
-        job.clear_signals()
-        job.write(
-            {
-                'status': 'queued',
-                'job_id': run_job_id,
-                'triton_name': triton_name,
-                'started_at': now_iso(),
-                'updated_at': now_iso(),
-            }
-        )
-        job.touch_heartbeat()
-    except BaseException:
-        await beat.release(opensearch)
-        raise
-    hold(promote_id, beat)
-    return job, True
+    return plan, PromoteRequest.model_validate(params['request'])
 
 
-def start(
-    job: FileJob,
-    work: Callable[[Callable[[str], None]], Awaitable[dict[str, Any]]],
-    opensearch: Any,
-) -> None:
-    """Schedule ``work`` in this process under the lease :func:`claim` took. ``work``
-    receives a phase callback and returns the JSON-able result; any exception fails the
-    job (an ``HTTPException``'s status is kept in ``error_status``)."""
-    beat = take(job.directory.name)
-    beat.start()
-    _tasks[job.directory.name] = asyncio.create_task(run_leased(beat, opensearch, _run(job, work)))
+async def start_promote(
+    session: AsyncSession,
+    project_id: uuid.UUID,
+    plan: PromotePlan,
+    payload: PromoteRequest,
+    *,
+    requested_by: str,
+) -> StartResult:
+    """Queue the promote; 409 ``job_busy`` while one of the same Triton name is active."""
+    return await start_job(
+        session,
+        KIND,
+        project_id,
+        params=plan_to_params(plan, payload),
+        requested_by=requested_by,
+    )
 
 
-_detached: set[asyncio.Task[Any]] = set()
+def wire(view: JobView) -> PromoteJobStatus:
+    """The promote status wire model of one ``promote`` job."""
+    params = view.params or {}
+    stage = (view.progress or {}).get('stage')
+    if view.status == 'completed':
+        status = 'done'
+    elif view.status in _FAILED:
+        status = 'failed'
+    elif view.status == 'queued':
+        status = 'queued'
+    else:
+        status = stage if stage in RUNNING_PHASES else 'exporting'
+    error = 'cancelled' if view.status == 'cancelled' else view.error_message
+    return PromoteJobStatus(
+        promote_id=view.id,
+        job_id=str(params.get('run_job_id', '')),
+        triton_name=str(params.get('triton_name', '')),
+        status=status,
+        error=error,
+        result=PromoteResponse.model_validate(view.result) if status == 'done' else None,
+        started_at=None if view.started_at is None else view.started_at.isoformat(),
+        updated_at=view.updated_at.isoformat(),
+        finished_at=None if view.finished_at is None else view.finished_at.isoformat(),
+        poll_after_s=3 if status in {'queued', *RUNNING_PHASES} else None,
+    )
 
 
-async def run_detached[T](work: Awaitable[T]) -> T:
-    """Await ``work`` so that the *caller* being cancelled does not cancel it.
+async def read_job(
+    session: AsyncSession, project_id: uuid.UUID, promote_id: uuid.UUID
+) -> PromoteJobStatus | None:
+    """One promote job of the project, or ``None`` for an unknown id or another kind of job."""
+    view = await job_status.get_job(session, promote_id, project=project_id)
+    return wire(view) if view.kind == KIND else None
 
-    ``?wait=true`` runs the whole export, load and warm-up inside one request.
-    A proxy that times out (nginx 504 at 120 s) drops the connection and the
-    handler can be cancelled mid-load, leaving a model Triton has half loaded
-    and not ready. The work runs as its own task and is shielded: an aborted
-    client abandons the response, never the promote, so the model finishes
-    loading and warming.
+
+async def latest_for_run(
+    session: AsyncSession, project_id: uuid.UUID, run_job_id: str
+) -> PromoteJobStatus | None:
+    """The most recently started promote of ``run_job_id`` (for the train status route)."""
+    async with project_tx(session, project_id):
+        found = await repo.latest_promote_job_id(session, run_job_id)
+    if found is None:
+        return None
+    return wire(await job_status.get_job(session, found, project=project_id))
+
+
+@dataclass(frozen=True)
+class Recorded:
+    """What the promoter writes the model directory from: the stored rows."""
+
+    labels: tuple[str, ...]
+    class_remap: Mapping[str, Any] | None
+
+
+def remap_document(remap: ClassRemapResult, run_job_id: str) -> dict[str, Any] | None:
+    """``promotions.class_remap``: the resolved remap by name, ``None`` for a full-class run."""
+    if remap.source == 'none':
+        return None
+    return {
+        'original_to_new': {str(k): v for k, v in remap.mapping.items()},
+        'single_cls': remap.single_cls,
+        'names': remap.names,
+        'include_classes': remap.include_classes,
+        'source': remap.source,
+        'job_id': run_job_id,
+    }
+
+
+class DbPromotionRecorder:
+    """Inserts the ``models`` and ``promotions`` rows of one promote and can withdraw them.
+
+    ``sessions`` opens a session in the job's project scope that commits on a clean exit
+    (``JobContext.session``). ``record`` runs in its own transaction once the version directory exists; the previous live
+    promotion of the Triton name is superseded in the same transaction. ``withdraw`` undoes it
+    when a later step fails, so a promote that never served never stays live.
     """
-    task = asyncio.ensure_future(work)
-    _detached.add(task)
 
-    def _done(t: asyncio.Task[T]) -> None:
-        _detached.discard(t)
-        if not t.cancelled() and t.exception() is not None:
-            logger.warning('promote_wait_abandoned_failed', error=str(t.exception()))
+    def __init__(
+        self,
+        sessions: Callable[[], AbstractAsyncContextManager[AsyncSession]],
+        *,
+        project_id: uuid.UUID,
+        job_id: uuid.UUID,
+        plan: PromotePlan,
+        requested_by: str,
+    ) -> None:
+        self._sessions = sessions
+        self._project_id = project_id
+        self._job_id = job_id
+        self._run_job_id = plan.job_id
+        self._requested_by = requested_by
+        self._labels = [plan.class_id_to_name[i] for i in sorted(plan.class_id_to_name)]
+        self._remap = plan.class_remap
+        self._promotion_id: uuid.UUID | None = None
 
-    task.add_done_callback(_done)
-    return await asyncio.shield(task)
-
-
-async def _run(
-    job: FileJob, work: Callable[[Callable[[str], None]], Awaitable[dict[str, Any]]]
-) -> None:
-    def on_phase(phase: str) -> None:
-        job.update(status=phase, updated_at=now_iso())
-        job.touch_heartbeat()
-
-    try:
-        on_phase('exporting')
-        result = await work(on_phase)
-        job.update(status='done', result=result, finished_at=now_iso(), updated_at=now_iso())
-    except asyncio.CancelledError:
-        job.update(status='failed', error='cancelled', finished_at=now_iso(), updated_at=now_iso())
-        raise
-    except Exception as exc:
-        # HTTPException carries .status_code/.detail; PromoteError .status_code
-        code = getattr(exc, 'status_code', None)
-        detail = getattr(exc, 'detail', None)
-        logger.error('promote_job_failed', job=job.directory.name, error=str(exc))
-        job.update(
-            status='failed',
-            error=str(detail if detail is not None else exc),
-            error_status=code,
-            finished_at=now_iso(),
-            updated_at=now_iso(),
+    async def record(self, *, triton_name: str, triton_version: int) -> Recorded:
+        new = repo.NewModel(
+            project_id=self._project_id,
+            name=triton_name,
+            origin='trained',
+            family='yolo26',
+            task='detect',
+            labels=self._labels,
+            artifact_storage_key=f'models/{triton_name}/{triton_version}/model.onnx',
+            created_by=self._requested_by,
         )
-    finally:
-        _tasks.pop(job.directory.name, None)
+        async with self._sessions() as session:
+            model, promotion = await repo.record_promotion(
+                session,
+                model=new,
+                triton_model_name=triton_name,
+                triton_version=triton_version,
+                class_remap=remap_document(self._remap, self._run_job_id),
+                job_id=self._job_id,
+                promoted_by=self._requested_by,
+            )
+        self._promotion_id = promotion.id
+        return Recorded(labels=model.labels, class_remap=promotion.class_remap)
+
+    async def withdraw(self) -> None:
+        if self._promotion_id is None:
+            return
+        async with self._sessions() as session:
+            await repo.withdraw_promotion(session, self._promotion_id)
+        self._promotion_id = None
 
 
 __all__ = [
-    'ACTIVE',
+    'KIND',
     'PHASES',
-    'PromoteJobConflictError',
-    'claim',
-    'jobs_root',
+    'DbPromotionRecorder',
+    'Recorded',
     'latest_for_run',
+    'plan_from_params',
+    'plan_to_params',
     'read_job',
-    'reconcile_orphaned_jobs',
-    'run_detached',
-    'start',
+    'remap_document',
+    'start_promote',
+    'wire',
 ]

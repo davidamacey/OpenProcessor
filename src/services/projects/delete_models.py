@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 async def _shared_model_users(record: ProjectRecord) -> list[str]:
     """§5.5 in_use guard: which of this project's own promoted models
     have opted into cross-project sharing (``PUT /models/{name}/sharing``,
-    ``promote.json.shared``)? A strict subset of :func:`owned_model_names` --
+    a ``model_shares`` row)? A strict subset of :func:`owned_model_names` --
     used ONLY to decide the ``in_use`` refusal (bypassable with
     ``force=True``), never to decide whether unload runs (see
     :func:`_unload_owned_models`, which unloads every owned model,
@@ -34,7 +34,7 @@ async def _shared_model_users(record: ProjectRecord) -> list[str]:
     """
     from src.services.training.model_classes import is_model_shared
 
-    return [name for name in owned_model_names(record.slug) if is_model_shared(name)]
+    return [name for name in await owned_model_names(record.slug) if await is_model_shared(name)]
 
 
 async def _unload_owned_models(record: ProjectRecord) -> list[str]:
@@ -56,7 +56,7 @@ async def _unload_owned_models(record: ProjectRecord) -> list[str]:
     from src.services.training.triton_promote import unload_triton_model
 
     failed: list[str] = []
-    for name in owned_model_names(record.slug):
+    for name in await owned_model_names(record.slug):
         try:
             await unload_triton_model(name)
         except ModelNotPromotedError:

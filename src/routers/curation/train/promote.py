@@ -1,54 +1,38 @@
-"""``POST /train/promote/{job_id}``, its job-status poll and ``/reload_promoted``."""
+"""``POST /train/promote/{job_id}`` (a `promote` job), its status poll and ``/reload_promoted``."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any
+import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Response
+from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 
-from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - FastAPI resolves the annotation at runtime
-from src.schemas.train_promote import (
-    PromoteJobStatus,
-    PromoteRequest,
-    PromoteResponse,
-    ReloadPromotedResponse,
-)
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.schemas.train_promote import PromoteJobStatus, PromoteRequest, ReloadPromotedResponse
+from src.services.jobs import status as job_status
 from src.services.training import promote_job
 from src.services.training.promote_gate import PromoteGateFailedResponse
-from src.services.training.promote_run import execute_promote, prepare_promote
+from src.services.training.promote_run import prepare_promote
 
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 router = APIRouter()
+REQUESTED_BY = 'api'
 
 
 @router.post(
     '/promote/{job_id}',
-    response_model=PromoteResponse | PromoteJobStatus,
+    response_model=PromoteJobStatus,
     status_code=202,
     responses={
-        200: {'model': PromoteResponse, 'description': 'wait=true, or an already-active job'},
+        409: {'description': 'a promote of this Triton model name is already active (`job_busy`)'},
         422: {'model': PromoteGateFailedResponse},
     },
 )
-async def promote_run(
+async def promote_run_job(
     payload: PromoteRequest,
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
-    response: Response,
-    opensearch: OpenSearchDep,
-    wait: Annotated[
-        bool,
-        Query(
-            description=(
-                'true: block until the model is loaded and warmed (2-3 minutes; '
-                'raise client/proxy timeouts to >= 300 s) and return the full '
-                'PromoteResponse with 200. false (default): return 202 with a '
-                'promote_id to poll.'
-            )
-        ),
-    ] = False,
+    session: DbSessionDep,
     force: Annotated[
         bool,
         Query(
@@ -58,20 +42,26 @@ async def promote_run(
             )
         ),
     ] = False,
-) -> PromoteResponse | PromoteJobStatus:
-    """Promote a finished training run into the Triton model repo.
+) -> PromoteJobStatus:
+    """Promote a finished training run into the Triton model repo, as a job.
 
-    Reads the run's ``status.json`` for the ONNX export the trainer
+    Every 4xx a caller can fix is answered here, before anything is queued; the
+    build, load and warm-up (2-3 minutes) run as a ``promote`` job. Poll
+    ``GET {api_prefix}/train/promote/{job_id}/jobs/{promote_id}`` with the
+    returned ``promote_id``: ``queued`` -> ``exporting`` -> ``loading`` ->
+    ``building`` -> ``warming`` -> ``done`` | ``failed``.
+
+    The job reads the run's ``status.json`` for the ONNX export the trainer
     produced during the ``exporting`` state, copies it into
-    ``models/<triton_name>/1/model.onnx``, writes ``config.pbtxt``
-    using the YOLO26 single-output template (no NMS plugin — NMS is
-    internal to the YOLO26 forward pass), writes
-    ``labels.txt`` honoring any subset-training class_remap, and POSTs
-    Triton's load endpoint to make the model active immediately.
+    ``models/<triton_name>/<version>/model.onnx``, stores the ``models`` and
+    ``promotions`` rows (the previous live promotion of the name is superseded),
+    writes ``config.pbtxt`` and ``labels.txt`` from the stored labels and
+    POSTs Triton's load endpoint.
 
     Errors:
         404: job not found, or its ONNX export hasn't been written
-        409: a Triton model with this name already exists (use
+        409: ``job_busy``: a promote of this name is already queued or running;
+              or a Triton model with this name already exists (use
               ``overwrite=true`` to clobber)
         422: status.json shows the run isn't in a promote-ready state, or
               the promote gate failed. The ``detail`` body always matches
@@ -80,61 +70,32 @@ async def promote_run(
               a caller never has to string-parse a message, and
               ``force_allowed`` says whether resubmitting with
               ``force=true`` can get past this specific failure.
-        502: Triton refused the load (config or weights mismatch)
     """
     if force and not payload.force:
         payload = payload.model_copy(update={'force': True})
 
     plan = await prepare_promote(job_id, payload)
-
-    if wait:
-        response.status_code = 200
-        # Shielded: a proxy timeout / client abort must not cancel the load mid-way.
-        return await promote_job.run_detached(execute_promote(plan, payload))
-
-    # Async (default): the validation above already ran, so every 4xx a
-    # caller can fix is synchronous; only the build/load/warm-up is a job.
-    try:
-        pjob, created = await promote_job.claim(
-            opensearch, run_job_id=job_id, triton_name=plan.triton_name
-        )
-    except promote_job.PromoteJobConflictError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                'code': 'promote_in_progress',
-                'message': str(exc),
-                'promote_id': exc.promote_id,
-            },
-        ) from exc
-    if created:
-
-        async def _work(on_phase: Callable[[str], None]) -> dict[str, Any]:
-            return (await execute_promote(plan, payload, on_phase)).model_dump()
-
-        promote_job.start(pjob, _work, opensearch)
-    else:
-        response.status_code = 200  # idempotent: the already-active job
-    state = promote_job.read_job(pjob.directory.name)
-    assert state is not None  # claim() just wrote it
-    return PromoteJobStatus(**state)
+    started = await promote_job.start_promote(
+        session, current_project_id(), plan, payload, requested_by=REQUESTED_BY
+    )
+    view = await job_status.get_job(session, started.job.id, project=current_project_id())
+    return promote_job.wire(view)
 
 
 @router.get('/promote/{job_id}/jobs/{promote_id}', response_model=PromoteJobStatus)
 async def promote_job_status(
     job_id: Annotated[str, PathParam(description='Training job_id the promote belongs to')],
-    promote_id: Annotated[str, PathParam(description='promote_id from the 202 response')],
+    promote_id: Annotated[uuid.UUID, PathParam(description='promote_id from the 202 response')],
+    session: DbSessionDep,
 ) -> PromoteJobStatus:
-    """Phase of a background promote: ``queued`` -> ``exporting`` -> ``loading``
+    """Phase of a promote job: ``queued`` -> ``exporting`` -> ``loading``
     -> ``building`` -> ``warming`` -> ``done`` | ``failed``. ``result`` (the
-    synchronous :class:`PromoteResponse` shape) is set on ``done``; ``error``
-    and ``error_status`` (the HTTP status a synchronous promote would have
-    returned) on ``failed``. 404 for an unknown id or one that belongs to a
-    different run."""
-    state = promote_job.read_job(promote_id)
-    if state is None or state['job_id'] != job_id:
-        raise HTTPException(status_code=404, detail=f'promote job {promote_id!r} not found')
-    return PromoteJobStatus(**state)
+    :class:`PromoteResponse` shape) is set on ``done``; ``error`` on ``failed``.
+    404 for an unknown id or one that belongs to a different run."""
+    state = await promote_job.read_job(session, current_project_id(), promote_id)
+    if state is None or state.job_id != job_id:
+        raise HTTPException(status_code=404, detail=f'promote job {str(promote_id)!r} not found')
+    return state
 
 
 # =============================================================================
@@ -158,8 +119,8 @@ async def reload_promoted() -> ReloadPromotedResponse:
 
     A model that's been through ``DELETE {api_prefix}/models/{name}`` is
     never resurrected here -- that route removes the whole model
-    directory, ``promote.json`` included, which is exactly what this
-    scan keys off.
+    directory, which ends its live promotion, and the scan only reloads
+    live promotions.
     """
     from src.services.training.triton_reload import reload_promoted_models
 

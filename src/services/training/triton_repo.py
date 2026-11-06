@@ -52,12 +52,11 @@ UNLOADED_MARKER = 'unloaded.marker'
 
 
 def set_explicitly_unloaded(model_dir: Path, unloaded: bool) -> None:
-    """Record (or clear) that an operator unloaded the promoted model in
-    ``model_dir``. A directory without ``promote.json`` is not a promoted
-    model and is left alone."""
+    """Record (or clear) that an operator unloaded the model in ``model_dir``. Only promoted
+    models are ever reloaded, so a marker on any other directory is never read."""
     marker = model_dir / UNLOADED_MARKER
     if unloaded:
-        if (model_dir / 'promote.json').is_file():
+        if model_dir.is_dir():
             marker.touch()
     else:
         marker.unlink(missing_ok=True)

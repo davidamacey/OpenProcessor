@@ -129,7 +129,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
             'pending_detection': pending_detection,
             'holdout_items': holdout_items,
             'classes': classes_count,
-            'promoted_models': len(owned_model_names(bound.record.slug)),
+            'promoted_models': len(await owned_model_names(bound.record.slug)),
         },
         'indexes': indexes,
         'disk': _disk_usage(bound.record.slug, bound.record.resources),

@@ -48,6 +48,7 @@ from src.services.projects.script_binding import (
     add_project_argument,
     script_project_registry,
 )
+from src.services.training import model_registry
 from src.services.training.run_retention import (
     apply_bakeoff_out_prune,
     apply_run_prune,
@@ -55,7 +56,6 @@ from src.services.training.run_retention import (
     plan_bakeoff_out_prune,
     plan_run_prune,
 )
-from src.services.training.triton_repo import resolve_triton_models_dir
 
 
 def _run_one_project(args: argparse.Namespace) -> int:
@@ -65,13 +65,17 @@ def _run_one_project(args: argparse.Namespace) -> int:
     not a raw env var, so each project prunes only its own dir."""
     config = get_curation_config()
     jobs_dir = config.train_jobs_dir
-    model_repo = resolve_triton_models_dir()
+    promoted = {
+        live.run_job_id
+        for live in asyncio.run(model_registry.owned_live(config.project_slug))
+        if live.run_job_id
+    }
     bakeoff_jobs_dir = config.bakeoff_jobs_dir
     out_dir = bakeoff_out_dir(Path(bakeoff_jobs_dir))
 
     run_plan = plan_run_prune(
         jobs_dir=jobs_dir,
-        model_repo=model_repo,
+        promoted_job_ids=promoted,
         bakeoff_jobs_dir=bakeoff_jobs_dir,
         keep_last=args.keep_last,
     )

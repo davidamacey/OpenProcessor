@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
+from curation._promote_start_fake import install as install_start_fake, run_job
+
 
 if TYPE_CHECKING:
     import pytest
@@ -52,12 +54,14 @@ def test_force_promote_returns_gate_report(
         'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
     )
 
+    captured: dict[str, Any] = {}
+    install_start_fake(monkeypatch, captured)
     r = app_client.post(
-        '/curation/projects/default/train/promote/force-report-job?wait=true',
+        '/curation/projects/default/train/promote/force-report-job',
         json={'triton_name': 'yolo26m_forced_report', 'force': True},
     )
-    assert r.status_code == 200, r.text
-    out = r.json()
+    assert r.status_code == 202, r.text
+    out = run_job(captured).model_dump()
     assert out['force_used'] is True
     assert out['gate_report'] is not None
     assert any('mAP50' in f['message'] for f in out['gate_report']['failures'])
@@ -105,12 +109,14 @@ def test_force_promote_records_force_used_in_manifest(
         'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
     )
 
+    captured: dict[str, Any] = {}
+    install_start_fake(monkeypatch, captured)
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}?wait=true',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_forced_manifest', 'force': True},
     )
-    assert r.status_code == 200, r.text
-    assert r.json()['lineage_stamped'] is True
+    assert r.status_code == 202, r.text
+    assert run_job(captured).lineage_stamped is True
 
     manifest = json.loads(
         (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').read_text()
@@ -185,18 +191,21 @@ def test_stamp_failure_is_not_swallowed(
     )
     monkeypatch.setattr('src.services.training.job_manifest.stamp_manifest_promotion', _fake_stamp)
 
+    captured: dict[str, Any] = {}
+    install_start_fake(monkeypatch, captured)
     with capture_logs() as cap:
         r = app_client.post(
-            f'/curation/projects/default/train/promote/{job_id}?wait=true',
+            f'/curation/projects/default/train/promote/{job_id}',
             json={'triton_name': 'yolo26m_stamp_fail'},
         )
+        assert r.status_code == 202, r.text
+        lineage_stamped = run_job(captured).lineage_stamped
 
     # Promote itself succeeded (the model is already live in Triton by this
     # point) — we don't turn that into a 500, but the response must say
     # lineage was NOT recorded, and the failure must be logged loudly (at
     # error, not the previous silent warning-and-forget).
-    assert r.status_code == 200, r.text
-    assert r.json()['lineage_stamped'] is False
+    assert lineage_stamped is False
     stamp_failure_logs = [e for e in cap if e.get('event') == 'manifest_stamp_failed']
     assert stamp_failure_logs, cap
     assert stamp_failure_logs[0]['log_level'] == 'error'

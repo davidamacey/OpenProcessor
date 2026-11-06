@@ -68,16 +68,13 @@ class PromoteResponse(BaseModel):
 
 
 class PromoteJobStatus(BaseModel):
-    """A background promote (``POST /train/promote/{job_id}`` without ``wait=true``)."""
+    """A promote job (``POST /train/promote/{job_id}``)."""
 
     promote_id: str
     job_id: str
     triton_name: str
     status: Literal['queued', 'exporting', 'loading', 'building', 'warming', 'done', 'failed']
     error: str | None = None
-    error_status: int | None = Field(
-        default=None, description='HTTP status a synchronous promote would have returned'
-    )
     result: PromoteResponse | None = None
     started_at: str | None = None
     updated_at: str | None = None

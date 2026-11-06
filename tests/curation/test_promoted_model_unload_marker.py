@@ -4,7 +4,6 @@ explicit reload route bring it back."""
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -22,10 +21,10 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(tmp_path: Path, model_registry_fake) -> Path:
     model = tmp_path / 'cars__det'
     model.mkdir()
-    (model / 'promote.json').write_text(json.dumps({'project': 'cars'}))
+    model_registry_fake.promote('cars__det', owner='cars')
     return tmp_path
 
 
@@ -80,11 +79,14 @@ async def test_the_explicit_reload_loads_it_and_clears_the_marker(
     assert loads
 
 
-def test_a_directory_without_promote_json_gets_no_marker(tmp_path: Path) -> None:
-    plain = tmp_path / 'core_model'
-    plain.mkdir()
-    set_explicitly_unloaded(plain, True)
-    assert not (plain / UNLOADED_MARKER).exists()
+@pytest.mark.asyncio
+async def test_a_directory_without_a_live_promotion_is_never_reloaded(
+    tmp_path: Path, loads: list[str]
+) -> None:
+    (tmp_path / 'core_model').mkdir()
+    result = await reload_promoted_models(_promoter(tmp_path))
+    assert result == {'status': 'ok', 'reloaded': [], 'failed': []}
+    assert loads == []
 
 
 def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:

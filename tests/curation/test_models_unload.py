@@ -187,77 +187,48 @@ def test_unload_propagates_not_promoted_as_404(app_client, monkeypatch):
 
 
 # =============================================================================
-# _discover_promoted_models — /models/status surfacing
+# discover_promoted_models -- /models/status surfacing
 #
 # Before this existed, /models/status only ever returned the fixed core
-# models — a throwaway promote would be invisible to the UI entirely,
+# models -- a throwaway promote would be invisible to the UI entirely,
 # requiring a shell into the host to clean up.
 # =============================================================================
 
 
-def test_discover_promoted_models_finds_a_promoted_extra(tmp_path):
+@pytest.mark.asyncio
+async def test_discover_promoted_models_finds_a_promoted_extra(model_registry_fake):
     import src.services.training.promoted_models as models_mod
 
-    model_dir = tmp_path / 'op_vehicle_smoke_v1'
-    model_dir.mkdir()
-    (model_dir / 'promote.json').write_text(
-        '{"job_id": "job-abc", "version": "1", "promoted_at": "2026-09-11T00:00:00Z"}'
+    model_registry_fake.promote(
+        'op_vehicle_smoke_v1', owner='default', labels=['car'], run_job_id='job-abc', version=1
     )
 
-    found = models_mod.discover_promoted_models(models_dir=tmp_path)
-    assert found == [
-        {
-            'name': 'op_vehicle_smoke_v1',
-            'job_id': 'job-abc',
-            'version': '1',
-            'promoted_at': '2026-09-11T00:00:00Z',
-        }
+    found = await models_mod.discover_promoted_models()
+    assert [(m['name'], m['job_id'], m['version']) for m in found] == [
+        ('op_vehicle_smoke_v1', 'job-abc', '1')
     ]
+    assert found[0]['promoted_at'].startswith('2026-01-01')
 
 
-def test_discover_promoted_models_skips_fixed_pipeline_models(tmp_path):
+@pytest.mark.asyncio
+async def test_discover_promoted_models_skips_fixed_pipeline_models(model_registry_fake):
     import src.services.training.promoted_models as models_mod
 
-    # A fixed pipeline model dir that happens to also carry a promote.json
-    # (plausible if it was itself promoted through this pipeline once) must
-    # not be double-counted — /models already lists it via _core_models().
-    model_dir = tmp_path / 'mobileclip2_s2_image_encoder'
-    model_dir.mkdir()
-    (model_dir / 'promote.json').write_text('{"job_id": "job-xyz"}')
+    # A fixed pipeline model that also has a promotion (plausible if it was itself promoted
+    # through this pipeline once) must not be double-counted: /models already lists it via
+    # _core_models().
+    model_registry_fake.promote('mobileclip2_s2_image_encoder', owner='default', run_job_id='x')
 
-    found = models_mod.discover_promoted_models(models_dir=tmp_path)
-    assert found == []
+    assert await models_mod.discover_promoted_models() == []
 
 
-def test_discover_promoted_models_ignores_dirs_without_promote_json(tmp_path):
+@pytest.mark.asyncio
+async def test_discover_promoted_models_lists_only_this_projects_models(model_registry_fake):
     import src.services.training.promoted_models as models_mod
 
-    (tmp_path / 'yolov11_small_trt_end2end').mkdir()  # a real dir, no promote.json
+    model_registry_fake.promote('cars__det', owner='cars')
 
-    found = models_mod.discover_promoted_models(models_dir=tmp_path)
-    assert found == []
-
-
-def test_discover_promoted_models_missing_dir_returns_empty(tmp_path):
-    import src.services.training.promoted_models as models_mod
-
-    found = models_mod.discover_promoted_models(models_dir=tmp_path / 'does_not_exist')
-    assert found == []
-
-
-def test_discover_promoted_models_corrupt_promote_json_is_skipped_not_fatal(tmp_path):
-    import src.services.training.promoted_models as models_mod
-
-    model_dir = tmp_path / 'op_bad_promote_json'
-    model_dir.mkdir()
-    (model_dir / 'promote.json').write_text('{not valid json')
-
-    found = models_mod.discover_promoted_models(models_dir=tmp_path)
-    # Still discovered (the dir + promote.json presence is the trigger),
-    # just with no metadata since the file couldn't be parsed.
-    assert found == [
-        {'name': 'op_bad_promote_json', 'job_id': None, 'version': None, 'promoted_at': None}
-    ]
+    assert await models_mod.discover_promoted_models() == []
 
 
 def test_is_region_protected_model_matches_names_and_prefixes():

@@ -171,18 +171,12 @@ async def test_clone_activations_refuses_a_target_that_already_has_one_up_front(
 
 @pytest.mark.asyncio
 async def test_clone_refuses_a_profile_whose_detector_is_private_to_the_source_project(
-    monkeypatch,
+    monkeypatch, model_registry_fake
 ) -> None:
-    import src.services.training.model_classes as mc
-    import src.services.training.promoted_models as pm
     from src.services.config_store.profile_validation import validate_profile
     from src.services.triton_control import TritonControlService
 
-    owner = {'alpha__wheel_det': 'alpha'}
-    monkeypatch.setattr(mc, 'model_owner_project', owner.get)
-    monkeypatch.setattr(pm, 'model_owner_project', owner.get)
-    monkeypatch.setattr(mc, 'is_model_shared', lambda _n: False)
-    monkeypatch.setattr(pm, 'is_model_shared', lambda _n: False)
+    model_registry_fake.promote('alpha__wheel_det', owner='alpha', labels=['wheel'])
 
     # Triton must report the detector READY: the clone's activation gate also checks
     # that, and without it the clone would fail on `detector_model_not_found` before the

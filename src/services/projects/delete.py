@@ -137,7 +137,7 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
     # that is a strict SUBSET of ownership, not the ownership report
     # itself. Previously this was always `[]` for a private-only
     # project, even though those models were never unloaded either.
-    promoted_models = owned_model_names(record.slug)
+    promoted_models = await owned_model_names(record.slug)
     referenced_by: list[dict[str, str]] = []
     try:
         referenced_by = await model_dependents(record.slug, await _shared_model_users(record))
