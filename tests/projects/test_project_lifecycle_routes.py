@@ -322,14 +322,31 @@ def test_patch_archive_unarchive_publish_their_events(events) -> None:
     ]
 
 
-def test_delete_finish_publishes_project_deleted(events) -> None:
-    """M5 step 9 + m11: drives the real route function (not a stand-in
-    for its background task) and awaits the exact task object it
-    registers in ``_BACKGROUND_DELETE_TASKS``, proving both that the
-    task is kept alive (m11) and that it publishes on completion."""
+class _StubContext:
+    """The four members of a ``JobContext`` the delete handler touches."""
+
+    def __init__(self, slug: str, client) -> None:
+        self.params = {'slug': slug}
+        self._client = client
+
+    async def client(self, _name: str):
+        return self._client
+
+    async def checkpoint(self, _cursor) -> None:
+        return None
+
+    async def progress(self, *_args, **_kwargs) -> None:
+        return None
+
+
+def test_delete_finish_publishes_project_deleted(events, producer) -> None:
+    """The DELETE route queues the ``project_delete`` job; the job's handler runs the finish and
+    publishes ``project.deleted`` once the tombstone is written."""
     from fastapi import Response
 
+    from src.db.session import async_session_factory
     from src.services.projects.registry import get_project_registry
+    from src.tasks import jobs_c
 
     asyncio.run(
         projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
@@ -340,13 +357,14 @@ def test_delete_finish_publishes_project_deleted(events) -> None:
     asyncio.run(get_project_registry().ensure_fresh())
 
     async def _delete_flow():
-        await projects_router.delete_project('cars', Response(), confirm='cars')
-        # P3F pass-3 MA1: _BACKGROUND_DELETE_TASKS is now keyed by slug
-        # (not a bare set) so a re-DELETE never double-schedules a
-        # finish for the same slug -- fetch the exact task the route
-        # registered for 'cars'.
-        task = projects_router._BACKGROUND_DELETE_TASKS['cars']
-        await task
+        async with async_session_factory()() as session:
+            accepted = await projects_router.delete_project(
+                'cars', Response(), session, confirm='cars'
+            )
+        assert accepted.job_id == producer.sent()[0]
+        assert not [e for e in events if e['type'] == 'project.deleted']
+        client = await projects_router.make_curation_opensearch()
+        await jobs_c.project_delete(_StubContext('cars', client))
 
     asyncio.run(_delete_flow())
 

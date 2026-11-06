@@ -366,7 +366,12 @@ async def unarchive_project(
 # working for every existing caller.
 from src.services.projects.clone import clone_settings, clone_settings_into  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect
 
-# dry_run_delete / delete_project / delete_project_finish live in
+# dry_run_delete / delete_project / delete_project_finish / start_project_delete live in
 # delete.py (700-LOC ratchet); re-exported here so
 # `lifecycle.delete_project(...)` keeps working for every existing caller.
-from src.services.projects.delete import delete_project, delete_project_finish, dry_run_delete  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect
+from src.services.projects.delete import (  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect
+    delete_project,
+    delete_project_finish,
+    dry_run_delete,
+    start_project_delete,
+)

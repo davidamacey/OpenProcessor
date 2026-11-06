@@ -21,6 +21,7 @@ from src.services.projects.guard import make_curation_opensearch
 
 if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
+    from fixtures.job_fixtures import FakeProducer
 
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
@@ -31,51 +32,9 @@ leak_env = _sweep.leak_env
 API = '/curation/projects'
 
 
-class _NoBackgroundFinish:
-    """Replaces the router module's ``asyncio`` name binding so
-    ``asyncio.create_task(_finish())`` in the DELETE route never actually
-    schedules the fire-and-forget finish task. TestClient's own portal
-    timing around a non-awaited background task is documented as
-    unreliable (see test_lifecycle_guarded.py and the P3 review's own
-    probes), so this test drives ``delete_project_finish`` itself,
-    deterministically, instead of racing whatever the HTTP layer happens
-    to run."""
-
-    def __getattr__(self, name: str) -> Any:
-        import asyncio as _real_asyncio
-
-        return getattr(_real_asyncio, name)
-
-    def create_task(self, coro: Any, *_a: Any, **_k: Any) -> Any:
-        coro.close()
-
-        class _Dummy:
-            def add_done_callback(self, *_a: Any, **_k: Any) -> None:
-                return None
-
-            def done(self) -> bool:
-                # P3F pass-3 MA1: the router's own scheduling guard
-                # checks `.done()` on any task already registered for
-                # the slug before scheduling a new one. This stub never
-                # actually runs (its coro is closed immediately above),
-                # so it must report itself as done -- otherwise the
-                # route's own re-DELETE below would see a "still
-                # running" dummy and skip scheduling the real retry this
-                # test drives manually.
-                return True
-
-        return _Dummy()
-
-
-@pytest.fixture
-def _no_background_finish(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.routers.curation.projects as projects_router
-
-    monkeypatch.setattr(projects_router, 'asyncio', _NoBackgroundFinish())
-
-
-@pytest.mark.usefixtures('_no_background_finish')
-def test_delete_retry_after_failed_index_delete_succeeds(leak_env: LeakEnv) -> None:
+def test_delete_retry_after_failed_index_delete_succeeds(
+    leak_env: LeakEnv, producer: FakeProducer
+) -> None:
     client_http = TestClient(leak_env.app, raise_server_exceptions=False)
 
     alpha = leak_env.records['alpha']
@@ -112,11 +71,13 @@ def test_delete_retry_after_failed_index_delete_succeeds(leak_env: LeakEnv) -> N
     assert get_resp.json()['status'] == 'deleting'
 
     # The M4 fix under test: a re-issued DELETE on an already-'deleting'
-    # record answers 202 (not 409 invalid_transition), and re-triggers
-    # the finish.
+    # record answers 202 (not 409 invalid_transition). The first finish job is still queued here
+    # (the test drives the finish itself), so the retry reports that job instead of a second one.
     retry_resp = client_http.delete(f'{API}/alpha', params={'confirm': 'alpha'})
     assert retry_resp.status_code == 202, retry_resp.text
     assert retry_resp.json()['project']['status'] == 'deleting'
+    assert retry_resp.json()['job_id'] == resp.json()['job_id']
+    assert len(producer.sent()) == 1
 
     # The transient fault has cleared; the retried finish now succeeds.
     finished = asyncio.run(lifecycle.delete_project_finish(guarded_client, slug='alpha')).record

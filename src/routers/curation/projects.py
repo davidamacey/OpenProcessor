@@ -10,7 +10,6 @@ module.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -18,6 +17,8 @@ from fastapi import APIRouter, Depends, Query, Response
 from src.config import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves route annotations at runtime
+from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
 from src.routers.curation._project_deps import bind_path_project
@@ -58,17 +59,6 @@ global_router = APIRouter(
         409: {'model': ApiErrorResponse, 'description': 'Refused (see detail.error)'},
     },
 )
-
-# m11: a strong reference for delete's fire-and-forget finish task, so it
-# is never garbage-collected mid-run (a documented asyncio caveat) --
-# discarded automatically once the task completes. P3F pass-3 MA1
-# probe 2: keyed by slug (not a bare set) so a re-DELETE issued while a
-# finish for the SAME slug is still running (the M4 retry path) never
-# schedules a second, redundant finish task racing the first one --
-# `delete_project_finish` itself also refuses a concurrent run for the
-# same slug (`delete._FINISH_IN_PROGRESS`), so this is belt-and-braces
-# against wasting a task, not the only guard.
-_BACKGROUND_DELETE_TASKS: dict[str, asyncio.Task[None]] = {}
 
 
 async def _publish_lifecycle_event(event_type: str, record: Any, **extra: Any) -> None:
@@ -278,6 +268,7 @@ async def clone_settings_route(
 async def delete_project(
     project: str,
     response: Response,
+    session: DbSessionDep,
     dry_run: Annotated[bool, Query()] = False,
     confirm: Annotated[str | None, Query()] = None,
     force: Annotated[bool, Query()] = False,
@@ -286,52 +277,27 @@ async def delete_project(
     answers **202** with the ``deleting`` record (delta 10): the drain
     wait, index/dir removal and tombstone run in the background so this
     always returns well under a proxy read timeout, regardless of how
-    long the drain takes. Follow ``project.deleted`` on the global
-    stream, or poll ``GET /projects/{project}`` -> 404, to know when it
-    finished."""
+    long the drain takes. ``job_id`` names the ``project_delete`` job; follow
+    ``project.deleted`` on the global stream, or poll ``GET /projects/{project}``
+    -> 404, to know when it finished."""
     client = await make_curation_opensearch()
     if dry_run:
         report = await lifecycle.dry_run_delete(client, slug=project)
         return DeleteDryRunResponse(**report)
     record = await lifecycle.delete_project(slug=project, confirm=confirm, force=force)
-
-    async def _finish() -> None:
-        try:
-            finished = await lifecycle.delete_project_finish(client, slug=project)
-        except Exception as exc:
-            logger.error('project_delete_finish_failed', project=project, error=str(exc))
-        else:
-            # M5 step 9: the completion signal Cropwright polls for
-            # (docstring above; delta 10) -- published only once the
-            # tombstone write itself succeeded, never on a busy/failed
-            # retry (M3/M4 leave the record retryable with no event).
-            await _publish_lifecycle_event(
-                'project.deleted',
-                finished.record,
-                mlflow_cleanup=finished.mlflow_cleanup.to_wire(),
-            )
-
-    # MA1 probe 2 / M11: only schedule a new finish task for this slug if
-    # none is already running -- a re-DELETE on an already-'deleting'
-    # record (the M4 retry path, just above) must not race a second
-    # finish against the first one's still-in-flight drain wait.
-    # M11 (unstarted background task with no strong reference can be
-    # GC'd mid-run): held on the router module so it survives until it
-    # completes, and discarded from the map once done (only if this
-    # exact task is still the one mapped -- a stale done-callback must
-    # never evict a newer task that replaced it).
-    existing_task = _BACKGROUND_DELETE_TASKS.get(project)
-    if existing_task is None or existing_task.done():
-        task = asyncio.create_task(_finish())
-        _BACKGROUND_DELETE_TASKS[project] = task
-
-        def _discard(finished_task: asyncio.Task[None], *, _slug: str = project) -> None:
-            if _BACKGROUND_DELETE_TASKS.get(_slug) is finished_task:
-                _BACKGROUND_DELETE_TASKS.pop(_slug, None)
-
-        task.add_done_callback(_discard)
+    # Starting is idempotent on the project row: a re-DELETE of a `deleting` project (the retry
+    # path) answers 202 and leaves the finish that is already queued or running to finish.
+    try:
+        started = await lifecycle.start_project_delete(session, project)
+        job_id: str | None = str(started.job.id)
+    except RequestRejectedError as exc:
+        if exc.detail.get('error') != 'job_busy':
+            raise
+        job_id = exc.detail.get('active_job_id')
     response.status_code = 202
-    return await _summary_response(record)
+    summary = await _summary_response(record)
+    summary.job_id = job_id
+    return summary
 
 
 @global_router.get('/projects/{project}/stats', response_model=ProjectStatsResponse)

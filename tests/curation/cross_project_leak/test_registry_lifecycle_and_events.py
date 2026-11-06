@@ -58,6 +58,7 @@ def test_lifecycle_mutations_really_write_the_seeded_registry(leak_env: LeakEnv)
     assert ('project.unarchived', 'beta', None) in published
 
 
+@pytest.mark.usefixtures('producer')
 def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakEnv) -> None:
     """M6: create and a real (non-dry-run) delete, neither of which the
     sweep reaches (they're not under {SCOPED}), must not leak into
@@ -105,12 +106,10 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
         )
         == before_alpha_docs
     )
-    # M5: create publishes its event synchronously in the request; the
-    # delete route's completion event (project.deleted) is published by
-    # its own fire-and-forget _finish() task, not by
-    # lifecycle.delete_project_finish directly (called above to avoid
-    # TestClient's portal cancelling the real background task) -- so it
-    # is not expected here. See test_delete_finish_publishes_project_deleted.
+    # M5: create publishes its event synchronously in the request; the completion event
+    # (project.deleted) is published by the project_delete job's handler, not by
+    # lifecycle.delete_project_finish (called above) -- so it is not expected here.
+    # See test_delete_finish_publishes_project_deleted.
     published = [(e.get('type'), e.get('target')) for e in leak_env.events]
     assert ('project.created', 'gamma') in published
 

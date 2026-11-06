@@ -5,10 +5,11 @@ status it never validated. Two independent probes from the review:
    ``_BUILDING_STALE_SECONDS``) racing a stale-building delete: the
    create's own final ``active`` write must never resurrect a
    tombstoned slug.
-2. A second ``delete_project_finish`` for the SAME slug, triggered
-   while a first finish's drain wait is still running, must never be
-   able to delete a project that the first finish's own drain-timeout
-   rollback has already restored to ``active``.
+2. A second ``delete_project_finish`` for the SAME slug (another
+   process; the job's exclusive scope normally keeps it from starting),
+   triggered while a first finish's drain wait is still running, must
+   never be able to delete a project that the first finish's own
+   drain-timeout rollback has already restored to ``active``.
 """
 
 from __future__ import annotations
@@ -120,73 +121,14 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
     asyncio.run(_run())
 
 
-def test_second_finish_cannot_delete_a_project_the_first_finish_rolled_back(monkeypatch) -> None:
-    """Probe 2: finish A starts draining (never clears -> rolls back to
-    'active' on timeout). While A is still draining, finish B is
-    triggered for the SAME slug (e.g. the router's M4 retry path after
-    a re-DELETE). B must never run to completion: either it is refused
-    outright (finish_in_progress) while A still holds the slug, or it
-    starts only after A has already finished -- in which case it must
-    see A's own rollback (status back to 'active') and refuse the
-    transition itself. Either way, the project must never end up
-    deleted."""
-    client = FakeLifecycleOpenSearch()
-    registry = _registry_for(client)
-    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
-    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
-    asyncio.run(registry.ensure_fresh())
-
-    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
-    assert deleting.status == 'deleting'
-
-    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.6)
-    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_POLL_SECONDS', 0.02)
-    monkeypatch.setattr(
-        busy,
-        '_detection_worker_inflight',
-        lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],  # noqa: ARG005
-    )
-
-    async def _finish_a():
-        with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project_finish(client, slug='alpha')
-        assert exc_info.value.detail['error'] == 'project_busy'
-
-    async def _finish_b_mid_drain():
-        while 'alpha' not in delete_mod._FINISH_IN_PROGRESS:  # A is draining
-            await asyncio.sleep(0.005)
-        with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project_finish(client, slug='alpha')
-        assert exc_info.value.detail['error'] == 'finish_in_progress'
-
-    async def _run() -> None:
-        await asyncio.gather(_finish_a(), _finish_b_mid_drain())
-
-    asyncio.run(_run())
-
-    asyncio.run(registry.ensure_fresh())
-    rolled_back = registry.get('alpha')
-    assert rolled_back is not None
-    assert rolled_back.status == 'active', (
-        'MA1: a project A rolled back to active must never be deleted by a racing finish B'
-    )
-
-
 def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_finish_rolled_back(
     monkeypatch,
 ) -> None:
-    """P3F pass-4 F1 -- the P3 review's pass-3 confirmation found the
-    prior pass's ``test_second_finish_cannot_delete_a_project_...`` test
-    (above) proves nothing about the ACTUAL production topology: api
-    runs ``--workers=32``, and ``delete._FINISH_IN_PROGRESS`` is a
-    per-worker-process set. A re-DELETE that lands on a DIFFERENT worker
-    (31 times out of 32) has its own, separate, empty copy of that guard
-    and cannot see that a finish for this slug is already running
-    elsewhere.
+    """P3F pass-4 F1 -- a second finish for one slug in another process
+    (the exclusive job scope normally prevents it; a reaper resume or a
+    manual call may not) shares no in-process state with the first.
 
-    This reproduces the reviewer's exact cross-worker probe: finish B
-    gets its own fresh, empty ``_FINISH_IN_PROGRESS`` set (simulating a
-    second worker process) instead of sharing A's. Busy is time-gated to
+    Finish B runs while finish A is draining. Busy is time-gated to
     clear shortly AFTER A's drain deadline (not held forever -- nit n-g:
     a busy check that never clears makes B time out too, and the project
     is never actually destroyed either way, which proves nothing). That
@@ -253,18 +195,6 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
     async def _finish_b_cross_worker() -> None:
         while not drains:  # A is draining
             await asyncio.sleep(0.005)
-        # Simulate finish B running on a DIFFERENT worker process: strip
-        # A's entry from the (per-process, real) guard so B's check sees
-        # an empty state for this slug, exactly like a second worker's
-        # own separate, empty `_FINISH_IN_PROGRESS` set would. Mutating
-        # the existing set in place (not swapping in a whole new set
-        # object) keeps A's own `finally: _FINISH_IN_PROGRESS.discard(...)`
-        # -- which resolves the module-global name at call time -- acting
-        # on the SAME object B just mutated, so both coroutines' cleanup
-        # still converges on one consistent, empty set once both are
-        # done (no leaked 'alpha' entry poisoning a later, unrelated
-        # test).
-        delete_mod._FINISH_IN_PROGRESS.discard('alpha')
         with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'invalid_transition', (

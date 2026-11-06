@@ -129,6 +129,8 @@ class ProjectLifecycleResponse(BaseModel):
     project: ProjectSummary
     warnings: list[ProjectWarning] = Field(default_factory=list)
     keymap_clone_conflicts: list[KeymapCloneConflictWire] = Field(default_factory=list)
+    # The ``project_delete`` job of a DELETE answered 202; null for every other mutation.
+    job_id: str | None = None
 
 
 class ProjectError(BaseModel):

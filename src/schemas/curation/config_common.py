@@ -84,10 +84,6 @@ ErrorCode = Literal[
     'already_undone',
     'label_op_busy',
     'label_op_in_progress',
-    # P3F pass-3 MA1: a second delete_project_finish for the same slug
-    # was refused because a first finish for it is still in flight --
-    # distinct from project_busy (a step *inside* one finish failed).
-    'finish_in_progress',
     # dataset import and reprocess.
     'dataset_not_found',
     'import_not_found',

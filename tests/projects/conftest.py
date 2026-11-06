@@ -10,6 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from fixtures.job_fixtures import kinds, producer  # noqa: F401  # fixture registration: a DELETE queues its job on a fake producer
 from opensearchpy.exceptions import NotFoundError
 
 
