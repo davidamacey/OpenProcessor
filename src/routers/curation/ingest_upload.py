@@ -14,6 +14,7 @@ from typing import Annotated
 
 from fastapi import File, Form, HTTPException, UploadFile
 
+from src.core.disk_space import DISK_GUARD
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
@@ -73,6 +74,7 @@ def _upload_extension(path: str, upload: UploadFile) -> str:
 
 @router.post(
     '/ingest/upload',
+    dependencies=[DISK_GUARD],
     response_model=_BatchIngestResponse,
     responses={413: {'description': 'Too many images, or total upload bytes, in one request.'}},
 )

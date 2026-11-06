@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import Query, Request
 
 from src.config import get_curation_config
+from src.core.disk_space import DISK_GUARD
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._ingest_bulk_models import (
@@ -53,7 +54,9 @@ async def bulk_ingest_config() -> BulkIngestConfig:
     )
 
 
-@router.post('/ingest/bulk', response_model=BulkIngestRun, status_code=202)
+@router.post(
+    '/ingest/bulk', dependencies=[DISK_GUARD], response_model=BulkIngestRun, status_code=202
+)
 async def start_bulk_ingest(
     body: BulkIngestRequest,
     request: Request,

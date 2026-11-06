@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from src.core.disk_space import DISK_GUARD
 from src.schemas.model_admin import ExportRequest
 from src.schemas.models import ExportFormat, ExportTaskResponse, ExportTaskStatus
 from src.services.model_export import (
@@ -55,7 +56,9 @@ def _require_worker() -> None:
 # =============================================================================
 
 
-@router.post('/upload', response_model=ExportTaskResponse, responses=_WORKER_DOWN)
+@router.post(
+    '/upload', dependencies=[DISK_GUARD], response_model=ExportTaskResponse, responses=_WORKER_DOWN
+)
 async def upload_model(
     file: UploadFile = File(..., description='YOLO11 .pt model file'),
     triton_name: str | None = Form(default=None, description='Custom Triton model name'),

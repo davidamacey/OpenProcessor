@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from fastapi import Request  # noqa: TC002 - FastAPI resolves route annotations at runtime
 
 from src.config import get_curation_config
+from src.core.disk_space import DISK_GUARD
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._ingest_bulk_models import BulkIngestRequest, BulkIngestRun
@@ -319,7 +320,12 @@ def resolve_bulk_source(body: BulkIngestRequest) -> IngestSource:
     return source
 
 
-@router.post('/ingest/sources/{source_id}/run', response_model=BulkIngestRun, status_code=202)
+@router.post(
+    '/ingest/sources/{source_id}/run',
+    dependencies=[DISK_GUARD],
+    response_model=BulkIngestRun,
+    status_code=202,
+)
 async def run_ingest_source(
     source_id: str, request: Request, opensearch: OpenSearchDep, registry: RegistryDep
 ) -> BulkIngestRun:

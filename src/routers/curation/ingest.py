@@ -26,6 +26,7 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
+from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -83,7 +84,7 @@ class IngestBatchRequest(BaseModel):
     ingest_run_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
-@router.post('/ingest/image', response_model=IngestImageResponse)
+@router.post('/ingest/image', dependencies=[DISK_GUARD], response_model=IngestImageResponse)
 async def curation_ingest_image(
     body: IngestImageRequest,
     opensearch: OpenSearchDep,
@@ -122,7 +123,7 @@ async def curation_ingest_image(
     )
 
 
-@router.post('/ingest/batch', response_model=_BatchIngestResponse)
+@router.post('/ingest/batch', dependencies=[DISK_GUARD], response_model=_BatchIngestResponse)
 async def curation_ingest_batch(
     body: IngestBatchRequest,
     opensearch: OpenSearchDep,

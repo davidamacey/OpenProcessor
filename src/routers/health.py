@@ -5,8 +5,8 @@ Provides liveness/readiness probes, service info, and connection pool
 statistics.
 
 - /live   — process responsive, no dependency probing (livenessProbe)
-- /ready  — the database, the task queue, Triton, its required models and
-            OpenSearch actively probed, one after another (readinessProbe / LB drain)
+- /ready  — the database, the task queue, Triton, its required models, OpenSearch
+            and free disk space actively probed, one after another (readinessProbe / LB drain)
 - /health — backward-compat alias for /ready
 """
 
@@ -27,6 +27,7 @@ from src.app.startup_gate import startup_probes
 from src.clients.triton_client_manager import get_async_triton_client, get_client_pool_stats
 from src.config import get_settings
 from src.config.faces import faces_enabled
+from src.core import disk_space
 from src.core.metrics import render_metrics
 from src.db.schema_check import ProbeFailed
 from src.services.face_privacy import FaceDataCounts, stored_face_counts, stored_summary
@@ -142,6 +143,45 @@ async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
     return True, f'{len(required)} required models READY', []
 
 
+async def _opensearch_free_ratio(url: str) -> float | None:
+    """The smallest free fraction over the OpenSearch nodes (``_cat/allocation``), or ``None``
+    when it cannot be read: the opensearch entry of the report already says it is down."""
+    try:
+        async with httpx.AsyncClient(timeout=_READY_PROBE_TIMEOUT_S) as client:
+            response = await client.get(
+                f'{url.rstrip("/")}/_cat/allocation', params={'format': 'json', 'bytes': 'b'}
+            )
+        response.raise_for_status()
+        rows = response.json()
+        ratios = [
+            int(row['disk.avail']) / int(row['disk.total'])
+            for row in rows
+            if str(row.get('disk.total', '')).isdigit() and str(row.get('disk.avail', '')).isdigit()
+        ]
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, ZeroDivisionError):
+        return None
+    return min(ratios) if ratios else None
+
+
+async def _disk_entry(opensearch_url: str, *, opensearch_up: bool) -> dict[str, Any]:
+    """The ``services.disk`` report: ``ok``, ``low`` (a warning; still ready) or ``critical``
+    (not ready). The database volume lives in the Postgres container, which this process
+    cannot see; its own healthcheck and the Postgres exporter cover it."""
+    volumes = [disk_space.data_volume()]
+    if opensearch_up:
+        ratio = await _opensearch_free_ratio(opensearch_url)
+        if ratio is not None:
+            volumes.append(disk_space.measure('opensearch', ratio))
+    level = disk_space.worst(volumes)
+    return {
+        'ok': level != 'critical',
+        'status': level,
+        'volumes': {
+            v.volume: {'free_ratio': round(v.free_ratio, 4), 'level': v.level} for v in volumes
+        },
+    }
+
+
 async def _face_data_counts() -> FaceDataCounts:
     return await asyncio.wait_for(stored_face_counts(), timeout=_READY_PROBE_TIMEOUT_S)
 
@@ -196,6 +236,8 @@ async def _readiness_payload() -> tuple[int, dict[str, Any]]:
         services['models'] = {'ok': models_ok, 'detail': models_detail, 'not_ready': not_ready}
         all_ok = all_ok and models_ok
     services['faces'] = await _faces_entry()
+    services['disk'] = await _disk_entry(settings.opensearch_url, opensearch_up=opensearch_ok)
+    all_ok = all_ok and services['disk']['ok']
     payload: dict[str, Any] = {
         'status': 'ready' if all_ok else 'not_ready',
         'version': settings.api_version,
