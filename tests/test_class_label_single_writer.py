@@ -36,6 +36,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # validator, narrowed to the exact function (see module docstring).
 _ALLOWED_CLASS_VALIDATED_TRUE_FILES = {
     'src/services/curation/class_label.py',
+    # Generates 0.6.0-shaped data (the upgrade's input) on purpose; not a writer.
+    'scripts/db/make_v060_fixture.py',
 }
 _ALLOWED_CLASS_VALIDATED_TRUE_FUNCTIONS = {
     ('src/services/curation/clustering/auto_promote.py', '_merge_promote'),

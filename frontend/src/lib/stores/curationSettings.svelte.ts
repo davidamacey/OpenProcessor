@@ -16,7 +16,11 @@
  */
 
 import { apiErrorText } from '$lib/api_errors';
-import { getCurationSettings, putCurationDefaults } from '$lib/api_settings';
+import {
+  getCurationSettings,
+  isSettingsRevisionConflict,
+  putCurationDefaults,
+} from '$lib/api_settings';
 import { onProjectChange } from '$lib/projectChange';
 import {
   EMPTY_CURATION_SETTINGS,
@@ -82,6 +86,27 @@ class CurationSettingsStore {
   }
 
   /**
+   * PUT one axis change on the loaded revision. A 409 `revision_conflict`
+   * (another tab or user saved first) re-reads the record so the page shows
+   * the current values and the next save carries the current revision, then
+   * rethrows so the caller tells the operator nothing was saved.
+   */
+  async #put(change: Record<string, string | null>): Promise<void> {
+    try {
+      this.settings = await putCurationDefaults(change, this.settings.revision);
+    } catch (e) {
+      if (isSettingsRevisionConflict(e)) {
+        try {
+          this.settings = await getCurationSettings();
+        } catch {
+          // keep the stale record; the rethrown conflict is the message
+        }
+      }
+      throw e;
+    }
+  }
+
+  /**
    * Pin one axis's shared default.
    *
    * Sends ONLY that axis (`{defaults: {[axis]: id}}`) — a partial merge,
@@ -103,7 +128,7 @@ class CurationSettingsStore {
     if (!spec) throw new Error(`unknown settings axis: ${axis}`);
     this.saving = axis;
     try {
-      this.settings = await putCurationDefaults({ [axis]: id });
+      await this.#put({ [axis]: id });
       this.error = null;
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {
@@ -127,7 +152,7 @@ class CurationSettingsStore {
     if (!spec) throw new Error(`unknown settings axis: ${axis}`);
     this.saving = axis;
     try {
-      this.settings = await putCurationDefaults({ [axis]: null });
+      await this.#put({ [axis]: null });
       this.error = null;
     } catch (e) {
       if ((e as Error)?.name !== 'AbortError') {

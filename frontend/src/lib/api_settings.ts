@@ -64,19 +64,37 @@ export async function getCurationSettings(
  * used to be permanent, since PUT only merged and every value had to be
  * a currently-advertised id).
  *
+ * `expectedRevision` is the `revision` of the record this edit was made on; a
+ * stale one is a 409 `revision_conflict` (`isSettingsRevisionConflict`).
+ *
  * Returns the FULL merged record. Always adopt this; never
  * optimistically construct the post-save state client-side.
  */
 export async function putCurationDefaults(
   defaults: Record<string, string | null>,
+  expectedRevision: number,
   signal?: AbortSignal,
 ): Promise<CurationSettings> {
   const raw = await apiFetch<unknown>(
     `${scoped()}/settings`,
-    { method: 'PUT', body: JSON.stringify({ defaults }) },
+    {
+      method: 'PUT',
+      body: JSON.stringify({ defaults, expected_revision: expectedRevision }),
+    },
     signal,
   );
   return parseCurationSettings(raw);
+}
+
+/** True for the 409 `revision_conflict` a stale `expected_revision` gets. */
+export function isSettingsRevisionConflict(e: unknown): boolean {
+  if (!(e instanceof ApiError) || e.status !== 409) return false;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  return (
+    !!detail &&
+    typeof detail === 'object' &&
+    (detail as Record<string, unknown>).error === 'revision_conflict'
+  );
 }
 
 // -- configurable keyboard shortcuts (K2, docs/design/

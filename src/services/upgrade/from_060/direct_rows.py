@@ -23,7 +23,6 @@ from src.db.models import (
     DeploymentCounter,
     DeploymentSetting,
     IngestSource,
-    Job,
     Model,
     ModelShare,
     Project,
@@ -32,6 +31,7 @@ from src.db.models import (
     Promotion,
     TrainingRun,
 )
+from src.db.repos.jobs_load import JobLoad, load_jobs
 
 
 if TYPE_CHECKING:
@@ -79,8 +79,8 @@ async def set_projects_revision(session: AsyncSession, revision: int) -> None:
     )
 
 
-def _job(row: JobRow, project_ids: Mapping[str, uuid.UUID]) -> Job:
-    return Job(
+def _job(row: JobRow, project_ids: Mapping[str, uuid.UUID]) -> JobLoad:
+    return JobLoad(
         id=row.id,
         project_id=project_ids[row.project_slug] if row.project_slug else None,
         kind=row.kind,
@@ -91,7 +91,6 @@ def _job(row: JobRow, project_ids: Mapping[str, uuid.UUID]) -> Job:
         result=row.result,
         error_code=row.error_code,
         error_message=row.error_message,
-        auto_resume=False,
         max_queue_wait=MAX_QUEUE_WAIT,
         requested_by=row.requested_by,
         created_at=row.created_at,
@@ -104,10 +103,8 @@ def _job(row: JobRow, project_ids: Mapping[str, uuid.UUID]) -> Job:
 async def jobs(
     session: AsyncSession, rows: Iterable[JobRow], project_ids: Mapping[str, uuid.UUID]
 ) -> int:
-    added = [_job(row, project_ids) for row in rows]
-    session.add_all(added)
-    await session.flush()
-    return len(added)
+    loads = [_job(row, project_ids) for row in rows]
+    return await session.run_sync(load_jobs, loads)
 
 
 async def ingest_sources(

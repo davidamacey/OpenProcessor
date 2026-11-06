@@ -288,30 +288,21 @@ def test_busy_route_error_is_a_409(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert (r.status_code, r.json()['detail']['error']) == (409, 'reprocess_busy')
 
 
-def test_orphaned_job_is_marked_interrupted_at_startup_and_busy_sees_live_ones() -> None:
-    from datetime import UTC, datetime
-
-    from src.config.curation_accessors import base_curation_config
-    from src.config.projects import ProjectRecord, resources_for_new
-    from src.services.projects.busy import _reprocess_jobs
-
+def test_orphaned_job_is_marked_interrupted_at_startup_and_leaves_the_live_list() -> None:
+    # The project busy check reads the jobs table now (src/services/projects/busy.py); the
+    # reprocess family is file-backed until it moves there, so its own live list is the one
+    # that must drop a dead job.
     job, _beat = asyncio.run(
         reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=['a'])
     )
-    now = datetime.now(UTC).isoformat()
-    record = ProjectRecord(
-        slug='default', display_name='d', description='', status='active', revision=1,
-        created_at=now, updated_at=now, origin=None,
-        resources=resources_for_new('default', base_curation_config()),
-    )  # fmt: skip
-    assert [j.job_id for j in _reprocess_jobs(record)] == [job.directory.name]
+    assert [job_id for job_id, _started in reprocess_job.running_job_ids()] == [job.directory.name]
 
     job.heartbeat_file.unlink()  # the owning process died before ticking
     assert reprocess_job.reconcile_orphaned_jobs() is True
     state = reprocess_job.read_job(job.directory.name)
     assert state is not None
     assert state.status == 'interrupted'
-    assert _reprocess_jobs(record) == []
+    assert reprocess_job.running_job_ids() == []
 
 
 # ------------------------------------------------- every entry point, locked

@@ -137,7 +137,7 @@ describe('curationSettingsStore', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('saveDefault sends exactly {"defaults":{"sort":"uncertainty_entropy"}} via PUT to ${API_PREFIX}/settings', async () => {
+  it('saveDefault sends {"defaults":{"sort":"uncertainty_entropy"},"expected_revision":0} via PUT to ${API_PREFIX}/settings', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         defaults: { sort: 'uncertainty_entropy' },
@@ -154,7 +154,7 @@ describe('curationSettingsStore', () => {
     expect(calledUrl).toContain(`${API_PREFIX}/settings`);
     expect(calledInit.method).toBe('PUT');
     expect(calledInit.body).toBe(
-      JSON.stringify({ defaults: { sort: 'uncertainty_entropy' } }),
+      JSON.stringify({ defaults: { sort: 'uncertainty_entropy' }, expected_revision: 0 }),
     );
   });
 
@@ -224,7 +224,9 @@ describe('curationSettingsStore', () => {
     const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(calledUrl).toContain(`${API_PREFIX}/settings`);
     expect(calledInit.method).toBe('PUT');
-    expect(calledInit.body).toBe(JSON.stringify({ defaults: { sort: null } }));
+    expect(calledInit.body).toBe(
+      JSON.stringify({ defaults: { sort: null }, expected_revision: 0 }),
+    );
   });
 
   it('clearDefault adopts the response — a cleared axis disappears from defaults', async () => {
@@ -287,6 +289,7 @@ describe('curationSettingsStore', () => {
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body as string)).toEqual({
       defaults: { prompt_pack: 'generic_item_v1' },
+      expected_revision: 0,
     });
   });
 
@@ -324,5 +327,78 @@ describe('curationSettingsStore', () => {
     expect(curationSettingsStore.saving).toBe('sort');
     await failing;
     expect(curationSettingsStore.saving).toBeNull();
+  });
+
+  it('sends the loaded revision as expected_revision and adopts the new one', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({ defaults: {}, revision: 7, updated_at: null, updated_by: null }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          defaults: { sort: 'recent' },
+          revision: 8,
+          updated_at: null,
+          updated_by: null,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await curationSettingsStore.init();
+    await curationSettingsStore.saveDefault('sort', 'recent');
+
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).expected_revision).toBe(7);
+    expect(curationSettingsStore.settings.revision).toBe(8);
+  });
+
+  it('a 409 revision_conflict re-reads the record, rethrows, and the next save carries the new revision', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({ defaults: {}, revision: 7, updated_at: null, updated_by: null }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse(
+          {
+            detail: {
+              error: 'revision_conflict',
+              message: 'settings changed: stored revision is 9, expected 7',
+            },
+          },
+          { status: 409 },
+        ),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          defaults: { cluster: 'ivf' },
+          revision: 9,
+          updated_at: null,
+          updated_by: null,
+        }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          defaults: { cluster: 'ivf', sort: 'recent' },
+          revision: 10,
+          updated_at: null,
+          updated_by: null,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await curationSettingsStore.init();
+    await expect(curationSettingsStore.saveDefault('sort', 'recent')).rejects.toThrow();
+
+    expect(fetchMock.mock.calls[2]![1]?.method ?? 'GET').toBe('GET');
+    expect(curationSettingsStore.settings).toMatchObject({
+      defaults: { cluster: 'ivf' },
+      revision: 9,
+    });
+
+    await curationSettingsStore.saveDefault('sort', 'recent');
+    const [, init] = fetchMock.mock.calls[3] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).expected_revision).toBe(9);
   });
 });

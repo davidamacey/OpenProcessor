@@ -26,6 +26,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.datastructures import DefaultPlaceholder
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
+from fastapi.sse import EventSourceResponse
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, TypeAdapter
 
@@ -82,6 +83,11 @@ def test_model_routes_use_the_default_response_class() -> None:
     for route in routes:
         cls = getattr(route.response_class, 'value', route.response_class)
         assert 'ORJSON' not in [c.__name__.upper() for c in cls.__mro__], route.path
+        # SSE routes stream through fastapi.sse.EventSourceResponse by design
+        # (https://fastapi.tiangolo.com/tutorial/server-sent-events/); there is no body to
+        # serialize direct-to-bytes. Every other route keeps the rule.
+        if issubclass(cls, EventSourceResponse):
+            continue
         if route.response_model is not None:
             assert isinstance(route.response_class, DefaultPlaceholder), route.path
 

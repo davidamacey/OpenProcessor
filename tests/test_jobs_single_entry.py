@@ -1,6 +1,6 @@
 """A ``jobs`` row is born in one place and a task message is sent from one place (02b section 2.4).
 
-``src/db/repos/jobs.py`` is the only module that inserts into ``jobs`` (every start goes through
+``src/db/repos/jobs.py`` (and ``jobs_load.py``, the 0.6.0 upgrade's load) are the only modules that insert into ``jobs`` (every start goes through
 ``start_job`` and ``insert_queued``), and ``src/clients/task_queue.py`` is the only one that calls
 ``send_task``. An AST scan fails on any other insert, on a ``Job(...)`` model construction, on
 ``insert(Job)``, and on any ``send_task`` call, so a second start path cannot grow back.
@@ -15,7 +15,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCANNED_ROOTS = ('src', 'scripts', 'docker', 'export')
-JOBS_WRITER = 'src/db/repos/jobs.py'
+# The repository: the start path, and the upgrade's load next to it (split out for size).
+JOBS_WRITERS = ('src/db/repos/jobs.py', 'src/db/repos/jobs_load.py')
 SENDER = 'src/clients/task_queue.py'
 _INSERT_SQL = re.compile(r'\binsert\s+into\s+"?jobs"?\b', re.IGNORECASE)
 
@@ -52,12 +53,12 @@ def send_task_calls(source: str) -> list[int]:
     ]
 
 
-def _offenders(scan, allowed: str) -> list[str]:
+def _offenders(scan, allowed: tuple[str, ...]) -> list[str]:
     found = []
     for root in SCANNED_ROOTS:
         for path in sorted((REPO_ROOT / root).rglob('*.py')):
             rel = path.relative_to(REPO_ROOT).as_posix()
-            if rel == allowed:
+            if rel in allowed:
                 continue
             found += [f'{rel}:{line}' for line in scan(path.read_text(encoding='utf-8'))]
     return found
@@ -90,14 +91,15 @@ def test_a_planted_send_task_is_found() -> None:
 
 
 def test_the_real_tree_inserts_into_jobs_only_in_the_repository() -> None:
-    assert _offenders(jobs_inserts, JOBS_WRITER) == []
+    assert _offenders(jobs_inserts, JOBS_WRITERS) == []
 
 
 def test_the_real_tree_sends_tasks_only_from_the_queue_client() -> None:
-    assert _offenders(send_task_calls, SENDER) == []
+    assert _offenders(send_task_calls, (SENDER,)) == []
 
 
 def test_the_allowed_modules_do_use_their_calls() -> None:
     """The exemption is not vacuous: each allowed module really holds the call."""
-    assert jobs_inserts((REPO_ROOT / JOBS_WRITER).read_text(encoding='utf-8'))
+    for writer in JOBS_WRITERS:
+        assert jobs_inserts((REPO_ROOT / writer).read_text(encoding='utf-8'))
     assert send_task_calls((REPO_ROOT / SENDER).read_text(encoding='utf-8'))
