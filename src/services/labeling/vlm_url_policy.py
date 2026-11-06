@@ -78,6 +78,15 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'alloy',
         'node-exporter',
         'dcgm-exporter',
+        'postgres',
+        'valkey',
+        'db-migrate',
+        'jobs-worker',
+        'jobs-beat',
+        'periodic-worker',
+        'open-vocab-worker',
+        'cluster-worker',
+        'flower',
     }
 )
 
