@@ -100,8 +100,8 @@ def leak_env(
 
     real_ensure_fresh = ConfigStore.ensure_fresh
 
-    async def ensure_fresh_always(self: Any, client: Any, max_age_s: float = 1.0) -> Any:
-        return await real_ensure_fresh(self, client, max_age_s=0.0)
+    async def ensure_fresh_always(self: Any, max_age_s: float = 1.0) -> Any:
+        return await real_ensure_fresh(self, max_age_s=0.0)
 
     monkeypatch.setattr(ConfigStore, 'ensure_fresh', ensure_fresh_always)
     for flag in ('SCORES_ENABLED', 'SELECT_DIVERSE_ENABLED', 'VIZ_PROJECTION_ENABLED'):

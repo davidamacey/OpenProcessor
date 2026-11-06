@@ -254,15 +254,13 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         retry_on_conflict: int = 0,  # noqa: ARG002
         refresh: str | bool | None = None,  # noqa: ARG002
     ) -> dict[str, Any]:
-        # teach this fake the atomic
-        # ``bump_config_revision`` (painless script + ``upsert``), the
-        # same real create-vs-bump distinction
-        # ``tests/curation/_fake_config_opensearch.py``'s
-        # ``FakeConfigOpenSearch.update()`` models -- a brand-new doc gets
-        # the ``upsert`` body verbatim (real OpenSearch never runs the
-        # script on the insert path); an existing doc gets the script's
-        # increment applied. The fix belongs here, in the fake, not in a
-        # second production code path.
+        # Model the real create-vs-bump distinction of a painless script with
+        # an ``upsert``: a brand-new doc gets the ``upsert`` body verbatim
+        # (real OpenSearch never runs the script on the insert path); an
+        # existing doc gets the script's increment applied. The config store
+        # itself lives in PostgreSQL now (``src/db/repos/config.py``, covered
+        # by ``tests/db/test_config_repo.py``); this only keeps the remaining
+        # OpenSearch-shaped callers honest.
         current = self.docs.get(id)
         script_source = (body.get('script') or {}).get('source', '')
         if current is None and 'config_revision' in script_source:

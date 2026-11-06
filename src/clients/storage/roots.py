@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, BinaryIO
 
 from src.clients.storage.base import BlobStat, BlobStore, ReadOnlyRootError
-from src.clients.storage.keys import make_key, parse_key
 from src.clients.storage.local import LocalFsStore
+from src.domain.storage_keys import make_key, parse_key
 
 
 if TYPE_CHECKING:

@@ -30,13 +30,13 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.clients.storage.keys import make_key
 from src.clients.storage.roots import build_rooted_store
 from src.config.project_context import current_project, current_project_id
 from src.config.storage import storage_root_paths
 from src.core.exceptions import RequestRejectedError
 from src.db.repos.records import HoldoutFreezeRow, forget_holdout_freeze, freeze_holdout
 from src.db.session import project_tx
+from src.domain.storage_keys import make_key
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 
 

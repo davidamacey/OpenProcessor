@@ -30,6 +30,8 @@ NOT_STORAGE_KEYS = frozenset(
         'model_key',
         'source_key',
         'index_prefix',
+        # a Triton model-name prefix (``alpha__``), never a path
+        'model_prefix',
     }
 )
 
@@ -47,6 +49,8 @@ def _builds_key(value: ast.expr | None) -> bool:
         return True
     if isinstance(value, ast.Call):
         return _target_name(value.func) in KEY_BUILDERS
+    if isinstance(value, ast.IfExp):
+        return _builds_key(value.body) and _builds_key(value.orelse)
     return False
 
 
@@ -61,7 +65,8 @@ def find_violations(source: str, filename: str) -> list[str]:
         if isinstance(node, ast.Assign):
             pairs = [(_target_name(t), node.value) for t in node.targets]
         elif isinstance(node, ast.AnnAssign):
-            pairs = [(_target_name(node.target), node.value)]
+            # ``name: type`` with no value declares a field and assigns nothing
+            pairs = [(_target_name(node.target), node.value)] if node.value is not None else []
         elif isinstance(node, ast.Call):
             pairs = [(kw.arg, kw.value) for kw in node.keywords]
         found.extend(
@@ -97,6 +102,7 @@ def test_missing_directory_passes(tmp_path: Path) -> None:
         'stmt = insert(T).values(snapshot_storage_key=f"/data/{x}")',
         "cache_prefix = '/dev/shm/x'",
         'row.results_key: str = str(path)',
+        "row.artifact_storage_key = make_key('projects', a) if a else path_arg",
     ],
 )
 def test_planted_violation_fails(tmp_path: Path, line: str) -> None:
@@ -110,6 +116,8 @@ def test_planted_violation_fails(tmp_path: Path, line: str) -> None:
         "row.artifact_storage_key = make_key('projects', slug, 'training')",
         'row.crop_key = keys.crop_key(slug, item, box, 0)',
         'row.artifact_storage_key = None',
+        'row.artifact_storage_key = make_key(*k.split("/")) if k is not None else None',
+        'artifact_storage_key: str | None',
         'row.idempotency_key = request_id',
         'stmt = insert(T).values(lock_key=k, name=n)',
     ],

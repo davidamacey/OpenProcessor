@@ -112,7 +112,7 @@ _.to_request  # ProcessingPlan.to_request, called by the route that parses the p
 # job lanes of stage 2 onward. Delete these entries when the first production caller lands.
 _.build_rooted_store  # src/clients/storage/roots.py, the BlobStore every storage consumer builds
 _.storage_root_paths  # src/config/storage.py, the physical roots build_rooted_store maps
-_.crop_key  # src/clients/storage/keys.py, the crop-cache key; its first caller is the crop sizing work
+_.crop_key  # src/domain/storage_keys.py, the crop-cache key; its first caller is the crop sizing work
 
 # Landed ahead of their consumers (B2 stage 1, lane 1B): the advisory-lock classes are first used
 # by the periodic task bodies and the beat/migrate runners of later lanes, and QUEUE_PROFILE by

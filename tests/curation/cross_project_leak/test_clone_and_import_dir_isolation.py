@@ -55,21 +55,21 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     assert r2.status_code == 201, r2.text
 
     new_writes = leak_env.transport.writes[len(writes_before) :]
-    assert source_configs_index not in new_writes, (
-        "from_project clone wrote to the SOURCE project's configs index -- "
-        'the read_only bind on the source is not being honored'
-    )
-    assert target_configs_index in new_writes, (
-        'from_project clone never wrote to the target -- the clone did not actually happen'
-    )
+    assert source_configs_index not in new_writes
+    assert target_configs_index not in new_writes  # the config store is PostgreSQL
 
-    # The cloned docs must exist in the target, not the source.
-    target_docs = leak_env.transport.store.get(target_configs_index, {})
-    source_docs = leak_env.transport.store.get(source_configs_index, {})
-    assert 'pack:from-alpha-pack' in target_docs
-    assert 'pack:from-alpha-pack' not in source_docs
-    assert 'profile:from-alpha-profile' in target_docs
-    assert 'profile:from-alpha-profile' not in source_docs
+    alpha = SCOPED.format(project='alpha')
+    beta = SCOPED.format(project='beta')
+    for kind, source_name, new_name in (
+        ('prompt_packs', 'alpha-model', 'from-alpha-pack'),
+        ('region_profiles', 'alpha-model', 'from-alpha-profile'),
+    ):
+        # the clone landed in the target only, and the source was only read
+        assert client.get(f'{beta}/{kind}/{new_name}').status_code == 200
+        assert client.get(f'{alpha}/{kind}/{new_name}').status_code == 404
+        source = client.get(f'{alpha}/{kind}/{source_name}')
+        assert source.status_code == 200
+        assert source.json()['revision'] == 1
 
 
 def test_import_state_of_alpha_is_invisible_to_beta_and_a_misplaced_dir_is_refused(

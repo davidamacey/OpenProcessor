@@ -490,6 +490,10 @@ def pg_registry(pg: Any, pg_env: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr('src.db.session.get_async_engine', new_task_async_engine)
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         conn.execute('TRUNCATE project_slugs, projects CASCADE')
+    # the slug -> id cache would otherwise hand a config write the id of a truncated row
+    from src.services.config_store import bound_project
+
+    bound_project._IDS.clear()  # test-only cache reset
     # a project create writes its default spaces against the shipped encoder catalog
     from sqlalchemy.orm import Session
 

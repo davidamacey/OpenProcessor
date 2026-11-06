@@ -10,11 +10,11 @@ from __future__ import annotations
 import io
 from typing import Any
 
-from src.clients.storage.keys import make_key
 from src.clients.storage.roots import RootedStore, build_rooted_store
 from src.config.project_context import current_project
 from src.config.storage import storage_root_paths
 from src.core.logging import get_logger
+from src.domain.storage_keys import make_key
 
 
 logger = get_logger(__name__)

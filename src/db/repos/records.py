@@ -27,6 +27,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, insert as pg_insert
 from src.db.models import HoldoutFreeze, LabelOperation, LabelOperationMember, Project, ProjectState
 from src.db.models.config import PROJECT_STATE_KEYS
 from src.db.models.datasets import LABEL_OPERATION_STATUSES
+from src.domain.storage_keys import make_key
 
 
 if TYPE_CHECKING:
@@ -92,7 +93,9 @@ def _freeze_row(row: HoldoutFreeze) -> HoldoutFreezeRow:
         source=row.source,
         item_count=row.item_count,
         seed=row.seed,
-        snapshot_storage_key=row.snapshot_storage_key,
+        snapshot_storage_key=make_key(*row.snapshot_storage_key.split('/'))
+        if row.snapshot_storage_key is not None
+        else None,
         frozen_at=row.frozen_at,
         frozen_by=row.frozen_by,
     )
@@ -139,7 +142,9 @@ async def freeze_holdout(
         source=source,
         item_count=item_count,
         seed=seed,
-        snapshot_storage_key=snapshot_storage_key,
+        snapshot_storage_key=(
+            make_key(*snapshot_storage_key.split('/')) if snapshot_storage_key is not None else None
+        ),
         frozen_by=frozen_by,
     )
     session.add(row)
@@ -209,7 +214,11 @@ async def load_holdout_freezes(
             source=r.source,
             item_count=r.item_count,
             seed=r.seed,
-            snapshot_storage_key=r.snapshot_storage_key,
+            snapshot_storage_key=(
+                make_key(*r.snapshot_storage_key.split('/'))
+                if r.snapshot_storage_key is not None
+                else None
+            ),
             frozen_at=r.frozen_at,
             frozen_by=r.frozen_by,
         )

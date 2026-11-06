@@ -261,14 +261,12 @@ class _FakeTransport:
             if method == 'DELETE':
                 self._write(indices[0], doc_id, None, merge=False)
             elif action == '_update':
-                # `bump_config_revision`'s
-                # painless script + upsert body needs real semantics here,
-                # not the generic doc-merge below -- mirrors
-                # tests/curation/_fake_config_opensearch.py's
-                # FakeConfigOpenSearch.update(). A brand-new doc gets the
+                # A painless script + upsert body needs real semantics here,
+                # not the generic doc-merge below. A brand-new doc gets the
                 # upsert body verbatim (real OpenSearch never runs the
                 # script on the insert path); an existing doc gets the
-                # script's increment applied.
+                # script's increment applied. The config store itself lives
+                # in PostgreSQL now (src/db/repos/config.py).
                 current = self.store.get(indices[0], {}).get(doc_id)
                 script_source = (payload.get('script') or {}).get('source', '')
                 if current is None and 'config_revision' in script_source:

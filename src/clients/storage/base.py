@@ -20,7 +20,7 @@ class ReadOnlyRootError(PermissionError):
 
 @runtime_checkable
 class BlobStore(Protocol):
-    """Blobs addressed by keys from :mod:`src.clients.storage.keys`.
+    """Blobs addressed by keys from :mod:`src.domain.storage_keys`.
 
     ``list_prefix`` and ``delete_prefix`` match whole path segments: ``a/b`` covers ``a/b/c``
     and not ``a/bc``. ``local_path`` is for code that needs a real file (Ultralytics, Triton

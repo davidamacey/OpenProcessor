@@ -323,7 +323,7 @@ under its own project name; because no service has a `container_name`, the harne
   ([cloud storage](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_repository.html#cloud-storage-with-environment-variables)),
   and Immich keeps originals and regenerable derivatives apart, which this root list mirrors.
 - A ratchet (`tests/test_no_absolute_paths_in_db.py`) asserts every `*_storage_key`, `*_prefix` and
-  `*_key` column is written through `src/clients/storage/keys.py` (relative, no `..`, no leading `/`).
+  `*_key` column is written through `src/domain/storage_keys.py` (relative, no `..`, no leading `/`).
 - Research seams (lane 1E): crop cache keys carry the size variant,
   `projects/<slug>/crops/<item>/<box>/<max_side>.jpg` with `0` for the source size, so a cached
   source-size crop is never served as a capped one (GPU S-10, used by #219's `crop_sizing` in W5c);
