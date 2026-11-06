@@ -49,6 +49,18 @@ TEST_KINDS = (
         **{**_BASE, 'soft_limit_s': 2 * HOUR, 'hard_limit_s': 2 * HOUR + 900},
     ),
     JobKind(
+        name='t_slice',
+        task_name='op.test.slice',
+        project_scope='project',
+        queue=TaskQueues.JOBS,
+        soft_limit_s=400,
+        hard_limit_s=500,
+        max_queue_wait_s=HOUR,
+        exclusive_group='slicing',
+        pausable=True,
+        slice_s=1,
+    ),
+    JobKind(
         name='t_short',
         task_name='op.test.short',
         project_scope='project',
