@@ -140,3 +140,9 @@ _.upsert_devices  # InventoryWriter protocol method, called by start_inventory o
 _.capabilities  # parameter of the InventoryWriter protocol method, filled by the registered writer
 _.bind_request_id  # src/core/logging.py, binds the id on both ContextVars; tests/integration/test_request_id_propagation.py asserts the binding
 _.basic_auth  # scripts/flower/flowerconfig.py, an option Flower reads by name from its --conf file
+
+# Landed ahead of their consumers (B2 stage 1, lane 1F): the contract models are first used by the
+# engine export (5B) and the embedding catalog sync (ES-A). Delete each entry with its caller.
+_.EngineOutputContract  # src/schemas/models.py, validated by the engine export (stage 5)
+_.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
+_.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)

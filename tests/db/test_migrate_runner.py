@@ -47,7 +47,7 @@ def test_two_runners_at_once_both_succeed_and_the_schema_is_at_head_once(
     with ThreadPoolExecutor(2) as pool:
         for future in [pool.submit(run), pool.submit(run)]:
             future.result(timeout=120)
-    assert _versions(pg, empty_database) == ['0001_control_plane']
+    assert _versions(pg, empty_database) == ['0002_research_seams']
 
 
 def test_a_runner_waits_while_another_holds_the_migration_lock(
@@ -78,7 +78,7 @@ def test_a_runner_waits_while_another_holds_the_migration_lock(
 def test_a_rerun_is_a_no_op(pg: PgDatabase, empty_database) -> None:
     migrate.upgrade(empty_database, super_user=pg.server.super_user)
     migrate.upgrade(empty_database, super_user=pg.server.super_user)
-    assert migrate.current(empty_database) == '0001_control_plane'
+    assert migrate.current(empty_database) == '0002_research_seams'
 
 
 def test_the_application_role_has_data_rights_but_no_ddl(pg: PgDatabase) -> None:
