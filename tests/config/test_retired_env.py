@@ -117,3 +117,14 @@ def test_every_profile_feature_output_override_is_retired(
     monkeypatch.setenv(name, 'sppf_feat')
     with pytest.raises(RuntimeError, match=name):
         reject_retired_env()
+
+
+@pytest.mark.parametrize('name', ['OP_PROJECTS_INDEX', 'OP_GLOBAL_CONFIGS_INDEX'])
+def test_the_control_index_names_are_retired_for_postgresql(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert RETIRED_ENV[name].startswith('removed:')
+    assert 'PostgreSQL' in RETIRED_ENV[name]
+    monkeypatch.setenv(name, 'op_anything')
+    with pytest.raises(RuntimeError, match=f'{name} was removed'):
+        reject_retired_env()

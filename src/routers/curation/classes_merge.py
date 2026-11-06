@@ -13,7 +13,6 @@ from src.routers.curation._common import (
     OpenSearchDep,
     get_class_registry,
     items_index,
-    labels_confirmed_index,
     logger,
     router,
 )
@@ -123,36 +122,6 @@ async def merge_class(
             'must_not': [{'term': {'test_holdout': True}}],
         },
     }
-    # The confirmed-labels index has no class_id_history / class_validated
-    # field (its label_source means "original label provenance", not
-    # "is this human-confirmed") — stays a plain update_by_query.
-    #
-    # This index has no mapping for cluster_id/cluster_subid — they
-    # were only ever written here (nothing reads them off this index;
-    # models.py's health check only checks index existence), so an
-    # unmapped field was accumulating on every merge for no reader. Drop
-    # both writes rather than add a mapping for dead fields.
-    try:
-        await opensearch.update_by_query(
-            index=labels_confirmed_index(),
-            body={
-                'script': {
-                    'source': (
-                        'ctx._source.class_id = params.class_id;'
-                        'ctx._source.class_name = params.class_name;'
-                        'ctx._source.class_source = params.class_source;'
-                        'ctx._source.updated_at = params.updated_at;'
-                    ),
-                    'params': relabel_doc,
-                },
-                'query': merge_query,
-            },
-            conflicts='proceed',
-            refresh=True,
-        )
-    except Exception as exc:
-        logger.warning('merge_relabel_failed', index=labels_confirmed_index(), error=str(exc))
-
     # Items index: a per-doc OCC bulk pass (rather than a bare
     # update_by_query painless script) so class_id_history gets appended
     # (dedupe/cap both live in record_class_history, reused here rather

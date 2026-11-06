@@ -249,6 +249,20 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     stub._refreshed = True
     registry_mod.set_project_registry(stub)
 
+    # The lifespan's mapping check reads OpenSearch, which unit tests never reach. The check
+    # itself is tested in tests/opensearch/test_mapping_gate.py against its original function.
+    # It still builds the shared client the way the real one does (a failed ping leaves the
+    # client cached), because later lifespan steps take that client without pinging again.
+    async def _no_mapping_check() -> None:
+        from contextlib import suppress
+
+        from src.core.dependencies import OpenSearchClientFactory
+
+        with suppress(RuntimeError):
+            await OpenSearchClientFactory.get_client()
+
+    monkeypatch.setattr('src.core.dependencies.bootstrap_opensearch_indexes', _no_mapping_check)
+
     # Script entry points resolve ``--project`` through the registry; here
     # it holds only the env-derived ``default`` (tests/projects/
     # test_script_binding.py exercises the real read).

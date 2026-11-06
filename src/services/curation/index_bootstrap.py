@@ -1,11 +1,10 @@
-"""The bound project's curation index bootstrap: create the indexes, run the
-mapping migrations and self-heal the classes index, once per project per process.
+"""The bound project's curation index bootstrap: create the indexes and run the mapping
+migrations, then stamp each mapping's ``_meta`` with :func:`schema_fingerprint`.
 
-The migrations are additive ``PUT _mapping`` calls, some sixty per project, and every
-uvicorn worker bootstraps every active project at startup (#356). So after a full run
-each index's mapping ``_meta`` is stamped with :func:`schema_fingerprint`, and a later
-process reads every index's marker in one request: when all are current (and the items
-index already has its inner-result window) it runs no migration (#376).
+The migrations are additive ``PUT _mapping`` calls, some sixty per project. They run in the
+one-shot ``db-migrate`` step (``scripts/opensearch/migrate.py``) and when a project is created,
+never in the API lifespan or a request: the API only checks the stamps
+(:func:`check_mappings_current`) and refuses to start on a wrong or missing one.
 """
 
 from __future__ import annotations
@@ -27,7 +26,6 @@ from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_text_fields,
     ensure_items_validation_split_fields,
     ensure_items_vlm_raw_label_fields,
-    ensure_labels_confirmed_fields,
 )
 from src.clients.curation_opensearch.ensure_overlay_fields import (
     adopt_inner_result_window,
@@ -40,7 +38,6 @@ from src.clients.curation_opensearch.ensure_overlay_fields import (
     ensure_items_score_fields,
     ensure_items_viz_fields,
 )
-from src.clients.curation_opensearch.ensure_settings_fields import ensure_settings_object_keys
 from src.clients.curation_opensearch.items_extra import (
     ensure_items_audit_fields,
     ensure_items_detector_fields,
@@ -86,6 +83,44 @@ def schema_fingerprint() -> str:
     }
     text = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+class MappingNotCurrentError(RuntimeError):
+    """An index of an active project is missing or carries another schema stamp."""
+
+    code = 'opensearch_mapping_not_current'
+
+    def __init__(self, indexes: list[str]):
+        super().__init__(
+            f'{self.code}: {", ".join(indexes)}; the db-migrate service creates and migrates the '
+            'indexes and must complete before the API starts'
+        )
+        self.indexes = indexes
+
+
+async def check_mappings_current(opensearch: Any, names: list[str]) -> None:
+    """Read the schema stamp of every index in ``names`` in one ``_mapping`` call and raise
+    :class:`MappingNotCurrentError` naming each index that is missing or stamped otherwise.
+
+    OpenSearch get-mapping with ``ignore_unavailable`` and ``filter_path``:
+    https://docs.opensearch.org/latest/api-reference/index-apis/get-mapping/
+    """
+    if not names:
+        return
+    resp = await opensearch.indices.get_mapping(
+        index=','.join(names),
+        ignore_unavailable=True,
+        filter_path=f'*.mappings._meta.{SCHEMA_META_KEY}',
+    )
+    current = schema_fingerprint()
+    stale = [
+        name
+        for name in names
+        if (((resp.get(name) or {}).get('mappings') or {}).get('_meta') or {}).get(SCHEMA_META_KEY)
+        != current
+    ]
+    if stale:
+        raise MappingNotCurrentError(stale)
 
 
 async def warm_knn_indexes(opensearch: Any) -> None:
@@ -167,9 +202,7 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
         ('embedding_fields', ensure_items_embedding_fields),
         ('open_vocab_fields', ensure_open_vocab_fields),
         ('assist_fields', ensure_assist_fields),
-        ('labels_confirmed_fields', ensure_labels_confirmed_fields),
         ('label_op_field', ensure_items_label_op_field),
-        ('settings_object_keys', ensure_settings_object_keys),
     )
 
 

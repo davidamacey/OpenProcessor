@@ -81,25 +81,7 @@ class CurationConfig:
     # no second naming path.
     images_index: str = _FROM_DEFAULT_PROJECT
     items_index: str = _FROM_DEFAULT_PROJECT
-    labels_confirmed_index: str = _FROM_DEFAULT_PROJECT
-    classes_index: str = _FROM_DEFAULT_PROJECT
-    # The strategy defaults moved to the ``project_settings`` row; this role is deleted with
-    # the control indexes.
-    # Shard folding (owner D4, projects_plan.md §2.3): SETTINGS folds onto
-    # CONFIGS's name for every project, ``default`` included --
-    # ``resources_for_new`` (via __post_init__ below) resolves the folded
-    # name; there is no second naming path.
-    settings_index: str = _FROM_DEFAULT_PROJECT
-    # Two deliberately distinct UMAP-state indexes (see
-    # ``src/services/curation/embedding_viz.py`` module docstring):
-    # the retired clustering reducer's fitted-manifold cache
-    # (``clustering/umap_state.py``) and the visualization-only
-    # projection's own metadata slot. UMAP_STATE keeps its own index;
-    # UMAP_VIZ_STATE folds onto CONFIGS's name (shard folding, owner D4).
-    umap_state_index: str = _FROM_DEFAULT_PROJECT
-    umap_viz_state_index: str = _FROM_DEFAULT_PROJECT
-    # Prompt packs, region profiles, activations, revision counter.
-    configs_index: str = _FROM_DEFAULT_PROJECT
+    leases_index: str = _FROM_DEFAULT_PROJECT
 
     class_registry_path: Path = _FROM_DEFAULT_PROJECT_PATH
     # Optional deployment-supplied VLM PromptPack (see

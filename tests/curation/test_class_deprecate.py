@@ -104,27 +104,13 @@ def test_deprecate_empty_class_works(client: TestClient, registry: InMemoryRegis
 def test_deprecate_class_with_items_is_409_with_counts(
     client: TestClient, fake_os: AsyncMock, registry: InMemoryRegistry
 ) -> None:
-    fake_os.count = AsyncMock(side_effect=[{'count': 3}, {'count': 1}])
+    fake_os.count = AsyncMock(return_value={'count': 3})
     resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 409, resp.text
     detail = resp.json()['detail']
     assert detail['error'] == 'class_still_referenced'
     assert detail['class_id'] == 0
     assert detail['item_count'] == 3
-    assert detail['confirmed_label_count'] == 1
-    assert _entry(registry, 0).deprecated is False
-
-
-def test_deprecate_class_with_only_confirmed_labels_is_409(
-    client: TestClient, fake_os: AsyncMock, registry: InMemoryRegistry
-) -> None:
-    """Items-index count can be zero while confirmed-label docs still
-    reference the class -- either nonzero count blocks."""
-    fake_os.count = AsyncMock(side_effect=[{'count': 0}, {'count': 2}])
-    resp = client.post('/curation/projects/default/classes/0/deprecate')
-    assert resp.status_code == 409, resp.text
-    assert resp.json()['detail']['item_count'] == 0
-    assert resp.json()['detail']['confirmed_label_count'] == 2
     assert _entry(registry, 0).deprecated is False
 
 

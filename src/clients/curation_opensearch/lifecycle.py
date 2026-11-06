@@ -6,14 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.base import config, logger
 from src.clients.curation_opensearch.bodies_core import _images_body, _items_body
-from src.clients.curation_opensearch.bodies_other import (
-    _classes_body,
-    _configs_body,
-    _labels_confirmed_body,
-    _settings_body,
-    _umap_state_body,
-    _umap_viz_state_body,
-)
+from src.clients.curation_opensearch.bodies_other import _leases_body
 from src.config import CurationConfig, IndexRole, index_name
 
 
@@ -24,12 +17,7 @@ if TYPE_CHECKING:
 INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
     IndexRole.IMAGES: _images_body(),
     IndexRole.ITEMS: _items_body(),
-    IndexRole.LABELS_CONFIRMED: _labels_confirmed_body(),
-    IndexRole.CLASSES: _classes_body(),
-    IndexRole.SETTINGS: _settings_body(),
-    IndexRole.UMAP_STATE: _umap_state_body(),
-    IndexRole.UMAP_VIZ_STATE: _umap_viz_state_body(),
-    IndexRole.CONFIGS: _configs_body(),
+    IndexRole.LEASES: _leases_body(),
 }
 
 
@@ -96,42 +84,10 @@ async def create_curation_indexes(
 
 
 def _bodies_by_name(cfg: CurationConfig) -> dict[str, dict[str, Any]]:
-    """The body of each distinct index name of ``cfg``'s project.
-
-    A project may fold several roles onto one index name (shard folding,
-    owner D4 -- SETTINGS / UMAP_VIZ_STATE onto CONFIGS for a project
-    created with the config store). Their mapping properties are merged into
-    one body per distinct name rather than creating the name once with only
-    whichever role's body happened to be seen first."""
-    bodies_by_name: dict[str, dict[str, Any]] = {}
-    for role, body in INDEX_BODIES.items():
-        name = index_name(cfg, role)
-        if name in bodies_by_name:
-            bodies_by_name[name] = _merge_index_bodies(bodies_by_name[name], body)
-        else:
-            bodies_by_name[name] = body
-    return bodies_by_name
+    """The body of each index of ``cfg``'s project, by index name."""
+    return {index_name(cfg, role): body for role, body in INDEX_BODIES.items()}
 
 
 def curation_index_names(cfg: CurationConfig | None = None) -> list[str]:
-    """The distinct index names of the bound project (or of ``cfg``), in creation order."""
+    """The index names of the bound project (or of ``cfg``), in creation order."""
     return list(_bodies_by_name(cfg or config))
-
-
-def _merge_index_bodies(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
-    """Union two index bodies' mapping properties (settings/shard config
-    taken from ``first``) -- used when shard folding maps more than one
-    ``IndexRole`` onto the same index name."""
-    merged_properties = {
-        **first.get('mappings', {}).get('properties', {}),
-        **second.get('mappings', {}).get('properties', {}),
-    }
-    return {
-        'settings': first.get('settings', {}),
-        'mappings': {
-            'dynamic': first.get('mappings', {}).get(
-                'dynamic', second.get('mappings', {}).get('dynamic')
-            ),
-            'properties': merged_properties,
-        },
-    }

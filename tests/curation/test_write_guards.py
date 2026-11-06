@@ -249,8 +249,8 @@ class TestAutomatedClassWritersExcludeTestHoldout:
                 ClassMergeRequest(source_id=source_id, target_id=target_id), fake_os
             )
 
-        assert fake_os.update_by_query.await_count >= 1
-        query = fake_os.update_by_query.await_args_list[0].kwargs['body']['query']
+        assert fake_os.search.await_count >= 1
+        query = fake_os.search.await_args_list[0].kwargs['body']['query']
         must_not = query['bool']['must_not']
         assert {'term': {'test_holdout': True}} in must_not
 

@@ -111,7 +111,6 @@ services:
       - OPENSEARCH_URL=http://opensearch:9200
       # Every project index carries the verify_ prefix, as for api.
       - OP_PROJECT_INDEX_PREFIX=verify_prj_
-      - OP_PROJECTS_INDEX=verify_projects
     depends_on:
       postgres:
         condition: service_healthy
@@ -218,7 +217,6 @@ services:
       # to run if any of them does not. `default` is bootstrapped as
       # verify_prj_default__<role>.
       - OP_PROJECT_INDEX_PREFIX=verify_prj_
-      - OP_PROJECTS_INDEX=verify_projects
       # Writable, host-visible filesystem roots.
       - OP_PROJECTS_DATA_ROOT=/verify-data/projects
       - OP_SOURCE_ROOT=/verify-data/images

@@ -191,11 +191,6 @@ async def test_script_populates_what_the_review_endpoint_reads(
 
     fake = FakeItemsOpenSearch(_corpus())
 
-    async def _noop(_client: Any) -> None:
-        return None
-
-    monkeypatch.setattr(review, 'ensure_indexes', _noop)
-
     # Before the script runs, the endpoint is the documented empty state.
     before = await review.review_raw_label_clusters(fake, size=50, samples_per_cluster=5)
     assert before['status'] == 'empty'

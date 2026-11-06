@@ -26,19 +26,17 @@ from pathlib import Path
 from typing import Any
 
 from scripts.db.v060_index_bodies import (
+    CLASSES_BODY,
     GLOBAL_CONFIGS_INDEX_BODY,
+    LABELS_CONFIRMED_BODY,
     PROJECTS_INDEX_BODY,
+    SETTINGS_BODY,
+    UMAP_STATE_BODY,
+    UMAP_VIZ_STATE_BODY,
     configs_body as _configs_body,
     images_body,
     index,
     items_body,
-)
-from src.clients.curation_opensearch.bodies_other import (
-    _classes_body,
-    _labels_confirmed_body,
-    _settings_body,
-    _umap_state_body,
-    _umap_viz_state_body,
 )
 
 
@@ -593,10 +591,10 @@ def build_opensearch() -> dict[str, Any]:
         _configs_body(), {**configs_docs(), 'lease:label_undo': {'lease': {'holder': 'x'}}}
     )
     out[default_roles['settings']] = index(
-        _settings_body(), {'default': {'defaults': {'scorer': 'entropy'}, 'updated_at': T1}}
+        SETTINGS_BODY, {'default': {'defaults': {'scorer': 'entropy'}, 'updated_at': T1}}
     )
     out[default_roles['umap_viz_state']] = index(
-        _umap_viz_state_body(),
+        UMAP_VIZ_STATE_BODY,
         {
             'current': {
                 'state_id': 'current',
@@ -611,7 +609,7 @@ def build_opensearch() -> dict[str, Any]:
         },
     )
     out[default_roles['umap_state']] = index(
-        _umap_state_body(),
+        UMAP_STATE_BODY,
         {
             'current': {
                 'state_id': 'current',
@@ -622,10 +620,10 @@ def build_opensearch() -> dict[str, Any]:
         },
     )
     out[default_roles['classes']] = index(
-        _classes_body(), {'0': {'class_id': 0, 'class_name': 'car', 'sample_count': 2}}
+        CLASSES_BODY, {'0': {'class_id': 0, 'class_name': 'car', 'sample_count': 2}}
     )
     out[default_roles['labels_confirmed']] = index(
-        _labels_confirmed_body(), {'l1': {'label_id': 'l1', 'class_id': 0, 'class_name': 'car'}}
+        LABELS_CONFIRMED_BODY, {'l1': {'label_id': 'l1', 'class_id': 0, 'class_name': 'car'}}
     )
     # demo: folded layout (settings and view state live in the configs index)
     out[demo_roles['images']] = index(images_body('lucene'))
@@ -655,12 +653,12 @@ def build_opensearch() -> dict[str, Any]:
     out[lean_roles['images']] = index(images_body('lucene'))
     out[lean_roles['items']] = index(items_body('lucene'))
     out[lean_roles['configs']] = index(_configs_body(), lean)
-    out[lean_roles['umap_state']] = index(_umap_state_body())
-    out[lean_roles['classes']] = index(_classes_body())
-    out[lean_roles['labels_confirmed']] = index(_labels_confirmed_body())
-    out[demo_roles['umap_state']] = index(_umap_state_body())
-    out[demo_roles['classes']] = index(_classes_body())
-    out[demo_roles['labels_confirmed']] = index(_labels_confirmed_body())
+    out[lean_roles['umap_state']] = index(UMAP_STATE_BODY)
+    out[lean_roles['classes']] = index(CLASSES_BODY)
+    out[lean_roles['labels_confirmed']] = index(LABELS_CONFIRMED_BODY)
+    out[demo_roles['umap_state']] = index(UMAP_STATE_BODY)
+    out[demo_roles['classes']] = index(CLASSES_BODY)
+    out[demo_roles['labels_confirmed']] = index(LABELS_CONFIRMED_BODY)
     return out
 
 

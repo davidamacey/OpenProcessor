@@ -29,6 +29,7 @@ from src.config.storage import storage_root_paths
 from src.db.engine import database_url, one_off_connection
 from src.services.upgrade import gate
 from src.services.upgrade.from_060.admin_client import ControlReader, ControlWriter, build_client
+from src.services.upgrade.from_060.analysis_settings import AnalysisSettingsError
 from src.services.upgrade.from_060.layout import Layout
 from src.services.upgrade.from_060.model import UnresolvedBuiltinError
 from src.services.upgrade.from_060.reset import reset
@@ -60,6 +61,7 @@ def summary_lines(result: UpgradeResult) -> str:
         f'projects whose indexes are missing (status failed): {", ".join(failed) or "none"}',
         f'bundle: {result.bundle}',
         f'report: {result.report_path}',
+        *result.analysis_lines,
     ]
     return '\n'.join(lines) + '\n'
 
@@ -82,6 +84,7 @@ async def run(install_dir: Path) -> int:
             layout=Layout.from_env(),
             store=build_rooted_store(storage_root_paths()),
             install_dir=install_dir,
+            analysis_client=client,
         )
         try:
             result = await runner.run()
@@ -93,6 +96,9 @@ async def run(install_dir: Path) -> int:
             return 0
         except UnresolvedBuiltinError as exc:
             sys.stderr.write(f'the upgrade stopped, nothing was changed: {exc}\n')
+            return 2
+        except AnalysisSettingsError as exc:
+            sys.stderr.write(f'the upgrade stopped before deleting anything: {exc}\n')
             return 2
         except VerifyFailedError as exc:
             sys.stderr.write(f'{exc}\n')
@@ -109,6 +115,7 @@ async def run(install_dir: Path) -> int:
             'steps': result.steps_run,
             'class_drift': (result.verify.class_drift if result.verify else {}),
             'failed_projects': (result.verify.failed_projects if result.verify else []),
+            'analysis_settings': result.analysis_lines,
         }
         sys.stdout.write(json.dumps(summary, indent=2, sort_keys=True) + '\n')
         return 0

@@ -294,15 +294,8 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
         )
     assert r.status_code == 200, r.text
 
-    # Confirmed-labels index: unchanged plain update_by_query, no
-    # class_validated/label_source touched.
-    ubq_calls = fake_opensearch.update_by_query.call_args_list
-    assert len(ubq_calls) == 1
-    labels_body = ubq_calls[0].kwargs['body']
-    assert ubq_calls[0].kwargs['index'] == 'op_prj_default__labels_confirmed'
-    labels_source = labels_body['script']['source']
-    assert 'class_validated' not in labels_source
-    assert 'label_source' not in labels_source
+    # There is no confirmed-labels index to relabel any more.
+    assert fake_opensearch.update_by_query.call_args_list == []
 
     # Items index: per-doc OCC bulk update (batched mget+bulk) resets the
     # stale human provenance on the merged crop.

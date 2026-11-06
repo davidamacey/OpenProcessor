@@ -1,6 +1,6 @@
 """Rules of the OpenSearch job lease (J-LEASE): kinds, document ids, expiry, results.
 
-A lease is one document in the bound project's SETTINGS-role index, written create-only
+A lease is one document in the bound project's leases index, written create-only
 and with ``if_seq_no`` / ``if_primary_term`` (see ``src/clients/job_lease.py`` for the
 operations). This module holds only the pure rules both the client and the callers share.
 """

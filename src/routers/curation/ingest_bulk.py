@@ -36,7 +36,6 @@ from src.services.curation.bulk_ingest.source import (
     validate_source,
 )
 from src.services.curation.bulk_ingest.store import list_stores
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_service_factory import get_ingest_service
 
 
@@ -77,7 +76,6 @@ async def start_bulk_ingest(
         validate_source(source)
     except InvalidSourceError as exc:
         raise api_error(422, 'bulk_ingest_invalid_source', str(exc), project=slug()) from None
-    await ensure_indexes(opensearch)
     # Refuse up front (503) what the first batch would refuse: no detector, no encoder.
     await get_ingest_service(opensearch, registry)
     address = own_address(request)

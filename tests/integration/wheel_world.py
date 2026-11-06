@@ -21,7 +21,7 @@ from opensearchpy.serializer import JSONSerializer
 from projects.conftest import FakeLifecycleOpenSearch
 
 
-_DATA_INDEX = re.compile(r'^op_prj_.+__(items|images|labels_confirmed|classes|umap_state)$')
+_DATA_INDEX = re.compile(r'^op_prj_.+__(items|images|leases)$')
 _SERIALIZER = JSONSerializer()  # the client's own: handles numpy scalars, datetimes, UUIDs
 #: Every audit op that changes the cluster: what "never written" assertions use.
 WRITE_OPS = frozenset(

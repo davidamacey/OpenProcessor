@@ -79,7 +79,7 @@ class World:
             for role, name in new_project_record(
                 'default', base_curation_config()
             ).resources.indexes.items()
-            if role in (IndexRole.ITEMS, IndexRole.IMAGES, IndexRole.LABELS_CONFIRMED)
+            if role in (IndexRole.ITEMS, IndexRole.IMAGES)
         }
         self.default_items = next(i for i in self.default_indexes if i.endswith('__items'))
         self.sentinel = {'crop_id': 'sentinel', 'class_name': 'car', 'class_id': 0}

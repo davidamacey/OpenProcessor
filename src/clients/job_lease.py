@@ -1,7 +1,7 @@
 """Job leases: one OpenSearch document per running singleton job.
 
 A lease is the cross-process claim "this job is running": a document in the bound project's
-SETTINGS-role index, written create-only and with optimistic concurrency, so two API workers
+leases index, written create-only and with optimistic concurrency, so two API workers
 cannot both start one job and a sibling's live job is never taken over. Official behaviour
 relied on (OpenSearch index API,
 https://docs.opensearch.org/latest/api-reference/document-apis/index-document/):
@@ -62,7 +62,7 @@ def is_conflict(exc: Exception) -> bool:
 async def _get(client: AsyncOpenSearch, did: str) -> _Doc | None:
     """The lease document ``(lease, seq_no, primary_term)``; ``None`` when absent."""
     try:
-        resp = await client.get(index=idx(IndexRole.SETTINGS), id=did)
+        resp = await client.get(index=idx(IndexRole.LEASES), id=did)
     except NotFoundError:
         return None
     lease = (resp.get('_source') or {}).get('lease')
@@ -73,7 +73,7 @@ async def _get(client: AsyncOpenSearch, did: str) -> _Doc | None:
 
 async def _create(client: AsyncOpenSearch, did: str, lease: dict[str, Any]) -> tuple[int, int]:
     resp = await client.index(
-        index=idx(IndexRole.SETTINGS),
+        index=idx(IndexRole.LEASES),
         id=did,
         body={'lease': lease},
         op_type='create',
@@ -86,7 +86,7 @@ async def _replace(
     client: AsyncOpenSearch, did: str, lease: dict[str, Any], seq_no: int, primary_term: int
 ) -> tuple[int, int]:
     resp = await client.index(
-        index=idx(IndexRole.SETTINGS),
+        index=idx(IndexRole.LEASES),
         id=did,
         body={'lease': lease},
         if_seq_no=seq_no,

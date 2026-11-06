@@ -152,10 +152,6 @@ def review_client(monkeypatch: pytest.MonkeyPatch):
     fake = QueryFakeOpenSearch(
         {ITEMS: {'a': _item('a', cluster_distance=0.3), 'b': _item('b', cluster_distance=0.1)}}
     )
-    for mod in ('review', 'settings'):
-        monkeypatch.setattr(
-            f'src.routers.curation.{mod}.ensure_indexes', AsyncMock(return_value=None)
-        )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
@@ -197,10 +193,6 @@ class _SettingsWithCoverage:
 def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    for mod in ('review', 'settings'):
-        monkeypatch.setattr(
-            f'src.routers.curation.{mod}.ensure_indexes', AsyncMock(return_value=None)
-        )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

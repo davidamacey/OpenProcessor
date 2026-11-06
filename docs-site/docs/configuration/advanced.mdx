@@ -22,7 +22,6 @@ record; changing them later does not move an existing project. The
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_PROJECTS_INDEX` | `op_projects` | Index holding the project records |
 | `OP_PROJECT_INDEX_PREFIX` | `op_prj_` | Prefix of every project index |
 | `OP_PROJECTS_DATA_ROOT` | `./data/projects` | Parent of each project's exports, bake-off eval sets and (until migrated) legacy `class_registry.json` |
 | `OP_SHARDS_PER_HEAP_GB` | `20` | Shards per GB of OpenSearch heap, for the soft shard budget. Past the budget, creating a project only warns; it is not a cap |

@@ -9,29 +9,26 @@ requests (``/assist/runs``, a ``cluster_id``-scoped auto-label run) are not limi
 from __future__ import annotations
 
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._common import router
 from src.routers.curation._vlm_policy_models import VlmPolicyUpdate  # noqa: TC001 - FastAPI
 from src.schemas.curation.config_common import ApiErrorResponse
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.vlm_policy import VlmPolicy, VlmPolicyBody
 from src.services.curation.vlm_policy_store import get_vlm_policy, put_vlm_policy
 
 
 @router.get('/vlm/policy', response_model=VlmPolicy)
-async def get_policy(opensearch: OpenSearchDep) -> VlmPolicy:
+async def get_policy() -> VlmPolicy:
     """The project's VLM scope policy; scope ``all`` (every eligible crop) when
     none was ever written."""
-    await ensure_indexes(opensearch)
     return await get_vlm_policy()
 
 
 @router.put('/vlm/policy', response_model=VlmPolicy, responses={409: {'model': ApiErrorResponse}})
-async def put_policy(body: VlmPolicyUpdate, opensearch: OpenSearchDep) -> VlmPolicy:
+async def put_policy(body: VlmPolicyUpdate) -> VlmPolicy:
     """Replace the policy. ``409`` when ``expected_revision`` is not the stored
     revision (re-read and retry). Takes effect on the worker's next poll (within
     about 30 seconds) and on the next ``auto_label`` run; stored labels are untouched."""
-    await ensure_indexes(opensearch)
     policy_body = VlmPolicyBody(**body.model_dump(exclude={'expected_revision'}))
     try:
         return await put_vlm_policy(policy_body, expected_revision=body.expected_revision)

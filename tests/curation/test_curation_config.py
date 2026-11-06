@@ -58,13 +58,11 @@ def test_index_name_resolves_each_role() -> None:
     cfg = CurationConfig(
         images_index='custom_images',
         items_index='custom_items',
-        labels_confirmed_index='custom_labels',
-        classes_index='custom_classes',
+        leases_index='custom_leases',
     )
     assert index_name(cfg, IndexRole.IMAGES) == 'custom_images'
     assert index_name(cfg, IndexRole.ITEMS) == 'custom_items'
-    assert index_name(cfg, IndexRole.LABELS_CONFIRMED) == 'custom_labels'
-    assert index_name(cfg, IndexRole.CLASSES) == 'custom_classes'
+    assert index_name(cfg, IndexRole.LEASES) == 'custom_leases'
 
 
 def test_from_env_overrides_only_set_vars(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -85,7 +83,7 @@ def test_from_env_respects_custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Non
     ('var', 'field'),
     [
         ('OP_ITEMS_INDEX', 'items_index'),
-        ('OP_CLASSES_INDEX', 'classes_index'),
+        ('OP_LEASES_INDEX', 'leases_index'),
         ('OP_REGISTRY_PATH', 'class_registry_path'),
         ('OP_EXPORT_ROOT', 'export_root'),
         ('OP_UPLOAD_ROOT', 'upload_root'),

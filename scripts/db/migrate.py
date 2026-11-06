@@ -6,11 +6,16 @@ creates the owner and application roles; then, as the owner on the direct host (
 a pooler: the lock below is a session lock), it takes ``pg_advisory_lock(2, 0)`` for the whole
 run, upgrades to head on that same connection, re-applies the application role's grants and
 unlocks. Two runners started together serialize and the second finds the schema at head.
+
+After the schema is at head the same step syncs the embedding model catalog, creates the
+``default`` project of a fresh install and runs the one OpenSearch migration
+(``scripts/opensearch/migrate.py``), so no API worker creates or migrates an index.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -21,10 +26,14 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, pool, text
 from sqlalchemy.engine import URL
+from sqlalchemy.orm import Session
 
+from scripts.opensearch.migrate import run as opensearch_run
 from src.config.advisory_locks import MIGRATE
 from src.config.database import SUPER_USER, DatabaseSettings
 from src.db import roles
+from src.db.engine import one_off_connection
+from src.services.embedding_spaces.catalog import sync_catalog
 
 
 if TYPE_CHECKING:
@@ -109,6 +118,21 @@ def upgrade(settings: DatabaseSettings, *, super_user: str = SUPER_USER) -> None
             conn.commit()
 
 
+def sync_embedding_catalog() -> None:
+    """Insert the catalog rows a project create needs (it fails closed without them)."""
+    with (
+        one_off_connection('app', application_name='op-migrate-catalog') as conn,
+        Session(bind=conn) as session,
+    ):
+        sync_catalog(session)
+
+
+def post_upgrade() -> None:
+    """After the schema is at head: the embedding catalog, then the OpenSearch migration."""
+    sync_embedding_catalog()
+    asyncio.run(opensearch_run())
+
+
 def current(settings: DatabaseSettings) -> str | None:
     """The revision the database is at, or ``None`` before the first migration."""
     with _owner_connection(settings) as conn:
@@ -130,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = DatabaseSettings.from_env()
     if args.action == 'upgrade':
         upgrade(settings)
+        post_upgrade()
     elif args.action == 'current':
         sys.stdout.write(f'{current(settings)}\n')
     else:

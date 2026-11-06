@@ -128,7 +128,6 @@ class FakeOpenSearch:
     def __init__(self, *, near_real_time: bool = False) -> None:
         self.images: dict[str, dict[str, Any]] = {}
         self.items: dict[str, dict[str, Any]] = {}
-        self.labels: dict[str, dict[str, Any]] = {}
         self.near_real_time = near_real_time
         self._searchable: dict[str, set[str]] = {'images': set(), 'items': set()}
         self.refresh_calls: list[str] = []
@@ -283,18 +282,14 @@ class FakeOpenSearch:
         body: list[dict[str, Any]],
         refresh: bool | str = False,  # noqa: ARG002
     ) -> dict[str, Any]:
-        from src.config import get_curation_config
 
         items_index = self._items_index()
-        labels_index = get_curation_config().labels_confirmed_index
         result_items = []
         for action, doc in zip(body[0::2], body[1::2], strict=True):
             if 'index' in action:
                 meta = action['index']
                 if meta['_index'] == items_index:
                     store = self.items
-                elif meta['_index'] == labels_index:
-                    store = self.labels
                 else:
                     store = self.images
                 store[meta['_id']] = doc

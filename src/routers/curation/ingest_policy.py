@@ -24,7 +24,6 @@ from src.routers.curation._ingest_policy_models import (
 )
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.detector_vocabulary import detector_labels
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_detector import project_ingest_profiles
 from src.services.curation.ingest_policy import (
     IngestPolicy,
@@ -71,10 +70,9 @@ async def _known_slugs() -> set[str]:
 
 
 @router.get('/ingest/policy', response_model=IngestPolicy)
-async def get_policy(opensearch: OpenSearchDep) -> IngestPolicy:
+async def get_policy() -> IngestPolicy:
     """The project's ingest policy; the defaults (store and embed everything)
     when none was ever written."""
-    await ensure_indexes(opensearch)
     return await get_ingest_policy()
 
 
@@ -83,13 +81,10 @@ async def get_policy(opensearch: OpenSearchDep) -> IngestPolicy:
     response_model=IngestPolicyPutResponse,
     responses={409: {'model': ApiErrorResponse}},
 )
-async def put_policy(
-    body: IngestPolicyUpdate, opensearch: OpenSearchDep
-) -> IngestPolicyPutResponse:
+async def put_policy(body: IngestPolicyUpdate) -> IngestPolicyPutResponse:
     """Replace the policy. ``409`` when ``expected_revision`` is not the stored
     revision (re-read and retry). Affects future ingests and explicit embed
     runs only, never stored data."""
-    await ensure_indexes(opensearch)
     policy_body = IngestPolicyBody(
         detect=body.detect,
         embedding=body.embedding,
@@ -111,7 +106,6 @@ async def put_policy(
 async def preview_policy(body: IngestPolicyBody, opensearch: OpenSearchDep) -> IngestPolicyPreview:
     """What ``body.embedding`` would embed over the stored items (one image's
     items at a time, the same function ingest runs). Read-only."""
-    await ensure_indexes(opensearch)
     cfg = get_curation_config()
     total = (await opensearch.count(index=cfg.items_index)).get('count', 0)
     docs = await scan_items(

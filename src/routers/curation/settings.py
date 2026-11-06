@@ -37,7 +37,6 @@ from src.routers.curation._common_models import (
     CurationSettingsResponse,
     CurationSettingsUpdateRequest,
 )
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.resource_links import schedule_reachability_refresh
 
 
@@ -156,7 +155,7 @@ async def _config_store_axis_defaults() -> dict[str, str | None]:
 
 
 @router.get('/settings', response_model=CurationSettingsResponse)
-async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSettingsResponse:
+async def get_curation_settings_route() -> CurationSettingsResponse:
     """Current shared curation-strategy defaults.
 
     No document yet (nothing has ever been ``PUT``) is not an error --
@@ -170,7 +169,6 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
     from src.services.curation.settings_store import get_curation_settings
 
     schedule_reachability_refresh()
-    await ensure_indexes(opensearch)
     doc = await get_curation_settings(fresh=True)
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
         await _config_store_axis_defaults()
@@ -208,7 +206,6 @@ async def update_curation_settings_route(
         update_curation_settings,
     )
 
-    await ensure_indexes(opensearch)
     # Refuse a stale revision before any axis is activated: the writes below are sequential, so
     # a conflict found only at the end would leave the earlier axes applied.
     stored_revision = (await get_curation_settings(fresh=True))['revision']

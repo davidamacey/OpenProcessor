@@ -76,6 +76,7 @@ def make_runner(owner_sessions, v060: V060Install, tmp_path: Path):
             layout=v060.layout,
             store=v060.store,
             install_dir=tmp_path / '.install',
+            analysis_client=overrides.pop('analysis_client', v060.os),
             now=lambda: NOW,
             **overrides,
         )

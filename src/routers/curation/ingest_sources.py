@@ -76,7 +76,6 @@ from src.services.curation.bulk_ingest.sources import (
     validate_source_definition,
 )
 from src.services.curation.bulk_ingest.store import active_run
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_service_factory import get_ingest_service
 
 
@@ -272,7 +271,6 @@ async def start_run_now(
 ) -> BulkIngestRun:
     """Scan the source, then drain its queue, as a run (409 while the project has one live)."""
     check_definition(source)
-    await ensure_indexes(opensearch)
     # Refuse up front (503) what the first batch would refuse: no detector, no encoder.
     await get_ingest_service(opensearch, registry)
     host, port = own_address(request)

@@ -130,13 +130,15 @@ read with `GET /query/duplicates`, `GET /query/duplicates/stats` and
 
 ## 2. Per-project curation indexes
 
-Each project owns six indexes named `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`
-(default prefix `op_prj_`). For project `cars`: `op_prj_cars__images`,
-`op_prj_cars__items`, `op_prj_cars__labels_confirmed`,
-`op_prj_cars__classes`, `op_prj_cars__umap_state`, `op_prj_cars__configs`. The
-registry is the separate `op_projects` index (`OP_PROJECTS_INDEX`); VLM
-endpoints live in PostgreSQL. Bodies are in
-`src/clients/curation_opensearch/` (`bodies_core.py` for images and items, `bodies_other.py` for the rest).
+Each project owns the indexes `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` (default prefix
+`op_prj_`) for the roles `images` and `items`, plus `leases`, the job lease documents that stay
+until the B1 leases are deleted. For project `cars`: `op_prj_cars__images`, `op_prj_cars__items`,
+`op_prj_cars__leases`. Every other control record (projects, classes, configs, settings, UMAP
+state) is in PostgreSQL. Bodies are in `src/clients/curation_opensearch/` (`bodies_core.py` for
+images and items, with the cluster and near-duplicate field groups in `cluster_fields.py` and
+`near_dup_fields.py`; `bodies_other.py` for the lease index). Indexes are created and migrated
+once by the `db-migrate` step (`scripts/opensearch/migrate.py`); the API only checks the schema
+stamp of each mapping and refuses to start with `opensearch_mapping_not_current`.
 
 An index created before a field existed gets it from an additive `PUT _mapping`
 migration (`src/services/curation/index_bootstrap.py`), run by each API worker the

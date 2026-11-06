@@ -65,6 +65,8 @@ RETIRED_ENV: dict[str, str] = {
     'OP_REGION_DRAIN_STATE_DIR': f'{_REMOVED} the drain streak is the region_drain row of project_state',
     # The VLM endpoint registry is a PostgreSQL table, not an OpenSearch index.
     'OP_GLOBAL_CONFIGS_INDEX': f'{_REMOVED} the endpoint registry is stored in PostgreSQL',
+    # The project records are PostgreSQL rows, not an OpenSearch index.
+    'OP_PROJECTS_INDEX': f'{_REMOVED} projects are rows in PostgreSQL; there is no projects index',
 }
 
 

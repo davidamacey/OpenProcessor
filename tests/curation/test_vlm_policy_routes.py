@@ -23,11 +23,6 @@ def fake() -> SettingsFakeOpenSearch:
 
 @pytest.fixture
 def client(fake: SettingsFakeOpenSearch, monkeypatch: pytest.MonkeyPatch):
-    async def _no_bootstrap(_: Any) -> None:
-        return None
-
-    monkeypatch.setattr('src.routers.curation.vlm_policy.ensure_indexes', _no_bootstrap)
-    monkeypatch.setattr('src.routers.curation.ingest_policy.ensure_indexes', _no_bootstrap)
     from _curation_app import mount_curation_routers
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
