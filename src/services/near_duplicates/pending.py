@@ -32,16 +32,16 @@ class PendingError(ValueError):
 
 async def enqueue_pending(
     session: AsyncSession,
-    project: uuid.UUID | None,
+    project: uuid.UUID,
     level: str,
     member_ids: Iterable[str],
     reason: str,
 ) -> int:
     """Insert (or refresh) one pending row per member; returns the number of members.
 
-    ``project`` is the project id, or ``None`` for the core global index. Both ``level`` and
-    ``reason`` are checked here so a typo is an error at the call site, not a CHECK violation
-    in a later flush.
+    ``project`` is the project's row id (``ctx.project_id`` in a job handler); the session's
+    row-level security refuses a row for any other project. ``level`` and ``reason`` are checked
+    here so a typo is an error at the call site, not a CHECK violation in a later flush.
     """
     if level not in rules.LEVELS:
         msg = f'unknown near-duplicate level {level!r}'

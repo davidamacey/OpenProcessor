@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import psycopg
 import pytest
+from sqlalchemy.exc import DBAPIError
 
 from src.db.session import async_session_factory, project_tx
 from src.services.near_duplicates.pending import PendingError, enqueue_pending
+
+from .conftest import make_project
 
 
 pytestmark = [pytest.mark.db, pytest.mark.asyncio]
@@ -56,16 +59,11 @@ async def test_thousands_of_members_in_one_call(pg, project) -> None:
     assert len(_rows(pg, project, 'image')) == 4500
 
 
-async def test_core_members_have_no_project(project, pg) -> None:
-    from src.db.session import core_tx
-
-    async with async_session_factory()() as session, core_tx(session, 'test core pending'):
-        await enqueue_pending(session, None, 'core', ['x'], 'added')
-        await enqueue_pending(session, None, 'core', ['x'], 'deleted')
-    with psycopg.connect(pg.conninfo('super'), autocommit=True) as c:
-        assert c.execute(
-            "SELECT reason FROM near_dup_pending WHERE project_id IS NULL AND member_id = 'x'"
-        ).fetchall() == [('deleted',)]
+async def test_a_row_for_another_project_is_refused_by_the_scope(project) -> None:
+    other = await make_project()
+    async with async_session_factory()() as session, project_tx(session, project):
+        with pytest.raises(DBAPIError, match='row-level security'):
+            await enqueue_pending(session, other, 'item', ['x'], 'added')
 
 
 async def test_an_unknown_level_or_reason_is_refused(project) -> None:

@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 import pytest_asyncio
+from fixtures.job_fixtures import job_env, kinds, producer, queue_hooks, wakes
 
 from src.db.session import async_session_factory, deployment_tx, project_tx
 from src.services.projects.records import new_project_for
@@ -41,3 +42,6 @@ def scope_for(project: uuid.UUID) -> Callable[[], AbstractAsyncContextManager[As
 @pytest_asyncio.fixture
 async def project(pg_registry: Any) -> uuid.UUID:
     return await make_project()
+
+
+__all__ = ['job_env', 'kinds', 'producer', 'queue_hooks', 'wakes']
