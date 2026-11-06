@@ -1,0 +1,252 @@
+"""2E-3: bundle -> load -> verify gives equal counts, ids and checksums; a failed load rolls back whole."""
+
+from __future__ import annotations
+
+import re
+
+import pytest
+from sqlalchemy import text
+
+from src.db.session import deployment_tx
+from src.services.upgrade import gate
+from src.services.upgrade.from_060 import direct_rows
+from src.services.upgrade.from_060.runner import UpgradeResult, UpgradeRunner
+
+
+pytestmark = pytest.mark.db
+
+TIMESTAMP = re.compile(r'"?\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?\+00"?')
+
+TABLES = (
+    'project_slugs', 'projects', 'project_indexes', 'project_classes', 'config_documents',
+    'config_revisions', 'config_activations', 'config_activation_events', 'project_settings',
+    'project_keymaps', 'project_state', 'projection_states', 'holdout_freezes', 'label_operations',
+    'label_operation_members', 'ingest_sources', 'ingest_source_files', 'dataset_imports',
+    'dataset_import_images', 'training_runs', 'models', 'promotions', 'model_shares',
+    'dataset_exports', 'combine_runs', 'combine_sources', 'jobs', 'vlm_endpoint_probes',
+    'embedding_spaces', 'deployment_settings',
+)  # fmt: skip
+
+
+# Columns the database generates (an identity that is never reused, a uuidv7 default) differ
+# between two runs of the same upgrade by design; every other column must be equal.
+GENERATED = {
+    'projects': 'SELECT (id, slug, display_name, status, revision, index_prefix)::text FROM projects ORDER BY 1',
+    'deployment_settings': "SELECT (key, value)::text FROM deployment_settings WHERE key <> 'upgrade_state' ORDER BY 1",
+    'config_activation_events': 'SELECT (project_id, axis, to_config_id, to_revision, reason)::text FROM config_activation_events ORDER BY 1',
+    'embedding_spaces': 'SELECT (project_id, target, space_key, knn_method, vector_field)::text FROM embedding_spaces ORDER BY 1',
+}
+
+
+def fingerprint(pg) -> dict[str, list[str]]:
+    """Every row of the load's tables, by primary-key-ish text, for same-result comparisons."""
+    out: dict[str, list[str]] = {}
+    with pg.engine('super').connect() as conn:
+        for table in TABLES:
+            # table names come from the constant above
+            query = GENERATED.get(table, f'SELECT t::text FROM {table} t ORDER BY 1')
+            rows = conn.execute(text(query)).scalars().all()
+            out[table] = [TIMESTAMP.sub('TS', r) for r in rows]
+    return out
+
+
+def rows(pg, sql: str, **params):
+    with pg.engine('super').connect() as conn:
+        return conn.execute(text(sql), params).all()
+
+
+@pytest.mark.asyncio
+async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
+    result = await make_runner().run()
+    counts = result.load_counts
+    assert counts['projects'] == 2
+    assert counts['retired_slugs'] == 1
+    assert rows(
+        clean_db, "SELECT retired_at IS NOT NULL FROM project_slugs WHERE slug = 'old-demo'"
+    ) == [(True,)]
+    assert (
+        rows(clean_db, "SELECT value FROM deployment_counters WHERE name = 'projects_revision'")[0][
+            0
+        ]
+        >= 5
+    )
+
+    # class ids, merge, hotkeys and the name pairs of R-3 survive; counts are not stored
+    classes = rows(
+        clean_db,
+        'SELECT c.class_id, c.name, c.deprecated, c.merged_into, c.hotkey_letter FROM project_classes c '
+        "JOIN projects p ON p.id = c.project_id WHERE p.slug = 'default' ORDER BY 1",
+    )
+    assert classes == [
+        (0, 'car', False, None, 'c'),
+        (1, 'Traffic Light', True, 2, None),
+        (2, 'traffic_light', False, None, 't'),
+        (3, 'Person', False, None, None),
+        (4, 'bus', True, None, None),
+        (5, 'bus', False, None, None),
+        (
+            6,
+            'plate',
+            False,
+            None,
+            None,
+        ),  # the legacy_repair step seeds the active region profile's class
+    ]
+    # the demo project's registry came from its document: its next_class_id (7) was kept, so the
+    # class the legacy_repair step seeds gets id 7
+    assert rows(
+        clean_db,
+        'SELECT r.next_class_id, c.class_id FROM class_registries r JOIN projects p ON p.id = r.project_id '
+        "JOIN project_classes c ON c.project_id = p.id AND c.name = 'plate' WHERE p.slug = 'demo'",
+    ) == [(8, 7)]
+
+    # prompt-pack revisions, the activation history, and the current activation
+    assert (
+        rows(
+            clean_db,
+            "SELECT count(*) FROM config_revisions r JOIN config_documents d ON d.id = r.config_id WHERE d.name = 'signs'",
+        )[0][0]
+        == 4
+    )  # two projects x two revisions
+    assert rows(
+        clean_db,
+        "SELECT a.revision FROM config_activations a JOIN projects p ON p.id = a.project_id WHERE p.slug = 'demo' AND a.axis = 'prompt_pack'",
+    ) == [(2,)]
+    assert rows(
+        clean_db,
+        "SELECT count(*) FROM config_activation_events e JOIN projects p ON p.id = e.project_id WHERE p.slug = 'demo' AND e.axis = 'prompt_pack'",
+    ) == [(2,)]
+    # the VLM activation points at the deployment-wide endpoint document
+    assert rows(
+        clean_db,
+        "SELECT d.project_id IS NULL FROM config_activations a JOIN config_documents d ON d.id = a.config_id WHERE a.axis = 'vlm' LIMIT 1",
+    ) == [(True,)]
+    assert rows(clean_db, 'SELECT count(*) FROM vlm_endpoint_probes') == [
+        (1,)
+    ]  # the env probe has no revision: not loaded
+    assert rows(
+        clean_db,
+        "SELECT value ->> 'catalog_id' FROM deployment_settings WHERE key = 'local_vlm_desired'",
+    ) == [('qwen3-vl-4b',)]
+
+    # settings, keymap, markers and the view state
+    assert rows(
+        clean_db,
+        "SELECT s.revision FROM project_keymaps s JOIN projects p ON p.id = s.project_id WHERE p.slug = 'demo'",
+    ) == [(3,)]
+    assert {r[0] for r in rows(clean_db, 'SELECT key FROM project_state')} == {
+        'cluster_refresh',
+        'region_drain',
+        'region_dependency_health',
+    }
+    assert rows(clean_db, 'SELECT count(*) FROM projection_states') == [(2,)]
+    assert rows(clean_db, "SELECT paused_at IS NOT NULL FROM projects WHERE slug = 'demo'") == [
+        (True,)
+    ]
+    assert rows(clean_db, "SELECT paused_at IS NULL FROM projects WHERE slug = 'default'") == [
+        (True,)
+    ]
+
+    # holdout: the current freeze is the curated one current.json equals; the import freeze is history
+    assert rows(clean_db, 'SELECT is_current, source, item_count FROM holdout_freezes ORDER BY source, is_current') == [
+        (True, 'curated', 3), (False, 'import', 2),
+    ]  # fmt: skip
+    assert result.load_counts['holdout_freezes'] == 2
+
+    # label operations: the dead 'writing' one arrives failed, members are loaded
+    assert rows(
+        clean_db,
+        "SELECT status, member_count FROM label_operations ORDER BY params ->> 'legacy_op_id'",
+    ) == [('written', 3), ('failed', 1)]
+    assert rows(clean_db, 'SELECT count(*) FROM label_operation_members') == [(4,)]
+
+    # ingest: only the pending queue rows; the import ledger keeps one row per image (latest event)
+    assert rows(clean_db, 'SELECT file_key, status, attempts FROM ingest_source_files ORDER BY 1') == [
+        ('images/a.jpg', 'pending', 0), ('images/b.jpg', 'pending', 1),
+    ]  # fmt: skip
+    assert rows(clean_db, 'SELECT image_key, status, item_ids FROM dataset_import_images ORDER BY 1') == [
+        ('a.jpg', 'written', ['c1', 'c2']), ('b.jpg', 'skipped', []), ('c.jpg', 'failed', []),
+    ]  # fmt: skip
+
+    # training, export, promotion and its share, combine
+    assert rows(clean_db, 'SELECT family, base_model, class_names FROM training_runs') == [
+        ('yolo26', 'yolo26s', ['car', 'bus'])
+    ]
+    assert rows(
+        clean_db,
+        'SELECT count(*) FROM training_runs t JOIN dataset_exports e ON e.id = t.dataset_export_id',
+    ) == [(1,)]
+    assert rows(
+        clean_db,
+        'SELECT m.name, m.labels, p.triton_version FROM promotions p JOIN models m ON m.id = p.model_id',
+    ) == [('demo__car_detector', ['car', 'bus'], 1)]
+    assert rows(clean_db, 'SELECT count(*) FROM model_shares') == [
+        (1,)
+    ]  # shared with the other project
+    assert rows(
+        clean_db, 'SELECT holdout_mode, target_project_id IS NOT NULL FROM combine_runs'
+    ) == [('union', True)]
+    assert rows(clean_db, 'SELECT source_slug FROM combine_sources') == [('default',)]
+
+    # the job that was alive arrives interrupted, never auto-resuming
+    assert rows(clean_db, "SELECT status, auto_resume, error_code, finished_at IS NULL FROM jobs WHERE kind = 'reprocess'") == [
+        ('interrupted', False, 'upgraded_from_0_6_0', True),
+    ]  # fmt: skip
+    # the research steps
+    assert rows(clean_db, "SELECT count(*) FROM embedding_spaces WHERE created_by = 'upgrade'") == [
+        (6,)
+    ]
+    assert rows(
+        clean_db, "SELECT key FROM deployment_settings WHERE key = 'active_serving_profile'"
+    ) == [('active_serving_profile',)]
+    assert rows(clean_db, 'SELECT count(*) FROM events') == [(0,)]
+
+
+@pytest.mark.asyncio
+async def test_a_load_that_fails_rolls_back_and_a_rerun_gives_the_same_rows(
+    make_runner, clean_db, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner = make_runner()
+    reference_run = UpgradeResult(
+        bundle=await runner._export()
+    )  # steps 1-2 only: the sources must stay
+    await runner._load(reference_run)
+    reference = fingerprint(clean_db)
+    with clean_db.engine('super').begin() as conn:
+        for statement in (
+            'TRUNCATE project_slugs, deployment_counters, events CASCADE',
+            'DELETE FROM config_documents WHERE project_id IS NULL',
+            'DELETE FROM deployment_settings',
+            'DELETE FROM upgrade_runs',
+        ):
+            conn.execute(text(statement))
+
+    real = direct_rows.combines
+
+    async def boom(*_args, **_kwargs):
+        raise RuntimeError('forced failure in load')
+
+    monkeypatch.setattr(direct_rows, 'combines', boom)
+    with pytest.raises(RuntimeError, match='forced failure'):
+        await make_runner().run()
+    assert rows(clean_db, 'SELECT count(*) FROM projects') == [(0,)]  # the whole load rolled back
+    assert {r[0] for r in rows(clean_db, 'SELECT step FROM upgrade_runs')} == {'export_bundle'}
+    monkeypatch.setattr(direct_rows, 'combines', real)
+
+    await make_runner().run()
+    assert fingerprint(clean_db) == reference
+
+
+@pytest.mark.asyncio
+async def test_the_upgrade_state_ends_completed_and_delete_sources_is_recorded(
+    make_runner, owner_sessions
+) -> None:
+    await make_runner().run()
+    async with owner_sessions() as session, deployment_tx(session, 'test'):
+        assert await gate.read_state(session) == gate.COMPLETED
+        assert await gate.step_done(session, 'delete_sources')
+        assert all([await gate.step_done(session, s) for s in ('export_bundle', 'load', 'verify')])
+
+
+def test_the_runner_type_is_the_one_the_script_builds() -> None:
+    assert UpgradeRunner.__name__ == 'UpgradeRunner'

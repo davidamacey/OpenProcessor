@@ -1,0 +1,1587 @@
+{
+ "op_global_configs": {
+  "docs": {
+   "local_vlm:desired": {
+    "catalog_id": "qwen3-vl-4b",
+    "doc_type": "local_vlm",
+    "requested_at": "2026-01-03T00:00:00+00:00"
+   },
+   "meta:config_revision": {
+    "config_revision": 3,
+    "doc_type": "meta"
+   },
+   "vlm:local-vlm": {
+    "body": {
+     "auth": null,
+     "base_url": "http://vlm:8000/v1",
+     "model": "qwen3-vl-4b"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "local-vlm vlm_endpoint",
+    "doc_type": "config",
+    "kind": "vlm_endpoint",
+    "name": "local-vlm",
+    "revision": 1,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "vlm:local-vlm@1": {
+    "body": {
+     "auth": null,
+     "base_url": "http://vlm:8000/v1",
+     "model": "qwen3-vl-4b"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "local-vlm vlm_endpoint",
+    "doc_type": "revision",
+    "kind": "vlm_endpoint",
+    "name": "local-vlm",
+    "revision": 1,
+    "updated_at": "2026-01-01T00:00:00+00:00",
+    "updated_by": null
+   },
+   "vlm_probe:env": {
+    "body": {
+     "record": {
+      "ok": false,
+      "probed_at": "2026-01-03T00:00:00+00:00"
+     }
+    },
+    "doc_type": "vlm_probe",
+    "name": "env",
+    "probe_key": "env",
+    "probed_at": "2026-01-03T00:00:00+00:00"
+   },
+   "vlm_probe:local-vlm@1": {
+    "body": {
+     "fingerprint": "ffffffffffffffff",
+     "record": {
+      "json_mode_supported": true,
+      "latency_ms": 120.5,
+      "ok": true,
+      "probed_at": "2026-01-03T00:00:00+00:00"
+     }
+    },
+    "doc_type": "vlm_probe",
+    "name": "local-vlm",
+    "probe_key": "local-vlm@1",
+    "probed_at": "2026-01-03T00:00:00+00:00"
+   }
+  },
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "applied_at": {
+     "type": "date"
+    },
+    "axis": {
+     "type": "keyword"
+    },
+    "body": {
+     "enabled": false,
+     "type": "object"
+    },
+    "cloned_from": {
+     "type": "keyword"
+    },
+    "config_revision": {
+     "type": "long"
+    },
+    "created_at": {
+     "type": "date"
+    },
+    "description": {
+     "ignore_above": 512,
+     "index": false,
+     "type": "keyword"
+    },
+    "doc_type": {
+     "type": "keyword"
+    },
+    "kind": {
+     "type": "keyword"
+    },
+    "name": {
+     "type": "keyword"
+    },
+    "previous": {
+     "enabled": false,
+     "type": "object"
+    },
+    "process": {
+     "type": "keyword"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "updated_at": {
+     "type": "date"
+    },
+    "updated_by": {
+     "type": "keyword"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__classes": {
+  "docs": {
+   "0": {
+    "class_id": 0,
+    "class_name": "car",
+    "sample_count": 2
+   }
+  },
+  "mappings": {
+   "properties": {
+    "added_at": {
+     "type": "date"
+    },
+    "class_id": {
+     "type": "integer"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "deprecated": {
+     "type": "boolean"
+    },
+    "group": {
+     "type": "keyword"
+    },
+    "notes": {
+     "type": "text"
+    },
+    "sample_count": {
+     "type": "long"
+    },
+    "validated_count": {
+     "type": "long"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__configs": {
+  "docs": {
+   "activation:detection_profile": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "detection_profile",
+    "doc_type": "activation",
+    "name": "cars",
+    "previous": null,
+    "revision": 1
+   },
+   "activation:prompt_pack": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation",
+    "name": "signs",
+    "previous": {
+     "name": "signs",
+     "revision": 1
+    },
+    "revision": 2
+   },
+   "activation:vlm": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "vlm",
+    "doc_type": "activation",
+    "name": "local-vlm",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000001": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation_event",
+    "name": "signs",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000002": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation_event",
+    "name": "signs",
+    "previous": {
+     "name": "signs",
+     "revision": 1
+    },
+    "revision": 2
+   },
+   "activation_event:00000000-0000-4000-8000-000000000003": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "detection_profile",
+    "doc_type": "activation_event",
+    "name": "cars",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000004": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "vlm",
+    "doc_type": "activation_event",
+    "name": "local-vlm",
+    "previous": null,
+    "revision": 1
+   },
+   "ingest:fast": {
+    "body": {
+     "detector": "yolov11_small_trt_end2end"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "fast ingest_profile",
+    "doc_type": "config",
+    "kind": "ingest_profile",
+    "name": "fast",
+    "revision": 1,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "ingest:fast@1": {
+    "body": {
+     "detector": "yolov11_small_trt_end2end"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "fast ingest_profile",
+    "doc_type": "revision",
+    "kind": "ingest_profile",
+    "name": "fast",
+    "revision": 1,
+    "updated_at": "2026-01-01T00:00:00+00:00",
+    "updated_by": null
+   },
+   "keymap:default": {
+    "doc_type": "keymap",
+    "overrides": {
+     "next_item": [
+      "j"
+     ]
+    },
+    "revision": 3,
+    "updated_at": "2026-01-03T00:00:00+00:00"
+   },
+   "lease:label_undo": {
+    "lease": {
+     "holder": "x"
+    }
+   },
+   "meta:config_revision": {
+    "config_revision": 9,
+    "doc_type": "meta"
+   },
+   "pack:signs": {
+    "body": {
+     "prompts": {
+      "bus": "a photo of a bus",
+      "car": "a photo of a car"
+     },
+     "version": 2
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "signs prompt_pack",
+    "doc_type": "config",
+    "kind": "prompt_pack",
+    "name": "signs",
+    "revision": 2,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "pack:signs@1": {
+    "body": {
+     "prompts": {
+      "car": "a photo of a car"
+     },
+     "version": 1
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "signs prompt_pack",
+    "doc_type": "revision",
+    "kind": "prompt_pack",
+    "name": "signs",
+    "revision": 1,
+    "updated_at": "2026-01-01T00:00:00+00:00",
+    "updated_by": null
+   },
+   "pack:signs@2": {
+    "body": {
+     "prompts": {
+      "bus": "a photo of a bus",
+      "car": "a photo of a car"
+     },
+     "version": 2
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "signs prompt_pack",
+    "doc_type": "revision",
+    "kind": "prompt_pack",
+    "name": "signs",
+    "revision": 2,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "profile:cars": {
+    "body": {
+     "detector": "yolo26_small_trt",
+     "region_class_name": "plate"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "cars region_profile",
+    "doc_type": "config",
+    "kind": "region_profile",
+    "name": "cars",
+    "revision": 1,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "profile:cars@1": {
+    "body": {
+     "detector": "yolo26_small_trt",
+     "region_class_name": "plate"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "cars region_profile",
+    "doc_type": "revision",
+    "kind": "region_profile",
+    "name": "cars",
+    "revision": 1,
+    "updated_at": "2026-01-01T00:00:00+00:00",
+    "updated_by": null
+   },
+   "runtime:detection:host1": {
+    "applied_at": "2026-01-03T00:00:00+00:00",
+    "doc_type": "runtime",
+    "host": "host1",
+    "process": "detection"
+   }
+  },
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "applied_at": {
+     "type": "date"
+    },
+    "axis": {
+     "type": "keyword"
+    },
+    "body": {
+     "enabled": false,
+     "type": "object"
+    },
+    "class_registry": {
+     "enabled": false,
+     "type": "object"
+    },
+    "cloned_from": {
+     "type": "keyword"
+    },
+    "cluster_id": {
+     "type": "integer"
+    },
+    "cluster_refresh": {
+     "enabled": false,
+     "type": "object"
+    },
+    "config_revision": {
+     "type": "long"
+    },
+    "created_at": {
+     "type": "date"
+    },
+    "defaults": {
+     "enabled": false,
+     "type": "object"
+    },
+    "description": {
+     "ignore_above": 512,
+     "index": false,
+     "type": "keyword"
+    },
+    "doc_type": {
+     "type": "keyword"
+    },
+    "fitted_at": {
+     "type": "date"
+    },
+    "ingest_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "kind": {
+     "type": "keyword"
+    },
+    "lease": {
+     "enabled": false,
+     "type": "object"
+    },
+    "metric": {
+     "type": "keyword"
+    },
+    "n_components": {
+     "type": "integer"
+    },
+    "n_points": {
+     "type": "integer"
+    },
+    "name": {
+     "type": "keyword"
+    },
+    "previous": {
+     "enabled": false,
+     "type": "object"
+    },
+    "process": {
+     "type": "keyword"
+    },
+    "projection_version": {
+     "type": "keyword"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "scope": {
+     "type": "keyword"
+    },
+    "state_id": {
+     "type": "keyword"
+    },
+    "updated_at": {
+     "type": "date"
+    },
+    "updated_by": {
+     "type": "keyword"
+    },
+    "vlm_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "vlm_scope_reps": {
+     "enabled": false,
+     "type": "object"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__images": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "image_id": {
+     "type": "keyword"
+    },
+    "pe_embedding": {
+     "dimension": 1024,
+     "method": {
+      "engine": "faiss",
+      "name": "hnsw",
+      "parameters": {
+       "ef_construction": 128,
+       "m": 16
+      },
+      "space_type": "cosinesimil"
+     },
+     "type": "knn_vector"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "knn": true,
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__items": {
+  "docs": {
+   "i1": {
+    "class_id": 0,
+    "class_name": "car",
+    "crop_id": "i1",
+    "embedding_state": "embedded",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
+   "i2": {
+    "class_id": 2,
+    "class_name": "Traffic Light",
+    "crop_id": "i2",
+    "embedding_state": "embedded",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
+   "i3": {
+    "class_id": 99,
+    "class_name": "ghost",
+    "crop_id": "i3",
+    "embedding_state": "embedded",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
+   "i4": {
+    "class_id": 0,
+    "class_name": "truck",
+    "crop_id": "i4",
+    "embedding_state": "embedded",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
+   "i5": {
+    "class_id": 5,
+    "class_name": "bus",
+    "crop_id": "i5",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   }
+  },
+  "mappings": {
+   "properties": {
+    "class_id": {
+     "type": "integer"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "crop_id": {
+     "type": "keyword"
+    },
+    "embedding_state": {
+     "type": "keyword"
+    },
+    "pe_embedding": {
+     "dimension": 1024,
+     "method": {
+      "engine": "faiss",
+      "name": "hnsw",
+      "parameters": {
+       "ef_construction": 128,
+       "m": 16
+      },
+      "space_type": "cosinesimil"
+     },
+     "type": "knn_vector"
+    },
+    "region_box_embeddings": {
+     "properties": {
+      "box_id": {
+       "type": "keyword"
+      },
+      "embedding": {
+       "dimension": 1024,
+       "method": {
+        "engine": "faiss",
+        "name": "hnsw",
+        "parameters": {
+         "ef_construction": 128,
+         "m": 16
+        },
+        "space_type": "cosinesimil"
+       },
+       "type": "knn_vector"
+      }
+     },
+     "type": "nested"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "knn": true,
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__labels_confirmed": {
+  "docs": {
+   "l1": {
+    "class_id": 0,
+    "class_name": "car",
+    "label_id": "l1"
+   }
+  },
+  "mappings": {
+   "properties": {
+    "bbox_norm": {
+     "type": "float"
+    },
+    "class_id": {
+     "type": "integer"
+    },
+    "class_mismatch": {
+     "type": "boolean"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "class_source": {
+     "type": "keyword"
+    },
+    "confirmed_at": {
+     "type": "date"
+    },
+    "crop_id": {
+     "type": "keyword"
+    },
+    "detector_class_id": {
+     "type": "integer"
+    },
+    "detector_class_name": {
+     "type": "keyword"
+    },
+    "detector_confidence": {
+     "type": "float"
+    },
+    "image_path": {
+     "type": "keyword"
+    },
+    "label_id": {
+     "type": "keyword"
+    },
+    "label_source": {
+     "type": "keyword"
+    },
+    "updated_at": {
+     "type": "date"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__settings": {
+  "docs": {
+   "default": {
+    "defaults": {
+     "scorer": "entropy"
+    },
+    "updated_at": "2026-01-02T00:00:00+00:00"
+   }
+  },
+  "mappings": {
+   "properties": {
+    "class_registry": {
+     "enabled": false,
+     "type": "object"
+    },
+    "cluster_refresh": {
+     "enabled": false,
+     "type": "object"
+    },
+    "defaults": {
+     "enabled": false,
+     "type": "object"
+    },
+    "ingest_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "lease": {
+     "enabled": false,
+     "type": "object"
+    },
+    "updated_at": {
+     "type": "date"
+    },
+    "updated_by": {
+     "type": "keyword"
+    },
+    "vlm_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "vlm_scope_reps": {
+     "enabled": false,
+     "type": "object"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__umap_state": {
+  "docs": {
+   "current": {
+    "metric": "cosine",
+    "n_components": 2,
+    "reducer_b64": "cmVkdWNlci1ieXRlcw==",
+    "state_id": "current"
+   }
+  },
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "metric": {
+     "type": "keyword"
+    },
+    "n_components": {
+     "type": "integer"
+    },
+    "reducer_b64": {
+     "type": "binary"
+    },
+    "state_id": {
+     "type": "keyword"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_default__umap_viz_state": {
+  "docs": {
+   "current": {
+    "cluster_id": null,
+    "fitted_at": "2026-01-03T00:00:00+00:00",
+    "metric": "cosine",
+    "n_components": 2,
+    "n_points": 5,
+    "projection_version": "umap_viz_v1",
+    "scope": "all",
+    "state_id": "current"
+   }
+  },
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "cluster_id": {
+     "type": "integer"
+    },
+    "fitted_at": {
+     "type": "date"
+    },
+    "metric": {
+     "type": "keyword"
+    },
+    "n_components": {
+     "type": "integer"
+    },
+    "n_points": {
+     "type": "integer"
+    },
+    "projection_version": {
+     "type": "keyword"
+    },
+    "scope": {
+     "type": "keyword"
+    },
+    "state_id": {
+     "type": "keyword"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_demo__classes": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "added_at": {
+     "type": "date"
+    },
+    "class_id": {
+     "type": "integer"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "deprecated": {
+     "type": "boolean"
+    },
+    "group": {
+     "type": "keyword"
+    },
+    "notes": {
+     "type": "text"
+    },
+    "sample_count": {
+     "type": "long"
+    },
+    "validated_count": {
+     "type": "long"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_demo__configs": {
+  "docs": {
+   "activation:detection_profile": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "detection_profile",
+    "doc_type": "activation",
+    "name": "cars",
+    "previous": null,
+    "revision": 1
+   },
+   "activation:prompt_pack": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation",
+    "name": "signs",
+    "previous": {
+     "name": "signs",
+     "revision": 1
+    },
+    "revision": 2
+   },
+   "activation:vlm": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "vlm",
+    "doc_type": "activation",
+    "name": "local-vlm",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000001": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation_event",
+    "name": "signs",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000002": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation_event",
+    "name": "signs",
+    "previous": {
+     "name": "signs",
+     "revision": 1
+    },
+    "revision": 2
+   },
+   "activation_event:00000000-0000-4000-8000-000000000003": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "detection_profile",
+    "doc_type": "activation_event",
+    "name": "cars",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000004": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "vlm",
+    "doc_type": "activation_event",
+    "name": "local-vlm",
+    "previous": null,
+    "revision": 1
+   },
+   "class_registry": {
+    "class_registry": {
+     "classes": [
+      {
+       "added": "2026-01-01T00:00:00+00:00",
+       "group": "vehicle",
+       "hotkey_letter": "c",
+       "id": 0,
+       "name": "car"
+      },
+      {
+       "added": "2026-01-01T00:00:00+00:00",
+       "deprecated": true,
+       "group": "signal",
+       "id": 1,
+       "merged_into": 2,
+       "name": "Traffic Light"
+      },
+      {
+       "added": "2026-01-01T00:00:00+00:00",
+       "group": "signal",
+       "hotkey_letter": "t",
+       "id": 2,
+       "name": "traffic_light",
+       "notes": "merged target"
+      },
+      {
+       "added": "2026-01-01T00:00:00+00:00",
+       "group": "people",
+       "id": 3,
+       "name": "Person"
+      },
+      {
+       "added": "2026-01-01T00:00:00+00:00",
+       "deprecated": true,
+       "group": "vehicle",
+       "id": 4,
+       "name": "bus"
+      },
+      {
+       "added": "2026-01-01T00:00:00+00:00",
+       "group": "vehicle",
+       "id": 5,
+       "name": "bus"
+      }
+     ],
+     "next_class_id": 7,
+     "registry_revision": 12,
+     "updated_at": "2026-01-03T00:00:00+00:00",
+     "version": 1
+    }
+   },
+   "current": {
+    "cluster_id": null,
+    "fitted_at": "2026-01-03T00:00:00+00:00",
+    "metric": "cosine",
+    "n_components": 2,
+    "n_points": 3,
+    "projection_version": "umap_viz_v1",
+    "scope": "all",
+    "state_id": "current"
+   },
+   "default": {
+    "cluster_refresh": {
+     "job_id": null,
+     "last_trained_count": 120,
+     "prev_count": 100,
+     "revision": 4,
+     "trained_before": null
+    },
+    "defaults": {
+     "clusterer": null,
+     "scorer": "margin"
+    },
+    "ingest_policy": {
+     "mode": "all",
+     "revision": 2
+    },
+    "updated_at": "2026-01-03T00:00:00+00:00",
+    "updated_by": null,
+    "vlm_policy": {
+     "max_images": 4,
+     "revision": 1
+    }
+   },
+   "ingest:fast": {
+    "body": {
+     "detector": "yolov11_small_trt_end2end"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "fast ingest_profile",
+    "doc_type": "config",
+    "kind": "ingest_profile",
+    "name": "fast",
+    "revision": 1,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "ingest:fast@1": {
+    "body": {
+     "detector": "yolov11_small_trt_end2end"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "fast ingest_profile",
+    "doc_type": "revision",
+    "kind": "ingest_profile",
+    "name": "fast",
+    "revision": 1,
+    "updated_at": "2026-01-01T00:00:00+00:00",
+    "updated_by": null
+   },
+   "keymap:default": {
+    "doc_type": "keymap",
+    "overrides": {
+     "next_item": [
+      "j"
+     ]
+    },
+    "revision": 3,
+    "updated_at": "2026-01-03T00:00:00+00:00"
+   },
+   "meta:config_revision": {
+    "config_revision": 9,
+    "doc_type": "meta"
+   },
+   "pack:signs": {
+    "body": {
+     "prompts": {
+      "bus": "a photo of a bus",
+      "car": "a photo of a car"
+     },
+     "version": 2
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "signs prompt_pack",
+    "doc_type": "config",
+    "kind": "prompt_pack",
+    "name": "signs",
+    "revision": 2,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "pack:signs@1": {
+    "body": {
+     "prompts": {
+      "car": "a photo of a car"
+     },
+     "version": 1
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "signs prompt_pack",
+    "doc_type": "revision",
+    "kind": "prompt_pack",
+    "name": "signs",
+    "revision": 1,
+    "updated_at": "2026-01-01T00:00:00+00:00",
+    "updated_by": null
+   },
+   "pack:signs@2": {
+    "body": {
+     "prompts": {
+      "bus": "a photo of a bus",
+      "car": "a photo of a car"
+     },
+     "version": 2
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "signs prompt_pack",
+    "doc_type": "revision",
+    "kind": "prompt_pack",
+    "name": "signs",
+    "revision": 2,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "profile:cars": {
+    "body": {
+     "detector": "yolo26_small_trt",
+     "region_class_name": "plate"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "cars region_profile",
+    "doc_type": "config",
+    "kind": "region_profile",
+    "name": "cars",
+    "revision": 1,
+    "updated_at": "2026-01-02T00:00:00+00:00",
+    "updated_by": null
+   },
+   "profile:cars@1": {
+    "body": {
+     "detector": "yolo26_small_trt",
+     "region_class_name": "plate"
+    },
+    "cloned_from": null,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "cars region_profile",
+    "doc_type": "revision",
+    "kind": "region_profile",
+    "name": "cars",
+    "revision": 1,
+    "updated_at": "2026-01-01T00:00:00+00:00",
+    "updated_by": null
+   },
+   "runtime:detection:host1": {
+    "applied_at": "2026-01-03T00:00:00+00:00",
+    "doc_type": "runtime",
+    "host": "host1",
+    "process": "detection"
+   }
+  },
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "applied_at": {
+     "type": "date"
+    },
+    "axis": {
+     "type": "keyword"
+    },
+    "body": {
+     "enabled": false,
+     "type": "object"
+    },
+    "class_registry": {
+     "enabled": false,
+     "type": "object"
+    },
+    "cloned_from": {
+     "type": "keyword"
+    },
+    "cluster_id": {
+     "type": "integer"
+    },
+    "cluster_refresh": {
+     "enabled": false,
+     "type": "object"
+    },
+    "config_revision": {
+     "type": "long"
+    },
+    "created_at": {
+     "type": "date"
+    },
+    "defaults": {
+     "enabled": false,
+     "type": "object"
+    },
+    "description": {
+     "ignore_above": 512,
+     "index": false,
+     "type": "keyword"
+    },
+    "doc_type": {
+     "type": "keyword"
+    },
+    "fitted_at": {
+     "type": "date"
+    },
+    "ingest_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "kind": {
+     "type": "keyword"
+    },
+    "lease": {
+     "enabled": false,
+     "type": "object"
+    },
+    "metric": {
+     "type": "keyword"
+    },
+    "n_components": {
+     "type": "integer"
+    },
+    "n_points": {
+     "type": "integer"
+    },
+    "name": {
+     "type": "keyword"
+    },
+    "previous": {
+     "enabled": false,
+     "type": "object"
+    },
+    "process": {
+     "type": "keyword"
+    },
+    "projection_version": {
+     "type": "keyword"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "scope": {
+     "type": "keyword"
+    },
+    "state_id": {
+     "type": "keyword"
+    },
+    "updated_at": {
+     "type": "date"
+    },
+    "updated_by": {
+     "type": "keyword"
+    },
+    "vlm_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "vlm_scope_reps": {
+     "enabled": false,
+     "type": "object"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_demo__images": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "image_id": {
+     "type": "keyword"
+    },
+    "pe_embedding": {
+     "dimension": 1024,
+     "method": {
+      "engine": "lucene",
+      "name": "hnsw",
+      "parameters": {
+       "ef_construction": 128,
+       "m": 16
+      },
+      "space_type": "cosinesimil"
+     },
+     "type": "knn_vector"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "knn": true,
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_demo__items": {
+  "docs": {
+   "d1": {
+    "class_id": 0,
+    "class_name": "car",
+    "crop_id": "d1",
+    "embedding_state": "embedded",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
+   "d2": {
+    "class_id": 5,
+    "class_name": "bus",
+    "crop_id": "d2",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
+   "d3": {
+    "class_id": null,
+    "class_name": null,
+    "crop_id": "d3"
+   }
+  },
+  "mappings": {
+   "properties": {
+    "class_id": {
+     "type": "integer"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "crop_id": {
+     "type": "keyword"
+    },
+    "embedding_state": {
+     "type": "keyword"
+    },
+    "pe_embedding": {
+     "dimension": 1024,
+     "method": {
+      "engine": "lucene",
+      "name": "hnsw",
+      "parameters": {
+       "ef_construction": 128,
+       "m": 16
+      },
+      "space_type": "cosinesimil"
+     },
+     "type": "knn_vector"
+    },
+    "region_box_embeddings": {
+     "properties": {
+      "box_id": {
+       "type": "keyword"
+      },
+      "embedding": {
+       "dimension": 1024,
+       "method": {
+        "engine": "lucene",
+        "name": "hnsw",
+        "parameters": {
+         "ef_construction": 128,
+         "m": 16
+        },
+        "space_type": "cosinesimil"
+       },
+       "type": "knn_vector"
+      }
+     },
+     "type": "nested"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "knn": true,
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_demo__labels_confirmed": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "bbox_norm": {
+     "type": "float"
+    },
+    "class_id": {
+     "type": "integer"
+    },
+    "class_mismatch": {
+     "type": "boolean"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "class_source": {
+     "type": "keyword"
+    },
+    "confirmed_at": {
+     "type": "date"
+    },
+    "crop_id": {
+     "type": "keyword"
+    },
+    "detector_class_id": {
+     "type": "integer"
+    },
+    "detector_class_name": {
+     "type": "keyword"
+    },
+    "detector_confidence": {
+     "type": "float"
+    },
+    "image_path": {
+     "type": "keyword"
+    },
+    "label_id": {
+     "type": "keyword"
+    },
+    "label_source": {
+     "type": "keyword"
+    },
+    "updated_at": {
+     "type": "date"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_demo__umap_state": {
+  "docs": {},
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "metric": {
+     "type": "keyword"
+    },
+    "n_components": {
+     "type": "integer"
+    },
+    "reducer_b64": {
+     "type": "binary"
+    },
+    "state_id": {
+     "type": "keyword"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_projects": {
+  "docs": {
+   "meta:projects_revision": {
+    "revision": 5
+   },
+   "project:default": {
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "Default (synthetic)",
+    "display_name": "Default",
+    "origin": null,
+    "pre_delete_status": null,
+    "resources": {
+     "autolabel_dir": "{ROOT}/jobs/auto_label/projects/default",
+     "bakeoff_eval_root": "{ROOT}/data/projects/default/bakeoff_eval",
+     "bakeoff_jobs_dir": "{ROOT}/state/projects/default/bakeoff_jobs",
+     "class_registry_path": "{ROOT}/data/projects/default/class_registry.json",
+     "export_root": "{ROOT}/data/projects/default/exports",
+     "indexes": {
+      "classes": "op_prj_default__classes",
+      "configs": "op_prj_default__configs",
+      "images": "op_prj_default__images",
+      "items": "op_prj_default__items",
+      "labels_confirmed": "op_prj_default__labels_confirmed",
+      "settings": "op_prj_default__settings",
+      "umap_state": "op_prj_default__umap_state",
+      "umap_viz_state": "op_prj_default__umap_viz_state"
+     },
+     "mlflow_experiment": "openprocessor-default",
+     "model_prefix": "",
+     "project_state_dir": "{ROOT}/state/projects/default",
+     "train_jobs_dir": "{ROOT}/jobs/projects/default",
+     "upload_root": "{ROOT}/state/projects/default/uploads"
+    },
+    "revision": 3,
+    "slug": "default",
+    "status": "active",
+    "updated_at": "2026-01-02T00:00:00+00:00"
+   },
+   "project:demo": {
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "Demo (synthetic)",
+    "display_name": "Demo",
+    "origin": null,
+    "pre_delete_status": null,
+    "resources": {
+     "autolabel_dir": "{ROOT}/jobs/auto_label/projects/demo",
+     "bakeoff_eval_root": "{ROOT}/data/projects/demo/bakeoff_eval",
+     "bakeoff_jobs_dir": "{ROOT}/state/projects/demo/bakeoff_jobs",
+     "class_registry_path": "{ROOT}/data/projects/demo/class_registry.json",
+     "export_root": "{ROOT}/data/projects/demo/exports",
+     "indexes": {
+      "classes": "op_prj_demo__classes",
+      "configs": "op_prj_demo__configs",
+      "images": "op_prj_demo__images",
+      "items": "op_prj_demo__items",
+      "labels_confirmed": "op_prj_demo__labels_confirmed",
+      "settings": "op_prj_demo__configs",
+      "umap_state": "op_prj_demo__umap_state",
+      "umap_viz_state": "op_prj_demo__configs"
+     },
+     "mlflow_experiment": "openprocessor-demo",
+     "model_prefix": "demo__",
+     "project_state_dir": "{ROOT}/state/projects/demo",
+     "train_jobs_dir": "{ROOT}/jobs/projects/demo",
+     "upload_root": "{ROOT}/state/projects/demo/uploads"
+    },
+    "revision": 3,
+    "slug": "demo",
+    "status": "active",
+    "updated_at": "2026-01-02T00:00:00+00:00"
+   },
+   "project:old-demo": {
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "Old demo (synthetic)",
+    "display_name": "Old demo",
+    "origin": null,
+    "pre_delete_status": null,
+    "resources": {
+     "autolabel_dir": "{ROOT}/jobs/auto_label/projects/old-demo",
+     "bakeoff_eval_root": "{ROOT}/data/projects/old-demo/bakeoff_eval",
+     "bakeoff_jobs_dir": "{ROOT}/state/projects/old-demo/bakeoff_jobs",
+     "class_registry_path": "{ROOT}/data/projects/old-demo/class_registry.json",
+     "export_root": "{ROOT}/data/projects/old-demo/exports",
+     "indexes": {
+      "classes": "op_prj_old-demo__classes",
+      "configs": "op_prj_old-demo__configs",
+      "images": "op_prj_old-demo__images",
+      "items": "op_prj_old-demo__items",
+      "labels_confirmed": "op_prj_old-demo__labels_confirmed",
+      "settings": "op_prj_old-demo__configs",
+      "umap_state": "op_prj_old-demo__umap_state",
+      "umap_viz_state": "op_prj_old-demo__configs"
+     },
+     "mlflow_experiment": "openprocessor-old-demo",
+     "model_prefix": "old-demo__",
+     "project_state_dir": "{ROOT}/state/projects/old-demo",
+     "train_jobs_dir": "{ROOT}/jobs/projects/old-demo",
+     "upload_root": "{ROOT}/state/projects/old-demo/uploads"
+    },
+    "revision": 3,
+    "slug": "old-demo",
+    "status": "deleted",
+    "updated_at": "2026-01-03T00:00:00+00:00"
+   }
+  },
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "created_at": {
+     "type": "date"
+    },
+    "revision": {
+     "type": "long"
+    },
+    "slug": {
+     "type": "keyword"
+    },
+    "status": {
+     "type": "keyword"
+    },
+    "updated_at": {
+     "type": "date"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ }
+}

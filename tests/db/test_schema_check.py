@@ -21,6 +21,12 @@ from src.db.schema_check import (
 pytestmark = pytest.mark.db
 
 
+@pytest.fixture(autouse=True)
+def _no_legacy_index(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests are about the revision; the upgrade gate has its own (tests/upgrade)."""
+    monkeypatch.setattr(schema_check, 'legacy_projects_index_exists', lambda: False)
+
+
 @contextmanager
 def _as_super(pg):
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:

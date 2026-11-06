@@ -4,7 +4,10 @@
 and then refuses with ``dependency_unavailable: <name>``; there is no degraded mode and no
 switch for one. ``check_control_plane`` compares the database revision with the head bundled in
 this image and refuses with ``schema_not_current`` naming both: a new image never runs on an
-old schema and an old image never runs on a newer one.
+old schema and an old image never runs on a newer one. It also refuses with
+``upgrade_incomplete`` while the 0.6.0 upgrade is in progress or its OpenSearch control
+data (``op_projects``) still exists, so nothing writes to PostgreSQL while the operator fixes a
+failed verify (review fix R-9a).
 
 A probe is a callable that returns when its service answers and raises :class:`ProbeFailed`
 when it does not. Each probe converts only the errors of its own client, so a bug in a probe
@@ -18,10 +21,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 
+from src.config.env import env_str
 from src.db.engine import one_off_connection
 
 
@@ -36,6 +41,11 @@ DEPENDENCY_WAIT_BUDGET_S = 60.0
 DEPENDENCY_WAIT_INTERVAL_S = 2.0
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / 'migrations'
+
+# The 0.6.0 index that held the project records; its presence means the upgrade has not deleted
+# its sources yet. The name is spelled out here, in the gate, and in ``src/services/upgrade``.
+LEGACY_PROJECTS_INDEX = 'op_projects'
+LEGACY_PROBE_TIMEOUT_S = 5.0
 
 
 class ProbeFailed(Exception):  # noqa: N818  # a probe's verdict, not an error class
@@ -55,6 +65,23 @@ class SchemaNotCurrentError(RuntimeError):
             f'this image expects {code}'
         )
         self.database = database
+        self.code = code
+
+
+class UpgradeIncompleteError(SchemaNotCurrentError):
+    """The 0.6.0 control data is not (fully) moved: refuse, naming why and the next command.
+
+    A subclass of :class:`SchemaNotCurrentError` so every process that already refuses to start
+    on a stale schema (the API lifespan, the Celery worker and beat hooks) refuses on this too.
+    """
+
+    def __init__(self, reason: str, code: str):
+        RuntimeError.__init__(
+            self,
+            f'upgrade_incomplete: {reason}; run `./openprocessor upgrade` to finish '
+            'or `./openprocessor upgrade --rollback` to return to 0.6.0',
+        )
+        self.database = None
         self.code = code
 
 
@@ -117,13 +144,47 @@ def database_revision(conn: Connection) -> str | None:
         return None
 
 
+def upgrade_state(conn: Connection) -> str | None:
+    """The recorded state of the 0.6.0 upgrade (``in_progress``, ``completed``) or ``None``."""
+    value = conn.execute(
+        text("SELECT value ->> 'state' FROM deployment_settings WHERE key = 'upgrade_state'")
+    ).scalar_one_or_none()
+    return None if value is None else str(value)
+
+
+def legacy_projects_index_exists() -> bool:
+    """Whether OpenSearch still has the 0.6.0 ``op_projects`` index (a HEAD request).
+
+    An unreachable OpenSearch is a refusal naming it, never an assumption that the data is gone.
+    """
+    url = env_str('OPENSEARCH_URL', 'http://opensearch:9200').rstrip('/')
+    try:
+        response = httpx.head(f'{url}/{LEGACY_PROJECTS_INDEX}', timeout=LEGACY_PROBE_TIMEOUT_S)
+    except httpx.HTTPError as exc:
+        raise DependencyUnavailableError(['opensearch'], type(exc).__name__) from exc
+    if response.status_code == httpx.codes.NOT_FOUND:
+        return False
+    if response.status_code == httpx.codes.OK:
+        return True
+    raise DependencyUnavailableError(['opensearch'], f'HTTP {response.status_code}')
+
+
 def check_control_plane() -> None:
-    """Refuse (:class:`SchemaNotCurrentError`) unless the database is at this image's head."""
+    """Refuse unless the database is at this image's head and the 0.6.0 upgrade is not pending.
+
+    Raises :class:`SchemaNotCurrentError` or :class:`UpgradeIncompleteError`.
+    """
     with one_off_connection(direct=False, application_name='op-startup') as conn:
         revision = database_revision(conn)
-    head = code_head()
-    if revision != head:
-        raise SchemaNotCurrentError(revision, head)
+        head = code_head()
+        if revision != head:
+            raise SchemaNotCurrentError(revision, head)
+        if upgrade_state(conn) == 'in_progress':
+            raise UpgradeIncompleteError('the 0.6.0 upgrade is in progress', head)
+    if legacy_projects_index_exists():
+        raise UpgradeIncompleteError(
+            f'OpenSearch still holds {LEGACY_PROJECTS_INDEX}, the 0.6.0 control data', head
+        )
 
 
 __all__ = [
@@ -132,6 +193,7 @@ __all__ = [
     'DependencyUnavailableError',
     'ProbeFailed',
     'SchemaNotCurrentError',
+    'UpgradeIncompleteError',
     'check_control_plane',
     'database_probe',
     'wait_for_dependencies',
