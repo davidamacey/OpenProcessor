@@ -88,7 +88,9 @@ async def test_a_rebound_name_still_connects_to_the_validated_address(
     dns: _Dns, connects: list[tuple[str, int]]
 ) -> None:
     dns.answer['vlm.corp.example'] = [GOOD]
-    labeler = labeler_for(_endpoint('http://vlm.corp.example:8000/v1'), GENERIC_ITEM_PACK)
+    labeler = labeler_for(
+        _endpoint('http://vlm.corp.example:8000/v1'), GENERIC_ITEM_PACK, usage_source=None
+    )
 
     dns.answer['vlm.corp.example'] = [EVIL]  # the name is rebound after validation
     with pytest.raises(httpx.ConnectError):
@@ -103,7 +105,9 @@ async def test_the_pinned_client_does_not_resolve_the_name_itself(
     dns: _Dns, connects: list[tuple[str, int]]
 ) -> None:
     dns.answer['vlm.corp.example'] = [GOOD]
-    labeler = labeler_for(_endpoint('http://vlm.corp.example/v1'), GENERIC_ITEM_PACK)
+    labeler = labeler_for(
+        _endpoint('http://vlm.corp.example/v1'), GENERIC_ITEM_PACK, usage_source=None
+    )
     resolved_by_policy = len(dns.calls)
     with pytest.raises(httpx.ConnectError):
         await labeler._post_chat({}, attempts=1)
@@ -121,7 +125,9 @@ async def test_a_recheck_that_now_resolves_somewhere_denied_refuses_and_never_co
     clock = {'t': 1000.0}
     monkeypatch.setattr(vlm_factory, 'time', SimpleNamespace(monotonic=lambda: clock['t']))
     dns.answer['vlm.corp.example'] = [GOOD]
-    labeler = labeler_for(_endpoint('http://vlm.corp.example/v1'), GENERIC_ITEM_PACK)
+    labeler = labeler_for(
+        _endpoint('http://vlm.corp.example/v1'), GENERIC_ITEM_PACK, usage_source=None
+    )
 
     dns.answer['vlm.corp.example'] = [METADATA]
     clock['t'] += vlm_factory._RECHECK_S + 1
@@ -140,7 +146,9 @@ async def test_a_recheck_that_passes_re_pins_to_its_fresh_answer(
     clock = {'t': 1000.0}
     monkeypatch.setattr(vlm_factory, 'time', SimpleNamespace(monotonic=lambda: clock['t']))
     dns.answer['vlm.corp.example'] = [GOOD]
-    labeler = labeler_for(_endpoint('http://vlm.corp.example/v1'), GENERIC_ITEM_PACK)
+    labeler = labeler_for(
+        _endpoint('http://vlm.corp.example/v1'), GENERIC_ITEM_PACK, usage_source=None
+    )
 
     dns.answer['vlm.corp.example'] = [EVIL]  # a legitimately moved container
     clock['t'] += vlm_factory._RECHECK_S + 1
@@ -154,7 +162,9 @@ async def test_a_recheck_that_passes_re_pins_to_its_fresh_answer(
 async def test_a_literal_ip_endpoint_is_not_pinned(
     dns: _Dns, connects: list[tuple[str, int]]
 ) -> None:
-    labeler = labeler_for(_endpoint('http://10.0.0.5:8000/v1'), GENERIC_ITEM_PACK)
+    labeler = labeler_for(
+        _endpoint('http://10.0.0.5:8000/v1'), GENERIC_ITEM_PACK, usage_source=None
+    )
     with pytest.raises(httpx.ConnectError):
         await labeler._post_chat({}, attempts=1)
     assert connects == [('10.0.0.5', 8000)]
@@ -248,7 +258,9 @@ async def test_the_real_labeler_client_reaches_the_pinned_address_with_the_endpo
     async with _Server() as server:
         dns.answer['vlm.corp.example'] = ['127.0.0.1']
         labeler = labeler_for(
-            _endpoint(f'http://vlm.corp.example:{server.port}/v1'), GENERIC_ITEM_PACK
+            _endpoint(f'http://vlm.corp.example:{server.port}/v1'),
+            GENERIC_ITEM_PACK,
+            usage_source=None,
         )
         dns.answer['vlm.corp.example'] = [EVIL]
         reply = await labeler._post_chat({'x': 1}, attempts=1)

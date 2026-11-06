@@ -154,7 +154,11 @@ def test_project_label_is_bounded_and_deterministic(monkeypatch: pytest.MonkeyPa
 def _labeler(handler: Any) -> VlmLabeler:
     client, _ = _fake_client(handler)
     return VlmLabeler(
-        base_url='http://fake/v1', model='m-test', requests_per_second=1000.0, client=client
+        base_url='http://fake/v1',
+        model='m-test',
+        requests_per_second=1000.0,
+        client=client,
+        usage_source=None,
     )
 
 

@@ -147,6 +147,7 @@ def test_label_item_batch_chunks_more_than_four_crops_into_multiple_calls():
             max_images_per_call=4,
             requests_per_second=1000.0,  # don't throttle the tests
             client=client,
+            usage_source=None,
         ) as labeler:
             crops = [_ItemCrop(img_id=f'crop-{i}', jpeg_bytes=_make_jpeg()) for i in range(5)]
             return await labeler.label_item_batch(crops, class_names=['alpha', 'beta'])
@@ -177,13 +178,13 @@ def test_construction_fails_loudly_with_a_url_but_no_model():
     an empty model must raise at construction, not silently talk to a
     vendor-named model."""
     with pytest.raises(ValueError, match='OP_VLM_MODEL'):
-        VlmLabeler(base_url='http://fake/v1', model='')
+        VlmLabeler(base_url='http://fake/v1', model='', usage_source=None)
 
 
 def test_construction_with_no_url_and_no_model_does_not_raise():
     """An unconfigured deployment (no OP_VLM_URL) must not fail merely for
     lacking a model id -- the VLM leg is simply off."""
-    labeler = VlmLabeler(base_url='', model='')
+    labeler = VlmLabeler(base_url='', model='', usage_source=None)
     assert labeler.model == ''
     _run(labeler.aclose())
 
@@ -197,6 +198,7 @@ def test_label_item_batch_clamps_max_images_per_call_above_hard_cap():
         max_images_per_call=16,  # higher than the hard cap
         requests_per_second=1000.0,
         client=client,
+        usage_source=None,
     )
     assert labeler.max_images_per_call == 8
     _run(labeler.aclose())
@@ -219,9 +221,7 @@ def test_label_item_batch_parses_markdown_fenced_response():
 
     async def _go() -> list[VlmClassPrediction]:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.label_item_batch(
                 [_ItemCrop(img_id='only', jpeg_bytes=_make_jpeg())],
@@ -242,9 +242,7 @@ def test_label_item_batch_returns_low_confidence_fallback_on_garbage():
 
     async def _go() -> list[VlmClassPrediction]:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.label_item_batch(
                 [
@@ -268,7 +266,9 @@ def test_rate_limiter_field_is_honored_via_constructor():
     """Token-bucket field is exposed; full timing test omitted (no time-machine)."""
 
     client, _ = _fake_client(lambda *_a: httpx.Response(200, json=_make_chat_response('[]')))
-    labeler = VlmLabeler(base_url='http://fake/v1', requests_per_second=2.5, client=client)
+    labeler = VlmLabeler(
+        base_url='http://fake/v1', requests_per_second=2.5, client=client, usage_source=None
+    )
     assert labeler.requests_per_second == 2.5
     # Token-bucket internal rate matches.
     assert labeler._bucket.rate == pytest.approx(2.5)
@@ -295,9 +295,7 @@ def test_retry_triggers_on_503_then_succeeds():
 
     async def _go() -> list[VlmClassPrediction]:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.label_item_batch(
                 [_ItemCrop(img_id='x', jpeg_bytes=_make_jpeg())],
@@ -321,9 +319,7 @@ def test_retry_gives_up_after_max_attempts_and_returns_fallback():
 
     async def _go() -> list[VlmClassPrediction]:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.label_item_batch(
                 [_ItemCrop(img_id='x', jpeg_bytes=_make_jpeg())],
@@ -359,6 +355,7 @@ def test_health_returns_unreachable_on_connection_error():
             model='fake-vlm',
             client=client,
             requests_per_second=1000.0,
+            usage_source=None,
         ) as labeler:
             return await labeler.health()
 
@@ -378,9 +375,7 @@ def test_health_returns_reachable_on_200():
 
     async def _go() -> VlmHealth:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.health()
 
@@ -404,9 +399,7 @@ def test_verify_plate_parses_well_formed_json():
 
     async def _go() -> VlmRegionVerdict | None:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
@@ -430,9 +423,7 @@ def test_verify_plate_returns_no_verdict_on_garbage():
 
     async def _go() -> VlmRegionVerdict | None:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
@@ -449,9 +440,7 @@ def test_verify_plate_returns_no_verdict_on_empty_reply():
 
     async def _go() -> VlmRegionVerdict | None:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
@@ -468,9 +457,7 @@ def test_verify_plate_returns_no_verdict_on_upstream_error():
 
     async def _go() -> VlmRegionVerdict | None:
         async with VlmLabeler(
-            base_url='http://fake/v1',
-            client=client,
-            requests_per_second=1000.0,
+            base_url='http://fake/v1', client=client, requests_per_second=1000.0, usage_source=None
         ) as labeler:
             return await labeler.verify_region(
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())

@@ -24,7 +24,7 @@ def _labeler(entries: list[dict[str, Any]], pack: PromptPack = GENERIC_ITEM_PACK
     )
     resp.raise_for_status = MagicMock()
     fake.post = AsyncMock(return_value=resp)
-    return VlmLabeler(client=fake, pack=pack)
+    return VlmLabeler(client=fake, pack=pack, usage_source=None)
 
 
 def _entry(i: int, proposed: str) -> dict[str, Any]:

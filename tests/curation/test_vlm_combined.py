@@ -53,7 +53,7 @@ def _make_labeler(http_response_json: dict | list | str | None = None) -> VlmLab
     )
     resp.raise_for_status = MagicMock()
     fake.post = AsyncMock(return_value=resp)
-    return VlmLabeler(client=fake)
+    return VlmLabeler(client=fake, usage_source=None)
 
 
 def _make_jpeg(size: tuple[int, int] = (200, 100)) -> bytes:

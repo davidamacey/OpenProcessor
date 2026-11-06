@@ -178,7 +178,12 @@ async def run_assist(
         endpoint = prepared.vlm.endpoint
         if endpoint is not None:
             await assert_may_connect(endpoint)
-        labeler = get_vlm_labeler(prepared.pack_name, prepared.pack_revision, endpoint=endpoint)
+        labeler = get_vlm_labeler(
+            prepared.pack_name,
+            prepared.pack_revision,
+            endpoint=endpoint,
+            usage_source='assist_run',
+        )
         ctx = await class_context(
             labeler, ClassWriteGuard('assist_run'), revision=prepared.pack_revision
         )

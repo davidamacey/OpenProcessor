@@ -71,7 +71,9 @@ async def _build_vlm_context(
     )
     if endpoint is not None:
         await assert_may_connect(endpoint)
-    labeler = get_vlm_labeler(labeler_pack, labeler_revision, endpoint=endpoint)
+    labeler = get_vlm_labeler(
+        labeler_pack, labeler_revision, endpoint=endpoint, usage_source='autolabel'
+    )
     ctx = await class_context(labeler, guard, revision=labeler_revision)
     if not attributes:
         return ctx, None

@@ -47,6 +47,7 @@ class Upstream:
             base_url='http://vlm.test/v1',
             model='m',
             client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+            usage_source=None,
         )
 
 
@@ -251,6 +252,7 @@ async def test_an_upstream_failure_is_a_transport_error_for_every_call(
         base_url='http://vlm.test/v1',
         model='m',
         client=httpx.AsyncClient(transport=httpx.MockTransport(down)),
+        usage_source=None,
     )
     crops = [ProbeCrop(crop_id=f'c{i}', jpeg=_jpeg(), region_boxes=BOXES) for i in (1, 2)]
     for subset in (crops[:1], crops):

@@ -31,6 +31,7 @@ from src.services.labeling.vlm_client import (
 )
 from src.services.labeling.vlm_models import VlmHealth
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
+from src.services.labeling.vlm_usage import record_call
 from src.utils.upstream_errors import describe_upstream_error
 
 
@@ -76,6 +77,7 @@ class VlmLabelerCore:
         pack: PromptPack = GENERIC_ITEM_PACK,
         fields: RegionFields | None = None,
         *,
+        usage_source: str | None,
         hard_cap: int | None = None,
         json_mode: bool = True,
         open_images_per_call: int | None = None,
@@ -109,6 +111,9 @@ class VlmLabelerCore:
             max_images_per_call = _max_hard
 
         self._egress_check = egress_check
+        # Who the calls are billed to in ``vlm_usage_hourly``; ``None`` for a reachability or
+        # test probe, which is not a workload.
+        self.usage_source = usage_source
         self.json_mode = json_mode
         self.open_images_per_call = (
             DEFAULT_OPEN_IMAGES_PER_CALL if open_images_per_call is None else open_images_per_call
@@ -175,7 +180,11 @@ class VlmLabelerCore:
         return build_auth_headers(self.api_key)
 
     async def _post_chat(
-        self, payload: dict[str, Any], *, attempts: int = RETRY_MAX_ATTEMPTS
+        self,
+        payload: dict[str, Any],
+        *,
+        attempts: int = RETRY_MAX_ATTEMPTS,
+        record_usage: bool = True,
     ) -> dict[str, Any]:
         """POST /chat/completions with retry on 5xx + connection errors.
 
@@ -196,6 +205,13 @@ class VlmLabelerCore:
             raise
         record_vlm_request(self.model, 'ok', time.monotonic() - started, response)
         record_chat_exchange(payload, response)
+        if record_usage:
+            await record_call(
+                endpoint_name=self.identity.endpoint_ref.rpartition('@')[0],
+                source=self.usage_source,
+                payload=payload,
+                response=response,
+            )
         return response
 
     # ----- public API -----
@@ -214,7 +230,7 @@ class VlmLabelerCore:
             'temperature': 0.0,
         }
         try:
-            resp = await self._post_chat(payload, attempts=1)
+            resp = await self._post_chat(payload, attempts=1, record_usage=False)
             _ = extract_message_content(resp)
             return VlmHealth(reachable=True, model=self.model, last_error=None)
         except Exception as exc:

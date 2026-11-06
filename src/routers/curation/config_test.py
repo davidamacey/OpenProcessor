@@ -141,7 +141,7 @@ def _vlm_ref(endpoint: VlmEndpoint, *, draft: bool, labeler: VlmLabeler) -> Pack
 async def _labeler(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
     try:
         await assert_may_connect(endpoint)
-        return labeler_for(endpoint, pack)
+        return labeler_for(endpoint, pack, usage_source=None)
     except VlmEndpointUnavailableError as exc:
         raise labeler_unavailable(exc) from exc
 

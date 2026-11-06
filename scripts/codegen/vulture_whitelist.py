@@ -195,3 +195,6 @@ _.resume_job  # src/services/jobs/service.py, called by the pausable families' r
 _.resume_from  # src/tasks/runtime/context.py, read by the resumable handlers
 _.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist loop, re-index, backfill)
 _.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands
+
+# The lane 4D VLM usage seam: the job handlers of the trigger family call it.
+_.usage_sessions  # src/services/labeling/vlm_usage.py, entered by the autolabel and assist-loop handlers

@@ -141,7 +141,9 @@ def test_start_job_runs_what_the_request_resolved(app_client, monkeypatch, query
         == 200
     )
     captured, summary = _run_job(c, monkeypatch, query)
-    lab = get_vlm_labeler(summary['prompt_pack'], summary['prompt_pack_revision'])
+    lab = get_vlm_labeler(
+        summary['prompt_pack'], summary['prompt_pack_revision'], usage_source=None
+    )
     stamp = prompt_pack_stamp(lab._pack, revision=summary['prompt_pack_revision'])
     print(
         repr(query),
@@ -216,7 +218,7 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     try:
         pack_arg = None if omitted else summary['prompt_pack']
         rev_arg = None if omitted else summary['prompt_pack_revision']
-        lab = get_vlm_labeler(pack_arg, rev_arg)
+        lab = get_vlm_labeler(pack_arg, rev_arg, usage_source=None)
         got = lab._pack.class_system
     except Exception as exc:
         got = repr(exc)
@@ -241,7 +243,7 @@ def test_omitted_job_after_active_switch_never_serves_draft(app_client, monkeypa
     # The job resolves against `None`/`None` when `prompt_pack_omitted` is set, exactly
     # like `run_auto_label`'s VLM stage, not the echoed `(prompt_pack, prompt_pack_revision)`.
     assert args['prompt_pack_omitted'] is True
-    lab = get_vlm_labeler(None, None)
+    lab = get_vlm_labeler(None, None, usage_source=None)
     print(
         'trigger', args['prompt_pack'], args['prompt_pack_revision'], '->', lab._pack.class_system
     )

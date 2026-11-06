@@ -52,7 +52,9 @@ from src.utils.timeutil import now_iso
 _F = get_region_fields()
 
 
-async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) -> Any:
+async def request_labeler(
+    opensearch: Any, vlm: Any, acknowledge_external: Any, *, usage_source: str
+) -> Any:
     """The labeler for one VLM route call: the settings-default pack, and the
     endpoint the request selected (``?vlm=``) or the project default, both
     through the shared gate. 409 ``vlm_not_configured`` when the project's
@@ -70,7 +72,7 @@ async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) 
     try:
         if run.endpoint is not None:
             await assert_may_connect(run.endpoint)
-        return get_vlm_labeler(pack_name, endpoint=run.endpoint)
+        return get_vlm_labeler(pack_name, endpoint=run.endpoint, usage_source=usage_source)
     except VlmEndpointUnavailableError as exc:
         raise labeler_unavailable(exc) from exc
 
@@ -134,7 +136,9 @@ async def vlm_label_batch(
         raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
     # Resolved (and gated) before any work: an unknown or unacknowledged
     # endpoint is a 422 up front, never after the crops were read.
-    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
+    labeler = await request_labeler(
+        opensearch, vlm, acknowledge_external, usage_source='label_batch'
+    )
 
     reg = await get_class_registry().snapshot()
     from src.services.curation.region_class import item_classes
@@ -366,7 +370,9 @@ async def vlm_verify_region_batch(
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
         candidate_text_by_id[item.crop_id] = item.candidate_text
 
-    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
+    labeler = await request_labeler(
+        opensearch, vlm, acknowledge_external, usage_source='region_verify'
+    )
     verdicts = await labeler.verify_region_batch(crops)
 
     # Re-order to input order (verify_region_batch already preserves it,
@@ -453,7 +459,9 @@ async def vlm_region_visible_batch(
             )
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
 
-    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
+    labeler = await request_labeler(
+        opensearch, vlm, acknowledge_external, usage_source='region_verify'
+    )
     visible = await labeler.region_visible_batch(crops)
     return VlmRegionVisibleBatchResponse(visible=visible)
 
