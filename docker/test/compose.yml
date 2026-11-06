@@ -312,6 +312,13 @@ services:
     volumes: *api-volumes
     environment: *process-env
     command: celery -A src.tasks.app worker -Q jobs --concurrency=2 --hostname jobs@%h -E
+    healthcheck:
+      # The image's default HEALTHCHECK probes the API port; a worker probes its own pool.
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "jobs"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
     depends_on: &worker-deps
       api:
         condition: service_healthy
@@ -323,6 +330,13 @@ services:
     volumes: *api-volumes
     environment: *process-env
     command: celery -A src.tasks.app worker -Q periodic -c 1 --hostname periodic@%h -E
+    healthcheck:
+      # The image's default HEALTHCHECK probes the API port; a worker probes its own pool.
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "periodic"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
     depends_on: *worker-deps
     networks:
       - verify_net
@@ -332,6 +346,13 @@ services:
     volumes: *api-volumes
     environment: *process-env
     command: celery -A src.tasks.app beat -s /tmp/celerybeat-schedule
+    healthcheck:
+      # A fresh schedule file (as in docker-compose.yml); an empty glob fails.
+      test: ["CMD", "python", "-c", "import glob,os,sys,time; f=glob.glob('/tmp/celerybeat-schedule*'); sys.exit(0 if f and time.time()-max(map(os.path.getmtime,f))<300 else 1)"]
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     deploy:
       replicas: 1
     depends_on: *worker-deps
