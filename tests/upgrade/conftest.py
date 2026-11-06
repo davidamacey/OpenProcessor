@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from src.services.detection import profile_registry
 from src.services.upgrade.from_060.runner import UpgradeRunner
 from tests.upgrade._v060 import V060Install, install
 
@@ -28,11 +29,15 @@ NOW = dt.datetime(2026, 2, 1, tzinfo=dt.UTC)
 
 
 @pytest.fixture(autouse=True)
-def env_vlm(monkeypatch):
-    """The environment the upgrade runs in names a VLM, so a project that activated the built-in
-    ``env`` endpoint can be pointed at its stored body."""
+def upgrade_environment(monkeypatch):
+    """The environment the upgrade runs in names a VLM and a region detector, so a project that
+    activated either built-in can be pointed at its stored body."""
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm-env:8000/v1')
     monkeypatch.setenv('OP_VLM_MODEL', 'env-model')
+    monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', 'road_detector')
+    profile_registry._reset_registry_for_tests()
+    yield
+    profile_registry._reset_registry_for_tests()
 
 
 @pytest.fixture

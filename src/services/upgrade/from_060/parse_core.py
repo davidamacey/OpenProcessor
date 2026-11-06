@@ -231,8 +231,8 @@ def parse_activations(
 
     An axis turned off ends in an event to ``None`` (0.7.0 records "off" as an event, so "never
     activated" stays distinct). The ``env`` VLM endpoint is pointed at its first revision. Any other
-    built-in (an activation with no revision) names no document the upgrade can store; such events
-    are skipped and the axis ends where the last pointable event left it.
+    built-in (an activation with a name and no revision) keeps ``to_revision`` ``None`` until
+    :mod:`registered_configs` stores its body.
     """
     events: dict[str, list[ActivationSrc]] = {}
     currents: dict[str, Mapping[str, Any]] = {}
@@ -275,8 +275,6 @@ def _activation(doc: Mapping[str, Any], now: dt.datetime) -> ActivationSrc | Non
     if axis not in _AXIS_KIND:
         return None
     to_revision = _pinned(axis, name, doc.get('revision'))
-    if name is not None and to_revision is None:
-        return None
     previous = doc.get('previous') or {}
     return ActivationSrc(
         axis=axis,

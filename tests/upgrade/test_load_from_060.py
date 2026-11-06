@@ -67,7 +67,7 @@ def rows(pg, sql: str, **params):
 async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
     result = await make_runner().run()
     counts = result.load_counts
-    assert counts['projects'] == 2
+    assert counts['projects'] == 3
     assert counts['retired_slugs'] == 1
     assert rows(
         clean_db, "SELECT retired_at IS NOT NULL FROM project_slugs WHERE slug = 'old-demo'"
@@ -197,8 +197,8 @@ async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
         'SELECT m.name, m.labels, p.triton_version FROM promotions p JOIN models m ON m.id = p.model_id',
     ) == [('demo__car_detector', ['car', 'bus'], 1)]
     assert rows(clean_db, 'SELECT count(*) FROM model_shares') == [
-        (1,)
-    ]  # shared with the other project
+        (2,)
+    ]  # shared with each of the other projects
     assert rows(
         clean_db, 'SELECT holdout_mode, target_project_id IS NOT NULL FROM combine_runs'
     ) == [('union', True)]
@@ -210,7 +210,7 @@ async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
     ]  # fmt: skip
     # the research steps
     assert rows(clean_db, "SELECT count(*) FROM embedding_spaces WHERE created_by = 'upgrade'") == [
-        (6,)
+        (9,)
     ]
     assert rows(
         clean_db, "SELECT key FROM deployment_settings WHERE key = 'active_serving_profile'"

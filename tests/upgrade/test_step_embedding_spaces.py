@@ -55,4 +55,7 @@ async def test_each_loaded_project_gets_three_spaces_with_the_live_engine(
         ('demo', 'box', 'items', 'region_box_embeddings.embedding', None, 'region_box_embeddings', 'lucene', 'primary', 'ready', 'upgrade', 'pe_core_l14_336_v1', 1024),
         ('demo', 'frame', 'images', 'pe_embedding', None, None, 'lucene', 'primary', 'ready', 'upgrade', 'pe_core_l14_336_v1', 1024),
         ('demo', 'item', 'items', 'pe_embedding', 'embedding_state', None, 'lucene', 'primary', 'ready', 'upgrade', 'pe_core_l14_336_v1', 1024),
+        ('lean', 'box', 'items', 'region_box_embeddings.embedding', None, 'region_box_embeddings', 'lucene', 'primary', 'ready', 'upgrade', 'pe_core_l14_336_v1', 1024),
+        ('lean', 'frame', 'images', 'pe_embedding', None, None, 'lucene', 'primary', 'ready', 'upgrade', 'pe_core_l14_336_v1', 1024),
+        ('lean', 'item', 'items', 'pe_embedding', 'embedding_state', None, 'lucene', 'primary', 'ready', 'upgrade', 'pe_core_l14_336_v1', 1024),
     ]  # fmt: skip

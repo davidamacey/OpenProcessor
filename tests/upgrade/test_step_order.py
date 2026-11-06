@@ -43,4 +43,4 @@ async def test_the_steps_ran_in_order_and_a_second_load_adds_nothing_new(
     # idempotent: the second run is refused by the gate, and the rows stay one set
     with clean_db.engine('super').connect() as conn:
         spaces = conn.execute(text('SELECT count(*) FROM embedding_spaces')).scalar_one()
-    assert spaces == 6
+    assert spaces == 9

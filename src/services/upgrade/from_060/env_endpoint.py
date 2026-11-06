@@ -20,6 +20,7 @@ from src.services.upgrade.from_060.model import (
     ConfigDocSrc,
     ConfigRevisionSrc,
     ProbeSrc,
+    UnresolvedBuiltinError,
     VlmEndpointSrc,
 )
 
@@ -41,18 +42,20 @@ def endpoints_to_store(
     project activated it and the environment still names a VLM."""
     endpoints = list(global_data.endpoints)
     if any(_uses_env(pd.activations) for pd in projects):
-        env = env_endpoint_source(global_data.env_probe, now=now)
-        if env is not None:
-            endpoints.append(env)
+        endpoints.append(env_endpoint_source(global_data.env_probe, now=now))
     return endpoints
 
 
-def env_endpoint_source(probe: ProbeSrc | None, *, now: dt.datetime) -> VlmEndpointSrc | None:
-    """The endpoint document to store, or ``None`` when the environment names no VLM (then there
-    is nothing for the activations to point at, and they are not loaded)."""
+def env_endpoint_source(probe: ProbeSrc | None, *, now: dt.datetime) -> VlmEndpointSrc:
+    """The endpoint document to store. Raises :class:`UnresolvedBuiltinError` when the environment
+    names no VLM: a project's choice of the ``env`` endpoint is never dropped."""
     endpoint = env_endpoint(dict(probe.result) if probe else None)
     if endpoint is None:
-        return None
+        msg = (
+            'a project activated the built-in VLM endpoint "env", but OP_VLM_URL is not set where '
+            'the upgrade runs; set OP_VLM_URL / OP_VLM_MODEL as they were on 0.6.0 and run it again'
+        )
+        raise UnresolvedBuiltinError(msg)
     doc = ConfigDocSrc(
         project_slug=None,
         kind='vlm_endpoint',

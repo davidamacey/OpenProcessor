@@ -211,9 +211,11 @@ the bundle and only then deletes the 0.6.0 control indexes and files. Every clas
 kept. If the verify fails nothing is deleted: the installer names
 `UPGRADE_REPORT.json` in the bundle, and you fix the cause and run `upgrade` again, run
 `--rollback`, or load again with `python -m scripts.db.upgrade_from_060 --reset`. A
-project that activated the built-in `OP_VLM_URL` endpoint keeps it as a stored endpoint
-document, built from the environment the upgrade runs in; with no `OP_VLM_URL` set its
-VLM activation is not carried over. A checkout upgrade (`git pull`, `make up`) from 0.6.0
+project that activated a built-in (the `OP_VLM_URL` endpoint, a built-in or file prompt
+pack, an env or registered region profile) keeps it as a stored document at revision 1,
+built from the environment the upgrade runs in. If a built-in does not resolve there
+(for example `OP_VLM_URL` is unset, or a prompt pack file is missing), the upgrade stops
+before it changes anything and names it; restore the 0.6.0 setting and run it again. A checkout upgrade (`git pull`, `make up`) from 0.6.0
 runs the same step with `python -m scripts.db.upgrade_from_060`. Afterwards
 `./openprocessor db verify` reports class disagreements, missing indexes and storage.
 

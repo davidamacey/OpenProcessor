@@ -9,7 +9,12 @@ from sqlalchemy import text
 
 from src.services.labeling.vlm_endpoints import ENV_ENDPOINT_NAME, env_endpoint, probe_fingerprint
 from src.services.upgrade.from_060 import env_endpoint as upgrade_env
-from src.services.upgrade.from_060.model import ENV_NAME, ENV_REVISION, ProbeSrc
+from src.services.upgrade.from_060.model import (
+    ENV_NAME,
+    ENV_REVISION,
+    ProbeSrc,
+    UnresolvedBuiltinError,
+)
 
 
 NOW = dt.datetime(2026, 2, 1, tzinfo=dt.UTC)
@@ -85,17 +90,13 @@ async def test_the_external_acknowledgements_load_as_project_state(make_runner, 
 
 @pytest.mark.db
 @pytest.mark.asyncio
-async def test_without_a_vlm_in_the_environment_the_env_activation_is_not_loaded(
+async def test_without_a_vlm_in_the_environment_the_upgrade_stops_and_loads_nothing(
     make_runner, clean_db, monkeypatch
 ) -> None:
     monkeypatch.setenv('OP_VLM_URL', '')
-    await make_runner().run()
-    assert rows(clean_db, "SELECT count(*) FROM config_documents WHERE name = 'env'") == [(0,)]
-    assert rows(
-        clean_db,
-        'SELECT d.name FROM config_activations a JOIN projects p ON p.id = a.project_id '
-        "JOIN config_documents d ON d.id = a.config_id WHERE p.slug = 'demo' AND a.axis = 'vlm'",
-    ) == [('local-vlm',)]  # the axis stays where the last pointable event left it
+    with pytest.raises(UnresolvedBuiltinError, match='OP_VLM_URL'):
+        await make_runner().run()
+    assert rows(clean_db, 'SELECT count(*) FROM projects') == [(0,)]
 
 
 def test_a_probe_of_the_current_environment_body_is_kept_on_the_stored_revision() -> None:

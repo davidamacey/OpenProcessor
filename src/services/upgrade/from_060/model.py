@@ -15,6 +15,12 @@ if TYPE_CHECKING:
     import datetime as dt
     import uuid
 
+
+class UnresolvedBuiltinError(RuntimeError):
+    """A built-in configuration a project activated cannot be stored: its body does not resolve in
+    the environment the upgrade runs in. The upgrade stops rather than drop the project's choice."""
+
+
 ENV_NAME = 'env'  # the VLM endpoint built from OP_VLM_URL / OP_VLM_MODEL
 ENV_REVISION = 1  # the one revision the upgrade stores for it
 
@@ -95,7 +101,7 @@ class ActivationSrc:
     from_name: str | None
     from_revision: int | None
     to_name: str | None  # ``None``: the axis was turned off
-    to_revision: int | None  # ``None`` with ``to_name`` ``None``: off
+    to_revision: int | None  # ``None`` with ``to_name`` ``None``: off; with a name, a built-in
     kind: str
     at: dt.datetime
 

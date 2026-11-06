@@ -24,7 +24,7 @@ async def _export(v060: V060Install, tmp_path):
 async def test_the_fixture_bundle_has_the_expected_counts(v060, tmp_path) -> None:
     manifest = await _export(v060, tmp_path)
     counts = manifest.counts
-    assert counts['doc:op_projects'] == 4  # three projects and the revision counter
+    assert counts['doc:op_projects'] == 5  # four projects and the revision counter
     assert counts['index:op_projects'] == 1
     assert counts['doc:op_global_configs'] == 6
     # lease and runtime documents are transient: neither exported nor restored

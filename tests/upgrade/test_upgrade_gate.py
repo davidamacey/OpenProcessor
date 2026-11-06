@@ -186,5 +186,5 @@ async def test_reset_after_delete_sources_is_refused(make_runner, clean_db) -> N
         reset(conn)
     with clean_db.engine('super').connect() as conn:
         assert (
-            conn.execute(text('SELECT count(*) FROM projects')).scalar_one() == 2
+            conn.execute(text('SELECT count(*) FROM projects')).scalar_one() == 3
         )  # nothing was truncated

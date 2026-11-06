@@ -17,7 +17,13 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import delete
 
 from src.db.models import Event
-from src.services.upgrade.from_060 import control_rows, direct_rows, env_endpoint, ledger_copy
+from src.services.upgrade.from_060 import (
+    control_rows,
+    direct_rows,
+    env_endpoint,
+    ledger_copy,
+    registered_configs,
+)
 from src.services.upgrade.from_060.model import LoadReport
 from src.services.upgrade.from_060.parse_core import parse_all
 from src.services.upgrade.from_060.parse_jobs import (
@@ -71,6 +77,7 @@ class Parsed:
         self.projects: list[ProjectData]
         self.retired: list[RetiredSlug]
         self.global_data, self.projects, self.retired = parse_all(snap, now=now)
+        self.projects = [registered_configs.store_builtins(pd) for pd in self.projects]
         self.endpoints: list[VlmEndpointSrc] = env_endpoint.endpoints_to_store(
             self.global_data, self.projects, now=now
         )

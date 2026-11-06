@@ -3,9 +3,10 @@
 
     python -m scripts.db.make_v060_fixture [--out DIR]
 
-A small synthetic 0.6.0 install (public names and numbers only): two projects (``default``, in
+A small synthetic 0.6.0 install (public names and numbers only): three projects (``default``, in
 the pre-folding layout with separate settings and view-state indexes and a ``class_registry.json``
-file; ``demo``, folded, with the class registry as a document), one deleted slug, classes with a
+file; ``demo``, folded, with the class registry as a document; ``lean``, folded, whose axes point at built-ins with no
+stored revision), one deleted slug, classes with a
 merge, hotkeys and the R-3 name pairs, prompt-pack revisions with an activation history, a VLM
 endpoint with a probe, a settings document, a keymap, a holdout freeze, label operations, an
 ingest source with a ``queue.sqlite``, a dataset import with a ledger, a training run, a
@@ -41,6 +42,7 @@ from src.clients.curation_opensearch.bodies_other import (
 )
 
 
+GENERIC_REGION_PACK_NAME = 'generic_region_v1'  # a built-in prompt pack that is not the default
 ROOT = '{ROOT}'
 PREFIX = 'op_prj_'
 T0 = '2026-01-01T00:00:00+00:00'
@@ -535,10 +537,12 @@ def build_files() -> list[dict[str, Any]]:
 def build_opensearch() -> dict[str, Any]:
     default_roles = roles('default', folded=False)
     demo_roles = roles('demo', folded=True)
+    lean_roles = roles('lean', folded=True)
     out: dict[str, Any] = {}
     projects = {
         'project:default': project_doc('default', 'Default', folded=False),
         'project:demo': project_doc('demo', 'Demo', folded=True),
+        'project:lean': project_doc('lean', 'Lean', folded=True),
         'project:old-demo': {
             **project_doc('old-demo', 'Old demo', folded=True, status='deleted'),
             'updated_at': T2,
@@ -641,6 +645,19 @@ def build_opensearch() -> dict[str, Any]:
     folded = {**configs_docs(), **env_vlm, 'default': settings_doc(), 'class_registry': classes_doc(),
               'current': {'state_id': 'current', 'projection_version': 'umap_viz_v1', 'scope': 'all', 'cluster_id': None, 'n_points': 3, 'fitted_at': T2, 'n_components': 2, 'metric': 'cosine'}}  # fmt: skip
     out[demo_roles['configs']] = index(_configs_body(), folded)
+    # lean activated built-ins that have no stored revision: a prompt pack and the env region profile
+    lean = {
+        **activation('prompt_pack', GENERIC_REGION_PACK_NAME, None, None, T1),
+        **event(8, 'prompt_pack', GENERIC_REGION_PACK_NAME, None, None, T1),
+        **activation('detection_profile', 'region', None, None, T2),
+        **event(9, 'detection_profile', 'region', None, None, T2),
+    }
+    out[lean_roles['images']] = index(images_body('lucene'))
+    out[lean_roles['items']] = index(items_body('lucene'))
+    out[lean_roles['configs']] = index(_configs_body(), lean)
+    out[lean_roles['umap_state']] = index(_umap_state_body())
+    out[lean_roles['classes']] = index(_classes_body())
+    out[lean_roles['labels_confirmed']] = index(_labels_confirmed_body())
     out[demo_roles['umap_state']] = index(_umap_state_body())
     out[demo_roles['classes']] = index(_classes_body())
     out[demo_roles['labels_confirmed']] = index(_labels_confirmed_body())

@@ -1576,6 +1576,362 @@
    }
   }
  },
+ "op_prj_lean__classes": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "added_at": {
+     "type": "date"
+    },
+    "class_id": {
+     "type": "integer"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "deprecated": {
+     "type": "boolean"
+    },
+    "group": {
+     "type": "keyword"
+    },
+    "notes": {
+     "type": "text"
+    },
+    "sample_count": {
+     "type": "long"
+    },
+    "validated_count": {
+     "type": "long"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_lean__configs": {
+  "docs": {
+   "activation:detection_profile": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "detection_profile",
+    "doc_type": "activation",
+    "name": "region",
+    "previous": null,
+    "revision": null
+   },
+   "activation:prompt_pack": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation",
+    "name": "generic_region_v1",
+    "previous": null,
+    "revision": null
+   },
+   "activation_event:00000000-0000-4000-8000-000000000008": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "prompt_pack",
+    "doc_type": "activation_event",
+    "name": "generic_region_v1",
+    "previous": null,
+    "revision": null
+   },
+   "activation_event:00000000-0000-4000-8000-000000000009": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "detection_profile",
+    "doc_type": "activation_event",
+    "name": "region",
+    "previous": null,
+    "revision": null
+   }
+  },
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "applied_at": {
+     "type": "date"
+    },
+    "axis": {
+     "type": "keyword"
+    },
+    "body": {
+     "enabled": false,
+     "type": "object"
+    },
+    "class_registry": {
+     "enabled": false,
+     "type": "object"
+    },
+    "cloned_from": {
+     "type": "keyword"
+    },
+    "cluster_id": {
+     "type": "integer"
+    },
+    "cluster_refresh": {
+     "enabled": false,
+     "type": "object"
+    },
+    "config_revision": {
+     "type": "long"
+    },
+    "created_at": {
+     "type": "date"
+    },
+    "defaults": {
+     "enabled": false,
+     "type": "object"
+    },
+    "description": {
+     "ignore_above": 512,
+     "index": false,
+     "type": "keyword"
+    },
+    "doc_type": {
+     "type": "keyword"
+    },
+    "fitted_at": {
+     "type": "date"
+    },
+    "ingest_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "kind": {
+     "type": "keyword"
+    },
+    "lease": {
+     "enabled": false,
+     "type": "object"
+    },
+    "metric": {
+     "type": "keyword"
+    },
+    "n_components": {
+     "type": "integer"
+    },
+    "n_points": {
+     "type": "integer"
+    },
+    "name": {
+     "type": "keyword"
+    },
+    "previous": {
+     "enabled": false,
+     "type": "object"
+    },
+    "process": {
+     "type": "keyword"
+    },
+    "projection_version": {
+     "type": "keyword"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "scope": {
+     "type": "keyword"
+    },
+    "state_id": {
+     "type": "keyword"
+    },
+    "updated_at": {
+     "type": "date"
+    },
+    "updated_by": {
+     "type": "keyword"
+    },
+    "vlm_policy": {
+     "enabled": false,
+     "type": "object"
+    },
+    "vlm_scope_reps": {
+     "enabled": false,
+     "type": "object"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_lean__images": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "image_id": {
+     "type": "keyword"
+    },
+    "pe_embedding": {
+     "dimension": 1024,
+     "method": {
+      "engine": "lucene",
+      "name": "hnsw",
+      "parameters": {
+       "ef_construction": 128,
+       "m": 16
+      },
+      "space_type": "cosinesimil"
+     },
+     "type": "knn_vector"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "knn": true,
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_lean__items": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "class_id": {
+     "type": "integer"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "crop_id": {
+     "type": "keyword"
+    },
+    "embedding_state": {
+     "type": "keyword"
+    },
+    "pe_embedding": {
+     "dimension": 1024,
+     "method": {
+      "engine": "lucene",
+      "name": "hnsw",
+      "parameters": {
+       "ef_construction": 128,
+       "m": 16
+      },
+      "space_type": "cosinesimil"
+     },
+     "type": "knn_vector"
+    },
+    "region_box_embeddings": {
+     "properties": {
+      "box_id": {
+       "type": "keyword"
+      },
+      "embedding": {
+       "dimension": 1024,
+       "method": {
+        "engine": "lucene",
+        "name": "hnsw",
+        "parameters": {
+         "ef_construction": 128,
+         "m": 16
+        },
+        "space_type": "cosinesimil"
+       },
+       "type": "knn_vector"
+      }
+     },
+     "type": "nested"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "knn": true,
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_lean__labels_confirmed": {
+  "docs": {},
+  "mappings": {
+   "properties": {
+    "bbox_norm": {
+     "type": "float"
+    },
+    "class_id": {
+     "type": "integer"
+    },
+    "class_mismatch": {
+     "type": "boolean"
+    },
+    "class_name": {
+     "type": "keyword"
+    },
+    "class_source": {
+     "type": "keyword"
+    },
+    "confirmed_at": {
+     "type": "date"
+    },
+    "crop_id": {
+     "type": "keyword"
+    },
+    "detector_class_id": {
+     "type": "integer"
+    },
+    "detector_class_name": {
+     "type": "keyword"
+    },
+    "detector_confidence": {
+     "type": "float"
+    },
+    "image_path": {
+     "type": "keyword"
+    },
+    "label_id": {
+     "type": "keyword"
+    },
+    "label_source": {
+     "type": "keyword"
+    },
+    "updated_at": {
+     "type": "date"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
+ "op_prj_lean__umap_state": {
+  "docs": {},
+  "mappings": {
+   "dynamic": false,
+   "properties": {
+    "metric": {
+     "type": "keyword"
+    },
+    "n_components": {
+     "type": "integer"
+    },
+    "reducer_b64": {
+     "type": "binary"
+    },
+    "state_id": {
+     "type": "keyword"
+    }
+   }
+  },
+  "settings": {
+   "index": {
+    "number_of_replicas": 0,
+    "number_of_shards": 1
+   }
+  }
+ },
  "op_projects": {
   "docs": {
    "meta:projects_revision": {
@@ -1644,6 +2000,39 @@
     },
     "revision": 3,
     "slug": "demo",
+    "status": "active",
+    "updated_at": "2026-01-02T00:00:00+00:00"
+   },
+   "project:lean": {
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "description": "Lean (synthetic)",
+    "display_name": "Lean",
+    "origin": null,
+    "pre_delete_status": null,
+    "resources": {
+     "autolabel_dir": "{ROOT}/jobs/auto_label/projects/lean",
+     "bakeoff_eval_root": "{ROOT}/data/projects/lean/bakeoff_eval",
+     "bakeoff_jobs_dir": "{ROOT}/state/projects/lean/bakeoff_jobs",
+     "class_registry_path": "{ROOT}/data/projects/lean/class_registry.json",
+     "export_root": "{ROOT}/data/projects/lean/exports",
+     "indexes": {
+      "classes": "op_prj_lean__classes",
+      "configs": "op_prj_lean__configs",
+      "images": "op_prj_lean__images",
+      "items": "op_prj_lean__items",
+      "labels_confirmed": "op_prj_lean__labels_confirmed",
+      "settings": "op_prj_lean__configs",
+      "umap_state": "op_prj_lean__umap_state",
+      "umap_viz_state": "op_prj_lean__configs"
+     },
+     "mlflow_experiment": "openprocessor-lean",
+     "model_prefix": "lean__",
+     "project_state_dir": "{ROOT}/state/projects/lean",
+     "train_jobs_dir": "{ROOT}/jobs/projects/lean",
+     "upload_root": "{ROOT}/state/projects/lean/uploads"
+    },
+    "revision": 3,
+    "slug": "lean",
     "status": "active",
     "updated_at": "2026-01-02T00:00:00+00:00"
    },

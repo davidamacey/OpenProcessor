@@ -30,6 +30,7 @@ from src.db.engine import database_url, one_off_connection
 from src.services.upgrade import gate
 from src.services.upgrade.from_060.admin_client import ControlReader, ControlWriter, build_client
 from src.services.upgrade.from_060.layout import Layout
+from src.services.upgrade.from_060.model import UnresolvedBuiltinError
 from src.services.upgrade.from_060.reset import reset
 from src.services.upgrade.from_060.runner import (
     AlreadyCompletedError,
@@ -90,6 +91,9 @@ async def run(install_dir: Path) -> int:
         except NothingToUpgradeError as exc:
             sys.stdout.write(f'{exc}\n')
             return 0
+        except UnresolvedBuiltinError as exc:
+            sys.stderr.write(f'the upgrade stopped, nothing was changed: {exc}\n')
+            return 2
         except VerifyFailedError as exc:
             sys.stderr.write(f'{exc}\n')
             sys.stdout.write(
