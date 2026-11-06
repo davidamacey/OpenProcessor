@@ -48,11 +48,14 @@ class RootedStore:
         return store.stat(rel)
 
     def list_prefix(self, prefix: str) -> list[str]:
+        prefix = prefix.removesuffix('/')
         store, rel = self._route(prefix)
         root = parse_key(prefix).root
         return [make_key(root, *k.split('/')) for k in store.list_prefix(rel)]
 
     def delete_prefix(self, prefix: str) -> int:
+        """Remove everything under ``prefix`` (``projects/<slug>/`` takes every area of a project)."""
+        prefix = prefix.removesuffix('/')
         store, rel = self._route(prefix, write=True)
         return store.delete_prefix(rel)
 
