@@ -129,10 +129,7 @@ headers remain, and core inference routes and their `/v1` aliases keep the body 
 A singleton job that is already running answers `409` with the family's busy code
 (`reprocess_busy`, `import_busy`, `assist_busy`, `assist_loop_busy`, `label_op_busy`, or a
 plain 409 for scores, selection and projection). If OpenSearch cannot be reached to take the
-job lease the start answers `503`. The class routes of a project whose registry is not yet
-migrated answer `409 registry_not_migrated`; a class write that loses five compare-and-set
-races in a row answers `409 registry_conflict`, and one past 10000 classes
-`409 registry_full`. `POST /search/object` (a core route) answers
+job lease the start answers `503`. `POST /search/object` (a core route) answers
 `422 object_class_not_indexed` for a box whose class is neither a vehicle nor a person.
 
 Older routes (crops, classes, review, export, training, clusters) raise
@@ -1371,7 +1368,6 @@ among active classes of a project. See [Class identity](#class-identity).
 | POST | `/classes/merge` | `{source_id, target_id}`, query `dry_run` | merge report | `400`, `409` |
 | POST | `/classes/{class_id}/deprecate` | | registry entry | `404`, `409 class_still_referenced` |
 | POST | `/classes/{class_id}/restore` | | registry entry | `404`, `409`, `409 class_merged` |
-| POST | `/classes/sync_to_opensearch` | | sync report | |
 | GET | `/class_sources` | | `{class_sources[]}` | |
 
 - `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`,
