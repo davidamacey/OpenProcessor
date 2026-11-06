@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 
 
 async def _apply_clone(
-    client: Any,
     *,
     target_record: ProjectRecord,
     source: ProjectRecord,
@@ -130,7 +129,6 @@ async def _apply_clone(
         from src.services.projects.clone_stored import copy_stored_configs
 
         written_packs = await copy_stored_configs(
-            client,
             target_record=target_record,
             source=source,
             kind='prompt_pack',
@@ -139,7 +137,6 @@ async def _apply_clone(
 
     if 'activations' in axes:
         await _clone_activations(
-            client,
             target_record=target_record,
             source=source,
             written_packs=written_packs,
@@ -155,7 +152,6 @@ async def _apply_clone(
     for named in (OPEN_VOCAB, INGEST_PROFILE):
         if named.axis in axes:
             await apply_named_axis_clone(
-                client,
                 axis=named,
                 source=source,
                 target_record=target_record,
@@ -166,7 +162,6 @@ async def _apply_clone(
         from src.services.projects.clone_vlm import apply_vlm_activation_clone
 
         await apply_vlm_activation_clone(
-            client,
             source=source,
             target_record=target_record,
             expected_active=(target_activations or {}).get('vlm'),
@@ -193,7 +188,6 @@ async def clone_settings(
         client, target_record=target_record, from_slug=from_slug, axes=axes
     )
     return await _apply_clone(
-        client,
         target_record=target_record,
         source=source,
         axes=resolved_axes,
@@ -228,7 +222,6 @@ async def clone_settings_into(
         client, target_record=record, from_slug=from_slug, axes=axes
     )
     conflicts = await _apply_clone(
-        client,
         target_record=record,
         source=source,
         axes=resolved_axes,

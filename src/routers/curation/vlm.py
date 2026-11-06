@@ -63,7 +63,6 @@ async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) 
 
     pack_name = await _default_pack_name(opensearch)
     run = await resolve_run_vlm(
-        opensearch,
         vlm,
         pack=resolve_pack(pack_name),
         acknowledge_external=acknowledge_external,

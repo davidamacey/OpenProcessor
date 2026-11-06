@@ -147,6 +147,11 @@ _.EngineOutputContract  # src/schemas/models.py, validated by the engine export 
 _.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
 _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)
 
+# Event publish and retention (B2 stage 3, lane 3B).
+_.delete_older_than  # src/db/repos/events.py, called by reaper rule f (lane 3A)
+_._send_wakes  # src/services/events/publish.py, a SQLAlchemy after_commit listener registered by decorator
+_._drop_wakes  # src/services/events/publish.py, a SQLAlchemy after_rollback listener registered by decorator
+_.StreamingResponse  # src/app/factory.py, named only in a string cast
 # Landed ahead of their callers (B2 stage 2, lane 2A): the repository is wired by the registry,
 # guard and lifecycle commits of the same lane. Delete each entry with its caller.
 _.load_project  # src/db/repos/projects.py, called by the 0.6.0 upgrade step (lane 2E)
@@ -185,15 +190,6 @@ _.get_one  # src/routers/curation/research_configs.py, GET /{kind}/{name}
 _.put_one  # src/routers/curation/research_configs.py, PUT /{kind}/{name}
 _.delete_one  # src/routers/curation/research_configs.py, DELETE /{kind}/{name}
 
-# STAND-IN, delete after lane 3B merges: this lane codes against a local copy of 3B's
-# src/db/repos/events.py (not committed); the callers of these functions live in 3B's listener
-# and SSE modules, which this branch does not have.
-_.cursor_from_future  # src/db/repos/events.py (3B), called by src/services/events/sse.py
-_.fetch_after  # src/db/repos/events.py (3B), called by src/services/events/listener.py
-_.head_cursor  # src/db/repos/events.py (3B), called by src/services/events/sse.py
-_.insert_event_async  # src/db/repos/events.py (3B), called by src/services/events/publish.py
-_.oldest_cursor  # src/db/repos/events.py (3B), called by src/services/events/sse.py
-_.project_id_for_slug  # src/db/repos/events.py (3B), called by src/services/events/sse.py
 
 # The job runtime's entry points that the family lanes (stages 4 and 5) call (lane 3A).
 _.__getattr__  # type: ignore[attr-defined]  # src/clients/__init__.py, PEP 562 module attribute hook

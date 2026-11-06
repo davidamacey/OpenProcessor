@@ -51,7 +51,7 @@ def app_client():
 
 @pytest.fixture(autouse=True)
 def _no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _none(_client: object) -> dict[str, frozenset[str]]:
+    async def _none() -> dict[str, frozenset[str]]:
         return {}
 
     monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)

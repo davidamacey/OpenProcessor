@@ -1022,7 +1022,7 @@ wins.
 | Method | Path | Body | Response | Errors |
 |---|---|---|---|---|
 | GET | `/label_ops` | query `limit` (1 to 50, default 20), `undoable`, `after` (the previous page's `next_after`; exclusive) | `LabelOpList`: `{items[], limit, retention, next_after}`, newest first by `op_id`; `next_after` is the page's last `op_id` while an older operation exists, else `null`. Each `LabelOp`: `op_id`, `kind` (`label` or `move`), `at`, `finished_at`, `class_name` (the name written; class ids are never served), `target_cluster_id`, `target_kind` (`class` or `candidate`), `label_source`, `target` (`crop_ids` or `selection`), `selected`, `count`, `conflicts`, `current` (items still carrying the label), `status`, `undone`, `undoable`, `last_undo` | `422` for `limit` above 50; `422 invalid_request` for an `after` that is not an operation id |
-| POST | `/label_ops/{op_id}/undo` | `{dry_run}` (default `true`) | `LabelOpUndoResponse`: `{op_id, dry_run, status, members_known, matched, restored, already_undone, kept_changed, kept_holdout, kept_stale_class, conflicts, conflict_ids[]}` | `404 label_op_not_found`; `409 already_undone`, `label_op_busy` (another undo is running in the project), `label_op_in_progress` (the operation is still being written) |
+| POST | `/label_ops/{op_id}/undo` | `{dry_run}` (default `true`) | `LabelOpUndoResponse`: `{op_id, dry_run, status, matched, restored, already_undone, kept_changed, kept_holdout, kept_stale_class, conflicts, conflict_ids[]}` | `404 label_op_not_found`; `409 already_undone`, `label_op_busy` (another undo is running in the project), `label_op_in_progress` (the operation is still being written) |
 
 - `status` is `writing`, `interrupted` (the writer died; its items are found through the tag),
   `written`, `undoing`, `undo_interrupted` (re-send the undo to resume) or `undone`. `undoable` is
@@ -2365,7 +2365,7 @@ on overflow.
 | GET | `/curation/events` | global stream; `topic` filter |
 | GET | `/events` | the bound project's stream; `topic` and `class_id` filters |
 | POST | `/events/publish` | used by the detection worker. `_PublishEvent`: `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `region_status`, `region_count`, `image_path`, `topic`, `extra` (`extra='forbid'`). A global event type is `422`; `extra.project` must be the bound project |
-| GET | `/events/stats` | `bus`, `log_path`, `subscribers`, `events_published`, `events_dropped` |
+| GET | `/events/stats` | `subscribers`, `clients_dropped`, `listener_running`, `pubsub_connected` |
 | GET | `/pipeline/events` | auto-label dashboard stream |
 
 Event types: `project.created`, `project.updated`, `project.archived`,
@@ -2378,10 +2378,11 @@ of `prompt_pack`, `detection_profile`, `vlm`, `keymap`, ...),
 `crop.region_verified`.
 
 `crop.region_verified` data: `type`, `topic` (`region_status`), `crop_id`,
-`region_status`, `region_count`, `ts`. The event hub is cross-process by
-default (`OP_EVENT_BUS=file`): every API worker tails a shared bounded log, so
-a client connected to any worker sees events from any other and from the
-detection worker.
+`region_status`, `region_count`, `ts`. Events are rows in the PostgreSQL
+`events` table with a Valkey wake-up, so a client connected to any API worker
+sees events from any other and from the detection worker. Every frame has
+`id: <xid>-<id>` and a reconnect resumes through `Last-Event-ID`; a cursor older
+than the 24 hour retention gets a `reset` event first.
 
 ## The lock rule
 

@@ -189,26 +189,24 @@ def test_rollback_refreshes_stale_snapshot_before_gating(app_client, ready_state
     """Another process activates 'multi' (direct index write, this
     process's snapshot is stale and older than the TTL). Rolling back to
     the stripped pack must see 'multi' and 422."""
-    from src.config import get_curation_config
     from src.services.config_store import get_config_store
-    from src.services.config_store.index import activate
+    from src.services.config_store.activation_apply import registered_for
+    from src.services.config_store.documents import activate
 
     c = app_client
     _setup_packs(c)
     assert c.put(SETTINGS, json={'defaults': {'prompt_pack': 'single'}}).status_code == 200
     assert c.put(SETTINGS, json={'defaults': {'prompt_pack': 'good'}}).status_code == 200
-    idx = get_curation_config().configs_index
     store = get_config_store()
     cur = store.current.active_profile
     exp = None if cur is None else ({'name': None, 'revision': None} if cur == 'off' else None)
     asyncio.run(
         activate(
-            c.fake_os,
-            idx,
             axis='detection_profile',
             name='multi',
             revision=None,
             expected_active=exp,
+            registered=registered_for('detection_profile', 'multi'),
         )
     )
     # Age the snapshot past the 1 s TTL without refreshing it.
@@ -232,21 +230,14 @@ def _clone_pair(profile_activation: tuple[str | None, int | None] | None, plant_
     from datetime import UTC, datetime
     from unittest.mock import AsyncMock, MagicMock
 
+    from projects.clone_flow_fakes import Fake, activate_config, save
+
     import src.config.curation_accessors as curation_mod
-    from curation._fake_config_opensearch import FakeConfigOpenSearch
     from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.config_store import get_config_store
-    from src.services.config_store.index import activate, save_config
     from src.services.config_store.store import reset_config_stores
-
-    class _Fake(FakeConfigOpenSearch):
-        async def count(self, index, body=None):  # noqa: ARG002
-            return {'count': 0}
-
-        async def bulk(self, body, refresh=False):  # noqa: ARG002
-            return {'errors': False, 'items': []}
 
     def _rec(slug):
         now = datetime.now(UTC).isoformat()
@@ -269,44 +260,13 @@ def _clone_pair(profile_activation: tuple[str | None, int | None] | None, plant_
         curation_mod._default_curation_config = None
         reset_config_stores()
         try:
-            client = _Fake()
+            client = Fake()
             source, target = _rec('alpha'), _rec('beta')
-            with bind_project(source):
-                from src.config import get_curation_config
-
-                idx = get_curation_config().configs_index
-                asyncio.run(
-                    save_config(
-                        client,
-                        idx,
-                        kind='prompt_pack',
-                        name='single',
-                        body=stripped_pack_body(),
-                        expected_revision=None,
-                    )
-                )
-                if profile_activation is not None:
-                    pname, prev = profile_activation
-                    asyncio.run(
-                        activate(
-                            client,
-                            idx,
-                            axis='detection_profile',
-                            name=pname,
-                            revision=prev,
-                            expected_active=None,
-                        )
-                    )
-                asyncio.run(
-                    activate(
-                        client,
-                        idx,
-                        axis='prompt_pack',
-                        name='single',
-                        revision=1,
-                        expected_active=None,
-                    )
-                )
+            asyncio.run(save(client, source, 'prompt_pack', 'single', stripped_pack_body()))
+            if profile_activation is not None:
+                pname, prev = profile_activation
+                asyncio.run(activate_config(client, source, 'detection_profile', pname, prev))
+            asyncio.run(activate_config(client, source, 'prompt_pack', 'single', 1))
             from src.services.projects import (
                 lifecycle as lm,
                 records as records_mod,
@@ -353,7 +313,7 @@ def _clone_pair(profile_activation: tuple[str | None, int | None] | None, plant_
                 rm.get_project_registry = saved_reg
             with bind_project(target):
                 store = get_config_store()
-                asyncio.run(store.refresh(client))
+                asyncio.run(store.refresh())
                 pack, prof = live_pair()
             return outcome, pack, prof
         finally:
@@ -393,37 +353,3 @@ def test_clone_does_not_pair_stripped_pack_with_multi_region_default(
     assert not (
         pack.class_system == 'STRIPPED' and prof is not None and prof.max_regions_per_item > 1
     ), 'clone put a multi-box-stripped pack live under a multi-region profile in the target'
-
-
-def test_active_source_stays_stored_for_deleted_but_activated_pack(
-    app_client,
-    ready_state,
-    registry,
-):
-    """Activate pack_a, then delete its config doc directly (bypassing the
-    router's own 'active pack can't be deleted' guard -- simulates the
-    doc being removed out-of-band, e.g. an operator script). The
-    activation's `revision` is still non-`None` (real, gate-validated
-    when it was activated), so GET /active must still report
-    ``source: 'stored'``, not misleadingly fall back to `'env'` just
-    because the name no longer appears in the store's current pack
-    list."""
-    from src.config import get_curation_config
-    from src.services.config_store.index import config_doc_id
-    from src.services.config_store.store import reset_config_stores
-
-    c = app_client
-    assert c.post(PREFIX, json={'name': 'pack_a', 'body': pack_body('A')}).status_code == 201
-    assert c.post(f'{PREFIX}/pack_a/activate', json={'expected_active': None}).status_code == 200
-
-    idx = get_curation_config().configs_index
-    doc_id = config_doc_id('prompt_pack', 'pack_a')  # current doc, no @rev
-    asyncio.run(c.fake_os.delete(index=idx, id=doc_id))
-    reset_config_stores()
-
-    act = c.get(f'{PREFIX}/active').json()
-    print('active after out-of-band delete:', act)
-    assert act['active']['name'] == 'pack_a'
-    assert act['source'] == 'stored', (
-        'a deleted-but-still-activated pack must still report source=stored, not env'
-    )

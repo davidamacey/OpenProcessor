@@ -12,7 +12,6 @@ the sources' current classes, so a resumed run copies what the preview showed.
 
 from __future__ import annotations
 
-import contextlib
 import uuid
 from collections import Counter
 from dataclasses import dataclass
@@ -158,19 +157,18 @@ def _sum_reports(done: dict[int, dict[str, Any]]) -> Counter[str]:
     return total
 
 
-def _publish(job_id: str, target: str, state: dict[str, Any]) -> None:
-    from src.services.curation.event_hub import publish_global_event
+async def _publish(job_id: str, target: str, state: dict[str, Any]) -> None:
+    from src.services.events.publish import apublish_global_event
 
-    with contextlib.suppress(Exception):
-        publish_global_event(
-            'combine.progress',
-            target=target,
-            job_id=job_id,
-            phase=state.get('phase'),
-            done=state.get('done'),
-            total=state.get('total'),
-            status=state.get('status'),
-        )
+    await apublish_global_event(
+        'combine.progress',
+        target=target,
+        job_id=job_id,
+        phase=state.get('phase'),
+        done=state.get('done'),
+        total=state.get('total'),
+        status=state.get('status'),
+    )
 
 
 async def run_combine(
@@ -237,7 +235,7 @@ async def run_combine(
                 error = f'{error}; could not fail the target: {settle_exc}'[:300]
         job.update(status='failed', error=error, finished_at=now_iso())
     finally:
-        _publish(job_id, target.slug, job.read())
+        await _publish(job_id, target.slug, job.read())
     return True
 
 
@@ -275,7 +273,7 @@ async def _copy_all(
             report.update(counts)
             seen = report['images_copied'] + report['images_duplicate']
             job.update(done=seen, report=dict(report), updated_at=now_iso())
-            _publish(store.import_id, ctx.target.slug, job.read())
+            await _publish(store.import_id, ctx.target.slug, job.read())
     return False
 
 

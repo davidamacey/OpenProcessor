@@ -63,12 +63,9 @@ class _Model:
         return images_per_call_for(self.endpoint)
 
 
-async def _resolve(
-    opensearch: AsyncOpenSearch, pin: dict[str, Any], pack: dict[str, Any]
-) -> _Model:
+async def _resolve(pin: dict[str, Any], pack: dict[str, Any]) -> _Model:
     """A pinned endpoint resolved by id, gated again, and its labeler."""
     endpoint = await job_endpoint(
-        opensearch,
         vlm=None,
         acknowledge_external=False,
         pack=None,
@@ -169,12 +166,8 @@ async def run_job(opensearch: AsyncOpenSearch, loop_id: str) -> LoopOutcome:
         if not pack.get('name'):
             msg = 'the loop pinned no prompt pack'
             raise ValueError(msg)
-        primary = await _resolve(opensearch, pinned.get('vlm') or {}, pack)
-        judge = (
-            await _resolve(opensearch, pinned['audit_vlm'], pack)
-            if pinned.get('audit_vlm')
-            else None
-        )
+        primary = await _resolve(pinned.get('vlm') or {}, pack)
+        judge = await _resolve(pinned['audit_vlm'], pack) if pinned.get('audit_vlm') else None
         budget = _budget(store, request, primary.images_per_call)
         deps = LoopDeps(
             opensearch=opensearch,

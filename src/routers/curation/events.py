@@ -1,26 +1,25 @@
-"""Curation SSE event endpoints — split out of pipeline.py for the file-size gate."""
+"""Curation SSE event endpoints and the worker publish route."""
 
 from __future__ import annotations
 
-import asyncio as _events_asyncio
-import json as _events_json
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import Header, HTTPException, Query
+from fastapi.sse import EventSourceResponse
 
 from src.config import get_curation_config
 from src.routers.curation._common import router
 from src.routers.curation._common_models import _PublishEvent
-from src.services.curation.event_hub import GLOBAL_EVENT_PREFIXES, get_event_hub
+from src.routers.curation._event_streams import ProjectSubscriptionDep, to_sse
 from src.services.curation.wire import region_wire_key
+from src.services.events import publish as event_publish
+from src.services.events.listener import get_listener
+from src.services.events.sse import event_stream
 
 
-_SSE_HEARTBEAT_SECONDS = 15.0
-
-
-@router.get('/events')
+@router.get('/events', response_class=EventSourceResponse)
 async def curation_events(
+    sub: ProjectSubscriptionDep,
     topic: str | None = Query(
         default=None,
         description='Optional topic filter (e.g. the region-status topic, "crop").',
@@ -30,76 +29,38 @@ async def curation_events(
         description='Optional class_id filter — only emit crop.classified '
         'events whose class matches.',
     ),
-) -> StreamingResponse:
-    """SSE stream of advisory crop-state events for the bound project
-    only (global ``project: null`` events go to ``{api}/events``).
+    last_event_id: Annotated[
+        str | None,
+        Header(description='Resume point: the `id` of the last event the client received.'),
+    ] = None,
+) -> Any:
+    """SSE stream of the bound project's events (global ``project: null`` events go to
+    ``{api}/events``).
 
-    The connection stays open until the client disconnects. A heartbeat
-    comment line is sent every 15s so reverse-proxies don't kill the
-    socket. Subscribers each get their own bounded queue (capped at
-    1000 events; oldest drops on overflow — events are advisory).
+    Every frame carries ``id: <xid>-<id>``; a reconnect with ``Last-Event-ID`` replays what was
+    missed. A cursor the server cannot honour (older than the 24 h retention, or from before a
+    restore) gets one ``reset`` event first: reload state. A client that falls behind is dropped
+    with a final ``reconnect`` event.
     """
-    hub = get_event_hub()
-    sub = await hub.subscribe(
-        project=get_curation_config().project_slug, topic=topic, class_id=class_id
-    )
-    return sse_response(hub, sub)
-
-
-def sse_response(hub: Any, sub: Any) -> StreamingResponse:
-    """Stream ``sub``'s queue as SSE until the client disconnects, then
-    unsubscribe. Shared by the scoped ``/events`` and the global one."""
-
-    async def event_gen() -> Any:
-        try:
-            # Initial comment so the client EventSource transitions to
-            # "open" immediately even before the first real event.
-            yield ': connected\n\n'
-            while True:
-                try:
-                    ev = await _events_asyncio.wait_for(
-                        sub.queue.get(), timeout=_SSE_HEARTBEAT_SECONDS
-                    )
-                except TimeoutError:
-                    yield ': hb\n\n'
-                    continue
-                payload = _events_json.dumps(ev, default=str)
-                yield f'event: {ev.get("type", "message")}\ndata: {payload}\n\n'
-        except _events_asyncio.CancelledError:
-            # Client disconnected — clean up and re-raise so Starlette
-            # finalises the response.
-            raise
-        finally:
-            await hub.unsubscribe(sub)
-
-    return StreamingResponse(
-        event_gen(),
-        media_type='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache, no-transform',
-            'X-Accel-Buffering': 'no',  # disable nginx buffering
-            'Connection': 'keep-alive',
-        },
-    )
+    async for frame in event_stream(sub, last_event_id, topic=topic, class_id=class_id):
+        yield to_sse(frame)
 
 
 @router.post('/events/publish')
 async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
-    """Publish one event into the in-process hub.
+    """Publish one event for the bound project.
 
-    Used by external publishers like ``scripts/curation/worker/``
-    that don't share the API process. Events from in-process callers
-    (ingest, VLM label_batch) skip this endpoint and call the hub directly.
+    Used by external publishers like ``scripts/curation/worker/`` that have no database
+    session of their own.
     """
-    if payload.type.startswith(GLOBAL_EVENT_PREFIXES):
-        # Project lifecycle / combine events are the API's own, on the
-        # global stream; a client may not spoof them on a project stream.
+    if payload.type.startswith(event_publish.GLOBAL_EVENT_PREFIXES):
+        # Project lifecycle / combine events are the API's own, on the global stream; a client
+        # may not spoof them on a project stream.
         raise HTTPException(
             status_code=422, detail=f'{payload.type!r} is a global event type; not publishable here'
         )
     status_key = region_wire_key('status')
     event: dict[str, Any] = {
-        'type': payload.type,
         'topic': payload.topic
         or (status_key if payload.type == 'crop.region_verified' else 'crop'),
     }
@@ -127,15 +88,14 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
             detail=f"extra.project must be the bound project '{bound}' (or omitted)",
         )
     extra.pop('target', None)
+    extra.pop('type', None)
     event.update(extra)
-    event['project'] = bound
-    get_event_hub().publish(event)
+    await event_publish.apublish(payload.type, event, project=bound)
     return {'ok': True}
 
 
 @router.get('/events/stats')
 async def curation_events_stats() -> dict[str, Any]:
-    """Ops counters for the bound project's stream: its subscribers and
-    publishes, plus the hub's ``events_dropped``, active ``bus``
-    (``file``/``process``) and ``log_path``."""
-    return get_event_hub().stats(get_curation_config().project_slug)
+    """Ops counters for the bound project's stream: its local subscribers, the clients this
+    process dropped for falling behind, and whether the listener and its Valkey subscription run."""
+    return get_listener().stats(get_curation_config().project_slug)

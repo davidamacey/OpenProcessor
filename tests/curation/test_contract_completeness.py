@@ -1,4 +1,7 @@
 """The curation wire is fully typed and consistent: every served filter has a spec,
+pytest_plugins = ['_records_world']
+
+
 class identity is by name, and the responses that gained fields declare them."""
 
 from __future__ import annotations
@@ -128,6 +131,8 @@ def test_a_state_outside_the_vocabulary_counts_as_unknown_instead_of_vanishing()
     assert embedding_summary(aggs, 5)['by_state']['unknown'] == 5
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_the_stats_model_names_every_key_the_route_emits() -> None:
     """A key the model lacks would be a field clients cannot see in the contract."""

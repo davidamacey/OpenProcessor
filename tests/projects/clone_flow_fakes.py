@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from curation._fake_config_opensearch import FakeConfigOpenSearch
+from config_store import memory_config
 
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
@@ -16,7 +16,9 @@ from src.config.projects import ProjectRecord, resources_for_new
 from src.services.config_store.store import reset_config_stores
 
 
-class Fake(FakeConfigOpenSearch):
+class Fake:
+    """The OpenSearch client of the clone flow: only item counts and bulks are asked of it."""
+
     async def count(self, index: str, body: Any = None) -> dict[str, Any]:  # noqa: ARG002
         return {'count': 0}
 
@@ -53,33 +55,38 @@ def isolated_state(tmp_path, monkeypatch):
 
 
 async def save(client, rec, kind, name, body, expected=None):
-    from src.config import get_curation_config
-    from src.services.config_store.index import save_config
+    from src.services.config_store.documents import save_config
 
+    del client
     with bind_project(rec):
-        return await save_config(
-            client,
-            get_curation_config().configs_index,
-            kind=kind,
-            name=name,
-            body=body,
-            expected_revision=expected,
-        )
+        saved, _ = await save_config(kind=kind, name=name, body=body, expected_revision=expected)
+    return saved
 
 
 async def activate_config(client, rec, axis, name, revision, expected=None):
-    from src.config import get_curation_config
-    from src.services.config_store.index import activate
+    from src.services.config_store.documents import Registered, activate
 
+    del client
+    # a name without a revision is a built-in: its body is stored as a system revision
+    registered = (
+        Registered({'class_system': name}, 'built-in') if name and revision is None else None
+    )
     with bind_project(rec):
         return await activate(
-            client,
-            get_curation_config().configs_index,
             axis=axis,
             name=name,
             revision=revision,
             expected_active=expected,
+            registered=registered,
         )
+
+
+async def active_ref(rec, axis):
+    """The project's activation of ``axis`` as ``{name, revision}`` (``None`` when never activated)."""
+    from src.services.config_store.documents import read_activation
+
+    read = await read_activation(rec.slug, axis)
+    return None if read is None else {'name': read.name, 'revision': read.revision}
 
 
 def patch_lifecycle(monkeypatch, source, target):
@@ -96,11 +103,22 @@ def patch_lifecycle(monkeypatch, source, target):
 
 
 def target_docs(client, rec):
-    from src.config import get_curation_config
-
-    with bind_project(rec):
-        idx = get_curation_config().configs_index
-    return dict(client._docs.get(idx, {}))
+    """Every stored document of the project (all revisions) and its activations, to compare
+    before and after a refused clone."""
+    del client
+    memory = memory_config.current()
+    pid = memory.project_id(rec.slug)
+    docs = {
+        f'{d.kind}:{d.name}': {n: r['body'] for n, r in d.revisions.items()}
+        for d in memory.docs.values()
+        if d.project_id == pid
+    }
+    active = {
+        f'active:{axis}': (ref.name, ref.revision)
+        for (project, axis), ref in memory.active.items()
+        if project == pid
+    }
+    return {**docs, **active}
 
 
 async def clone_into(client, source, target):

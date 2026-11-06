@@ -84,13 +84,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         async def close() -> None:
             w.step('opensearch_close')
 
-    class FakeHub:
-        async def start_tail(self) -> None:
-            w.step('event_hub_start')
-
-        async def stop_tail(self) -> None:
-            w.step('event_hub_stop')
-
     class FakeEncoder:
         text_backend = 'fake'
 
@@ -128,11 +121,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
     patches: list[tuple[str, str, Any]] = [
         ('src.config.retired_env', 'reject_retired_env', _sync_step(w, 'retired_env')),
         (
-            'src.services.config_store.global_store',
-            'global_configs_index',
-            _sync_step(w, 'global_configs_index'),
-        ),
-        (
             'src.services.detection.profile_registry',
             'ensure_env_region_profile',
             _sync_step(w, 'region_profile'),
@@ -153,7 +141,8 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
             'startup_bootstrap_config_store_safe',
             _async_step(w, 'config_store_bootstrap'),
         ),
-        ('src.services.curation.event_hub', 'get_event_hub', FakeHub),
+        ('src.services.events.listener', 'start_listener', _async_step(w, 'event_listener_start')),
+        ('src.services.events.listener', 'stop_listener', _async_step(w, 'event_listener_stop')),
         (
             'src.services.curation.startup_reconcile',
             'reconcile_all_jobs',
@@ -212,14 +201,13 @@ def _run_lifespan(body=None) -> FastAPI:
 
 EXPECTED_STARTUP = [
     'retired_env',
-    'global_configs_index',
     'region_profile',
     'pool_created:4x64',
     'pool_initialize',
     'project_registry_bootstrap',
     'opensearch_bootstrap',
     'config_store_bootstrap',
-    'event_hub_start',
+    'event_listener_start',
     'reconcile_jobs',
     'arbiter_config',
     'arbiter_reconcile',
@@ -232,7 +220,7 @@ EXPECTED_SHUTDOWN = [
     "stop_background_jobs:['job-a']",
     'project_registry_shutdown',
     'config_store_shutdown',
-    'event_hub_stop',
+    'event_listener_stop',
     'pool_close',
     'cpu_executor_shutdown',
     'triton_clients_close',
@@ -282,19 +270,19 @@ def test_startup_then_shutdown_run_every_step_in_order(world: World) -> None:
     assert seen['arbiter'].cancelled() or seen['arbiter'].done()
 
 
-def test_a_failing_event_hub_start_is_skipped_and_its_stop_is_not_attempted(
+def test_a_failing_event_listener_start_is_skipped_and_its_stop_is_not_attempted(
     world: World,
 ) -> None:
-    world.fail = {'event_hub_start'}
+    world.fail = {'event_listener_start'}
     _run_lifespan()
-    assert 'event_hub_start' in world.events
-    assert 'event_hub_stop' not in world.events
+    assert 'event_listener_start' in world.events
+    assert 'event_listener_stop' not in world.events
     assert 'reconcile_jobs' in world.events
     assert 'start_background_jobs' in world.events
 
 
-def test_a_failing_event_hub_stop_does_not_stop_the_rest_of_shutdown(world: World) -> None:
-    world.fail = {'event_hub_stop'}
+def test_a_failing_event_listener_stop_does_not_stop_the_rest_of_shutdown(world: World) -> None:
+    world.fail = {'event_listener_stop'}
     _run_lifespan()
     tail = _normalized(world.events)[len(EXPECTED_STARTUP) :]
     assert tail == EXPECTED_SHUTDOWN

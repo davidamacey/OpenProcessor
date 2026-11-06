@@ -54,7 +54,7 @@ def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
     )
 
     # What /start does at request time: resolve-and-pin once.
-    name, revision = asyncio.run(resolve_run_prompt_pack(c.fake_os, 'my_pack@1'))
+    name, revision = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@1'))
     assert (name, revision) == ('my_pack', 1)
 
     def _must_not_be_called(*_a, **_kw):  # pragma: no cover - failure path
@@ -113,7 +113,7 @@ def _run_job(c, monkeypatch, query):
     assert r.status_code in (200, 202), r.text
 
     async def _resolve(_os, pp):
-        return await real_resolve(c.fake_os, pp)
+        return await real_resolve(object(), pp)
 
     monkeypatch.setattr(auto_label_run, 'resolve_run_prompt_pack', _resolve)
     args = {k: v for k, v in captured.items() if k != 'opensearch'}
@@ -190,7 +190,7 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     empty and nothing on the job path refreshes it once
     prompt_pack_resolved=True skips resolve_run_prompt_pack.
 
-    Uses ``c.fake_os`` (not a fresh, unrelated fake) as the job's
+    Uses ``object()`` (not a fresh, unrelated fake) as the job's
     ``opensearch`` client -- this is the one piece of state that IS
     shared with a real cross-process worker (the same OpenSearch
     cluster); a genuinely different, empty backing store would never be
@@ -207,7 +207,7 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     reset_config_stores()  # a different process: cold store
     args['train_clusters'] = False
     args['run_vlm'] = False
-    summary = asyncio.run(run_auto_label(opensearch=c.fake_os, **args))
+    summary = asyncio.run(run_auto_label(opensearch=object(), **args))
     print('store loaded after job stages:', get_config_store().current.loaded_at)
     # Exactly what `run_auto_label`'s VLM stage does: `prompt_pack_omitted`, not the
     # echoed `summary['prompt_pack']`, decides whether the labeler resolves against

@@ -10,18 +10,18 @@ bound. The project's own ``/health`` and ``/events`` live under
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import Query
-from fastapi.responses import StreamingResponse  # noqa: TC002 - resolved at runtime
+from fastapi import Header, Query
+from fastapi.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 
 from src.config import get_settings
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
-from src.routers.curation.events import sse_response
+from src.routers.curation._event_streams import GlobalSubscriptionDep, to_sse
 from src.routers.curation.health import triton_status, vlm_status
 from src.routers.curation.projects import global_router
-from src.services.curation.event_hub import GLOBAL_STREAM, get_event_hub
+from src.services.events.sse import event_stream
 from src.services.projects.guard import make_curation_opensearch
 from src.services.resource_links import service_url
 
@@ -76,15 +76,20 @@ async def global_health(triton_pool: AsyncTritonDep) -> GlobalHealthResponse:
     )
 
 
-@global_router.get('/events')
+@global_router.get('/events', response_class=EventSourceResponse)
 async def global_events(
+    sub: GlobalSubscriptionDep,
     topic: str | None = Query(default=None, description='Optional topic filter.'),
-) -> StreamingResponse:
+    last_event_id: Annotated[
+        str | None,
+        Header(description='Resume point: the `id` of the last event the client received.'),
+    ] = None,
+) -> Any:
     """SSE stream of global events only (``project: null``): project
     lifecycle (``project.*``) and ``combine.*`` (``GLOBAL_EVENT_PREFIXES``).
     A ``combine.*`` event names the project it builds in ``target``. No
     project's own events are ever delivered here; a project's config
-    changes (``config.changed``) ride that project's own stream."""
-    hub = get_event_hub()
-    sub = await hub.subscribe(project=GLOBAL_STREAM, topic=topic)
-    return sse_response(hub, sub)
+    changes (``config.changed``) ride that project's own stream. Frames carry
+    ``id`` and resume through ``Last-Event-ID`` like the project stream."""
+    async for frame in event_stream(sub, last_event_id, topic=topic):
+        yield to_sse(frame)

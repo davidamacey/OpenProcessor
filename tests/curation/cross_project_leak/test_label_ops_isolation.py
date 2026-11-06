@@ -1,8 +1,7 @@
-"""Label operations belong to the project that made them: its list, its record files, its indexes."""
+"""Label operations belong to the project that made them: its list, its rows, its indexes."""
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,6 +15,23 @@ if TYPE_CHECKING:
 
 
 pytestmark = pytest.mark.db
+
+
+def _stored_op_ids(leak_env: LeakEnv, slug: str) -> list[str]:
+    """The ids of the ``label_operations`` rows the database holds for ``slug``."""
+    import asyncio
+
+    from src.db.repos.records import list_label_operations
+    from src.db.session import async_session_factory, project_tx
+
+    project_id = leak_env.records[slug].id
+
+    async def read() -> list[str]:
+        async with async_session_factory()() as session, project_tx(session, project_id):
+            rows = await list_label_operations(session, project_id, limit=100)
+        return [str(r.id) for r in rows]
+
+    return asyncio.run(read())
 
 
 def _label(client: TestClient, slug: str) -> str:
@@ -40,15 +56,9 @@ def test_an_operation_is_listed_and_stored_only_in_its_own_project(leak_env: Lea
     assert listed('alpha') == [op_id]
     assert listed('beta') == []
     assert listed('default') == []
-
-    alpha_dir = leak_env.records['alpha'].resources.project_state_dir / 'label_ops'
-    assert (alpha_dir / op_id / 'state.json').is_file()
+    assert _stored_op_ids(leak_env, 'alpha') == [op_id]
     for slug in ('beta', 'default'):
-        other = leak_env.records[slug].resources.project_state_dir / 'label_ops'
-        assert not (other / op_id).exists()
-    written = set(leak_env.root.rglob(op_id))
-    assert written == {alpha_dir / op_id}, 'op files only under the owning project'
-    assert json.loads((alpha_dir / op_id / 'state.json').read_text())['op_id'] == op_id
+        assert _stored_op_ids(leak_env, slug) == [], 'the row exists only under the owning project'
 
 
 def test_listing_reaches_only_the_bound_projects_indexes(leak_env: LeakEnv) -> None:

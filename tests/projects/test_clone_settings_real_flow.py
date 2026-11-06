@@ -7,6 +7,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store import memory_config
 
 from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an autouse fixture
     Fake,
@@ -28,25 +29,20 @@ pytestmark = pytest.mark.unbound
 
 
 async def _target_state(client, target):
-    from src.config import get_curation_config
-    from src.services.config_store.index import config_doc_id, get_activation
+    """``(activation, current doc, activated body, every document)`` of the target's prompt packs."""
+    from src.services.config_store.documents import get_revision, read_activation
 
+    del client
     with bind_project(target):
-        idx = get_curation_config().configs_index
-        act = await get_activation(client, idx, 'prompt_pack')
+        read = await read_activation(target.slug, 'prompt_pack')
+        act = None if read is None else {'name': read.name, 'revision': read.revision}
         cur = None
         active_body = None
-        if act and act.get('name'):
-            cur = (await client.get(index=idx, id=config_doc_id('prompt_pack', act['name'])))[
-                '_source'
-            ]
-            active_body = (
-                await client.get(
-                    index=idx, id=config_doc_id('prompt_pack', act['name'], act['revision'])
-                )
-            )['_source']['body']
-        settings = client._docs.get(idx, {})
-    return act, cur, active_body, settings
+        if read is not None and read.name:
+            cur = memory_config.current().stored('prompt_pack', read.name, target.slug)
+            pinned = await get_revision(kind='prompt_pack', name=read.name, revision=read.revision)
+            active_body = pinned.body if pinned else None
+    return act, cur, active_body, target_docs(None, target)
 
 
 async def _clone(client, source, target, monkeypatch, axes=None):
@@ -84,9 +80,8 @@ async def test_clone_settings_does_not_promote_a_source_draft(monkeypatch):
         'draft clone: target active',
         (act['name'], act['revision']),
         active_body,
-        '| target current doc',
-        cur['revision'],
-        cur['body'],
+        '| target doc',
+        cur,
     )
     assert active_body == {'class_system': 'R1'}
 
@@ -110,8 +105,6 @@ async def test_existing_target_with_same_named_unactivated_profile_conflicts_bef
 ):
     """Existing target has an un-activated stored region profile with the same
     name as the source's ACTIVE profile. Expect: clean 409 BEFORE any write."""
-    from src.config import get_curation_config
-
     client = Fake()
     source, target = record('alpha'), record('beta')
     await save(client, source, 'prompt_pack', 'wheel', {'class_system': 'R1'})
@@ -119,15 +112,13 @@ async def test_existing_target_with_same_named_unactivated_profile_conflicts_bef
     await save(client, source, 'region_profile', 'badge', {'x': 1})
     await activate_config(client, source, 'detection_profile', 'badge', 1)
     await save(client, target, 'region_profile', 'badge', {'x': 'TARGET OWN'})
-    with bind_project(target):
-        tidx = get_curation_config().configs_index
-    before = set(client._docs.get(tidx, {}))
+    before = set(target_docs(client, target))
     try:
         await _clone(client, source, target, monkeypatch, axes=None)
         outcome = 'ok'
     except RequestRejectedError as exc:
         outcome = f'{exc.status_code} {exc.detail}'
-    after = set(client._docs.get(tidx, {}))
+    after = set(target_docs(client, target))
     print('profile-collision clone ->', outcome, '| new target docs:', sorted(after - before))
     assert not (outcome != 'ok' and after - before), 'partial write before 409'
 
@@ -137,31 +128,27 @@ async def test_existing_target_previously_deactivated_accepts_clone(monkeypatch)
     """Existing target once activated a pack then deactivated it ('off').
     _validate_clone treats that as 'no activation'; activate(expected_active=None)
     then conflicts."""
-    from src.config import get_curation_config
-
     client = Fake()
     source, target = record('alpha'), record('beta')
     await save(client, source, 'prompt_pack', 'wheel', {'class_system': 'R1'})
     await activate_config(client, source, 'prompt_pack', 'wheel', 1)
     # target: activate a built-in/env id then turn it off (no stored packs left)
-    await activate_config(client, target, 'prompt_pack', 'generic_item', None)
+    await activate_config(client, target, 'prompt_pack', 'generic_item_v1', None)
     await activate_config(
         client,
         target,
         'prompt_pack',
         None,
         None,
-        expected={'name': 'generic_item', 'revision': None},
+        expected={'name': 'generic_item_v1', 'revision': None},
     )
-    with bind_project(target):
-        tidx = get_curation_config().configs_index
-    before = set(client._docs.get(tidx, {}))
+    before = set(target_docs(client, target))
     try:
         await _clone(client, source, target, monkeypatch, axes=None)
         outcome = 'ok'
     except RequestRejectedError as exc:
         outcome = f'{exc.status_code} {exc.detail}'
-    after = set(client._docs.get(tidx, {}))
+    after = set(target_docs(client, target))
     print('deactivated-target clone ->', outcome, '| new target docs:', sorted(after - before))
     # A target that once deactivated this axis is genuinely EMPTY (no stored pack of its
     # own on this axis), so a clone into it must actually SUCCEED. Accepting a clean 409
@@ -176,21 +163,17 @@ async def test_clone_into_a_target_with_a_stored_unactivated_pack_of_the_same_na
 ):
     """The refusal comes from validation, before any write: a same-named
     stored pack that was never activated is the target's own history."""
-    from src.config import get_curation_config
-
     client = Fake()
     source, target = record('alpha'), record('beta')
     await save(client, source, 'prompt_pack', 'wheel', {'class_system': 'R1'})
     await activate_config(client, source, 'prompt_pack', 'wheel', 1)
     await save(client, target, 'prompt_pack', 'wheel', {'class_system': 'MINE'})
-    with bind_project(target):
-        tidx = get_curation_config().configs_index
-    before = {k: dict(v) for k, v in client._docs.get(tidx, {}).items()}
+    before = target_docs(client, target)
     with pytest.raises(RequestRejectedError) as exc:
         await _clone(client, source, target, monkeypatch, axes=['settings_defaults', 'activations'])
     assert exc.value.status_code == 409
     assert exc.value.detail['error'] == 'target_not_empty'
-    assert client._docs.get(tidx, {}) == before
+    assert target_docs(client, target) == before
 
 
 @pytest.mark.asyncio
@@ -199,26 +182,25 @@ async def test_clone_into_previously_deactivated_target_succeeds(monkeypatch):
     source, target = record('alpha'), record('beta')
     await save(client, source, 'prompt_pack', 'wheel', {'class_system': 'R1'})
     await activate_config(client, source, 'prompt_pack', 'wheel', 1)
-    await activate_config(client, target, 'prompt_pack', 'generic_item', None)
+    await activate_config(client, target, 'prompt_pack', 'generic_item_v1', None)
     await activate_config(
         client,
         target,
         'prompt_pack',
         None,
         None,
-        expected={'name': 'generic_item', 'revision': None},
+        expected={'name': 'generic_item_v1', 'revision': None},
     )
     patch_lifecycle(monkeypatch, source, target)
     await clone_into(client, source, target)
-    from src.config import get_curation_config
-    from src.services.config_store.index import get_activation
+    from src.services.config_store.documents import get_activation_detail
 
     with bind_project(target):
-        act = await get_activation(client, get_curation_config().configs_index, 'prompt_pack')
-    print('deactivated target ->', act)
-    assert act is not None
-    assert act['name'] == 'wheel'
-    assert act['previous'] == {'name': None, 'revision': None}
+        detail = await get_activation_detail('prompt_pack')
+    print('deactivated target ->', detail)
+    assert detail is not None
+    assert detail.ref == ('wheel', 1)
+    assert detail.previous == (None, None)
 
 
 @pytest.mark.parametrize(
@@ -252,9 +234,7 @@ async def test_clone_into_same_named_unactivated_config_409_before_writes(
 async def test_clone_into_target_with_stale_cache_does_not_partially_write(monkeypatch):
     """Another worker process stored 'badge' in the target <1s after this
     process last warmed the target store. Validation reads the warm cache."""
-    from src.config import get_curation_config
     from src.services.config_store import get_config_store
-    from src.services.config_store.index import save_config
 
     client = Fake()
     source, target = record('alpha'), record('beta')
@@ -262,16 +242,9 @@ async def test_clone_into_target_with_stale_cache_does_not_partially_write(monke
     await activate_config(client, source, 'detection_profile', 'badge', 1)
     with bind_project(target):
         store = get_config_store()
-        await store.refresh(client)  # warm, empty
-        # "other process" write: straight to the index, no apply_local here
-        await save_config(
-            client,
-            get_curation_config().configs_index,
-            kind='region_profile',
-            name='badge',
-            body={'x': 'OTHER WORKER'},
-            expected_revision=None,
-        )
+        await store.refresh()  # warm, empty
+        # "other process" write: straight to the database, no apply_local here
+        await save(client, target, 'region_profile', 'badge', {'x': 'OTHER WORKER'})
     patch_lifecycle(monkeypatch, source, target)
     before = target_docs(client, target)
     try:
@@ -290,30 +263,9 @@ async def test_prompt_packs_plus_activations_axes_together() -> None:
     client = Fake()
     source = record('alpha')
     target = record('beta')
-    from src.services.config_store.index import activate, save_config
-
-    with bind_project(source):
-        from src.config import get_curation_config
-
-        idx = get_curation_config().configs_index
-        doc = await save_config(
-            client,
-            idx,
-            kind='prompt_pack',
-            name='wheel',
-            body={'class_system': 'x'},
-            expected_revision=None,
-        )
-        await activate(
-            client,
-            idx,
-            axis='prompt_pack',
-            name='wheel',
-            revision=doc['revision'],
-            expected_active=None,
-        )
+    saved = await save(client, source, 'prompt_pack', 'wheel', {'class_system': 'x'})
+    await activate_config(client, source, 'prompt_pack', 'wheel', saved.revision)
     await _apply_clone(
-        client,
         target_record=target,
         source=source,
         axes=['prompt_packs', 'activations'],
@@ -322,36 +274,12 @@ async def test_prompt_packs_plus_activations_axes_together() -> None:
 
 
 async def _seed(client, source, *, edit_after_activate):
-    from src.config import get_curation_config
-    from src.services.config_store.index import activate, save_config
-
-    with bind_project(source):
-        idx = get_curation_config().configs_index
-        doc = await save_config(
-            client,
-            idx,
-            kind='prompt_pack',
-            name='wheel',
-            body={'class_system': 'R1'},
-            expected_revision=None,
+    saved = await save(client, source, 'prompt_pack', 'wheel', {'class_system': 'R1'})
+    await activate_config(client, source, 'prompt_pack', 'wheel', saved.revision)
+    if edit_after_activate:
+        await save(
+            client, source, 'prompt_pack', 'wheel', {'class_system': 'R2 NOT ACTIVATED'}, expected=1
         )
-        await activate(
-            client,
-            idx,
-            axis='prompt_pack',
-            name='wheel',
-            revision=doc['revision'],
-            expected_active=None,
-        )
-        if edit_after_activate:
-            await save_config(
-                client,
-                idx,
-                kind='prompt_pack',
-                name='wheel',
-                body={'class_system': 'R2 NOT ACTIVATED'},
-                expected_revision=1,
-            )
 
 
 @pytest.mark.asyncio
@@ -368,7 +296,6 @@ async def test_validate_then_apply_succeeds_without_waiting_for_cache_ttl(monkey
         client, target_record=target, from_slug='alpha', axes=['prompt_packs', 'activations']
     )
     await _apply_clone(
-        client,
         target_record=target,
         source=src_rec,
         axes=axes,
@@ -378,31 +305,18 @@ async def test_validate_then_apply_succeeds_without_waiting_for_cache_ttl(monkey
 
 @pytest.mark.asyncio
 async def test_target_activates_the_source_activated_body_not_current():
-    from src.config import get_curation_config
-    from src.services.config_store.index import get_activation
-
     client = Fake()
     source, target = record('alpha'), record('beta')
     await _seed(client, source, edit_after_activate=True)
     await _apply_clone(
-        client,
         target_record=target,
         source=source,
         axes=['prompt_packs', 'activations'],
         target_activations=None,
     )
-    with bind_project(target):
-        idx = get_curation_config().configs_index
-        act = await get_activation(client, idx, 'prompt_pack')
-        assert act is not None
-        from src.services.config_store.index import config_doc_id
-
-        doc = await client.get(
-            index=idx, id=config_doc_id('prompt_pack', act['name'], act['revision'])
-        )
-    assert doc is not None
-    print('target active', act['name'], act['revision'], doc['_source']['body'])
-    assert doc['_source']['body'] == {'class_system': 'R1'}, (
+    act, _cur, active_body, _ = await _target_state(client, target)
+    print('target active', act, active_body)
+    assert active_body == {'class_system': 'R1'}, (
         'target activated the source CURRENT (never-activated) body, not the activated revision'
     )
 
@@ -422,7 +336,6 @@ async def test_validate_then_apply_after_cache_ttl(monkeypatch):
     )
     await asyncio.sleep(1.1)
     await _apply_clone(
-        client,
         target_record=target,
         source=src_rec,
         axes=axes,

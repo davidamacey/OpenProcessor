@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_curation_config
+from src.config.project_context import current_project_id
 
 
 if TYPE_CHECKING:
@@ -111,8 +112,33 @@ class OpsEnv:
     def list_ops(self, **params: Any) -> Any:
         return self.client.get(f'{self.prefix}/label_ops', params=params)
 
-    def state(self) -> Path:
-        return get_curation_config().project_state_dir / 'label_ops'
+    def record(self, op_id: str) -> dict[str, Any]:
+        """The stored record of an operation (its row), as the store reads it."""
+        from src.services.curation.label_ops import store
+
+        return asyncio.run(store.read_op(op_id)).model_dump(mode='json')
+
+    def set_status(self, op_id: str, status: str) -> None:
+        """Rewrite the stored status, to stand in for a writer that died mid-way."""
+        from src.services.curation.label_ops import store
+
+        async def rewrite() -> None:
+            record = await store.read_op(op_id)
+            record.status = status  # type: ignore[assignment]
+            await store.save_op(record)
+
+        asyncio.run(rewrite())
+
+    def row_count(self) -> int:
+        from src.db.repos.records import list_label_operations
+        from src.db.session import async_session_factory, project_tx
+
+        async def count() -> int:
+            project_id = current_project_id()
+            async with async_session_factory()() as session, project_tx(session, project_id):
+                return len(await list_label_operations(session, project_id, limit=1000))
+
+        return asyncio.run(count())
 
 
 def build_env(

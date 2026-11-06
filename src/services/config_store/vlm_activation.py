@@ -1,28 +1,30 @@
 """Per-project VLM activation.
 
-Which endpoint a project's VLM calls is that project's ``activation:vlm``
-doc; the endpoints themselves are global
+Which endpoint a project's VLM calls is that project's ``vlm`` activation;
+the endpoints themselves are global
 (:mod:`src.services.config_store.vlm_endpoints`). Every activation writer --
 ``POST /vlm/endpoints/{name}/activate``, rollback, deactivate, ``PUT
 /settings`` and a project clone's activation copy -- goes through
 :func:`activate_vlm` (or :func:`deactivate_vlm`), which runs
 :func:`~src.services.config_store.vlm_gate.enforce_vlm_gate` first and then
 writes, applies the result to this process's snapshot and publishes
-``config.changed``. The activation doc also carries ``acked_refs`` (every
-external ``name@revision`` this project has acknowledged, with the time) and
-``external_ack_at`` (the ack of the ACTIVE endpoint): a later PUT to an
-endpoint is a new revision and needs a new ack.
+``config.changed``. The project's ``vlm_external_ack`` state records every
+external ``name@revision`` it has acknowledged, with the time (written in the
+activation's own transaction): a later PUT to an endpoint is a new revision
+and needs a new ack.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlsplit
 
 from src.core.logging import get_logger
-from src.services.config_store import get_config_store
-from src.services.config_store.index import activate as _activate, get_activation
+from src.services.config_store import documents, get_config_store
+from src.services.config_store.documents import Registered
+from src.services.config_store.store import publish_config_changed
+from src.services.config_store.vlm_endpoints import ENV_DESCRIPTION
 from src.services.config_store.vlm_gate import (
     GateMode,
     GateResult,
@@ -31,7 +33,6 @@ from src.services.config_store.vlm_gate import (
     enforce_vlm_gate,
     project_vlm_state,
 )
-from src.services.config_store.vlm_snapshot import fetch_revision
 from src.services.labeling.vlm_endpoints import (
     ENV_ENDPOINT_NAME,
     VlmEndpoint,
@@ -40,17 +41,13 @@ from src.services.labeling.vlm_endpoints import (
     refresh_vlm_state,
     resolve_vlm_source,
 )
-from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
+    from src.services.config_store.documents import Activated
     from src.services.config_store.snapshot import AxisRef
 
 logger = get_logger(__name__)
-
-_MAX_ACKED_REFS = 200
 
 
 def expected_active_for(ref: AxisRef) -> dict[str, Any] | None:
@@ -64,75 +61,50 @@ def expected_active_for(ref: AxisRef) -> dict[str, Any] | None:
     return None
 
 
-def _carry(
-    endpoint: VlmEndpoint | None, *, ack_now: bool
-) -> Callable[[dict[str, Any] | None], dict[str, Any]]:
-    """The activation doc's extras, computed from the CURRENT doc inside the
-    same OCC step so a concurrent activation's acknowledgements are never
-    lost."""
-
-    def fields(current: dict[str, Any] | None) -> dict[str, Any]:
-        acked: dict[str, str] = dict((current or {}).get('acked_refs') or {})
-        if endpoint is not None and ack_now:
-            acked.setdefault(endpoint.ref, now_iso())
-        if len(acked) > _MAX_ACKED_REFS:
-            newest = sorted(acked.items(), key=lambda kv: kv[1])[-_MAX_ACKED_REFS:]
-            acked = dict(newest)
-        ack_at = acked.get(endpoint.ref) if endpoint is not None else None
-        return {'acked_refs': acked, 'external_ack_at': ack_at}
-
-    return fields
-
-
 async def write_vlm_activation(
-    client: Any,
     endpoint: VlmEndpoint | None,
     *,
     expected_active: dict[str, Any] | None,
     ack_now: bool,
-) -> dict[str, Any]:
-    from src.services.curation.event_hub import get_event_hub
-
+    reason: Literal['activate', 'rollback', 'clone'] = 'activate',
+) -> Activated:
     store = get_config_store()
     name = endpoint.name if endpoint is not None else None
     revision = endpoint.revision if endpoint is not None else None
     body = None
+    registered = None
     if endpoint is not None and endpoint.source == 'stored' and revision is not None:
-        body = await fetch_revision(client, endpoint.name, revision)
-    result = await _activate(
-        client,
-        store.index,
+        body = await documents.get_revision(
+            kind='vlm_endpoint', name=endpoint.name, revision=revision
+        )
+    elif endpoint is not None and endpoint.source == 'env':
+        registered = Registered(endpoint.body.model_dump(), ENV_DESCRIPTION)
+    result = await documents.activate(
         axis='vlm',
         name=name,
         revision=revision,
         expected_active=expected_active,
-        doc_fields=_carry(endpoint, ack_now=ack_now),
+        registered=registered,
+        ack_ref=endpoint.ref if endpoint is not None and ack_now else None,
+        reason=reason,
     )
-    ref: AxisRef = (name, revision) if name is not None else 'off'
+    acked = await documents.get_acked_refs()
     store.apply_local(
-        config_revision=result['config_revision'],
-        active_vlm=ref,
+        config_revision=result.epoch,
+        active_vlm=result.ref,
         active_vlm_body=body,
-        active_vlm_ack_at=result.get('external_ack_at'),
-        acked_refs=frozenset(result.get('acked_refs') or ()),
+        active_vlm_ack_at=acked.get(endpoint.ref) if endpoint is not None else None,
+        acked_refs=frozenset(acked),
     )
-    get_event_hub().publish(
-        {
-            'type': 'config.changed',
-            'topic': 'config',
-            'axis': 'vlm',
-            'name': name,
-            'config_revision': result['config_revision'],
-        }
-    )
+    await publish_config_changed('vlm', name, result.epoch)
     return result
 
 
-async def _target(client: Any, name: str, revision: int | None) -> VlmEndpoint:
+async def _target(name: str, revision: int | None) -> VlmEndpoint:
     from src.services.rejections import rejection
 
     try:
-        endpoint = await resolve_vlm_source(client, name, revision)
+        endpoint = await resolve_vlm_source(name, revision)
     except VlmRegistryUnavailableError as exc:
         raise rejection(503, 'config_store_unavailable', str(exc)) from exc
     if endpoint is None:
@@ -158,7 +130,6 @@ class PreparedVlmActivation:
 
 
 async def prepare_vlm_activation(
-    client: Any,
     *,
     name: str,
     revision: int | None,
@@ -173,8 +144,8 @@ async def prepare_vlm_activation(
     concrete number) and run the gate; write nothing. ``pack`` / ``profile``
     are the PENDING values of a combined settings request (see :data:`UNSET`).
     Raises a rejection (404 / 422)."""
-    await refresh_vlm_state(client)
-    endpoint = await _target(client, name, revision)
+    await refresh_vlm_state()
+    endpoint = await _target(name, revision)
     current_pack, current_profile = current_pack_and_profile()
     gate = await enforce_vlm_gate(
         endpoint,
@@ -189,16 +160,16 @@ async def prepare_vlm_activation(
 
 
 async def apply_vlm_activation(
-    client: Any,
     prepared: PreparedVlmActivation,
     *,
     expected_active: dict[str, Any] | None,
-) -> dict[str, Any]:
+    reason: Literal['activate', 'rollback', 'clone'] = 'activate',
+) -> Activated:
     """Write a prepared activation (OCC on ``expected_active``), apply it to
     this process's snapshot and publish ``config.changed``."""
     endpoint, gate = prepared.endpoint, prepared.gate
     result = await write_vlm_activation(
-        client, endpoint, expected_active=expected_active, ack_now=gate.ack_now
+        endpoint, expected_active=expected_active, ack_now=gate.ack_now, reason=reason
     )
     if gate.ack.sends_images_externally and endpoint.source != 'env':
         # Once per activation, the host only -- never the key.
@@ -211,7 +182,6 @@ async def apply_vlm_activation(
 
 
 async def activate_vlm(
-    client: Any,
     *,
     name: str,
     revision: int | None,
@@ -220,11 +190,10 @@ async def activate_vlm(
     force: bool = False,
     acknowledge_external: bool = False,
     state: ProjectVlmState | None = None,
-) -> tuple[dict[str, Any], GateResult]:
+) -> tuple[Activated, GateResult]:
     """Gate, then activate ``name@revision`` in the bound project. Raises
     a rejection (404 / 422) or :class:`ActiveConflictError`."""
     prepared = await prepare_vlm_activation(
-        client,
         name=name,
         revision=revision,
         mode=mode,
@@ -232,39 +201,39 @@ async def activate_vlm(
         acknowledge_external=acknowledge_external,
         state=state,
     )
-    result = await apply_vlm_activation(client, prepared, expected_active=expected_active)
+    result = await apply_vlm_activation(
+        prepared,
+        expected_active=expected_active,
+        reason='rollback' if mode == 'rollback' else 'activate',
+    )
     return result, prepared.gate
 
 
-async def deactivate_vlm(client: Any, *, expected_active: dict[str, Any] | None) -> dict[str, Any]:
+async def deactivate_vlm(*, expected_active: dict[str, Any] | None) -> Activated:
     """VLM off for the bound project (nothing to gate)."""
-    await refresh_vlm_state(client)
-    return await write_vlm_activation(client, None, expected_active=expected_active, ack_now=False)
+    await refresh_vlm_state()
+    return await write_vlm_activation(None, expected_active=expected_active, ack_now=False)
 
 
 async def rollback_vlm(
-    client: Any, *, expected_active: dict[str, Any] | None
-) -> tuple[dict[str, Any], GateResult | None]:
-    """Re-activate ``previous`` through the same gate (an endpoint that was
-    validly active once is not necessarily valid now). ``LookupError``
-    ``no_previous`` / ``previous_deleted`` with nothing written."""
-    await refresh_vlm_state(client)
-    store = get_config_store()
-    doc = await get_activation(client, store.index, 'vlm')
-    previous = (doc or {}).get('previous')
-    if not previous:
-        msg = 'no_previous'
-        raise LookupError(msg)
-    prev_name, prev_revision = previous.get('name'), previous.get('revision')
-    if prev_name is None:
-        return (await deactivate_vlm(client, expected_active=expected_active)), None
-    if prev_name != ENV_ENDPOINT_NAME and get_vlm_endpoint(prev_name) is None:
+    *, expected_active: dict[str, Any] | None
+) -> tuple[Activated, GateResult | None]:
+    """Re-activate what the VLM axis moved away from through the same gate (an endpoint that was
+    validly active once is not necessarily valid now). ``LookupError`` ``no_previous`` /
+    ``previous_deleted`` with nothing written."""
+    await refresh_vlm_state()
+    target = await documents.previous_target('vlm')
+    if target.name is None:
+        off = await write_vlm_activation(
+            None, expected_active=expected_active, ack_now=False, reason='rollback'
+        )
+        return off, None
+    if target.name != ENV_ENDPOINT_NAME and get_vlm_endpoint(target.name) is None:
         msg = 'previous_deleted'
         raise LookupError(msg)
     return await activate_vlm(
-        client,
-        name=prev_name,
-        revision=prev_revision,
+        name=target.name,
+        revision=target.revision,
         expected_active=expected_active,
         mode='rollback',
     )
@@ -285,29 +254,27 @@ class DefaultVlmPlan:
 
 
 async def plan_default_vlm(
-    client: Any, value: str | None, *, pack: Any = UNSET, profile: Any = UNSET
+    value: str | None, *, pack: Any = UNSET, profile: Any = UNSET
 ) -> DefaultVlmPlan:
     """Resolve and gate ``PUT /settings {"defaults": {"vlm": value}}`` without
     writing: a name = that endpoint's latest revision; ``'off'`` or ``None`` =
     VLM off (a project never inherits the ``env`` built-in). ``pack`` / ``profile`` are the pending sides
     of a combined request. Goes through the one gate like every other
     activation."""
-    await refresh_vlm_state(client)
+    await refresh_vlm_state()
     expected = expected_active_for(get_config_store().current.active_vlm)
     if value is None or value == 'off':
         return DefaultVlmPlan(None, expected)
     prepared = await prepare_vlm_activation(
-        client, name=value, revision=None, mode='settings', pack=pack, profile=profile
+        name=value, revision=None, mode='settings', pack=pack, profile=profile
     )
     return DefaultVlmPlan(prepared, expected)
 
 
-async def apply_default_vlm(client: Any, plan: DefaultVlmPlan) -> dict[str, Any]:
+async def apply_default_vlm(plan: DefaultVlmPlan) -> Activated:
     if plan.prepared is None:
-        return await write_vlm_activation(
-            client, None, expected_active=plan.expected_active, ack_now=False
-        )
-    return await apply_vlm_activation(client, plan.prepared, expected_active=plan.expected_active)
+        return await write_vlm_activation(None, expected_active=plan.expected_active, ack_now=False)
+    return await apply_vlm_activation(plan.prepared, expected_active=plan.expected_active)
 
 
 __all__ = [

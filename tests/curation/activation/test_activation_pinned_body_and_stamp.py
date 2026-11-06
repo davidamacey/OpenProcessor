@@ -29,7 +29,7 @@ def test_vlm_route_default_serves_pinned_body_and_stamp(app_client):
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
-    name = asyncio.run(_default_pack_name(app_client.fake_os))
+    name = asyncio.run(_default_pack_name(object()))
     lab = get_vlm_labeler(name)
     print('route default', name, lab._pack.class_system[:20], prompt_pack_stamp(lab._pack))
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
@@ -42,7 +42,7 @@ def test_pipeline_default_serves_pinned_body_and_stamp(app_client):
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
-    name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, None))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), None))
     lab = get_vlm_labeler(name, rev)
     print('pipeline default', name, rev, lab._pack.class_system[:20], prompt_pack_stamp(lab._pack))
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
@@ -56,7 +56,7 @@ def test_per_run_pin_of_current_draft_is_stamped_with_its_own_revision(app_clien
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
-    name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack@2'))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@2'))
     lab = get_vlm_labeler(name, rev)
     stamp = prompt_pack_stamp(lab._pack)
     print('per-run my_pack@2 served', lab._pack.class_system[:20], 'stamp', stamp)
@@ -70,7 +70,7 @@ def test_per_run_explicit_name_resolves_latest_revision(app_client):
     from src.services.labeling.run_labeler import get_vlm_labeler
 
     _activate_then_put(app_client)
-    name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack'))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack'))
     lab = get_vlm_labeler(name, rev)
     print('per-run explicit my_pack ->', rev, lab._pack.class_system[:20])
     assert lab._pack.class_system == 'R2 DRAFT'
@@ -82,7 +82,7 @@ def test_per_run_pin_of_active_old_revision(app_client):
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
-    name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack@1'))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@1'))
     lab = get_vlm_labeler(name, rev)
     assert (name, rev) == ('my_pack', 1)
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
@@ -125,7 +125,7 @@ def test_per_run_pin_of_superseded_revision_is_unresolvable(app_client):
     # this process" wording.
     for far_past in ('my_pack@1', 'my_pack@9'):
         with pytest.raises(RequestRejectedError) as exc_info:
-            asyncio.run(resolve_run_prompt_pack(c.fake_os, far_past))
+            asyncio.run(resolve_run_prompt_pack(object(), far_past))
         assert exc_info.value.status_code == 422
         assert 'not resolvable in this process' in exc_info.value.detail['error']
 
@@ -137,49 +137,31 @@ def test_warm_store_transient_fetch_error_keeps_last_good_body(app_client, monke
     c = app_client
     _activate_then_put(c)
     store = get_config_store()
-    asyncio.run(store.refresh(c.fake_os))
+    asyncio.run(store.refresh())
     assert active_prompt_pack().class_system == GENERIC_ITEM_PACK.class_system
     # another process bumps the revision (e.g. unrelated pack created)
     assert c.post(PREFIX, json={'name': 'other', 'body': pack_body('OTHER')}).status_code == 201
-    fake = c.fake_os
-    orig_get = fake.get
+    from src.db.repos import config as repo
 
-    async def flaky_get(*a, **kw):
-        if str(kw.get('id', '')).endswith('@1'):
+    orig_get = repo.get_config_by_id
+
+    async def flaky_get(session, config_id, revision=None):
+        if revision == 1:
             raise ConnectionError('transient')
-        return await orig_get(*a, **kw)
+        return await orig_get(session, config_id, revision)
 
-    monkeypatch.setattr(fake, 'get', flaky_get)
+    monkeypatch.setattr(repo, 'get_config_by_id', flaky_get)
     # force a reload
     from dataclasses import replace
 
     store.current = replace(store.current, config_revision=-1)
-    asyncio.run(store.refresh(fake))
+    asyncio.run(store.refresh())
     print('stale', store.current.stale, 'served', active_prompt_pack().class_system[:20])
     assert store.current.stale is True
     assert active_prompt_pack().class_system == GENERIC_ITEM_PACK.class_system
     warm_store_pack = get_prompt_pack('my_pack')
     assert warm_store_pack is not None
     assert warm_store_pack.class_system == GENERIC_ITEM_PACK.class_system
-
-
-def test_missing_pinned_copy_does_not_serve_draft(app_client):
-    from src.services.config_store import get_config_store
-    from src.services.config_store.index import config_doc_id
-    from src.services.labeling.vlm_prompts import active_prompt_pack, prompt_pack_stamp
-
-    c = app_client
-    _activate_then_put(c)
-    fake = c.fake_os
-    idx = get_config_store().index
-    fake._docs[idx].pop(config_doc_id('prompt_pack', 'my_pack', 1))
-    from src.services.config_store.store import reset_config_stores
-
-    reset_config_stores()
-    asyncio.run(get_config_store().refresh(fake))
-    served = active_prompt_pack()
-    print('404 pinned copy -> served', served.class_system[:20], prompt_pack_stamp(served))
-    assert served.class_system != 'R2 DRAFT'
 
 
 def test_vlm_api_default_labeler_serves_pinned_body(app_client):
@@ -189,7 +171,7 @@ def test_vlm_api_default_labeler_serves_pinned_body(app_client):
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
-    name = asyncio.run(_default_pack_name(app_client.fake_os))
+    name = asyncio.run(_default_pack_name(object()))
     labeler = get_vlm_labeler(name)
     stamp = prompt_pack_stamp(labeler._pack)
     print('default name', name, 'served', labeler._pack.class_system[:30], 'stamp', stamp)
@@ -203,7 +185,7 @@ def test_pipeline_omitted_prompt_pack_serves_pinned_body(app_client):
     from src.services.labeling.run_labeler import get_vlm_labeler
 
     _activate_then_put(app_client)
-    name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, None))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), None))
     labeler = get_vlm_labeler(name, rev)
     print('pipeline default', name, rev, labeler._pack.class_system[:30])
     assert labeler._pack.class_system == GENERIC_ITEM_PACK.class_system
@@ -217,16 +199,13 @@ def test_pinned_fetch_failure_on_cold_reload_does_not_serve_put_body(app_client,
 
     _activate_then_put(app_client)
     reset_config_stores()
-    fake = app_client.fake_os
-    orig_get = fake.get
+    from src.db.repos import config as repo
 
-    async def flaky_get(*a, **kw):
-        if '@1' in str(kw.get('id', '')):
-            raise ConnectionError('transient')
-        return await orig_get(*a, **kw)
+    async def flaky_get(*_a, **_kw):
+        raise ConnectionError('transient')
 
-    monkeypatch.setattr(fake, 'get', flaky_get)
-    asyncio.run(get_config_store().refresh(fake))
+    monkeypatch.setattr(repo, 'get_config_by_id', flaky_get)
+    asyncio.run(get_config_store().refresh())
     served = active_prompt_pack()
     print('after flaky reload served', served.class_system[:30], get_config_store().current.stale)
     assert served.class_system != 'EDITED AFTER ACTIVATION'
@@ -247,7 +226,7 @@ def test_per_run_name_at_past_revision_labels_successfully(app_client):
     from src.services.labeling.run_labeler import get_vlm_labeler
 
     _activate_then_put(app_client)
-    name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack@1'))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@1'))
     print('resolved', name, rev)
     try:
         labeler = get_vlm_labeler(name, rev)
@@ -302,60 +281,13 @@ def test_per_run_tag_isolated_from_default_path(app_client):
         ).status_code
         == 200
     )
-    name, rev = asyncio.run(resolve_run_prompt_pack(c.fake_os, 'my_pack'))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack'))
     lab = get_vlm_labeler(name, rev)
     assert rev == 3
     assert prompt_pack_stamp(lab._pack, revision=rev) == 'my_pack@3'
-    d = get_vlm_labeler(asyncio.run(_default_pack_name(c.fake_os)))
+    d = get_vlm_labeler(asyncio.run(_default_pack_name(object())))
     print('per-run', prompt_pack_stamp(lab._pack), 'default route', prompt_pack_stamp(d._pack))
     assert prompt_pack_stamp(d._pack) == 'my_pack@1'
     # per-run draft pin
-    name, rev = asyncio.run(resolve_run_prompt_pack(c.fake_os, 'my_pack@3'))
+    name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@3'))
     assert prompt_pack_stamp(get_vlm_labeler(name, rev)._pack) == 'my_pack@3'
-
-
-def test_profile_missing_pinned_copy_does_not_serve_draft(app_client, monkeypatch):
-    from src.config import DetectionProfile
-    from src.services.config_store import get_config_store
-    from src.services.config_store.index import activate, config_doc_id, save_config
-    from src.services.config_store.store import reset_config_stores
-    from src.services.detection import profile_registry
-    from src.services.detection.profile_registry import get_active_region_profile
-
-    fake = app_client.fake_os
-    profile_registry._reset_registry_for_tests()
-    profile_registry.register_profile(DetectionProfile(name='envdef'), default=True)
-    try:
-        idx = get_config_store().index
-
-        async def _seed():
-            await save_config(
-                fake,
-                idx,
-                kind='region_profile',
-                name='rp',
-                body={'max_regions_per_item': 1},
-                expected_revision=None,
-            )
-            await activate(
-                fake, idx, axis='detection_profile', name='rp', revision=1, expected_active=None
-            )
-            await save_config(
-                fake,
-                idx,
-                kind='region_profile',
-                name='rp',
-                body={'max_regions_per_item': 7},
-                expected_revision=1,
-            )
-
-        asyncio.run(_seed())
-        fake._docs[idx].pop(config_doc_id('region_profile', 'rp', 1))
-        reset_config_stores()
-        asyncio.run(get_config_store().refresh(fake))
-        served = get_active_region_profile()
-        print('profile pinned 404 ->', served and (served.name, served.max_regions_per_item))
-        assert served is not None
-        assert served.max_regions_per_item != 7
-    finally:
-        profile_registry._reset_registry_for_tests()

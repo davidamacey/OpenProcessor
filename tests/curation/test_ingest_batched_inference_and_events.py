@@ -157,22 +157,17 @@ class TestCropCreatedEvents:
     never fail the ingest."""
 
     @pytest.fixture(autouse=True)
-    def _fresh_hub(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from src.services.curation import event_hub
+    def _capture(self, captured_events: list[dict[str, Any]]) -> None:
+        self._seen = captured_events
 
-        monkeypatch.setattr(event_hub, '_HUB', None)
-
-    @staticmethod
-    async def _subscribe() -> Any:
-        from src.services.curation.event_hub import get_event_hub
-
-        return await get_event_hub().subscribe(project='default')
+    async def _subscribe(self) -> list[dict[str, Any]]:
+        self._seen.clear()  # a subscriber only sees events published after it joined
+        return self._seen
 
     @staticmethod
-    def _drain(sub: Any) -> list[dict[str, Any]]:
-        events = []
-        while not sub.queue.empty():
-            events.append(sub.queue.get_nowait())
+    def _drain(seen: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        events = list(seen)
+        seen.clear()
         return events
 
     @pytest.mark.asyncio
@@ -247,12 +242,12 @@ class TestCropCreatedEvents:
     async def test_publish_failure_never_fails_ingest(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from src.services.curation import event_hub
+        from src.services.events import publish as publish_module
 
         def _boom(*_a: Any, **_k: Any) -> None:
-            raise RuntimeError('hub exploded')
+            raise RuntimeError('publish exploded')
 
-        monkeypatch.setattr(event_hub.EventHub, 'publish', _boom)
+        monkeypatch.setattr(publish_module, 'publish', _boom)
         svc, os_fake, _ = _make_service()
         result = await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
         assert result.status == 'success'

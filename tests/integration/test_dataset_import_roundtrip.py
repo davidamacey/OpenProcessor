@@ -27,6 +27,9 @@ SPLITS = {
 }
 
 
+pytest_plugins = ['_records_world']
+
+
 def _mapping(h: Harness, root: Path) -> list[ClassMappingEntry]:
     out = []
     for name, s in h.prepare(h.request(root)).suggestions.items():
@@ -69,6 +72,8 @@ def _rows_by_stem(export: Path, stem_of_label: dict[str, str]) -> dict[str, tupl
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_export_reimports_into_a_fresh_project_and_round_trips(
     tmp_path: Path, monkeypatch
 ) -> None:

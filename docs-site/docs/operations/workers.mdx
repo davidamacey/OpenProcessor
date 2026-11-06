@@ -134,11 +134,11 @@ memory:
 | Dataset import | `/jobs/imports` |
 | Combine | `/jobs/combine` |
 
-Events work the same way: with `OP_EVENT_BUS=file` (the default) every
-uvicorn process tails one shared, rotated JSONL log, so a client on
-`GET /curation/events` sees events published by any process, including
-the detection worker's `POST /curation/projects/{project}/events/publish`
-calls. Events are stamped with their project: a project's stream delivers
+Events are rows in the PostgreSQL `events` table, announced by a Valkey
+wake-up, so a client on `GET /curation/events` sees events published by
+any process, including the detection worker's
+`POST /curation/projects/{project}/events/publish` calls, and can resume
+with `Last-Event-ID`. Events are stamped with their project: a project's stream delivers
 only its own, and `GET /curation/events` delivers the global ones.
 
 ## Worker metrics

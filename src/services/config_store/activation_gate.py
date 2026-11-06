@@ -31,7 +31,7 @@ from src.config import get_curation_config
 
 if TYPE_CHECKING:
     from src.schemas.curation.config_common import ValidationReport
-    from src.services.config_store.index import ConfigAxis
+    from src.services.config_store.documents import ConfigAxis
 
 
 # Sentinel distinguishing "no override supplied -- use the OTHER axis's
@@ -48,7 +48,6 @@ async def run_activation_gate(
     revision: int | None,
     *,
     force: bool = False,
-    client: Any = None,
     pending_sibling: Any = _UNSET,
     pending_vlm: Any = _UNSET,
     body: dict[str, Any] | None = None,
@@ -56,18 +55,10 @@ async def run_activation_gate(
     """Run the exact `for_activation` validation the dedicated `/activate`
     routes run, against whichever axis is being activated.
 
-    ``client`` (an OpenSearch client) is optional but should be passed
-    whenever the caller has one: rollback's ``previous`` ref can name a
-    revision that is no longer the STORED CURRENT one (e.g. pack was
-    active at rev 1, a later, never-activated PUT moved current to rev
-    2) -- ``build_record`` only resolves the current revision, so without
-    a client-backed fallback to the immutable ``<kind>:<name>@<rev>``
-    revision-copy doc, a legitimate rollback to an old-but-real revision
-    would incorrectly 404 here. Callers with no client (none exist today)
-    keep the current-revision-only behavior the dedicated activate routes
-    already had
-    (activating a genuinely past revision through those routes is a
-    separate, non-blocking gap).
+    A ``revision`` that is not the stored CURRENT one (rollback's ``previous`` can name an
+    old-but-real revision: the pack was active at rev 1, a later, never-activated save moved
+    current to rev 2) is read from its immutable revision row, so a legitimate rollback does
+    not 404 here.
 
     ``pending_sibling``: the OTHER
     axis's PENDING (about-to-be-applied) value, for a caller that is
@@ -114,9 +105,9 @@ async def run_activation_gate(
     from src.services.rejections import rejection
 
     if axis == 'ingest_profile':
-        return await _run_ingest_profile_gate(name, revision, force=force, client=client, body=body)
+        return await _run_ingest_profile_gate(name, revision, force=force, body=body)
     if axis == 'open_vocab':
-        return await _run_open_vocab_gate(name, revision, force=force, client=client, body=body)
+        return await _run_open_vocab_gate(name, revision, force=force, body=body)
     if axis == 'prompt_pack':
         from src.services.config_store.pack_validation import BYPASSABLE_CODES, validate_pack
         from src.services.config_store.packs import (
@@ -128,8 +119,8 @@ async def run_activation_gate(
 
         if body is None:
             record = build_pack_record(name, revision=revision)
-            if record is None and revision is not None and client is not None:
-                record = await get_pack_revision(client, name, revision)
+            if record is None and revision is not None:
+                record = await get_pack_revision(name, revision)
             if record is None:
                 raise rejection(404, 'not_found', f'{name!r} is not a known pack')
             if record.read_only and record.source == 'template':
@@ -160,8 +151,8 @@ async def run_activation_gate(
 
         if body is None:
             profile_record = build_profile_record(name, revision=revision)
-            if profile_record is None and revision is not None and client is not None:
-                profile_record = await get_profile_revision(client, name, revision)
+            if profile_record is None and revision is not None:
+                profile_record = await get_profile_revision(name, revision)
             if profile_record is None:
                 raise rejection(404, 'not_found', f'{name!r} is not a known region profile')
             if profile_record.read_only and profile_record.source == 'template':
@@ -190,7 +181,6 @@ async def run_activation_gate(
     from src.services.config_store.vlm_validation import BYPASSABLE_CODES as VLM_BYPASSABLE
 
     vlm_issues = await active_vlm_pairing_issues(
-        client,
         paired_pack,
         paired_profile,
         **({} if pending_vlm is _UNSET else {'pending_vlm': pending_vlm}),
@@ -221,7 +211,7 @@ async def run_activation_gate(
 
 
 async def _run_ingest_profile_gate(
-    name: str, revision: int | None, *, force: bool, client: Any, body: dict[str, Any] | None
+    name: str, revision: int | None, *, force: bool, body: dict[str, Any] | None
 ) -> ValidationReport:
     """The ``for_activation`` gate of an ingest profile: its body must validate
     and its models must be servable on Triton. ``force`` bypasses only a Triton
@@ -236,8 +226,8 @@ async def _run_ingest_profile_gate(
 
     if body is None:
         record = build_record(name, revision=revision)
-        if record is None and revision is not None and client is not None:
-            record = await get_revision_record(client, name, revision)
+        if record is None and revision is not None:
+            record = await get_revision_record(name, revision)
         if record is None:
             raise rejection(404, 'not_found', f'{name!r} is not a known ingest profile')
         if record.read_only and record.source == 'template':
@@ -262,7 +252,6 @@ async def _run_open_vocab_gate(
     revision: int | None,
     *,
     force: bool,
-    client: Any,
     body: dict[str, Any] | None,
 ) -> ValidationReport:
     """The ``for_activation`` gate of a prompt set: its body must validate and
@@ -278,8 +267,8 @@ async def _run_open_vocab_gate(
 
     if body is None:
         record = build_record(name, revision=revision)
-        if record is None and revision is not None and client is not None:
-            record = await get_revision_record(client, name, revision)
+        if record is None and revision is not None:
+            record = await get_revision_record(name, revision)
         if record is None:
             raise rejection(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
         if record.read_only and record.source == 'template':

@@ -13,7 +13,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation._cropwright_action_ids import CROPWRIGHT_ACTION_IDS
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.curation.keymap import (
     combo_grammar_error,
     effective_keys,
@@ -288,14 +287,14 @@ def registry(tmp_path: Any) -> InMemoryRegistry:
 
 
 @pytest.fixture
-def fake_os() -> FakeConfigOpenSearch:
-    return FakeConfigOpenSearch()
+def fake_os():
+    from curation.query_fakes import QueryFakeOpenSearch
+
+    return QueryFakeOpenSearch({})
 
 
 @pytest.fixture
-def client(
-    registry: InMemoryRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
-):
+def client(registry: InMemoryRegistry, fake_os, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
@@ -463,34 +462,20 @@ def test_class_put_rejects_taken_hotkey_as_config_error_detail(
 
 
 def test_config_changed_event_published_once_on_put(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, captured_events: list[dict]
 ) -> None:
-    from src.services.curation import event_hub
-
-    monkeypatch.setenv('OP_EVENT_BUS', 'process')
-    event_hub._HUB = None
-
-    async def _run() -> None:
-        hub = event_hub.get_event_hub()
-        sub = await hub.subscribe(project='default')
-        client.put(
-            f'{PREFIX}/keymap',
-            json={'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}},
-        )
-        event = sub.queue.get_nowait()
-        assert event['type'] == 'config.changed'
-        assert event['axis'] == 'keymap'
-        assert event['project'] == 'default'
-        assert sub.queue.empty()
-
-    import asyncio
-
-    asyncio.run(_run())
-    event_hub._HUB = None
+    client.put(
+        f'{PREFIX}/keymap',
+        json={'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}},
+    )
+    (event,) = captured_events
+    assert event['type'] == 'config.changed'
+    assert event['axis'] == 'keymap'
+    assert event['project'] == 'default'
 
 
 def test_keymap_save_failure_is_a_500_and_the_class_hotkey_survives(
-    registry: InMemoryRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, fake_os, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An unbind runs before the save; a non-conflict failure of the save
     must roll the unbind back instead of leaving the hotkey cleared."""

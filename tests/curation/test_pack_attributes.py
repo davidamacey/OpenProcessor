@@ -13,7 +13,6 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.config_store.pack_validation import validate_pack
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 
@@ -165,7 +164,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    fake_os = FakeConfigOpenSearch()
+    from curation.query_fakes import QueryFakeOpenSearch
+
+    fake_os = QueryFakeOpenSearch({})
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     return TestClient(app)
 

@@ -175,7 +175,7 @@ async def create_project(
             await ensure_indexes(client)
             from src.services.projects.vlm_default import pin_new_project_vlm_off
 
-            await pin_new_project_vlm_off(client)
+            await pin_new_project_vlm_off()
         if clone_settings_from:
             clone_conflicts = await clone_settings(
                 client,

@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 
 if TYPE_CHECKING:
-    from src.services.config_store.index import ConfigAxis
+    from src.services.config_store.documents import ConfigAxis
 
 from fastapi import HTTPException
 
@@ -126,7 +126,7 @@ def _without_config_store_axes(defaults: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in defaults.items() if k not in CONFIG_STORE_AXES}
 
 
-async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
+async def _config_store_axis_defaults() -> dict[str, str | None]:
     """The active name for each config-store-backed axis, for merging
     into ``GET /settings``'s ``defaults`` map."""
     from src.services.config_store import get_config_store
@@ -134,11 +134,11 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
     from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     snapshot = store.current
     result: dict[str, str | None] = {}
     # the third config-store axis is the project's VLM endpoint.
-    await refresh_vlm_state(opensearch)
+    await refresh_vlm_state()
     if (vlm_default := active_default_id()) is not None:
         result['vlm'] = vlm_default
     for axis, ref in (
@@ -173,7 +173,7 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
     await ensure_indexes(opensearch)
     doc = await get_curation_settings(fresh=True)
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
-        await _config_store_axis_defaults(opensearch)
+        await _config_store_axis_defaults()
     )
     return CurationSettingsResponse(**doc)
 
@@ -243,7 +243,7 @@ async def update_curation_settings_route(
     # (no gate calls yet), THEN gate each axis using the OTHER axis's
     # PENDING target from this same request -- not its stored value.
     resolved = {
-        axis: await _resolve_config_store_axis(axis, value, opensearch)
+        axis: await _resolve_config_store_axis(axis, value)
         for axis, value in config_store_defaults.items()
     }
     combined = len(resolved) > 1
@@ -253,7 +253,7 @@ async def update_curation_settings_route(
     # (never each against the other sides' stored values).
     vlm_plan = None
     if 'vlm' in body.defaults:
-        vlm_plan = await _plan_vlm(body.defaults['vlm'], resolved, opensearch)
+        vlm_plan = await _plan_vlm(body.defaults['vlm'], resolved)
     for axis, res in resolved.items():
         if res.target_name is None:
             continue
@@ -269,14 +269,13 @@ async def update_curation_settings_route(
             axis,
             res.target_name,
             res.target_revision,
-            opensearch,
             **({'pending_sibling': pending_sibling} if has_sibling else {}),
             **({'pending_vlm': vlm_plan.endpoint} if vlm_plan is not None else {}),
         )
     for plan in resolved.values():
-        await _apply_config_store_axis(plan, opensearch)
+        await _apply_config_store_axis(plan)
     if vlm_plan is not None:
-        await _apply_vlm(vlm_plan, opensearch)
+        await _apply_vlm(vlm_plan)
 
     try:
         doc = await update_curation_settings(
@@ -285,7 +284,7 @@ async def update_curation_settings_route(
     except RevisionConflictError as exc:
         raise api_error(409, 'revision_conflict', f'settings changed: {exc}') from exc
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
-        await _config_store_axis_defaults(opensearch)
+        await _config_store_axis_defaults()
     )
     logger.info('curation_settings_updated', axes=sorted(body.defaults))
     return CurationSettingsResponse(**doc)
@@ -299,7 +298,8 @@ class _AxisActivationPlan(NamedTuple):
 
 
 async def _resolve_config_store_axis(
-    axis: str, value: str | None, opensearch: Any
+    axis: str,
+    value: str | None,
 ) -> _AxisActivationPlan:
     """``PUT /settings {"defaults": {axis: value}}`` for a config-store
     axis: resolve ``value`` (or ``None``/``'off'``) against the live
@@ -314,7 +314,7 @@ async def _resolve_config_store_axis(
     from src.services.curation.strategy_defaults import _advertised_ids_for_axis
 
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     current_ref = (
         store.current.active_pack if axis == 'prompt_pack' else store.current.active_profile
     )
@@ -403,7 +403,7 @@ async def _pending_sibling_for_gate(other_axis: str, other: _AxisActivationPlan)
     return PromptPack.from_dict({**pack_record.body, 'name': other.target_name})
 
 
-async def _plan_vlm(value: str | None, resolved: dict[str, Any], opensearch: Any) -> Any:
+async def _plan_vlm(value: str | None, resolved: dict[str, Any]) -> Any:
     """Resolve and gate the ``vlm`` default of a ``PUT /settings`` (write
     nothing): 422 ``unknown_vlm`` for an id nobody advertises, then the one
     VLM gate against the request's PENDING pack and profile."""
@@ -412,7 +412,7 @@ async def _plan_vlm(value: str | None, resolved: dict[str, Any], opensearch: Any
     from src.services.curation.vlm_strategies import advertised_ids
     from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
-    await refresh_vlm_state(opensearch)
+    await refresh_vlm_state()
     if value is not None and value not in advertised_ids():
         raise api_error(
             422,
@@ -430,21 +430,21 @@ async def _plan_vlm(value: str | None, resolved: dict[str, Any], opensearch: Any
         profile = await _pending_sibling_for_gate(
             'detection_profile', resolved['detection_profile']
         )
-    return await plan_default_vlm(opensearch, value, pack=pack, profile=profile)
+    return await plan_default_vlm(value, pack=pack, profile=profile)
 
 
-async def _apply_vlm(plan: Any, opensearch: Any) -> None:
+async def _apply_vlm(plan: Any) -> None:
     from src.routers.curation._api_error import active_conflict_error
     from src.services.config_store import ActiveConflictError
     from src.services.config_store.vlm_activation import apply_default_vlm
 
     try:
-        await apply_default_vlm(opensearch, plan)
+        await apply_default_vlm(plan)
     except ActiveConflictError as exc:
         raise active_conflict_error('the active VLM', exc.current) from exc
 
 
-async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -> None:
+async def _apply_config_store_axis(plan: _AxisActivationPlan) -> None:
     """Write side of a resolved axis activation (see
     :func:`_resolve_config_store_axis`). Only called once every axis in
     the request has cleared resolve+gate."""
@@ -456,7 +456,6 @@ async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -
     try:
         await activate_axis(
             store,
-            opensearch,
             axis=cast('ConfigAxis', plan.axis),
             name=plan.target_name,
             revision=plan.target_revision,
@@ -473,7 +472,6 @@ async def _run_activation_gate(
     axis: str,
     target_name: str,
     target_revision: int | None,
-    opensearch: Any,
     *,
     pending_sibling: Any = _NO_PENDING_OVERRIDE,
     pending_vlm: Any = _NO_PENDING_OVERRIDE,
@@ -501,6 +499,4 @@ async def _run_activation_gate(
         kwargs['pending_sibling'] = pending_sibling
     if pending_vlm is not _NO_PENDING_OVERRIDE:
         kwargs['pending_vlm'] = pending_vlm
-    await run_activation_gate(
-        cast('ConfigAxis', axis), target_name, target_revision, client=opensearch, **kwargs
-    )
+    await run_activation_gate(cast('ConfigAxis', axis), target_name, target_revision, **kwargs)

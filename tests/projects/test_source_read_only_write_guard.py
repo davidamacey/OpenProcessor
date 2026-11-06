@@ -175,7 +175,7 @@ def test_clone_activations_source_bind_blocks_planted_write(monkeypatch) -> None
     client = FakeLifecycleOpenSearch()
     _source, target = asyncio.run(_seed(client))
 
-    from src.services.config_store.index import get_activation as orig_get_activation
+    from src.services.config_store.documents import get_activation as orig_get_activation
 
     async def _probing_get_activation(probe_client: Any, index: str, axis: Any):
         bound = try_current_project()

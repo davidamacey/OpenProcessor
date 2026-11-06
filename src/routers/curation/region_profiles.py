@@ -157,10 +157,10 @@ async def get_region_profile_schema() -> RegionProfileSchema:
 
 @router.post('/region_profiles/validate')
 async def validate_region_profile_route(
-    body: RegionProfileValidateRequest, opensearch: OpenSearchDep, for_activation: bool = False
+    body: RegionProfileValidateRequest, for_activation: bool = False
 ) -> Any:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     report = await validate_profile(
         body.name,
         body.body.model_dump(),
@@ -195,8 +195,8 @@ async def validate_segmenter_prompt_route(body: SegmenterPromptValidateRequest) 
 
 
 @router.get('/region_profiles/active', response_model=ActiveConfigResponse)
-async def get_active_region_profile_route(opensearch: OpenSearchDep) -> ActiveConfigResponse:
-    return await build_active_config_response(opensearch, axis='detection_profile')
+async def get_active_region_profile_route() -> ActiveConfigResponse:
+    return await build_active_config_response(axis='detection_profile')
 
 
 @router.get('/region_profiles/active/impact', response_model=ActivationImpact)
@@ -208,11 +208,11 @@ async def get_active_region_profile_impact(opensearch: OpenSearchDep) -> Activat
 
 @router.post('/region_profiles/active/rollback', response_model=ActiveConfigResponse)
 async def rollback_active_region_profile(
-    body: RegionProfileRollbackRequest, opensearch: OpenSearchDep
+    body: RegionProfileRollbackRequest,
 ) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await rollback_profile(opensearch, expected_active=expected)
+        await rollback_profile(expected_active=expected)
     except LookupError as exc:
         # m-b fix: `previous_deleted` is distinct
         # from `no_previous` -- the profile was deleted while it was the
@@ -228,19 +228,17 @@ async def rollback_active_region_profile(
         ) from exc
     except ActiveConflictError as exc:
         raise active_conflict_error('the active profile', exc.current) from exc
-    return await build_active_config_response(opensearch, axis='detection_profile')
+    return await build_active_config_response(axis='detection_profile')
 
 
 @router.post('/region_profiles/deactivate', response_model=ActiveConfigResponse)
-async def deactivate_region_profile(
-    body: RegionProfileDeactivateRequest, opensearch: OpenSearchDep
-) -> ActiveConfigResponse:
+async def deactivate_region_profile(body: RegionProfileDeactivateRequest) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await activate_profile(opensearch, name=None, revision=None, expected_active=expected)
+        await activate_profile(name=None, revision=None, expected_active=expected)
     except ActiveConflictError as exc:
         raise active_conflict_error('the active profile', exc.current) from exc
-    return await build_active_config_response(opensearch, axis='detection_profile')
+    return await build_active_config_response(axis='detection_profile')
 
 
 # =============================================================================
@@ -250,14 +248,13 @@ async def deactivate_region_profile(
 
 @router.get('/region_profiles', response_model=RegionProfileList)
 async def list_region_profiles(
-    opensearch: OpenSearchDep,
     include_templates: bool = Query(
         default=False,
         description='Also return the shipped example templates in `templates`; they are omitted by default.',
     ),
 ) -> RegionProfileList:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     names = all_known_names() - set(_template_names_only())
     records = [build_record(name) for name in sorted(names)]
     templates: list[RegionProfileTemplateSummary] = []
@@ -287,11 +284,9 @@ async def list_region_profiles(
 
 
 @router.post('/region_profiles', response_model=RegionProfileDoc, status_code=201)
-async def create_region_profile(
-    body: RegionProfileCreateRequest, opensearch: OpenSearchDep
-) -> RegionProfileDoc:
+async def create_region_profile(body: RegionProfileCreateRequest) -> RegionProfileDoc:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     existing = all_known_names()
     report = await validate_profile(
         body.name,
@@ -314,7 +309,6 @@ async def create_region_profile(
             422, 'validation_failed', f'the profile has {len(other_errors)} error(s)', report=report
         )
     record = await save_profile(
-        opensearch,
         name=body.name,
         body=body.body.model_dump(),
         expected_revision=None,
@@ -329,9 +323,9 @@ async def create_region_profile(
 
 
 @router.get('/region_profiles/{name}', response_model=RegionProfileDoc)
-async def get_region_profile_route(name: str, opensearch: OpenSearchDep) -> Any:
+async def get_region_profile_route(name: str) -> Any:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
@@ -340,10 +334,8 @@ async def get_region_profile_route(name: str, opensearch: OpenSearchDep) -> Any:
 
 
 @router.get('/region_profiles/{name}/revisions', response_model=RegionProfileRevisionsResponse)
-async def list_region_profile_revisions(
-    name: str, opensearch: OpenSearchDep
-) -> RegionProfileRevisionsResponse:
-    revisions = await list_revisions(opensearch, name)
+async def list_region_profile_revisions(name: str) -> RegionProfileRevisionsResponse:
+    revisions = await list_revisions(name)
     if revisions is None:
         raise api_error(404, 'not_found', f'{name!r} is not a stored profile')
     return RegionProfileRevisionsResponse(
@@ -361,10 +353,8 @@ async def list_region_profile_revisions(
 
 
 @router.get('/region_profiles/{name}/revisions/{revision}', response_model=RegionProfileDoc)
-async def get_region_profile_revision(
-    name: str, revision: int, opensearch: OpenSearchDep
-) -> RegionProfileDoc:
-    record = await get_revision_record(opensearch, name, revision)
+async def get_region_profile_revision(name: str, revision: int) -> RegionProfileDoc:
+    record = await get_revision_record(name, revision)
     if record is None:
         raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
     return _to_doc(record)
@@ -382,11 +372,9 @@ async def get_region_profile_revision(
 
 
 @router.put('/region_profiles/{name}', response_model=RegionProfileDoc)
-async def save_region_profile(
-    name: str, body: RegionProfileSaveRequest, opensearch: OpenSearchDep
-) -> RegionProfileDoc:
+async def save_region_profile(name: str, body: RegionProfileSaveRequest) -> RegionProfileDoc:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
@@ -411,7 +399,6 @@ async def save_region_profile(
 
     try:
         record = await save_profile(
-            opensearch,
             name=name,
             body=body.body.model_dump(),
             expected_revision=body.expected_revision,
@@ -430,13 +417,11 @@ async def save_region_profile(
 
 
 @router.delete('/region_profiles/{name}', status_code=204)
-async def delete_region_profile_route(
-    name: str, expected_revision: int, opensearch: OpenSearchDep
-) -> None:
+async def delete_region_profile_route(name: str, expected_revision: int) -> None:
     from fastapi import Response
 
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
@@ -446,7 +431,7 @@ async def delete_region_profile_route(
     if isinstance(ref, tuple) and ref[0] == name:
         raise api_error(409, 'in_use', f'{name!r} is the active profile')
     try:
-        await delete_profile(opensearch, name=name, expected_revision=expected_revision)
+        await delete_profile(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
         raise api_error(
             409,
@@ -469,12 +454,12 @@ async def activate_region_profile_route(
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name, revision=body.revision)
     if record is None and body.revision is None:
         # Written through another API worker: this process may hold a stale snapshot.
         try:
-            await store.refresh_on_miss(opensearch)
+            await store.refresh_on_miss()
         except ConfigStoreUnavailableError as exc:
             raise api_error(503, 'config_store_unavailable', str(exc)) from exc
         record = build_record(name)
@@ -483,23 +468,19 @@ async def activate_region_profile_route(
 
     # the ONE shared `for_activation` gate
     # every activation writer calls -- activate, settings-bridge, rollback.
-    report = await run_activation_gate(
-        'detection_profile', name, record.revision, force=body.force, client=opensearch
-    )
+    report = await run_activation_gate('detection_profile', name, record.revision, force=body.force)
 
     expected_active = (
         body.expected_active.model_dump() if body.expected_active is not None else None
     )
     try:
-        await activate_profile(
-            opensearch, name=name, revision=record.revision, expected_active=expected_active
-        )
+        await activate_profile(name=name, revision=record.revision, expected_active=expected_active)
     except ActiveConflictError as exc:
         raise active_conflict_error('the active profile', exc.current) from exc
 
     from src.services.detection.profile_registry import get_active_region_profile
 
-    response = await build_active_config_response(opensearch, axis='detection_profile')
+    response = await build_active_config_response(axis='detection_profile')
     impact = await compute_activation_impact(opensearch, profile=get_active_region_profile())
     return RegionProfileActivateResponse(**response.model_dump(), impact=impact, validation=report)
 

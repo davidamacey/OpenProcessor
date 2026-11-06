@@ -51,6 +51,9 @@ CLASS_STATE_FIELDS = (
 )
 
 
+pytest_plugins = ['_records_world']
+
+
 def _ingest_doc(crop_id: str, **item_kw: Any) -> dict[str, Any]:
     item = DetectedItem(bbox_pixel=(10.0, 10.0, 50.0, 50.0), score=0.42, **item_kw)
     return build_item_doc(
@@ -180,6 +183,8 @@ async def test_undo_restores_prior_vlm_label(crops, registry, ids) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_undo_reverses_batch_label_and_move(crops, registry, ids) -> None:
     from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
 
@@ -362,6 +367,8 @@ async def test_unexclude_unvalidated_item_from_another_class_cluster_goes_residu
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_move_into_candidate_cluster_sets_placement_not_class(crops, registry, ids) -> None:
     from src.routers.curation._common_models import CropMoveRequest
 
@@ -385,6 +392,8 @@ async def test_move_into_candidate_cluster_sets_placement_not_class(crops, regis
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) -> None:
     """A human-validated crop moved into a candidate group is no longer that
     class; keeping it validated would leak the old class into export."""
@@ -558,6 +567,8 @@ def test_undo_route_unknown_crop_is_404(client_for) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_undo_batch_reverses_a_batch_label(crops, ids, client_for) -> None:
     from src.routers.curation._common_models import CropBatchLabelRequest
 

@@ -329,7 +329,7 @@ async def finalize(ctx: ImportContext, store: ImportStore, report: ImportReport)
     from src.services.curation.dataset_import.holdout_record import persist_import_freeze
 
     if ctx.freeze_test:
-        persist_import_freeze(ctx, store)
+        await persist_import_freeze(ctx, store)
     next_steps = []
     if report.boxes_written or report.standalone_regions:
         next_steps.append(cluster_regions())
@@ -384,7 +384,7 @@ def spawn_undo(
                 deprecate_created_classes=body.deprecate_created_classes,
                 created_classes=created_classes,
             )
-            mark_freeze_undone(store)
+            await mark_freeze_undone(store)
             job.update(
                 status='undone',
                 undo=report.to_dict(),

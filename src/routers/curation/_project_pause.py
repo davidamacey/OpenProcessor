@@ -57,12 +57,12 @@ def _state(*, project_paused: bool) -> PipelinePauseState:
     )
 
 
-def _publish_pause_event(*, event_type: str, cfg: Any) -> None:
+async def _publish_pause_event(*, event_type: str, cfg: Any) -> None:
     """BA-P2-5: same envelope style as the M5-step-9 project.* events
     (``target`` names the affected slug)."""
-    from src.services.curation.event_hub import publish_global_event
+    from src.services.events.publish import apublish_global_event
 
-    publish_global_event(event_type, target=cfg.project_slug)
+    await apublish_global_event(event_type, target=cfg.project_slug)
 
 
 @router.post('/pause', response_model=PipelinePauseState)
@@ -70,7 +70,7 @@ async def pause_pipeline() -> PipelinePauseState:
     """Skip this project in every worker's next discovery cycle. Idempotent."""
     cfg = get_curation_config()
     await pause_service.set_paused(cfg.project_slug, paused=True)
-    _publish_pause_event(event_type='project.paused', cfg=cfg)
+    await _publish_pause_event(event_type='project.paused', cfg=cfg)
     return _state(project_paused=True)
 
 
@@ -80,7 +80,7 @@ async def resume_pipeline() -> PipelinePauseState:
     already-running project is a no-op, not an error."""
     cfg = get_curation_config()
     await pause_service.set_paused(cfg.project_slug, paused=False)
-    _publish_pause_event(event_type='project.resumed', cfg=cfg)
+    await _publish_pause_event(event_type='project.resumed', cfg=cfg)
     return _state(project_paused=False)
 
 

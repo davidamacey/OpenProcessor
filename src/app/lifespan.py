@@ -42,12 +42,6 @@ def _preflight() -> None:
 
     faces_enabled()
 
-    # A global config index name inside the project namespace is a
-    # misconfiguration: refuse to start rather than serve a broken store.
-    from src.services.config_store.global_store import global_configs_index
-
-    global_configs_index()
-
     # The lifespan runs unbound; steps that touch project data bind each
     # project in turn (src.services.projects.bootstrap). Resolve the region
     # profile before serving: a bad profile file fails startup up front.
@@ -121,17 +115,16 @@ async def _start_background_tasks() -> None:
     AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe()
 
 
-async def _start_event_bus_tail() -> None:
-    # S-3: tail the shared cross-process event log so this uvicorn
-    # worker's SSE clients see events from any other worker/job. Best-effort.
+async def _start_event_listener() -> None:
+    # One Valkey subscription per process; a Valkey outage leaves its 2 s database tick running.
     try:
-        from src.services.curation.event_hub import get_event_hub
+        from src.services.events.listener import start_listener
 
-        await get_event_hub().start_tail()
+        await start_listener()
         AppResources.event_bus_started = True
-        logger.info('event_bus_tail_started')
+        logger.info('event_listener_started')
     except Exception as exc:
-        logger.warning('event_bus_tail_start_skipped', error=str(exc))
+        logger.warning('event_listener_start_skipped', error=str(exc))
 
 
 async def _reconcile_orphaned_state() -> None:
@@ -347,10 +340,10 @@ async def _stop_config_store_poll() -> None:
 async def _stop_event_bus() -> None:
     if AppResources.event_bus_started:
         AppResources.event_bus_started = False
-        from src.services.curation.event_hub import get_event_hub
+        from src.services.events.listener import stop_listener
 
-        await get_event_hub().stop_tail()
-        logger.info('event_bus_tail_stopped')
+        await stop_listener()
+        logger.info('event_listener_stopped')
 
 
 async def _close_triton_pool() -> None:
@@ -422,7 +415,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await startup_gate.require_control_plane(settings)
     await _start_pools(settings)
     await _start_background_tasks()
-    await _start_event_bus_tail()
+    await _start_event_listener()
     await _reconcile_orphaned_state()
     await _start_gpu_arbiter()
     await _reload_promoted_models()

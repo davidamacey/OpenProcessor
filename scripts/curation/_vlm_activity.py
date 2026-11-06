@@ -36,9 +36,7 @@ def idle_backoff_s(poll_interval: float, idle_cycles: int) -> float:
     return result
 
 
-async def projects_with_active_vlm(
-    opensearch: Any, registry: Any, only_slug: str | None
-) -> list[ProjectRecord]:
+async def projects_with_active_vlm(registry: Any, only_slug: str | None) -> list[ProjectRecord]:
     """The unpaused projects (see ``unpaused_projects``) whose VLM is active.
 
     The registry is refreshed once, then each project's activation is read
@@ -50,7 +48,7 @@ async def projects_with_active_vlm(
     for record in await unpaused_projects(registry, only_slug):
         try:
             with bind_project(record):
-                await vlm_endpoints.refresh_vlm_state(opensearch)
+                await vlm_endpoints.refresh_vlm_state()
                 if vlm_endpoints.vlm_configured():
                     active.append(record)
         except Exception as exc:

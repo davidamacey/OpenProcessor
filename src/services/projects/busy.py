@@ -74,10 +74,8 @@ def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:
     ``scripts/curation/worker/fairness.py``'s ``write_liveness`` drops one
     ``runtime_detection_worker_<host>.json`` file per host under this
     project's own ``project_state_dir`` every cycle (§5.1) -- a real,
-    file-based liveness doc, not the OpenSearch ``runtime:*`` doc the
-    plan sketched (no such mechanism exists on this branch; see that
-    module's docstring). One busy entry per host actually mid-batch
-    (``inflight > 0``), keyed by hostname so a delete/archive busy-check
+    file-based liveness doc (see that module's docstring). One busy entry per host actually
+    mid-batch (``inflight > 0``), keyed by hostname so a delete/archive busy-check
     error message can name which host is still working the project.
 
     A file whose ``updated_at`` is older than the worker heartbeat window

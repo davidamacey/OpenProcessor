@@ -1,10 +1,12 @@
-"""The cross-process config-store cache: a global revision counter plus a
+"""The cross-process config-store cache: the config epoch plus a
 per-process, per-project in-memory snapshot.
 
-A ``ConfigStore`` instance is scoped to one project's ``configs`` index.
+A ``ConfigStore`` instance is scoped to one project (or the deployment).
 :func:`get_config_store` keys instances by the *currently bound*
-project's slug, so every route/task that already binds a project (P1)
-gets an isolated snapshot with no extra plumbing.
+project's slug, so every route/task that already binds a project
+gets an isolated snapshot with no extra plumbing. The epoch is
+``projects.config_epoch`` (``global_config_epoch`` for the deployment): every write bumps it,
+and a process reloads its snapshot when the epoch it holds differs.
 
 Two modes:
 - ``live`` (the API): :meth:`ConfigStore.refresh` publishes the new
@@ -19,32 +21,23 @@ Two modes:
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import threading
 import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Literal
 
-from opensearchpy.exceptions import OpenSearchException
-
 from src.core.logging import get_logger
-from src.services.config_store.index import (
-    ConfigAxis,
-    forget_absent_revision,
-    get_activation,
-    get_config_revision,
-)
-from src.services.config_store.snapshot import (
-    _EMPTY_SNAPSHOT,
-    ConfigSnapshot,
-    StoredConfig,
-    _axis_ref,
-    _resolve_active_body,
-)
+from src.db.repos.config import get_epoch
+from src.services.config_store.bound_project import project_id_for
+from src.services.config_store.documents import tx
+from src.services.config_store.snapshot import _EMPTY_SNAPSHOT, ConfigSnapshot, StoredConfig
+from src.services.config_store.snapshot_load import load_snapshot
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    import uuid
+
+    from src.services.config_store.documents import Activated, ConfigAxis, Registered
 
 logger = get_logger(__name__)
 
@@ -61,17 +54,16 @@ class ConfigStore:
 
     def __init__(
         self,
-        index: str,
         *,
         mode: Literal['live', 'pinned'] = 'live',
         label: str = 'default',
         is_global: bool = False,
     ) -> None:
-        self.index = index
         self.mode = mode
+        # The project slug, or ``'__global__'`` for the deployment store.
         self.label = label
-        # The one deployment-wide store (op_global_configs): loads the
-        # endpoint registry instead of a project's packs/profiles/activations.
+        # The one deployment-wide store: loads the endpoint registry instead of a project's
+        # packs, profiles and activations.
         self.is_global = is_global
         self.current: ConfigSnapshot = _EMPTY_SNAPSHOT
         self.pending_snapshot: ConfigSnapshot | None = None
@@ -79,56 +71,54 @@ class ConfigStore:
         self._miss_read_at = float('-inf')
         self._miss_read_failed = False
 
-    async def refresh(self, client: Any) -> ConfigSnapshot:
-        """Fetch the global revision counter; if it changed, reload every
-        config doc plus both activations and swap (``live``) or stage
-        (``pinned``) the new snapshot. A no-op (returns ``current``) when
-        the revision hasn't moved -- one cheap ``GET`` per call in the
-        steady state."""
-        async with self._lock:
-            with self._read_scope():
-                return await self._refresh_locked(client)
+    async def _scope(self) -> uuid.UUID | None:
+        return None if self.is_global else await project_id_for(self.label)
 
-    async def refresh_on_miss(self, client: Any) -> ConfigSnapshot:
-        """Re-read after a by-name lookup missed. A write made through another
-        API worker bumps the counter in a doc this process may have cached as
-        absent for a whole poll interval, so the absent cache is dropped and the
-        (cheap) counter read again; the documents reload only if the counter
-        moved. Concurrent misses queue on the lock and the later ones reuse the
-        first one's outcome (reads are at least ``MISS_REFRESH_MIN_INTERVAL_S``
-        apart), so an unknown-name storm costs one counter read, not one reload
-        each. A failed read raises :class:`ConfigStoreUnavailableError` and leaves
-        the snapshot as it was: marking it stale would degrade every other reader
-        for one caller's failed lookup. In ``pinned`` mode the result is staged,
-        never published, like any refresh."""
+    async def _epoch(self) -> int:
+        scope = await self._scope()
+        async with tx('read config epoch') as session:
+            return await get_epoch(session, scope)
+
+    async def refresh(self) -> ConfigSnapshot:
+        """Read the epoch; if it changed, reload every config plus the activations and swap
+        (``live``) or stage (``pinned``) the new snapshot. A no-op (returns ``current``) when the
+        epoch hasn't moved: one indexed read per call in the steady state."""
+        async with self._lock:
+            return await self._refresh_locked()
+
+    async def refresh_on_miss(self) -> ConfigSnapshot:
+        """Re-read after a by-name lookup missed. A write made through another API worker bumps
+        the epoch, so the (cheap) epoch is read again; the documents reload only if it moved.
+        Concurrent misses queue on the lock and the later ones reuse the first one's outcome
+        (reads are at least ``MISS_REFRESH_MIN_INTERVAL_S`` apart), so an unknown-name storm costs
+        one epoch read, not one reload each. A failed read raises
+        :class:`ConfigStoreUnavailableError` and leaves the snapshot as it was: marking it stale
+        would degrade every other reader for one caller's failed lookup. In ``pinned`` mode the
+        result is staged, never published, like any refresh."""
         async with self._lock:
             if time.monotonic() - self._miss_read_at < MISS_REFRESH_MIN_INTERVAL_S:
                 if self._miss_read_failed:
-                    msg = f'config store {self.index} could not be read'
+                    msg = f'config store {self.label} could not be read'
                     raise ConfigStoreUnavailableError(msg)
                 return self.current
-            with self._read_scope():
-                try:
-                    await self._reload_if_moved(client)
-                except Exception as exc:
-                    logger.warning(
-                        'config_store_miss_refresh_failed', index=self.index, error=str(exc)
-                    )
-                    self._miss_read_failed = True
-                    msg = f'config store {self.index} could not be read'
-                    raise ConfigStoreUnavailableError(msg) from exc
-                finally:
-                    self._miss_read_at = time.monotonic()
-                self._miss_read_failed = False
-                return self.current
+            try:
+                await self._reload_if_moved()
+            except Exception as exc:
+                logger.warning('config_store_miss_refresh_failed', store=self.label, error=str(exc))
+                self._miss_read_failed = True
+                msg = f'config store {self.label} could not be read'
+                raise ConfigStoreUnavailableError(msg) from exc
+            finally:
+                self._miss_read_at = time.monotonic()
+            self._miss_read_failed = False
+            return self.current
 
-    async def _reload_if_moved(self, client: Any) -> None:
-        forget_absent_revision(client, self.index)
-        revision = await get_config_revision(client, self.index)
+    async def _reload_if_moved(self) -> None:
+        epoch = await self._epoch()
         known = self.pending_snapshot or self.current
-        if revision == known.config_revision and known.loaded_at and not known.stale:
+        if epoch == known.config_revision and known.loaded_at and not known.stale:
             return
-        self._publish(await self._load_snapshot(client, revision))
+        self._publish(await self._load())
 
     def _publish(self, snapshot: ConfigSnapshot) -> None:
         if self.mode == 'live':
@@ -136,148 +126,42 @@ class ConfigStore:
         else:
             self.pending_snapshot = snapshot
 
-    def _read_scope(self) -> contextlib.AbstractContextManager[None]:
-        """The global store's reads are allowed while a project is bound
-        (the project guard otherwise refuses an index that project does not
-        own); a project's own store needs no allowance."""
-        if not self.is_global:
-            return contextlib.nullcontext()
-        from src.services.projects.guard_policy import global_configs_read
+    async def _load(self) -> ConfigSnapshot:
+        return await load_snapshot(await self._scope())
 
-        return global_configs_read()
-
-    async def _refresh_locked(self, client: Any) -> ConfigSnapshot:
+    async def _refresh_locked(self) -> ConfigSnapshot:
         try:
-            revision = await get_config_revision(client, self.index)
+            epoch = await self._epoch()
         except Exception as exc:
-            logger.warning('config_store_refresh_failed', index=self.index, error=str(exc))
+            logger.warning('config_store_refresh_failed', store=self.label, error=str(exc))
             self.current = replace(self.current, stale=True)
             return self.current
 
-        # A stale snapshot is reloaded even at the same revision: nothing else clears
+        # A stale snapshot is reloaded even at the same epoch: nothing else clears
         # `stale`, so skipping here would leave a recovered store refusing forever.
-        unchanged = revision == self.current.config_revision and self.current.loaded_at
+        unchanged = epoch == self.current.config_revision and self.current.loaded_at
         if unchanged and not self.current.stale:
             return self.current
 
         try:
-            snapshot = await self._load_snapshot(client, revision)
+            snapshot = await self._load()
         except Exception as exc:
-            logger.warning('config_store_refresh_failed', index=self.index, error=str(exc))
+            logger.warning('config_store_refresh_failed', store=self.label, error=str(exc))
             self.current = replace(self.current, stale=True)
             return self.current
 
         self._publish(snapshot)
         return snapshot
 
-    async def _load_snapshot(self, client: Any, revision: int) -> ConfigSnapshot:
-        # B5: `revision` above was read with a realtime GET; `_search` is
-        # near-real-time and can otherwise return a stale doc set paired
-        # with that fresh revision number (a poll landing in the ~1s
-        # window after a save+activate). An explicit index refresh
-        # forces the search segments current before we read them, so
-        # the snapshot this call builds is never cached as "current for
-        # revision N" while missing docs that made revision N happen.
-        try:
-            await client.indices.refresh(index=self.index)
-        except OpenSearchException as exc:  # pragma: no cover - defensive; search below still runs
-            logger.warning('config_store_index_refresh_failed', index=self.index, error=str(exc))
-        resp = await client.search(
-            index=self.index,
-            body={'size': 1000, 'query': {'bool': {'filter': [{'term': {'doc_type': 'config'}}]}}},
-        )
-        packs: dict[str, StoredConfig] = {}
-        profiles: dict[str, StoredConfig] = {}
-        vlm_endpoints: dict[str, StoredConfig] = {}
-        open_vocab_sets: dict[str, StoredConfig] = {}
-        ingest_profiles: dict[str, StoredConfig] = {}
-        for hit in resp['hits']['hits']:
-            src = hit['_source']
-            item = StoredConfig(
-                kind=src['kind'],
-                name=src['name'],
-                revision=int(src['revision']),
-                body=src.get('body') or {},
-                description=src.get('description') or '',
-                created_at=src.get('created_at'),
-                updated_at=src.get('updated_at'),
-                cloned_from=src.get('cloned_from'),
-            )
-            if src['kind'] == 'prompt_pack':
-                packs[src['name']] = item
-            elif src['kind'] == 'region_profile':
-                profiles[src['name']] = item
-            elif src['kind'] == 'vlm_endpoint':
-                vlm_endpoints[src['name']] = item
-            elif src['kind'] == 'open_vocab_set':
-                open_vocab_sets[src['name']] = item
-            elif src['kind'] == 'ingest_profile':
-                ingest_profiles[src['name']] = item
-
-        from src.services.config_store import vlm_snapshot
-
-        if self.is_global:
-            vlm_fields = await vlm_snapshot.load_global_fields(client, self.index)
-            vlm_fields['vlm_endpoints'] = vlm_endpoints
-        else:
-            vlm_fields = await vlm_snapshot.load_project_fields(
-                client, await get_activation(client, self.index, 'vlm')
-            )
-
-        pack_activation = await get_activation(client, self.index, 'prompt_pack')
-        profile_activation = await get_activation(client, self.index, 'detection_profile')
-        active_pack = _axis_ref(pack_activation)
-        active_profile = _axis_ref(profile_activation)
-        active_open_vocab = _axis_ref(await get_activation(client, self.index, 'open_vocab'))
-        active_ingest_profile = _axis_ref(
-            await get_activation(client, self.index, 'ingest_profile')
-        )
-        active_pack_body = await _resolve_active_body(
-            client, self.index, kind='prompt_pack', ref=active_pack, current=packs
-        )
-        active_profile_body = await _resolve_active_body(
-            client, self.index, kind='region_profile', ref=active_profile, current=profiles
-        )
-        return ConfigSnapshot(
-            config_revision=revision,
-            packs=packs,
-            profiles=profiles,
-            active_pack=active_pack,
-            active_profile=active_profile,
-            active_pack_body=active_pack_body,
-            active_profile_body=active_profile_body,
-            open_vocab_sets=open_vocab_sets,
-            active_open_vocab=active_open_vocab,
-            active_open_vocab_body=await _resolve_active_body(
-                client,
-                self.index,
-                kind='open_vocab_set',
-                ref=active_open_vocab,
-                current=open_vocab_sets,
-            ),
-            ingest_profiles=ingest_profiles,
-            active_ingest_profile=active_ingest_profile,
-            active_ingest_profile_body=await _resolve_active_body(
-                client,
-                self.index,
-                kind='ingest_profile',
-                ref=active_ingest_profile,
-                current=ingest_profiles,
-            ),
-            loaded_at=time.monotonic(),
-            stale=False,
-            **vlm_fields,
-        )
-
-    async def ensure_fresh(self, client: Any, max_age_s: float = 1.0) -> ConfigSnapshot:
+    async def ensure_fresh(self, max_age_s: float = 1.0) -> ConfigSnapshot:
         """Refresh only if the snapshot is older than ``max_age_s``: for
         read paths where a snapshot under a second old is fine (§3.6). A
         route that looks a config up by *name* so a caller can act on what it
         just wrote -- through another API worker -- calls :meth:`refresh`
-        instead, which always checks the revision counter."""
+        instead, which always checks the epoch."""
         if self.current.loaded_at and (time.monotonic() - self.current.loaded_at) < max_age_s:
             return self.current
-        return await self.refresh(client)
+        return await self.refresh()
 
     def pin_active(self) -> ConfigSnapshot:
         """``pinned`` mode only: publish the last-fetched ``pending_snapshot``
@@ -370,39 +254,19 @@ class ConfigStore:
         if self.mode == 'pinned':
             self.pending_snapshot = new_current
 
-    async def poll_loop(
-        self, get_client: Callable[[], Awaitable[Any] | Any], interval: float
-    ) -> None:
-        """Background refresh loop (API: started from the lifespan next to
-        ``arbiter_task``; cancelled on shutdown). ``get_client`` may be a
-        sync callable returning a client, or an async one -- both are
-        awaited/called fresh each cycle so a client rotated mid-run is
-        picked up."""
-        while True:
-            try:
-                client = get_client()
-                if hasattr(client, '__await__'):
-                    client = await client
-                await self.refresh(client)
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                logger.warning('config_store_poll_failed', index=self.index, error=str(exc))
-            await asyncio.sleep(interval)
-
 
 async def activate_axis(
     store: ConfigStore,
-    client: Any,
     *,
     axis: ConfigAxis,
     name: str | None,
     revision: int | None,
     expected_active: dict[str, Any] | None = None,
+    registered: Registered | None = None,
     publish_event: bool = True,
-) -> dict[str, Any]:
+) -> Activated:
     """Activate (or deactivate, ``name=None``) ``axis`` on ``store``'s
-    project: writes through :func:`~src.services.config_store.index.activate`,
+    project: writes through :func:`~src.services.config_store.documents.activate`,
     applies the result to ``store`` immediately (read-after-write in this
     process), and publishes the ``config.changed`` SSE event --
     the one place both effects happen together, so every caller (the
@@ -412,63 +276,66 @@ async def activate_axis(
     from src.services.config_store.activation_apply import activate_and_apply
 
     result = await activate_and_apply(
-        store, client, axis=axis, name=name, revision=revision, expected_active=expected_active
+        store,
+        axis=axis,
+        name=name,
+        revision=revision,
+        expected_active=expected_active,
+        registered=registered,
     )
     if publish_event:
-        from src.services.curation.event_hub import get_event_hub
-
-        get_event_hub().publish(
-            {
-                'type': 'config.changed',
-                'topic': 'config',
-                'axis': axis,
-                'name': name,
-                'config_revision': result['config_revision'],
-            }
-        )
+        await publish_config_changed(axis, name, result.epoch)
     return result
+
+
+async def publish_config_changed(axis: str, name: str | None, epoch: int) -> None:
+    from src.services.events.publish import apublish
+
+    await apublish(
+        'config.changed',
+        {'topic': 'config', 'axis': axis, 'name': name, 'config_revision': epoch},
+    )
 
 
 _STORES: dict[str, ConfigStore] = {}
 _STORES_LOCK = threading.Lock()
 
 
-def get_config_store(*, mode: Literal['live', 'pinned'] = 'live') -> ConfigStore:
-    """The process's :class:`ConfigStore` for the *currently bound*
-    project (P1's ``get_curation_config()``, which resolves
-    ``project_slug``/``configs_index`` from whatever project is bound in
-    this context -- there is always one bound, per P1's contract).
+def config_store_for(slug: str, *, mode: Literal['live', 'pinned'] = 'live') -> ConfigStore:
+    """The process's :class:`ConfigStore` of project ``slug`` (created on first use).
 
-    ``mode`` only takes effect the first time a given slug's store is
-    created in this process -- a process is consistently one mode (the
-    API is always ``live``, the detection worker is always ``pinned``).
+    ``mode`` only takes effect the first time a given slug's store is created in this process:
+    a process is consistently one mode (the API is always ``live``, the detection worker always
+    ``pinned``).
     """
-    from src.config import get_curation_config
-
-    cfg = get_curation_config()
-    slug = cfg.project_slug
-    index = cfg.configs_index
     with _STORES_LOCK:
         store = _STORES.get(slug)
         if store is None:
-            store = ConfigStore(index=index, mode=mode, label=slug)
+            store = ConfigStore(mode=mode, label=slug)
             _STORES[slug] = store
         return store
 
 
-def reset_config_stores() -> None:
-    """Test-only: drop every cached store so a test's fake OpenSearch
-    starts from a clean snapshot."""
-    from src.services.config_store.vlm_snapshot import reset_vlm_revision_cache
+def get_config_store(*, mode: Literal['live', 'pinned'] = 'live') -> ConfigStore:
+    """The process's :class:`ConfigStore` for the *currently bound* project (there is always
+    one bound, per the project context's contract)."""
+    from src.config import get_curation_config
 
+    return config_store_for(get_curation_config().project_slug, mode=mode)
+
+
+def reset_config_stores() -> None:
+    """Test-only: drop every cached store so a test starts from a clean snapshot."""
     with _STORES_LOCK:
         _STORES.clear()
-    reset_vlm_revision_cache()
 
 
 __all__ = [
     'ConfigStore',
+    'ConfigStoreUnavailableError',
     'activate_axis',
+    'config_store_for',
     'get_config_store',
+    'publish_config_changed',
     'reset_config_stores',
 ]

@@ -11,11 +11,9 @@ Model lifecycle routes: status, load, unload, delete and list.
 import logging
 import shutil
 from pathlib import Path
-from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
-from src.core.dependencies import get_curation_opensearch
 from src.routers.curation._api_error import api_error
 from src.schemas.model_admin import ModelStatusResponse
 from src.schemas.models import (
@@ -168,7 +166,6 @@ async def load_model(model_name: str) -> ModelLoadResponse:
 @router.post('/{model_name}/unload', response_model=ModelLoadResponse)
 async def unload_model(
     model_name: str,
-    opensearch: Annotated[Any, Depends(get_curation_opensearch)],
     force: bool = Query(False, description='Also unload a core pipeline model'),
 ) -> ModelLoadResponse:
     """
@@ -180,7 +177,7 @@ async def unload_model(
     """
     _valid_name(model_name)
     try:
-        await check_unload(model_name, force=force, client=opensearch)
+        await check_unload(model_name, force=force)
     except UnloadRefusedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     triton = TritonControlService()
@@ -201,7 +198,6 @@ async def unload_model(
 @router.delete('/{model_name}', response_model=ModelDeleteResponse)
 async def delete_model(
     model_name: str,
-    opensearch: Annotated[Any, Depends(get_curation_opensearch)],
     force: bool = Query(False, description='Also delete a core pipeline model'),
 ) -> ModelDeleteResponse:
     """
@@ -233,7 +229,7 @@ async def delete_model(
             )
     try:
         for model_dir in model_dirs:
-            await check_unload(model_dir.name, force=force, client=opensearch)
+            await check_unload(model_dir.name, force=force)
     except UnloadRefusedError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 

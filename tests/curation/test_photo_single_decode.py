@@ -14,6 +14,10 @@ from PIL import Image, ImageOps
 from src.utils.pe_preprocess import PE_SIZE
 
 
+async def _no_publish(*_a: object, **_k: object) -> None:
+    return None
+
+
 def _jpeg(width: int, height: int, orientation: int | None = None) -> bytes:
     rng = np.random.default_rng(width * 7 + height)
     pixels = rng.integers(0, 256, (height, width, 3), dtype=np.uint8)
@@ -134,7 +138,7 @@ def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> 
         config=SimpleNamespace(crop_cache_dir=str(tmp_path / 'crops'), crop_cache_max_bytes=0),
         region_seed_status=None,
         _bulk_index=_bulk_index,
-        _publish_created=lambda *_a, **_k: None,
+        _publish_created=_no_publish,
     )
     frame = Image.open(io.BytesIO(_jpeg(128, 96))).convert('RGB')
     ctx = ImageContext(

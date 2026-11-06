@@ -4,18 +4,16 @@ the 700-LOC ratchet, like ``_region_profile_clone.py``."""
 
 from __future__ import annotations
 
-from typing import Any
-
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._common import router
 from src.routers.curation._open_vocab_models import OpenVocabCloneRequest, OpenVocabDoc
 from src.services.config_store import RevisionConflictError
 from src.services.config_store.clone_shared import (
     cloned_description,
-    cloned_from_tag,
     read_source_record,
     reject_invalid_clone_name,
 )
+from src.services.config_store.documents import CloneSource
 from src.services.config_store.open_vocab import (
     OpenVocabRecord,
     all_known_names,
@@ -27,10 +25,10 @@ from src.services.config_store.open_vocab_validation import validate_open_vocab
 
 
 async def _resolve_clone_source(
-    client: Any, *, name: str, revision: int | None, source: str | None
+    *, name: str, revision: int | None, source: str | None
 ) -> OpenVocabRecord:
     if revision is not None and source in (None, 'stored'):
-        record = await get_revision_record(client, name, revision)
+        record = await get_revision_record(name, revision)
         if record is not None:
             return record
         if source == 'stored':
@@ -42,24 +40,19 @@ async def _resolve_clone_source(
 
 
 @router.post('/open_vocab/{name}/clone', response_model=OpenVocabDoc, status_code=201)
-async def clone_open_vocab(
-    name: str, body: OpenVocabCloneRequest, opensearch: OpenSearchDep
-) -> OpenVocabDoc:
+async def clone_open_vocab(name: str, body: OpenVocabCloneRequest) -> OpenVocabDoc:
     from src.config import get_curation_config
     from src.routers.curation.open_vocab import _to_doc
     from src.services.config_store.open_vocab_inputs import validation_inputs
 
     target_slug = get_curation_config().project_slug
 
-    async def _resolve(client: Any) -> OpenVocabRecord:
-        return await _resolve_clone_source(
-            client, name=name, revision=body.revision, source=body.source
-        )
+    async def _resolve() -> OpenVocabRecord:
+        return await _resolve_clone_source(name=name, revision=body.revision, source=body.source)
 
     source = await read_source_record(
         from_project=body.from_project,
         target_slug=target_slug,
-        opensearch=opensearch,
         resolve=_resolve,
     )
     existing = all_known_names()
@@ -78,15 +71,12 @@ async def clone_open_vocab(
         )
     try:
         record = await save_set(
-            opensearch,
             name=body.new_name,
             body=dict(source.body),
             expected_revision=None,
             description=cloned_description(body.description, source.description),
-            cloned_from=cloned_from_tag(
-                source_project=body.from_project or target_slug,
-                name=name,
-                revision=source.revision,
+            cloned_from=CloneSource(
+                body.from_project or target_slug, 'open_vocab_set', name, source.revision
             ),
         )
     except RevisionConflictError as exc:

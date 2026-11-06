@@ -146,17 +146,17 @@ class MemorySettings:
         )
 
     async def publish_keymap_changed(self, doc):
-        from src.services.curation.event_hub import get_event_hub
+        from src.services.events.publish import apublish
 
-        get_event_hub().publish(
+        await apublish(
+            'config.changed',
             {
-                'type': 'config.changed',
                 'topic': 'config',
                 'axis': 'keymap',
                 'name': None,
                 'config_revision': 0,
                 'keymap_revision': doc.revision,
-            }
+            },
         )
 
     async def load_run_metadata(self):

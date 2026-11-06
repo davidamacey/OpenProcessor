@@ -458,7 +458,7 @@ async def test_vlm_worker_reads_and_labels_each_project_in_its_own_scope(
 
     transport, api = _http_world(monkeypatch, vlm_worker, projects)
 
-    async def _vlm_refresh(_client: Any) -> None:
+    async def _vlm_refresh() -> None:
         return None
 
     monkeypatch.setattr('src.services.labeling.vlm_endpoints.refresh_vlm_state', _vlm_refresh)

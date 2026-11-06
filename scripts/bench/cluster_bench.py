@@ -126,7 +126,7 @@ async def delete_throwaway(slug: str) -> None:
 
     client = await make_curation_opensearch()
     await get_project_registry().refresh_strict()
-    await lifecycle.delete_project(client, slug=slug, confirm=slug)
+    await lifecycle.delete_project(slug=slug, confirm=slug)
     await delete_project_finish(client, slug=slug)
 
 

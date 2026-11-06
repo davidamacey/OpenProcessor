@@ -30,6 +30,9 @@ ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 
+pytest_plugins = ['_records_world']
+
+
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
@@ -82,6 +85,8 @@ def _docs() -> dict[str, dict[str, Any]]:
     }
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_region_detectors_agg_counts_crops_not_boxes(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs()}), monkeypatch)
     r = client.get('/curation/projects/default/stats/dataset')

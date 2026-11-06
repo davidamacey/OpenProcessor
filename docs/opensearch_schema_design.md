@@ -134,8 +134,8 @@ Each project owns six indexes named `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`
 (default prefix `op_prj_`). For project `cars`: `op_prj_cars__images`,
 `op_prj_cars__items`, `op_prj_cars__labels_confirmed`,
 `op_prj_cars__classes`, `op_prj_cars__umap_state`, `op_prj_cars__configs`. The
-registry is the separate `op_projects` index (`OP_PROJECTS_INDEX`), and VLM
-endpoints live in `op_global_configs` (`OP_GLOBAL_CONFIGS_INDEX`). Bodies are in
+registry is the separate `op_projects` index (`OP_PROJECTS_INDEX`); VLM
+endpoints live in PostgreSQL. Bodies are in
 `src/clients/curation_opensearch/` (`bodies_core.py` for images and items, `bodies_other.py` for the rest).
 
 An index created before a field existed gets it from an additive `PUT _mapping`

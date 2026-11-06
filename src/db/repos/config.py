@@ -13,8 +13,8 @@ NOTHING`` (https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLI
 zero-row result as the conflict.
 
 An explicit deactivation ("off") is not a row in ``config_activations`` (its ``config_id`` is
-not nullable). It is an event whose target is ``OFF_CONFIG_ID``: the axis then reads as ``off``
-until the next activation, and "never activated" stays distinct from "off".
+not nullable). It is an event with no target (both ``to_*`` columns NULL): the axis then reads as
+``off`` until the next activation, and "never activated" (no event) stays distinct from "off".
 """
 
 from __future__ import annotations
@@ -23,9 +23,10 @@ import datetime as dt
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import and_, delete, func, insert, select, update
+from sqlalchemy import String, case, cast, delete, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 
 from src.db.models.config import (
     ConfigDocument,
@@ -33,19 +34,21 @@ from src.db.models.config import (
     ConfigRuntimeReport,
     VlmEndpointProbe,
 )
-from src.db.models.projects import DeploymentSetting
+from src.db.models.projects import DeploymentSetting, Project
 from src.db.repos.config_activations import (
+    ActiveBody,
     activate,
     get_activation,
     get_activations,
     list_activation_events,
+    list_active_bodies,
+    list_axis_state,
     load_activation_events,
 )
 from src.db.repos.config_base import (
     AXIS_KIND,
     DEFAULT_ACTOR,
     GLOBAL_EPOCH_COUNTER,
-    OFF_CONFIG_ID,
     ActivationEvent,
     ActivationEventLoad,
     ActiveConflictError,
@@ -78,9 +81,9 @@ __all__ = [
     'AXIS_KIND',
     'DEFAULT_ACTOR',
     'GLOBAL_EPOCH_COUNTER',
-    'OFF_CONFIG_ID',
     'ActivationEvent',
     'ActivationEventLoad',
+    'ActiveBody',
     'ActiveConflictError',
     'ActiveRef',
     'AxisKindError',
@@ -101,6 +104,7 @@ __all__ = [
     'bump_epoch',
     'check_scope',
     'delete_config',
+    'ensure_config',
     'get_activation',
     'get_activations',
     'get_config',
@@ -108,6 +112,8 @@ __all__ = [
     'get_deployment_setting',
     'get_epoch',
     'list_activation_events',
+    'list_active_bodies',
+    'list_axis_state',
     'list_configs',
     'list_probes',
     'list_revisions',
@@ -123,20 +129,40 @@ __all__ = [
 ]
 
 
-def _doc_columns() -> tuple[Any, ...]:
+_SOURCE = aliased(ConfigDocument)
+_SOURCE_PROJECT = aliased(Project)
+
+
+def _doc_select() -> Any:
+    """Documents joined to one of their revisions (the caller adds the revision predicate) and,
+    for a clone, to its source document for the ``cloned_from`` tag."""
+    ref = cast(ConfigDocument.cloned_from_revision, String)
+    tag = case(
+        (_SOURCE.id.is_(None), None),
+        (_SOURCE.project_id.is_(None), _SOURCE.name + '@' + ref),
+        else_=_SOURCE_PROJECT.slug + ':' + _SOURCE.name + '@' + ref,
+    )
     return (
-        ConfigDocument.id,
-        ConfigDocument.project_id,
-        ConfigDocument.kind,
-        ConfigDocument.name,
-        ConfigRevision.revision,
-        ConfigRevision.body,
-        ConfigDocument.description,
-        ConfigDocument.created_at,
-        ConfigDocument.updated_at,
-        ConfigDocument.updated_by,
-        ConfigDocument.cloned_from_id,
-        ConfigDocument.current_revision,
+        select(
+            ConfigDocument.id,
+            ConfigDocument.project_id,
+            ConfigDocument.kind,
+            ConfigDocument.name,
+            ConfigRevision.revision,
+            ConfigRevision.body,
+            ConfigRevision.description,
+            ConfigDocument.created_at,
+            ConfigRevision.created_at,
+            ConfigRevision.created_by,
+            ConfigDocument.cloned_from_id,
+            ConfigDocument.cloned_from_revision,
+            ConfigDocument.current_revision,
+            tag,
+        )
+        .select_from(ConfigDocument)
+        .join(ConfigRevision, ConfigRevision.config_id == ConfigDocument.id)
+        .outerjoin(_SOURCE, _SOURCE.id == ConfigDocument.cloned_from_id)
+        .outerjoin(_SOURCE_PROJECT, _SOURCE_PROJECT.id == _SOURCE.project_id)
     )
 
 
@@ -175,6 +201,7 @@ async def save_config(
     expected_revision: int | None,
     description: str = '',
     cloned_from_id: uuid.UUID | None = None,
+    cloned_from_revision: int | None = None,
     by: str = DEFAULT_ACTOR,
 ) -> ConfigDoc:
     """Create (``expected_revision`` ``None``) or save a new revision of a document.
@@ -193,6 +220,7 @@ async def save_config(
                 current_revision=1,
                 description=description,
                 cloned_from_id=cloned_from_id,
+                cloned_from_revision=cloned_from_revision,
                 updated_by=by,
             )
             .on_conflict_do_nothing(constraint='uq_config_documents_project_id_kind_name')
@@ -229,6 +257,7 @@ async def save_config(
             revision=revision,
             body=body,
             body_sha256=body_sha256(body),
+            description=description,
             created_by=by,
         )
     )
@@ -249,10 +278,8 @@ async def get_config(
     revision: int | None = None,
 ) -> ConfigDoc | None:
     """The document at ``revision`` (the current one when ``None``), or ``None``."""
-    stmt = (
-        select(*_doc_columns())
-        .join(ConfigRevision, ConfigRevision.config_id == ConfigDocument.id)
-        .where(_scope_filter(project_id), ConfigDocument.kind == kind, ConfigDocument.name == name)
+    stmt = _doc_select().where(
+        _scope_filter(project_id), ConfigDocument.kind == kind, ConfigDocument.name == name
     )
     if revision is None:
         stmt = stmt.where(ConfigRevision.revision == ConfigDocument.current_revision)
@@ -265,11 +292,7 @@ async def get_config(
 async def get_config_by_id(
     session: AsyncSession, config_id: uuid.UUID, revision: int | None = None
 ) -> ConfigDoc | None:
-    stmt = (
-        select(*_doc_columns())
-        .join(ConfigRevision, ConfigRevision.config_id == ConfigDocument.id)
-        .where(ConfigDocument.id == config_id)
-    )
+    stmt = _doc_select().where(ConfigDocument.id == config_id)
     if revision is None:
         stmt = stmt.where(ConfigRevision.revision == ConfigDocument.current_revision)
     else:
@@ -283,15 +306,10 @@ async def list_configs(
 ) -> list[ConfigDoc]:
     """Every document of the scope at its current revision, ordered by kind and name."""
     stmt = (
-        select(*_doc_columns())
-        .join(
-            ConfigRevision,
-            and_(
-                ConfigRevision.config_id == ConfigDocument.id,
-                ConfigRevision.revision == ConfigDocument.current_revision,
-            ),
+        _doc_select()
+        .where(
+            _scope_filter(project_id), ConfigRevision.revision == ConfigDocument.current_revision
         )
-        .where(_scope_filter(project_id))
         .order_by(ConfigDocument.kind, ConfigDocument.name)
     )
     if kind is not None:
@@ -300,12 +318,12 @@ async def list_configs(
 
 
 async def list_revisions(session: AsyncSession, config_id: uuid.UUID) -> list[RevisionInfo]:
-    rows = await session.execute(
-        select(ConfigRevision.revision, ConfigRevision.created_at, ConfigRevision.created_by)
-        .where(ConfigRevision.config_id == config_id)
-        .order_by(ConfigRevision.revision)
-    )
-    return [RevisionInfo(*r) for r in rows.all()]
+    """Every revision of a document, oldest first."""
+    stmt = _doc_select().where(ConfigDocument.id == config_id).order_by(ConfigRevision.revision)
+    return [
+        RevisionInfo(d.revision, d.updated_at, d.updated_by, d.description, d.cloned_from)
+        for d in (_to_doc(r) for r in (await session.execute(stmt)).all())
+    ]
 
 
 async def delete_config(
@@ -353,12 +371,16 @@ async def rollback(
     ``LookupError('no_previous')`` when the axis has no earlier state, ``LookupError('previous_deleted')``
     when that document or revision no longer exists.
     """
-    events = await list_activation_events(session, project_id, axis, limit=1)
+    events = await list_activation_events(session, project_id, axis, limit=2)
     last = events[0] if events else None
-    if last is None or last.from_config_id is None:
+    if last is None:
         msg = 'no_previous'
         raise LookupError(msg)
-    if last.from_config_id == OFF_CONFIG_ID:
+    if last.from_config_id is None:
+        # Moved away from nothing: from "off" when an earlier event exists, else from never-activated.
+        if len(events) < 2:
+            msg = 'no_previous'
+            raise LookupError(msg)
         return await activate(
             session,
             project_id=project_id,
@@ -382,6 +404,37 @@ async def rollback(
         expected_active=expected_active,
         by=by,
         reason='rollback',
+    )
+
+
+async def ensure_config(
+    session: AsyncSession,
+    *,
+    project_id: uuid.UUID | None,
+    kind: str,
+    name: str,
+    body: dict[str, Any],
+    description: str,
+) -> ConfigDoc:
+    """A stored revision that carries exactly ``body``, created by ``system`` when needed.
+
+    Activating a built-in, file-registered or environment configuration needs a stored document so
+    the activation's foreign key is honest. The current revision is reused while its body digest
+    matches; otherwise a new revision is saved on top of it (a concurrent save is a
+    :class:`RevisionConflictError`).
+    """
+    current = await get_config(session, project_id=project_id, kind=kind, name=name)
+    if current is not None and body_sha256(current.body) == body_sha256(body):
+        return current
+    return await save_config(
+        session,
+        project_id=project_id,
+        kind=kind,
+        name=name,
+        body=body,
+        expected_revision=None if current is None else current.current_revision,
+        description=description,
+        by=DEFAULT_ACTOR,
     )
 
 
@@ -516,8 +569,9 @@ async def load_config_document(session: AsyncSession, doc: ConfigDocumentLoad) -
         'kind': doc.kind,
         'name': doc.name,
         'current_revision': current.revision,
-        'description': doc.description,
+        'description': current.description,
         'cloned_from_id': doc.cloned_from_id,
+        'cloned_from_revision': doc.cloned_from_revision,
         'updated_by': doc.updated_by,
         'created_at': doc.created_at or revisions[0].created_at,
         'updated_at': doc.updated_at or current.created_at,
@@ -535,6 +589,7 @@ async def load_config_document(session: AsyncSession, doc: ConfigDocumentLoad) -
                 'revision': r.revision,
                 'body': r.body,
                 'body_sha256': body_sha256(r.body),
+                'description': r.description,
                 'created_at': r.created_at,
                 'created_by': r.created_by,
             }

@@ -16,7 +16,6 @@ import json
 import re
 from typing import Any
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.query_fakes import QueryFakeOpenSearch
 from opensearchpy.serializer import JSONSerializer
 from projects.conftest import FakeLifecycleOpenSearch
@@ -63,8 +62,6 @@ class _Indices:
     async def exists(self, *, index: str) -> bool:
         if _DATA_INDEX.match(index):
             return index in self._o.data.store
-        if self._o._is_config(index) and index in self._o.cfg._docs:
-            return True
         return await self._o.lifecycle.indices.exists(index=index)
 
     async def refresh(self, *, index: str | None = None, **kw: Any) -> dict[str, Any]:
@@ -96,7 +93,6 @@ class _Indices:
 class RoutedOpenSearch:
     def __init__(self) -> None:
         self.lifecycle = FakeLifecycleOpenSearch()
-        self.cfg = FakeConfigOpenSearch()
         self.data = QueryFakeOpenSearch()
         self.indices = _Indices(self)
         self.transport = self.lifecycle.transport
@@ -106,17 +102,11 @@ class RoutedOpenSearch:
 
     # --------------------------------------------------------------- routing
 
-    @staticmethod
-    def _is_config(index: str) -> bool:
-        return index.endswith('__configs') or index == 'op_global_configs'
-
     def _log(self, op: str, index: str) -> None:
         self.audit.append((op, index))
 
     def _pick(self, op: str, index: str) -> Any:
         self._log(op, index)
-        if self._is_config(index):
-            return self.cfg
         if _DATA_INDEX.match(index):
             return self.data
         return self.lifecycle

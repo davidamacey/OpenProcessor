@@ -97,6 +97,25 @@ def resolve_prompt_pack(cfg: Any | None = None) -> PromptPack:
     return pack if pack is not None else GENERIC_ITEM_PACK
 
 
+def registered_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
+    """The built-in packs and the loadable file packs, keyed by ``name`` (no stored packs)."""
+    from src.services.labeling.vlm_prompts import _BUILT_IN_NAMES, BUILT_IN_PACKS
+
+    config = _config(cfg)
+    packs: dict[str, PromptPack] = {p.name: p for p in BUILT_IN_PACKS}
+    default = resolve_prompt_pack(config)
+    for path in getattr(config, 'prompt_pack_paths', ()) or ():
+        pack = _load_pack_file(Path(path))
+        if pack is None:
+            continue
+        if pack.name in packs and pack.name not in _BUILT_IN_NAMES:
+            logger.warning('prompt_pack_name_collision', name=pack.name, path=str(path))
+            continue
+        packs[pack.name] = pack
+    packs[default.name] = default
+    return packs
+
+
 def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
     """Every selectable pack, keyed by ``name``.
 
@@ -115,20 +134,7 @@ def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
     is skipped; otherwise the default pack wins, then the earlier
     ``OP_PROMPT_PACK_PATHS`` entry.
     """
-    from src.services.labeling.vlm_prompts import _BUILT_IN_NAMES, BUILT_IN_PACKS
-
-    config = _config(cfg)
-    packs: dict[str, PromptPack] = {p.name: p for p in BUILT_IN_PACKS}
-    default = resolve_prompt_pack(config)
-    for path in getattr(config, 'prompt_pack_paths', ()) or ():
-        pack = _load_pack_file(Path(path))
-        if pack is None:
-            continue
-        if pack.name in packs and pack.name not in _BUILT_IN_NAMES:
-            logger.warning('prompt_pack_name_collision', name=pack.name, path=str(path))
-            continue
-        packs[pack.name] = pack
-    packs[default.name] = default
+    packs = registered_prompt_packs(cfg)
     packs.update(_stored_packs())
     return packs
 

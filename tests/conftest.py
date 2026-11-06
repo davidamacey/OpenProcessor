@@ -18,7 +18,14 @@ import pytest
 
 
 # The `db` tier's PostgreSQL fixtures (pg, two_sessions); inert unless a test asks for them.
-pytest_plugins = ['fixtures.postgres', 'fixtures.db_marker_policy', 'config_store.memory_settings']
+pytest_plugins = [
+    'fixtures.postgres',
+    'fixtures.db_marker_policy',
+    'fixtures.event_capture',
+    'fixtures.postgres_events',
+    'config_store.memory_settings',
+    'config_store.memory_config',
+]
 
 # OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
 # DEFAULT_MODEL). A deterministic test value, set before any test module
@@ -462,7 +469,7 @@ def no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
     """No other project runs any ingest detector (the unload guard and the models
     list scan every project's active ingest profile)."""
 
-    async def _none(_client: object) -> dict[str, frozenset[str]]:
+    async def _none() -> dict[str, frozenset[str]]:
         return {}
 
     monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)
