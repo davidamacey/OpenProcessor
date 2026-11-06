@@ -1,6 +1,10 @@
-"""Task routes of the `periodic` family; filled by the lane that owns it."""
+"""Task routes of the `periodic` family: beat ticks, on queue `periodic`."""
 
 from __future__ import annotations
 
+from src.config.queue import TaskQueues
 
-ROUTES: dict[str, str] = {}
+
+ROUTES: dict[str, str] = {
+    'op.periodic.reaper': TaskQueues.PERIODIC,
+}

@@ -1,9 +1,9 @@
 """Every task takes the job id and nothing else, the shape ``task_queue.enqueue`` sends.
 
 ``enqueue`` publishes ``send_task(name, args=[job_id], task_id=job_id)``, so a worker calls the
-task with exactly one positional argument. The rule: every task in ``ROUTES`` (the names
-``enqueue`` accepts) must bind exactly one positional job id. Periodic/beat entries that are
-not in ``ROUTES`` are not sent by ``enqueue`` and are outside the rule. Celery's testing
+task with exactly one positional argument. The rule: every job task in ``ROUTES`` (the names
+``enqueue`` accepts) must bind exactly one positional job id. Beat ticks, on the non-job queues,
+have no job row and take no argument. Celery's testing
 guide runs the task object directly (``.apply``/``.run``) and does not use
 ``task_always_eager`` (https://docs.celeryq.dev/en/stable/userguide/testing.html).
 """
@@ -14,6 +14,7 @@ import inspect
 
 import pytest
 
+from src.config.queue import NON_JOB_QUEUES
 from src.config.task_routes import ROUTES
 
 
@@ -39,7 +40,20 @@ def test_noop_is_the_wrapper_task_of_its_kind(worker_app) -> None:
     assert list(inspect.signature(task.run).parameters) == ['job_id']
 
 
-@pytest.mark.parametrize('name', sorted(ROUTES))
+JOB_TASKS = sorted(name for name, queue in ROUTES.items() if queue not in NON_JOB_QUEUES)
+BEAT_TASKS = sorted(name for name, queue in ROUTES.items() if queue in NON_JOB_QUEUES)
+
+
+@pytest.mark.parametrize('name', BEAT_TASKS)
+def test_a_beat_task_takes_no_argument(worker_app, name: str) -> None:
+    """A beat tick has no job row: beat sends it with no arguments."""
+    task = worker_app.tasks[name]
+    inspect.signature(task.run).bind()
+    with pytest.raises(TypeError):
+        inspect.signature(task.run).bind('job-1')
+
+
+@pytest.mark.parametrize('name', JOB_TASKS)
 def test_every_routed_task_accepts_exactly_one_job_id(worker_app, name: str) -> None:
     task = worker_app.tasks[name]
     inspect.signature(task.run).bind('job-1')

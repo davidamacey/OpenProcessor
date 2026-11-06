@@ -73,3 +73,45 @@ def start(engine: Engine, project: uuid.UUID, kind: str = 'noop', **overrides: A
     """Insert one queued job and commit."""
     with project_session(engine, project) as session:
         return repo.insert_queued(session, new_job(project, kind, **overrides)).job
+
+
+_LIVE = ('running', 'cancelling')
+_TERMINAL = ('completed', 'completed_with_errors', 'failed', 'cancelled')
+
+
+def insert_row(
+    pg: PgDatabase,
+    project: uuid.UUID | None,
+    status: str,
+    kind: str = 'noop',
+    **columns: Any,
+) -> uuid.UUID:
+    """A ``jobs`` row in any status, written past the state machine as the superuser.
+
+    The companion columns the table's CHECKs require for the status are filled in; ``columns``
+    overrides or adds any column (``retry_count``, ``updated_at``, ``lease_expires_at``...).
+    """
+    values: dict[str, Any] = {
+        'project_id': project,
+        'kind': kind,
+        'queue': 'jobs',
+        'status': status,
+        'max_queue_wait': dt.timedelta(hours=1),
+        'requested_by': 'test',
+    }
+    if status in _LIVE:
+        values['owner'] = 'w:1'
+        values['lease_expires_at'] = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=2)
+    if status in _TERMINAL:
+        values['finished_at'] = dt.datetime.now(dt.UTC)
+    if status == 'paused':
+        values['pause_reason'] = 'user'
+    if status == 'queued':
+        values['queued_at'] = dt.datetime.now(dt.UTC)
+    values.update(columns)
+    names = ', '.join(values)
+    marks = ', '.join(['%s'] * len(values))
+    [(job_id,)] = sql(
+        pg, f'INSERT INTO jobs ({names}) VALUES ({marks}) RETURNING id', *values.values()
+    )
+    return job_id
