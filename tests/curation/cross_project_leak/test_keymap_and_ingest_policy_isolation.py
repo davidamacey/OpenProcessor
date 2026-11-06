@@ -22,6 +22,11 @@ pytestmark = pytest.mark.db
 # --------------------------------------------------------------------------
 
 
+def _keymap_revision(client: TestClient, keymap_url: str) -> int:
+    """The revision a PUT must present: a created project already holds its default keymap row."""
+    return int(client.get(keymap_url).json()['revision'])
+
+
 def test_ingest_policy_alpha_invisible_to_beta(leak_env: LeakEnv) -> None:
     """Alpha's ingest policy is never read from beta, and a beta write does not
     advance alpha's revision."""
@@ -58,7 +63,13 @@ def test_keymap_alpha_invisible_to_beta(leak_env: LeakEnv) -> None:
     alpha = f'{SCOPED.format(project="alpha")}/keymap'
     beta = f'{SCOPED.format(project="beta")}/keymap'
 
-    put = client.put(alpha, json={'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}})
+    put = client.put(
+        alpha,
+        json={
+            'expected_revision': _keymap_revision(client, alpha),
+            'overrides': {'cluster.ignore': ['k']},
+        },
+    )
     assert put.status_code == 200, put.text
 
     beta_get = client.get(beta).json()
@@ -83,12 +94,20 @@ def test_keymap_class_hotkey_checks_use_only_the_bound_registry(leak_env: LeakEn
     assert bound_q.status_code == 200, bound_q.text
 
     alpha_put = client.put(
-        f'{alpha}/keymap', json={'expected_revision': 0, 'overrides': {'cluster.move': ['q']}}
+        f'{alpha}/keymap',
+        json={
+            'expected_revision': _keymap_revision(client, f'{alpha}/keymap'),
+            'overrides': {'cluster.move': ['q']},
+        },
     )
     assert alpha_put.status_code == 200, alpha_put.text
 
     beta_put = client.put(
-        f'{beta}/keymap', json={'expected_revision': 0, 'overrides': {'cluster.move': ['q']}}
+        f'{beta}/keymap',
+        json={
+            'expected_revision': _keymap_revision(client, f'{beta}/keymap'),
+            'overrides': {'cluster.move': ['q']},
+        },
     )
     assert beta_put.status_code == 409, beta_put.text
     assert beta_put.json()['detail']['error'] == 'class_hotkey_conflict'
@@ -119,7 +138,7 @@ def test_put_keymap_unbind_rolls_back_class_hotkey_if_save_fails(
         resp = client.put(
             f'{beta}/keymap',
             json={
-                'expected_revision': 0,
+                'expected_revision': _keymap_revision(client, f'{beta}/keymap'),
                 'overrides': {'cluster.ignore': ['i']},
                 'unbind_conflicting_class_hotkeys': True,
             },
@@ -147,7 +166,7 @@ def test_clone_keymap_axis_all_or_nothing_on_kept_override_collision(leak_env: L
     put = client.put(
         f'{alpha}/keymap',
         json={
-            'expected_revision': 0,
+            'expected_revision': _keymap_revision(client, f'{alpha}/keymap'),
             'overrides': {'cluster.ignore': ['m'], 'cluster.move': ['q']},
         },
     )
@@ -199,7 +218,7 @@ def test_clone_keymap_axis_all_or_nothing_on_defaults_source_class_clash(
     moved = client.put(
         f'{beta}/keymap',
         json={
-            'expected_revision': 0,
+            'expected_revision': _keymap_revision(client, f'{beta}/keymap'),
             'overrides': {'cluster.ignore': ['k'], 'clusters_search.ignore': ['k']},
         },
     )

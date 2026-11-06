@@ -183,11 +183,6 @@ def _sweep(
     bodies = route_bodies(slug, records[slug].resources.export_root)
 
     role_of = {name: role.value for role, name in records[slug].resources.indexes.items()}
-    # The deployment-wide VLM registry is a process cache shared by every
-    # project by design, so it is excluded from the per-role parity below.
-    from src.services.config_store.global_store import global_configs_index
-
-    role_of[global_configs_index()] = 'registry'
     leaks: list[str] = []
     wrote: set[tuple[str, str]] = set()
     roles: dict[tuple[str, str], collections.Counter[Shape]] = {}

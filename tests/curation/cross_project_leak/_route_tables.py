@@ -205,7 +205,33 @@ _CLASS_REGISTRY_IN_POSTGRES = (
     'its per-project isolation is proven by tests/db/test_class_registry.py and the row-level '
     'security tests'
 )
+_CONFIG_STORE_IN_POSTGRES = (
+    'the config store (documents, revisions, activations, settings) is rows in PostgreSQL keyed '
+    'by project_id, not an OpenSearch index; its per-project isolation is proven by '
+    'tests/db/test_config_repo.py and the row-level security tests'
+)
+_CONFIG_STORE_ROUTES: tuple[tuple[str, str], ...] = (
+    *(
+        (method, f'/{kind}{suffix}')
+        for kind in ('prompt_packs', 'region_profiles', 'ingest_profiles', 'open_vocab')
+        for method, suffix in (
+            ('POST', ''),
+            ('PUT', '/{name}'),
+            ('DELETE', '/{name}'),
+            ('POST', '/{name}/clone'),
+            ('POST', '/{name}/activate'),
+        )
+    ),
+    *(
+        ('POST', f'/{kind}/deactivate')
+        for kind in ('region_profiles', 'ingest_profiles', 'open_vocab')
+    ),
+    ('PUT', '/settings'),
+    ('POST', '/vlm/endpoints/{name}/activate'),
+    ('POST', '/vlm/endpoints/deactivate'),
+)
 UNSEEDED_WRITES: dict[tuple[str, str], str] = {
+    **dict.fromkeys(_CONFIG_STORE_ROUTES, _CONFIG_STORE_IN_POSTGRES),
     ('POST', '/pause'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
     ('POST', '/resume'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
     ('POST', '/classes'): _CLASS_REGISTRY_IN_POSTGRES,

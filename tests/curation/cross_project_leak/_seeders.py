@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -114,76 +115,56 @@ def _region_box_seeded(env: LeakEnv, slug: str) -> None:
     doc[F.rejected_count] = 0
 
 
-def _stored_prompt_pack(env: Any, slug: str) -> None:
-    """(Re-)seed ``pack:<slug>-model`` at a known revision 1, with no
-    activation recorded, directly in the fake transport's store --
-    mirrors ``_region_box_seeded``. Run fresh immediately before EACH
-    mutating ``/prompt_packs/{name}...`` route, so every one of them is
-    independent of what an earlier route in the same pass left behind
-    (revision-based OCC here is enforced entirely by comparing the
-    stored ``revision`` field, never real OpenSearch ``if_seq_no``, so
-    resetting that field is enough)."""
-    from src.config.curation_roles import IndexRole
+def _reseed_config(env: Any, slug: str, kind: str, axis: str, body: dict[str, Any]) -> None:
+    import asyncio
 
-    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
-    name = f'{slug}-model'
-    now = '2026-01-01T00:00:00+00:00'
-    body = _prompt_pack_body()
-    docs = env.transport.store.setdefault(index, {})
-    doc = {
-        'doc_type': 'config',
-        'kind': 'prompt_pack',
-        'name': name,
-        'revision': 1,
-        'body': body,
-        'description': '',
-        'created_at': now,
-        'updated_at': now,
-        'updated_by': None,
-        'cloned_from': None,
-    }
-    docs[f'pack:{name}'] = doc
-    docs[f'pack:{name}@1'] = {**doc, 'doc_type': 'revision'}
-    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
-    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
-    # No leftover activation from an earlier route in this same pass --
-    # 'expected_active: None' in route_bodies must match reality.
-    docs.pop('activation:prompt_pack', None)
+    asyncio.run(_reseed_config_async(env.records[slug], kind, axis, body))
+
+
+async def _reseed_config_async(record: Any, kind: str, axis: str, body: dict[str, Any]) -> None:
+    """``<slug>-model`` back to a single revision 1 and ``axis`` never activated (the sweep
+    bodies send ``expected_active: null``). No service un-activates to "never", so the
+    activation row and the document (its revisions cascade) are removed first."""
+    from sqlalchemy import delete
+
+    from src.config.project_context import bind_project
+    from src.db.models.config import ConfigActivation, ConfigDocument
+    from src.services.config_store import documents
+    from src.services.config_store.bound_project import bound_project_id
     from src.services.config_store.store import reset_config_stores
 
+    name = f'{record.slug}-model'
+    with bind_project(record):
+        project_id = await bound_project_id()
+        async with documents.tx('reseed the leak environment') as session:
+            await session.execute(
+                delete(ConfigActivation).where(
+                    ConfigActivation.project_id == project_id, ConfigActivation.axis == axis
+                )
+            )
+            await session.execute(
+                delete(ConfigDocument).where(
+                    ConfigDocument.project_id == project_id,
+                    ConfigDocument.kind == kind,
+                    ConfigDocument.name == name,
+                )
+            )
+        await documents.save_config(kind=kind, name=name, body=body, expected_revision=None)
     reset_config_stores()
+
+
+def _stored_prompt_pack(env: Any, slug: str) -> None:
+    """(Re-)seed the ``{slug}-model`` prompt_pack at revision 1 with no activation, through
+    the config store; run before each mutating route so it is independent of what an
+    earlier route left behind."""
+    _reseed_config(env, slug, 'prompt_pack', 'prompt_pack', _prompt_pack_body())
 
 
 def _stored_region_profile(env: Any, slug: str) -> None:
-    """(Re-)seed ``profile:<slug>-model`` at a known revision 1, with no
-    activation recorded -- mirrors ``_stored_prompt_pack``."""
-    from src.config.curation_roles import IndexRole
-
-    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
-    name = f'{slug}-model'
-    now = '2026-01-01T00:00:00+00:00'
-    body = _region_profile_body()
-    docs = env.transport.store.setdefault(index, {})
-    doc = {
-        'doc_type': 'config',
-        'kind': 'region_profile',
-        'name': name,
-        'revision': 1,
-        'body': body,
-        'description': '',
-        'created_at': now,
-        'updated_at': now,
-        'updated_by': None,
-        'cloned_from': None,
-    }
-    docs[f'profile:{name}'] = doc
-    docs[f'profile:{name}@1'] = {**doc, 'doc_type': 'revision'}
-    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
-    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
-    docs.pop('activation:detection_profile', None)
-    from src.services.config_store.store import reset_config_stores
-
-    reset_config_stores()
+    """(Re-)seed the ``{slug}-model`` region_profile at revision 1 with no activation, through
+    the config store; run before each mutating route so it is independent of what an
+    earlier route left behind."""
+    _reseed_config(env, slug, 'region_profile', 'detection_profile', _region_profile_body())
 
 
 def _region_failed_item(env: LeakEnv, slug: str) -> None:
@@ -233,53 +214,62 @@ NAME_FOR: dict[tuple[str, str], str] = {
 
 
 def _seed_vlm(env: Any, slug: str) -> None:
-    """The shared endpoint in the global registry (revision 1, the private
-    address ``_FAKE_VLM_HOST`` resolves to) and ``slug``'s activation of it,
-    re-seeded before each VLM activation route so every one is independent
-    of what an earlier route left behind."""
-    from src.config.curation_roles import IndexRole
-    from src.services.config_store.global_store import global_configs_index
-    from src.services.config_store.store import reset_config_stores
-    from src.services.config_store.vlm_snapshot import reset_vlm_revision_cache
+    """The shared endpoint in the deployment-wide registry (the private address
+    ``_FAKE_VLM_HOST`` resolves to) and ``slug``'s activation of it, written through
+    the config store services the routes use and re-seeded before each VLM
+    activation route so every one is independent of what an earlier route left
+    behind. The activation's ``previous`` is the per-project ``<slug>-model``
+    endpoint, activated first and deleted again."""
+    import asyncio
+
+    asyncio.run(_seed_vlm_async(env.records[slug]))
+
+
+async def _seed_vlm_async(record: Any) -> None:
+    from src.config.project_context import bind_project
+    from src.db.repos.config_base import RevisionConflictError
+    from src.services.config_store import documents
+    from src.services.config_store.global_store import reset_global_config_store
+    from src.services.config_store.store import get_config_store, reset_config_stores
+    from src.services.config_store.vlm_activation import expected_active_for
     from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 
-    now = '2026-01-01T00:00:00+00:00'
-    endpoint = {
-        'doc_type': 'config',
-        'kind': 'vlm_endpoint',
-        'name': _SHARED_VLM,
-        'revision': 1,
-        'body': VlmEndpointBody(base_url=f'http://{_FAKE_VLM_HOST}/v1', model='leak-test-vlm')
-        .normalized()
-        .model_dump(),
-        'description': '',
-        'created_at': now,
-        'updated_at': now,
-        'updated_by': None,
-        'cloned_from': None,
-    }
-    registry = env.transport.store.setdefault(global_configs_index(), {})
-    registry[f'vlm:{_SHARED_VLM}'] = endpoint
-    registry[f'vlm:{_SHARED_VLM}@1'] = {**endpoint, 'doc_type': 'revision'}
-    meta = registry.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
-    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
-    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
-    docs = env.transport.store.setdefault(index, {})
-    docs['activation:vlm'] = {
-        'doc_type': 'activation',
-        'axis': 'vlm',
-        **_VLM_ACTIVE,
-        'activated_at': now,
-        'previous': {'name': f'{slug}-model', 'revision': 1},
-        'acked_refs': {},
-        'external_ack_at': None,
-    }
-    project_meta = docs.setdefault(
-        'meta:config_revision', {'doc_type': 'meta', 'config_revision': 0}
-    )
-    project_meta['config_revision'] = int(project_meta.get('config_revision', 0)) + 1
     reset_config_stores()
-    reset_vlm_revision_cache()
+    reset_global_config_store()
+    body = VlmEndpointBody(base_url=f'http://{_FAKE_VLM_HOST}/v1', model='leak-test-vlm')
+    marker = f'{record.slug}-model'
+
+    # Not ``save_endpoint``: that announces ``vlm.changed`` on the global stream, and a seed
+    # must not look like an event of the route under test.
+    async def save_config(name: str, endpoint: VlmEndpointBody) -> None:
+        await documents.save_config(
+            kind='vlm_endpoint',
+            name=name,
+            body=endpoint.normalized().model_dump(),
+            expected_revision=None,
+        )
+
+    async def _activate(name: str) -> None:
+        store = get_config_store()
+        await store.refresh()
+        await documents.activate(
+            axis='vlm',
+            name=name,
+            revision=1,
+            expected_active=expected_active_for(store.current.active_vlm),
+        )
+
+    with bind_project(record):
+        store = get_config_store()
+        await store.refresh()
+        with contextlib.suppress(RevisionConflictError):  # already registered by an earlier seed
+            await save_config(_SHARED_VLM, body)
+        await save_config(marker, body)
+        await _activate(marker)
+        await _activate(_SHARED_VLM)
+        await documents.delete_config(kind='vlm_endpoint', name=marker, expected_revision=1)
+    reset_config_stores()
+    reset_global_config_store()
 
 
 def _prepare_vlm(env: Any, slug: str) -> None:
@@ -287,59 +277,17 @@ def _prepare_vlm(env: Any, slug: str) -> None:
 
 
 def _stored_ingest_profile(env: Any, slug: str) -> None:
-    """(Re-)seed ``ingest:<slug>-model`` at a known revision 1, with no
-    activation recorded -- mirrors ``_stored_open_vocab``."""
-    from src.config.curation_roles import IndexRole
-
-    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
-    name = f'{slug}-model'
-    now = '2026-01-01T00:00:00+00:00'
-    docs = env.transport.store.setdefault(index, {})
-    doc = {
-        'doc_type': 'config',
-        'kind': 'ingest_profile',
-        'name': name,
-        'revision': 1,
-        'body': _ingest_profile_body(),
-        'description': '',
-        'created_at': now,
-        'updated_at': now,
-        'updated_by': None,
-        'cloned_from': None,
-    }
-    docs[f'ingest:{name}'] = doc
-    docs[f'ingest:{name}@1'] = {**doc, 'doc_type': 'revision'}
-    docs.pop('activation:ingest_profile', None)
-    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
-    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
+    """(Re-)seed the ``{slug}-model`` ingest_profile at revision 1 with no activation, through
+    the config store; run before each mutating route so it is independent of what an
+    earlier route left behind."""
+    _reseed_config(env, slug, 'ingest_profile', 'ingest_profile', _ingest_profile_body())
 
 
 def _stored_open_vocab(env: Any, slug: str) -> None:
-    """(Re-)seed ``ovset:<slug>-model`` at a known revision 1, with no
-    activation recorded -- mirrors ``_stored_region_profile``."""
-    from src.config.curation_roles import IndexRole
-
-    index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
-    name = f'{slug}-model'
-    now = '2026-01-01T00:00:00+00:00'
-    docs = env.transport.store.setdefault(index, {})
-    doc = {
-        'doc_type': 'config',
-        'kind': 'open_vocab_set',
-        'name': name,
-        'revision': 1,
-        'body': _open_vocab_body(),
-        'description': '',
-        'created_at': now,
-        'updated_at': now,
-        'updated_by': None,
-        'cloned_from': None,
-    }
-    docs[f'ovset:{name}'] = doc
-    docs[f'ovset:{name}@1'] = {**doc, 'doc_type': 'revision'}
-    docs.pop('activation:open_vocab', None)
-    meta = docs.setdefault('meta:config_revision', {'doc_type': 'meta', 'config_revision': 0})
-    meta['config_revision'] = int(meta.get('config_revision', 0)) + 1
+    """(Re-)seed the ``{slug}-model`` open_vocab_set at revision 1 with no activation, through
+    the config store; run before each mutating route so it is independent of what an
+    earlier route left behind."""
+    _reseed_config(env, slug, 'open_vocab_set', 'open_vocab', _open_vocab_body())
 
 
 def _export_with_val_split(env: Any, slug: str) -> None:
