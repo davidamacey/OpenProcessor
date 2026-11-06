@@ -208,7 +208,7 @@ def _write_report(record: ProjectRecord, kind: str, report: dict[str, Any], stam
 async def run(args: argparse.Namespace) -> int:
     client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=60)
     try:
-        registry = script_project_registry(client=client)
+        registry = script_project_registry()
         await registry.ensure_fresh()
         if not registry.refreshed:
             print(
@@ -263,7 +263,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if not args.all:
-        bind_script_project(args.project, opensearch_url=args.opensearch_url)
+        bind_script_project(args.project)
     return asyncio.run(run(args))
 
 

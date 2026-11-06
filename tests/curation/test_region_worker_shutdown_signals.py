@@ -78,35 +78,14 @@ class TestSignalHandling:
         # was built unconditionally from the env profile, regardless of
         # what the registry (a separate, only-used-for-fetch concern)
         # contained.
-        from src.config.curation_accessors import base_curation_config
-        from src.config.projects import resources_for_new
-        from src.services.projects.registry import (
-            REVISION_DOC_ID,
-            ProjectRecord,
-            projects_index,
-            record_to_doc,
-        )
+        from _fake_project_registry import install_static_project_registry
 
-        default_record = ProjectRecord(
-            slug='default',
-            display_name='Default',
-            description='',
-            status='active',
-            revision=1,
-            created_at='',
-            updated_at='',
-            origin=None,
-            resources=resources_for_new('default', base_curation_config()),
-        )
+        install_static_project_registry(monkeypatch)
 
         async def _search(*, index: str, body: dict[str, Any]) -> dict[str, Any]:
-            if index == projects_index():
-                return {'hits': {'hits': [{'_source': record_to_doc(default_record)}]}}
             return {'hits': {'hits': []}}
 
         async def _get(*, index: str, id: str) -> dict[str, Any]:  # noqa: A002
-            if index == projects_index() and id == REVISION_DOC_ID:
-                return {'found': True, '_source': {'revision': 1}}
             return {'found': False}
 
         os_client = MagicMock()

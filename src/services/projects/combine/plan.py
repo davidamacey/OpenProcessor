@@ -129,7 +129,7 @@ async def resolve_sources(
             )
             continue
         record = registry.get(slug)
-        if record is None or record.status == 'deleted':
+        if record is None:
             errors.append(
                 CombineIssue(
                     code='source_not_found',
@@ -177,9 +177,8 @@ async def check_target(
         return errors, warnings
     registry = get_project_registry()
     await registry.ensure_fresh()
-    existing = registry.get(slug)
-    if existing is not None:
-        code = 'slug_retired' if existing.status == 'deleted' else 'slug_taken'
+    if registry.get(slug) is not None or slug in registry.retired_slugs():
+        code = 'slug_retired' if slug in registry.retired_slugs() else 'slug_taken'
         errors.append(CombineIssue(code=code, message=f"'{slug}' cannot be used"))
         return errors, warnings
     try:

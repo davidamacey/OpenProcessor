@@ -13,7 +13,7 @@ read refuses to bind at all: a script never guesses.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.config.env import env_str
 from src.config.project_context import bind_process_project
@@ -41,76 +41,53 @@ def add_project_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
-async def load_registry(opensearch_url: str | None = None) -> ProjectRegistry:
-    """One read of the project registry through a short-lived guarded
-    client. Raises ``SystemExit`` when it cannot be read."""
-    from src.services.projects.guard import make_script_opensearch
-
-    url = opensearch_url or _default_opensearch_url()
-    client = make_script_opensearch([url])
-    try:
-        registry = ProjectRegistry(lambda: client)
-        await registry.ensure_fresh()
-    finally:
-        await client.close()
+async def load_registry() -> ProjectRegistry:
+    """One read of the project registry. Raises ``SystemExit`` when it cannot be read."""
+    registry = ProjectRegistry()
+    await registry.ensure_fresh()
     if not registry.refreshed:
-        raise SystemExit(f'cannot read the project registry at {url}; refusing to guess a project')
+        raise SystemExit('cannot read the project registry; refusing to guess a project')
     return registry
 
 
-async def resolve_project(slug: str, *, opensearch_url: str | None = None) -> ProjectRecord:
+async def resolve_project(slug: str) -> ProjectRecord:
     """The bindable record for ``slug``; raises ``SystemExit`` with a
     clear message for an unknown or unbindable project."""
-    registry = await load_registry(opensearch_url)
+    registry = await load_registry()
     record = registry.get(slug)
-    if record is None or record.status == 'deleted':
+    if record is None:
         raise SystemExit(f"no project named '{slug}'")
     if record.status not in _BINDABLE:
         raise SystemExit(f"project '{slug}' is {record.status}; refusing to run against it")
     return record
 
 
-def bind_script_project(slug: str, *, opensearch_url: str | None = None) -> ProjectRecord:
+def bind_script_project(slug: str) -> ProjectRecord:
     """Resolve ``slug`` and bind it for this whole script process. Call
     once, right after argument parsing and before anything reads
     project-scoped config. Must not run inside an event loop (it starts
     its own for the lookup); async entry points use
     :func:`abind_script_project`."""
-    record = asyncio.run(resolve_project(slug, opensearch_url=opensearch_url))
+    record = asyncio.run(resolve_project(slug))
     bind_process_project(record, read_only=record.status == 'archived')
     return record
 
 
-async def abind_script_project(slug: str, *, opensearch_url: str | None = None) -> ProjectRecord:
+async def abind_script_project(slug: str) -> ProjectRecord:
     """:func:`bind_script_project` for an entry point already running in
     an event loop."""
-    record = await resolve_project(slug, opensearch_url=opensearch_url)
+    record = await resolve_project(slug)
     bind_process_project(record, read_only=record.status == 'archived')
     return record
 
 
-def script_project_registry(
-    opensearch_url: str | None = None, *, client: Any = None
-) -> ProjectRegistry:
-    """A project registry for a multi-project worker or maintenance script,
-    reading the projects index through the script's own guarded client
-    (``opensearch_url``, else ``$OPENSEARCH_URL``) rather than the API
-    process's client factory.
-
-    Pass ``client`` (the caller's own guarded client) to share it: the caller
-    then closes the one client at shutdown. Without it the registry opens a
-    client nothing can close, which is fine only for a short-lived script."""
-    from src.services.projects.guard import make_script_opensearch
-
-    shared = client or make_script_opensearch([opensearch_url or _default_opensearch_url()])
-    return ProjectRegistry(lambda: shared)
+def script_project_registry() -> ProjectRegistry:
+    """A project registry for a multi-project worker or maintenance script, reading the database
+    through the poll engine."""
+    return ProjectRegistry()
 
 
 def only_project(records: list[ProjectRecord], slug: str | None) -> list[ProjectRecord]:
     """``records`` restricted to ``slug`` (a worker's optional ``--project``
     filter); all of them when ``slug`` is ``None``."""
     return [r for r in records if slug is None or r.slug == slug]
-
-
-def _default_opensearch_url() -> str:
-    return env_str('OPENSEARCH_URL', 'http://opensearch:9200')

@@ -113,7 +113,7 @@ async def _amain(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = build_parser().parse_args()
-    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    bind_script_project(args.project)
     return asyncio.run(_amain(args))
 
 

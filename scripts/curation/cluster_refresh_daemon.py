@@ -29,7 +29,7 @@ scripts.curation.cluster_refresh_daemon``) or as a cron job invoking
 ``--once``.
 
 Projects: each iteration discovers the active projects, skips paused
-ones (``<project_state_dir>/pipeline_paused.flag``) and checks every
+ones (``projects.paused_at``) and checks every
 other one in rotating order, with a growth counter per project. A
 project's count reads its own items index (guarded client, bound to that
 project); its refresh calls its own ``{prefix}/projects/{slug}/...``
@@ -456,7 +456,7 @@ async def _sleep_with_heartbeat(stop: asyncio.Event, sleep_s: float) -> None:
 async def run(args: argparse.Namespace) -> int:
     stop, _ = _make_signal_stop()
     opensearch = make_script_opensearch([args.opensearch], timeout=30)
-    registry = script_project_registry(client=opensearch)
+    registry = script_project_registry()
     api_prefix = curation_api_prefix()
     book = ScheduleBook()
     policy = Policy(
@@ -515,7 +515,7 @@ def main() -> int:
     args = _parse_args()
     if args.project:
         # Fails fast on an unknown/unbindable slug.
-        bind_script_project(args.project, opensearch_url=args.opensearch)
+        bind_script_project(args.project)
     return asyncio.run(run(args))
 
 

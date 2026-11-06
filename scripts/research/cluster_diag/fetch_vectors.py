@@ -100,7 +100,7 @@ def write_export(out: Path, vectors: np.ndarray, meta: Sequence[dict[str, Any]])
 
 
 async def run(args: argparse.Namespace) -> int:
-    await abind_script_project(args.project, opensearch_url=args.opensearch_url)
+    await abind_script_project(args.project)
     client = make_script_opensearch([args.opensearch_url], timeout=600)
     try:
         vectors, meta = await fetch(client, items_index(), args.limit)

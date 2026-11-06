@@ -106,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    bind_script_project(args.project)
     if args.page_size <= 0:
         build_parser().error('--page-size must be positive')
     return asyncio.run(_async_main(args))

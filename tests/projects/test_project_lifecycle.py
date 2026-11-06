@@ -12,7 +12,15 @@ from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
+from .conftest import (
+    FakeLifecycleOpenSearch,
+    aseed_project,
+    fake_ensure_indexes,
+    seed_default_project,
+)
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +40,7 @@ def _reset_registry(tmp_path, monkeypatch):
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 
@@ -89,46 +97,6 @@ def test_create_project_concurrent_same_slug_exactly_one_wins() -> None:
         return await asyncio.gather(
             lifecycle.create_project(client, slug='zeta', display_name='First'),
             lifecycle.create_project(client, slug='zeta', display_name='Second'),
-            return_exceptions=True,
-        )
-
-    results = asyncio.run(_race())
-    successes = [r for r in results if not isinstance(r, BaseException)]
-    failures = [r for r in results if isinstance(r, BaseException)]
-    assert len(successes) == 1, results
-    assert len(failures) == 1, results
-    assert isinstance(failures[0], RequestRejectedError)
-    assert failures[0].detail['error'] == 'slug_taken'
-
-
-def test_write_record_create_op_type_refuses_second_writer() -> None:
-    """M1's storage-level primitive, isolated from create_project's own
-    in-memory snapshot check (which alone cannot decide a real race --
-    see the module docstring): two writes of the *same* building record
-    with ``op_type='create'`` for one slug must let exactly one through,
-    even though both pass an identical in-memory precondition check."""
-    from src.config.curation_accessors import base_curation_config
-    from src.config.projects import ProjectRecord, resources_for_new
-
-    client = FakeLifecycleOpenSearch()
-    _registry_for(client)
-    resources = resources_for_new('zeta', base_curation_config())
-    record = ProjectRecord(
-        slug='zeta',
-        display_name='First',
-        description='',
-        status='building',
-        revision=1,
-        created_at='t',
-        updated_at='t',
-        origin=None,
-        resources=resources,
-    )
-
-    async def _race() -> tuple[Any, ...]:
-        return await asyncio.gather(
-            lifecycle.write_record(client, record, op_type='create'),
-            lifecycle.write_record(client, record, op_type='create'),
             return_exceptions=True,
         )
 
@@ -350,75 +318,12 @@ def test_create_cloning_from_a_building_source_is_refused() -> None:
     """m9: only active/archived projects can be cloned from."""
     client = FakeLifecycleOpenSearch()
     _registry_for(client)
-    from src.config.curation_accessors import base_curation_config
-    from src.config.projects import ProjectRecord, resources_for_new
-    from src.services.projects.registry import write_record as raw_write_record
-
-    resources = resources_for_new('building_src', base_curation_config())
-    record = ProjectRecord(
-        slug='building_src',
-        display_name='Building',
-        description='',
-        status='building',
-        revision=1,
-        created_at='t',
-        updated_at='t',
-        origin=None,
-        resources=resources,
-    )
-    asyncio.run(raw_write_record(client, record, op_type='create'))
+    asyncio.run(aseed_project('building-src', status='building'))
 
     with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.create_project(
-                client, slug='gamma', display_name='Gamma', clone_settings_from='building_src'
+                client, slug='gamma', display_name='Gamma', clone_settings_from='building-src'
             )
         )
     assert exc_info.value.detail['error'] == 'clone_source_not_ready'
-
-
-def test_write_record_is_visible_to_a_search_immediately_after_create() -> None:
-    """B2 (live bug, 2026-09-27): on opfinal, 3 of 5 live creates ended
-    'active' with no indexes. Root cause: ``registry.write_record``
-    wrote the new project's doc with a plain (near-real-time) index
-    write, then bumped the revision; ``ensure_fresh()`` saw the bumped
-    revision via a real-time GET but re-read the project docs with a
-    ``_search``, which -- being near-real-time, not read-your-writes --
-    could still miss the just-written doc. The guard maps index name ->
-    owning project from that snapshot, so it refused the new project's
-    own ``op_prj_<slug>__*`` index creation as belonging to no known
-    project, moments after the doc write that should have made it known.
-
-    ``FakeRegistryOpenSearch``/``FakeLifecycleOpenSearch`` now model this
-    (a doc written without ``refresh='wait_for'``/``'true'`` is invisible
-    to ``search()`` until an explicit refresh), so this test would have
-    gone red on the old plain ``client.index(...)`` call before the fix
-    added ``refresh='wait_for'``."""
-    client = FakeLifecycleOpenSearch()
-    registry = ProjectRegistry(lambda: client)
-    set_project_registry(registry)
-
-    from datetime import UTC, datetime
-
-    from src.config.curation_accessors import base_curation_config
-    from src.config.projects import ProjectRecord, resources_for_new
-
-    now = datetime.now(UTC).isoformat()
-    record = ProjectRecord(
-        slug='zeta',
-        display_name='Zeta',
-        description='',
-        status='active',
-        revision=1,
-        created_at=now,
-        updated_at=now,
-        origin=None,
-        resources=resources_for_new('zeta', base_curation_config()),
-    )
-    asyncio.run(lifecycle.write_record(client, record, op_type='create'))
-    asyncio.run(registry.ensure_fresh())
-
-    assert registry.get('zeta') is not None, (
-        "the new project's doc must be visible to the very next ensure_fresh() "
-        "-- registry.write_record must use refresh='wait_for' (B2)"
-    )

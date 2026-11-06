@@ -1,24 +1,26 @@
-"""Idempotent startup bootstrap of the ``default`` project record.
+"""Idempotent startup bootstrap of the ``default`` project row.
 
-``default`` is created like any project (``new_project_record``: indexes
-``{OP_PROJECT_INDEX_PREFIX}default__<role>``, dirs under the projects data
-and state roots). The bootstrap touches no data index; the project's
-indexes are created by the normal per-project index bootstrap.
+``default`` is created like any project (indexes ``{OP_PROJECT_INDEX_PREFIX}default__<role>``,
+storage prefix ``projects/default``). The bootstrap touches no data index; the project's indexes
+are created by the normal per-project index bootstrap.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation_accessors import base_curation_config
-from src.config.projects import DEFAULT_SLUG, ProjectRecord, new_project_record
+from src.config.projects import DEFAULT_SLUG
 from src.core.logging import get_logger
-from src.services.projects.registry import REVISION_DOC_ID, projects_index, record_to_doc
+from src.db.repos import projects as repo
+from src.db.session import async_session_factory, deployment_tx
+from src.services.projects.records import new_project_for, record_from_row
+from src.services.projects.store import create_with_default_spaces
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from src.config.projects import ProjectRecord
 
 
 logger = get_logger(__name__)
@@ -41,142 +43,32 @@ def for_each_project(statuses: tuple[str, ...] = ('active',)) -> Iterator[str]:
             yield slug
 
 
-async def bootstrap_default_project(client: Any) -> ProjectRecord:
-    """Create the ``default`` project doc if it does not exist yet, or
-    return the existing one unchanged. Never overwrites an existing
-    record (a later env change must not remap a live project), and never
-    touches any data index."""
-    from src.services.projects.guard_policy import bind_registry_admin
-    from src.services.projects.registry import doc_to_record
+async def bootstrap_default_project() -> ProjectRecord:
+    """Create the ``default`` project if it does not exist yet, or return the stored one unchanged.
 
-    doc_id = f'project:{DEFAULT_SLUG}'
-    with bind_registry_admin():
-        await ensure_projects_index(client)
-        # Only a definite "not found" means first boot. Any other failure
-        # (a 503 right after the cluster starts, a timeout, a malformed
-        # doc) propagates, so startup retries later instead of resetting
-        # an existing record (e.g. an archived ``default``).
-        existing = await _get_or_none(client, doc_id)
-        if existing is not None:
-            return doc_to_record(existing)
-
-        record = new_project_record(
-            DEFAULT_SLUG,
-            base_curation_config(),
-            display_name='Default',
-            description='The project every fresh install starts with.',
-            now=datetime.now(UTC).isoformat(),
-        )
+    Never overwrites an existing project (a later env change must not remap a live one) and
+    touches no data index. The slug claim in the create transaction decides a race between API
+    workers: the loser reads the winner's row."""
+    async with async_session_factory()() as session:
         try:
-            # B2: read-your-writes, same as registry.write_record.
-            await client.index(
-                index=projects_index(),
-                id=doc_id,
-                body=record_to_doc(record),
-                op_type='create',
-                refresh='wait_for',
-            )
-        except Exception as exc:
-            if not _is_conflict(exc):
-                raise
-            # Another worker created it first: its record wins.
-            winner = await _get_or_none(client, doc_id)
-            if winner is None:
-                raise
-            return doc_to_record(winner)
-        await bump_revision(client)
-    logger.info('bootstrapped default project record')
-    return record
-
-
-def _is_not_found(exc: BaseException) -> bool:
-    return getattr(exc, 'status_code', None) == 404 or 'NotFound' in type(exc).__name__
-
-
-def _is_conflict(exc: BaseException) -> bool:
-    return getattr(exc, 'status_code', None) == 409 or 'Conflict' in type(exc).__name__
-
-
-async def _get_or_none(client: Any, doc_id: str) -> dict[str, Any] | None:
-    """The stored doc's ``_source``, or ``None`` only when OpenSearch says
-    the doc does not exist. Every other failure is raised."""
-    try:
-        existing = await client.get(index=projects_index(), id=doc_id)
-    except Exception as exc:
-        if _is_not_found(exc):
-            return None
-        raise
-    if not existing.get('found', True):
-        return None
-    typed: dict[str, Any] | None = existing['_source']
-    return typed
-
-
-# ``dynamic: false``: the registry stores whole records, but only these
-# fields are ever queried; nothing a record carries can change the mapping.
-PROJECTS_INDEX_BODY: dict[str, Any] = {
-    'settings': {'index': {'number_of_shards': 1, 'number_of_replicas': 0}},
-    'mappings': {
-        'dynamic': False,
-        'properties': {
-            'slug': {'type': 'keyword'},
-            'status': {'type': 'keyword'},
-            'revision': {'type': 'long'},
-            'created_at': {'type': 'date'},
-            'updated_at': {'type': 'date'},
-        },
-    },
-}
-
-
-async def ensure_projects_index(client: Any) -> None:
-    """Create ``op_projects`` with its explicit mapping if it does not
-    exist, so the first registry write never auto-creates it with a
-    dynamic mapping. Call inside :func:`bind_registry_admin`."""
-    if await client.indices.exists(index=projects_index()):
-        return
-    await client.indices.create(index=projects_index(), body=PROJECTS_INDEX_BODY)
-
-
-_BUMP_RETRIES = 5
-
-
-async def bump_revision(client: Any) -> int:
-    """Increment the ``meta:projects_revision`` counter with optimistic
-    concurrency (``if_seq_no``/``if_primary_term``; ``op_type=create`` on
-    the first write), retrying on a conflict. Returns the new revision.
-    Call inside :func:`bind_registry_admin`."""
-    for _attempt in range(_BUMP_RETRIES):
-        try:
-            current = await client.get(index=projects_index(), id=REVISION_DOC_ID)
-        except Exception as exc:
-            if not _is_not_found(exc):
-                raise
-            current = {'found': False}
-        try:
-            if current.get('found', True) and '_source' in current:
-                revision = int(current['_source'].get('revision', 0)) + 1
-                await client.index(
-                    index=projects_index(),
-                    id=REVISION_DOC_ID,
-                    body={'revision': revision},
-                    if_seq_no=current.get('_seq_no'),
-                    if_primary_term=current.get('_primary_term'),
+            async with deployment_tx(session, 'bootstrap the default project'):
+                row = await create_with_default_spaces(
+                    session,
+                    new_project_for(
+                        DEFAULT_SLUG,
+                        display_name='Default',
+                        description='The project every fresh install starts with.',
+                        status='active',
+                    ),
                 )
-            else:
-                revision = 1
-                await client.index(
-                    index=projects_index(),
-                    id=REVISION_DOC_ID,
-                    body={'revision': revision},
-                    op_type='create',
-                )
-        except Exception as exc:
-            if _is_conflict(exc):
-                continue
-            raise
-        return revision
-    raise RuntimeError('project registry revision kept conflicting; giving up')
+        except repo.SlugTakenError:
+            async with deployment_tx(session, 'read the default project'):
+                existing = await repo.get_by_slug(session, DEFAULT_SLUG)
+            if existing is None:
+                raise
+            return record_from_row(existing)
+    logger.info('bootstrapped default project')
+    return record_from_row(row)
 
 
 async def _bootstrap_once() -> Any:
@@ -186,7 +78,7 @@ async def _bootstrap_once() -> Any:
     from src.services.projects.registry import get_project_registry
 
     client = await make_curation_opensearch()
-    await bootstrap_default_project(client)
+    await bootstrap_default_project()
     registry = get_project_registry()
     await registry.ensure_fresh()
     if not registry.refreshed:

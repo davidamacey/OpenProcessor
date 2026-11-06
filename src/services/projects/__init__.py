@@ -1,5 +1,5 @@
-"""Project registry: the ``op_projects`` index, its in-process snapshot,
-and startup bootstrap of the ``default`` project record.
+"""Project registry: the Postgres-backed in-process snapshot of every project,
+and startup bootstrap of the ``default`` project row.
 
 See the project-isolation design §2/§4.
 """

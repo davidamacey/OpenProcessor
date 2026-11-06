@@ -262,16 +262,17 @@ def test_handles_are_owned_by_the_project_that_opened_them(snapshot) -> None:
         check_request('POST', f'/{BETA_ITEMS}/_search/point_in_time', None, snapshot)
 
 
-def test_registry_index_is_writable_only_by_lifecycle_code(snapshot) -> None:
-    from src.services.projects.guard_policy import bind_registry_admin
+def test_the_removed_registry_index_is_an_unowned_op_index_while_bound(snapshot) -> None:
+    """Project records live in Postgres: ``op_projects`` is just another index no project owns,
+    so a bound project may not reach it, read or write."""
+    from src.services.projects.guard_policy import bind_index_inventory_read
 
     with bind_project(snapshot['beta']):
-        check_request('GET', '/op_projects/_doc/project:beta', None, snapshot)
         with pytest.raises(CrossProjectAccess):
-            check_request('PUT', '/op_projects/_doc/project:beta', {'status': 'active'}, snapshot)
-        with bind_registry_admin():
+            check_request('GET', '/op_projects/_doc/project:beta', None, snapshot)
+        with pytest.raises(CrossProjectAccess):
             check_request('PUT', '/op_projects/_doc/project:beta', {'status': 'active'}, snapshot)
     with pytest.raises(CrossProjectAccess):
         check_request('GET', f'/_cat/indices/{ALPHA_ITEMS},{BETA_ITEMS}', None, snapshot)
-    with bind_registry_admin():
+    with bind_index_inventory_read():
         check_request('GET', f'/_cat/indices/{ALPHA_ITEMS},{BETA_ITEMS}', None, snapshot)

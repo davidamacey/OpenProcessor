@@ -21,6 +21,9 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -54,7 +57,7 @@ def test_delete_refuses_when_project_owns_a_shared_model(tmp_path) -> None:
         # P3F item 3 (B2(a) residual): create_project's registry
         # refresh_strict() needs a real, reachable registry bound during
         # the create itself -- set it before create_project runs.
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
@@ -84,7 +87,7 @@ def test_delete_force_bypasses_shared_model_block_and_logs(tmp_path, monkeypatch
         # P3F item 3 (B2(a) residual): create_project's registry
         # refresh_strict() needs a real, reachable registry bound during
         # the create itself -- set it before create_project runs.
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
@@ -109,7 +112,7 @@ def test_delete_allowed_when_project_has_no_shared_models(tmp_path) -> None:
         # P3F item 3 (B2(a) residual): create_project's registry
         # refresh_strict() needs a real, reachable registry bound during
         # the create itself -- set it before create_project runs.
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
@@ -133,7 +136,7 @@ def test_delete_refusal_names_the_project_whose_active_profile_uses_the_model(
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
@@ -158,7 +161,7 @@ def test_delete_fails_closed_when_another_project_cannot_be_read(tmp_path, monke
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')

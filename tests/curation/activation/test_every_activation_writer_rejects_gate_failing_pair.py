@@ -266,11 +266,15 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
 
             orig_resolve = lifecycle_mod._resolve_existing
             orig_mutable = lifecycle_mod._get_mutable_record
-            orig_write = lifecycle_mod.write_record
+            from src.services.projects import records as records_mod, store as store_mod
+
+            orig_run_repo = store_mod.run_repo
+            orig_from_row = records_mod.record_from_row
             orig_get_registry = registry_mod.get_project_registry
             lifecycle_mod._resolve_existing = AsyncMock(return_value=source)
-            lifecycle_mod._get_mutable_record = AsyncMock(return_value=(target, 1, 1))
-            lifecycle_mod.write_record = AsyncMock(return_value=None)
+            lifecycle_mod._get_mutable_record = AsyncMock(return_value=target)
+            store_mod.run_repo = AsyncMock(return_value=target)
+            records_mod.record_from_row = lambda row: row
             reg = MagicMock()
             reg.ensure_fresh = AsyncMock(return_value=None)
             registry_mod.get_project_registry = lambda: reg
@@ -288,7 +292,8 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
             finally:
                 lifecycle_mod._resolve_existing = orig_resolve
                 lifecycle_mod._get_mutable_record = orig_mutable
-                lifecycle_mod.write_record = orig_write
+                store_mod.run_repo = orig_run_repo
+                records_mod.record_from_row = orig_from_row
                 registry_mod.get_project_registry = orig_get_registry
 
             with bind_project(target):

@@ -39,11 +39,12 @@ async def test_a_stale_looking_job_whose_worker_is_alive_in_this_process_is_not_
         live -= 1
         return False
 
-    async def get_target(_client: Any, _slug: str) -> tuple[Any, int, int]:
-        return world.records[target.slug], 1, 1
+    class _Registry:
+        async def lookup(self, slug: str) -> Any:
+            return world.records[slug]
 
     monkeypatch.setattr(svc, 'run_combine', parked_worker)
-    monkeypatch.setattr(svc, 'get_record_with_seq', get_target)
+    monkeypatch.setattr(svc, 'get_project_registry', _Registry)
     store.job.update(status='interrupted')
     await svc.resume(world.fake, store.import_id)
     await asyncio.sleep(0.05)

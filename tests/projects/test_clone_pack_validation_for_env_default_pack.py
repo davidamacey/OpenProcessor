@@ -138,14 +138,25 @@ def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
                 assert sprof is not None
                 assert sprof.max_regions_per_item == 3
 
-            from src.services.projects import lifecycle as lm, registry as rm
+            from src.services.projects import (
+                lifecycle as lm,
+                records as records_mod,
+                registry as rm,
+                store as store_mod,
+            )
             from src.services.projects.clone import clone_settings_into
 
-            saved = (lm._resolve_existing, lm._get_mutable_record, lm.write_record)
+            saved = (
+                lm._resolve_existing,
+                lm._get_mutable_record,
+                store_mod.run_repo,
+                records_mod.record_from_row,
+            )
             saved_reg = rm.get_project_registry
             lm._resolve_existing = AsyncMock(return_value=source)
-            lm._get_mutable_record = AsyncMock(return_value=(target, 1, 1))
-            lm.write_record = AsyncMock(return_value=None)
+            lm._get_mutable_record = AsyncMock(return_value=target)
+            store_mod.run_repo = AsyncMock(return_value=target)
+            records_mod.record_from_row = lambda row: row
             reg = MagicMock()
             reg.ensure_fresh = AsyncMock(return_value=None)
             rm.get_project_registry = lambda: reg
@@ -163,7 +174,12 @@ def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
             except Exception as exc:
                 outcome = repr(exc)[:400]
             finally:
-                lm._resolve_existing, lm._get_mutable_record, lm.write_record = saved
+                (
+                    lm._resolve_existing,
+                    lm._get_mutable_record,
+                    store_mod.run_repo,
+                    records_mod.record_from_row,
+                ) = saved
                 rm.get_project_registry = saved_reg
 
             # The gate must reject this clone: pairing 'mp' (3 regions) with the TARGET's

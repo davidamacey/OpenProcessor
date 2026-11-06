@@ -32,7 +32,6 @@ def list_membership(status: str, *, include_archived: bool) -> bool:
 
 
 def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
-    from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG
 
@@ -41,7 +40,7 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
 
         prefix = project_api_base()
     is_default = record.slug == DEFAULT_SLUG
-    paused = (record.resources.project_state_dir / PIPELINE_PAUSED_FLAG_NAME).exists()
+    paused = record.paused_at is not None
     return ProjectSummary(
         slug=record.slug,
         display_name=record.display_name,

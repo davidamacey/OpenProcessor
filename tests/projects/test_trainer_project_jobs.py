@@ -179,7 +179,7 @@ def test_arbiter_sees_a_run_in_a_project_dir(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     alpha = _record('alpha')
-    registry = ProjectRegistry(lambda: None)
+    registry = ProjectRegistry()
     registry._by_slug = {'alpha': alpha}
     registry._revision = 0
     set_project_registry(registry)
@@ -206,7 +206,7 @@ def test_arbiter_keeps_the_gpu_claimed_for_another_projects_bakeoff(tmp_path) ->
         resources=dataclasses.replace(alpha.resources, bakeoff_jobs_dir=tmp_path / 'alpha_bo'),
     )
     (tmp_path / 'alpha_bo').mkdir()
-    registry = ProjectRegistry(lambda: None)
+    registry = ProjectRegistry()
     registry._by_slug = {'alpha': alpha}
     registry._revision = 0
     set_project_registry(registry)

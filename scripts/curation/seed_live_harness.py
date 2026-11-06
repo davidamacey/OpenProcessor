@@ -548,7 +548,7 @@ def main() -> int:
     )
     add_project_argument(parser)
     args = parser.parse_args()
-    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    bind_script_project(args.project)
     if args.source_root is None:
         from src.config import get_curation_config
 

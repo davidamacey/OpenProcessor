@@ -423,7 +423,7 @@ async def _main_loop(stop: asyncio.Event, only_slug: str | None) -> None:
     """One job at a time across every served project: the oldest pending
     trigger first, else a due IVF retrain."""
     opensearch = _build_opensearch()
-    registry = script_project_registry(client=opensearch)
+    registry = script_project_registry()
     logger.info(
         'worker ready project=%s poll_s=%s retrain_check_s=%s',
         only_slug or '*',

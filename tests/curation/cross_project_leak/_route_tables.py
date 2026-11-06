@@ -183,6 +183,8 @@ UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
 # markers in the response, events, 5xx, cache parity, foreign files)
 # still applies to them.
 UNSEEDED_WRITES: dict[tuple[str, str], str] = {
+    ('POST', '/pause'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
+    ('POST', '/resume'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
     ('POST', '/bakeoff/run'): 'needs a resolvable contender model list, not seeded',
     ('POST', '/train/promote/{job_id}'): 'needs an exported best.onnx, not seeded',
     ('DELETE', '/models/{model_name}'): 'see EXPECTED_5XX: no live Triton to confirm the unload',

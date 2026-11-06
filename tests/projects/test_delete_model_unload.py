@@ -18,6 +18,9 @@ from src.services.training import triton_promote
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -48,7 +51,7 @@ def test_dry_run_reports_owned_promoted_model(tmp_path) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
 
@@ -68,7 +71,7 @@ def test_dry_run_reports_a_private_promoted_model_too(tmp_path) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
 
@@ -102,7 +105,7 @@ def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
@@ -137,7 +140,7 @@ def test_real_delete_unloads_a_private_promoted_model_with_no_force(tmp_path, mo
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
