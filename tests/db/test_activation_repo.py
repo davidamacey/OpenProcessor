@@ -129,6 +129,21 @@ async def test_off_is_distinct_from_never_activated_and_rolls_back(pg_env, proje
 
 
 @pytest.mark.asyncio
+async def test_off_is_an_event_with_no_target_and_no_activation_row(pg_env, project) -> None:
+    ov = await _doc(project, 'ov-off', kind='open_vocab_set')
+    await _activate(project, 'open_vocab', ov, None)
+    await _activate(project, 'open_vocab', None, {'name': 'ov-off', 'revision': 1})
+    async with async_session_factory()() as session, project_tx(session, project):
+        events = await repo.list_activation_events(session, project, 'open_vocab')
+        ref = await repo.get_activation(session, project, 'open_vocab')
+    assert ref is not None
+    assert ref.state == 'off'
+    assert (events[0].to_config_id, events[0].to_revision) == (None, None)
+    assert (events[0].from_config_id, events[0].from_revision) == (ov.id, 1)
+    assert events[0].from_name == 'ov-off'
+
+
+@pytest.mark.asyncio
 async def test_rollback_without_an_earlier_state_is_refused(pg_env, project) -> None:
     ing = await _doc(project, 'ing', kind='ingest_profile')
     await _activate(project, 'ingest_profile', ing, None)
@@ -179,6 +194,27 @@ async def test_load_activation_events_makes_the_last_event_the_activation(pg_env
     assert ref is not None
     assert (ref.name, ref.activated_at) == ('lb', t)
     assert [e.reason for e in logged] == ['upgrade', 'upgrade']
+
+
+@pytest.mark.asyncio
+async def test_load_activation_events_ending_in_off_leaves_no_activation_row(pg_env, pg) -> None:
+    import datetime as dt
+
+    project = make_project(pg, f'loadoff-{uuid.uuid4().hex[:12]}')
+    a = await _doc(project, 'lo', kind='ingest_profile')
+    t = dt.datetime(2026, 3, 1, tzinfo=dt.UTC)
+    events = [
+        repo.ActivationEventLoad('ingest_profile', a.id, 1, t),
+        repo.ActivationEventLoad(
+            'ingest_profile', None, None, t, from_config_id=a.id, from_revision=1
+        ),
+    ]
+    async with async_session_factory()() as session, deployment_tx(session, 'load test'):
+        await repo.load_activation_events(session, project, events)
+    async with async_session_factory()() as session, project_tx(session, project):
+        ref = await repo.get_activation(session, project, 'ingest_profile')
+    assert ref is not None
+    assert ref.state == 'off'
 
 
 @pytest.mark.asyncio

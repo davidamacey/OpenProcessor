@@ -529,7 +529,7 @@ CREATE TABLE project_keymaps (
 
 CREATE TABLE project_state (                -- small internal markers, one pydantic model per key
   project_id  uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  key         text NOT NULL CHECK (key IN ('cluster_refresh','region_drain','region_dependency_health')),
+  key         text NOT NULL CHECK (key IN ('cluster_refresh','region_drain','region_dependency_health','vlm_external_ack')),
               -- research X-11: the region-cluster markers and last_clustering are replaced by
               -- cluster_partitions (02d section 2.2); cluster_refresh is the beat's scheduling clock
   value       jsonb NOT NULL,

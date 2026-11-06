@@ -1,8 +1,9 @@
 """Config store repository, part 2: activations, their event log and the activation load.
 
 An explicit deactivation ("off") is not a row in ``config_activations`` (its ``config_id`` is not
-nullable). It is an event whose target is ``OFF_CONFIG_ID``: the axis then reads as ``off`` until
-the next activation, and "never activated" stays distinct from "off".
+nullable). It is an event with no target (``to_config_id`` and ``to_revision`` both NULL): the axis
+then reads as ``off`` until the next activation, and "never activated" (no event) stays distinct
+from "off".
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from src.db.models.config import ConfigActivation, ConfigActivationEvent, Config
 from src.db.repos.config_base import (
     AXIS_KIND,
     DEFAULT_ACTOR,
-    OFF_CONFIG_ID,
     ActivationEvent,
     ActivationEventLoad,
     ActiveConflictError,
@@ -75,10 +75,10 @@ async def _off_axes(
         ConfigActivationEvent.id.in_(newest.group_by(ConfigActivationEvent.axis))
     )
     rows = (await session.execute(latest)).scalars().all()
-    return {r.axis: _event(r) for r in rows if r.to_config_id == OFF_CONFIG_ID}
+    return {r.axis: _event(r) for r in rows if r.to_config_id is None}
 
 
-def _event(row: ConfigActivationEvent) -> ActivationEvent:
+def _event(row: ConfigActivationEvent, from_name: str | None = None) -> ActivationEvent:
     return ActivationEvent(
         row.id,
         row.axis,
@@ -89,6 +89,7 @@ def _event(row: ConfigActivationEvent) -> ActivationEvent:
         row.reason,
         row.at,
         row.by,
+        from_name,
     )
 
 
@@ -145,14 +146,14 @@ async def activate(
             current.as_expected() if current is not None and current.state == 'active' else None
         )
     held = current if current is not None and current.state == 'active' else None
-    previous_id = held.config_id if held else (OFF_CONFIG_ID if current is not None else None)
-    previous_revision = held.revision if held else (0 if current is not None else None)
+    previous_id = held.config_id if held else None
+    previous_revision = held.revision if held else None
 
     if config_id is None:
         if held is None:
             raise ActiveConflictError(None)
         await _cas_delete(session, project_id, axis, held)
-        target_id, target_revision = OFF_CONFIG_ID, 0
+        target_id, target_revision = None, None
     else:
         if revision is None:
             msg = 'an activation names a revision'
@@ -253,13 +254,15 @@ async def _cas_write(
 async def list_activation_events(
     session: AsyncSession, project_id: uuid.UUID, axis: str, *, limit: int = 50
 ) -> list[ActivationEvent]:
+    """The axis's events, newest first, each with the name of the document it moved away from."""
     rows = await session.execute(
-        select(ConfigActivationEvent)
+        select(ConfigActivationEvent, ConfigDocument.name)
+        .outerjoin(ConfigDocument, ConfigDocument.id == ConfigActivationEvent.from_config_id)
         .where(ConfigActivationEvent.project_id == project_id, ConfigActivationEvent.axis == axis)
         .order_by(ConfigActivationEvent.id.desc())
         .limit(limit)
     )
-    return [_event(r) for r in rows.scalars().all()]
+    return [_event(r, from_name) for r, from_name in rows.all()]
 
 
 async def load_activation_events(
@@ -268,7 +271,7 @@ async def load_activation_events(
     """Insert the events in order; the last event of each axis becomes that axis's activation.
 
     ``project_id`` is required (``None`` is accepted only for an empty list). A last event that
-    targets ``OFF_CONFIG_ID`` leaves the axis off: an event and no activation row.
+    with no target leaves the axis off: an event and no activation row.
     """
     if not events:
         return
@@ -292,7 +295,7 @@ async def load_activation_events(
         )
         last[event.axis] = event
     for axis_name, event in last.items():
-        if event.to_config_id == OFF_CONFIG_ID:
+        if event.to_config_id is None or event.to_revision is None:
             continue
         await session.execute(
             insert(ConfigActivation).values(
