@@ -3,7 +3,7 @@
 No route starts an ``op.infra.*`` job, so a check starts one through the job service from inside the
 ``api`` container (``docker compose exec -T api python -``): the same ``start_job`` the routes
 call, over the container's own database and broker configuration. Reads use the deployment-wide
-``GET /curation/jobs`` route (the infra kinds belong to no project).
+``GET /jobs`` route (src/routers/jobs.py; the infra kinds belong to no project).
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ def start_infra_job_undispatched(kind: str, **params: Any) -> str:
 
 def get_job(api: Any, job_id: str) -> dict[str, Any] | None:
     """The job from the deployment-wide list; ``None`` when it is not on the first page."""
-    resp = api.get('/curation/jobs', params={'limit': 200})
+    resp = api.get('/jobs', params={'limit': 200})
     resp.raise_for_status()
     return next((j for j in resp.json()['items'] if j['id'] == job_id), None)
 
