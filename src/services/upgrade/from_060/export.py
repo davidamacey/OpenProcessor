@@ -14,7 +14,7 @@ import hashlib
 import sqlite3
 from typing import TYPE_CHECKING, Any
 
-from src.clients.storage.keys import make_key
+from src.domain.storage_keys import make_key
 from src.services.upgrade.from_060 import sources as legacy
 from src.services.upgrade.from_060.bundle import BundleWriter
 
