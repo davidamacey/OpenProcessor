@@ -23,6 +23,7 @@ on what it was measured, and every result that matters has a reproduce command.
 | [triton_perf_crossvalidation.md](triton_perf_crossvalidation.md) | Batch size versus output payload on a live Triton. |
 | [curation_scores.md](curation_scores.md) | Validation of the uniqueness, mistakenness and diversity scores. |
 | [retrieval_baseline.md](retrieval_baseline.md) | First search-quality baseline on a test stack with public COCO images, captions and instance annotations. |
+| [near_duplicate_detection.md](near_duplicate_detection.md) | Near-duplicate prototypes nd:P0..P2: registration, product-engine encoder parity, copy-level cosine cuts per space and linkage on 26,000 constructed copies, Copydays, exact and perceptual hash tiers (SHA-256 and PDQ cost). |
 | [ingest_write_path_investigation.md](ingest_write_path_investigation.md) | Why bulk ingest looked write- and queue-bound: OpenSearch write-path measurements on throwaway containers, the fixes that followed and the remaining follow-ups. |
 | [storage_sizing_and_ingest_baselines.md](storage_sizing_and_ingest_baselines.md) | Index size per item, memory and ingest baselines (faiss figures for old projects, Lucene for new ones), re-measured on the public set. |
 | [v060_vector_db_evaluation_plan.md](v060_vector_db_evaluation_plan.md) | Tuned OpenSearch against Milvus, Qdrant, pgvector and LanceDB at 2k, 10k and 100k real vectors; results in `docs/PERFORMANCE.md`. |
