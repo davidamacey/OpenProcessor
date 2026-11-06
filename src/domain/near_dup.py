@@ -17,7 +17,7 @@ import numpy as np
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
 
 
 LEVELS: tuple[str, ...] = ('image', 'item', 'core')
@@ -176,6 +176,37 @@ def most_central(mat: np.ndarray, group: Sequence[int]) -> int:
     sub = mat[list(group)]
     centrality = (sub @ sub.T).sum(axis=1)
     return int(np.argmax(centrality))
+
+
+@dataclass(frozen=True)
+class Seat:
+    """Where one member sits in the current run's dedup groups."""
+
+    group_id: str
+    is_representative: bool
+    cosine_to_rep: float
+
+
+def collapse_drops(seats: Mapping[str, Seat], preferred: Collection[str] = ()) -> set[str]:
+    """The members to drop so each dedup group keeps one survivor among ``seats``.
+
+    A preferred member (a held-out frame) wins, so its near-twins leave the training pool rather
+    than the held-out frame. Otherwise the stored representative wins; when the export holds only
+    other members of the group, the one closest to the representative. The member id breaks ties.
+    """
+    groups: dict[str, list[str]] = {}
+    for member, seat in seats.items():
+        groups.setdefault(seat.group_id, []).append(member)
+    dropped: set[str] = set()
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        pool = [m for m in members if m in preferred] or members
+        winner = min(
+            pool, key=lambda m: (not seats[m].is_representative, -seats[m].cosine_to_rep, m)
+        )
+        dropped.update(m for m in members if m != winner)
+    return dropped
 
 
 def describe_group(

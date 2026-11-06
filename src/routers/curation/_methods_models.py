@@ -43,12 +43,6 @@ class StrategyEntry(BaseModel):
     # ``diverse`` overlay only: largest accepted ``k`` for ``GET /crops?order=diverse``
     # (``max_k``) and ``POST /select/diverse`` (``select_max_k``).
     max_k: int | None = None
-    # ``yolo`` / ``single_class`` export entries only: the ``dedup_threshold``
-    # value to pre-fill when near-duplicate collapsing is switched on, and
-    # its accepted range (the request default itself is ``null`` = off).
-    dedup_threshold_default: float | None = None
-    dedup_threshold_min: float | None = None
-    dedup_threshold_max: float | None = None
     select_max_k: int | None = None
     default_ack_recorded: bool | None = None
     per_run_ack_required: bool | None = None

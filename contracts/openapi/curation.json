@@ -10186,23 +10186,15 @@
             "title": "Class Ids",
             "type": "array"
           },
+          "collapse_near_duplicates": {
+            "default": false,
+            "title": "Collapse Near Duplicates",
+            "type": "boolean"
+          },
           "copy_images": {
             "default": true,
             "title": "Copy Images",
             "type": "boolean"
-          },
-          "dedup_threshold": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold"
           },
           "empty_bg_ratio": {
             "default": 0.1,
@@ -10590,18 +10582,10 @@
       "ExportYoloRequest": {
         "additionalProperties": false,
         "properties": {
-          "dedup_threshold": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold"
+          "collapse_near_duplicates": {
+            "default": false,
+            "title": "Collapse Near Duplicates",
+            "type": "boolean"
           },
           "export_dir": {
             "anyOf": [
@@ -32106,39 +32090,6 @@
           "axis": {
             "title": "Axis",
             "type": "string"
-          },
-          "dedup_threshold_default": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold Default"
-          },
-          "dedup_threshold_max": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold Max"
-          },
-          "dedup_threshold_min": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold Min"
           },
           "default": {
             "title": "Default",

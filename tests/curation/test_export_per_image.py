@@ -28,6 +28,8 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from src.config import CurationConfig
+from src.domain.near_dup import Seat, collapse_drops
+from src.services.curation import export_images
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 
 
@@ -56,11 +58,8 @@ class _FilteringOpenSearch:
     exporter uses, so unvalidated / excluded / dismissed items are actually
     filtered rather than every query returning every doc."""
 
-    def __init__(
-        self, docs: list[dict[str, Any]], embeddings: dict[str, list[float]] | None = None
-    ) -> None:
+    def __init__(self, docs: list[dict[str, Any]]) -> None:
         self._docs = docs
-        self._embeddings = embeddings or {}
         self.queries: list[dict[str, Any]] = []
 
     async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
@@ -81,14 +80,6 @@ class _FilteringOpenSearch:
     async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
         return None
 
-    async def mget(self, index: str, body: dict[str, Any], _source: list[str]) -> dict:  # noqa: ARG002
-        docs = [
-            {'_id': i, '_source': {'image_id': i, _source[1]: self._embeddings[i]}}
-            for i in body['ids']
-            if i in self._embeddings
-        ]
-        return {'docs': docs}
-
 
 def _registry(base_dir: Path) -> InMemoryRegistry:
     """Registry ids 0/1/2 with id 0 deprecated, so dense export ids (alpha=0,
@@ -104,15 +95,10 @@ def _registry(base_dir: Path) -> InMemoryRegistry:
     return reg
 
 
-def _service(
-    tmp_path: Path,
-    docs: list[dict[str, Any]],
-    *,
-    embeddings: dict[str, list[float]] | None = None,
-) -> GenericYoloExportService:
+def _service(tmp_path: Path, docs: list[dict[str, Any]]) -> GenericYoloExportService:
     cfg = CurationConfig(export_root=tmp_path / 'exports', source_root=tmp_path / 'src')
     return GenericYoloExportService(
-        _FilteringOpenSearch(docs, embeddings), config=cfg, registry=_registry(tmp_path / 'reg')
+        _FilteringOpenSearch(docs), config=cfg, registry=_registry(tmp_path / 'reg')
     )
 
 
@@ -398,8 +384,8 @@ def test_unlabeled_objects_preflight_check_warns_with_the_counts() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dedup_collapses_near_duplicate_images_with_all_their_objects(
-    tmp_path: Path,
+async def test_collapse_keeps_one_image_per_stored_group_with_all_its_objects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     docs = [
         _doc('a-1', 'img-a', 1),
@@ -408,13 +394,22 @@ async def test_dedup_collapses_near_duplicate_images_with_all_their_objects(
         _doc('b-2', 'img-b', 2),
         _doc('c-1', 'img-c', 1),
     ]
-    embeddings = {
-        'img-a': [1.0, 0.0, 0.0],
-        'img-b': [0.999, 0.01, 0.0],  # near-duplicate of img-a
-        'img-c': [0.0, 1.0, 0.0],
-    }
-    service = _service(tmp_path, docs, embeddings=embeddings)
-    result = await service.export_dataset(seed=1, copy_images=False, dedup_threshold=0.98)
+    seats = {'img-a': Seat('g', True, 1.0), 'img-b': Seat('g', False, 0.999)}  # img-c: no group
+
+    async def stored_groups(rows):
+        dropped = collapse_drops(seats)
+        kept = [r for r in rows if r.image_id not in dropped]
+        stats = {
+            'enabled': True,
+            'n_input_rows': len(rows),
+            'frames_dropped': len(dropped),
+            'n_output_rows': len(kept),
+        }
+        return kept, stats
+
+    monkeypatch.setattr(export_images, 'collapse_rows', stored_groups)
+    service = _service(tmp_path, docs)
+    result = await service.export_dataset(seed=1, copy_images=False, collapse_near_duplicates=True)
 
     labels = _label_files(Path(result.export_dir))
     stems = sorted(k.split('/')[1] for k in labels)
@@ -456,6 +451,22 @@ def status_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     return TestClient(app)
+
+
+def test_collapse_without_a_run_is_a_409(
+    monkeypatch: pytest.MonkeyPatch, status_client: TestClient
+) -> None:
+    from src.services.near_duplicates.collapse import NoCurrentRunError
+
+    async def refused(self: object, **_kw: object) -> None:
+        raise NoCurrentRunError('start a full build first')
+
+    monkeypatch.setattr(GenericYoloExportService, 'export_dataset', refused)
+    resp = status_client.post(
+        '/curation/projects/default/export/yolo', json={'collapse_near_duplicates': True}
+    )
+    assert resp.status_code == 409
+    assert resp.json()['detail'].startswith('near_dup_no_run')
 
 
 @pytest.mark.asyncio

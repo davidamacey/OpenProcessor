@@ -579,24 +579,23 @@ if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
 
-def test_export_entries_serve_dedup_default_and_range(app_client: TestClient) -> None:
-    from src.services.detection.frame_dedup import DEFAULT_FRAME_DEDUP_THRESHOLD
-
+def test_export_entries_serve_no_cosine_cut(app_client: TestClient) -> None:
     body = app_client.get('/curation/projects/default/methods').json()
     exports = {s['id']: s for s in body['strategies'] if s['axis'] == 'export'}
+    assert set(exports) == {'yolo', 'single_class'}
     for entry in exports.values():
-        assert entry['dedup_threshold_default'] == DEFAULT_FRAME_DEDUP_THRESHOLD == 0.98
-        assert (entry['dedup_threshold_min'], entry['dedup_threshold_max']) == (0.0, 1.0)
+        assert not [k for k in entry if k.startswith('dedup_threshold')]
 
 
-def test_export_requests_enforce_the_served_dedup_range() -> None:
+def test_export_requests_collapse_near_duplicates_is_off_by_default_and_a_cut_is_refused() -> None:
     from pydantic import ValidationError
 
     from src.routers.curation._common_models import ExportSingleClassRequest, ExportYoloRequest
 
-    ExportYoloRequest(dedup_threshold=1.0)
-    for bad in (-0.1, 1.01):
-        with pytest.raises(ValidationError):
-            ExportYoloRequest(dedup_threshold=bad)
-        with pytest.raises(ValidationError):
-            ExportSingleClassRequest(profile_name='p', class_ids=[1], dedup_threshold=bad)
+    assert ExportYoloRequest().collapse_near_duplicates is False
+    assert (
+        ExportSingleClassRequest(profile_name='p', class_ids=[1]).collapse_near_duplicates is False
+    )
+    assert ExportYoloRequest(collapse_near_duplicates=True).collapse_near_duplicates is True
+    with pytest.raises(ValidationError):
+        ExportYoloRequest(dedup_threshold=0.98)

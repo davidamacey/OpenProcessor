@@ -18,11 +18,8 @@ def test_export_status_serves_readiness(api_client: Any) -> None:
         assert body['blocking_reasons']
 
 
-def test_methods_serve_dedup_range_and_diverse_limits(api_client: Any) -> None:
+def test_methods_serve_diverse_limits(api_client: Any) -> None:
     entries = {s['id']: s for s in api_client.get('/methods').json()['strategies']}
-    for export in ('yolo', 'single_class'):
-        e = entries[export]
-        assert e['dedup_threshold_min'] <= e['dedup_threshold_default'] <= e['dedup_threshold_max']
     assert entries['diverse']['max_k'] >= 1
     assert entries['diverse']['select_max_k'] >= entries['diverse']['max_k']
 

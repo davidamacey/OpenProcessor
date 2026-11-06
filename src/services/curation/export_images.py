@@ -39,7 +39,7 @@ from src.services.curation.export_support import (
     even_stratified_sample,
     scroll_hits,
 )
-from src.services.detection.frame_dedup import dedup_rows_by_embedding
+from src.services.near_duplicates.collapse import collapse_near_duplicates as collapse_rows
 
 
 if TYPE_CHECKING:
@@ -62,7 +62,7 @@ _SAFE_STEM = re.compile(r'[^A-Za-z0-9._-]')
 class _ExportImage:
     """One source image and every validated object the export writes for it.
 
-    ``image_id`` + ``has_test_crop`` make it a ``frame_dedup._DedupRow``,
+    ``image_id`` + ``has_test_crop`` make it a ``CollapsibleRow``,
     so near-duplicate collapse runs on images directly. ``has_test_crop``
     is true when any object on the image is a frozen ``test_holdout``
     item; the whole image then goes to ``test``.
@@ -231,7 +231,7 @@ async def select_export_images(
     rows: list[_ExportRow],
     *,
     require_fully_labeled_images: bool,
-    dedup_threshold: float | None,
+    collapse_near_duplicates: bool,
     max_images: int | None,
     seed: int,
 ) -> tuple[list[_ExportImage], dict[str, int], dict[str, Any]]:
@@ -261,10 +261,8 @@ async def select_export_images(
             )
         images = full
     dedup_stats: dict[str, Any] = {'enabled': False}
-    if dedup_threshold is not None:
-        kept, dedup_stats = await dedup_rows_by_embedding(
-            opensearch, images, threshold=dedup_threshold, config=config
-        )
+    if collapse_near_duplicates:
+        kept, dedup_stats = await collapse_rows(images)
         images = sorted(kept, key=lambda im: im.image_id)
 
     sampling_mode = 'all'

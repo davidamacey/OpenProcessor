@@ -20,7 +20,6 @@ from src.routers.curation._selection import SelectionTargets
 from src.services.curation.class_sources import HumanLabelSource
 from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_filter import ItemFilter
-from src.services.detection.frame_dedup import FRAME_DEDUP_THRESHOLD_MAX, FRAME_DEDUP_THRESHOLD_MIN
 from src.services.resource_links import ResourceLink, resource_links_from_config
 
 
@@ -278,12 +277,9 @@ class ExportYoloRequest(BaseModel):
     # Cap on exported source images (a class-balanced sample; every object
     # on a kept image stays). None = full export.
     max_images: int | None = None
-    # Optional whole-frame near-dup cut (cosine on the images index's
-    # secondary embedding). e.g. 0.98 collapses near-identical bursts to
-    # one image; None disables.
-    dedup_threshold: float | None = Field(
-        default=None, ge=FRAME_DEDUP_THRESHOLD_MIN, le=FRAME_DEDUP_THRESHOLD_MAX
-    )
+    # Keep one image per near-duplicate group of the project's current run
+    # (a burst collapses to one image); 409 when the project has no run yet.
+    collapse_near_duplicates: bool = False
     # False (default): an image that also holds unreviewed objects (or
     # objects on a class the export leaves out) is exported with its
     # validated objects labeled; the manifest counts the rest, and training
@@ -332,12 +328,9 @@ class ExportSingleClassRequest(BaseModel):
     empty_bg_ratio: float = 0.1
     # Sample at most this many positive frames; None == all.
     max_positive_images: int | None = None
-    # Optional whole-frame near-dup cut (cosine on the images index's
-    # secondary embedding). e.g. 0.98 collapses near-identical bursts to
-    # one frame; None disables.
-    dedup_threshold: float | None = Field(
-        default=None, ge=FRAME_DEDUP_THRESHOLD_MIN, le=FRAME_DEDUP_THRESHOLD_MAX
-    )
+    # Keep one frame per near-duplicate group of the project's current run
+    # (a burst collapses to one frame); 409 when the project has no run yet.
+    collapse_near_duplicates: bool = False
     # 'whole_frame' (full source frame) or 'item_crop' (parent item crop
     # with the region re-projected) — for whole-image vs crop training
     # A/B. 'item_crop' requires box_source='region'.

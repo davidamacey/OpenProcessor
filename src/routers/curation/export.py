@@ -22,6 +22,7 @@ from src.routers.curation._common_models import ExportYoloRequest
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 from src.services.curation.export_models import REGISTRY_ARTIFACT_CONTENT_TYPES
 from src.services.curation.export_readiness import NothingToExportError, export_blocking_reasons
+from src.services.near_duplicates.collapse import NoCurrentRunError
 
 
 if TYPE_CHECKING:
@@ -71,7 +72,7 @@ async def export_yolo(
             version_tag=payload.version_tag,
             seed=payload.seed,
             max_images=payload.max_images,
-            dedup_threshold=payload.dedup_threshold,
+            collapse_near_duplicates=payload.collapse_near_duplicates,
             require_fully_labeled_images=payload.require_fully_labeled_images,
             split_mode=payload.split_mode,
             include_negative_frames=payload.include_negative_frames,
@@ -83,6 +84,9 @@ async def export_yolo(
         # previous export.
         logger.warning('export_refused_empty', reason=str(exc))
         raise HTTPException(status_code=422, detail=f'nothing to export: {exc}') from exc
+    except NoCurrentRunError as exc:
+        logger.warning('export_refused_no_near_dup_run', reason=str(exc))
+        raise HTTPException(status_code=409, detail=f'near_dup_no_run: {exc}') from exc
     except Exception as exc:
         logger.error('export_failed', error=str(exc))
         raise server_error(500, 'export failed', exc) from exc
@@ -103,7 +107,7 @@ async def export_yolo(
         'images_with_unlabeled_items': result.images_with_unlabeled_items,
         'images_dropped_not_fully_labeled': result.images_dropped_not_fully_labeled,
         'skipped_items': ExportSkippedItems(**result.skipped_items),
-        'dedup': payload.dedup_threshold,
+        'collapse_near_duplicates': payload.collapse_near_duplicates,
         'started_at': result.started_at or None,
         'finished_at': result.finished_at or None,
     }
