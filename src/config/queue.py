@@ -94,7 +94,8 @@ class QueueSettings:
             raise EnvError('OP_QUEUE_URL', url, 'must not carry a password; use the password file')
         if not parts.hostname:
             raise EnvError('OP_QUEUE_URL', url, 'has no host')
-        return cls(url=url, password=_read_password_file('OP_QUEUE_PASSWORD_FILE'))
+        password = _read_secret_file('OP_QUEUE_PASSWORD_FILE', env_str('OP_QUEUE_PASSWORD_FILE'))
+        return cls(url=url, password=password)
 
     @property
     def broker_url(self) -> str:
@@ -106,8 +107,7 @@ class QueueSettings:
         return urlsplit(self.url).scheme == 'rediss'
 
 
-def _read_password_file(name: str) -> str:
-    path = env_str(name)
+def _read_secret_file(name: str, path: str) -> str:
     if not path:
         raise EnvError(name, '', 'is required')
     try:
