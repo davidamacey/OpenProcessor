@@ -60,14 +60,14 @@ def leak_env(
     reference_region_profile: None,
     pg_registry: Any,
     captured_events: list[dict[str, Any]],
-    producer: Any,
-    wakes: Any,
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
     from cachetools import TTLCache
+    from fixtures.job_fixtures import FakeProducer
 
     import src.config.curation_accessors as curation_config_mod
+    from src.clients import task_queue
     from src.config.curation_roles import IndexRole
     from src.core.dependencies import app_state, get_async_triton
     from src.services.curation import index_bootstrap, settings_store
@@ -93,6 +93,13 @@ def leak_env(
     }.items():
         monkeypatch.setenv(f'OP_{name}', str(tmp_path / sub))
     monkeypatch.setenv('OP_S3_ALLOWED', 'sweep-allowed-bucket')
+    # A route that queues a job (class merge, upload, dataset import) sends its message to a
+    # recorder and wakes nobody: there is no broker or Valkey in the sweep.
+    fake_producer = FakeProducer()
+    monkeypatch.setattr(task_queue, 'producer_app', lambda: fake_producer)
+    monkeypatch.setattr(task_queue, 'mark_queued', lambda *_a, **_k: None)
+    monkeypatch.setattr(task_queue, 'clear_queued', lambda *_a, **_k: None)
+    monkeypatch.setattr('src.services.jobs.service.wake', lambda *_a, **_k: None)
     # `ensure_fresh` skips the config read while the snapshot is under a
     # second old, so how many `configs` operations a route issues would
     # depend on how fast the previous route ran, and the sweep compares
