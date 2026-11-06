@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 
+# The `db` tier's PostgreSQL fixtures (pg, two_sessions); inert unless a test asks for them.
+pytest_plugins = ['fixtures.postgres']
+
 # OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
 # DEFAULT_MODEL). A deterministic test value, set before any test module
 # imports vlm_client, so the whole suite doesn't have to configure it
@@ -60,6 +63,19 @@ class _EnvDefaultProjectRecord:
 
 
 DEFAULT_RECORD = _EnvDefaultProjectRecord()
+
+
+@pytest.fixture(autouse=True)
+def _control_plane_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The startup gate finds every dependency up and the schema current.
+
+    The lifespan refuses to start without PostgreSQL, the queue, OpenSearch and Triton, and the
+    Docker-free suite has none of them. A test about the gate itself replaces these two names
+    again with its own probes."""
+    from src.app import startup_gate
+
+    monkeypatch.setattr(startup_gate, 'startup_probes', lambda _settings: {})
+    monkeypatch.setattr(startup_gate, 'check_control_plane', lambda: None)
 
 
 @pytest.fixture(autouse=True)

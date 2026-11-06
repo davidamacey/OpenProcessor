@@ -11,6 +11,15 @@ function bodies). Contracts:
 3. ``src/{services,clients,config,domain,utils,schemas}`` must not import ``fastapi`` or
    ``starlette`` (HTTP stays in the routers).
 4. ``src/{config,domain,utils,schemas}`` must not import ``src.services`` or ``src.clients``.
+5. ``src/db`` must not import ``src.services``, ``src.clients``, ``src.routers``, ``fastapi`` or
+   ``starlette``; ``src/{config,domain,utils,schemas}`` must not import ``src.db``; and
+   ``src/routers`` must not import ``src.db.repos`` (handlers go through services).
+6. ``src/tasks`` must not import ``src.routers``, ``fastapi`` or ``starlette``.
+7. ``src.tasks.runtime`` is a leaf layer. Anything outside ``src/tasks/`` (services, scripts,
+   the trainer, export, the bake-off) may import it and no other task module, and
+   ``src/tasks/runtime/`` itself imports only ``src.db``, ``src.config``, ``src.domain``,
+   ``src.utils`` and itself, so the trainer, export and evaluator images can carry it without
+   FastAPI, OpenSearch or torch.
 
 There is no baseline: a violation fails. The one permanent exception is
 :data:`PERMANENT_EXCEPTIONS`, with its reason; an exception whose import is gone
@@ -72,14 +81,21 @@ CONTRACTS: tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] 
         ('src.services', 'src.clients'),
         (),
     ),
+    (('src/db/',), ('src.services', 'src.clients', 'src.routers', *_NO_HTTP), ()),
+    (('src/config/', 'src/domain/', 'src/utils/', 'src/schemas/'), ('src.db',), ()),
+    (('src/routers/',), ('src.db.repos',), ()),
+    (('src/tasks/',), ('src.routers', *_NO_HTTP), ()),
 )
+
+# The only ``src`` packages ``src/tasks/runtime/`` may import.
+_RUNTIME_MAY_IMPORT = ('src.db', 'src.config', 'src.domain', 'src.utils', 'src.tasks.runtime')
 
 
 def tracked_python(repo_root: Path) -> list[str]:
     out = subprocess.run(  # nosec B603 B607  fixed argv, git from PATH
         ['git', 'ls-files', '-z', '*.py'], cwd=repo_root, capture_output=True, text=True, check=True
     ).stdout
-    return [p for p in out.split('\0') if p.startswith(('src/', 'scripts/'))]
+    return [p for p in out.split('\0') if p.startswith(('src/', 'scripts/', 'docker/', 'export/'))]
 
 
 def _matches(module: str, prefix: str) -> bool:
@@ -102,7 +118,17 @@ def imported_modules(rel: str, tree: ast.AST) -> list[str]:
     return modules
 
 
+def _breaks_task_layers(rel: str, module: str) -> bool:
+    if rel.startswith('src/tasks/runtime/') and (module == 'src' or module.startswith('src.')):
+        return not any(_matches(module, ok) for ok in _RUNTIME_MAY_IMPORT)
+    if not rel.startswith('src/tasks/') and _matches(module, 'src.tasks'):
+        return not _matches(module, 'src.tasks.runtime')
+    return False
+
+
 def violated(rel: str, module: str) -> bool:
+    if _breaks_task_layers(rel, module):
+        return True
     for applies, forbidden, exempt in CONTRACTS:
         if rel.startswith(applies) and not rel.startswith(exempt):
             for f in forbidden:
@@ -149,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(
             'ERROR: layering contract failed. Routers may import services and clients; '
             'services and clients never import routers; clients never import services; '
-            'only routers import fastapi.\n'
+            'only routers import fastapi; src/db imports no service, client or router; '
+            'src/tasks/runtime is a leaf that only db, config, domain and utils may feed.\n'
         )
         for e in errors:
             sys.stderr.write(f'  {e}\n')
