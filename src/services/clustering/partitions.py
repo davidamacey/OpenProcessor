@@ -342,7 +342,59 @@ __all__ = [
     'PartitionError',
     'PartitionMember',
     'PartitionRecord',
+    'PartitionRow',
     'PartitionSpace',
+    'get_partition',
+    'list_partitions',
     'mint_uids',
     'record_partition',
 ]
+
+
+@dataclass(frozen=True)
+class PartitionRow:
+    id: uuid.UUID
+    target: str
+    level: str
+    embedding_field: str
+    method: str
+    status: str
+    n_items: int | None
+    n_clusters: int | None
+    n_review: int | None
+    n_unassigned: int | None
+    metrics: Mapping[str, Any]
+    diff: Mapping[str, Any] | None
+    created_at: str
+    parent_partition_id: uuid.UUID | None
+    serving: bool
+
+
+_SELECT_PARTITION = (
+    'SELECT p.id, p.target, p.level, p.embedding_field, p.method, p.status, p.n_items, '
+    'p.n_clusters, p.n_review, p.n_unassigned, p.metrics, p.diff, p.created_at::text, '
+    'p.parent_partition_id, COALESCE(a.serving_partition_id = p.id, false) AS serving '
+    'FROM cluster_partitions p LEFT JOIN cluster_activations a ON a.project_id = p.project_id '
+    'AND a.target = p.target AND a.level = p.level AND a.embedding_field = p.embedding_field '
+)
+
+
+async def list_partitions(
+    session: AsyncSession, *, target: str | None = None, limit: int = 50
+) -> list[PartitionRow]:
+    """The project's partitions, newest first (the session's scope limits it to one project)."""
+    rows = await session.execute(
+        text(
+            _SELECT_PARTITION + 'WHERE (CAST(:target AS text) IS NULL OR p.target = :target) '
+            'ORDER BY p.created_at DESC, p.id DESC LIMIT :limit'
+        ),
+        {'target': target, 'limit': limit},
+    )
+    return [PartitionRow(*row) for row in rows]
+
+
+async def get_partition(session: AsyncSession, partition_id: uuid.UUID) -> PartitionRow | None:
+    row = (
+        await session.execute(text(_SELECT_PARTITION + 'WHERE p.id = :id'), {'id': partition_id})
+    ).first()
+    return None if row is None else PartitionRow(*row)

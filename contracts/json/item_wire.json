@@ -47,6 +47,7 @@
     "proposed_class_name",
     "needs_new_class",
     "needs_new_class_note",
+    "cluster",
     "cluster_id",
     "cluster_kind",
     "cluster_distance",
@@ -187,6 +188,90 @@
           "box_id"
         ],
         "title": "AssistBoxWire",
+        "type": "object"
+      },
+      "ClusterRef": {
+        "description": "The served cluster of an item (the active partition's assignment).",
+        "properties": {
+          "assigned_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "run",
+                  "incremental",
+                  "edit"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Assigned By"
+          },
+          "margin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Margin"
+          },
+          "partition_id": {
+            "title": "Partition Id",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Score"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assigned",
+                  "review",
+                  "unassigned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "State"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Uid"
+          }
+        },
+        "required": [
+          "partition_id"
+        ],
+        "title": "ClusterRef",
         "type": "object"
       },
       "ItemAssistWire": {
@@ -601,6 +686,17 @@
         "default": false,
         "title": "Class Validated",
         "type": "boolean"
+      },
+      "cluster": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ClusterRef"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       },
       "cluster_distance": {
         "anyOf": [

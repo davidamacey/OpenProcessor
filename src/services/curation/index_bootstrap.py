@@ -15,6 +15,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.assist_fields import ensure_assist_fields
+from src.clients.curation_opensearch.cluster_fields import ensure_items_cluster_partition_fields
 from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_cluster_geometry_fields,
     ensure_items_embedding_fields,
@@ -183,6 +184,7 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
     return (
         ('vlm_raw_label', ensure_items_vlm_raw_label_fields),
         ('label_cluster', ensure_items_label_cluster_fields),
+        ('cluster_partition', ensure_items_cluster_partition_fields),
         ('provenance', ensure_items_provenance_fields),
         ('request_id', ensure_items_request_id_field),
         ('images_upload_fields', ensure_images_upload_fields),

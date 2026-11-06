@@ -4684,6 +4684,84 @@
         "title": "CloneSettingsRequest",
         "type": "object"
       },
+      "ClusterActivationAccepted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "pending_partition_id": {
+            "format": "uuid",
+            "title": "Pending Partition Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "revision",
+          "pending_partition_id"
+        ],
+        "title": "ClusterActivationAccepted",
+        "type": "object"
+      },
+      "ClusterActivationRequest": {
+        "properties": {
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The activation revision the caller saw; null for a first activation.",
+            "title": "Expected Revision"
+          },
+          "expected_serving_partition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The serving partition the caller saw; null for a first activation.",
+            "title": "Expected Serving Partition Id"
+          },
+          "level": {
+            "const": "class",
+            "default": "class",
+            "title": "Level",
+            "type": "string"
+          },
+          "partition_id": {
+            "format": "uuid",
+            "title": "Partition Id",
+            "type": "string"
+          },
+          "target": {
+            "enum": [
+              "item",
+              "region_box"
+            ],
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "partition_id"
+        ],
+        "title": "ClusterActivationRequest",
+        "type": "object"
+      },
       "ClusterCard": {
         "properties": {
           "cluster_id": {
@@ -5102,6 +5180,236 @@
         "title": "ClusterListResponse",
         "type": "object"
       },
+      "ClusterPartitionList": {
+        "properties": {
+          "partitions": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterPartitionView"
+            },
+            "title": "Partitions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "partitions"
+        ],
+        "title": "ClusterPartitionList",
+        "type": "object"
+      },
+      "ClusterPartitionView": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "embedding_field": {
+            "title": "Embedding Field",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "n_clusters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Clusters"
+          },
+          "n_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Items"
+          },
+          "n_review": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Review"
+          },
+          "n_unassigned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Unassigned"
+          },
+          "parent_partition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Partition Id"
+          },
+          "serving": {
+            "title": "Serving",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "building",
+              "ready",
+              "failed",
+              "discarded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "level",
+          "embedding_field",
+          "method",
+          "status",
+          "n_items",
+          "n_clusters",
+          "n_review",
+          "n_unassigned",
+          "metrics",
+          "diff",
+          "created_at",
+          "parent_partition_id",
+          "serving"
+        ],
+        "title": "ClusterPartitionView",
+        "type": "object"
+      },
+      "ClusterRef": {
+        "description": "The served cluster of an item (the active partition's assignment).",
+        "properties": {
+          "assigned_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "run",
+                  "incremental",
+                  "edit"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned By"
+          },
+          "margin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin"
+          },
+          "partition_id": {
+            "title": "Partition Id",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assigned",
+                  "review",
+                  "unassigned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          }
+        },
+        "required": [
+          "partition_id"
+        ],
+        "title": "ClusterRef",
+        "type": "object"
+      },
       "ClusterRepresentative": {
         "properties": {
           "class_name": {
@@ -5149,6 +5457,42 @@
           "cluster_subid"
         ],
         "title": "ClusterRepresentative",
+        "type": "object"
+      },
+      "ClusterRunAccepted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "ClusterRunAccepted",
+        "type": "object"
+      },
+      "ClusterRunRequest": {
+        "properties": {
+          "level": {
+            "const": "class",
+            "default": "class",
+            "title": "Level",
+            "type": "string"
+          },
+          "target": {
+            "enum": [
+              "item",
+              "region_box"
+            ],
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "ClusterRunRequest",
         "type": "object"
       },
       "ClusterSortOption": {
@@ -13189,6 +13533,16 @@
             "default": false,
             "title": "Class Validated",
             "type": "boolean"
+          },
+          "cluster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClusterRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "cluster_distance": {
             "anyOf": [
@@ -24035,6 +24389,16 @@
             "title": "Class Validated",
             "type": "boolean"
           },
+          "cluster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClusterRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cluster_distance": {
             "anyOf": [
               {
@@ -25304,6 +25668,17 @@
             "title": "Candidate Index",
             "type": "integer"
           },
+          "cluster_assigned_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Assigned By"
+          },
           "cluster_distance": {
             "anyOf": [
               {
@@ -25326,6 +25701,50 @@
             ],
             "title": "Cluster Id"
           },
+          "cluster_margin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Margin"
+          },
+          "cluster_partition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Partition Id"
+          },
+          "cluster_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Score"
+          },
+          "cluster_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster State"
+          },
           "cluster_subid": {
             "anyOf": [
               {
@@ -25336,6 +25755,17 @@
               }
             ],
             "title": "Cluster Subid"
+          },
+          "cluster_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Uid"
           },
           "confidence": {
             "anyOf": [
@@ -25634,6 +26064,12 @@
           "cluster_id",
           "cluster_subid",
           "cluster_distance",
+          "cluster_partition_id",
+          "cluster_uid",
+          "cluster_state",
+          "cluster_score",
+          "cluster_margin",
+          "cluster_assigned_by",
           "detected_at",
           "locked",
           "bbox_in_parent",
@@ -27995,6 +28431,16 @@
             "title": "Class Validated",
             "type": "boolean"
           },
+          "cluster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClusterRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cluster_distance": {
             "anyOf": [
               {
@@ -29664,6 +30110,16 @@
             "default": false,
             "title": "Class Validated",
             "type": "boolean"
+          },
+          "cluster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClusterRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "cluster_distance": {
             "anyOf": [
@@ -40499,6 +40955,59 @@
         ]
       }
     },
+    "/curation/projects/{project}/clusters/activation": {
+      "put": {
+        "description": "Activate a ready partition; 409 `partition_conflict` if the serving partition or revision moved.",
+        "operationId": "activate_cluster_partition_curation_projects__project__clusters_activation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterActivationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterActivationAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Cluster Partition",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/clusters/auto_promote": {
       "post": {
         "description": "Promote classifier-labelled crops that agree with their high-purity cluster.\n\nValidates each such crop (``class_source='cluster_majority_agreement'``).\nGated on the accuracy audit (``POST /audit/start``): every class the run would\npromote needs enough audited crops and an audited detector precision of at\nleast ``promote_min_precision``, else ``409 audit_required`` or\n``409 audit_precision_low`` listing the classes and nothing is written.\n``force=true`` bypasses the gate; a dry run is never gated.",
@@ -40615,6 +41124,129 @@
           }
         },
         "summary": "Auto Promote Clusters Endpoint",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/clusters/partitions": {
+      "get": {
+        "operationId": "list_cluster_partitions_curation_projects__project__clusters_partitions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(item|region_box)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterPartitionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Cluster Partitions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/clusters/partitions/{partition_id}": {
+      "get": {
+        "operationId": "get_cluster_partition_curation_projects__project__clusters_partitions__partition_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "partition_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Partition Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterPartitionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Cluster Partition",
         "tags": [
           "Curation"
         ]
@@ -40798,6 +41430,59 @@
           }
         },
         "summary": "Cluster Representatives",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/clusters/runs": {
+      "post": {
+        "description": "Queue a clustering run for a target; 409 `job_busy` while one for that space is active.",
+        "operationId": "start_cluster_run_curation_projects__project__clusters_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterRunAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Cluster Run",
         "tags": [
           "Curation"
         ]

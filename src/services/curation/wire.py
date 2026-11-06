@@ -162,6 +162,21 @@ def _proposed_class(
     }
 
 
+def cluster_object(src: dict[str, Any]) -> dict[str, Any] | None:
+    """The served cluster of an item or box element, nested on the wire (plan 5.5); ``None``
+    until a partition has been projected onto it."""
+    if src.get('cluster_partition_id') is None:
+        return None
+    return {
+        'uid': src.get('cluster_uid'),
+        'partition_id': src.get('cluster_partition_id'),
+        'state': src.get('cluster_state'),
+        'score': src.get('cluster_score'),
+        'margin': src.get('cluster_margin'),
+        'assigned_by': src.get('cluster_assigned_by'),
+    }
+
+
 def current_cluster_distance(src: dict[str, Any]) -> Any:
     """The stored ``cluster_distance`` if it was measured against the item's
     current cluster (``cluster_distance_cluster_id`` absent — written
@@ -299,6 +314,7 @@ def serialize_item(
         'needs_new_class_note': src.get('needs_new_class_note'),
         # Why the item has no vector (null = written before the field existed).
         'embedding_state': src.get('embedding_state'),
+        'cluster': cluster_object(src),
         'cluster_id': src.get('cluster_id'),
         'cluster_kind': cluster_kind(src.get('cluster_id')),
         # Null when measured against a cluster the item has since left.

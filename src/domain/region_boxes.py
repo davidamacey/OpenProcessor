@@ -69,6 +69,12 @@ class RegionBox:
     cluster_id: int | None = None
     cluster_subid: str | None = None
     cluster_distance: float | None = None
+    cluster_partition_id: str | None = None
+    cluster_uid: str | None = None
+    cluster_state: str | None = None
+    cluster_score: float | None = None
+    cluster_margin: float | None = None
+    cluster_assigned_by: str | None = None
     detected_at: str | None = None
 
     def to_doc(self) -> dict[str, Any]:
