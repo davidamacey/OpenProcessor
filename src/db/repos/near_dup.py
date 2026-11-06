@@ -26,6 +26,7 @@ from src.db.models.near_dup import (
 
 
 if TYPE_CHECKING:
+    import datetime as dt
     import uuid
     from collections.abc import Iterable, Mapping, Sequence
 
@@ -244,6 +245,8 @@ class RunRow:
     oversized_split: int
     holdout_absorbed: int
     algorithm_version: str
+    started_at: dt.datetime
+    finished_at: dt.datetime | None
 
 
 def _run_row(r: NearDupRun) -> RunRow:
@@ -251,7 +254,7 @@ def _run_row(r: NearDupRun) -> RunRow:
         r.id, r.project_id, r.level, r.mode, r.status, r.space, r.profile_config_id,
         r.profile_revision, dict(r.params), r.members_scored, r.dedup_groups, r.leak_groups,
         r.grouped_members, r.largest_group, r.oversized_split, r.holdout_absorbed,
-        r.algorithm_version,
+        r.algorithm_version, r.started_at, r.finished_at,
     )  # fmt: skip
 
 
@@ -517,3 +520,161 @@ async def parent_member_states(
         select(NearDupRun.parent_run_id).where(NearDupRun.id == run_id)
     )
     return None if parent_id is None else await member_states(session, parent_id)
+
+
+async def pending_count(session: AsyncSession, project_id: uuid.UUID | None, level: str) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(NearDupPending)
+            .where(
+                _same_project(NearDupPending.project_id, project_id), NearDupPending.level == level
+            )
+        )
+        or 0
+    )
+
+
+async def list_runs(
+    session: AsyncSession, project_id: uuid.UUID, level: str | None, limit: int
+) -> list[RunRow]:
+    stmt = select(NearDupRun).where(NearDupRun.project_id == project_id)
+    if level is not None:
+        stmt = stmt.where(NearDupRun.level == level)
+    rows = await session.scalars(stmt.order_by(NearDupRun.started_at.desc()).limit(limit))
+    return [_run_row(r) for r in rows]
+
+
+@dataclass(frozen=True)
+class GroupSummaryRow:
+    lineage_id: uuid.UUID
+    purpose: str
+    member_count: int
+    representative_id: str
+    min_edge_cosine: float
+    min_cosine_to_rep: float
+    has_holdout: bool
+
+
+def _summary(g: NearDupGroup) -> GroupSummaryRow:
+    return GroupSummaryRow(
+        g.lineage_id, g.purpose, g.member_count, g.representative_id,
+        float(g.min_edge_cosine), float(g.min_cosine_to_rep), g.has_holdout,
+    )  # fmt: skip
+
+
+async def page_groups(
+    session: AsyncSession,
+    run_id: uuid.UUID,
+    *,
+    purpose: str,
+    min_size: int,
+    has_holdout: bool | None,
+    after: tuple[int, uuid.UUID] | None,
+    limit: int,
+) -> list[GroupSummaryRow]:
+    """Groups of one run, largest first; ``after`` is the ``(size, lineage)`` of the last row."""
+    stmt = select(NearDupGroup).where(
+        NearDupGroup.run_id == run_id,
+        NearDupGroup.purpose == purpose,
+        NearDupGroup.member_count >= min_size,
+    )
+    if has_holdout is not None:
+        stmt = stmt.where(NearDupGroup.has_holdout == has_holdout)
+    if after is not None:
+        size, lineage = after
+        stmt = stmt.where(
+            or_(
+                NearDupGroup.member_count < size,
+                and_(NearDupGroup.member_count == size, NearDupGroup.lineage_id > lineage),
+            )
+        )
+    rows = await session.scalars(
+        stmt.order_by(NearDupGroup.member_count.desc(), NearDupGroup.lineage_id).limit(limit)
+    )
+    return [_summary(g) for g in rows]
+
+
+async def group_with_members(
+    session: AsyncSession, run_id: uuid.UUID, lineage_id: uuid.UUID, purpose: str
+) -> tuple[GroupSummaryRow, list[tuple[str, bool, float]]] | None:
+    group = await session.scalar(
+        select(NearDupGroup).where(
+            NearDupGroup.run_id == run_id,
+            NearDupGroup.lineage_id == lineage_id,
+            NearDupGroup.purpose == purpose,
+        )
+    )
+    if group is None:
+        return None
+    rows = await session.execute(
+        select(
+            NearDupMember.member_id, NearDupMember.is_representative, NearDupMember.cosine_to_rep
+        )
+        .where(NearDupMember.group_id == group.id)
+        .order_by(NearDupMember.cosine_to_rep.desc(), NearDupMember.member_id)
+    )
+    return _summary(group), [
+        (r.member_id, r.is_representative, float(r.cosine_to_rep)) for r in rows
+    ]
+
+
+@dataclass(frozen=True)
+class DecisionRow:
+    id: uuid.UUID
+    level: str
+    a_id: str
+    b_id: str
+    decision: str
+    decided_by: str
+    decided_at: Any
+
+
+def _decision(d: NearDupDecision) -> DecisionRow:
+    return DecisionRow(d.id, d.level, d.a_id, d.b_id, d.decision, d.decided_by, d.decided_at)
+
+
+async def upsert_decision(
+    session: AsyncSession,
+    project_id: uuid.UUID,
+    *,
+    level: str,
+    a_id: str,
+    b_id: str,
+    decision: str,
+    decided_by: str,
+) -> DecisionRow:
+    lo, hi = (a_id, b_id) if a_id < b_id else (b_id, a_id)
+    insert = pg_insert(NearDupDecision).values(
+        project_id=project_id,
+        level=level,
+        a_id=lo,
+        b_id=hi,
+        decision=decision,
+        decided_by=decided_by,
+    )
+    stmt = insert.on_conflict_do_update(
+        constraint='uq_near_dup_decisions_pair',
+        set_={
+            'decision': insert.excluded.decision,
+            'decided_by': insert.excluded.decided_by,
+            'decided_at': func.now(),
+        },
+    ).returning(NearDupDecision)
+    return _decision((await session.execute(stmt)).scalar_one())
+
+
+async def delete_decision(
+    session: AsyncSession, project_id: uuid.UUID, decision_id: uuid.UUID
+) -> DecisionRow | None:
+    row = await session.scalar(
+        select(NearDupDecision).where(
+            NearDupDecision.id == decision_id, NearDupDecision.project_id == project_id
+        )
+    )
+    if row is None:
+        return None
+    kept = _decision(row)
+    await session.delete(row)
+    await session.flush()
+    return kept

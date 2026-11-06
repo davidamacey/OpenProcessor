@@ -57,6 +57,7 @@ import src.routers.curation.label_ops
 import src.routers.curation.label_undo
 import src.routers.curation.methods
 import src.routers.curation.models
+import src.routers.curation.near_duplicates
 import src.routers.curation.open_vocab
 import src.routers.curation.open_vocab_test
 
