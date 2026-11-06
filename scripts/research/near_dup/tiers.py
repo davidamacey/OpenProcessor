@@ -136,6 +136,14 @@ def cost(paths: list[Path], repeat: int) -> dict:
             rgb.thumbnail((512, 512), Image.Resampling.BILINEAR)
             hashes.pdq_bits(np.asarray(rgb))
 
+        decoded = hashes.decode_rgb(p)
+
+        def phash_only(img: Image.Image = decoded) -> None:
+            hashes.phash_bits(img)
+
+        def dhash_only(img: Image.Image = decoded) -> None:
+            hashes.dhash_bits(img)
+
         def decode_only(path: Path = p) -> None:
             hashes.decode_rgb(path)
 
@@ -144,6 +152,8 @@ def cost(paths: list[Path], repeat: int) -> dict:
                 'megapixels': w * h / 1e6,
                 'bytes': p.stat().st_size,
                 'decode_ms': hashes.timed(decode_only, repeat=repeat)[0],
+                'phash_ms_after_decode': hashes.timed(phash_only, repeat=repeat)[0],
+                'dhash_ms_after_decode': hashes.timed(dhash_only, repeat=repeat)[0],
                 'full_pdq_ms': hashes.timed(full, repeat=repeat)[0],
                 'tile_pdq_ms': hashes.timed(tile, repeat=repeat)[0],
                 'draft_pdq_ms': hashes.timed(draft, repeat=repeat)[0]
@@ -151,7 +161,14 @@ def cost(paths: list[Path], repeat: int) -> dict:
                 else None,
             }
         )
-    keys = ('decode_ms', 'full_pdq_ms', 'tile_pdq_ms', 'draft_pdq_ms')
+    keys = (
+        'decode_ms',
+        'phash_ms_after_decode',
+        'dhash_ms_after_decode',
+        'full_pdq_ms',
+        'tile_pdq_ms',
+        'draft_pdq_ms',
+    )
     summary = {k: statistics.median([v for r in rows if (v := r[k]) is not None]) for k in keys}
     summary['median_megapixels'] = statistics.median(float(r['megapixels'] or 0) for r in rows)
     summary['ingest_ms_per_image'] = INGEST_MS
@@ -212,7 +229,7 @@ def perceptual(
             if name == 'quality':
                 continue
             hi, hj, hd = hashes.hamming_pairs(words[idx], bits[name])
-            grid = list(range(0, bits[name] + 1, 1 if bits[name] <= 64 else 2))
+            grid = list(range(0, bits[name] + 1, 1 if bits[name] <= 32 else 2))
             alone, union = {}, {}
             for t in grid:
                 mask = hd <= t
@@ -245,6 +262,11 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument('--repeat', type=int, default=3)
     e.add_argument('--workers', type=int, default=8)
     e.add_argument('--out', type=Path, required=True)
+    s = sub.add_parser('sha-cost', help='SHA-256 cost only, on a sample of the given roots')
+    s.add_argument('--root', action='append', required=True, help='name=directory (repeatable)')
+    s.add_argument('--repeat', type=int, default=3)
+    s.add_argument('--sample', type=int, default=3000)
+    s.add_argument('--out', type=Path, required=True)
     c = sub.add_parser('cost')
     c.add_argument('--images', type=Path, required=True, help='directory of large images')
     c.add_argument('--limit', type=int, default=30)
@@ -268,6 +290,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == 'exact':
         roots = {s.split('=', 1)[0]: Path(s.split('=', 1)[1]) for s in args.root}
         result = exact(roots, args.repeat, args.workers)
+    elif args.cmd == 'sha-cost':
+        files = sorted(p for r in args.root for p in _files(Path(r.split('=', 1)[1])))
+        result = _sha_cost(files[:: max(1, len(files) // args.sample)], args.repeat)
     elif args.cmd == 'cost':
         imgs = sorted(args.images.rglob('*.jp*g'), key=lambda q: -q.stat().st_size)[: args.limit]
         result = cost(imgs, args.repeat)
@@ -282,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
             hs = compute_hashes([r['path'] for r in rows], args.workers)
             np.savez(args.hash_cache, **hs)  # type: ignore[arg-type]
         p1 = json.loads(args.p1.read_text())
-        result = perceptual(x, rows, hs, p1, args.seeds, {'pdq': 256, 'phash': 64, 'dhash': 64})
+        result = perceptual(x, rows, hs, p1, args.seeds, {'pdq': 64, 'phash': 32, 'dhash': 32})
         result['pdq_quality_median'] = float(np.median(hs['quality']))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=1))
