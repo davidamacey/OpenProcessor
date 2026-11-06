@@ -45,11 +45,11 @@ async def _reload(client: Any, axis: str = 'registry') -> Any:
     """Re-read the registry after a write: the exact state, not this
     process's guess of it (another uvicorn worker may have written too), and
     tell every open UI (``vlm.changed`` on the global stream)."""
-    from src.services.events.publish import publish_global_event
+    from src.services.events.publish import apublish_global_event
 
     store = get_global_config_store()
     await store.refresh(client)
-    publish_global_event('vlm.changed', axis=axis)
+    await apublish_global_event('vlm.changed', axis=axis)
     return store.current
 
 

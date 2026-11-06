@@ -3,8 +3,8 @@
 ``publish`` keeps the event hub's name and the (type, fields) shape of its call sites. With a
 session the row joins the caller's transaction and the Valkey wake-up is sent only after that
 transaction commits (a rolled-back change emits nothing). Without a session the call opens its
-own short transaction. Inside a running event loop that write is scheduled as a task, because
-the hub's ``publish`` never blocked its caller either; outside a loop it runs inline.
+own short transaction. Sync ``publish`` is for threads and Celery children; async code awaits
+``apublish`` so a failed write reaches the caller instead of being lost.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from src.config.project_context import current_project
-from src.core.logging import get_logger
 from src.db.repos.events import insert_event, insert_event_async
 from src.db.session import (
     async_session_factory,
@@ -30,12 +29,10 @@ from src.tasks.runtime.event_wakeup import wake
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-
-logger = get_logger(__name__)
 
 # The only event families allowed on the global stream: project lifecycle, the combine job that
 # builds a new project (its ``target``) and the deployment-wide VLM registry.
@@ -56,29 +53,16 @@ GLOBAL: Final = _Global()
 type Target = uuid.UUID | str | _Global | None
 
 
-_tasks: set[asyncio.Task[None]] = set()
-
-
-def _run_wake(project_id: uuid.UUID | None) -> None:
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        wake(project_id)
-        return
-    # The wake-up is a blocking socket call (1 s timeout); keep it off the event loop.
-    task = loop.create_task(asyncio.to_thread(wake, project_id))
-    _tasks.add(task)
-    task.add_done_callback(_tasks.discard)
-
-
 def _pend_wake(session: Session, project_id: uuid.UUID | None) -> None:
     session.info.setdefault(_WAKES, set()).add(project_id)
 
 
 @event.listens_for(Session, 'after_commit')
 def _send_wakes(session: Session) -> None:
+    # A short blocking call (1 s socket timeouts) after the commit; its failure is logged inside
+    # ``wake`` because the listener's 2 s tick delivers the committed row anyway.
     for project_id in session.info.pop(_WAKES, ()):
-        _run_wake(project_id)
+        wake(project_id)
 
 
 @event.listens_for(Session, 'after_rollback')
@@ -108,17 +92,16 @@ def _write_sync(target: uuid.UUID | str | None, event_type: str, body: dict[str,
 
 
 async def _write_async(
-    target: uuid.UUID | str | None, event_type: str, body: dict[str, Any]
+    target: uuid.UUID | str | None, events: Sequence[tuple[str, dict[str, Any]]]
 ) -> None:
     async with async_session_factory()() as session, deployment_tx(session, 'event publish'):
-        inserted = await insert_event_async(session, target, event_type, body)
-        _pend_wake(session.sync_session, inserted.project_id)
+        for event_type, body in events:
+            inserted = await insert_event_async(session, target, event_type, body)
+            _pend_wake(session.sync_session, inserted.project_id)
 
 
-def _log_failure(task: asyncio.Task[None]) -> None:
-    _tasks.discard(task)
-    if not task.cancelled() and (exc := task.exception()) is not None:
-        logger.warning('event_publish_failed', error=str(exc))
+class PublishInEventLoopError(RuntimeError):
+    """``publish`` was called where a loop is running: it would block the loop on the database."""
 
 
 def publish(
@@ -130,24 +113,23 @@ def publish(
 ) -> None:
     """Record an event for ``project`` (default: the bound project; ``GLOBAL``: the global stream).
 
-    With ``session`` the row joins that transaction. Without one: inside a running loop the
-    write is scheduled (failures are logged, never raised into the caller); outside a loop it
-    runs inline and raises on failure.
+    With ``session`` the row joins that transaction. Without one it opens its own and commits.
+    Async code calls :func:`apublish`; calling this inside a running event loop raises
+    :class:`PublishInEventLoopError` rather than blocking the loop or dropping the write.
     """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        raise PublishInEventLoopError('publish() blocks on the database; use await apublish()')
     target = _resolve(project)
     body = _stamp(payload)
     if session is not None:
         inserted = insert_event(session, target, event_type, body)
         _pend_wake(session, inserted.project_id)
         return
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        _write_sync(target, event_type, body)
-        return
-    task = loop.create_task(_write_async(target, event_type, body))
-    _tasks.add(task)
-    task.add_done_callback(_log_failure)
+    _write_sync(target, event_type, body)
 
 
 async def apublish(
@@ -161,17 +143,33 @@ async def apublish(
     target = _resolve(project)
     body = _stamp(payload)
     if session is None:
-        await _write_async(target, event_type, body)
+        await _write_async(target, [(event_type, body)])
         return
     inserted = await insert_event_async(session, target, event_type, body)
     _pend_wake(session.sync_session, inserted.project_id)
 
 
-def publish_global_event(
-    event_type: str,
-    *,
-    target: str | None = None,
-    **fields: Any,
+async def apublish_many(
+    events: Sequence[tuple[str, Mapping[str, Any]]], *, project: Target = None
+) -> None:
+    """Several events in one transaction (one wake-up), for a batch of ingest or label writes."""
+    if not events:
+        return
+    target = _resolve(project)
+    await _write_async(target, [(event_type, _stamp(payload)) for event_type, payload in events])
+
+
+def _global_body(event_type: str, target: str | None, fields: dict[str, Any]) -> dict[str, Any]:
+    if not event_type.startswith(GLOBAL_EVENT_PREFIXES):
+        raise ValueError(f'{event_type!r} is not a global event type')
+    if reserved := _RESERVED_KEYS & fields.keys():
+        raise ValueError(f'fields may not set the event envelope: {sorted(reserved)}')
+    topic = 'vlm' if event_type.startswith('vlm.') else GLOBAL_EVENT_TOPIC
+    return {**fields, 'topic': topic, 'target': target}
+
+
+async def apublish_global_event(
+    event_type: str, *, target: str | None = None, **fields: Any
 ) -> None:
     """Publish onto the global stream, whatever project (if any) is bound.
 
@@ -179,32 +177,19 @@ def publish_global_event(
     override the envelope. ``target`` names the project a ``combine.*`` / ``project.*`` event is
     about; it is on the wire as ``null`` when not given.
     """
-    if not event_type.startswith(GLOBAL_EVENT_PREFIXES):
-        raise ValueError(f'{event_type!r} is not a global event type')
-    if reserved := _RESERVED_KEYS & fields.keys():
-        raise ValueError(f'fields may not set the event envelope: {sorted(reserved)}')
-    topic = 'vlm' if event_type.startswith('vlm.') else GLOBAL_EVENT_TOPIC
-    publish(event_type, {**fields, 'topic': topic, 'target': target}, project=GLOBAL)
+    await apublish(event_type, _global_body(event_type, target, fields), project=GLOBAL)
 
 
-def publish_crop_created(crop_id: str, image_path: str = '') -> None:
-    publish('crop.created', {'topic': 'crop', 'crop_id': crop_id, 'image_path': image_path})
-
-
-def publish_crop_classified(
-    crop_id: str,
-    *,
-    class_id: int | None,
-    class_name: str | None = None,
-    class_source: str = '',
-) -> None:
-    publish(
-        'crop.classified',
-        {
-            'topic': 'crop',
-            'crop_id': crop_id,
-            'class_id': class_id,
-            'class_name': class_name,
-            'class_source': class_source,
-        },
+async def apublish_crops_created(crops: Sequence[tuple[str, str]]) -> None:
+    """``crop.created`` for each ``(crop_id, image_path)``."""
+    await apublish_many(
+        [
+            ('crop.created', {'topic': 'crop', 'crop_id': crop_id, 'image_path': image_path})
+            for crop_id, image_path in crops
+        ]
     )
+
+
+async def apublish_crops_classified(classified: Sequence[Mapping[str, Any]]) -> None:
+    """``crop.classified`` for each mapping with ``crop_id``, ``class_id``, ``class_name``, ``class_source``."""
+    await apublish_many([('crop.classified', {'topic': 'crop', **c}) for c in classified])

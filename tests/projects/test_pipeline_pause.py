@@ -118,10 +118,14 @@ def test_pause_publishes_a_global_event(
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
     published: list[tuple[str, dict]] = []
+
+    async def _record_global(event_type: str, **fields: object) -> None:
+        published.append((event_type, fields))
+
     monkeypatch.setattr(
         event_publish,
-        'publish_global_event',
-        lambda event_type, **fields: published.append((event_type, fields)),
+        'apublish_global_event',
+        _record_global,
     )
 
     assert app_client.post('/curation/projects/default/pause').status_code == 200

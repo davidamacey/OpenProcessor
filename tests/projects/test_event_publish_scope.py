@@ -14,7 +14,7 @@ from src.config.curation_accessors import base_curation_config
 from src.config.project_context import ProjectNotBound, bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.events import publish as publish_module
-from src.services.events.publish import GLOBAL, publish_crop_created, publish_global_event
+from src.services.events.publish import GLOBAL, apublish_crops_created, apublish_global_event
 
 
 # Binding is part of what is under test here.
@@ -36,11 +36,12 @@ def _record(slug: str) -> ProjectRecord:
     )
 
 
-def test_a_project_event_is_stamped_with_the_bound_project(
+@pytest.mark.asyncio
+async def test_a_project_event_is_stamped_with_the_bound_project(
     captured_events: list[dict[str, Any]],
 ) -> None:
     with bind_project(_record('alpha')):
-        publish_crop_created('alpha-item-0001')
+        await apublish_crops_created([('alpha-item-0001', '')])
     (event,) = captured_events
     assert (event['type'], event['project'], event['crop_id']) == (
         'crop.created',
@@ -57,17 +58,23 @@ def test_an_unbound_publish_is_refused(captured_events: list[dict[str, Any]]) ->
     assert captured_events == []
 
 
-def test_only_global_families_may_go_global(captured_events: list[dict[str, Any]]) -> None:
+@pytest.mark.asyncio
+async def test_only_global_families_may_go_global(captured_events: list[dict[str, Any]]) -> None:
     with pytest.raises(ValueError, match='not a global event type'):
-        publish_global_event('crop.created', crop_id='x')
+        await apublish_global_event('crop.created', crop_id='x')
     assert captured_events == []
 
 
-def test_combine_progress_goes_global_with_target(captured_events: list[dict[str, Any]]) -> None:
+@pytest.mark.asyncio
+async def test_combine_progress_goes_global_with_target(
+    captured_events: list[dict[str, Any]],
+) -> None:
     """The combine target is ``building`` (binds refused), so its progress rides the global
     stream and names the target, whatever project the publisher has bound."""
     with bind_project(_record('alpha')):
-        publish_global_event('combine.progress', target='cars-all', job_id='cmb_1', done=3, total=9)
+        await apublish_global_event(
+            'combine.progress', target='cars-all', job_id='cmb_1', done=3, total=9
+        )
     (event,) = captured_events
     assert event['type'] == 'combine.progress'
     assert event['project'] is None
@@ -76,26 +83,31 @@ def test_combine_progress_goes_global_with_target(captured_events: list[dict[str
     assert (event['job_id'], event['done'], event['total']) == ('cmb_1', 3, 9)
 
 
-def test_global_event_target_is_always_on_the_wire(captured_events: list[dict[str, Any]]) -> None:
-    publish_global_event('project.deleted')
+@pytest.mark.asyncio
+async def test_global_event_target_is_always_on_the_wire(
+    captured_events: list[dict[str, Any]],
+) -> None:
+    await apublish_global_event('project.deleted')
     (event,) = captured_events
     assert event['target'] is None
     assert event['project'] is None
 
 
-def test_the_vlm_family_carries_its_own_topic(captured_events: list[dict[str, Any]]) -> None:
-    publish_global_event('vlm.changed', axis='endpoints')
+@pytest.mark.asyncio
+async def test_the_vlm_family_carries_its_own_topic(captured_events: list[dict[str, Any]]) -> None:
+    await apublish_global_event('vlm.changed', axis='endpoints')
     assert captured_events[0]['topic'] == 'vlm'
 
 
 @pytest.mark.parametrize('key', ['type', 'topic', 'project'])
-def test_global_event_fields_cannot_override_the_envelope(
+@pytest.mark.asyncio
+async def test_global_event_fields_cannot_override_the_envelope(
     captured_events: list[dict[str, Any]], key: str
 ) -> None:
     """``type=`` (or any envelope key) in ``fields`` must not smuggle a project event onto the
     global stream."""
     with pytest.raises(ValueError, match='envelope'):
-        publish_global_event('project.updated', **{key: 'crop.classified'}, crop_id='beta-1')
+        await apublish_global_event('project.updated', **{key: 'crop.classified'}, crop_id='beta-1')
     assert captured_events == []
 
 

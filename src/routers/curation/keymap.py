@@ -250,12 +250,9 @@ async def _restore_classes(opensearch: Any, cleared: dict[int, str | None]) -> N
 
 
 async def _publish_classes_changed() -> None:
-    try:
-        from src.services.events.publish import apublish
+    from src.services.events.publish import apublish
 
-        await apublish('classes.changed', {'topic': 'classes'})
-    except Exception as exc:  # pragma: no cover - advisory only
-        logger.warning('classes_changed_publish_failed', error=str(exc))
+    await apublish('classes.changed', {'topic': 'classes'})
 
 
 def _class_hotkey_conflict_error(

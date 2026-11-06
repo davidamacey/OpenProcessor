@@ -174,10 +174,14 @@ async def test_progress_events_name_the_target_and_busy_lists_the_job(
 
     build(world)
     events: list[tuple[str, dict[str, Any]]] = []
+
+    async def _record_global(event_type: str, **fields: object) -> None:
+        events.append((event_type, fields))
+
     monkeypatch.setattr(
         event_publish,
-        'publish_global_event',
-        lambda event_type, **fields: events.append((event_type, fields)),
+        'apublish_global_event',
+        _record_global,
     )
     store, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
     assert events

@@ -196,9 +196,9 @@ async def _run(
     async def settle(ok: bool) -> None:
         await lifecycle.finish_building(client, target, ok=ok)
         if ok:
-            from src.services.events.publish import publish_global_event
+            from src.services.events.publish import apublish_global_event
 
-            publish_global_event(
+            await apublish_global_event(
                 'project.created', target=target.slug, status='active', revision=target.revision
             )
 

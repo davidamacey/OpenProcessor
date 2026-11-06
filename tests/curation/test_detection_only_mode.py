@@ -31,6 +31,10 @@ if TYPE_CHECKING:
     import pytest
 
 
+async def _no_publish(*_a: object, **_k: object) -> None:
+    return None
+
+
 def test_the_default_policy_clusters_automatically() -> None:
     assert IngestPolicyBody().clustering.automatic is True
 
@@ -71,7 +75,7 @@ def _index(policy: IngestPolicy, tmp_path: Any) -> tuple[_Encoder, list[dict[str
         config=SimpleNamespace(crop_cache_dir=str(tmp_path / 'crops'), crop_cache_max_bytes=0),
         region_seed_status=None,
         _bulk_index=_bulk_index,
-        _publish_created=lambda *_a, **_k: None,
+        _publish_created=_no_publish,
     )
     buf = io.BytesIO()
     Image.fromarray(np.zeros((96, 128, 3), dtype=np.uint8)).save(buf, 'JPEG')

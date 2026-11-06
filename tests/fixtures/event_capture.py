@@ -31,7 +31,12 @@ def captured_events(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     ) -> None:
         record(event_type, payload, project=project)
 
+    async def arecord_many(events: Any, *, project: Any = None) -> None:
+        for event_type, payload in events:
+            record(event_type, payload, project=project)
+
     monkeypatch.setattr(publish_module, 'publish', record)
+    monkeypatch.setattr(publish_module, 'apublish_many', arecord_many)
     monkeypatch.setattr(publish_module, 'apublish', arecord)
     return seen
 
