@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.assist.proposal import ClassAnswer
-    from src.services.curation.assist_loop.partition import PartitionReader
+    from src.services.curation.assist_loop.partition import RootReader
     from src.services.curation.class_label import ItemLabel
 
 SKIP_REASONS = ('dissent', 'drifted', 'locked', 'token_changed', 'conflicts')
@@ -65,7 +65,7 @@ async def _written_by(opensearch: AsyncOpenSearch, ids: Sequence[str], run_id: s
 
 async def propagate_node(
     opensearch: AsyncOpenSearch,
-    reader: PartitionReader,
+    reader: RootReader,
     *,
     root_key: str,
     eligible: Sequence[str],

@@ -1,9 +1,11 @@
 """The loop's pinned partition: what the roots are, who is in them, and the snapshot.
 
-The partition is read through :class:`PartitionReader`; :class:`ClusterFieldPartition` is
-the only implementation and the only reader of ``cluster_id`` in the loop. A versioned
-partition (stable cluster identities) implements the same two calls, so the driver, the
-gate and the writer do not change.
+The loop's clusters are the serving partition's: :class:`PartitionReader` reads
+``(partition_id, cluster_uid, size)`` from PostgreSQL, where a partition's memberships are
+immutable and a cluster is named by its stable uid, never by an integer id. The driver, gate and
+writer of the loop still run on :class:`RootReader` and :class:`ClusterFieldPartition` (the
+``cluster_id`` reader) until the lane that owns them moves to :class:`PartitionReader`; that lane
+then deletes both, with this module's snapshot helpers.
 
 At start every root's members are snapshotted into the job directory with the lock-rule
 state and class-state token each had: the loop works on that pinned set, never on what the
@@ -16,10 +18,13 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
+from sqlalchemy import text
+
 from src.clients.curation_opensearch.crops import mget_crops
 from src.clients.occ import is_locked_class
 from src.config.curation_accessors import items_index
 from src.domain.loop_tree import parse_path, root_path
+from src.services.clustering.assign import serving_partition_id
 from src.services.curation.assist.scope import membership_digest
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,
@@ -32,10 +37,12 @@ from src.utils.atomic_write import atomic_write_json
 
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Sequence
     from pathlib import Path
 
     from opensearchpy import AsyncOpenSearch
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 MemberStateName = Literal['eligible', 'locked', 'holdout', 'excluded']
 _PAGE = 500
@@ -105,7 +112,7 @@ class RootRef:
         return [m.crop_id for m in self.members if m.state == 'eligible']
 
 
-class PartitionReader(Protocol):
+class RootReader(Protocol):
     async def survey(self, scope: PartitionScope) -> list[RootSize]:
         """The roots of ``scope`` with their sizes (what a plan shows); reads no members."""
         ...
@@ -115,6 +122,38 @@ class PartitionReader(Protocol):
     async def root_of(self, ids: Sequence[str]) -> dict[str, str]:
         """Root key each id belongs to now; an id in no root is absent."""
         ...
+
+
+@dataclass(frozen=True)
+class ClusterRoot:
+    """One cluster of the serving partition, as the loop sees a root."""
+
+    partition_id: uuid.UUID
+    cluster_uid: uuid.UUID
+    size: int
+
+
+class PartitionReader:
+    """The loop's reader of the serving partition (research clustering plan 7.2).
+
+    Memberships are immutable once a partition is ready, so a root is the pair
+    ``(partition_id, cluster_uid)`` and its members never change under the loop.
+    """
+
+    @staticmethod
+    async def roots(session: AsyncSession, *, project: uuid.UUID, target: str) -> list[ClusterRoot]:
+        """The serving partition's clusters of ``target`` (class level), in display order."""
+        partition_id = await serving_partition_id(session, project=project, target=target)
+        if partition_id is None:
+            return []
+        rows = await session.execute(
+            text(
+                'SELECT cluster_uid, size FROM partition_clusters WHERE partition_id = :p '
+                'ORDER BY display_no'
+            ),
+            {'p': partition_id},
+        )
+        return [ClusterRoot(partition_id, uid, size) for uid, size in rows]
 
 
 def member_state(crop_id: str, source: dict[str, Any]) -> MemberState:
@@ -273,9 +312,11 @@ def read_snapshot(job_dir: Path, key: str) -> RootRef:
 
 __all__ = [
     'ClusterFieldPartition',
+    'ClusterRoot',
     'MemberState',
     'PartitionReader',
     'PartitionScope',
+    'RootReader',
     'RootRef',
     'RootSize',
     'member_state',

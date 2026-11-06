@@ -28,8 +28,8 @@ from src.services.curation.assist_loop.driver import LoopDeps, LoopOutcome, Loop
 from src.services.curation.assist_loop.evaluate import VlmAsker
 from src.services.curation.assist_loop.partition import (
     ClusterFieldPartition,
-    PartitionReader,
     PartitionScope,
+    RootReader,
 )
 from src.services.curation.assist_loop.store import LoopStore
 from src.services.curation.class_write_guard import ClassWriteGuard
@@ -231,7 +231,7 @@ async def drive(
     scope: PartitionScope | None = None,
     clock: Callable[[], float] | None = None,
     store: LoopStore | None = None,
-    reader: PartitionReader | None = None,
+    reader: RootReader | None = None,
     audit: AuditParams | None = None,
     judge: FakeVlm | None = None,
     audit_max_crops: int = 500,

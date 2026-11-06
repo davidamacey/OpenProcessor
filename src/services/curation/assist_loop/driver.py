@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from src.services.curation.assist_loop.audit import Auditor
     from src.services.curation.assist_loop.budget import LoopBudget
     from src.services.curation.assist_loop.evaluate import VlmAsker
-    from src.services.curation.assist_loop.partition import PartitionReader, PartitionScope, RootRef
+    from src.services.curation.assist_loop.partition import PartitionScope, RootReader, RootRef
     from src.services.curation.assist_loop.store import LoopStore
 
 logger = get_logger(__name__)
@@ -97,7 +97,7 @@ class LoopParams:
 @dataclass
 class LoopDeps:
     opensearch: AsyncOpenSearch
-    reader: PartitionReader
+    reader: RootReader
     asker: VlmAsker
     auditor: Auditor | None = None
     """``None``: the audit is off (no audit endpoint), which the record states."""
@@ -112,9 +112,7 @@ class LoopOutcome:
     error: str | None = None
 
 
-async def _pin_roots(
-    store: LoopStore, reader: PartitionReader, scope: PartitionScope
-) -> list[RootRef]:
+async def _pin_roots(store: LoopStore, reader: RootReader, scope: PartitionScope) -> list[RootRef]:
     lines = store.read_roots()
     if lines is not None:
         return [read_snapshot(store.directory, line['root']) for line in lines]
