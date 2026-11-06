@@ -1,6 +1,6 @@
 """The exact duplicate key: the SHA-256 of the stored bytes, one ``image_contents`` row per image.
 
-The insert is the duplicate check (replaces the sampled ``imohash`` lookup against the index):
+The insert is the duplicate check (it replaces the sampled-hash lookup against the index):
 two workers that ingest one file at the same time meet at the unique constraint, so the second
 one is told which image holds the content instead of racing past an index that has not refreshed
 (#358). A row is written before the images document it describes and is removed when the image

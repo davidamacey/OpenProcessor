@@ -13366,31 +13366,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -13556,6 +13531,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "needs_new_class": {
             "default": false,
@@ -24680,31 +24680,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -24870,6 +24845,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "nearest_fp_subid": {
             "anyOf": [
@@ -28640,31 +28640,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -28830,6 +28805,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "needs_new_class": {
             "default": false,
@@ -30310,31 +30310,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -30524,6 +30499,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "needs_new_class": {
             "default": false,

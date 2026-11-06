@@ -397,9 +397,9 @@ def serialize_item(
         'mistakenness_version': src.get('mistakenness_version'),
         'mistakenness_scored_at': src.get('mistakenness_scored_at'),
         'uniqueness_score': src.get('uniqueness_score'),
-        'dup_group_id': src.get('dup_group_id'),
-        'dup_group_size': src.get('dup_group_size'),
-        'dup_is_representative': src.get('dup_is_representative'),
+        'near_dup_group_id': src.get('near_dup_group_id'),
+        'near_dup_group_size': src.get('near_dup_group_size'),
+        'near_dup_is_representative': src.get('near_dup_is_representative'),
         'updated_at': src.get('updated_at') or '',
         'thumbnail_url': f'{prefix}/crops/{crop_id}/thumbnail',
         # Every OCR line on the item crop; [] when none / not yet read.

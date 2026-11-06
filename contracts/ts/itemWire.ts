@@ -115,9 +115,9 @@ export interface ItemWire {
   mistakenness_version: string | null;
   mistakenness_scored_at: string | null;
   uniqueness_score: number | null;
-  dup_group_id: unknown;
-  dup_group_size: number | null;
-  dup_is_representative: boolean | null;
+  near_dup_group_id: unknown;
+  near_dup_group_size: number | null;
+  near_dup_is_representative: boolean | null;
   updated_at: string;
   thumbnail_url: string;
   region_status: string | null;
@@ -243,9 +243,9 @@ export const ITEM_WIRE_KEYS = [
   'mistakenness_version',
   'mistakenness_scored_at',
   'uniqueness_score',
-  'dup_group_id',
-  'dup_group_size',
-  'dup_is_representative',
+  'near_dup_group_id',
+  'near_dup_group_size',
+  'near_dup_is_representative',
   'updated_at',
   'thumbnail_url',
   'region_status',
