@@ -9,6 +9,7 @@ from typing import Literal
 from fastapi import File, Form, HTTPException, UploadFile, status
 
 from src.core.dependencies import VisualSearchDep
+from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.ingest._router import router
 from src.schemas.ingest import (
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 @router.post(
     '/batch',
+    dependencies=[DISK_GUARD],
     response_model=BatchIngestResponse,
     status_code=status.HTTP_201_CREATED,
     responses={

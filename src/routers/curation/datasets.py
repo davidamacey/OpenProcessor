@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import File, Query, Response, UploadFile
 
 from src.config import get_curation_config
+from src.core.disk_space import DISK_GUARD
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._dataset_import_models import (
@@ -208,7 +209,12 @@ async def _context(
 # ------------------------------------------------------------------- upload
 
 
-@router.post('/datasets/uploads', response_model=DatasetUploadResponse, status_code=201)
+@router.post(
+    '/datasets/uploads',
+    dependencies=[DISK_GUARD],
+    response_model=DatasetUploadResponse,
+    status_code=201,
+)
 async def upload_dataset(file: Annotated[UploadFile, File()]) -> DatasetUploadResponse:
     cfg = get_curation_config()
 
@@ -246,7 +252,9 @@ async def preview_dataset(
 # ------------------------------------------------------------------- start
 
 
-@router.post('/datasets/imports', response_model=DatasetImportJob, status_code=202)
+@router.post(
+    '/datasets/imports', dependencies=[DISK_GUARD], response_model=DatasetImportJob, status_code=202
+)
 async def start_dataset_import(
     body: DatasetImportRequest,
     response: Response,

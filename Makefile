@@ -291,8 +291,12 @@ test-api-health: ## Test API health
 	@curl -sf http://localhost:$(API_PORT)/health && echo " OK" || echo " FAILED"
 
 .PHONY: test
-test: ## Run the pytest suite
-	$(V)/python -m pytest tests/ -q
+test: ## Run the Docker-free pytest suite
+	$(V)/python -m pytest tests/ -q -m 'not live and not families and not db'
+
+.PHONY: test-db
+test-db: ## Run the db tier (needs Docker for the test PostgreSQL, no GPU)
+	$(V)/python -m pytest tests/ -q -n 2 -m db --no-cov
 
 .PHONY: contracts
 contracts: ## Regenerate the committed API contracts under contracts/

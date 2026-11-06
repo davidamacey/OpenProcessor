@@ -13,6 +13,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **`/ready` (and `/health`) now probes the database, the task queue and free disk space.** A down database or queue, or a data or OpenSearch volume below `OP_DISK_CRITICAL_PCT` (default 3 %) free, answers 503 naming it; below `OP_DISK_LOW_PCT` (default 10 %) the body says `disk: low` and stays 200. Ingest, import and dataset or model upload starts answer 507 `insufficient_storage` at critical. The gauge `op_disk_free_ratio{volume}` exports the free fraction. `/live` still probes nothing. Probes now run one after another instead of concurrently.
+- **Celery workers and beat exit at start** when the database is unreachable (after a 60 s wait) or at another schema revision than the image.
 - **Breaking: error bodies no longer carry `error_type`.** The 500 body and the Triton-unavailable 503 body hold `detail` and `request_id`; use `request_id` and the server log (which still records the exception class).
 - **Breaking: `/curation` JSON bodies no longer carry `total_time_ms` and `request_id`.** The `X-Process-Time` and `X-Request-ID` headers remain; core inference routes and their `/v1` aliases are unchanged.
 - **Breaking: `POST /ocr/search` is removed.** Use `POST /search/ocr`, which now also takes `page` (0-indexed, `top_k` results per page) and `fuzzy`; its `total_results` counts matching images across all pages.

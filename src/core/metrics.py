@@ -16,6 +16,7 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
     Counter,
+    Gauge,
     Histogram,
     generate_latest,
 )
@@ -51,6 +52,16 @@ OP_INGEST_PRESERVED_HUMAN_LABEL = Counter(
     'op_ingest_preserved_human_label',
     'Ingest upserts that preserved a pre-existing human-applied label field.',
     labelnames=('field',),
+)
+
+
+# Free fraction (0-1) of each volume the API watches; the alert on a filling disk reads it.
+# Every process measures the same filesystem, so any one's latest value is the value.
+DISK_FREE_RATIO = Gauge(
+    'op_disk_free_ratio',
+    'Free fraction of a volume (data, opensearch).',
+    labelnames=('volume',),
+    multiprocess_mode='livemostrecent',
 )
 
 

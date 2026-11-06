@@ -20,6 +20,7 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 
 from src.config import get_curation_config
+from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, images_index, router
@@ -92,7 +93,7 @@ async def _already_stored(opensearch: OpenSearchDep, uris: list[str]) -> dict[st
     return found
 
 
-@router.post('/ingest/objects', response_model=_BatchIngestResponse)
+@router.post('/ingest/objects', dependencies=[DISK_GUARD], response_model=_BatchIngestResponse)
 async def curation_ingest_objects(
     body: IngestObjectsRequest,
     opensearch: OpenSearchDep,

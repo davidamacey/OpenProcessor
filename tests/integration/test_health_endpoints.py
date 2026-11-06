@@ -63,6 +63,10 @@ def _patch_probes(
     async def _stub_models() -> tuple[bool, str, list[dict[str, str]]]:
         return models
 
+    async def _stub_dependency(name: str) -> tuple[bool, str]:
+        return True, 'ok'
+
+    monkeypatch.setattr(health_module, '_probe_dependency', _stub_dependency)
     monkeypatch.setattr(health_module, '_probe_triton', _stub_triton)
     monkeypatch.setattr(health_module, '_probe_http', _stub_http)
     monkeypatch.setattr(health_module, '_probe_required_models', _stub_models)
@@ -256,6 +260,10 @@ def _patch_infra_only(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _http(_url: str) -> tuple[bool, str]:
         return True, 'HTTP 200'
 
+    async def _dependency(_name: str) -> tuple[bool, str]:
+        return True, 'ok'
+
+    monkeypatch.setattr(health_module, '_probe_dependency', _dependency)
     monkeypatch.setattr(health_module, '_probe_triton', _live)
     monkeypatch.setattr(health_module, '_probe_http', _http)
 

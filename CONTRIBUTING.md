@@ -35,19 +35,41 @@ binary path.
 ## Running the offline test suite
 
 ```bash
-# Everything except the `live` marker (needs no Docker, no GPU)
-.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'
+# The Docker-free tier: everything except the `live`, `families` and `db` markers (no Docker, no GPU)
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not db'
 
 # With coverage (also run in CI)
-.venv/bin/python -m pytest tests/ -q -m 'not live and not families' --cov=src --cov=scripts \
+.venv/bin/python -m pytest tests/ -q -m 'not live and not families and not db' --cov=src --cov=scripts \
     --cov-report=term-missing:skip-covered
 
 # Import sanity — the loudest, cheapest check; run this first when debugging
 .venv/bin/python -c "import src.main"
 ```
 
-`pyproject.toml`'s `addopts` deselects the `live` and `families` markers by default, so
+`pyproject.toml`'s `addopts` deselects the `live`, `families` and `db` markers by default, so
 a plain `pytest tests/` never touches Docker or the network.
+
+### Test tiers
+
+| Tier | Marker | Needs | Run |
+|---|---|---|---|
+| Docker-free (the default) | none | nothing | the commands above |
+| `db` | `db` | a PostgreSQL: Docker (testcontainers) or `OP_TEST_DATABASE_URL`; no GPU | `make test-db` |
+| `live` | `live` | the `docker/test/` harness | `-m live`, see below |
+
+A test under `tests/db/`, or one that uses the `pg` fixture, must carry `pytest.mark.db`
+(`pytestmark = pytest.mark.db`); collection stops with an error naming any that does not
+(`tests/fixtures/db_marker_policy.py`). `make test-db` runs `-m db` with pytest-xdist: the
+fixture starts one PostgreSQL 18 container (the image and digest of `docker-compose.yml`) and
+every worker migrates its own template database on it. To use a server you already have, set
+`OP_TEST_DATABASE_URL` to a URL whose user is the superuser `op_super`
+(`postgresql://op_super:<password>@host:5432/postgres`); CI does this with a service container.
+The fixture raises when no database is reachable and never skips, so a green `-m db` run proves
+tests ran.
+
+Migrations keep **one Alembic head**. When two branches each add a revision, the second to merge
+rebases its migration onto the new head (it changes its `down_revision`) instead of adding a
+merge revision; `alembic heads` must print one line. The `db` tier fails on more than one.
 
 The `families` tests run against the official Ultralytics weights and the original-YOLOv5 ONNX
 exports. Their files live in `~/.cache/op-test-weights` (`$XDG_CACHE_HOME` when set), are never
@@ -133,7 +155,10 @@ make contracts          # regenerate
 make contracts-check    # fail if anything is stale
 ```
 
-Pre-commit rejects a commit that leaves a contract stale. See
+Pre-commit rejects a commit that leaves a contract stale. In a parallel lane, regenerate in the
+commit that changes the route or model and never hand-edit a file under `contracts/`; when two
+lanes both changed a contract, the coordinator regenerates once on the merged branch rather than
+resolving the generated files by hand. See
 [`contracts/README.md`](contracts/README.md).
 
 ## After pulling or merging code

@@ -5,14 +5,15 @@ Provides liveness/readiness probes, service info, and connection pool
 statistics.
 
 - /live   — process responsive, no dependency probing (livenessProbe)
-- /ready  — Triton, its required models and OpenSearch actively probed
-            (readinessProbe / LB drain)
+- /ready  — the database, the task queue, Triton, its required models, OpenSearch
+            and free disk space actively probed, one after another (readinessProbe / LB drain)
 - /health — backward-compat alias for /ready
 """
 
 import asyncio
 import logging
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from typing import Any
 
@@ -23,10 +24,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from opensearchpy import OpenSearchException
 
+from src.app.startup_gate import startup_probes
 from src.clients.triton_client_manager import get_async_triton_client, get_client_pool_stats
 from src.config import get_settings
 from src.config.faces import faces_enabled
+from src.core import disk_space
 from src.core.metrics import render_metrics
+from src.db.schema_check import ProbeFailed
 from src.services.face_privacy import FaceDataCounts, stored_face_counts, stored_summary
 from src.services.model_readiness import models_not_ready, required_model_names
 from src.services.triton_control import TritonControlService
@@ -65,6 +69,39 @@ async def _probe_http(url: str) -> tuple[bool, str]:
     return True, f'HTTP {response.status_code}'
 
 
+async def _bounded_probe(name: str, check: Callable[[], Awaitable[str]]) -> tuple[bool, str]:
+    """The one readiness boundary: run ``check`` and turn any failure into a not-ready entry.
+
+    ``ProbeFailed`` and a timeout carry their own detail. Any other exception means the probe
+    could not run (an unreadable secret, bad settings, a client error): the dependency is down
+    for readiness, so ``/ready`` answers 503 naming it, never 500. The body gets only the
+    exception class (the message may hold a path); the log line gets the message.
+    """
+    try:
+        return True, await check()
+    except ProbeFailed as exc:
+        return False, str(exc)
+    except TimeoutError:
+        return False, f'timeout after {_READY_PROBE_TIMEOUT_S}s'
+    except Exception as exc:
+        logger.warning('readiness probe %s could not run: %s', name, exc)
+        return False, type(exc).__name__
+
+
+async def _probe_dependency(name: str) -> tuple[bool, str]:
+    """Run the startup probe of ``name`` (database, queue) off the event loop, bounded.
+
+    The same probes the startup wait uses, so readiness and start agree on what "up" means.
+    """
+
+    async def check() -> str:
+        probe = startup_probes(get_settings())[name]
+        await asyncio.wait_for(asyncio.to_thread(probe), timeout=_READY_PROBE_TIMEOUT_S)
+        return 'ok'
+
+    return await _bounded_probe(name, check)
+
+
 async def _probe_triton() -> tuple[bool, str]:
     """Probe Triton via a real ``is_server_live()`` gRPC round-trip.
 
@@ -83,23 +120,17 @@ async def _probe_triton() -> tuple[bool, str]:
     so a degraded Triton can't stall the probe past the k8s readiness
     window.
     """
-    settings = get_settings()
-    try:
+
+    async def check() -> str:
         client = await asyncio.wait_for(
-            get_async_triton_client(settings.triton_url),
+            get_async_triton_client(get_settings().triton_url),
             timeout=_READY_PROBE_TIMEOUT_S,
         )
-        live = await asyncio.wait_for(
-            client.is_server_live(),
-            timeout=_READY_PROBE_TIMEOUT_S,
-        )
-    except TimeoutError:
-        return False, f'is_server_live timeout after {_READY_PROBE_TIMEOUT_S}s'
-    except Exception as exc:
-        return False, f'{type(exc).__name__}: {exc}'
-    if not live:
-        return False, 'is_server_live returned False'
-    return True, 'is_server_live OK'
+        if not await asyncio.wait_for(client.is_server_live(), timeout=_READY_PROBE_TIMEOUT_S):
+            raise ProbeFailed('is_server_live returned False')
+        return 'is_server_live OK'
+
+    return await _bounded_probe('triton', check)
 
 
 async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
@@ -123,6 +154,45 @@ async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
         names = ', '.join(f'{b["name"]} ({b["state"]})' for b in bad)
         return False, f'required models not READY: {names}', bad
     return True, f'{len(required)} required models READY', []
+
+
+async def _opensearch_free_ratio(url: str) -> float | None:
+    """The smallest free fraction over the OpenSearch nodes (``_cat/allocation``), or ``None``
+    when it cannot be read: the opensearch entry of the report already says it is down."""
+    try:
+        async with httpx.AsyncClient(timeout=_READY_PROBE_TIMEOUT_S) as client:
+            response = await client.get(
+                f'{url.rstrip("/")}/_cat/allocation', params={'format': 'json', 'bytes': 'b'}
+            )
+        response.raise_for_status()
+        rows = response.json()
+        ratios = [
+            int(row['disk.avail']) / int(row['disk.total'])
+            for row in rows
+            if str(row.get('disk.total', '')).isdigit() and str(row.get('disk.avail', '')).isdigit()
+        ]
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, ZeroDivisionError):
+        return None
+    return min(ratios) if ratios else None
+
+
+async def _disk_entry(opensearch_url: str, *, opensearch_up: bool) -> dict[str, Any]:
+    """The ``services.disk`` report: ``ok``, ``low`` (a warning; still ready) or ``critical``
+    (not ready). The database volume lives in the Postgres container, which this process
+    cannot see; its own healthcheck and the Postgres exporter cover it."""
+    volumes = [disk_space.data_volume()]
+    if opensearch_up:
+        ratio = await _opensearch_free_ratio(opensearch_url)
+        if ratio is not None:
+            volumes.append(disk_space.measure('opensearch', ratio))
+    level = disk_space.worst(volumes)
+    return {
+        'ok': level != 'critical',
+        'status': level,
+        'volumes': {
+            v.volume: {'free_ratio': round(v.free_ratio, 4), 'level': v.level} for v in volumes
+        },
+    }
 
 
 async def _face_data_counts() -> FaceDataCounts:
@@ -149,20 +219,21 @@ async def _faces_entry() -> dict[str, Any]:
 
 
 async def _readiness_payload() -> tuple[int, dict[str, Any]]:
-    """Probe Triton and OpenSearch concurrently; build the payload.
+    """Probe every dependency in turn (no fan-out); build the payload.
 
     Returns the HTTP status code (200 if every dep and required model is
     ready, 503 otherwise)
     and a JSON-serializable body listing per-service status + detail.
     """
     settings = get_settings()
-    triton_task = asyncio.create_task(_probe_triton())
-    opensearch_task = asyncio.create_task(_probe_http(settings.opensearch_url))
+    database_ok, database_detail = await _probe_dependency('database')
+    queue_ok, queue_detail = await _probe_dependency('queue')
+    triton_ok, triton_detail = await _probe_triton()
+    opensearch_ok, opensearch_detail = await _probe_http(settings.opensearch_url)
 
-    triton_ok, triton_detail = await triton_task
-    opensearch_ok, opensearch_detail = await opensearch_task
-
-    services = {
+    services: dict[str, Any] = {
+        'database': {'ok': database_ok, 'detail': database_detail},
+        'queue': {'ok': queue_ok, 'detail': queue_detail},
         'triton': {'ok': triton_ok, 'detail': triton_detail, 'url': settings.triton_url},
         'opensearch': {
             'ok': opensearch_ok,
@@ -170,7 +241,7 @@ async def _readiness_payload() -> tuple[int, dict[str, Any]]:
             'url': settings.opensearch_url,
         },
     }
-    all_ok = triton_ok and opensearch_ok
+    all_ok = database_ok and queue_ok and triton_ok and opensearch_ok
     if triton_ok:
         # Without a reachable Triton the models cannot be judged; the triton
         # entry already fails the probe.
@@ -178,6 +249,8 @@ async def _readiness_payload() -> tuple[int, dict[str, Any]]:
         services['models'] = {'ok': models_ok, 'detail': models_detail, 'not_ready': not_ready}
         all_ok = all_ok and models_ok
     services['faces'] = await _faces_entry()
+    services['disk'] = await _disk_entry(settings.opensearch_url, opensearch_up=opensearch_ok)
+    all_ok = all_ok and services['disk']['ok']
     payload: dict[str, Any] = {
         'status': 'ready' if all_ok else 'not_ready',
         'version': settings.api_version,
@@ -248,7 +321,7 @@ def live() -> dict[str, str]:
 
 @router.get('/ready')
 async def ready() -> JSONResponse:
-    """Readiness probe — Triton, its required models and OpenSearch.
+    """Readiness probe — the database, the queue, Triton, its required models and OpenSearch.
 
     Returns 200 with ``status='ready'`` when every dep responds; 503
     with per-service detail when at least one is unreachable. Designed
