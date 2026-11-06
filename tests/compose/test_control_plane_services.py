@@ -271,3 +271,12 @@ def test_live_harness_api_waits_for_the_migration_and_never_mounts_the_docker_so
     assert 'docker.sock' not in (REPO_ROOT / 'docker/test/compose.yml').read_text().replace(
         '/var/run/docker.sock is NEVER mounted', ''
     )
+
+
+def test_api_sets_web_concurrency_equal_to_its_workers_flag() -> None:
+    api = _svc('api')
+    env = {e.split('=', 1)[0]: e.split('=', 1)[1] for e in api['environment'] if '=' in e}
+    workers = [a for a in api['command'] if str(a).startswith('--workers=')]
+    assert len(workers) == 1
+    count = workers[0].split('=', 1)[1].split('#')[0].strip()
+    assert env['WEB_CONCURRENCY'] == count

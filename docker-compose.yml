@@ -204,6 +204,9 @@ services:
       # API, not whichever worker answered. The directory is a tmpfs (see
       # `tmpfs:` below), so it is empty on every container start.
       - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-multiproc
+      # uvicorn reads WEB_CONCURRENCY for its worker count (https://www.uvicorn.org/settings/);
+      # it equals --workers below, and the database pool size is derived from it.
+      - WEB_CONCURRENCY=32
       # glibc malloc: keep freed memory instead of returning it to the kernel and faulting it
       # back in. Ingest allocates and frees tens of megabytes of pixel data per image (a
       # 1.35 MB PE crop, a 52 MB decoded photo, 14 MB of Triton tensors), and with the pixel
@@ -348,6 +351,16 @@ services:
   postgres:
     image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     restart: unless-stopped
     # postgres:18 moved PGDATA to /var/lib/postgresql/18/docker and the volume to /var/lib/postgresql.
     command:
@@ -386,6 +399,15 @@ services:
   valkey:
     image: valkey/valkey:9.1.3-alpine3.24@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
     restart: unless-stopped
     # The conf holds only requirepass. The image drops to the `valkey` user before the server
     # starts, and that user cannot read a mode-600 file owned by the installing user, so the
@@ -436,6 +458,10 @@ services:
   db-migrate:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: "no"
     mem_reservation: 256m
     command: python -m scripts.db.migrate upgrade
@@ -468,6 +494,10 @@ services:
   jobs-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
     command: celery -A src.tasks.app worker -Q jobs --concurrency=${OP_JOBS_CONCURRENCY:-4} --max-tasks-per-child=50 --max-memory-per-child=${OP_JOBS_MAX_MEMORY_PER_CHILD_KB:-8000000} --hostname jobs@%h -E
     stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
@@ -530,6 +560,10 @@ services:
   periodic-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
     # Periodic housekeeping; it never mounts the Docker socket.
     command: celery -A src.tasks.app worker -Q periodic -c 2 --max-tasks-per-child=200 --hostname periodic@%h -E
@@ -586,6 +620,10 @@ services:
   open-vocab-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
     mem_reservation: 512m
     command: celery -A src.tasks.app worker -Q open_vocab -c 1 --max-tasks-per-child=50 --hostname open_vocab@%h -E
@@ -637,6 +675,10 @@ services:
   jobs-beat:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
     command: celery -A src.tasks.app beat -s /run/beat/celerybeat-schedule
     env_file:
@@ -687,6 +729,10 @@ services:
   flower:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
     mem_reservation: 256m
     profiles:
