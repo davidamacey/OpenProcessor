@@ -149,11 +149,9 @@ _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_researc
 
 # Landed ahead of their consumers (B2 stage 2, lane 2C): the upgrade load (lane 2E) and the readers of
 # the poll and the runtime reports. Delete each entry with its caller.
-_.list_configs  # src/db/repos/config.py, read by the config store snapshot load (2C-1)
 _.list_probes  # src/db/repos/config.py, read by the global snapshot load (2C-3)
 _.list_runtime_reports  # src/db/repos/config.py, read by the applied-config view (2C-4)
 _.upsert_runtime_report  # src/db/repos/config.py, written by the worker runtime report (2C-4)
-_.put_deployment_setting  # src/db/repos/config.py, written by the local-VLM request and the serving activation (2C-3, 2C-7)
 _.load_activation_events  # src/db/repos/config_activations.py, called by the 0.6.0 upgrade (lane 2E)
 _.load_vlm_endpoint  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane 2E)
 _.load_config_document  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane 2E)
@@ -173,3 +171,9 @@ _.mark_ready  # src/services/embedding_spaces/spaces.py, called by the re-index 
 _.retire_space  # src/services/embedding_spaces/spaces.py, called by the space routes
 _.finish_retire  # src/services/embedding_spaces/spaces.py, called by the re-index job in clear mode
 _.list_project_spaces  # src/services/embedding_spaces/spaces.py, called by the space routes
+
+# Route handlers registered by decorator inside a factory (one set per config kind).
+_.list_all  # src/routers/curation/research_configs.py, GET /{kind}
+_.get_one  # src/routers/curation/research_configs.py, GET /{kind}/{name}
+_.put_one  # src/routers/curation/research_configs.py, PUT /{kind}/{name}
+_.delete_one  # src/routers/curation/research_configs.py, DELETE /{kind}/{name}
