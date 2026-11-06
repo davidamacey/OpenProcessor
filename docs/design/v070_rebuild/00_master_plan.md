@@ -685,7 +685,7 @@ Lanes never run a full suite, `--all-files`, the live harness or a GPU.
    tracks in parallel, xdist capped by the host load; heavy and live runs one at a time,
    announced, with their own `-p`. The coordinator never extends a budget; a step that overruns
    stops and is reported.
-8. **PR.** Local CI parity first (every job of `ci.yml`, and `frontend.yml` when `frontend/`
+8. **PR.** The coordinator's closing commit adds the PR's entries under `## [Unreleased]` in the root `CHANGELOG.md` (and `frontend/CHANGELOG.md` when `frontend/` changed), Keep a Changelog sections, because CI's "CHANGELOG entry for backend changes" job fails a code PR without one; this applies to W2.0, each of the three B2 PRs and every later wave PR (lane 6D still writes the B2 summary and breaking-change notes in PR3). Local CI parity first (every job of `ci.yml`, and `frontend.yml` when `frontend/`
    changed, the changelog rules included). Ask the owner before pushing. Push the integration
    branch, open one PR against `main` (`gh pr create`; B2 opens three, PR1 after W2.2, PR2 after W2.3a and PR3 after W2.4, each with its own checks from section 4, none tagged, each leaving `main` bootable), check `gh pr checks`, verify the push with
    `git ls-remote`. Merge with a merge commit on green CI and the owner's yes.
