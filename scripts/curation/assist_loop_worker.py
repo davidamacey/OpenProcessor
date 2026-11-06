@@ -44,6 +44,7 @@ if str(_REPO_ROOT) not in sys.path:
 from scripts.curation._project_worker_utils import unpaused_projects
 from src.config.project_context import bind_project
 from src.config.settings import get_settings
+from src.db.engine import run_with_engine
 from src.services.curation.assist_loop import job
 from src.services.curation.assist_loop.runtime import run_job
 from src.services.curation.worker_liveness import heartbeat_loop
@@ -171,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        return asyncio.run(_amain())
+        return asyncio.run(run_with_engine(_amain(), 'op-assist-loop-worker'))
     except KeyboardInterrupt:
         return 130
 

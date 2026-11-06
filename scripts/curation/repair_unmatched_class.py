@@ -33,6 +33,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from src.config import get_curation_config
+from src.db.engine import run_with_engine
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.unmatched_class_repair import RepairPlan, apply_repairs, plan_repairs
 from src.services.projects.guard import make_script_opensearch
@@ -109,7 +110,7 @@ def main() -> int:
     bind_script_project(args.project)
     if args.page_size <= 0:
         build_parser().error('--page-size must be positive')
-    return asyncio.run(_async_main(args))
+    return asyncio.run(run_with_engine(_async_main(args), 'op-repair-unmatched-class'))
 
 
 if __name__ == '__main__':

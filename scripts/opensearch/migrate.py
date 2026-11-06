@@ -26,7 +26,7 @@ from src.config.curation_roles import IndexRole
 from src.config.env import env_str
 from src.config.project_context import bind_project
 from src.core.logging import get_logger
-from src.db.engine import dispose_engines, one_off_connection
+from src.db.engine import dispose_engines, one_off_connection, run_with_engine
 from src.db.repos import projects as projects_repo
 from src.db.schema_check import legacy_projects_index_exists, upgrade_state
 from src.db.session import async_session_factory, deployment_tx
@@ -165,10 +165,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run and args.step is None:
         parser.error('--dry-run needs --step')
     if args.step is None:
-        asyncio.run(run())
+        asyncio.run(run_with_engine(run(), 'op-migrate', one_shot=True))
         return 0
     try:
-        asyncio.run(run_analysis_step(dry_run=args.dry_run))
+        asyncio.run(
+            run_with_engine(run_analysis_step(dry_run=args.dry_run), 'op-migrate', one_shot=True)
+        )
     except analysis_settings.AnalysisSettingsError as exc:
         sys.stderr.write(f'{exc}\n')
         return 2

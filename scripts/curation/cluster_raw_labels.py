@@ -59,6 +59,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.config.curation_accessors import get_curation_config
+from src.db.engine import run_with_engine
 from src.services.curation.raw_label_clusters import (
     CLUSTER_ID_FIELD,
     RAW_LABEL_FIELD,
@@ -357,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     args = build_parser().parse_args(argv)
     bind_script_project(args.project)
-    return asyncio.run(_async_main(args))
+    return asyncio.run(run_with_engine(_async_main(args), 'op-cluster-raw-labels'))
 
 
 if __name__ == '__main__':

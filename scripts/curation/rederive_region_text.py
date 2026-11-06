@@ -38,6 +38,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from src.config import get_curation_config
+from src.db.engine import run_with_engine
 from src.services.curation.region_text_repair import (
     apply_region_text_repair,
     plan_region_text_repair,
@@ -138,7 +139,7 @@ def main() -> int:
     bind_script_project(args.project)
     if args.page_size <= 0:
         build_parser().error('--page-size must be positive')
-    return asyncio.run(_async_main(args))
+    return asyncio.run(run_with_engine(_async_main(args), 'op-rederive-region-text'))
 
 
 if __name__ == '__main__':

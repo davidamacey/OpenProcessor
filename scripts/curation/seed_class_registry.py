@@ -72,6 +72,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
+from src.db.engine import run_with_engine
 from src.services.classes.registry import get_class_registry
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
@@ -406,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
     args = build_parser().parse_args(argv)
     bind_script_project(args.project)
-    return asyncio.run(run(args))
+    return asyncio.run(run_with_engine(run(args), 'op-seed-class-registry'))
 
 
 if __name__ == '__main__':

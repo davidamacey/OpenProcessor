@@ -41,6 +41,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
+from src.db.engine import run_with_engine
 from src.services.curation.item_scores import available_scorers
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
@@ -138,7 +139,7 @@ def main() -> int:
     add_project_argument(p)
     args = p.parse_args()
     bind_script_project(args.project)
-    return asyncio.run(_async_main(args))
+    return asyncio.run(run_with_engine(_async_main(args), 'op-backfill-scores'))
 
 
 if __name__ == '__main__':

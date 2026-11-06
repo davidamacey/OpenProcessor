@@ -32,7 +32,7 @@ from scripts.opensearch.migrate import run as opensearch_run
 from src.config.advisory_locks import MIGRATE
 from src.config.database import SUPER_USER, DatabaseSettings
 from src.db import roles
-from src.db.engine import one_off_connection
+from src.db.engine import one_off_connection, run_with_engine
 from src.services.embedding_spaces.catalog import sync_catalog
 
 
@@ -130,7 +130,7 @@ def sync_embedding_catalog() -> None:
 def post_upgrade() -> None:
     """After the schema is at head: the embedding catalog, then the OpenSearch migration."""
     sync_embedding_catalog()
-    asyncio.run(opensearch_run())
+    asyncio.run(run_with_engine(opensearch_run(), 'op-migrate', one_shot=True))
 
 
 def current(settings: DatabaseSettings) -> str | None:

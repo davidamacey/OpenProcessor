@@ -81,6 +81,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.curation._project_worker_utils import unpaused_projects
+from src.db.engine import run_with_engine
 from src.services.curation.autolabel.job import (
     _job,
     _JobState,
@@ -500,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        return asyncio.run(_amain())
+        return asyncio.run(run_with_engine(_amain(), 'op-auto-label-worker'))
     except KeyboardInterrupt:
         return 130
 

@@ -90,3 +90,43 @@ def test_the_api_engine_is_used_when_nothing_is_bound(
     sentinel = _engine()
     monkeypatch.setattr(db_engine, 'get_async_engine', lambda: sentinel)
     assert db_engine.current_async_engine() is sentinel
+
+
+def test_a_worker_engine_is_a_small_bounded_pool_and_a_one_shot_engine_holds_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def probe(name: str, *, one_shot: bool) -> None:
+        async def inside() -> None:
+            seen[name] = db_engine.current_async_engine()
+
+        await db_engine.run_with_engine(inside(), name, one_shot=one_shot)
+
+    async def both() -> None:
+        await probe('op-worker', one_shot=False)
+        await probe('op-once', one_shot=True)
+
+    monkeypatch.setenv('OP_DB_HOST', '127.0.0.1')
+    asyncio.run(both())
+    worker, once = seen['op-worker'], seen['op-once']
+    assert worker.sync_engine.pool.size() == db_engine.CHILD_POOL_SIZE == 2
+    assert worker.sync_engine.pool._max_overflow == 0
+    assert isinstance(once.sync_engine.pool, pool.NullPool)
+
+
+def test_run_with_engine_unbinds_and_disposes_even_when_the_awaitable_raises() -> None:
+    disposed: list[object] = []
+
+    async def failing() -> None:
+        disposed.append(db_engine.current_async_engine())
+        raise RuntimeError
+
+    async def outer() -> None:
+        with pytest.raises(RuntimeError):
+            await db_engine.run_with_engine(failing(), 'op-test')
+        with pytest.raises(DatabaseConfigError, match='WEB_CONCURRENCY'):
+            db_engine.current_async_engine()
+
+    asyncio.run(outer())
+    assert disposed

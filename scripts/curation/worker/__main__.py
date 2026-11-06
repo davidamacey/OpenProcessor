@@ -13,6 +13,7 @@ import asyncio
 import sys
 
 from src.core.logging import get_logger
+from src.db.engine import run_with_engine
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
@@ -104,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.project:
         bind_script_project(args.project)
     try:
-        return asyncio.run(run(args))
+        return asyncio.run(run_with_engine(run(args), 'op-detection-worker'))
     except KeyboardInterrupt:
         return 130
 
