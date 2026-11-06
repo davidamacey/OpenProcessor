@@ -21,6 +21,9 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 # The route sweep's fixture: the real app, three seeded projects, the real guard.
 leak_env = _sweep.leak_env
 

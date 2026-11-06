@@ -21,6 +21,9 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 leak_env = _sweep.leak_env
 
 API = '/curation/projects'

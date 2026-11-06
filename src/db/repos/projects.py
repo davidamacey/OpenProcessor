@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Session
 
 PROJECTS_REVISION = 'projects_revision'
 
@@ -181,65 +182,58 @@ def _row(project: Project, indexes: Mapping[str, str]) -> ProjectRow:
     )
 
 
-async def _index_names(
-    session: AsyncSession, project_ids: Sequence[uuid.UUID] | None
+def _index_names_sync(
+    session: Session, project_ids: Sequence[uuid.UUID] | None
 ) -> dict[uuid.UUID, dict[str, str]]:
     stmt = select(ProjectIndex.project_id, ProjectIndex.role, ProjectIndex.index_name)
     if project_ids is not None:
         stmt = stmt.where(ProjectIndex.project_id.in_(project_ids))
     by_project: dict[uuid.UUID, dict[str, str]] = {}
-    for project_id, role, name in (await session.execute(stmt)).all():
+    for project_id, role, name in session.execute(stmt).all():
         by_project.setdefault(project_id, {})[role] = name
     return by_project
 
 
-async def get_by_slug(session: AsyncSession, slug: str) -> ProjectRow | None:
-    project = (
-        await session.execute(select(Project).where(Project.slug == slug))
-    ).scalar_one_or_none()
+def _one_sync(session: Session, where: Any) -> ProjectRow | None:
+    project = session.execute(select(Project).where(where)).scalar_one_or_none()
     if project is None:
         return None
-    return _row(project, (await _index_names(session, [project.id])).get(project.id, {}))
+    return _row(project, _index_names_sync(session, [project.id]).get(project.id, {}))
 
 
-async def get_by_id(session: AsyncSession, project_id: uuid.UUID) -> ProjectRow | None:
-    project = (
-        await session.execute(select(Project).where(Project.id == project_id))
-    ).scalar_one_or_none()
-    if project is None:
-        return None
-    return _row(project, (await _index_names(session, [project.id])).get(project.id, {}))
+def get_by_slug_sync(session: Session, slug: str) -> ProjectRow | None:
+    return _one_sync(session, Project.slug == slug)
 
 
-async def list_projects(session: AsyncSession) -> list[ProjectRow]:
+def list_projects_sync(session: Session) -> list[ProjectRow]:
     """Every existing project (a deleted one has no row), ordered by slug."""
-    projects = (await session.execute(select(Project).order_by(Project.slug))).scalars().all()
-    names = await _index_names(session, None)
+    projects = session.execute(select(Project).order_by(Project.slug)).scalars().all()
+    names = _index_names_sync(session, None)
     return [_row(p, names.get(p.id, {})) for p in projects]
 
 
-async def retired_slugs(session: AsyncSession) -> list[str]:
+def retired_slugs_sync(session: Session) -> list[str]:
     stmt = (
         select(ProjectSlug.slug)
         .where(ProjectSlug.retired_at.is_not(None))
         .order_by(ProjectSlug.slug)
     )
-    return list((await session.execute(stmt)).scalars().all())
+    return list(session.execute(stmt).scalars().all())
 
 
-async def ownership_map(session: AsyncSession) -> dict[str, str]:
-    """``index_name -> slug`` for the guard, from ``project_indexes`` joined to ``projects``."""
-    stmt = select(ProjectIndex.index_name, Project.slug).join(
-        Project, Project.id == ProjectIndex.project_id
-    )
-    return {row[0]: row[1] for row in (await session.execute(stmt)).all()}
-
-
-async def read_projects_revision(session: AsyncSession) -> int:
-    value = await session.scalar(
+def read_projects_revision_sync(session: Session) -> int:
+    value = session.scalar(
         select(DeploymentCounter.value).where(DeploymentCounter.name == PROJECTS_REVISION)
     )
     return int(value or 0)
+
+
+async def get_by_slug(session: AsyncSession, slug: str) -> ProjectRow | None:
+    return await session.run_sync(get_by_slug_sync, slug)
+
+
+async def get_by_id(session: AsyncSession, project_id: uuid.UUID) -> ProjectRow | None:
+    return await session.run_sync(lambda sync: _one_sync(sync, Project.id == project_id))
 
 
 async def bump_projects_revision(session: AsyncSession) -> int:

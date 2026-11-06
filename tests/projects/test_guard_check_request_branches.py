@@ -16,7 +16,7 @@ from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.projects.guard_errors import CrossProjectAccess
-from src.services.projects.guard_policy import bind_registry_admin, check_request
+from src.services.projects.guard_policy import bind_index_inventory_read, check_request
 
 
 pytestmark = pytest.mark.unbound
@@ -394,19 +394,19 @@ def test_knn_warmup_other_shapes_refused(snapshot) -> None:
     _refused(snapshot, 'is not an allowed request shape', 'GET', '/_plugins/_knn/warmup')
 
 
-def test_cat_indices_needs_registry_admin(snapshot) -> None:
+def test_cat_indices_needs_the_inventory_binding(snapshot) -> None:
     _refused(
         snapshot,
-        '_cat/indices is only for the global project list',
+        '_cat/indices is only for the index inventory read',
         'GET',
         '/_cat/indices/op_projects',
     )
-    with bind_registry_admin():
+    with bind_index_inventory_read():
         check_request('GET', '/_cat/indices/op_prj_alpha__items,op_projects', None, snapshot)
 
 
 def test_cat_indices_names_must_be_concrete_even_for_admin(snapshot) -> None:
-    with bind_registry_admin():
+    with bind_index_inventory_read():
         with pytest.raises(CrossProjectAccess, match='not a concrete index name'):
             check_request('GET', '/_cat/indices/op_prj_*', None, snapshot)
         with pytest.raises(CrossProjectAccess, match='is not an allowed request shape'):

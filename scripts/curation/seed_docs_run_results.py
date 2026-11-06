@@ -141,7 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    bind_script_project(args.project)
     names, supports = [], []
     for spec in args.classes:
         name, _, support = spec.partition('=')

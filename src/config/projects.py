@@ -17,6 +17,7 @@ from src.config.env import env_path, env_str
 
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Mapping
     from pathlib import Path
 
@@ -86,8 +87,7 @@ ProjectStatus = Literal['building', 'active', 'archived', 'deleting', 'deleted',
 
 @dataclass(frozen=True)
 class ProjectRecord:
-    """The persisted, wire-facing shape of a project (index ``op_projects``,
-    doc id ``project:<slug>``)."""
+    """The wire-facing shape of a project, built from its ``projects`` row."""
 
     slug: str
     display_name: str
@@ -98,10 +98,14 @@ class ProjectRecord:
     updated_at: str
     origin: dict | None
     resources: ProjectResources
-    # M3: the status a 'deleting' record should roll back to if the drain
-    # wait times out (the plan's machine, not the 'failed' the old no-op
-    # drain always wrote). None once terminal / not mid-delete.
+    # The status a 'deleting' record rolls back to if the drain wait times out;
+    # None when the project is not mid-delete.
     pre_delete_status: str | None = None
+    # The database row's identity (what ``project_tx`` scopes to). None only for a
+    # record built without a database behind it.
+    id: uuid.UUID | None = None
+    paused_at: str | None = None
+    paused_by: str | None = None
 
 
 def project_index_prefix() -> str:
@@ -120,27 +124,41 @@ def trainer_jobs_root() -> Path:
     return env_path('OP_TRAIN_JOBS_DIR', '/jobs')
 
 
-def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
-    """Resources for a brand-new project ``slug``, per the §2.2 naming
-    table. Computed once at create time and persisted -- never
-    recomputed from a later env on every boot."""
+# Index roles that still exist in OpenSearch although ``project_indexes`` records only ``images``
+# and ``items``. Their names follow the creation rule; lanes 2B-2D delete the last users and this
+# set with them.
+_DERIVED_INDEX_ROLES = (
+    'labels_confirmed',
+    'classes',
+    'umap_state',
+    'configs',
+)
+_FOLDED_ON_CONFIGS = ('settings', 'umap_viz_state')
+
+
+def resources_from_stored(
+    slug: str,
+    base: CurationConfig,
+    *,
+    index_prefix: str,
+    model_prefix: str,
+    mlflow_experiment: str,
+    indexes: Mapping[str, str],
+) -> ProjectResources:
+    """A project's resources from what its row stores (index names, prefixes, experiment);
+    the directories derive from the slug and the deployment's roots."""
     from src.config.curation_roles import IndexRole
 
-    prefix = project_index_prefix()
+    by_role: dict[IndexRole, str] = {IndexRole(role): name for role, name in indexes.items()}
+    for role in _DERIVED_INDEX_ROLES:
+        by_role[IndexRole(role)] = f'{index_prefix}{slug}__{role}'
+    # Shard folding (owner D4): settings and umap-viz-state live on the configs index.
+    configs_name = by_role[IndexRole.CONFIGS]
+    for role in _FOLDED_ON_CONFIGS:
+        by_role[IndexRole(role)] = configs_name
     data_root = projects_data_root() / slug
-    indexes = {role: f'{prefix}{slug}__{role.value}' for role in IndexRole}
-    # Shard folding (owner D4, projects_plan.md §2.3): every project --
-    # ``default`` included, since it is now an ordinary project built by
-    # this same function -- never gets its own settings / umap-viz-state
-    # indexes; both roles resolve to the configs index name instead (6
-    # indexes, not 8). Safe because both folded roles are addressed by a
-    # single fixed doc id only (never searched) and their mappings merge
-    # without a type conflict -- see _configs_body().
-    configs_name = f'{prefix}{slug}__{IndexRole.CONFIGS.value}'
-    indexes[IndexRole.SETTINGS] = configs_name
-    indexes[IndexRole.UMAP_VIZ_STATE] = configs_name
     return ProjectResources(
-        indexes=indexes,
+        indexes=by_role,
         class_registry_path=data_root / 'class_registry.json',
         export_root=data_root / 'exports',
         upload_root=base.state_dir / 'projects' / slug / 'uploads',
@@ -149,15 +167,48 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
         train_jobs_dir=trainer_jobs_root() / 'projects' / slug,
         autolabel_dir=env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects' / slug,
         bakeoff_jobs_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',
-        mlflow_experiment=f'openprocessor-{slug}',
-        # §5.3/§5.5: `default`'s model_prefix stays empty (not `default__`)
-        # so every model promoted before projects existed -- and every
-        # core pipeline model, which never carries a project prefix --
-        # keeps resolving as `default`'s own. This is a model-naming
-        # exception only; every OTHER resource (indexes, state dirs,
-        # class registry) still follows the ordinary per-slug convention
-        # (D-A, P1R §6.1) with no other `default` special case.
+        mlflow_experiment=mlflow_experiment,
+        model_prefix=model_prefix,
+    )
+
+
+@dataclass(frozen=True)
+class ProjectNames:
+    """The names a project is created with; stored on its row, never recomputed."""
+
+    index_prefix: str
+    storage_prefix: str
+    model_prefix: str
+    mlflow_experiment: str
+    indexes: Mapping[str, str]
+
+
+def new_project_names(slug: str) -> ProjectNames:
+    """The names a brand-new project ``slug`` is created with, per the naming table.
+
+    ``default``'s model prefix stays empty (not ``default__``) so every model promoted before
+    projects existed, and every core pipeline model, keeps resolving as ``default``'s own.
+    """
+    prefix = project_index_prefix()
+    return ProjectNames(
+        index_prefix=prefix,
+        storage_prefix=f'projects/{slug}',
         model_prefix='' if slug == DEFAULT_SLUG else f'{slug}__',
+        mlflow_experiment=f'openprocessor-{slug}',
+        indexes={role: f'{prefix}{slug}__{role}' for role in ('images', 'items')},
+    )
+
+
+def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
+    """Resources for a brand-new project ``slug``."""
+    names = new_project_names(slug)
+    return resources_from_stored(
+        slug,
+        base,
+        index_prefix=names.index_prefix,
+        model_prefix=names.model_prefix,
+        mlflow_experiment=names.mlflow_experiment,
+        indexes=names.indexes,
     )
 
 

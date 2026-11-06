@@ -4,9 +4,7 @@ Everything in :mod:`src.services.config_store.store` is per-project (keyed
 by the bound project's slug, unusable unbound). This is its sibling: ONE
 store for the whole deployment, for a config axis that is not scoped to any
 project -- the VLM endpoint registry (endpoint docs, revision copies, probe
-docs and the desired local model), the same way ``op_projects``
-(src.services.projects.registry) is the one other index that lives outside
-every project's own index set.
+docs and the desired local model).
 """
 
 from __future__ import annotations
@@ -19,14 +17,12 @@ from src.services.config_store.store import ConfigStore
 
 
 def global_configs_index() -> str:
-    """The one config-store index that belongs to no project -- mirrors
-    ``src.services.projects.registry.projects_index()`` for ``op_projects``.
+    """The one config-store index that belongs to no project.
 
     Refuses a name that would collide with the project namespace (a
     project-index prefix, which the project guard would then treat as one
-    project's index) or with the project registry itself."""
+    project's index)."""
     from src.config.projects import project_index_prefix
-    from src.services.projects.registry import projects_index
 
     name = env_str('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
     if name.startswith(project_index_prefix()):
@@ -34,9 +30,6 @@ def global_configs_index() -> str:
             f"OP_GLOBAL_CONFIGS_INDEX '{name}' starts with the project index prefix "
             f"'{project_index_prefix()}'; the global store must live outside every project"
         )
-        raise ValueError(msg)
-    if name == projects_index():
-        msg = f"OP_GLOBAL_CONFIGS_INDEX '{name}' is the project registry index (OP_PROJECTS_INDEX)"
         raise ValueError(msg)
     return name
 

@@ -52,7 +52,6 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from src.config.curation_accessors import items_index
 from src.services.projects.guard import make_curation_opensearch, make_script_opensearch
-from src.services.projects.guard_policy import bind_registry_admin
 from src.services.projects.script_binding import abind_script_project
 
 
@@ -86,18 +85,15 @@ def spread(values: list[float]) -> dict[str, float]:
 
 async def ensure_project(client: Any, slug: str) -> None:
     from src.services.projects import lifecycle
-    from src.services.projects.bootstrap import ensure_projects_index
 
     # Creation goes through the process client (OPENSEARCH_HOSTS), whose registry the
     # lifecycle keeps current; the script client below only reads and writes items.
     client = await make_curation_opensearch()
-    with bind_registry_admin():
-        await ensure_projects_index(client)
-        try:
-            await lifecycle.create_project(client, slug=slug, display_name=slug)
-        except Exception as exc:
-            if 'slug_taken' not in str(exc):
-                raise
+    try:
+        await lifecycle.create_project(client, slug=slug, display_name=slug)
+    except Exception as exc:
+        if 'slug_taken' not in str(exc):
+            raise
 
 
 async def load_items(client: Any, vectors: np.ndarray, truth: np.ndarray) -> float:
@@ -465,7 +461,7 @@ async def one_size(args: argparse.Namespace, size: int, out: Path) -> None:
     slug = f'{args.project_prefix}-{size}-{uuid.uuid4().hex[:6]}'
     client = make_script_opensearch([args.opensearch_url], timeout=600)
     await ensure_project(client, slug)
-    await abind_script_project(slug, opensearch_url=args.opensearch_url)
+    await abind_script_project(slug)
     rows: list[dict[str, Any]] = []
     load_s = await load_items(client, vectors, truth)
     rows.append({'kind': 'load', 'size': size, 'wall_s': round(load_s, 2)})

@@ -130,7 +130,7 @@ def main() -> int:
     g.add_argument('--apply', dest='dry_run', action='store_false')
     add_project_argument(p)
     args = p.parse_args()
-    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    bind_script_project(args.project)
     if args.page_size <= 0:
         p.error('--page-size must be positive')
     if args.start_after and args.label_prefix and len(args.label_prefix) > 1:

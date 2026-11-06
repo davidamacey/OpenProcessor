@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -216,10 +216,19 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     monkeypatch.setattr(TestClient, '__enter__', _unbound_enter)
 
-    def _no_registry_client() -> object:
-        raise ConnectionError('no project registry in unit tests')
+    class _NoDatabaseSource:
+        """A registry source that never reaches a database."""
 
-    stub = registry_mod.ProjectRegistry(_no_registry_client)
+        def read_revision(self) -> int:
+            raise ConnectionError('no project registry in unit tests')
+
+        def read_all(self) -> tuple[list[object], frozenset[str]]:
+            raise ConnectionError('no project registry in unit tests')
+
+        def read_one(self, _slug: str) -> object:
+            raise ConnectionError('no project registry in unit tests')
+
+    stub = registry_mod.ProjectRegistry(_NoDatabaseSource())  # type: ignore[arg-type]
     stub._by_slug = {'default': DEFAULT_RECORD}  # type: ignore[dict-item]
 
     # M2 made a stale registry (``.stale`` True after a failed
@@ -242,8 +251,8 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # test_script_binding.py exercises the real read).
     from src.services.projects import script_binding
 
-    async def _default_only_registry(_url: str | None = None) -> object:
-        registry = registry_mod.ProjectRegistry(_no_registry_client)
+    async def _default_only_registry() -> object:
+        registry = registry_mod.ProjectRegistry(_NoDatabaseSource())  # type: ignore[arg-type]
         registry._by_slug = {'default': DEFAULT_RECORD}  # type: ignore[dict-item]
         registry._refreshed = True
         return registry
@@ -461,3 +470,21 @@ def no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
         return {}
 
     monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)
+
+
+@pytest.fixture
+def pg_registry(pg: Any, pg_env: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """The real project registry on a migrated PostgreSQL, empty at the start of each test.
+
+    The async engine is replaced by a ``NullPool`` one so the tests that call ``asyncio.run``
+    several times never reuse a connection from a closed loop. Test modules that use it carry
+    ``pytest.mark.db``.
+    """
+    import psycopg
+
+    from src.db.engine import new_task_async_engine
+
+    monkeypatch.setattr('src.db.session.get_async_engine', new_task_async_engine)
+    with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
+        conn.execute('TRUNCATE project_slugs, projects CASCADE')
+    return pg_env

@@ -125,7 +125,7 @@ class _StreamWorker:
         self.args = args
         self.api_prefix = curation_api_prefix()
         self.opensearch = make_script_opensearch([args.opensearch], timeout=30)
-        self.registry = script_project_registry(client=self.opensearch)
+        self.registry = script_project_registry()
         self.scope_cache = ScopeCache()
         self.rotation = 0
         self.stop_event = asyncio.Event()
@@ -507,7 +507,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.project:
         # Fails fast on an unknown/unbindable slug.
-        bind_script_project(args.project, opensearch_url=args.opensearch)
+        bind_script_project(args.project)
     start_worker_metrics_server(os.environ.get('OP_VLM_WORKER_METRICS_PORT', '4610'))
     try:
         return asyncio.run(run(args))

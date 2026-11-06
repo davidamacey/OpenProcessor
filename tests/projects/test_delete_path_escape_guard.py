@@ -26,10 +26,13 @@ from dataclasses import replace
 import pytest
 
 from src.core.exceptions import RequestRejectedError
-from src.services.projects import lifecycle
-from src.services.projects.registry import ProjectRegistry, record_to_doc, set_project_registry
+from src.services.projects import delete as delete_mod, lifecycle
+from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -50,12 +53,26 @@ def _env(tmp_path, monkeypatch):
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 
 
-def test_delete_refuses_path_escape_for_corrupted_train_jobs_dir(tmp_path) -> None:
+def _corrupt_stored(monkeypatch, corrupted) -> None:
+    """Directories derive from the slug and the deployment roots, so a corrupted record can only
+    come from a misread row: make the delete's read hand back this one for its project."""
+    real = delete_mod.record_from_row
+
+    def read(row):
+        record = real(row)
+        if row.slug != corrupted.slug:
+            return record
+        return dataclasses.replace(record, resources=corrupted.resources)
+
+    monkeypatch.setattr(delete_mod, 'record_from_row', read)
+
+
+def test_delete_refuses_path_escape_for_corrupted_train_jobs_dir(tmp_path, monkeypatch) -> None:
     client = FakeLifecycleOpenSearch()
     registry = _registry_for(client)
     asyncio.run(seed_default_project(client))
@@ -68,9 +85,7 @@ def test_delete_refuses_path_escape_for_corrupted_train_jobs_dir(tmp_path) -> No
     escaped_dir.mkdir(parents=True)
     (escaped_dir / 'canary.txt').write_text('do not delete me', encoding='utf-8')
     corrupted = replace(record, resources=replace(record.resources, train_jobs_dir=escaped_dir))
-    client.docs['project:alpha'] = record_to_doc(corrupted)
-    client._seq['project:alpha'] = client._seq.get('project:alpha', 0) + 1
-    registry._by_slug['alpha'] = corrupted
+    _corrupt_stored(monkeypatch, corrupted)
 
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
@@ -105,6 +120,7 @@ def _shared_root_for(field_name: str):
 @pytest.mark.parametrize('field_name', _PREVIOUSLY_UNGUARDED_FIELDS)
 def test_delete_refuses_path_escape_when_dir_points_at_the_shared_root_itself(
     field_name: str,
+    monkeypatch,
 ) -> None:
     """m-a: reproduce the reviewer's exact probe for each of the 6 dirs
     the prior pass left unguarded -- point the field straight at the
@@ -141,9 +157,7 @@ def test_delete_refuses_path_escape_when_dir_points_at_the_shared_root_itself(
         record,
         resources=dataclasses.replace(record.resources, **{field_name: corrupted_value}),
     )
-    client.docs['project:alpha'] = record_to_doc(corrupted)
-    client._seq['project:alpha'] = client._seq.get('project:alpha', 0) + 1
-    registry._by_slug['alpha'] = corrupted
+    _corrupt_stored(monkeypatch, corrupted)
 
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
@@ -158,7 +172,7 @@ def test_delete_refuses_path_escape_when_dir_points_at_the_shared_root_itself(
     )
 
 
-def test_path_escape_check_runs_before_the_irreversible_index_delete() -> None:
+def test_path_escape_check_runs_before_the_irreversible_index_delete(monkeypatch) -> None:
     """m-a ordering: a path_escape must be raised BEFORE
     ``_delete_indexes`` runs -- previously the path check lived only
     inside dir removal, itself called AFTER index deletion, so a
@@ -177,9 +191,7 @@ def test_path_escape_check_runs_before_the_irreversible_index_delete() -> None:
     corrupted = dataclasses.replace(
         record, resources=dataclasses.replace(record.resources, export_root=escaped_dir)
     )
-    client.docs['project:alpha'] = record_to_doc(corrupted)
-    client._seq['project:alpha'] = client._seq.get('project:alpha', 0) + 1
-    registry._by_slug['alpha'] = corrupted
+    _corrupt_stored(monkeypatch, corrupted)
 
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'

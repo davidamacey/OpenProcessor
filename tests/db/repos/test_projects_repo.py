@@ -26,7 +26,7 @@ def new(slug: str, **kw: Any) -> repo.NewProject:
     return repo.NewProject(
         slug=slug,
         display_name=slug.title(),
-        index_prefix=f'op_prj_{slug}__',
+        index_prefix='op_prj_',
         storage_prefix=f'projects/{slug}',
         model_prefix=f'{slug}__',
         mlflow_experiment=f'openprocessor-{slug}',
@@ -46,6 +46,11 @@ async def read(fn: Any, *args: Any, **kw: Any) -> Any:
         return await fn(session, *args, **kw)
 
 
+async def read_sync(fn: Any) -> Any:
+    async with async_session_factory()() as session, deployment_tx(session, 'test read'):
+        return await session.run_sync(fn)
+
+
 async def write(fn: Any, *args: Any, **kw: Any) -> Any:
     async with async_session_factory()() as session, deployment_tx(session, 'test write'):
         return await fn(session, *args, **kw)
@@ -59,16 +64,16 @@ async def test_create_then_get_and_list_return_the_project(repo_env: None) -> No
     got = await read(repo.get_by_slug, 'alpha')
     assert got == created
     assert await read(repo.get_by_id, created.id) == created
-    assert 'alpha' in [p.slug for p in await read(repo.list_projects)]
+    assert 'alpha' in [p.slug for p in await read_sync(repo.list_projects_sync)]
     assert await read(repo.get_by_slug, 'nope') is None
 
 
 async def test_create_writes_the_satellite_rows_and_bumps_the_counter(
     repo_env: None,
 ) -> None:
-    before = await read(repo.read_projects_revision)
+    before = await read_sync(repo.read_projects_revision_sync)
     created = await create('satellites')
-    assert await read(repo.read_projects_revision) == before + 1
+    assert await read_sync(repo.read_projects_revision_sync) == before + 1
     async with async_session_factory()() as session, deployment_tx(session, 'test'):
         counts = (
             await session.execute(
@@ -95,7 +100,7 @@ async def test_a_retired_slug_is_slug_retired_and_never_reused(repo_env: None) -
     await write(repo.mark_deleting, 'gone', from_states=('active',))
     await write(repo.finish_delete, 'gone')
     assert await read(repo.get_by_slug, 'gone') is None
-    assert await read(repo.retired_slugs) == ['gone']
+    assert await read_sync(repo.retired_slugs_sync) == ['gone']
     with pytest.raises(repo.SlugRetiredError):
         await create('gone')
     # the identity key is never reissued: a different slug gets a later key
@@ -115,7 +120,9 @@ async def test_ten_concurrent_creates_of_one_slug_leave_one_row(repo_env: None) 
     assert all(
         isinstance(r, repo.SlugTakenError) for r in results if not isinstance(r, repo.ProjectRow)
     )
-    assert [p.slug for p in await read(repo.list_projects) if p.slug == 'race'] == ['race']
+    assert [p.slug for p in await read_sync(repo.list_projects_sync) if p.slug == 'race'] == [
+        'race'
+    ]
 
 
 async def test_a_stale_revision_is_a_conflict(repo_env: None) -> None:
@@ -172,18 +179,6 @@ async def test_finish_requires_deleting(repo_env: None) -> None:
         await write(repo.finish_delete, 'live')
     with pytest.raises(repo.ProjectNotFoundError):
         await write(repo.finish_delete, 'never-was')
-
-
-async def test_ownership_map_names_each_index_once(repo_env: None) -> None:
-    await create('own-a')
-    await create('own-b')
-    owners = {k: v for k, v in (await read(repo.ownership_map)).items() if v.startswith('own-')}
-    assert owners == {
-        'op_prj_own-a__images': 'own-a',
-        'op_prj_own-a__items': 'own-a',
-        'op_prj_own-b__images': 'own-b',
-        'op_prj_own-b__items': 'own-b',
-    }
 
 
 async def test_pause_and_resume_write_paused_at(repo_env: None) -> None:
@@ -262,7 +257,7 @@ async def test_load_project_preserves_ids_and_timestamps_and_reads_back(
         paused_by='cli',
         origin=[{'project_id': str(uuid.uuid4()), 'slug': 'src'}],
     )
-    before = await read(repo.read_projects_revision)
+    before = await read_sync(repo.read_projects_revision_sync)
     project_id = await write(repo.load_project, load)
     got = await read(repo.get_by_slug, 'legacy')
     assert got.id == project_id
@@ -270,6 +265,6 @@ async def test_load_project_preserves_ids_and_timestamps_and_reads_back(
     assert (got.created_at, got.updated_at, got.paused_at) == (created_at, updated_at, paused_at)
     assert got.origin == load.origin
     assert got.indexes == load.indexes
-    assert await read(repo.read_projects_revision) == before + 1
+    assert await read_sync(repo.read_projects_revision_sync) == before + 1
     with pytest.raises(repo.SlugTakenError):
         await write(repo.load_project, load)

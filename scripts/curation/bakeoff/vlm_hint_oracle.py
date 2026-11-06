@@ -84,7 +84,7 @@ async def _dump(args: argparse.Namespace) -> int:
     from src.services.projects.guard import make_script_opensearch
     from src.services.projects.script_binding import abind_script_project
 
-    await abind_script_project(args.project, opensearch_url=args.opensearch_url)
+    await abind_script_project(args.project)
     client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
     index = get_curation_config().items_index
     written = 0

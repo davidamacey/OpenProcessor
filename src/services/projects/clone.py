@@ -9,14 +9,12 @@ and :func:`clone_settings_into` so every existing caller
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
 from src.core.logging import get_logger
 from src.services.projects.clone_activation import _clone_activations
 from src.services.projects.clone_validate import _validate_clone
-from src.utils.timeutil import now_iso
 
 
 logger = get_logger(__name__)
@@ -228,11 +226,14 @@ async def clone_settings_into(
     target emptiness) runs before anything is written, and the revision
     is bumped only after the copy succeeded -- a refused clone never
     changes the target's revision."""
-    from src.services.projects.lifecycle import _get_mutable_record, write_record
+    from src.db.repos import projects as repo
+    from src.services.projects.lifecycle import _get_mutable_record
     from src.services.projects.lifecycle_checks import _require_revision, _require_transition
+    from src.services.projects.records import record_from_row
     from src.services.projects.registry import get_project_registry
+    from src.services.projects.store import run_repo
 
-    record, seq, term = await _get_mutable_record(client, slug)
+    record = await _get_mutable_record(slug)
     _require_transition(record, 'clone settings into', frozenset({'active'}))
     _require_revision(record, expected_revision)
     source, resolved_axes, target_activations = await _validate_clone(
@@ -245,10 +246,11 @@ async def clone_settings_into(
         axes=resolved_axes,
         target_activations=target_activations,
     )
-    updated = replace(record, revision=record.revision + 1, updated_at=now_iso())
-    await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
+    row = await run_repo(
+        'bump a project after a clone', repo.patch_project, slug, expected_revision=record.revision
+    )
     await get_project_registry().ensure_fresh()
-    return updated, conflicts
+    return record_from_row(row), conflicts
 
 
 __all__ = ['clone_settings', 'clone_settings_into']

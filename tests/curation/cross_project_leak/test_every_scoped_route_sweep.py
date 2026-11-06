@@ -66,6 +66,9 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytestmark = pytest.mark.db
+
+
 def _served_urls(value: Any) -> list[str]:
     """Every string in a JSON body that *is* a curation URL."""
     if isinstance(value, str):

@@ -323,14 +323,14 @@ async def fake_ensure_indexes(opensearch: Any) -> None:
         await opensearch.indices.create(index=index_name(cfg, role))
 
 
-async def seed_default_project(client: Any) -> Any:
+async def seed_default_project(_client: Any = None) -> Any:
     """``default`` is now an ordinary project record (no env-synthesis
     fallback in ``lifecycle._get_mutable_record``); tests that need to
     archive/delete/protect it must first bootstrap it exactly like
     ``src.main``'s startup lifespan does."""
     from src.services.projects.bootstrap import bootstrap_default_project
 
-    return await bootstrap_default_project(client)
+    return await bootstrap_default_project()
 
 
 @pytest.fixture
@@ -345,7 +345,7 @@ def not_stale_registry(monkeypatch: pytest.MonkeyPatch) -> Any:
     from src.services.projects import registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
-    registry = ProjectRegistry(lambda: None)
+    registry = ProjectRegistry()
     registry._by_slug = dict(registry_mod.get_project_registry().snapshot())
 
     async def _fresh(self: ProjectRegistry) -> None:
@@ -354,3 +354,62 @@ def not_stale_registry(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', _fresh)
     registry_mod.set_project_registry(registry)
     return registry
+
+
+async def aseed_project(slug: str, *, status: str = 'active', **columns: Any) -> Any:
+    """A project row in the test database (not its indexes), optionally with columns set raw."""
+    from sqlalchemy import update
+
+    from src.db.models.projects import Project
+    from src.db.repos import projects as repo
+    from src.services.projects.records import new_project_for, record_from_row
+    from src.services.projects.store import run_repo
+
+    row = await run_repo(
+        'seed a test project',
+        repo.create_project,
+        new_project_for(slug, display_name=slug.title(), status='active'),
+    )
+
+    async def _set(session: Any) -> Any:
+        values = {'status': status, **columns}
+        if values['status'] == 'deleting':
+            values.setdefault('pre_delete_status', 'active')
+        await session.execute(update(Project).where(Project.slug == slug).values(**values))
+        await repo.bump_projects_revision(session)
+        return await repo.get_by_slug(session, slug)
+
+    return (
+        record_from_row(await run_repo('seed a test project', _set))
+        if (status != 'active' or columns)
+        else record_from_row(row)
+    )
+
+
+async def amutate_project(slug: str, **columns: Any) -> None:
+    """Change columns of a stored project behind the repository's back, and bump the counter."""
+    from sqlalchemy import update
+
+    from src.db.models.projects import Project
+    from src.db.repos import projects as repo
+    from src.services.projects.store import run_repo
+
+    async def _set(session: Any) -> None:
+        await session.execute(update(Project).where(Project.slug == slug).values(**columns))
+        await repo.bump_projects_revision(session)
+
+    await run_repo('mutate a test project', _set)
+
+
+def stored_status(slug: str) -> str | None:
+    """The status stored for ``slug`` in the test database, or None when there is no such row."""
+    import asyncio
+
+    from src.db.repos import projects as repo
+    from src.services.projects.store import run_repo
+
+    async def _read(session: Any) -> str | None:
+        row = await repo.get_by_slug(session, slug)
+        return row.status if row is not None else None
+
+    return asyncio.run(run_repo('read a stored status', _read))

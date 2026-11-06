@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     reject_retired_env()
     args = parse_args(argv)
     if args.project:
-        bind_script_project(args.project, opensearch_url=args.opensearch)
+        bind_script_project(args.project)
     try:
         return asyncio.run(run(args))
     except KeyboardInterrupt:

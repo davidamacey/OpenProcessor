@@ -122,14 +122,12 @@ async def delete_throwaway(slug: str) -> None:
     from src.services.projects import lifecycle
     from src.services.projects.delete import delete_project_finish
     from src.services.projects.guard import make_curation_opensearch
-    from src.services.projects.guard_policy import bind_registry_admin
     from src.services.projects.registry import get_project_registry
 
     client = await make_curation_opensearch()
     await get_project_registry().refresh_strict()
-    with bind_registry_admin():
-        await lifecycle.delete_project(client, slug=slug, confirm=slug)
-        await delete_project_finish(client, slug=slug)
+    await lifecycle.delete_project(client, slug=slug, confirm=slug)
+    await delete_project_finish(client, slug=slug)
 
 
 async def bench_size(args: argparse.Namespace, size: int, pool: np.ndarray) -> list[dict[str, Any]]:
@@ -143,7 +141,7 @@ async def bench_size(args: argparse.Namespace, size: int, pool: np.ndarray) -> l
     bound = False
     try:
         await ensure_project(client, slug)
-        await abind_script_project(slug, opensearch_url=args.opensearch_url)
+        await abind_script_project(slug)
         bound = True
         load_s = await load_items(client, vectors, args.truth[:size])
         # The backend probe imports umap/numba once per process; timed runs start warm.

@@ -16,6 +16,9 @@ from src.services.projects.stats import project_stats
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -43,7 +46,7 @@ def _noop_ensure_indexes():
 
 def test_project_stats_counts_and_disk() -> None:
     client = FakeLifecycleOpenSearch()
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars'))
     asyncio.run(registry.ensure_fresh())
@@ -90,7 +93,7 @@ def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, mo
     )
 
     client = _TermAwareClient()
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars'))
     asyncio.run(registry.ensure_fresh())

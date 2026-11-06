@@ -153,12 +153,7 @@ async def run(args: argparse.Namespace) -> int:
     from src.services.projects.registry import ProjectRegistry
     from src.services.projects.script_binding import only_project
 
-    # Reuse the already-built (and, in tests, already-patched)
-    # `opensearch` client above -- a second script_project_registry()
-    # client would open its own real AsyncOpenSearch straight from
-    # args.opensearch, bypassing whatever fake a caller/test installed
-    # at make_script_opensearch.
-    registry = ProjectRegistry(lambda: opensearch)
+    registry = ProjectRegistry()
     project_filter = getattr(args, 'project', None)
 
     class _WorkerProjects:

@@ -40,7 +40,7 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
     from src.services.config_store.global_store import get_global_config_store
     from src.services.projects.registry import ProjectRegistry
 
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     while True:
         try:
             # the deployment-wide VLM registry, refreshed unbound (its

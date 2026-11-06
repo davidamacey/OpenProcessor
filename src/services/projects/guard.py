@@ -14,10 +14,9 @@ searches, wildcards and patterns, ``_all``, aliases, ``_reindex``,
 ``_sql``/``_ppl``, snapshots, remote-cluster names, unknown names under
 the project index prefix, and any body that reaches another index.
 
-Unbound code (the non-curation ``visual_search_*`` routers, the registry)
-may touch only indexes no project owns. The ``op_projects`` registry
-index is readable from anywhere and writable only inside
-:func:`bind_registry_admin`.
+Unbound code (the non-curation ``visual_search_*`` routers) may touch only
+indexes no project owns. Which index belongs to which project comes from
+``project_indexes`` through the registry snapshot.
 
 Installed on the shared client at construction
 (``src.core.dependencies.OpenSearchClientFactory``) and on every script
@@ -32,7 +31,6 @@ import asyncio
 import time
 from collections import OrderedDict
 from typing import Any
-from urllib.parse import quote
 
 from src.config.project_context import try_current_project
 from src.services.projects.guard_policy import check_request
@@ -124,21 +122,6 @@ def install_project_guard(client: Any, registry: Any, *, refresh: Any = None) ->
     client.transport = ProjectGuardedTransport(client.transport, registry, refresh)
 
 
-class _RegistryReader:
-    """The two calls :class:`~src.services.projects.registry.ProjectRegistry`
-    makes, sent straight to the *unguarded* inner transport so reading the
-    registry never re-enters the guard that needs it."""
-
-    def __init__(self, transport: Any) -> None:
-        self._transport = transport
-
-    async def get(self, *, index: str, id: str) -> Any:  # noqa: A002 - mirrors the client API
-        return await self._transport.perform_request('GET', f'/{index}/_doc/{quote(id, safe="")}')
-
-    async def search(self, *, index: str, body: Any) -> Any:
-        return await self._transport.perform_request('POST', f'/{index}/_search', body=body)
-
-
 def make_script_opensearch(hosts: list[str], **kwargs: Any) -> Any:
     """The one factory for script / worker OpenSearch clients: an
     ``AsyncOpenSearch`` with the project guard installed. Its registry is
@@ -152,8 +135,7 @@ def make_script_opensearch(hosts: list[str], **kwargs: Any) -> Any:
     kwargs.setdefault('use_ssl', False)
     kwargs.setdefault('serializer', OrjsonSerializer())
     client = AsyncOpenSearch(hosts=hosts, **kwargs)
-    reader = _RegistryReader(client.transport)
-    registry = ProjectRegistry(lambda: reader)
+    registry = ProjectRegistry()
     install_project_guard(client, registry, refresh=registry.ensure_fresh)
     return client
 

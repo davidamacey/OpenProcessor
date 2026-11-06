@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectStatus
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 class _CountingOpenSearch(FakeLifecycleOpenSearch):
     """``count`` honours a ``term`` query, so a validated count is real."""
 
@@ -70,7 +73,7 @@ def _noop_ensure_indexes():
 @pytest.fixture
 def client(monkeypatch) -> _CountingOpenSearch:
     fake = _CountingOpenSearch()
-    set_project_registry(ProjectRegistry(lambda: fake))
+    set_project_registry(ProjectRegistry())
 
     async def _make() -> _CountingOpenSearch:
         return fake

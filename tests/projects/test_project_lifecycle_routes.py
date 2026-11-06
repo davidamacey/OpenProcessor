@@ -23,6 +23,9 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -51,7 +54,7 @@ def _noop_ensure_indexes():
 @pytest.fixture(autouse=True)
 def _patch_client(monkeypatch):
     client = FakeLifecycleOpenSearch()
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
 
     async def _fake_make_client():

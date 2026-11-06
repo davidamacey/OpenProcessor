@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytestmark = pytest.mark.db
+
+
 def _state() -> dict[str, Any]:
     return {
         'status': 'queued',

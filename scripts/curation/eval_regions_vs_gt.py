@@ -453,7 +453,7 @@ async def _async_main(args: argparse.Namespace, cohort: list[CohortImage]) -> in
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     args = build_parser().parse_args(argv)
-    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    bind_script_project(args.project)
     if not 0.0 < args.iou <= 1.0 or not 0.0 <= args.dedup_iou <= 1.0:
         logger.error('--iou must be in (0, 1] and --dedup-iou in [0, 1]')
         return 1
