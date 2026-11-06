@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 
     from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.db]
 
 SLUG = 'cars'
 API = f'/curation/projects/{SLUG}'
@@ -96,7 +96,7 @@ class World:
 
 
 @pytest.fixture
-def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
+def world(pg_registry: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
     import src.config.curation_accessors as curation_mod
     from src.services.curation import index_bootstrap
     from src.services.projects import capacity as capacity_mod
