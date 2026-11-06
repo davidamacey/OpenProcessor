@@ -176,12 +176,11 @@ storage to wire.
 
 ## Projects and isolation
 
-A project is a named, isolated dataset workspace. The registry is the
-`op_projects` index (`OP_PROJECTS_INDEX`).
+A project is a named, isolated dataset workspace. The project records are rows in PostgreSQL.
 
 | Resource | Where |
 |---|---|
-| Indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`, default prefix `op_prj_`, roles `images`, `items`, `labels_confirmed`, `classes`, `umap_state`, `configs` |
+| Indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`, default prefix `op_prj_`, roles `images` and `items` (plus `leases`, the transitional job-lease index) |
 | Settings and UMAP view state | folded into the project's `configs` index, by fixed document id |
 | Class registry, exports, bake-off eval sets | `OP_PROJECTS_DATA_ROOT/<slug>/` (default `./data/projects/<slug>/`) |
 | Uploads, bake-off jobs, pause flag | `OP_STATE_DIR/projects/<slug>/` |
