@@ -103,10 +103,10 @@ async def _start_background_tasks() -> None:
 
     AppResources.ops_metrics_task = asyncio.create_task(ops_metrics_refresh_loop())
 
-    # Best-effort: create each project's curation indexes + kNN-warmup.
+    # Refuse to start when an active project's index mapping stamp is not current.
     from src.core.dependencies import bootstrap_opensearch_indexes
 
-    AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
+    await bootstrap_opensearch_indexes()
     await _report_stored_face_data()
 
     # Config store poll task: fans out per active project, not `default`.

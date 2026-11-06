@@ -85,9 +85,6 @@ _.updated_count  # serialised to the wire or the job file by asdict/model_dump
 _.registry_snapshot_path  # serialised to the wire or the job file by asdict/model_dump
 _.ocr_error  # serialised to the wire or the job file by asdict/model_dump
 
-# Held for a reason other than a read
-_.curation_knn_warmup_task  # AppResources keeps the warmup task referenced so asyncio does not garbage-collect it
-
 # Test seams and oracles (production code whose only caller is the test that needs the seam)
 _._reset_for_tests  # clears module state between tests
 _._reset_field_coverage_cache  # clears a module cache between tests
