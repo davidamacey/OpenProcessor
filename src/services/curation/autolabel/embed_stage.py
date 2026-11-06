@@ -5,7 +5,7 @@ The scope is the run's ``class_id`` / ``cluster_id`` plus the shared item
 filter; only items stored without a vector for a recorded reason
 (``not_selected``, ``deferred``, ``failed``) are embedded, by the same code the
 ``embed`` reprocess scope runs. The worker has no resident encoder, so one is
-built per run from ``OP_TRITON_URL`` / ``TRITON_URL`` (default
+built per run from ``TRITON_URL`` (default
 ``triton-server:8001``, reachable on the compose network).
 """
 
@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from src.config.env import env_optional_str, env_str
+from src.config.env import env_str
 from src.core.logging import get_logger
 from src.domain.embedding_state import DEFERRED, FAILED, NOT_SELECTED
 from src.services.curation.item_filter import ItemFilter
@@ -39,7 +39,7 @@ DEFAULT_TRITON_URL = 'triton-server:8001'
 
 
 def triton_url() -> str:
-    return env_optional_str('OP_TRITON_URL') or env_str('TRITON_URL', DEFAULT_TRITON_URL)
+    return env_str('TRITON_URL', DEFAULT_TRITON_URL)
 
 
 def stage_request(

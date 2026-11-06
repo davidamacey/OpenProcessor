@@ -26,6 +26,10 @@ _BAKEOFF_TARGET_REMOVED = (
 )
 _FEATURE_OUTPUT_REMOVED = f'{_REMOVED} the profile feature_output field was removed'
 RETIRED_ENV: dict[str, str] = {
+    'OP_TRITON_URL': 'TRITON_URL',
+    'OP_IVF_RETRAIN_CHECK_S': (
+        f'{_REMOVED} the IVF retrain is a cluster_run started by the periodic cluster refresh'
+    ),
     'VLM_URL': 'OP_VLM_URL',
     'GEMMA_URL': 'OP_VLM_URL',
     'OPENWEBUI_BASE_URL': 'OP_VLM_URL',

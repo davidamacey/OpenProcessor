@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.services.labeling.vlm_url_policy as policy
+from src.core.db_session import get_db
 from src.services.labeling.vlm_endpoint_body import VlmProbeRecord
 
 
@@ -144,6 +145,8 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
     )
     install_project_exception_handlers(app)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: None
+    # No database in these tests: a route that needs a session gets none and must not touch it.
+    app.dependency_overrides[get_db] = lambda: None
     api = VlmApi(
         client=revision_aware(TestClient(app)),
         lenient=revision_aware(TestClient(app, raise_server_exceptions=False)),

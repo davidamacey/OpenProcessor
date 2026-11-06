@@ -23,7 +23,6 @@ JOB_MODULES: tuple[tuple[str, LeaseKind], ...] = (
     ('src.services.curation.item_scores.job', LeaseKind.ITEM_SCORES),
     ('src.services.curation.selection.job', LeaseKind.SELECTION),
     ('src.services.curation.embedding_viz', LeaseKind.EMBEDDING_VIZ),
-    ('src.services.curation.autolabel.job', LeaseKind.AUTOLABEL),
     ('src.services.curation.probe_job', LeaseKind.PROBE),
     ('src.services.curation.reprocess_job', LeaseKind.REPROCESS),
     ('src.services.curation.assist.job', LeaseKind.ASSIST_RUN),

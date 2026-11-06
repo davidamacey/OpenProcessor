@@ -159,26 +159,6 @@ def test_the_daemon_fails_closed_when_it_cannot_tell_whether_a_loop_is_live() ->
     assert not api.retrained
 
 
-# ---- the auto-label worker's idle retrain --------------------------------
-
-
-def test_the_workers_idle_retrain_stays_off_while_a_loop_is_live(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from scripts.curation import auto_label_worker as w
-    from src.services.curation.clustering import retrain_policy
-
-    async def _due(_client: Any) -> dict[str, Any]:
-        return {'should': True}
-
-    monkeypatch.setattr(retrain_policy, 'should_retrain_centroids', _due)
-    fake = SettingsFakeOpenSearch({})
-    assert asyncio.run(w._maybe_auto_retrain(fake)) is not None
-    _live_loop()
-
-    assert asyncio.run(w._maybe_auto_retrain(fake)) is None
-
-
 # ---- the start routes -----------------------------------------------------
 
 
@@ -200,7 +180,7 @@ def test_a_start_that_does_not_retrain_is_not_held(http: TestClient) -> None:
 
     allowed = http.post(START, params={'train_clusters': 'false'})
 
-    assert allowed.status_code == 200, allowed.text
+    assert allowed.status_code == 202, allowed.text
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')
@@ -218,4 +198,4 @@ def test_a_start_goes_through_once_the_loop_has_ended(http: TestClient) -> None:
     loop = asyncio.run(job.create_loop(object(), state={'status': 'queued'}, request={}))
     loop.update(status='completed')
 
-    assert http.post(START).status_code == 200
+    assert http.post(START).status_code == 202

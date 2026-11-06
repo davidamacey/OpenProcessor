@@ -11,7 +11,7 @@ import pytest
 from curation.reprocess_fixtures import FakePE, docs, item, jpeg_bytes, make_fake, servable_root
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from src.services.curation.autolabel.embed_stage import run_embed_missing_stage, stage_request
-from src.services.curation.autolabel.job import STAGES
+from src.services.curation.autolabel.progress import STAGES
 from src.services.curation.autolabel.selection import unvalidated_count_query, vlm_selection_query
 from src.services.curation.item_filter import ItemFilter
 
@@ -187,7 +187,7 @@ def test_start_carries_the_scope_and_embed_flag_in_the_job_trigger(
         '/curation/projects/default/pipeline/auto_label/start',
         params={'embed_missing': 'true', 'class_name': 'car', 'min_area': '0.1', 'class_id': 3},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     args = r.json()['args']
     assert args['embed_missing'] is True
     assert args['class_id'] == 3

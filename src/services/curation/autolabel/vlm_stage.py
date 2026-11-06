@@ -15,6 +15,7 @@ from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.services.curation.assist.chunk import suggested_name
 from src.services.curation.assist.slot_write import RunMeta, build_slot, write_slots
+from src.services.curation.autolabel.progress import PauseRequestedError
 from src.services.curation.autolabel.run_params import labeler_resolution_args
 from src.services.curation.autolabel.run_state import Run, start_stage
 from src.services.curation.autolabel.run_vlm import job_endpoint, require_item_attributes
@@ -143,20 +144,32 @@ async def _label_all(
 ) -> ChunkResult:
     """Label ``ids`` in chunks. The VLM is the dominant cost at scale (often hours), so
     progress is reported per chunk and an operator cancel is checked between chunks."""
-    chunks = [ids[i : i + batch_size] for i in range(0, len(ids), batch_size)]
-    sem = asyncio.Semaphore(concurrency)
+    chunks = iter([ids[i : i + batch_size] for i in range(0, len(ids), batch_size)])
     start_stage(run, 'vlm', total=len(ids))
+    results: list[ChunkResult] = []
+    stop: type[BaseException] | None = None
 
-    async def gated(chunk: list[str]) -> ChunkResult:
-        async with sem:
+    async def worker() -> None:
+        # A bounded set of workers pulls chunks, so a million-crop sweep is never a million
+        # tasks. A cancel or pause stops the taking of new chunks; chunks in flight finish.
+        nonlocal stop
+        for chunk in chunks:
             if run.progress is not None:
-                run.progress.raise_if_cancelled()
-            out = await _label_chunk(run, ctx, chunk, meta)
+                if run.progress.cancelled:
+                    stop = asyncio.CancelledError
+                    return
+                if run.progress.paused:
+                    stop = PauseRequestedError
+                    return
+            results.append(await _label_chunk(run, ctx, chunk, meta))
             if run.progress is not None:
                 run.progress.advance(len(chunk))
-            return out
 
-    results = await asyncio.gather(*[gated(c) for c in chunks])
+    async with asyncio.TaskGroup() as group:
+        for _ in range(min(concurrency, max(1, len(ids)))):
+            group.create_task(worker())
+    if stop is not None:
+        raise stop
     return ChunkResult(
         sum(r.predicted for r in results),
         sum(r.updated for r in results),
@@ -187,7 +200,7 @@ async def _post_vlm_normalize(run: Run, unvalidated_ids: list[str]) -> dict[str,
     """The VLM may have changed ``class_id`` without rewriting ``cluster_id``, which fragments
     the labeler view: one last pass makes ``cluster_id`` equal ``class_id`` wherever a class
     is set -- only on the selected items when the job is scoped."""
-    from src.services.curation.autolabel.job import with_elapsed_tick
+    from src.services.curation.autolabel.progress import with_elapsed_tick
     from src.services.curation.clustering.id_normalize import force_cluster_id_equals_class_id
 
     start_stage(run, 'finalize')

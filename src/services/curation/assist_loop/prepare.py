@@ -20,7 +20,7 @@ from src.services.curation.assist_loop.partition import (
     PartitionScope,
     RootSize,
 )
-from src.services.curation.autolabel import job as auto_label_job
+from src.services.curation.autolabel import service as autolabel_service
 from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
 from src.services.curation.autolabel.run_vlm import RunVlm, require_run_vlm, resolve_run_vlm
 from src.services.labeling.run_labeler import resolve_pack
@@ -75,7 +75,7 @@ async def prepare_loop(opensearch: AsyncOpenSearch, request: AssistLoopRequest) 
             'no_roots',
             'no cluster is big enough to work on: lower scope.min_root_size or name clusters',
         )
-    if not request.dry_run and auto_label_job.is_busy():
+    if not request.dry_run and await autolabel_service.is_busy():
         raise rejection(
             409,
             'clustering_running',

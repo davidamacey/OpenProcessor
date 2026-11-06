@@ -182,21 +182,21 @@ async def test_a_started_job_keeps_the_endpoint_it_was_accepted_against(stack, m
     """``/pipeline/auto_label/start`` pins ``(name, revision)`` into the job;
     later activations and edits change nothing for it, and the job resolves
     that immutable revision by id (in whatever process runs it)."""
-    from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel import service as auto_label_service
     from src.services.curation.autolabel.run_vlm import job_endpoint
 
     api = stack.api
     captured: dict[str, Any] = {}
 
-    async def fake_start(_os: Any, fn: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def fake_start(_session: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'status': 'queued', 'job_id': 'j1'}
 
-    monkeypatch.setattr(auto_label_job, 'start_job', fake_start)
+    monkeypatch.setattr(auto_label_service, 'start', fake_start)
     started = api.client.post(
         f'{SCOPED}/pipeline/auto_label/start', params={'run_vlm': 'true', 'vlm': 'ua'}
     )
-    assert started.status_code == 200, started.text
+    assert started.status_code == 202, started.text
     assert captured['vlm_endpoint'] == 'ua'
     assert captured['vlm_endpoint_revision'] == 1
     assert captured['vlm_resolved'] is True

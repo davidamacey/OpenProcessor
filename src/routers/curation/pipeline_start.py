@@ -5,8 +5,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import HTTPException, Query
+from fastapi import Query
 
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers.curation._autolabel_models import AutoLabelJobState
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
@@ -48,9 +49,13 @@ _EMBED_MISSING_DESC = (
 
 
 @router.post(
-    '/pipeline/auto_label/start', response_model=None, responses={200: {'model': AutoLabelJobState}}
+    '/pipeline/auto_label/start',
+    status_code=202,
+    response_model=None,
+    responses={202: {'model': AutoLabelJobState}},
 )
 async def pipeline_auto_label_start(
+    session: DbSessionDep,
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
     train_clusters: Annotated[bool, Query()] = True,
@@ -79,16 +84,15 @@ async def pipeline_auto_label_start(
     vlm_scope: Annotated[VlmScope | None, Query(description=_VLM_SCOPE_DESC)] = None,
     vlm_attributes: Annotated[bool, Query(description=VLM_ATTRIBUTES_DESC)] = False,
 ) -> dict[str, Any]:
-    """Kick off auto_label as a background job. Returns immediately.
+    """Queue auto_label as a background job and answer 202 with its state.
 
     Poll ``GET /pipeline/auto_label/status/{job_id}`` (the returned
     ``job_id``) for this job's progress.
-    Only one job runs at a time; a second start request returns HTTP 409
-    while a job is in flight.
+    Only one job per project is queued, running or paused at a time; a second start
+    request returns 409 ``job_busy``.
     """
     from src.services.curation.assist_loop.job import require_no_live_loop
-    from src.services.curation.auto_label_run import run_auto_label
-    from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel import service
 
     if train_clusters:
         require_no_live_loop()
@@ -131,59 +135,47 @@ async def pipeline_auto_label_start(
         )
         if run_vlm:
             require_run_vlm(vlm_run)
-    try:
-        return await auto_label_job.start_job(
-            opensearch,
-            # R6-m1 fix: the worker must invoke the internal implementation
-            # directly, not the public route wrapper -- `pipeline_auto_label`
-            # now always forces `prompt_pack_resolved=False`, which would
-            # silently re-resolve (and potentially re-pin) every job.
-            run_auto_label,
-            {
-                'opensearch': opensearch,
-                'train_clusters': train_clusters,
-                'promote_min_purity': promote_min_purity,
-                'promote_min_members': promote_min_members,
-                'vlm_batch_size': vlm_batch_size,
-                'vlm_concurrency': vlm_concurrency,
-                'max_vlm_crops': max_vlm_crops,
-                'classifier_confidence_skip_vlm': classifier_confidence_skip_vlm,
-                'clustering_method': clustering_method,
-                'run_vlm': run_vlm,
-                'recluster_unvalidated': recluster_unvalidated,
-                'run_auto_promote': run_auto_promote,
-                'reassign_only': reassign_only,
-                'gate_max_rank': gate_max_rank,
-                'gate_min_blur_ratio': gate_min_blur_ratio,
-                'n_clusters': n_clusters,
-                'class_id': class_id,
-                'cluster_id': cluster_id,
-                'item_filter': item_filter.model_dump(mode='json', exclude_defaults=True),
-                'embed_missing': embed_missing,
-                'vlm_scope': vlm_scope,
-                'vlm_attributes': vlm_attributes,
-                'prompt_pack': prompt_pack,
-                'prompt_pack_revision': prompt_pack_revision,
-                # always set, even for the omitted-pack default
-                # case -- `/start` already ran `resolve_run_prompt_pack`
-                # above for every shape of this request, so the job must
-                # never re-run it.
-                'prompt_pack_resolved': True,
-                # Tells `run_auto_label` whether THIS request
-                # omitted `prompt_pack` -- when it did, the job must
-                # resolve the VLM labeler against `None` (always "whatever
-                # is active right now"), never the echoed `prompt_pack`
-                # name, which can go stale between `/start` and the VLM
-                # stage actually running (see `run_auto_label`).
-                'prompt_pack_omitted': prompt_pack_was_omitted,
-                'vlm_endpoint': vlm_run.name,
-                'vlm_endpoint_revision': vlm_run.revision,
-                'vlm_resolved': True,
-            },
-        )
-    except RuntimeError as exc:
-        # 409 makes it unambiguous in the UI that a run is already in flight.
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    params = {
+        'train_clusters': train_clusters,
+        'promote_min_purity': promote_min_purity,
+        'promote_min_members': promote_min_members,
+        'vlm_batch_size': vlm_batch_size,
+        'vlm_concurrency': vlm_concurrency,
+        'max_vlm_crops': max_vlm_crops,
+        'classifier_confidence_skip_vlm': classifier_confidence_skip_vlm,
+        'clustering_method': clustering_method,
+        'run_vlm': run_vlm,
+        'recluster_unvalidated': recluster_unvalidated,
+        'run_auto_promote': run_auto_promote,
+        'reassign_only': reassign_only,
+        'gate_max_rank': gate_max_rank,
+        'gate_min_blur_ratio': gate_min_blur_ratio,
+        'n_clusters': n_clusters,
+        'class_id': class_id,
+        'cluster_id': cluster_id,
+        'item_filter': item_filter.model_dump(mode='json', exclude_defaults=True),
+        'embed_missing': embed_missing,
+        'vlm_scope': vlm_scope,
+        'vlm_attributes': vlm_attributes,
+        'prompt_pack': prompt_pack,
+        'prompt_pack_revision': prompt_pack_revision,
+        # always set, even for the omitted-pack default
+        # case -- `/start` already ran `resolve_run_prompt_pack`
+        # above for every shape of this request, so the job must
+        # never re-run it.
+        'prompt_pack_resolved': True,
+        # Tells `run_auto_label` whether THIS request
+        # omitted `prompt_pack` -- when it did, the job must
+        # resolve the VLM labeler against `None` (always "whatever
+        # is active right now"), never the echoed `prompt_pack`
+        # name, which can go stale between `/start` and the VLM
+        # stage actually running (see `run_auto_label`).
+        'prompt_pack_omitted': prompt_pack_was_omitted,
+        'vlm_endpoint': vlm_run.name,
+        'vlm_endpoint_revision': vlm_run.revision,
+        'vlm_resolved': True,
+    }
+    return await service.start(session, params)
 
 
 __all__ = ['pipeline_auto_label_start']

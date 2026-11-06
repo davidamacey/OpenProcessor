@@ -1680,6 +1680,218 @@
         "title": "AugmentationSpec",
         "type": "object"
       },
+      "AutoLabelActionResponse": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "description": "The arguments the run was started with.",
+            "title": "Args",
+            "type": "object"
+          },
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Clustering backend, 'gpu' or 'cpu'; null before it ran.",
+            "title": "Backend"
+          },
+          "backend_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Detail"
+          },
+          "done": {
+            "description": "There was a job to pause or resume.",
+            "title": "Done",
+            "type": "boolean"
+          },
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
+          "eta_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Seconds"
+          },
+          "finished_at": {
+            "description": "Unix seconds; 0 while it has not finished.",
+            "title": "Finished At",
+            "type": "number"
+          },
+          "free_vram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Vram Mb"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "pause_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the job is paused or pausing; null otherwise.",
+            "title": "Pause Reason"
+          },
+          "peak_vram_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Vram Mb"
+          },
+          "pipeline": {
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "queue_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds a queued job has waited for a worker; null once it is not queued.",
+            "title": "Queue Age Seconds"
+          },
+          "queue_max_age_seconds": {
+            "description": "A job still queued after this long fails: no worker is running.",
+            "title": "Queue Max Age Seconds",
+            "type": "number"
+          },
+          "result": {
+            "additionalProperties": true,
+            "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
+            "title": "Result",
+            "type": "object"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_durations": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Wall seconds per finished stage.",
+            "title": "Stage Durations",
+            "type": "object"
+          },
+          "started_at": {
+            "description": "Unix seconds; 0 before the job starts.",
+            "title": "Started At",
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "queued",
+              "running",
+              "paused",
+              "cancelling",
+              "completed",
+              "completed_with_errors",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "stage",
+          "processed",
+          "total",
+          "started_at",
+          "finished_at",
+          "error",
+          "error_detail",
+          "result",
+          "args",
+          "pipeline",
+          "backend",
+          "backend_detail",
+          "free_vram_mb",
+          "peak_vram_mb",
+          "stage_durations",
+          "eta_seconds",
+          "elapsed_seconds",
+          "queue_age_seconds",
+          "queue_max_age_seconds",
+          "done"
+        ],
+        "title": "AutoLabelActionResponse",
+        "type": "object"
+      },
       "AutoLabelCancelResponse": {
         "properties": {
           "args": {
@@ -1773,6 +1985,18 @@
             "title": "Job Id",
             "type": "string"
           },
+          "pause_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the job is paused or pausing; null otherwise.",
+            "title": "Pause Reason"
+          },
           "peak_vram_mb": {
             "anyOf": [
               {
@@ -1837,9 +2061,13 @@
               "idle",
               "queued",
               "running",
+              "paused",
+              "cancelling",
               "completed",
+              "completed_with_errors",
               "failed",
-              "cancelled"
+              "cancelled",
+              "interrupted"
             ],
             "title": "Status",
             "type": "string"
@@ -1964,6 +2192,18 @@
             "title": "Job Id",
             "type": "string"
           },
+          "pause_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the job is paused or pausing; null otherwise.",
+            "title": "Pause Reason"
+          },
           "peak_vram_mb": {
             "anyOf": [
               {
@@ -2028,9 +2268,13 @@
               "idle",
               "queued",
               "running",
+              "paused",
+              "cancelling",
               "completed",
+              "completed_with_errors",
               "failed",
-              "cancelled"
+              "cancelled",
+              "interrupted"
             ],
             "title": "Status",
             "type": "string"
@@ -49538,7 +49782,7 @@
     },
     "/curation/projects/{project}/pipeline/auto_label/cancel": {
       "post": {
-        "description": "Request cancellation of the active auto_label job.",
+        "description": "Cancel the active auto_label job: a queued one at once, a running one at its next boundary.",
         "operationId": "pipeline_auto_label_cancel_curation_projects__project__pipeline_auto_label_cancel_post",
         "parameters": [
           {
@@ -49579,9 +49823,95 @@
         ]
       }
     },
+    "/curation/projects/{project}/pipeline/auto_label/pause": {
+      "post": {
+        "description": "Pause the active job between stages or VLM chunks; chunks in flight finish.",
+        "operationId": "pipeline_auto_label_pause_curation_projects__project__pipeline_auto_label_pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoLabelActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pipeline Auto Label Pause",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/pipeline/auto_label/resume": {
+      "post": {
+        "description": "Resume the paused job (409 ``resume_blocked`` names why it cannot yet).",
+        "operationId": "pipeline_auto_label_resume_curation_projects__project__pipeline_auto_label_resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoLabelActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pipeline Auto Label Resume",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/pipeline/auto_label/start": {
       "post": {
-        "description": "Kick off auto_label as a background job. Returns immediately.\n\nPoll ``GET /pipeline/auto_label/status/{job_id}`` (the returned\n``job_id``) for this job's progress.\nOnly one job runs at a time; a second start request returns HTTP 409\nwhile a job is in flight.",
+        "description": "Queue auto_label as a background job and answer 202 with its state.\n\nPoll ``GET /pipeline/auto_label/status/{job_id}`` (the returned\n``job_id``) for this job's progress.\nOnly one job per project is queued, running or paused at a time; a second start\nrequest returns 409 ``job_busy``.",
         "operationId": "pipeline_auto_label_start_curation_projects__project__pipeline_auto_label_start_post",
         "parameters": [
           {
@@ -50226,7 +50556,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
@@ -50298,7 +50628,7 @@
     },
     "/curation/projects/{project}/pipeline/auto_label/status/{job_id}": {
       "get": {
-        "description": "State of one auto_label job by the ``job_id`` its start returned.\n\nSame shape as ``GET /pipeline/auto_label/status``. Answers for the job\neven after a later job replaced it as the current one (its final\nstate is kept; the newest 50 are retained). ``404`` for an unknown id.",
+        "description": "State of one auto_label job by the ``job_id`` its start returned (404 for another id).",
         "operationId": "pipeline_auto_label_job_status_curation_projects__project__pipeline_auto_label_status__job_id__get",
         "parameters": [
           {
@@ -50350,7 +50680,7 @@
     },
     "/curation/projects/{project}/pipeline/events": {
       "get": {
-        "description": "Server-sent events stream for the curation dashboard.\n\nReplaces a ``GET /curation/stats/dataset`` polling loop. One open\nHTTP connection per dashboard tab; the server pushes:\n\n* ``snapshot`` (on connect) — current ``state.json`` plus a one-shot\n  dataset aggregation, so the client renders without any additional\n  REST call.\n* ``state`` — whenever ``auto_label`` state changes (stage\n  transitions, progress advances, terminal status), noticed by a 1 s\n  poll of the bound project's ``state.json`` mtime.\n* ``stats`` — refreshed dataset aggregation. Emitted at auto_label\n  stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)\n  so the dashboard counts (unlabeled / pending_detection /\n  pending_verification) keep ticking while the detection worker\n  drains the queue independent of auto_label. Frontends that only\n  care about pipeline status can ignore these.\n* a keep-alive comment every 15 s, sent by FastAPI's SSE response so\n  reverse proxies don't reap the connection.\n\nThe dashboard consumes this with ``new EventSource(url)`` and\nswitches on ``ev.type`` (snapshot | state | stats).",
+        "description": "Server-sent events stream for the curation dashboard.\n\nReplaces a ``GET /curation/stats/dataset`` polling loop. One open\nHTTP connection per dashboard tab; the server pushes:\n\n* ``snapshot`` (on connect) — current ``state.json`` plus a one-shot\n  dataset aggregation, so the client renders without any additional\n  REST call.\n* ``state`` — whenever ``auto_label`` state changes (stage\n  transitions, progress advances, terminal status), noticed by a 1 s\n  poll of the job row.\n* ``stats`` — refreshed dataset aggregation. Emitted at auto_label\n  stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)\n  so the dashboard counts (unlabeled / pending_detection /\n  pending_verification) keep ticking while the detection worker\n  drains the queue independent of auto_label. Frontends that only\n  care about pipeline status can ignore these.\n* a keep-alive comment every 15 s, sent by FastAPI's SSE response so\n  reverse proxies don't reap the connection.\n\nThe dashboard consumes this with ``new EventSource(url)`` and\nswitches on ``ev.type`` (snapshot | state | stats).",
         "operationId": "pipeline_events_curation_projects__project__pipeline_events_get",
         "parameters": [
           {

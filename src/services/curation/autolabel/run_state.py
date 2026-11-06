@@ -31,3 +31,4 @@ def start_cancellable_stage(run: Run, name: str) -> None:
     if run.progress is not None:
         run.progress.start_stage(name)
         run.progress.raise_if_cancelled()
+        run.progress.raise_if_paused()

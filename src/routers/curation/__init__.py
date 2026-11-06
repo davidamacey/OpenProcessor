@@ -104,7 +104,7 @@ from src.services.classes.registry import get_class_registry
 # `__init__`), so there is no import-order requirement between those two
 # side-effect imports. `classes_crops` imports `list_crops` from `crops_list`
 # directly (not through this package's `__init__`); `pipeline_events` lazily
-# imports `stats.stats_dataset` and `autolabel.job` inside its generator
+# imports `stats.stats_dataset` and `autolabel.service` inside its generator
 # function body (not at module load time) to avoid a load-order
 # dependency. `settings` registers `GET,PUT /curation/settings` on this
 # same shared `router`.

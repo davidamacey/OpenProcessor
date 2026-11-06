@@ -21,7 +21,6 @@ pytestmark = pytest.mark.integration
 
 def test_lifespan_calls_reconcile_for_all_job_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.services.curation import embedding_viz, probe_job
-    from src.services.curation.autolabel import job as autolabel_job
     from src.services.curation.item_scores import job as item_scores_job
     from src.services.curation.selection import job as selection_job
 
@@ -37,7 +36,6 @@ def test_lifespan_calls_reconcile_for_all_job_modules(monkeypatch: pytest.Monkey
     monkeypatch.setattr(item_scores_job, 'reconcile_orphaned_jobs', _tracker('item_scores'))
     monkeypatch.setattr(selection_job, 'reconcile_orphaned_jobs', _tracker('selection'))
     monkeypatch.setattr(embedding_viz, 'reconcile_orphaned_jobs', _tracker('embedding_viz'))
-    monkeypatch.setattr(autolabel_job, 'reconcile_orphaned_jobs', _tracker('autolabel'))
     monkeypatch.setattr(probe_job, 'reconcile_orphaned_jobs', _tracker('probe'))
 
     from src.main import app
@@ -49,7 +47,6 @@ def test_lifespan_calls_reconcile_for_all_job_modules(monkeypatch: pytest.Monkey
         'item_scores',
         'selection',
         'embedding_viz',
-        'autolabel',
         'probe',
     }
 

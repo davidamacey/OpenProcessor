@@ -197,7 +197,6 @@ _.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist
 _.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands
 
 # The lane 4D VLM usage seam: the job handlers of the trigger family call it.
-_.usage_sessions  # src/services/labeling/vlm_usage.py, entered by the autolabel and assist-loop handlers
 
 # The assist loop's SQL budget lands ahead of the loop driver that calls it (lane 4D).
 _.seed_budgets  # src/db/repos/assist_loop.py
@@ -210,3 +209,7 @@ _.settled_amounts  # src/domain/assist_loop_budget.py
 _.as_amounts  # src/domain/assist_loop_budget.py
 _.POOLS  # src/domain/assist_loop_budget.py
 _.UNITS  # src/domain/assist_loop_budget.py
+
+# Lane 4D left these without a production caller.
+_.should_retrain_centroids  # src/services/curation/clustering/retrain_policy.py, the IVF policy; it goes with the IVF method (lane 4F), the auto-label worker that called it is deleted
+_.__qualname__  # src/tasks/runtime/register.py, Celery names the task by it
