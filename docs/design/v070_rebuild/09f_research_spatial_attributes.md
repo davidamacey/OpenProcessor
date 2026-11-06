@@ -197,6 +197,57 @@ on 2026-11-04 and must be re-checked before anything ships.
 | CLIP zero-shot (Radford et al. 2021, [arXiv:2103.00020](https://arxiv.org/abs/2103.00020)) | "a photo of a red {class}" against the stored crop vector: no pixels, no new model |
 | Known failure | Illumination: the same object changes name under shade, sodium light or white-balance error. Colour constancy is unsolved in general, so flip rate is the metric that matters (the former #400 plan, 4.4) |
 
+#### 3.6a Research note (2026-11-05): a vehicle-colour classifier trained on our own data
+
+A quick survey of Hugging Face and GitHub found no well-maintained vehicle-colour model with
+clear weight and data licences:
+
+- **Hugging Face.** The vehicle models there classify make, model or type. One make and model card
+  says colour "is handled separately" ([Jordo23/vehicle-classifier](https://huggingface.co/Jordo23/vehicle-classifier)).
+  The colour repositories have no documented data or licence.
+- **Spectrico's MobileNetV3 car-colour classifier (14 colours).** The most practical ready-made
+  model, but its weights come from a commercial vendor. The MIT badge covers only the example
+  code ([example](https://github.com/TheDeveloperMask/car-color-classifier-yolo4-python)). A private
+  yardstick at most.
+- **Datasets.**
+  - [UFPR-VCR](https://github.com/Lima001/UFPR-VCR-Dataset): 10,039 images, 11 colours, night and
+    occlusion, available on request under a signed agreement.
+  - [Roboflow Car Colors](https://universe.roboflow.com/tyler-yonjx/car-colors-1smyc): 2,004
+    images, 9 colours; check its licence first.
+  - Neither ships in the product.
+- **The hard part is illumination**, not the model: night, sodium light, glare, and silver versus
+  grey versus white. A short vocabulary of about 10 to 12 names and a calibrated abstain matter more
+  than the architecture.
+
+**Owner direction (2026-11-05): train our own colour classifier on our own data**, the way the
+owner's private plate model was built: label our own crops, train a small model, serve it fast. The
+path, in order (each step stops when its bar passes, D2 below):
+
+1. **Zero-shot on the stored crop embedding (arm a).** "a photo of a {colour} car" against the
+   vector already stored per crop. No pixels and no new model. A one-hour check on a few hundred
+   labelled vehicle crops.
+2. **Bootstrap labels.**
+   - Arm a, the VLM pack attribute (arm c) and the pixel palette (arm b) propose a colour per
+     vehicle crop.
+   - Where they agree, the crop goes to a review queue first. Where they disagree, it goes to a
+     person.
+   - Review happens in Cropwright as ordinary class labels in a colour project.
+3. **Train with the app's own trainer.**
+   - A small YOLO classification model on the reviewed crops (thousands, not tens of thousands),
+     with the per-capture-group split and frozen holdout that every project already has.
+   - It is served on Triton as a classification head after the vehicle detector, batched at well
+     under a millisecond per crop.
+   - It is licence-clean, tuned to our cameras and lighting, and a public demonstration of the
+     label, train and serve loop. A public reproduction uses public COCO or Open Images vehicle
+     crops only.
+4. **Ship gate.** The same bars as D2: per-class accuracy and the flip rate under the illumination
+   jitter of P-3, with abstain under a calibrated margin. It stores into the `attr_colour*` fields of
+   D4, so nothing in the rebuild changes (the attribute tables are reserved, 02d section 5).
+
+This replaces D2x's "no case until the cheap arms fail". The trained model is the planned end
+state for vehicles; the cheap arms are its label source and its fallback. It lands in research
+wave RW-5 (after the tag), with no change to any v0.7.0 lane.
+
 ### 3.7 Viewpoint estimation
 
 | Source | What it gives |
@@ -232,7 +283,7 @@ Legend: ✅ recommended; ❌ rejected; 🟡 conditional (needs a measured bar or
 | D1e | File modification time as capture time | ❌ | Not capture time (EXIF spec; Immich treats it as the last fallback, with known wrong results). We store "unknown" instead of a wrong time |
 | D1f | Time-zone inference from coordinates (timezonefinder) | 🟡 | Only when the location policy stores location; otherwise the offset comes only from the offset tags or the GPS UTC delta |
 | D2 | **Colour per box, three arms**: (a) PE zero-shot over the stored vector; (b) pixel Lab palette on the decoded crop (mask when the region stage has one), named by nearest CIE Lab centroid of the 11 basic terms with CIEDE2000; (c) the existing VLM pack attribute | 🟡 (P-3) | Methods are standard. Accuracy and flip rate on our data are unknown. Arm (a) needs no pixels, so it can backfill everywhere |
-| D2x | A trained colour model | ❌ | No case until the cheap arms fail |
+| D2x | A trained colour model (owner direction 2026-11-05) | 🟡 | For vehicles: a small YOLO classifier trained with the app's own trainer on our own reviewed crops, bootstrapped by arms a-c (section 3.6a); ships only on the D2 bars |
 | D3 | **View per box**: PE zero-shot prompts per coarse class, calibrated by isotonic regression, abstaining under a margin | 🟡 (P-2) | Bar from the former #400 plan: at least 0.8 per bin, at least 60 per bin. Pascal3D+ gives public ground truth |
 | D3a | Orient Anything or another learned orientation model | 🟡 measurement-only | Licence not found |
 | D3x | View as a clustering veto | ❌ | Views differ inside one class and one object (the former #400 plan, principle and 4.3) |
