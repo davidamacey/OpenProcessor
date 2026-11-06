@@ -6,5 +6,5 @@ from src.tasks.app import app
 
 
 @app.task(name='op.infra.noop', shared=False)
-def noop() -> None:
+def noop(job_id: str) -> None:
     """Does nothing; proves a message reaches a worker through the routed queue."""

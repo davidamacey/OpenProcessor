@@ -7,8 +7,10 @@ import ast
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -278,6 +280,61 @@ def test_api_image_copies_every_scripts_file_it_imports_or_sources() -> None:
     needed |= _COCO_SAMPLE | _SHELL_LIBS
     missing = sorted(n for n in _with_sourced_libs(needed) if not _covered(n, dirs, files))
     assert missing == [], f'api target does not COPY: {missing}'
+
+
+def _flat_strings(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [s for item in value for s in _flat_strings(item)]
+
+
+def _api_services_runtime_paths() -> dict[str, set[str]]:
+    """``path under /app -> services`` for what each api-image service runs in compose.
+
+    docker-compose.yml bind-mounts no source, so a path its command, entrypoint or healthcheck
+    names under /app, or the file of a ``python -m`` module, must be baked into the image. A
+    module that reads ``alembic.ini`` relative to the repository root needs that file too.
+    """
+    compose = yaml.safe_load((REPO_ROOT / 'docker-compose.yml').read_text())['services']
+    found: dict[str, set[str]] = {}
+    for name, svc in compose.items():
+        if not str(svc.get('image', '')).startswith('${OP_API_IMAGE'):
+            continue
+        text = ' '.join(
+            _flat_strings(svc.get('command'))
+            + _flat_strings(svc.get('entrypoint'))
+            + _flat_strings((svc.get('healthcheck') or {}).get('test'))
+        )
+        paths = {p.rstrip('/.') for p in re.findall(r'/app/([\w./-]+)', text)}
+        for module in re.findall(r'python3?\s+-m\s+([\w.]+)', text):
+            base = Path(*module.split('.'))
+            for cand in (base.with_suffix('.py'), base / '__init__.py'):
+                if (REPO_ROOT / cand).is_file():
+                    paths.add(cand.as_posix())
+                    if 'alembic.ini' in (REPO_ROOT / cand).read_text():
+                        paths.add('alembic.ini')
+        for path in paths - {'data'}:
+            found.setdefault(path, set()).add(name)
+    return found
+
+
+def test_api_image_copies_every_path_its_compose_services_run() -> None:
+    needed = _api_services_runtime_paths()
+    assert 'scripts/flower/flowerconfig.py' in needed, 'the scan found nothing: not vacuous'
+    copied = [
+        w
+        for kind, rest in _named_stages()['api']
+        if kind == 'COPY' and '--from=' not in rest
+        for w in [x for x in rest.split() if not x.startswith('--')][:-1]
+    ]
+    dirs = {c.rstrip('/') for c in copied if c.endswith('/')}
+    files = {c for c in copied if not c.endswith('/')}
+    missing = {
+        p: sorted(users) for p, users in sorted(needed.items()) if not _covered(p, dirs, files)
+    }
+    assert missing == {}, f'api target does not COPY paths its services run: {missing}'
 
 
 def test_export_image_copies_every_scripts_file_it_imports_or_sources() -> None:

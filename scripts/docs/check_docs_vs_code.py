@@ -94,7 +94,10 @@ _CODE_ENV_FILES = (
     'Makefile',
     'Dockerfile',
 )
-
+# Test harness files that read a documented variable (CONTRIBUTING.md names OP_TEST_DATABASE_URL, which
+# the database fixture reads and no code under the scanned roots does). The whole of tests/ is not
+# scanned: a variable only a test reads should still be named here on purpose.
+_TEST_ENV_FILES = ('tests/fixtures/postgres.py',)
 
 _STATE: dict[str, list[Path] | None] = {'only': None}
 
@@ -206,7 +209,7 @@ def check_routes() -> list[str]:
 
 def _env_corpus() -> str:
     parts = []
-    for name in _CODE_ENV_FILES:
+    for name in (*_CODE_ENV_FILES, *_TEST_ENV_FILES):
         p = REPO_ROOT / name
         if p.is_file():
             parts.append(p.read_text(encoding='utf-8', errors='replace'))
