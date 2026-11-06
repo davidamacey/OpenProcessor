@@ -19,12 +19,15 @@ router = APIRouter()
 async def get_manifest(
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
 ) -> WireJSONResponse:
-    """Return the run's ``manifest.json`` (lineage envelope).
+    """Return the run's manifest (lineage envelope).
 
     404 if the manifest doesn't exist yet — older runs that finished
     before the manifest writer landed simply lack one.
     """
-    manifest = await job_manifest.read_manifest(job_id)
+    try:
+        manifest = await job_manifest.read_manifest(job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if manifest is None:
         raise HTTPException(status_code=404, detail=f'no manifest for job {job_id!r}')
     return WireJSONResponse(content=manifest)
@@ -43,7 +46,7 @@ async def get_run_artifact(
         PathParam(
             description=(
                 'Whitelisted artifact filename '
-                '(see src.services.training.job_wire.RUN_ARTIFACT_WHITELIST), '
+                '(see src.domain.training_keys.RUN_ARTIFACT_WHITELIST), '
                 'e.g. confusion_matrix.png'
             )
         ),

@@ -1,9 +1,11 @@
-"""Builders for the bake-off router tests: tiny YOLO exports and training-run status/manifest pairs."""
+"""Builders for the bake-off router tests: tiny YOLO exports and in-memory training runs."""
 
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING, Any
+
+from src.services.training.job_models import TrainJobStatus
 
 
 if TYPE_CHECKING:
@@ -88,43 +90,39 @@ def make_run(
     ckpt = dirs['runs'] / run_id / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
-    # `dirs['train_jobs']` is already default's fully-nested
-    # `OP_TRAIN_JOBS_DIR/projects/default` (see `default_train_jobs_dir`
-    # in tests/_project_paths.py) -- do not nest it again here.
-    jobs = dirs['train_jobs']
-    jobs.mkdir(parents=True, exist_ok=True)
-    (jobs / f'{run_id}.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': run_id,
-                'state': state,
-                'finished_at': '2026-09-24T23:51:09Z',
-                'checkpoint_path': str(ckpt),
-                'eval': eval_block or {'map50': 0.9356, 'split': 'test'},
-            }
-        )
+    fakes = dirs['run_fakes']
+    fakes.statuses[run_id] = TrainJobStatus(
+        job_id=run_id,
+        state=state,  # type: ignore[arg-type]  # the tests pass a wire state
+        finished_at='2026-09-24T23:51:09Z',
+        checkpoint_path=str(ckpt),
+        eval=eval_block or {'map50': 0.9356, 'split': 'test'},
     )
-    (jobs / f'{run_id}.manifest.json').write_text(
-        json.dumps(
-            {
-                'kind': 'train',
-                'job_id': run_id,
-                'lineage': {
-                    'export_dir': str(export_dir),
-                    'dataset_sha': None,
-                    'frozen_test_sha': frozen_test_sha,
-                    'include_classes': include_classes,
-                    'single_cls': single_cls,
-                    'class_remap': class_remap,
-                },
-                'spec': {
-                    'model_family': 'yolo26',
-                    'model_size': 'n',
-                    'hyperparameters': {'imgsz': imgsz},
-                },
-            }
-        )
-    )
+    fakes.manifests[run_id] = {
+        'kind': 'train',
+        'job_id': run_id,
+        'lineage': {
+            'export_dir': str(export_dir),
+            'dataset_sha': None,
+            'frozen_test_sha': frozen_test_sha,
+            'include_classes': include_classes,
+            'single_cls': single_cls,
+            'class_remap': class_remap,
+        },
+        'spec': {
+            'model_family': 'yolo26',
+            'model_size': 'n',
+            'hyperparameters': {'imgsz': imgsz},
+        },
+    }
+    fakes.specs[run_id] = {
+        'job_id': run_id,
+        'model_family': 'yolo26',
+        'model_size': 'n',
+        'hyperparameters': {'imgsz': imgsz},
+        'include_classes': include_classes,
+        'single_cls': single_cls,
+    }
     return ckpt
 
 

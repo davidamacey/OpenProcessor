@@ -2,7 +2,7 @@
 
 Mounts at ``{api_prefix}/train``. Each module owns one concern and exposes a
 sub-router; this package assembles them in the published route order.
-The routers stay thin: file-system access goes through
+The routers stay thin: run state and queueing go through
 :mod:`src.services.training.jobs`, hyperparameter tables live in
 :mod:`src.services.training.profiles`, preflight checks in
 :mod:`src.services.training.preflight_checks`.
@@ -10,13 +10,13 @@ The routers stay thin: file-system access goes through
 Endpoints:
 
     POST   {api_prefix}/train/preflight          -> PreflightReport
-    POST   {api_prefix}/train/start              -> {job_id}        (writes job.json)
+    POST   {api_prefix}/train/start              -> {job_id}        (queues a `train` job)
     POST   {api_prefix}/train/start_campaign     -> {campaign_id, job_ids}
     GET    {api_prefix}/train/status             -> most recent TrainJobStatus
     GET    {api_prefix}/train/status/{job_id}    -> TrainJobStatus
     GET    {api_prefix}/train/runs               -> paginated list
     GET    {api_prefix}/train/log/tail/{job_id}  -> tail N lines
-    POST   {api_prefix}/train/cancel/{job_id}    -> drop cancel sentinel
+    POST   {api_prefix}/train/cancel/{job_id}    -> cancel the run
     POST   {api_prefix}/train/cancel_campaign/{campaign_id}
     GET    {api_prefix}/train/profiles           -> profile table
     GET    {api_prefix}/train/presets            -> class-subset presets
@@ -27,7 +27,7 @@ Endpoints:
         -> whitelisted run artifact (confusion_matrix.png, results.csv, ...)
 
 Pre-flight contract: ``/start`` calls ``/preflight``
-internally and refuses to write ``job.json`` if any check has severity
+internally and refuses to queue the run if any check has severity
 ``block``. Pass ``?force=true`` to bypass; the report is still returned in
 the 422 body so the UI can render it inline.
 """

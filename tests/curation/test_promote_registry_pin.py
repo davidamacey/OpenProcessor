@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock
 import pytest
 from _class_registry_fake import InMemoryRegistry, use_registry
 from _project_paths import default_train_jobs_dir
+from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -73,8 +74,14 @@ def _renamed_live_registry() -> InMemoryRegistry:
     return use_registry(registry)
 
 
+@pytest.fixture
+def run_fakes(monkeypatch: pytest.MonkeyPatch):
+    return install_run_fakes(monkeypatch)
+
+
 def test_labels_txt_uses_pinned_registry_not_live(
     app_client: TestClient,
+    run_fakes: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -93,17 +100,13 @@ def test_labels_txt_uses_pinned_registry_not_live(
         )
     )
 
-    # 2. job.json carries the pin's location, as write_job would have written it.
-    (default_train_jobs_dir(tmp_path) / f'{job_id}.job.json').write_text(
-        json.dumps(
-            {
-                'job_id': job_id,
-                'dataset_export_dir': '/data/exports/x',
-                'registry_snapshot_path': str(snapshot_path),
-                'registry_sha': 'irrelevant-for-this-test',
-            }
-        )
-    )
+    # 2. the stored spec carries the pin's location, as start_run would have stored it.
+    run_fakes.specs[job_id] = {
+        'job_id': job_id,
+        'dataset_export_dir': '/data/exports/x',
+        'registry_snapshot_path': str(snapshot_path),
+        'registry_sha': 'irrelevant-for-this-test',
+    }
 
     # 3. The LIVE registry has since been renamed — class_id=5 is now
     #    'suv_renamed'. Before the fix, promote would follow this rename.
@@ -160,6 +163,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
 
 def test_labels_txt_falls_back_to_live_registry_without_a_pin(
     app_client: TestClient,
+    run_fakes: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -167,9 +171,7 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
     registry_snapshot_path — promote must still work, falling back to the
     live registry rather than erroring."""
     job_id = 'no-pin-job'
-    (default_train_jobs_dir(tmp_path) / f'{job_id}.job.json').write_text(
-        json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/x'})
-    )
+    run_fakes.specs[job_id] = {'job_id': job_id, 'dataset_export_dir': '/data/exports/x'}
 
     _renamed_live_registry()
 

@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.db.engine import get_sync_engine
+from src.db.repos import gpu_devices
 from src.db.session import sync_deployment_tx
 
 
@@ -24,19 +25,6 @@ if TYPE_CHECKING:
 
     from src.tasks.runtime.gpu_app import GpuDevice
 
-_UPSERT_DEVICE = text(
-    'INSERT INTO gpu_devices (gpu_uuid, host, nvml_index, name, compute_capability, '
-    'memory_total_mib, numa_node, pcie_gen, pcie_width, hw_jpeg_decoder, driver_version, '
-    'cuda_version, seen_at) VALUES (:gpu_uuid, :host, :nvml_index, :name, :compute_capability, '
-    ':memory_total_mib, :numa_node, :pcie_gen, :pcie_width, :hw_jpeg_decoder, :driver_version, '
-    ':cuda_version, now()) ON CONFLICT (gpu_uuid) DO UPDATE SET host = excluded.host, '
-    'nvml_index = excluded.nvml_index, name = excluded.name, '
-    'compute_capability = excluded.compute_capability, '
-    'memory_total_mib = excluded.memory_total_mib, numa_node = excluded.numa_node, '
-    'pcie_gen = excluded.pcie_gen, pcie_width = excluded.pcie_width, '
-    'hw_jpeg_decoder = excluded.hw_jpeg_decoder, driver_version = excluded.driver_version, '
-    'cuda_version = excluded.cuda_version, seen_at = now()'
-)
 _TOUCH_DEVICES = text('UPDATE gpu_devices SET seen_at = now() WHERE gpu_uuid = ANY(:uuids)')
 _UPSERT_CAPABILITIES = text(
     'INSERT INTO worker_capabilities (worker_id, queue, host, capabilities, seen_at) '
@@ -79,7 +67,7 @@ class DbInventoryWriter:
             for d in devices
         ]
         with self._session() as session, sync_deployment_tx(session, 'gpu inventory upsert'):
-            session.execute(_UPSERT_DEVICE, rows)
+            session.execute(gpu_devices.UPSERT, rows)
 
     def touch_devices(self, uuids: Sequence[str]) -> None:
         with self._session() as session, sync_deployment_tx(session, 'gpu inventory refresh'):

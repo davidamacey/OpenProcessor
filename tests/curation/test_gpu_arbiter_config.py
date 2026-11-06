@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from src.config import GpuArbiterConfig, get_curation_config, get_gpu_arbiter_config
-from src.services.training import gpu_arbiter, gpu_arbiter_docker, trainer_reachability
+from src.services.training import gpu_arbiter, gpu_arbiter_docker
 
 
 if TYPE_CHECKING:
@@ -26,7 +26,6 @@ def test_defaults_are_empty_and_permissive() -> None:
     assert cfg.allowed_gpu_ids == frozenset()
     assert cfg.containers == ()
     assert cfg.container_gpus == ()
-    assert cfg.trainer_container is None
     # Never None: the router and the reconcile loop must watch the same dir
     # even when OP_BAKEOFF_JOBS_DIR is unset.
     assert cfg.bakeoff_jobs_dir == str(get_curation_config().bakeoff_jobs_dir)
@@ -61,100 +60,6 @@ def test_stop_gpu_services_is_noop_with_no_configured_containers() -> None:
 def test_start_gpu_services_is_noop_with_no_configured_containers() -> None:
     action = asyncio.run(gpu_arbiter_docker.start_gpu_services(containers=()))
     assert action.action == 'noop'
-
-
-def test_probe_trainer_reachable_skips_when_unconfigured() -> None:
-    severity, detail = asyncio.run(
-        trainer_reachability.probe_trainer_reachable(container_name=None)
-    )
-    assert severity == 'ok'
-    assert 'not configured' in detail or 'not applicable' in detail
-
-
-def _write_heartbeat(jobs_dir: Path, *, age_seconds: float) -> None:
-    import json
-    from datetime import UTC, datetime, timedelta
-
-    written_at = (datetime.now(UTC) - timedelta(seconds=age_seconds)).isoformat()
-    jobs_dir.mkdir(parents=True, exist_ok=True)
-    (jobs_dir / trainer_reachability.TRAINER_CAPABILITIES_FILENAME).write_text(
-        json.dumps({'gpu_order': [], 'visible_count': 1, 'written_at': written_at})
-    )
-
-
-def test_probe_trainer_reachable_ok_on_a_stock_install_with_fresh_heartbeat(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Regression: a stock install has no docker socket in the API
-    container. The heartbeat file the trainer's watch loop refreshes every
-    ~30s must be enough on its own -- no docker SDK/socket needed.
-
-    ``_docker_client`` is patched to ``None`` rather than left to whatever
-    the *host* running this test suite happens to have -- this asserts the
-    stock (no docker socket mounted) path specifically, and must not flake
-    depending on whether a real 'op-test-trainer'-named container happens
-    to exist on the machine running the tests.
-    """
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-    _write_heartbeat(tmp_path, age_seconds=5.0)
-
-    severity, detail = asyncio.run(
-        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
-    )
-    assert severity == 'ok'
-    assert 'heartbeat' in detail
-
-
-def test_probe_trainer_reachable_warns_on_stale_heartbeat_without_docker(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A stale heartbeat with no docker socket to confirm either way must
-    warn, never block -- "can't tell" is not the same as "definitely down"."""
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-    _write_heartbeat(
-        tmp_path, age_seconds=trainer_reachability.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0
-    )
-
-    severity, detail = asyncio.run(
-        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
-    )
-    assert severity == 'warn'
-    assert 'stale' in detail
-
-
-def test_probe_trainer_reachable_warns_when_heartbeat_file_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """No heartbeat file at all (older trainer image, or the trainer profile
-    was never started) must warn, not block -- an unconfigured/uninstalled
-    trainer profile is not the same failure as a trainer that crashed."""
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-
-    severity, detail = asyncio.run(
-        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
-    )
-    assert severity == 'warn'
-    assert 'no heartbeat file' in detail
-
-
-def test_probe_trainer_reachable_blocks_when_docker_confirms_container_gone(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The docker-SDK path stays a purely optional, confirming extra: it is
-    only consulted once the heartbeat is missing/stale, and only then may
-    it upgrade the warn to a definitive block."""
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    monkeypatch.setattr(trainer_reachability, '_docker_client', object)
-    monkeypatch.setattr(trainer_reachability, '_container_status_sync', lambda _client, _name: None)
-
-    severity, detail = asyncio.run(
-        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
-    )
-    assert severity == 'block'
-    assert 'does not exist' in detail
 
 
 def test_docker_client_unavailable_warns_once_not_per_call(
@@ -205,7 +110,6 @@ def test_docker_client_unavailable_warns_once_not_per_call(
 _ARBITER_ENV_VARS = (
     'OP_GPU_ALLOWED_IDS',
     'OP_GPU_ARBITER_CONTAINERS',
-    'OP_GPU_ARBITER_TRAINER_CONTAINER',
     'OP_BAKEOFF_JOBS_DIR',
     'OP_GPU_LABELS',
     'OP_TRAIN_DEFAULT_GPUS',
@@ -230,7 +134,6 @@ def test_from_env_unset_is_permissive_default(clean_arbiter_env: pytest.MonkeyPa
 def test_from_env_parses_every_field(clean_arbiter_env: pytest.MonkeyPatch) -> None:
     clean_arbiter_env.setenv('OP_GPU_ALLOWED_IDS', ' 2, 0 ,')
     clean_arbiter_env.setenv('OP_GPU_ARBITER_CONTAINERS', 'vlm-server@2, region-worker')
-    clean_arbiter_env.setenv('OP_GPU_ARBITER_TRAINER_CONTAINER', 'trainer')
     clean_arbiter_env.setenv('OP_BAKEOFF_JOBS_DIR', '/var/lib/openprocessor/bakeoff_jobs')
     clean_arbiter_env.setenv('OP_GPU_LABELS', '0=RTX A6000,2=RTX A6000')
     clean_arbiter_env.setenv('OP_TRAIN_DEFAULT_GPUS', '2')
@@ -238,7 +141,6 @@ def test_from_env_parses_every_field(clean_arbiter_env: pytest.MonkeyPatch) -> N
     assert cfg.allowed_gpu_ids == frozenset({0, 2})
     assert cfg.containers == ('vlm-server', 'region-worker')
     assert cfg.container_gpus == (('vlm-server', frozenset({2})), ('region-worker', None))
-    assert cfg.trainer_container == 'trainer'
     assert cfg.bakeoff_jobs_dir == '/var/lib/openprocessor/bakeoff_jobs'
     assert cfg.gpu_labels == {0: 'RTX A6000', 2: 'RTX A6000'}
     assert cfg.default_train_gpus == '2'
@@ -289,10 +191,8 @@ def test_from_env_malformed_allowlist_raises(
 
 def test_default_singleton_is_built_from_env(clean_arbiter_env: pytest.MonkeyPatch) -> None:
     clean_arbiter_env.setenv('OP_GPU_ALLOWED_IDS', '0,2')
-    clean_arbiter_env.setenv('OP_GPU_ARBITER_TRAINER_CONTAINER', 'trainer')
     cfg = get_gpu_arbiter_config()
     assert cfg.allowed_gpu_ids == frozenset({0, 2})
-    assert cfg.trainer_container == 'trainer'
 
 
 def test_env_allowlist_rejects_disallowed_gpu_on_training_start(

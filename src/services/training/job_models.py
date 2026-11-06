@@ -1,7 +1,7 @@
-"""Training-job wire models: the ``job.json`` / ``status.json`` shapes.
+"""Training-run wire models: the start payload (stored as ``training_runs.spec``) and the
+status the routes serve.
 
-Split out of :mod:`src.services.training.jobs`; the file-protocol readers and
-writers live there.
+Split out of :mod:`src.services.training.jobs`.
 """
 
 from __future__ import annotations
@@ -108,10 +108,8 @@ class TrainJobSpec(BaseModel):
     model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
     # Identity ---------------------------------------------------------------
-    job_id: str | None = None  # API fills this in if omitted
     campaign_id: str | None = None  # set by start_campaign()
     submitted_by: str = Field(default='labeler-ui')
-    submitted_at: str | None = None  # ISO; API fills in
 
     # Campaign metadata -- copied onto each per-job spec by
     # ``write_campaign``. The trainer reads these between runs to decide
@@ -162,7 +160,7 @@ class TrainJobSpec(BaseModel):
     mlflow_run_name: str | None = None
 
     # Lineage -----------------------------------------------------------------
-    # All of these are normally auto-filled by ``write_job`` at submit time
+    # All of these are normally auto-filled by ``start_run`` at submit time
     # and should not be set by API callers directly:
     #   - dataset_sha / frozen_test_sha / test_label_sha / dataset_version_tag:
     #     copied from the export's manifest.json (``src.services.training.
@@ -172,10 +170,8 @@ class TrainJobSpec(BaseModel):
     #     ``dataset_sha`` is the export's own claim and is never computed;
     #     the two test-split hashes are computed from disk when an older
     #     export's manifest lacks them.
-    #   - api_sha / trainer_image_id / trainer_image_revision: this API
-    #     process's own build identity plus the trainer container's image
-    #     id and baked-in revision label (``lineage.stamp_code_versions``).
-    #   - registry_sha / registry_snapshot_path: a sha256 + on-disk copy of
+    #   - api_sha: this API process's own build identity (``lineage.api_sha``).
+    #   - registry_sha / registry_snapshot_path: a sha256 + a stored copy of
     #     the class registry *at submit time*, so a class rename between
     #     export and promote can't silently relabel the served model
     #     (promote prefers this pinned snapshot over the live registry).
@@ -184,8 +180,6 @@ class TrainJobSpec(BaseModel):
     test_label_sha: str | None = None
     dataset_version_tag: str | None = None
     api_sha: str | None = None
-    trainer_image_id: str | None = None
-    trainer_image_revision: str | None = None
     registry_sha: str | None = None
     registry_snapshot_path: str | None = None
 
@@ -227,10 +221,9 @@ class TrainJobSpec(BaseModel):
 
 
 class TrainJobStatus(BaseModel):
-    """``status.json`` shape.
+    """A run's status: its job row joined with its run row (``run_wire.to_status``).
 
-    Every field except ``job_id`` and ``state`` is nullable so the trainer
-    can write partial updates while the run is still spinning up.
+    Every field except ``job_id`` and ``state`` is nullable: a queued run has no epoch yet.
     """
 
     model_config = ConfigDict(extra='allow')

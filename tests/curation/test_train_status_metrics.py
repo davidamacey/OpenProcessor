@@ -8,11 +8,10 @@ per-key running max that could mix epochs) must not reach the wire.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 import pytest
-from _project_paths import default_train_jobs_dir
+from _train_run_fakes import install_run_fakes
 
 from src.services.training.job_models import TrainJobStatus
 
@@ -73,19 +72,14 @@ async def test_trained_models_reports_the_eval_score_with_its_split(
     ckpt = tmp_path / 'runs' / 'run-3' / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
     ckpt.write_bytes(b'pt')
-    jobs_dir = default_train_jobs_dir(tmp_path / 'jobs')
-    (jobs_dir / 'run-3.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'run-3',
-                'state': 'finished',
-                'checkpoint_path': '/runs/run-3/weights/best.pt',
-                'best_checkpoint_metric': {'epoch': 18, 'map50': 0.99, 'map50_95': 0.86},
-                'eval': {'split': 'test', 'map50': 0.92, 'map50_95': 0.81},
-            }
-        )
+    run_fakes = install_run_fakes(monkeypatch)
+    run_fakes.statuses['run-3'] = TrainJobStatus(
+        job_id='run-3',
+        state='finished',
+        checkpoint_path='/runs/run-3/weights/best.pt',
+        best_checkpoint_metric={'epoch': 18, 'map50': 0.99, 'map50_95': 0.86},
+        eval={'split': 'test', 'map50': 0.92, 'map50_95': 0.81},
     )
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     monkeypatch.setattr(bakeoff_resolve, 'RUNS_HOST_ROOT', tmp_path / 'runs')
 
     body = await bakeoff.bakeoff_trained_models()

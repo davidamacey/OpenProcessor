@@ -22,7 +22,6 @@ from src.services.curation.dataset_thresholds import (
     dataset_thresholds,
 )
 from src.services.training.augmentation_presets import unknown_preset_error
-from src.services.training.job_files import trainer_root_dir
 
 
 if TYPE_CHECKING:
@@ -281,43 +280,6 @@ def training_volume_mount_sane(path: str) -> bool:
         return existing.stat().st_dev != Path('/').stat().st_dev
     except OSError:
         return False
-
-
-# Written by docker/trainer/gpu_select.py's write_trainer_capabilities() at
-# startup, next to job.json in the shared /jobs volume. Kept in sync with
-# TRAINER_CAPABILITIES_FILENAME there -- there is no shared import (the
-# trainer ships as its own image with no src/ dependency), so
-# tests/curation/trainer_protocol/ conformance-tests both halves against the
-# literal name.
-TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
-
-
-def _read_trainer_capabilities() -> dict[str, Any] | None:
-    """The trainer's published ``gpu_order``/``visible_count``/``build_sha``.
-
-    ``None`` (not an error) when the file is absent -- an older trainer
-    image that predates this fix, or a container that hasn't started yet.
-    Callers must treat that as "can't verify" (a warning), not "no GPUs
-    attached" (which would incorrectly block every request).
-    """
-    path = trainer_root_dir() / TRAINER_CAPABILITIES_FILENAME
-    try:
-        typed: dict[str, Any] | None = json.loads(path.read_text(encoding='utf-8'))
-        return typed
-    except (OSError, ValueError):
-        return None
-
-
-def read_trainer_gpu_order() -> list[int] | None:
-    """``gpu_order`` from the trainer capabilities file, or ``None`` if
-    unknown (missing file, or a non-empty-but-unparseable field)."""
-    caps = _read_trainer_capabilities()
-    if caps is None:
-        return None
-    order = caps.get('gpu_order')
-    if not isinstance(order, list) or not all(isinstance(i, int) for i in order):
-        return None
-    return order
 
 
 class ExportManifestUnreadableError(ValueError):

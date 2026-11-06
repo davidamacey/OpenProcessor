@@ -1,12 +1,8 @@
-"""Run manifest: the lineage envelope written next to a finished job's status file.
-
-See :mod:`job_protocol` for the overall file protocol.
-"""
+"""Run manifest: the lineage envelope the handler stores in ``training_runs.manifest``."""
 
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,14 +53,10 @@ def build_lineage(spec: JobSpec) -> dict[str, Any]:
     """Byte-identical lineage dict shared by the run manifest and the
     MLflow tags/params/registry metadata (``mlflow_callbacks.py``).
 
-    Reads straight off ``spec.raw`` -- the job.json the API wrote via
-    ``src.services.training.jobs.write_job`` -- so both consumers see the
-    exact same values with no second source of truth to drift out of sync.
-    ``trainer_sha`` prefers this container's own baked ``OP_BUILD_SHA``
-    (the trainer image actually running this code) over the API's stamped
-    ``trainer_image_revision`` (the trainer image the API *observed* at
-    submit time, via the docker socket) -- the two agree unless the
-    trainer image was rebuilt/redeployed between submit and run.
+    Reads straight off ``spec.raw`` -- the ``training_runs.spec`` the API stored via
+    ``src.services.training.jobs.start_run`` -- so both consumers see the exact same values
+    with no second source of truth to drift out of sync. ``trainer_sha`` is this container's
+    own baked ``OP_BUILD_SHA``: the trainer image actually running this code.
     """
     raw = spec.raw
     return {
@@ -73,22 +65,20 @@ def build_lineage(spec: JobSpec) -> dict[str, Any]:
         'test_label_sha': raw.get('test_label_sha'),
         'dataset_version_tag': raw.get('dataset_version_tag'),
         'api_sha': raw.get('api_sha'),
-        'trainer_sha': os.environ.get('OP_BUILD_SHA') or raw.get('trainer_image_revision') or None,
-        'trainer_image_id': raw.get('trainer_image_id'),
+        'trainer_sha': os.environ.get('OP_BUILD_SHA') or None,
     }
 
 
-def write_manifest(
+def build_manifest(
     spec: JobSpec, state: StatusState, class_remap: dict[str, Any] | None = None
-) -> None:
-    """Write ``<job_id>.manifest.json`` -- the run's full lineage envelope.
+) -> dict[str, Any] | None:
+    """The run's full lineage envelope, or ``None`` when it could not be built.
 
     Captures dataset SHA, class remap, code versions and eval results so a
-    finished run can be reproduced and audited. Read by
-    ``GET {api_prefix}/train/manifest/{job_id}`` and by promote (which resolves
-    ``lineage.class_remap`` from here first). Writes are atomic and
-    best-effort: a failure logs and moves on rather than blocking the trainer's
-    terminal-status write.
+    finished run can be reproduced and audited. Stored in ``training_runs.manifest`` by the
+    handler; read by ``GET {api_prefix}/train/manifest/{job_id}`` and by promote (which
+    resolves ``lineage.class_remap`` from here first). Best-effort: a failure logs and
+    returns ``None`` rather than blocking the run's terminal write.
 
     ``class_remap`` is passed in rather than read here: it lives under the
     job's scratch dir, which the caller deletes right after this runs, and this
@@ -134,7 +124,6 @@ def write_manifest(
             'code_versions': {
                 'api_sha': lineage['api_sha'],
                 'trainer_sha': lineage['trainer_sha'],
-                'trainer_image_id': lineage['trainer_image_id'],
                 'ultralytics_pkg': _ultralytics_version(),
                 'ultralytics_sha': os.environ.get('ULTRALYTICS_SHA'),
             },
@@ -171,8 +160,7 @@ def write_manifest(
             # Stamped by POST {api_prefix}/train/promote/{job_id}.
             'promoted_to': None,
         }
-        tmp = spec.manifest_path.with_suffix('.json.tmp')
-        tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding='utf-8')
-        tmp.replace(spec.manifest_path)
-    except Exception as exc:  # manifest must never block the status write
-        logger.warning('manifest write failed', job_id=spec.job_id, error=str(exc))
+    except Exception as exc:  # manifest must never block the terminal write
+        logger.warning('manifest build failed', job_id=spec.job_id, error=str(exc))
+        return None
+    return manifest

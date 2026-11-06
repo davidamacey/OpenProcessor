@@ -1,13 +1,22 @@
-"""Fixtures for the curation train router tests: an app over a mocked OpenSearch and a temp jobs volume."""
+"""Fixtures for the curation train router tests: an app over a mocked OpenSearch and fake run seams.
+
+The database-backed run service (start, status, queue) and the broker probe are replaced by the
+recording fakes of ``train_fake``; their real behaviour is tested against PostgreSQL in
+``tests/training``."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+if TYPE_CHECKING:
+    from types import SimpleNamespace
 
 
 # =============================================================================
@@ -38,19 +47,22 @@ def fake_opensearch() -> AsyncMock:
 
 
 @pytest.fixture
+def train_fake(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """The run service and the broker probe, replaced; ``started`` records every queued run."""
+    return install_run_fakes(monkeypatch)
+
+
+@pytest.fixture
 def app_client(
     fake_opensearch: AsyncMock,
     tmp_path: Any,
     monkeypatch: pytest.MonkeyPatch,
+    train_fake: SimpleNamespace,
 ):
     """Build a minimal FastAPI app with just the train router."""
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
-    # `default` (the project every unit test binds) included.
-    (tmp_path / 'projects' / 'default').mkdir(parents=True, exist_ok=True)
 
     # claim_gpus_for_training (called unconditionally by /start and
-    # /start_campaign before job.json is written) writes a sentinel/lock
+    # /start_campaign before the run is queued) writes a sentinel/lock
     # file under CurationConfig.state_dir. get_curation_config() is a
     # process-wide cached singleton, so setting OP_STATE_DIR here would
     # have no effect once the process has already built it once -- patch
@@ -70,6 +82,13 @@ def app_client(
 
     mount_curation_routers(app, curation_train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
+
+    from src.core.db_session import get_db
+
+    async def no_session():
+        yield None
+
+    app.dependency_overrides[get_db] = no_session
 
     with TestClient(app) as client:
         yield client

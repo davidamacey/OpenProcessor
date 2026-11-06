@@ -1,12 +1,18 @@
-"""Status, runs, log tail, cancel, profiles/presets and artifact serving."""
+"""Status, runs, log tail, cancel, profiles/presets and artifact serving (routes over fake seams;
+the database-backed behaviour is tested in ``tests/training``)."""
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, Any
+import uuid
+from typing import TYPE_CHECKING
+
+from src.services.training.job_models import TrainJobStatus
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+    from types import SimpleNamespace
+
     from fastapi.testclient import TestClient
 
 
@@ -22,27 +28,17 @@ def test_status_endpoint_returns_null_when_empty(app_client: TestClient) -> None
 
 
 def test_status_by_id_404(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/train/status/nope')
+    r = app_client.get(f'/curation/projects/default/train/status/{uuid.uuid4()}')
     assert r.status_code == 404
 
 
-def test_status_by_id_returns_status(app_client: TestClient, tmp_path: Any) -> None:
-    import json
-    from datetime import UTC, datetime
-
-    (tmp_path / 'projects' / 'default' / 'real.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'real',
-                'state': 'running',
-                'heartbeat_at': datetime.now(UTC).isoformat(),
-            }
-        )
-    )
-    r = app_client.get('/curation/projects/default/train/status/real')
+def test_status_by_id_returns_status(app_client: TestClient, train_fake: SimpleNamespace) -> None:
+    job_id = str(uuid.uuid4())
+    train_fake.statuses[job_id] = TrainJobStatus(job_id=job_id, state='running')
+    r = app_client.get(f'/curation/projects/default/train/status/{job_id}')
     assert r.status_code == 200
     body = r.json()
-    assert body['job_id'] == 'real'
+    assert body['job_id'] == job_id
     assert body['state'] == 'running'
 
 
@@ -65,17 +61,27 @@ def test_runs_list_empty(app_client: TestClient) -> None:
     assert body['total'] == 0
 
 
+def test_runs_list_pages_and_totals(app_client: TestClient, train_fake: SimpleNamespace) -> None:
+    ids = [str(uuid.uuid4()) for _ in range(3)]
+    for job_id in ids:
+        train_fake.statuses[job_id] = TrainJobStatus(job_id=job_id, state='queued')
+    body = app_client.get('/curation/projects/default/train/runs?limit=2&offset=1').json()
+    assert [i['job_id'] for i in body['items']] == ids[1:3]
+    assert body['total'] == 3
+
+
 # =============================================================================
 # /log/tail
 # =============================================================================
 
 
-def test_log_tail_returns_lines(app_client: TestClient, tmp_path: Any) -> None:
-    (tmp_path / 'projects' / 'default' / 'logj.run.log').write_text('a\nb\nc\nd\n')
-    r = app_client.get('/curation/projects/default/train/log/tail/logj?lines=2')
+def test_log_tail_returns_lines(app_client: TestClient, train_fake: SimpleNamespace) -> None:
+    job_id = str(uuid.uuid4())
+    train_fake.logs[job_id] = ['a', 'b', 'c', 'd']
+    r = app_client.get(f'/curation/projects/default/train/log/tail/{job_id}?lines=2')
     assert r.status_code == 200
     body = r.json()
-    assert body['job_id'] == 'logj'
+    assert body['job_id'] == job_id
     assert body['lines'] == ['c', 'd']
 
 
@@ -84,37 +90,29 @@ def test_log_tail_returns_lines(app_client: TestClient, tmp_path: Any) -> None:
 # =============================================================================
 
 
-def test_cancel_writes_sentinel(app_client: TestClient, tmp_path: Any) -> None:
-    r = app_client.post('/curation/projects/default/train/cancel/some_job')
+def test_cancel_cancels_the_run(app_client: TestClient, train_fake: SimpleNamespace) -> None:
+    job_id = str(uuid.uuid4())
+    r = app_client.post(f'/curation/projects/default/train/cancel/{job_id}')
     assert r.status_code == 200, r.text
-    assert (tmp_path / 'projects' / 'default' / 'some_job.cancel').exists()
+    assert train_fake.cancelled == [job_id]
     assert r.json()['cancelled'] is True
 
 
-def test_cancel_campaign(app_client: TestClient, tmp_path: Any) -> None:
-    import json
-    from datetime import UTC, datetime
+def test_cancel_of_an_unknown_run_is_404(
+    app_client: TestClient, train_fake: SimpleNamespace
+) -> None:
+    train_fake.cancel_found = False
+    assert (
+        app_client.post(f'/curation/projects/default/train/cancel/{uuid.uuid4()}').status_code
+        == 404
+    )
 
-    # Two jobs, both belonging to one campaign, one running, one queued.
-    for jid in ('camp_run00', 'camp_run01'):
-        (tmp_path / 'projects' / 'default' / f'{jid}.job.json').write_text(
-            json.dumps({'job_id': jid, 'campaign_id': 'camp', 'dataset_export_dir': '/x'})
-        )
-        (tmp_path / 'projects' / 'default' / f'{jid}.status.json').write_text(
-            json.dumps(
-                {
-                    'job_id': jid,
-                    'campaign_id': 'camp',
-                    'state': 'running',
-                    'heartbeat_at': datetime.now(UTC).isoformat(),
-                }
-            )
-        )
+
+def test_cancel_campaign(app_client: TestClient, train_fake: SimpleNamespace) -> None:
+    train_fake.campaign_cancelled = 2
     r = app_client.post('/curation/projects/default/train/cancel_campaign/camp')
     assert r.status_code == 200, r.text
-    assert r.json()['cancelled'] == 2
-    assert (tmp_path / 'projects' / 'default' / 'camp_run00.cancel').exists()
-    assert (tmp_path / 'projects' / 'default' / 'camp_run01.cancel').exists()
+    assert r.json() == {'cancelled': 2, 'campaign_id': 'camp'}
 
 
 # =============================================================================
@@ -149,47 +147,24 @@ def test_presets_endpoint(app_client: TestClient) -> None:
 # =============================================================================
 
 
-def test_get_run_artifact_serves_whitelisted_file(app_client: TestClient, tmp_path: Any) -> None:
-    run_dir = tmp_path / 'runs' / 'artjob'
-    run_dir.mkdir(parents=True)
-    (run_dir / 'confusion_matrix.png').write_bytes(b'\x89PNG-fake-bytes')
-    (tmp_path / 'projects' / 'default' / 'artjob.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'artjob',
-                'state': 'finished',
-                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
-            }
-        )
-    )
+def test_get_run_artifact_serves_whitelisted_file(
+    app_client: TestClient, train_fake: SimpleNamespace, tmp_path: Path
+) -> None:
+    job_id = str(uuid.uuid4())
+    artifact = tmp_path / 'confusion_matrix.png'
+    artifact.write_bytes(b'\x89PNG-fake-bytes')
+    train_fake.artifacts[(job_id, 'confusion_matrix.png')] = artifact
 
-    r = app_client.get('/curation/projects/default/train/artifacts/artjob/confusion_matrix.png')
+    r = app_client.get(f'/curation/projects/default/train/artifacts/{job_id}/confusion_matrix.png')
 
     assert r.status_code == 200, r.text
     assert r.content == b'\x89PNG-fake-bytes'
     assert r.headers['content-type'] == 'image/png'
 
 
-def test_get_run_artifact_404_for_non_whitelisted_name(
-    app_client: TestClient, tmp_path: Any
-) -> None:
-    run_dir = tmp_path / 'runs' / 'artjob2'
-    run_dir.mkdir(parents=True)
-    (run_dir / 'best.pt').write_bytes(b'weights')
-    (tmp_path / 'projects' / 'default' / 'artjob2.status.json').write_text(
-        json.dumps(
-            {'job_id': 'artjob2', 'state': 'finished', 'checkpoint_path': str(run_dir / 'best.pt')}
-        )
-    )
-
-    r = app_client.get('/curation/projects/default/train/artifacts/artjob2/best.pt')
-
-    assert r.status_code == 404
-
-
-def test_get_run_artifact_404_for_unknown_job(app_client: TestClient) -> None:
+def test_get_run_artifact_404_for_unknown_job_or_missing_file(app_client: TestClient) -> None:
     r = app_client.get(
-        '/curation/projects/default/train/artifacts/does_not_exist/confusion_matrix.png'
+        f'/curation/projects/default/train/artifacts/{uuid.uuid4()}/confusion_matrix.png'
     )
     assert r.status_code == 404
 
@@ -202,54 +177,9 @@ def test_get_run_artifact_400_for_invalid_job_id(app_client: TestClient) -> None
     # a 400 (our validation) or 404 (routing never matched) is acceptable,
     # matching the existing /status/{job_id} traversal test's tolerance.
     assert r.status_code in (400, 404)
-
-
-def test_get_run_artifact_404_when_file_never_written(
-    app_client: TestClient, tmp_path: Any
-) -> None:
-    run_dir = tmp_path / 'runs' / 'artjob3'
-    run_dir.mkdir(parents=True)
-    (tmp_path / 'projects' / 'default' / 'artjob3.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'artjob3',
-                'state': 'running',
-                'eval': {'confusion_matrix_path': str(run_dir / 'confusion_matrix.png')},
-            }
-        )
-    )
-
-    r = app_client.get('/curation/projects/default/train/artifacts/artjob3/confusion_matrix.png')
-
-    assert r.status_code == 404
-
-
-def test_status_eval_never_carries_a_filesystem_path(app_client: TestClient, tmp_path: Any) -> None:
-    """No consumer of the wire should ever see a server path -- only the
-    artifact-route URL (or null)."""
-    run_dir = tmp_path / 'runs' / 'pathcheck'
-    run_dir.mkdir(parents=True)
-    (tmp_path / 'projects' / 'default' / 'pathcheck.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'pathcheck',
-                'state': 'finished',
-                'eval': {
-                    'map50': 0.5,
-                    'split': 'val',
-                    'confusion_matrix_path': str(run_dir / 'confusion_matrix.png'),
-                },
-            }
-        )
-    )
-
-    r = app_client.get('/curation/projects/default/train/status/pathcheck')
-
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert 'confusion_matrix_path' not in body['eval']
-    assert str(tmp_path) not in json.dumps(body)
     assert (
-        body['eval']['confusion_matrix_url']
-        == '/curation/projects/default/train/artifacts/pathcheck/confusion_matrix.png'
+        app_client.get(
+            '/curation/projects/default/train/artifacts/not-a-uuid/confusion_matrix.png'
+        ).status_code
+        == 400
     )

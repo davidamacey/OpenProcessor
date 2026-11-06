@@ -82,19 +82,6 @@ def _start_containers_sync(client: Any, names: tuple[str, ...]) -> list[str]:
     return started
 
 
-def _container_status_sync(client: Any, name: str) -> str | None:
-    """Return the named container's status, or ``None`` if it doesn't exist."""
-    import docker.errors
-
-    try:
-        container = client.containers.get(name)
-    except docker.errors.NotFound:
-        return None
-    container.reload()
-    typed: str | None = container.status
-    return typed
-
-
 async def stop_gpu_services(
     *,
     containers: tuple[str, ...] | None = None,

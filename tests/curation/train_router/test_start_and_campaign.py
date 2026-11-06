@@ -1,13 +1,14 @@
-"""POST /start and /start_campaign: job writing, refusals and the GPU-arbiter 409s."""
+"""POST /start and /start_campaign: queueing a run, refusals and the GPU-arbiter 409s."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from types import SimpleNamespace
 
     import pytest
     from fastapi.testclient import TestClient
@@ -19,7 +20,9 @@ from curation.train_router._helpers import _set_arbiter_config
 # =============================================================================
 
 
-def test_start_writes_job(app_client: TestClient, tmp_path: Any, project_export_root: Path) -> None:
+def test_start_queues_a_run(
+    app_client: TestClient, train_fake: SimpleNamespace, project_export_root: Path
+) -> None:
     body = {
         'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
@@ -36,8 +39,9 @@ def test_start_writes_job(app_client: TestClient, tmp_path: Any, project_export_
     assert r.status_code == 201, r.text
     out = r.json()
     assert out['job_id']
-    # File was written
-    assert any((tmp_path / 'projects' / 'default').glob(f'{out["job_id"]}.job.json'))
+    [(queued, _kwargs)] = train_fake.started
+    assert queued.profile == 'medium'
+    assert queued.dataset_export_dir == str(project_export_root / 'x')
 
 
 def test_start_rejects_optimizer_auto(app_client: TestClient, project_export_root: Path) -> None:
@@ -55,7 +59,7 @@ def test_start_rejects_optimizer_auto(app_client: TestClient, project_export_roo
 
 
 def test_start_with_force_bypasses_block(
-    app_client: TestClient, tmp_path: Any, project_export_root: Path
+    app_client: TestClient, train_fake: SimpleNamespace, project_export_root: Path
 ) -> None:
     body = {
         'dataset_export_dir': str(project_export_root / 'x'),
@@ -64,28 +68,18 @@ def test_start_with_force_bypasses_block(
     }
     r = app_client.post('/curation/projects/default/train/start?force=true', json=body)
     # Even with force, optimizer=auto block path emits 422 only when not forced.
-    # Here force=true allows past the blocked report. The route still writes.
+    # Here force=true allows past the blocked report. The route still queues the run.
     assert r.status_code == 201, r.text
-    job_id = r.json()['job_id']
-    assert any((tmp_path / 'projects' / 'default').glob(f'{job_id}.job.json'))
+    assert len(train_fake.started) == 1
 
 
 def test_start_returns_409_when_active_run_exists(
-    app_client: TestClient, tmp_path: Any, project_export_root: Path
+    app_client: TestClient, train_fake: SimpleNamespace, project_export_root: Path
 ) -> None:
-    """Drop a status.json with state=running; /start should 409."""
-    import json
-    from datetime import UTC, datetime
+    """With a run in progress, /start answers 409 and queues nothing."""
+    from src.services.training.job_models import TrainJobStatus
 
-    (tmp_path / 'projects' / 'default' / 'live.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'live',
-                'state': 'running',
-                'heartbeat_at': datetime.now(UTC).isoformat(),
-            }
-        )
-    )
+    train_fake.active = TrainJobStatus(job_id='live', state='running')
     body = {
         'dataset_export_dir': str(project_export_root / 'x'),
         'profile': 'medium',
@@ -94,17 +88,18 @@ def test_start_returns_409_when_active_run_exists(
     assert r.status_code == 409, r.text
     detail = r.json()['detail']
     assert 'progress' in detail['message'].lower() or 'preflight' in detail
+    assert train_fake.started == []
 
 
 def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
     app_client: TestClient,
-    tmp_path: Any,
+    train_fake: SimpleNamespace,
     monkeypatch: pytest.MonkeyPatch,
     project_export_root: Path,
 ) -> None:
     """A claim that needs to stop a configured GPU-resident container
     (e.g. a large vLLM process sharing the requested GPU) must refuse
-    with 409 -- and must NOT write job.json -- when the docker SDK/socket
+    with 409 -- and must NOT queue the run -- when the docker SDK/socket
     isn't usable, instead of silently falling back to a sentinel-only
     pause that never actually stops the container.
     """
@@ -139,7 +134,8 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
 
     assert r.status_code == 409, r.text
     assert 'vlm-inference-container' in r.json()['detail']['message']
-    assert list((tmp_path / 'projects' / 'default').glob('*.job.json')) == []
+    assert train_fake.started == []
+    assert train_fake.campaigns == []
 
 
 def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
@@ -184,7 +180,7 @@ def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
 
 def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
     app_client: TestClient,
-    tmp_path: Any,
+    train_fake: SimpleNamespace,
     monkeypatch: pytest.MonkeyPatch,
     project_export_root: Path,
 ) -> None:
@@ -212,11 +208,12 @@ def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unava
 
     assert r.status_code == 409, r.text
     assert 'vlm-inference-container' in r.json()['detail']['message']
-    assert list((tmp_path / 'projects' / 'default').glob('*.job.json')) == []
+    assert train_fake.started == []
+    assert train_fake.campaigns == []
 
 
-def test_start_campaign_writes_n_jobs(
-    app_client: TestClient, tmp_path: Any, project_export_root: Path
+def test_start_campaign_queues_n_runs(
+    app_client: TestClient, train_fake: SimpleNamespace, project_export_root: Path
 ) -> None:
     body = {
         'dataset_export_dir': str(project_export_root / 'x'),
@@ -229,8 +226,8 @@ def test_start_campaign_writes_n_jobs(
     assert r.status_code == 201, r.text
     out = r.json()
     assert len(out['job_ids']) == 2
-    for jid in out['job_ids']:
-        assert any((tmp_path / 'projects' / 'default').glob(f'{jid}.job.json'))
+    assert out['campaign_id'] == 'camp-1'
+    assert len(train_fake.campaigns[0].runs) == 2
 
 
 def test_start_campaign_rejects_empty_runs(

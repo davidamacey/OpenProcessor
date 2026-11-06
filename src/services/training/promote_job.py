@@ -53,9 +53,9 @@ class PromoteJobConflictError(Exception):
 
 
 def jobs_root() -> Path:
-    from src.services.training.job_files import _resolve_jobs_dir
+    from src.config import get_curation_config
 
-    return _resolve_jobs_dir() / 'promote'
+    return get_curation_config().train_jobs_dir / 'promote'
 
 
 def _job(promote_id: str) -> FileJob:

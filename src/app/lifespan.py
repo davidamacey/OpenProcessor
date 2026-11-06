@@ -185,7 +185,7 @@ async def _start_gpu_arbiter() -> None:
         from src.services.training.gpu_arbiter import reconcile_on_startup
 
         # Resolved via GpuArbiterConfig.from_env() (OP_GPU_ALLOWED_IDS,
-        # OP_GPU_ARBITER_CONTAINERS, OP_GPU_ARBITER_TRAINER_CONTAINER).
+        # OP_GPU_ARBITER_CONTAINERS).
         # Logged so an operator can confirm the GPU
         # fence actually took effect.
         arbiter_cfg = get_gpu_arbiter_config()
@@ -193,7 +193,6 @@ async def _start_gpu_arbiter() -> None:
             'gpu_arbiter_config',
             allowed_gpu_ids=sorted(arbiter_cfg.allowed_gpu_ids) or 'unrestricted',
             containers=list(arbiter_cfg.containers),
-            trainer_container=arbiter_cfg.trainer_container,
         )
 
         action = await reconcile_on_startup()

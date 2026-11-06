@@ -50,14 +50,16 @@ from src.services.training.preflight_checks import (
     free_gb,
     ingest_idle_check,
     read_export_manifest,
-    read_trainer_gpu_order,
     resolve_disk_check_path,
     resolve_target_classes,
     training_volume_mount_sane,
     unresolvable_include_classes,
 )
 from src.services.training.profiles import RESERVED_OPTIMIZERS_YOLO26
-from src.services.training.trainer_reachability import probe_trainer_reachable
+from src.services.training.trainer_reachability import (
+    probe_trainer_reachable,
+    read_trainer_gpu_order,
+)
 
 
 if TYPE_CHECKING:
@@ -220,8 +222,8 @@ def _free_disk_check(spec: TrainJobSpec) -> PreflightCheck:
 
 
 async def _trainer_reachable_check() -> PreflightCheck:
-    """Without this, /start writes job.json and the run sits in ``queued``
-    forever with no error if the configured trainer container was never started."""
+    """Without this, /start queues the run and it sits in ``queued`` until the queue-wait limit
+    if no trainer was ever started."""
     severity, detail = await probe_trainer_reachable()
     return PreflightCheck(name='trainer_reachable', severity=severity, message=detail)
 
@@ -255,32 +257,29 @@ def _gpu_arbiter_check(spec: TrainJobSpec) -> PreflightCheck | None:
     )
 
 
-def _trainer_gpus_check(spec: TrainJobSpec) -> PreflightCheck:
+async def _trainer_gpus_check(spec: TrainJobSpec) -> PreflightCheck:
     """The trainer is actually attached to the requested host GPU(s).
 
     ``OP_GPU_ALLOWED_IDS`` only says a host id is *policy-permitted*; it says
     nothing about which container is physically pinned to it. Without this, a
     request for a GPU the trainer container was never attached to (device_ids /
     ``OP_TRAIN_GPU_ORDER`` drift, or a GPU-policy change that forgot to redeploy
-    the trainer) writes job.json and sits in ``queued``/``starting`` forever with
-    no error. The trainer publishes its attachment at startup
-    (``write_trainer_capabilities`` in docker/trainer/gpu_select.py); an absent file
-    (older image) only downgrades this to a warning.
+    the trainer) is queued and sits in ``queued``/``starting`` forever with
+    no error. The trainer worker records the cards it sees in ``worker_capabilities``
+    at start; no row for the live consumer only downgrades this to a warning.
     """
-    trainer_gpu_order = read_trainer_gpu_order()
+    trainer_gpu_order = await read_trainer_gpu_order()
     requested_ids = parse_cuda_visible_devices(spec.cuda_visible_devices)
     if trainer_gpu_order is None:
         return PreflightCheck(
             name='trainer_gpus',
             severity='warn',
             message=(
-                'no trainer capabilities file found -- cannot verify the trainer '
-                'is attached to the requested GPU(s) (older trainer image?)'
+                'no trainer capabilities recorded -- cannot verify the trainer '
+                'is attached to the requested GPU(s)'
             ),
         )
-    if trainer_gpu_order and (
-        unattached := [i for i in requested_ids if i not in trainer_gpu_order]
-    ):
+    if unattached := [i for i in requested_ids if i not in trainer_gpu_order]:
         return PreflightCheck(
             name='trainer_gpus',
             severity='block',
@@ -290,19 +289,12 @@ def _trainer_gpus_check(spec: TrainJobSpec) -> PreflightCheck:
     return PreflightCheck(
         name='trainer_gpus',
         severity='ok',
-        message=(
-            f'trainer is attached to host GPUs {trainer_gpu_order}'
-            if trainer_gpu_order
-            else 'trainer reports no GPU restriction (attached to every GPU at its host index)'
-        ),
+        message=f'trainer is attached to host GPUs {trainer_gpu_order}',
     )
 
 
 async def _active_run_check() -> PreflightCheck:
-    try:
-        active = await train_jobs.get_active_job()
-    except RuntimeError as exc:
-        return PreflightCheck(name='active_run', severity='block', message=str(exc))
+    active = await train_jobs.get_active_job()
     if active is not None and active.state in ('queued', 'starting', 'running', 'exporting'):
         return PreflightCheck(
             name='active_run',
@@ -558,7 +550,7 @@ async def run_preflight(spec: TrainJobSpec, opensearch: Any) -> PreflightReport:
     checks.append(await _trainer_reachable_check())
     if (arbiter := _gpu_arbiter_check(spec)) is not None:
         checks.append(arbiter)
-    checks.append(_trainer_gpus_check(spec))
+    checks.append(await _trainer_gpus_check(spec))
     checks.append(await _active_run_check())
 
     manifest = _read_manifest(spec, checks)

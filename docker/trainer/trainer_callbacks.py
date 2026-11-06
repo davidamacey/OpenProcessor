@@ -1,4 +1,4 @@
-"""Ultralytics hooks: cancel sentinel, epoch metric capture and the MLflow artifact-root guard."""
+"""Ultralytics hooks: cancel at an epoch boundary, epoch metric capture and the MLflow artifact-root guard."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ logger = get_logger('trainer.callbacks')
 
 
 class CancelRequestedError(Exception):
-    """Raised inside the Ultralytics callback when a ``.cancel`` sentinel appears."""
+    """Raised inside the Ultralytics callback when the run's cancel was requested."""
 
 
 def _make_ultralytics_callbacks(
@@ -28,8 +28,8 @@ def _make_ultralytics_callbacks(
 ) -> tuple[Any, Any, Any]:
     """Build the three per-epoch callbacks registered on the model.
 
-    They read the cancel sentinel between epochs and refresh ``state`` so the
-    heartbeat thread publishes live metrics.
+    They check ``state.cancel_requested`` (set by the handler from ``ctx.cancelled()``) between
+    epochs and refresh ``state`` so the handler publishes live metrics.
     """
     epoch_start_at: dict[str, float] = {}
 
@@ -37,9 +37,9 @@ def _make_ultralytics_callbacks(
         epoch_start_at['t0'] = time.time()
 
     def on_train_epoch_end(_trainer: Any) -> None:
-        if spec.cancel_path.exists():
-            logger.info('cancel sentinel detected -- stopping after epoch', job_id=spec.job_id)
-            msg = f'cancel sentinel for {spec.job_id}'
+        if state.cancel_requested.is_set():
+            logger.info('cancel requested -- stopping after epoch', job_id=spec.job_id)
+            msg = f'cancel requested for {spec.job_id}'
             raise CancelRequestedError(msg)
 
     def on_fit_epoch_end(trainer: Any) -> None:

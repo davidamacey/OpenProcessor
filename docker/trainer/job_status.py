@@ -1,33 +1,27 @@
-"""Status file: :class:`StatusState`, the ``status.json`` payload, heartbeats and MLflow run-id capture.
+"""Live run state: :class:`StatusState`, its progress snapshot and MLflow run-id capture.
 
-See :mod:`job_protocol` for the overall file protocol.
+The handler (:mod:`celery_tasks`) publishes the snapshot through ``ctx.progress``; the job runtime
+owns the heartbeat.
 """
 
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import threading
-import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from job_spec import JobSpec, _utcnow_iso
 from logutil import get_logger
+
+from src.domain.gpu_order import parse_order
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
+    from job_spec import JobSpec
 
 
 logger = get_logger('trainer.job_status')
-
-
-HEARTBEAT_INTERVAL_S = 5.0
-TERMINAL_STATES = {'finished', 'failed', 'cancelled', 'skipped'}
-ACTIVE_STATES = {'queued', 'starting', 'running', 'exporting'}
 
 
 @dataclass
@@ -37,8 +31,6 @@ class StatusState:
     job_id: str
     campaign_id: str | None = None
     state: str = 'queued'
-    started_at: str | None = None
-    finished_at: str | None = None
     current_epoch: int = 0
     total_epochs: int = 0
     epoch_time_s: float | None = None
@@ -76,31 +68,19 @@ class StatusState:
     # so promote can refuse to silently fall back to the full registry for a
     # subset-trained run.
     class_remap_copy_failed: bool = False
+    # Set by the handler when the job's cancel was requested; the epoch callback reads it.
+    cancel_requested: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
-def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
-    """Write ``payload`` atomically (tmp file + rename).
-
-    The API polls these files; a half-written status must never be readable.
-    """
-    # Unique per writer: the heartbeat thread and the main thread both write the
-    # same status file, and a shared tmp name let one rename the other's away.
-    tmp = path.with_suffix(f'{path.suffix}.{os.getpid()}.{threading.get_ident()}.tmp')
-    with tmp.open('w', encoding='utf-8') as fh:
-        json.dump(payload, fh, indent=2, default=str)
-    tmp.replace(path)
-
-
 # ---------------------------------------------------------------------------
-# Status / heartbeat
+# Progress snapshot
 # ---------------------------------------------------------------------------
 
 
 def _host_gpu_order() -> tuple[int, ...]:
     """``OP_TRAIN_GPU_ORDER`` (the compose ``device_ids`` list); empty = unrestricted."""
-    raw = os.environ.get('OP_TRAIN_GPU_ORDER', '')
-    return tuple(int(tok) for tok in raw.split(',') if tok.strip())
+    return parse_order(os.environ.get('OP_TRAIN_GPU_ORDER'))
 
 
 def _gpu_telemetry() -> list[dict[str, Any]]:
@@ -142,67 +122,20 @@ def _gpu_telemetry() -> list[dict[str, Any]]:
     return out
 
 
-def build_status_payload(s: StatusState) -> dict[str, Any]:
-    """Render the ``status.json`` body.
-
-    Every key here is read by :class:`src.services.training.job_models.TrainJobStatus`
-    (which allows extras, so adding a key is safe; removing one is not).
-    """
+def progress_counters(s: StatusState) -> dict[str, Any]:
+    """The ``counters`` of a progress snapshot: everything ``TrainJobStatus`` reads that is not
+    the epoch count (``done``/``total`` carry that) or the stage (``state``)."""
     with s.lock:
         return {
-            'job_id': s.job_id,
-            'campaign_id': s.campaign_id,
-            'state': s.state,
-            'started_at': s.started_at,
-            'finished_at': s.finished_at,
-            'current_epoch': s.current_epoch,
-            'total_epochs': s.total_epochs,
             'epoch_time_s': s.epoch_time_s,
             'last_epoch_metric': s.last_epoch_metric,
             'best_checkpoint_metric': s.best_checkpoint_metric,
             'mlflow_run_id': s.mlflow_run_id,
-            'mlflow_run_url': s.mlflow_run_url,
             'mlflow_experiment_id': s.mlflow_experiment_id,
             'checkpoint_path': s.checkpoint_path,
             'class_remap_copy_failed': s.class_remap_copy_failed,
             'gpu': _gpu_telemetry(),
-            'eval': s.eval,
-            'compare': s.compare,
-            'error': s.error,
-            'heartbeat_at': _utcnow_iso(),
         }
-
-
-def write_status_now(status_path: Path, state: StatusState) -> None:
-    """Force-write the current status (used at state transitions)."""
-    _atomic_write_json(status_path, build_status_payload(state))
-
-
-def _heartbeat_loop(
-    stop_event: threading.Event,
-    state: StatusState,
-    status_path: Path,
-    superseded: Callable[[], bool] = lambda: False,
-) -> None:
-    """Daemon-thread body: write status.json every ``HEARTBEAT_INTERVAL_S``.
-
-    The API flips a run to ``lost`` when ``heartbeat_at`` goes stale, so this
-    loop must keep running for the whole job. It stops writing once ``superseded()``
-    says another replica reclaimed the job (see :mod:`job_claim`).
-    """
-    while not stop_event.is_set():
-        if superseded():
-            logger.warning('heartbeat: job reclaimed by another trainer; no more status writes')
-            return
-        try:
-            _atomic_write_json(status_path, build_status_payload(state))
-        except OSError:
-            logger.exception('heartbeat: write failed', path=str(status_path))
-        # Sleep in small increments so a stop is honored quickly.
-        for _ in range(int(HEARTBEAT_INTERVAL_S * 10)):
-            if stop_event.is_set():
-                break
-            time.sleep(0.1)
 
 
 def _bound_mlflow_http_waits() -> None:

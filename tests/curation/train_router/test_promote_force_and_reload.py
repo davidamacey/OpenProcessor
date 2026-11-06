@@ -65,18 +65,15 @@ def test_force_promote_returns_gate_report(
 
 
 def test_force_promote_records_force_used_in_manifest(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, train_fake: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Before the fix: nothing about force=true reaches the manifest at all."""
-    import json
     from pathlib import Path
 
     from src.services.training.job_models import TrainJobStatus
 
     job_id = 'force-manifest-job'
-    (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').write_text(
-        json.dumps({'kind': 'train', 'job_id': job_id, 'promoted_to': None})
-    )
+    train_fake.manifests[job_id] = {'kind': 'train', 'job_id': job_id, 'promoted_to': None}
 
     fake_status = TrainJobStatus(
         job_id=job_id,
@@ -112,10 +109,7 @@ def test_force_promote_records_force_used_in_manifest(
     assert r.status_code == 200, r.text
     assert r.json()['lineage_stamped'] is True
 
-    manifest = json.loads(
-        (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').read_text()
-    )
-    promoted_to = manifest['promoted_to']
+    promoted_to = train_fake.manifests[job_id]['promoted_to']
     assert promoted_to['force_used'] is True
     assert promoted_to['gate_report'] is not None
     assert any('mAP50' in f['message'] for f in promoted_to['gate_report']['failures'])

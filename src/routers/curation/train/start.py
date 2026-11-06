@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
 from src.services.training import job_campaigns, jobs as train_jobs
@@ -39,14 +40,15 @@ class StartTrainResponse(BaseModel):
 async def start_train(
     spec: TrainJobSpec,
     opensearch: OpenSearchDep,
+    session: DbSessionDep,
     force: Annotated[bool, Query(description='Bypass blocking preflight checks')] = False,
 ) -> StartTrainResponse:
-    """Validate, run preflight, and write ``job.json``.
+    """Validate, run preflight, and queue the run as a ``train`` job.
 
     Returns 422 with the full preflight report if any check is blocking
     and ``force=False``; 422 for an unknown augmentation preset and 422
-    ``empty_val_split`` (empty validation split) even with ``force``. The trainer picks up the file
-    out-of-band.
+    ``empty_val_split`` (empty validation split) even with ``force``. The trainer consumes the
+    ``gpu_train`` queue.
     """
     refuse_unknown_augmentation_preset(spec.augmentation)
     report = await run_preflight(spec, opensearch)
@@ -69,8 +71,8 @@ async def start_train(
             detail={'message': 'preflight blocked', 'preflight': report.model_dump()},
         )
     # GPU arbiter — pause the VLM worker (single-GPU) or stop the container
-    # (dual-GPU) BEFORE the trainer picks the job up, and BEFORE job.json
-    # is written. Fails closed -- claim_gpus_for_training raises
+    # (dual-GPU) BEFORE the trainer picks the job up, and BEFORE the job
+    # is queued. Fails closed -- claim_gpus_for_training raises
     # GpuArbiterStopFailedError when a claim needs to stop a configured
     # GPU-resident container and can't (docker SDK/socket unavailable, or
     # the stop itself failed). Starting anyway would run training right
@@ -92,7 +94,7 @@ async def start_train(
             },
         ) from exc
     try:
-        job_id = await train_jobs.write_job(spec)
+        job_id = await train_jobs.start_run(session, spec)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StartTrainResponse(job_id=job_id, preflight=report)
@@ -111,6 +113,7 @@ class StartCampaignResponse(BaseModel):
 async def start_campaign(
     campaign: TrainCampaignSpec,
     opensearch: OpenSearchDep,
+    session: DbSessionDep,
     force: Annotated[bool, Query(description='Bypass blocking preflight checks')] = False,
 ) -> StartCampaignResponse:
     """Submit a multi-size training campaign.
@@ -161,7 +164,7 @@ async def start_campaign(
             },
         ) from exc
     try:
-        campaign_id, job_ids = await job_campaigns.write_campaign(campaign)
+        campaign_id, job_ids = await job_campaigns.write_campaign(session, campaign)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StartCampaignResponse(campaign_id=campaign_id, job_ids=job_ids)

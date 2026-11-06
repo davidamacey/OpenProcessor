@@ -10,7 +10,7 @@ import job_spec
 import pytest
 import subset_dataset
 
-from curation.trainer_protocol._helpers import _write_job
+from curation.trainer_protocol._helpers import make_spec
 from src.services.training.class_remap import build_class_id_to_name, resolve_class_remap
 
 
@@ -102,8 +102,7 @@ def test_class_remap_copy_reports_failure_loudly_for_a_subset_run(
     doesn't describe the model it is serving.
     """
     monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
-    job_id = _write_job(dataset_export_dir=str(export_dir), include_classes=[5], single_cls=False)
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = make_spec(dataset_export_dir=str(export_dir), include_classes=[5], single_cls=False)
     save_dir = tmp_path / 'run'
     save_dir.mkdir()
 
@@ -127,8 +126,7 @@ def test_class_remap_copy_is_a_no_op_for_a_whole_export_run_missing_the_remap(
     ``full_class_remap_path`` file yet -- that alone is not a failure; an
     export that predates the dense-id remap hits this same path for real."""
     monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
-    job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = make_spec(dataset_export_dir=str(export_dir))
     save_dir = tmp_path / 'run'
     save_dir.mkdir()
 
@@ -151,8 +149,7 @@ def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
     here) instead of dense id 0's real class (``widget``, registry id 5).
     """
     monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
-    job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = make_spec(dataset_export_dir=str(export_dir))
 
     written = dataset_prep.write_full_class_remap(spec)
     assert written == spec.full_class_remap_path
@@ -168,7 +165,7 @@ def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
     weights_remap = save_dir / 'weights' / 'class_remap.json'
     assert weights_remap.is_file()
 
-    remap = resolve_class_remap(job_id=job_id, checkpoint_path=weights_remap, manifest=None)
+    remap = resolve_class_remap(job_id=spec.job_id, checkpoint_path=weights_remap, manifest=None)
     assert remap.source == 'weights_dir'
 
     # The bug, made concrete: registry ids are NOT 0/1/2, so an identity
@@ -184,11 +181,10 @@ def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
 def test_text_classes_resolve_by_name_against_the_training_data_yaml(
     jobs_dir: Path, export_dir: Path
 ) -> None:
-    job_id = _write_job(
+    spec = make_spec(
         dataset_export_dir=str(export_dir),
         augmentation={'enabled': True, 'text_class_names': ['Serial_Plate']},
     )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     # Matching is case-insensitive and lands in the data.yaml's id space.
     assert dataset_prep.resolve_text_classes(spec, export_dir / 'data.yaml') == {1}
@@ -202,12 +198,11 @@ def test_text_classes_follow_the_subset_renumbering(
     subset_dataset.build_subset_view(
         export_dir=export_dir, include_classes=[12, 9], single_cls=False, out_dir=out
     )
-    job_id = _write_job(
+    spec = make_spec(
         dataset_export_dir=str(export_dir),
         include_classes=[12, 9],
         augmentation={'enabled': True, 'text_class_names': ['serial_plate']},
     )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     assert dataset_prep.resolve_text_classes(spec, out / 'data.yaml') == {1}
 
@@ -216,8 +211,7 @@ def test_text_classes_fall_back_to_the_deployment_default(
     jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_TRAIN_TEXT_CLASS_NAMES', 'serial_plate,absent_class')
-    job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = make_spec(dataset_export_dir=str(export_dir))
 
     # Unknown names are ignored rather than raising -- a subset run drops
     # classes legitimately.

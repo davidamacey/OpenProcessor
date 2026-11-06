@@ -195,3 +195,6 @@ _.resume_job  # src/services/jobs/service.py, called by the pausable families' r
 _.resume_from  # src/tasks/runtime/context.py, read by the resumable handlers
 _.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist loop, re-index, backfill)
 _.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands
+_.link_model  # src/db/repos/training_runs.py, called by the promote job when it records the model (5D)
+_.registry_sha  # src/services/training/jobs.py, stored in training_runs.spec and read by the trainer
+_.tb  # src/utils/stage_timing.py, the __exit__ signature

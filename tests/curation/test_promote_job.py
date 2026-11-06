@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from _project_paths import default_train_jobs_dir
+from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -52,9 +53,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             }
         )
     )
-    (jobs_dir / f'{RUN}.job.json').write_text(
-        json.dumps({'job_id': RUN, 'registry_snapshot_path': str(snapshot)})
-    )
+    run_fakes = install_run_fakes(monkeypatch)
+    run_fakes.specs[RUN] = {'job_id': RUN, 'registry_snapshot_path': str(snapshot)}
 
     from src.services.training.job_models import TrainJobStatus
 
