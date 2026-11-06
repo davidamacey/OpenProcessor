@@ -1,151 +1,81 @@
-"""A worker killed and restarted inside the liveness window leaves an import
-``running`` with a heartbeat that then goes stale: it must be resumable and
-undoable, not stuck. An undo excludes a concurrent import like a start does."""
+"""What an operator may do with an import right now, decided from its status.
+
+An interrupted run (the reaper's state for a worker that died) is resumable and undoable; a
+running one is neither; an undo, like a start, refuses while another import of the project is
+live. The gates read one decision (``control.check_*`` and the served ``actions``), so a
+button and the 409 behind it cannot disagree."""
 
 from __future__ import annotations
 
-import os
-import time
-from typing import TYPE_CHECKING, Any
+import datetime as dt
+import uuid
 
 import pytest
 
-from curation.dataset_import.harness import Harness, map_all, write_yolo
-from src.services.curation.dataset_import import runner
-from src.services.curation.dataset_import.store import ImportStore, imports_root, open_store
-from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
+from src.services.curation.dataset_import import control, runner
+from src.services.curation.dataset_import.actions import import_actions
+from src.services.curation.dataset_import.rows import ImportRecord
 
 
-if TYPE_CHECKING:
-    from pathlib import Path
+def _view(status: str, *, mode: str = 'import', other: str | None = None) -> control.ImportView:
+    record = ImportRecord(
+        id=uuid.uuid4(),
+        job_id=None,
+        undo_job_id=None,
+        format='yolo',
+        mapping={},
+        request={},
+        scan={},
+        report={},
+        created_at=dt.datetime.now(dt.UTC),
+        undone_at=None,
+    )
+    return control.ImportView(record, None, None, status, mode, other)
 
 
-async def _completed(tmp_path: Path, monkeypatch: Any) -> tuple[Harness, ImportStore]:
-    h = Harness(tmp_path, monkeypatch)
-    h.registry.add('car')
-    root = tmp_path / 'ds'
-    write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2']})
-    store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))
-    return h, store
+@pytest.mark.parametrize('status', ['interrupted', 'failed', 'cancelled'])
+def test_an_interrupted_failed_or_cancelled_import_is_resumable_and_undoable(status) -> None:
+    control.check_resumable(_view(status))
+    control.check_undoable(_view(status))
 
 
-def _age_heartbeat(store: ImportStore, seconds: float) -> None:
-    old = time.time() - seconds
-    os.utime(store.job.heartbeat_file, (old, old))
-
-
-@pytest.mark.asyncio
-async def test_a_stale_running_import_is_resumable_and_undoable(tmp_path, monkeypatch) -> None:
-    _h, store = await _completed(tmp_path, monkeypatch)
-    store.job.update(status='running')
-    _age_heartbeat(store, 600)
-    reopened = open_store(store.import_id)
-    assert reopened is not None
-    assert reopened.repaired_state()['status'] == 'interrupted'
-    runner.check_resumable(reopened)
-    runner.check_undoable(reopened)
-
-
-@pytest.mark.asyncio
-async def test_check_resumable_accepts_a_stale_import_without_writing(
-    tmp_path, monkeypatch
-) -> None:
-    _h, store = await _completed(tmp_path, monkeypatch)
-    store.job.update(status='running')
-    _age_heartbeat(store, 600)
-    before = store.job.state_file.stat().st_mtime_ns
-    runner.check_resumable(store)
-    assert store.job.read()['status'] == 'running'  # a reader never writes
-    assert store.job.state_file.stat().st_mtime_ns == before
-
-
-@pytest.mark.asyncio
-async def test_a_live_running_import_is_neither_resumable_nor_undoable(
-    tmp_path, monkeypatch
-) -> None:
-    _h, store = await _completed(tmp_path, monkeypatch)
-    store.job.update(status='running')
-    store.job.touch_heartbeat()
+@pytest.mark.parametrize('status', ['queued', 'running', 'paused_backpressure', 'undoing'])
+def test_a_live_import_is_neither_resumable_nor_undoable(status) -> None:
     with pytest.raises(runner.ImportNotResumableError):
-        runner.check_resumable(store)
+        control.check_resumable(_view(status))
     with pytest.raises(runner.ImportNotUndoableError):
-        runner.check_undoable(store)
-    assert store.job.read()['status'] == 'running'
+        control.check_undoable(_view(status))
 
 
-@pytest.mark.asyncio
-async def test_undo_refuses_while_another_import_is_live(tmp_path, monkeypatch) -> None:
-    _h, store = await _completed(tmp_path, monkeypatch)
-    other = ImportStore(imports_root() / 'imp_20990101T000000_deadbeef')
-    other.job.write({'status': 'running'})
-    other.job.touch_heartbeat()
+def test_a_completed_import_is_undoable_not_resumable() -> None:
+    control.check_undoable(_view('completed'))
+    with pytest.raises(runner.ImportNotResumableError):
+        control.check_resumable(_view('completed'))
+
+
+def test_an_undo_run_cannot_be_resumed() -> None:
+    with pytest.raises(runner.ImportNotResumableError):
+        control.check_resumable(_view('failed', mode='undo'))
+
+
+def test_undo_and_resume_refuse_while_another_import_is_live() -> None:
+    other = str(uuid.uuid4())
     with pytest.raises(runner.ImportBusyError) as busy:
-        await runner.claim_undo(object(), store)
-    assert busy.value.import_id == other.import_id
-    assert store.job.read()['status'] == 'completed'
+        control.check_undoable(_view('completed', other=other))
+    assert busy.value.import_id == other
+    with pytest.raises(runner.ImportBusyError):
+        control.check_resumable(_view('interrupted', other=other))
 
 
-@pytest.mark.asyncio
-async def test_undo_claim_marks_the_import_undoing_when_nothing_else_is_live(
-    tmp_path, monkeypatch
-) -> None:
-    _h, store = await _completed(tmp_path, monkeypatch)
-    await runner.claim_undo(object(), store)
-    state = store.job.read()
-    assert (state['status'], state['mode']) == ('undoing', 'undo')
-    with pytest.raises(runner.ImportNotUndoableError):
-        await runner.claim_undo(object(), store)
-
-
-def test_repair_leaves_a_job_that_has_not_ticked_yet(tmp_path: Path) -> None:
-    job = FileJob(tmp_path / 'j')
-    job.write({'status': 'running'})
-    assert job.served_state(frozenset({'running'}), error_prefix='x')['status'] == 'running'
-
-
-def test_repair_leaves_a_fresh_heartbeat_and_a_terminal_state(tmp_path: Path) -> None:
-    job = FileJob(tmp_path / 'j')
-    job.write({'status': 'running'})
-    job.touch_heartbeat()
-    assert job.served_state(frozenset({'running'}), error_prefix='x')['status'] == 'running'
-    job.write({'status': 'completed'})
-    old = time.time() - 10 * HEARTBEAT_STALE_S
-    os.utime(job.heartbeat_file, (old, old))
-    assert job.served_state(frozenset({'running'}), error_prefix='x')['status'] == 'completed'
-
-
-def test_repair_marks_a_stale_active_job_interrupted(tmp_path: Path) -> None:
-    job = FileJob(tmp_path / 'j')
-    job.write({'status': 'running'})
-    job.touch_heartbeat()
-    old = time.time() - 10 * HEARTBEAT_STALE_S
-    os.utime(job.heartbeat_file, (old, old))
-    state = job.served_state(frozenset({'running'}), error_prefix='thing')
-    assert state['status'] == 'interrupted'
-    assert state['error'] == 'thing heartbeat stale'
-    assert job.read()['status'] == 'running'  # the view only: a reader never writes
-
-
-def _stale_running_job(directory: Path) -> FileJob:
-    job = FileJob(directory)
-    job.write({'status': 'running'})
-    job.touch_heartbeat()
-    old = time.time() - 600
-    os.utime(job.heartbeat_file, (old, old))
-    return job
-
-
-def test_a_stale_read_writes_nothing_so_a_claim_cannot_be_overwritten(tmp_path: Path) -> None:
-    job = _stale_running_job(tmp_path / 'job')
-    before = job.state_file.stat().st_mtime_ns
-
-    seen = job.served_state(frozenset({'running'}), error_prefix='t')
-    job.update(status='queued')  # a resume claims the job after the reader looked
-
-    assert seen['status'] == 'interrupted'
-    assert job.state_file.stat().st_mtime_ns != before
-    assert job.read()['status'] == 'queued'
-    assert not (job.directory / 'state.lock').exists()
+def test_the_served_actions_match_the_gates() -> None:
+    interrupted = import_actions(_view('interrupted').state, other_live_id=None)
+    assert (interrupted.can_resume.allowed, interrupted.can_undo.allowed) == (True, True)
+    assert interrupted.can_cancel.allowed is False
+    busy = import_actions(_view('completed').state, other_live_id='x')
+    assert busy.can_undo.allowed is False
+    assert 'another import' in (busy.can_undo.reason or '')
+    undoing = import_actions(_view('undoing', mode='undo').state, other_live_id=None)
+    assert undoing.can_cancel.allowed is False
 
 
 def test_undo_keeps_a_box_whose_ledger_row_has_no_bbox() -> None:

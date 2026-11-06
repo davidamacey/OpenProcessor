@@ -9,7 +9,6 @@ through :func:`api_error`.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import File, Query, Response, UploadFile
@@ -33,9 +32,8 @@ from src.routers.curation._dataset_import_models import (
 )
 from src.routers.curation._dataset_import_views import job_wire, preview_wire
 from src.routers.curation._dataset_issue_wire import issues_to_wire
-from src.services.curation.dataset_import import runner, upload_job
-from src.services.curation.dataset_import.context import ImportContext
-from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest
+from src.services.curation.dataset_import import control, runner, upload_job
+from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest  # noqa: TC001 - FastAPI body types
 from src.services.curation.dataset_import.paths import (
     DatasetPathNotAllowedError,
     dataset_path_guard,
@@ -47,27 +45,14 @@ from src.services.curation.dataset_import.prepare import (
     prepare_import,
 )
 from src.services.curation.dataset_import.scan import FormatUndetectedError
-from src.services.curation.dataset_import.store import (
-    COMPLETED_STATUSES,
-    RESUMABLE_STATUSES,
-    list_stores,
-    open_store,
-)
+from src.services.curation.dataset_import.status import COMPLETED_STATUSES, RESUMABLE_STATUSES
 from src.services.curation.dataset_import.undo import UndoContext, undo_import
 from src.services.curation.dataset_import.upload import UploadTooLargeError
-from src.services.curation.ingest import CurationIngestService
-from src.services.curation.ingest_detector import (
-    IngestProfileUnresolvedError,
-    refreshed_ingest_profiles,
-)
-from src.services.curation.ingest_policy_store import get_ingest_policy
-from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
     from src.services.classes.registry import ClassRegistry
-    from src.services.curation.dataset_import.store import ImportStore
-    from src.services.curation.ingest_policy import IngestPolicy
+    from src.services.curation.dataset_import.control import ImportView
 
 
 def _slug() -> str:
@@ -78,11 +63,11 @@ def _guard() -> Any:
     return dataset_path_guard(get_curation_config().export_root)
 
 
-def _open(import_id: str) -> ImportStore:
-    store = open_store(import_id)
-    if store is None:
+async def _open(import_id: str) -> ImportView:
+    view = await control.view_of(import_id)
+    if view is None:
         raise api_error(404, 'import_not_found', f'no import {import_id!r}', project=_slug())
-    return store
+    return view
 
 
 async def _prepare(request: DatasetPreviewRequest, registry: ClassRegistry) -> PreparedImport:
@@ -134,72 +119,6 @@ async def _already_indexed(opensearch: Any, prepared: PreparedImport) -> int:
     return len(found & set(paths))
 
 
-async def _import_service(
-    opensearch: Any, registry: Any, *, need_detector: bool, policy: IngestPolicy
-) -> CurationIngestService:
-    from src.app.resources import get_async_triton_pool
-    from src.main import app
-
-    pe_encoder = getattr(app.state, 'pe_encoder', None)
-    if pe_encoder is None:
-        raise api_error(503, 'config_store_unavailable', 'PE encoder not initialized')
-    try:
-        profile = (await refreshed_ingest_profiles()).primary
-    except (ValueError, IngestProfileUnresolvedError) as exc:
-        raise api_error(503, 'config_store_unavailable', f'ingest misconfigured: {exc}') from exc
-    if need_detector and not profile.detector_model:
-        raise api_error(
-            503, 'config_store_unavailable', 'this import runs the detector; none is configured'
-        )
-    return CurationIngestService(
-        opensearch=opensearch,
-        triton_pool=get_async_triton_pool() if need_detector else None,
-        registry=await registry.snapshot(),
-        profile=profile,
-        pe_encoder=pe_encoder,
-        policy=policy,
-    )
-
-
-async def _context(
-    store: ImportStore,
-    request: DatasetImportRequest,
-    prepared_like: Any,
-    opensearch: Any,
-    registry: Any,
-) -> ImportContext:
-    """The run context from persisted/pinned inputs only."""
-    resolved, profile, parents = prepared_like
-    cfg = get_curation_config()
-    state = store.job.read()
-    has_region = any(t.kind == 'region' for t in resolved.targets.values())
-    need_detector = request.options.processing == 'propose' or (has_region and parents == 'detect')
-    service = await _import_service(
-        opensearch,
-        registry,
-        need_detector=need_detector,
-        policy=await get_ingest_policy(),
-    )
-    return ImportContext(
-        import_id=store.import_id,
-        options=request.options,
-        resolved=resolved,
-        profile=profile,
-        parents=parents,
-        source_sha=state['source_sha'],
-        source_format=state.get('source_format', ''),
-        source_root=Path(state.get('source_root', '')),
-        opensearch=service.opensearch,
-        service=service,
-        images_index=cfg.images_index,
-        items_index=cfg.items_index,
-        crop_cache_dir=cfg.crop_cache_dir,
-        upload_root=Path(cfg.upload_root),
-        export_root=Path(cfg.export_root) if cfg.export_root else None,
-        freeze_test=bool(state.get('freeze_test')),
-    )
-
-
 # ------------------------------------------------------------------- upload
 
 
@@ -247,10 +166,7 @@ async def preview_dataset(
     '/datasets/imports', dependencies=[DISK_GUARD], response_model=DatasetImportJob, status_code=202
 )
 async def start_dataset_import(
-    body: DatasetImportRequest,
-    response: Response,
-    opensearch: OpenSearchDep,
-    registry: RegistryDep,
+    body: DatasetImportRequest, response: Response, registry: RegistryDep
 ) -> DatasetImportJob:
     prepared = await _prepare(body, registry)
     if body.expected_import_key and body.expected_import_key != prepared.import_key:
@@ -260,63 +176,45 @@ async def start_dataset_import(
             'the dataset or mapping changed since the preview',
             project=_slug(),
         )
-    prior = runner.reusable_prior(prepared)
-    if prior is not None and prior[1] in COMPLETED_STATUSES:
+    prior = await control.prior_of(prepared)
+    if prior is not None and prior.status in COMPLETED_STATUSES:
         response.status_code = 200
-        return job_wire(prior[0], project=_slug(), reused=True)
-    if prior is not None and prior[1] in RESUMABLE_STATUSES:
+        return job_wire(prior, project=_slug(), reused=True)
+    if prior is not None and prior.status in RESUMABLE_STATUSES:
         raise api_error(
             409,
             'import_resumable',
             'an interrupted import of this dataset can be resumed',
-            import_id=prior[0].import_id,
+            import_id=prior.import_id,
             project=_slug(),
         )
     _refuse_unmapped_or_blocked(prepared, body)
-    try:
-        store, reused = await runner.claim_import(opensearch, body, prepared)
-    except runner.ImportBusyError as exc:
-        raise api_error(
-            409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
-        ) from None
-    except runner.ImportResumableError as exc:
+    live = await control.live_import_id()
+    if live is not None:
         raise api_error(
             409,
-            'import_resumable',
-            'an interrupted import of this dataset can be resumed',
-            import_id=exc.import_id,
+            'import_busy',
+            f'an import is already running: {live}',
+            import_id=live,
             project=_slug(),
-        ) from None
-    if reused:
-        response.status_code = 200
-        return job_wire(store, project=_slug(), reused=True)
-
+        )
     new_groups = {m.dataset_class: m.new_class_group for m in body.mapping}
     try:
         await materialize_created_classes(prepared.resolved, registry, new_groups=new_groups)
     except Exception as exc:
-        store.job.update(status='failed', error=str(exc)[:300], finished_at=now_iso())
-        await runner.abandon_claim(opensearch, store)
         raise api_error(422, 'class_mapping_invalid', f'could not create a class: {exc}') from None
     try:
-        runner.persist_pinned(store, prepared)
-        runner.persist_scan_summary(
-            store, prepared, [i.model_dump() for i in issues_to_wire(prepared.issues)]
-        )
-        freeze = runner.freeze_default(prepared, body)
-        store.job.update(freeze_test=freeze)
-        ctx = await _context(
-            store,
+        view = await control.start(
+            prepared,
             body,
-            (prepared.resolved, prepared.view.profile, prepared.parents),
-            opensearch,
-            registry,
+            [i.model_dump() for i in issues_to_wire(prepared.issues)],
+            freeze_test=runner.freeze_default(prepared, body),
         )
-    except BaseException:
-        await runner.abandon_claim(opensearch, store)
-        raise
-    runner.spawn(ctx, store, runner.ordered_entries(prepared.scan.entries))
-    return job_wire(store, project=_slug())
+    except runner.ImportBusyError as exc:
+        raise api_error(
+            409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
+        ) from None
+    return job_wire(view, project=_slug())
 
 
 def _refuse_unmapped_or_blocked(prepared: PreparedImport, body: DatasetImportRequest) -> None:
@@ -364,11 +262,11 @@ async def list_dataset_imports(
     page_size: Annotated[int, Query(ge=1, le=200)] = 20,
     status: str | None = None,
 ) -> DatasetImportList:
-    stores = [s for s in list_stores() if status is None or s.job.read().get('status') == status]
-    chunk = stores[(page - 1) * page_size : page * page_size]
+    views = [v for v in await control.list_views() if status is None or v.status == status]
+    window = views[(page - 1) * page_size : page * page_size]
     return DatasetImportList(
-        items=[job_wire(s, project=_slug()) for s in chunk],
-        total=len(stores),
+        items=[job_wire(v, project=_slug()) for v in window],
+        total=len(views),
         page=page,
         page_size=page_size,
     )
@@ -376,7 +274,7 @@ async def list_dataset_imports(
 
 @router.get('/datasets/imports/{import_id}', response_model=DatasetImportJob)
 async def get_dataset_import(import_id: str) -> DatasetImportJob:
-    return job_wire(_open(import_id), project=_slug())
+    return job_wire(await _open(import_id), project=_slug())
 
 
 @router.get('/datasets/imports/{import_id}/issues', response_model=DatasetIssuePage)
@@ -386,7 +284,8 @@ async def dataset_import_issues(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> DatasetIssuePage:
-    rows = [r for r in _open(import_id).issues() if code is None or r.get('code') == code]
+    found = (await _open(import_id)).record.report.get('job_issues') or []
+    rows = [r for r in found if code is None or r.get('code') == code]
     return DatasetIssuePage(
         items=rows[(page - 1) * page_size : page * page_size],
         total=len(rows),
@@ -404,14 +303,13 @@ async def dataset_import_entries(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> DatasetImportEntryPage:
-    rows = [
-        r
-        for r in _open(import_id).ledger_rows()
-        if (split is None or r.get('split') == split)
-        and (label_state is None or r.get('label_state') == label_state)
-        and (status is None or r.get('status') == status)
-    ]
-    window = rows[(page - 1) * page_size : page * page_size]
+    window, total = await control.ledger_of(await _open(import_id)).page(
+        split=split,
+        label_state=label_state,
+        status=status,
+        offset=(page - 1) * page_size,
+        limit=page_size,
+    )
     return DatasetImportEntryPage(
         items=[
             DatasetImportEntry(
@@ -419,7 +317,7 @@ async def dataset_import_entries(
             )
             for r in window
         ],
-        total=len(rows),
+        total=total,
         page=page,
         page_size=page_size,
     )
@@ -430,20 +328,18 @@ async def dataset_import_entries(
 
 @router.post('/datasets/imports/{import_id}/cancel', response_model=DatasetImportJob)
 async def cancel_dataset_import(import_id: str) -> DatasetImportJob:
-    store = _open(import_id)
-    runner.cancel_import(import_id)
-    return job_wire(store, project=_slug())
+    return job_wire(await control.cancel(await _open(import_id)), project=_slug())
 
 
 @router.post(
     '/datasets/imports/{import_id}/resume', response_model=DatasetImportJob, status_code=202
 )
-async def resume_dataset_import(
-    import_id: str, opensearch: OpenSearchDep, registry: RegistryDep
-) -> DatasetImportJob:
-    store = _open(import_id)
+async def resume_dataset_import(import_id: str) -> DatasetImportJob:
+    """Queue the rest of the import. Nothing is scanned in the request: the worker scans the
+    dataset again and fails the job if it changed since the import started."""
+    view = await _open(import_id)
     try:
-        prior = await runner.claim_resume(opensearch, store)
+        resumed = await control.resume(view)
     except runner.ImportNotResumableError:
         raise api_error(
             409,
@@ -456,29 +352,7 @@ async def resume_dataset_import(
         raise api_error(
             409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
         ) from None
-    try:
-        request = DatasetImportRequest(**store.read_request())
-        try:
-            entries = await asyncio.to_thread(
-                runner.rescan_for_resume, store, request, path_guard=_guard()
-            )
-        except runner.DatasetChangedError:
-            raise api_error(
-                409,
-                'dataset_changed',
-                'the dataset changed since this import started',
-                import_id=import_id,
-                project=_slug(),
-            ) from None
-        except (DatasetPathNotAllowedError, FormatUndetectedError) as exc:
-            raise api_error(422, 'dataset_path_not_allowed', str(exc), project=_slug()) from None
-        await runner.prepare_resume(store, registry)
-        ctx = await _context(store, request, runner.load_pinned(store), opensearch, registry)
-    except BaseException:
-        await runner.release_resume(opensearch, store, prior)
-        raise
-    runner.spawn(ctx, store, entries)
-    return job_wire(store, project=_slug())
+    return job_wire(resumed, project=_slug())
 
 
 @router.post('/datasets/imports/{import_id}/undo')
@@ -489,12 +363,9 @@ async def undo_dataset_import(
     opensearch: OpenSearchDep,
     registry: RegistryDep,
 ) -> DatasetUndoReportWire | DatasetImportJob:
-    store = _open(import_id)
+    view = await _open(import_id)
     try:
-        if body.dry_run:
-            runner.check_undoable(store)
-        else:
-            await runner.claim_undo(opensearch, store)
+        control.check_undoable(view)
     except runner.ImportNotUndoableError:
         raise api_error(
             409,
@@ -507,32 +378,40 @@ async def undo_dataset_import(
         raise api_error(
             409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
         ) from None
-    cfg = get_curation_config()
-    from src.config.region_fields import get_region_fields
-
-    ctx = UndoContext(
-        import_id=import_id,
-        opensearch=getattr(opensearch, 'client', opensearch),
-        images_index=cfg.images_index,
-        items_index=cfg.items_index,
-        crop_cache_dir=cfg.crop_cache_dir,
-        region_fields=get_region_fields(),
-        registry=registry,
-    )
-    created = store.read_mapping().get('created_classes') or {}
     if body.dry_run:
+        from src.config.region_fields import get_region_fields
+
+        cfg = get_curation_config()
+        ctx = UndoContext(
+            import_id=import_id,
+            opensearch=getattr(opensearch, 'client', opensearch),
+            images_index=cfg.images_index,
+            items_index=cfg.items_index,
+            crop_cache_dir=cfg.crop_cache_dir,
+            region_fields=get_region_fields(),
+            registry=registry,
+        )
         report = await undo_import(
             ctx,
-            store,
+            control.ledger_of(view),
             dry_run=True,
             remove_images=body.remove_images,
             deprecate_created_classes=body.deprecate_created_classes,
-            created_classes=created,
+            created_classes=view.record.mapping.get('created_classes') or {},
         )
         return DatasetUndoReportWire(**report.to_dict())
-    runner.spawn_undo(ctx, store, body, created)
+    try:
+        started = await control.start_undo(
+            view,
+            remove_images=body.remove_images,
+            deprecate_created_classes=body.deprecate_created_classes,
+        )
+    except runner.ImportBusyError as exc:
+        raise api_error(
+            409, 'import_busy', str(exc), import_id=exc.import_id, project=_slug()
+        ) from None
     response.status_code = 202
-    return job_wire(store, project=_slug())
+    return job_wire(started, project=_slug())
 
 
 __all__ = ['router']

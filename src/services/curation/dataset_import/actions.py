@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from src.services.curation.dataset_import.store import (
+from src.services.curation.dataset_import.status import (
     ACTIVE_STATUSES,
     RESUMABLE_STATUSES,
     UNDOABLE_STATUSES,
@@ -31,6 +31,8 @@ class ImportActions(BaseModel):
 
 
 def cancel_blocker(state: dict[str, Any]) -> str | None:
+    if state.get('status') == 'undoing':
+        return 'an undo cannot be cancelled'
     if state.get('status') in ACTIVE_STATUSES:
         return None
     return 'the import is not running'

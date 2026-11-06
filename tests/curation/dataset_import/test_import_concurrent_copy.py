@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+pytestmark = pytest.mark.db
+
+
 @pytest.mark.asyncio
 async def test_import_lands_on_the_copy_stored_after_its_lookup(
     tmp_path: Path, monkeypatch

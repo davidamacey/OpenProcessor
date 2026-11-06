@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-pytest_plugins = ['_records_world']
+pytestmark = pytest.mark.db
 
 
 def _items_of(h: Harness, class_name: str) -> list[dict]:
@@ -185,8 +185,6 @@ async def test_negatives_unlabeled_and_splits(tmp_path: Path, monkeypatch) -> No
     assert not [d for d in h.items.values() if d['image_id'] == neg['image_id']]
 
 
-@pytest.mark.db
-@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_freeze_test_split_marks_holdout_and_leaves_current_untouched(
     tmp_path: Path, monkeypatch

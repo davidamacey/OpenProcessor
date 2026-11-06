@@ -22,6 +22,9 @@ EDGE_CAR = '0 0.517545 0.30847 0.169271 0.183381'
 WHEEL_INSIDE = '1 0.517545 0.30847 0.05 0.05'
 
 
+pytestmark = pytest.mark.db
+
+
 @pytest.mark.asyncio
 async def test_region_labels_reach_a_parent_whose_box_sits_on_a_rounding_edge(
     tmp_path: Path, monkeypatch
@@ -49,7 +52,7 @@ async def test_ledger_ids_are_the_stored_item_ids(tmp_path: Path, monkeypatch) -
     write_yolo(root, names=['car'], images={'a': [EDGE_CAR]})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))
     stored = set(h.items)
-    recorded = {i['crop_id'] for row in store.chunk_rows(0).values() for i in row.get('items', [])}
+    recorded = {i['crop_id'] for row in store.ledger_rows() for i in row.get('items', [])}
     assert recorded
     assert recorded <= stored
 

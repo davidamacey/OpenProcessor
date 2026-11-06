@@ -27,7 +27,6 @@ JOB_MODULES: tuple[tuple[str, LeaseKind], ...] = (
     ('src.services.curation.probe_job', LeaseKind.PROBE),
     ('src.services.curation.reprocess_job', LeaseKind.REPROCESS),
     ('src.services.curation.assist.job', LeaseKind.ASSIST_RUN),
-    ('src.services.curation.dataset_import.runner', LeaseKind.DATASET_IMPORT),
     ('src.services.training.promote_job', LeaseKind.PROMOTE),
 )
 

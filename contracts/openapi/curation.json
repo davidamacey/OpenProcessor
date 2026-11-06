@@ -8067,6 +8067,17 @@
             "title": "Issues Summary",
             "type": "array"
           },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
           "labels": {
             "additionalProperties": {
               "additionalProperties": {
@@ -43870,6 +43881,7 @@
     },
     "/curation/projects/{project}/datasets/imports/{import_id}/resume": {
       "post": {
+        "description": "Queue the rest of the import. Nothing is scanned in the request: the worker scans the\ndataset again and fails the job if it changed since the import started.",
         "operationId": "resume_dataset_import_curation_projects__project__datasets_imports__import_id__resume_post",
         "parameters": [
           {

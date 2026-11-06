@@ -117,22 +117,6 @@ async def _start_assist(client: Any) -> str:
     return 'started'
 
 
-async def _start_dataset_import(client: Any) -> str:
-    from src.services.curation.dataset_import import runner
-    from src.services.curation.dataset_import.store import ImportStore, imports_root
-
-    store = ImportStore(imports_root() / 'imp_20990101T000000_deadbeef')
-    store.job.directory.mkdir(parents=True, exist_ok=True)
-    if not store.job.state_file.exists():
-        store.job.write({'status': 'completed'})
-    _widen_check(runner, 'active_import')
-    try:
-        await runner.claim_undo(client, store)
-    except (runner.ImportBusyError, runner.ImportNotUndoableError):
-        return 'busy'
-    return 'started'
-
-
 async def _start_promote(client: Any) -> str:
     from src.services.training import promote_job
 
@@ -208,7 +192,6 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'embedding_viz': (_start_embedding_viz, {'OP_VIZ_JOBS_DIR': 'viz'}),
     'reprocess': (_start_reprocess, {'OP_REPROCESS_JOBS_DIR': 'reprocess'}),
     'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
-    'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
     'promote': (_start_promote, {'OP_TRAIN_JOBS_DIR': 'train'}),
     'autolabel': (_start_autolabel, {'OP_AUTO_LABEL_STATE_DIR': 'autolabel'}),
     'assist_loop': (_start_assist_loop, {'OP_ASSIST_LOOP_JOBS_DIR': 'loops'}),

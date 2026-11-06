@@ -28,12 +28,12 @@ from src.routers.curation._dataset_issue_wire import issues_to_wire
 from src.services.curation.dataset_import.actions import import_actions
 from src.services.curation.dataset_import.options import DatasetImportOptions
 from src.services.curation.dataset_import.prepare import mapping_from_dict
-from src.services.curation.dataset_import.store import ACTIVE_STATUSES, active_import
+from src.services.curation.dataset_import.status import ACTIVE_STATUSES
 
 
 if TYPE_CHECKING:
+    from src.services.curation.dataset_import.control import ImportView
     from src.services.curation.dataset_import.prepare import PreparedImport
-    from src.services.curation.dataset_import.store import ImportStore
 
 STATUS_LABELS: dict[str, str] = {
     'queued': 'Queued',
@@ -170,9 +170,14 @@ def _report_wire(raw: dict[str, Any]) -> DatasetImportReportWire:
     )
 
 
-def job_wire(store: ImportStore, *, project: str, reused: bool = False) -> DatasetImportJob:
-    state = store.repaired_state()
-    mapping_raw = store.read_mapping()
+def _iso(value: Any) -> str | None:
+    return None if value is None else value.isoformat()
+
+
+def job_wire(view: ImportView, *, project: str, reused: bool = False) -> DatasetImportJob:
+    record = view.record
+    job = view.undo if view.mode == 'undo' and view.undo is not None else view.run
+    mapping_raw = record.mapping
     resolved = mapping_from_dict(mapping_raw) if mapping_raw else None
     targets = []
     if resolved is not None:
@@ -186,47 +191,49 @@ def job_wire(store: ImportStore, *, project: str, reused: bool = False) -> Datas
                     created=name in resolved.created_classes,
                 )
             )
-    request = store.read_request()
-    total = int(state.get('images_total') or 0)
-    done = int(state.get('images_done') or 0)
-    rate = state.get('images_per_s')
-    status = state.get('status', 'queued')
-    undo = state.get('undo')
-    live = active_import()
-    other_live = live.import_id if live and live.import_id != store.import_id else None
+    progress = dict((view.run.progress if view.run else None) or {})
+    counters = progress.get('counters') or {}
+    total = int(record.scan.get('images_total') or 0)
+    done = int(counters.get('images_done') or 0)
+    rate = counters.get('images_per_s')
+    undo = (view.undo.result or {}).get('undo') if view.undo is not None else None
+    status = view.status
     return DatasetImportJob(
         project=project,
-        import_id=store.import_id,
-        import_key=state.get('import_key', ''),
-        name=state.get('name', ''),
+        import_id=view.import_id,
+        job_id=None if job is None else str(job.id),
+        import_key=record.scan.get('import_key', ''),
+        name=record.scan.get('name', ''),
         status=status,
         reused=reused,
         progress=DatasetImportProgress(
             images_total=total,
             images_done=done,
-            images_failed=int(state.get('images_failed') or 0),
-            chunks_total=int(state.get('chunks_total') or 0),
-            chunks_done=int(state.get('chunks_done') or 0),
+            images_failed=int(counters.get('images_failed') or 0),
+            chunks_total=int(counters.get('chunks_total') or 0),
+            chunks_done=int(counters.get('chunks_done') or 0),
             images_per_s=rate,
             eta_s=round((total - done) / rate, 1) if rate and total > done else None,
         ),
-        waiting_for=state.get('waiting_for'),
-        report=_report_wire(state.get('report') or {}),
+        waiting_for='region_worker' if status == 'paused_backpressure' else None,
+        report=_report_wire(record.report),
         mapping=targets,
-        options=DatasetImportOptions(**((request.get('options')) or {})),
+        options=DatasetImportOptions(**((record.request.get('options')) or {})),
         source=DatasetImportSource(
-            format=state.get('source_format'),
-            root=state.get('source_root'),
-            source_sha=state.get('source_sha'),
+            format=record.scan.get('source_format'),
+            root=record.scan.get('source_root'),
+            source_sha=record.scan.get('source_sha'),
         ),
-        issues_summary=store.read_scan().get('issues', []),
+        issues_summary=record.scan.get('issues', []),
         undo=DatasetUndoReportWire(**undo) if undo else None,
-        actions=import_actions(state, other_live_id=other_live),
-        next_steps=[NextStep(**s) for s in state.get('next_steps') or []],
-        error=state.get('error'),
-        started_at=state.get('started_at'),
-        updated_at=state.get('updated_at'),
-        finished_at=state.get('finished_at'),
+        actions=import_actions(view.state, other_live_id=view.other_live_id),
+        next_steps=[NextStep(**s) for s in (view.run.result or {}).get('next_steps') or []]
+        if view.run is not None
+        else [],
+        error=job.error_message if job is not None else None,
+        started_at=_iso(job.started_at or job.created_at) if job is not None else None,
+        updated_at=_iso(job.updated_at) if job is not None else None,
+        finished_at=_iso(job.finished_at) if job is not None else None,
         poll_after_s=2 if status in ACTIVE_STATUSES else None,
         labels={'status': STATUS_LABELS},
     )

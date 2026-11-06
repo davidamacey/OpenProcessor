@@ -22,6 +22,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+pytestmark = pytest.mark.db
+
+
 def _items_of(h: Harness, class_name: str) -> list[dict]:
     return [d for d in h.items.values() if d.get('class_name') == class_name]
 

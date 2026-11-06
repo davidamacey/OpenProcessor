@@ -69,39 +69,6 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
         assert source.json()['revision'] == 1
 
 
-def test_import_state_of_alpha_is_invisible_to_beta_and_a_misplaced_dir_is_refused(
-    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Imports, uploads and reprocess jobs are filesystem state the route
-    sweep cannot see leak. Each project's dir carries a ``.project`` marker."""
-    import shutil
-
-    from src.config.project_context import ProjectDirMismatchError, bind_project
-    from src.services.curation.dataset_import.store import (
-        ImportStore,
-        imports_root,
-        list_stores,
-        open_store,
-    )
-
-    monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(leak_env.root / 'imports'))
-    import_id = 'imp_20260101T000000_0123abcd'
-    with bind_project(leak_env.records['alpha']):
-        ImportStore(imports_root() / import_id).job.write({'status': 'completed'})
-        assert open_store(import_id) is not None
-        alpha_dir = imports_root()
-        assert (alpha_dir / '.project').read_text() == 'alpha'
-    with bind_project(leak_env.records['beta']):
-        assert open_store(import_id) is None
-        assert list_stores() == []
-        beta_dir = imports_root()
-    assert beta_dir != alpha_dir
-    # alpha's directory copied under beta's path: refused, not served.
-    shutil.copytree(alpha_dir, beta_dir)
-    with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
-        open_store(import_id)
-
-
 def test_bulk_ingest_runs_of_alpha_are_invisible_to_beta_and_a_misplaced_dir_is_refused(
     leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:

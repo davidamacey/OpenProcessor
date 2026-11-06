@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
@@ -69,9 +68,33 @@ CLASS_ORDER = ('bus', 'wheel', 'truck', 'car')
 DATASET_TO_NAME = {'Car': 'car', 'automobile': 'car', 'truck': 'truck', 'bus': 'bus'}
 
 
+def _worker_side(monkeypatch: pytest.MonkeyPatch, cluster: RoutedOpenSearch) -> None:
+    """What the import job builds for itself in a worker: the cluster, Triton and the encoder."""
+    from integration.ingest_fakes import FakePEEncoder
+    from src.services.curation.dataset_import import job as import_job
+
+    class Runtime:
+        pool = FakeTritonPool()
+        pe_encoder = FakePEEncoder()
+
+        async def close(self) -> None:
+            return None
+
+    async def open_runtime() -> Any:
+        return Runtime()
+
+    monkeypatch.setattr(import_job, 'open_ingest_runtime', open_runtime)
+    monkeypatch.setattr(
+        'src.services.projects.guard.make_script_opensearch', lambda *_a, **_k: cluster
+    )
+
+
 class World:
-    def __init__(self, client: TestClient, cluster: RoutedOpenSearch, tmp: Path) -> None:
+    def __init__(
+        self, client: TestClient, cluster: RoutedOpenSearch, tmp: Path, worker_app: Any
+    ) -> None:
         self.client = client
+        self.worker_app = worker_app
         self.cluster = cluster
         self.tmp = tmp
         self.default_indexes = {
@@ -96,14 +119,25 @@ class World:
 
 
 @pytest.fixture
-def world(pg_registry: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
+def world(
+    pg_registry: Any,
+    pg_env: Any,
+    producer: Any,
+    wakes: Any,
+    worker_app: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[World]:
+    from families_b.ledger_detail import ensure_detail_column, stand_in_enqueue_pending
+
     import src.config.curation_accessors as curation_mod
     from src.services.curation import index_bootstrap
     from src.services.projects import capacity as capacity_mod
     from src.services.projects.bootstrap import bootstrap_default_project
 
+    ensure_detail_column(pg_env)  # depends on the ND-A merge (the ledger's detail column)
+    stand_in_enqueue_pending(monkeypatch)  # and on its enqueue_pending
     monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
     monkeypatch.setattr(curation_mod, '_default_curation_config', None)
     capacity_mod._cache = None
     index_bootstrap._INDEXES_BOOTSTRAPPED.clear()
@@ -138,7 +172,8 @@ def world(pg_registry: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
         set_project_registry(registry)
         asyncio.run(bootstrap_default_project())
         asyncio.run(registry.ensure_fresh())
-        yield World(client, cluster, tmp_path)
+        _worker_side(monkeypatch, cluster)
+        yield World(client, cluster, tmp_path, worker_app)
     set_project_registry(None)
     index_bootstrap._INDEXES_BOOTSTRAPPED.clear()
     capacity_mod._cache = None
@@ -243,15 +278,13 @@ def example_body(kind: str) -> dict[str, Any]:
     return {k: v for k, v in raw.items() if k not in ('_comment', 'name')}
 
 
-def wait_import(world: World, import_id: str, timeout: float = 30.0) -> dict[str, Any]:
-    deadline = time.time() + timeout
-    job: dict[str, Any] = {}
-    while time.time() < deadline:
-        job = world.client.get(f'{API}/datasets/imports/{import_id}').json()
-        if job['status'] in {'completed', 'completed_with_errors', 'failed'}:
-            return job
-        time.sleep(0.05)
-    raise AssertionError(job)
+def wait_import(world: World, started: dict[str, Any]) -> dict[str, Any]:
+    """Run the queued ``dataset_import`` job as the worker would, then read the import."""
+    outcome = world.worker_app.tasks['op.families_b.dataset_import'].apply(
+        args=[started['job_id']], task_id=started['job_id']
+    )
+    assert outcome.successful(), outcome.traceback
+    return world.client.get(f'{API}/datasets/imports/{started["import_id"]}').json()
 
 
 def create_project_with_classes(world: World) -> dict[str, int]:
@@ -305,7 +338,7 @@ def test_wheel_example_end_to_end(
         },
     )
     assert started.status_code == 202, started.text
-    job = wait_import(world, started.json()['import_id'])
+    job = wait_import(world, started.json())
     assert job['status'] == 'completed', job
     report = job['report']
     expected = spec['expected_report']
@@ -573,7 +606,7 @@ def test_coco_variant_is_detected_and_imports(world: World) -> None:
     ]
     started = world.client.post(f'{API}/datasets/imports', json={**body, 'mapping': mapping})
     assert started.status_code == 202, started.text
-    job = wait_import(world, started.json()['import_id'])
+    job = wait_import(world, started.json())
     assert job['status'] == 'completed', job
     items = world.cluster.data.docs(ITEMS_INDEX)
     got = {n: sum(1 for d in items.values() if d.get('class_name') == n) for n in ids}

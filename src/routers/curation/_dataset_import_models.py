@@ -179,6 +179,8 @@ class DatasetUndoReportWire(BaseModel):
 class DatasetImportJob(BaseModel):
     project: str
     import_id: str
+    job_id: str | None = None
+    """The queued job to poll (`GET /jobs/{id}`): the undo job while an undo runs."""
     import_key: str
     name: str
     status: ImportStatus

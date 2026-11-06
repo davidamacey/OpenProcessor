@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 HUMAN = {'class_source': 'human', 'label_source': 'human', 'class_validated': True}
 
 
+pytestmark = pytest.mark.db
+
+
 async def _imported(tmp_path: Path, monkeypatch: Any) -> tuple[Harness, Any]:
     h = Harness(tmp_path, monkeypatch)
     h.registry.add('car')

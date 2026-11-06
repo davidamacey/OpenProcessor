@@ -78,6 +78,28 @@ async def dataset_upload_extract(ctx: JobContext) -> Any:
         return await run_extract(ctx)
 
 
+async def dataset_import(ctx: JobContext) -> Any:
+    from src.services.curation.dataset_import.job import run_import
+
+    with _bound(await _record(ctx)):
+        return await run_import(
+            ctx, await ctx.client('opensearch'), await ctx.client('ingest_runtime')
+        )
+
+
+async def dataset_import_undo(ctx: JobContext) -> Any:
+    from src.services.curation.dataset_import.job import run_undo
+
+    with _bound(await _record(ctx)):
+        return await run_undo(ctx, await ctx.client('opensearch'))
+
+
+async def _ingest_runtime() -> Any:
+    from src.services.curation.dataset_import.job import open_ingest_runtime
+
+    return await open_ingest_runtime()
+
+
 # --- combine -----------------------------------------------------------------------------------
 
 
@@ -93,3 +115,9 @@ register_job('dataset_upload_extract', dataset_upload_extract)
 register_job('class_merge', class_merge, client_factories=_FACTORIES)
 register_job('class_projection_sync', class_projection_sync, client_factories=_FACTORIES)
 register_job('combine', combine, client_factories=_FACTORIES)
+register_job(
+    'dataset_import',
+    dataset_import,
+    client_factories={**_FACTORIES, 'ingest_runtime': _ingest_runtime},
+)
+register_job('dataset_import_undo', dataset_import_undo, client_factories=_FACTORIES)

@@ -60,6 +60,8 @@ def leak_env(
     reference_region_profile: None,
     pg_registry: Any,
     captured_events: list[dict[str, Any]],
+    producer: Any,
+    wakes: Any,
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""

@@ -11,11 +11,10 @@ import pytest
 from curation.dataset_import.harness import Harness, activate_region_profile, map_all, write_yolo
 from src.config.region_fields import get_region_fields
 from src.domain.region_boxes import read_boxes
-from src.services.curation.dataset_import import runner
+from src.services.curation.dataset_import import control
 from src.services.curation.dataset_import.item_labels import apply_item_updates, plan_item_labels
 from src.services.curation.dataset_import.mapping import ClassMappingEntry, MapTarget
 from src.services.curation.dataset_import.scan import LabelBox
-from src.services.curation.dataset_import.store import imports_root, open_store, valid_import_id
 
 
 if TYPE_CHECKING:
@@ -23,6 +22,9 @@ if TYPE_CHECKING:
 
 BOX = (0.1, 0.1, 0.5, 0.5)
 CAR = MapTarget(kind='item', class_id=0, class_name='car')
+
+
+pytestmark = pytest.mark.db
 
 
 def _doc(**fields: Any) -> dict[str, Any]:
@@ -79,7 +81,7 @@ async def test_a_human_edit_between_plan_and_write_still_wins(tmp_path: Path, mo
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.4 0.4']})
     prepared = h.prepare(h.request(root, map_all(h.registry, 'car')))
     request = h.request(root, map_all(h.registry, 'car'))
-    store, _ = await runner.claim_import(object(), request, prepared)
+    store = await h.begin(request, prepared)
     ctx = h.context(store, request, prepared)
     machine = _doc(class_source='vlm', label_source='vlm', class_validated=False)
     h.items[machine['crop_id']] = dict(machine)
@@ -129,12 +131,13 @@ async def test_region_boxes_are_never_written_over_a_human_box_or_verdict(
     assert store.job.read()['report']['boxes_written'] == 0
 
 
-def test_import_ids_are_only_ever_ones_the_store_generated(tmp_path: Path, monkeypatch) -> None:
-    Harness(tmp_path, monkeypatch)
-    root = imports_root()
-    (root / 'imp_20260101T000000_aaaaaaaa').mkdir(parents=True)
-    (root.parent / 'evil').mkdir(parents=True)
-    assert open_store('imp_20260101T000000_aaaaaaaa') is not None
-    for bad in ('../evil', '..', '.', '', 'evil', 'imp_20260101T000000_AAAAAAAA', '../../x'):
-        assert valid_import_id(bad) is False
-        assert open_store(bad) is None
+@pytest.mark.asyncio
+async def test_an_id_that_is_not_an_import_id_names_no_import(tmp_path: Path, monkeypatch) -> None:
+    h = Harness(tmp_path, monkeypatch)
+    h.registry.add('car')
+    root = tmp_path / 'ds'
+    write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.4 0.4']})
+    store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))
+    assert (await control.view_of(store.import_id)).import_id == store.import_id
+    for bad in ('../evil', '..', '.', '', 'evil', 'imp_20260101T000000_aaaaaaaa', '../../x'):
+        assert await control.view_of(bad) is None

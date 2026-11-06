@@ -14,11 +14,14 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
+import uuid
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fixtures.job_rows import sql
 
+from curation.dataset_import import harness
 from curation.dataset_import.harness import (
     Harness,
     activate_region_profile,
@@ -63,6 +66,9 @@ SAME = '0 0.3 0.3 0.4 0.4'
 FAR = '0 0.8 0.8 0.1 0.1'
 
 
+pytestmark = pytest.mark.db
+
+
 def _clean(value: Any) -> Any:
     if isinstance(value, dict):
         return {
@@ -95,7 +101,7 @@ def snapshot(h: Harness, store: Any, tmp: Path) -> dict[str, Any]:
     for raw, name in sorted(_stable_ids(h).items(), key=lambda kv: -len(kv[0])):
         text = text.replace(raw, name)
     text = text.replace(str(tmp), '<tmp>')
-    text = re.sub(r'imp_\d{8}T\d{6}_[0-9a-f]{8}', '<import>', text)
+    text = re.sub(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<import>', text)
     return json.loads(text)
 
 
@@ -137,14 +143,13 @@ async def _size_mismatch(h: Harness, tmp: Path) -> dict[str, Any]:
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2'], 'b': ['0 0.5 0.5 0.2 0.2']})
     request = h.request(root, map_all(h.registry, 'car'))
     prepared = h.prepare(request)
-    store, _ = await runner.claim_import(object(), request, prepared)
-    h.last_store = store
-    runner.persist_pinned(store, prepared)
+    store = await h.begin(request, prepared)
     ctx = h.context(store, request, prepared)
     entries = runner.ordered_entries(prepared.scan.entries)
     entries[0] = dataclasses.replace(entries[0], declared_size=(7, 7))
     entries[1] = dataclasses.replace(entries[1], declared_size=(100, 100))
-    report = await import_chunk(ctx, store, 0, entries)
+    await store.seed(entries)
+    report = await import_chunk(ctx, entries, {})
     snap = snapshot(h, store, tmp)
     snap['chunk_report'] = report.to_dict()
     return snap
@@ -257,20 +262,24 @@ async def _resumed_image(h: Harness, tmp: Path) -> dict[str, Any]:
     write_yolo(root, names=['car'], images={'a': [SAME, FAR], 'b': ['0 0.5 0.5 0.1 0.1']})
     request = h.request(root, map_all(h.registry, 'car'))
     prepared = h.prepare(request)
-    store, _ = await runner.claim_import(object(), request, prepared)
-    h.last_store = store
-    runner.persist_pinned(store, prepared)
+    store = await h.begin(request, prepared)
     ctx = h.context(store, request, prepared)
     entries = runner.ordered_entries(prepared.scan.entries)
-    await import_chunk(ctx, store, 0, entries)
-    # The process died after the write-ahead row and the item writes: keep only
-    # the pending rows (their recorded actions say 'created') and re-run.
-    ledger = store.directory / 'ledger' / '000000.jsonl'
-    pending = [
-        r for r in map(json.loads, ledger.read_text().splitlines()) if r['status'] == 'pending'
-    ]
-    ledger.write_text(''.join(json.dumps(r) + '\n' for r in pending))
-    report = await import_chunk(ctx, store, 0, entries)
+    await store.seed(entries)
+    await import_chunk(ctx, entries, {})
+    # The process died after the write-ahead row and the item writes: put every row back to its
+    # write-ahead state (pending, the planned item actions, no result) and re-run.
+    sql(
+        harness.PG,
+        "UPDATE dataset_import_images SET status = 'pending', detail = (detail - 'report' - 'boxes') "
+        "|| jsonb_build_object('items', (SELECT coalesce(jsonb_agg(i), '[]'::jsonb) "
+        "FROM jsonb_array_elements(detail->'items') i "
+        "WHERE i->>'action' NOT IN ('standalone', 'parent', 'proposal'))) "
+        "WHERE import_id = %s AND detail ? 'items'",
+        uuid.UUID(store.import_id),
+    )
+    claimed = await store.claim(100, after=-1)
+    report = await import_chunk(ctx, entries, {c.key: c.prior for c in claimed})
     snap = snapshot(h, store, tmp)
     snap['rerun_report'] = report.to_dict()
     return snap
@@ -291,20 +300,12 @@ SCENARIOS = {
 }
 
 
-pytest_plugins = ['_records_world']
-
-FREEZING = {'freeze_test_split', 'freeze_updated_item'}
-"""Scenarios that record a holdout freeze, which is a database row."""
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     'name',
-    [pytest.param(n, marks=pytest.mark.db) if n in FREEZING else n for n in sorted(SCENARIOS)],
+    sorted(SCENARIOS),
 )
-async def test_import_matches_golden(name: str, tmp_path: Path, monkeypatch, request) -> None:
-    if name in FREEZING:
-        request.getfixturevalue('world')
+async def test_import_matches_golden(name: str, tmp_path: Path, monkeypatch) -> None:
     h = Harness(tmp_path, monkeypatch)
     got = await SCENARIOS[name](h, tmp_path)
     assert got == json.loads(GOLDEN.read_text())[name]
