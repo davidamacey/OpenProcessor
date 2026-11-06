@@ -790,7 +790,7 @@ services:
       - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       - ./secrets/flower:/run/secrets/op_flower:ro
     ports:
-      - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:4613:5555"  # Flower
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:4613:5555"  # Flower (not a UI: OP_UI_BIND_ADDRESS does not open it)
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5555/healthcheck')"]
       interval: 30s
