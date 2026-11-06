@@ -7,6 +7,7 @@ import asyncio
 from typing import Any
 
 from opensearchpy.exceptions import OpenSearchException
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.logging import get_logger
 from src.services.config_store.index import config_poll_interval_s
@@ -15,10 +16,42 @@ from src.services.config_store.store import get_config_store
 
 logger = get_logger(__name__)
 
+GLOBAL_EPOCH_KEY = '__global__'
+
 #: Default interval (seconds) for ``poll_loop`` -- fast enough that a
 #: pack/profile activated in one uvicorn worker is visible in every
 #: other within one tick, cheap enough (one ``GET`` per project per
 #: tick when nothing changed) to run continuously.
+
+
+async def poll_config_epochs(known: dict[str, int | None]) -> dict[str, int | None]:
+    """Read the epoch of every live project and the global one; return those that moved since ``known``.
+
+    The keys are project slugs and ``'__global__'``. Every project's epoch is reported to the
+    embedding-space resolver on each read (``note_config_epoch``), so a flip is seen within one poll.
+    One indexed read of ``projects`` and one of the counter; nothing touches OpenSearch.
+    """
+    from sqlalchemy import select
+
+    from src.db.models.projects import Project
+    from src.db.repos.config import get_epoch
+    from src.db.session import async_session_factory, deployment_tx
+    from src.services.embedding_spaces.resolve import note_config_epoch
+
+    async with async_session_factory()() as session, deployment_tx(session, 'poll config epochs'):
+        rows = (
+            await session.execute(
+                select(Project.slug, Project.config_epoch).where(
+                    Project.status.in_(('active', 'archived'))
+                )
+            )
+        ).all()
+        global_epoch = await get_epoch(session, None)
+    current: dict[str, int | None] = {slug: int(epoch) for slug, epoch in rows}
+    current[GLOBAL_EPOCH_KEY] = global_epoch
+    for slug, epoch in rows:
+        note_config_epoch(slug, int(epoch))
+    return {key: epoch for key, epoch in current.items() if known.get(key) != epoch}
 
 
 async def _poll_all_active_projects(client: Any, interval: float) -> None:
@@ -41,7 +74,12 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
     from src.services.projects.registry import ProjectRegistry
 
     registry = ProjectRegistry(lambda: client)
+    known_epochs: dict[str, int | None] = {}
     while True:
+        try:
+            known_epochs.update(await poll_config_epochs(known_epochs))
+        except SQLAlchemyError as exc:
+            logger.warning('config_epoch_poll_failed', error=str(exc))
         try:
             # the deployment-wide VLM registry, refreshed unbound (its
             # index belongs to no project) so a probe or an endpoint edit

@@ -149,7 +149,6 @@ _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_researc
 
 # Landed ahead of their consumers (B2 stage 2, lane 2C): the upgrade load (lane 2E) and the readers of
 # the poll and the runtime reports. Delete each entry with its caller.
-_.get_epoch  # src/db/repos/config_base.py, read by the epoch poll (2C-4)
 _.list_configs  # src/db/repos/config.py, read by the config store snapshot load (2C-1)
 _.list_probes  # src/db/repos/config.py, read by the global snapshot load (2C-3)
 _.list_runtime_reports  # src/db/repos/config.py, read by the applied-config view (2C-4)
@@ -166,7 +165,6 @@ _.put_keymap  # src/db/repos/settings.py, written by the keymap service (2C-5)
 # upgrade and re-index work. Delete each entry with its first production caller.
 _.sync_catalog  # src/services/embedding_spaces/catalog.py, called by scripts/db/migrate.py after Alembic
 _.embedding_space  # src/services/embedding_spaces/resolve.py, called by every vector reader
-_.note_config_epoch  # src/services/embedding_spaces/resolve.py, called by the config_epoch poll
 _.default_space_rows  # src/services/embedding_spaces/spaces.py, called by the project create and the upgrade
 _.add_spaces  # src/db/repos/embedding_spaces.py, called with default_space_rows by the project create and the upgrade
 _.register_space  # src/services/embedding_spaces/spaces.py, called by the space routes
