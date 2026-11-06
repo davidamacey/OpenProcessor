@@ -14,6 +14,12 @@ from src.db.session import sync_deployment_tx, sync_session_factory
 pytestmark = pytest.mark.db
 
 
+@pytest.fixture(scope='module')
+def pg(pg_events):
+    """The cursor waits for the cluster's oldest open transaction: use a server of its own."""
+    return pg_events
+
+
 def _count(pg) -> int:
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         return conn.execute('SELECT count(*) FROM events').fetchone()[0]

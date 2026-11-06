@@ -15,6 +15,12 @@ from src.db.session import async_session_factory, project_tx
 pytestmark = pytest.mark.db
 
 
+@pytest.fixture(scope='module')
+def pg(pg_events):
+    """The cursor waits for the cluster's oldest open transaction: use a server of its own."""
+    return pg_events
+
+
 def _new_project(pg) -> uuid.UUID:
     project, slug = uuid.uuid4(), f'cur-{uuid.uuid4().hex[:8]}'
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
