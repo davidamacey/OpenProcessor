@@ -90,13 +90,13 @@ class DatabaseSettings:
             app_user=_identifier('OP_DB_APP_USER', env_str('OP_DB_APP_USER', 'op_app')),
             owner_user=_identifier('OP_DB_OWNER_USER', env_str('OP_DB_OWNER_USER', 'op_owner')),
             app_password_file=Path(
-                env_str('OP_DB_APP_PASSWORD_FILE', '/run/secrets/postgres_app_password')
+                env_str('OP_DB_APP_PASSWORD_FILE', '/run/secrets/op_pg/app_password')
             ),
             owner_password_file=Path(
-                env_str('OP_DB_OWNER_PASSWORD_FILE', '/run/secrets/postgres_owner_password')
+                env_str('OP_DB_OWNER_PASSWORD_FILE', '/run/secrets/op_pg/owner_password')
             ),
             super_password_file=Path(
-                env_str('OP_DB_SUPER_PASSWORD_FILE', '/run/secrets/postgres_super_password')
+                env_str('OP_DB_SUPER_PASSWORD_FILE', '/run/secrets/op_pg/super_password')
             ),
             sslmode=_choice('OP_DB_SSLMODE', env_str('OP_DB_SSLMODE', 'prefer'), SSLMODES),
             pooler=_choice('OP_DB_POOLER', env_str('OP_DB_POOLER', 'none'), POOLERS),

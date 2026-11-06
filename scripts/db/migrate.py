@@ -22,6 +22,7 @@ from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, pool, text
 from sqlalchemy.engine import URL
 
+from src.config.advisory_locks import MIGRATE
 from src.config.database import SUPER_USER, DatabaseSettings
 from src.db import roles
 
@@ -30,9 +31,9 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATE_LOCK = (2, 0)
+MIGRATE_LOCK = (MIGRATE, 0)
 # Roles are cluster-wide, so two runners must not write them at the same moment.
-ROLES_LOCK = (2, 1)
+ROLES_LOCK = (MIGRATE, 1)
 MAINTENANCE_DATABASE = 'postgres'
 
 

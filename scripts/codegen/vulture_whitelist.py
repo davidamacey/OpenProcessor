@@ -118,7 +118,6 @@ _.crop_key  # src/clients/storage/keys.py, the crop-cache key; its first caller 
 # by the periodic task bodies and the beat/migrate runners of later lanes, and QUEUE_PROFILE by
 # the consumer-from-compose test. Delete each entry in the change that adds its production caller.
 _.BEAT  # src/config/advisory_locks.py, session lock of the single beat (stage 6)
-_.MIGRATE  # src/config/advisory_locks.py, session lock of the schema migration runner (lane 1A)
 _.INGEST_DISPATCH  # src/config/advisory_locks.py, periodic ingest dispatcher body (stage 4)
 _.OPEN_VOCAB_SWEEP  # src/config/advisory_locks.py, periodic open-vocabulary sweep (stage 4)
 _.CACHE_PRUNE  # src/config/advisory_locks.py, periodic cache prune (stage 6)
