@@ -1,4 +1,5 @@
-"""Near-duplicate tables, the holdout freeze columns, the near_dup profile kind and axis.
+"""Near-duplicate tables, the holdout freeze columns, the near_dup profile kind and axis,
+and the open-vocabulary gate as a VLM usage source.
 
 Revision ID: 0003_near_duplicates
 Revises: 0002_research_seams
@@ -32,6 +33,9 @@ _PAIRS_OLD = (
     "('clustering_region_box', 'cluster_profile'), ('assist_loop_preset', 'assist_loop_preset')"
 )
 _TASK_KINDS_OLD = "'class_rename', 'class_merge', 'cluster_partition'"
+_USAGE_SOURCES_OLD = (
+    "'assist_loop', 'assist_run', 'autolabel', 'vlm_worker', 'region_verify', 'label_batch'"
+)
 
 
 def _replace_check(table: str, name: str, expression: str) -> None:
@@ -48,6 +52,10 @@ def _alter_closed_sets(*, kinds: str, axes: str, pairs: str, task_kinds: str) ->
     _replace_check(
         'search_projection_tasks', 'ck_search_projection_tasks_kind', f'kind IN ({task_kinds})'
     )
+
+
+def _alter_usage_sources(sources: str) -> None:
+    _replace_check('vlm_usage_hourly', 'ck_vlm_usage_hourly_source', f'source IN ({sources})')
 
 
 def upgrade() -> None:
@@ -80,9 +88,12 @@ def upgrade() -> None:
         pairs=f"{_PAIRS_OLD}, ('near_dup', 'near_dup_profile')",
         task_kinds=f"{_TASK_KINDS_OLD}, 'near_dup_run'",
     )
+    _alter_usage_sources(f"{_USAGE_SOURCES_OLD}, 'open_vocab_gate'")
 
 
 def downgrade() -> None:
+    op.execute("DELETE FROM vlm_usage_hourly WHERE source = 'open_vocab_gate'")
+    _alter_usage_sources(_USAGE_SOURCES_OLD)
     op.execute("DELETE FROM search_projection_tasks WHERE kind = 'near_dup_run'")
     op.execute("DELETE FROM config_activations WHERE axis = 'near_dup'")
     op.execute("DELETE FROM config_documents WHERE kind = 'near_dup_profile'")
