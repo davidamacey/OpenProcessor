@@ -48,6 +48,9 @@ def test_a_late_ack_on_a_collected_channel_is_a_connection_error() -> None:
     channel.connection = SimpleNamespace(client=None)
     with pytest.raises(RedisConnectionError), channel.conn_or_acquire():
         pytest.fail('no client may be built from a collected transport')
+    channel.connection = None  # a closed channel drops its transport altogether
+    with pytest.raises(RedisConnectionError), channel.conn_or_acquire():
+        pytest.fail('no client may be built from a closed channel')
     stock = kombu_redis.Channel.__new__(kombu_redis.Channel)
     stock.connection = SimpleNamespace(client=None)
     stock._pool = None

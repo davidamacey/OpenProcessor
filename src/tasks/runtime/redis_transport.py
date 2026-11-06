@@ -42,11 +42,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _collected(channel: Any) -> bool:
+    """True once the channel was closed (no transport) or its transport was collected (no client)."""
+    transport = channel.connection
+    return transport is None or transport.client is None
+
+
 class QoS(redis.QoS):
     """``restore_unacked`` that does nothing once the transport has been collected."""
 
     def restore_unacked(self, client: Any = None) -> None:
-        if client is None and self.channel.connection.client is None:
+        if client is None and _collected(self.channel):
             logger.warning(
                 'broker connection already collected: leaving %d unacked message(s) to their '
                 'tasks and the visibility timeout',
@@ -62,7 +68,7 @@ class Channel(redis.Channel):
 
     @contextmanager
     def conn_or_acquire(self, client: Any = None) -> Iterator[Any]:
-        if client is None and self.connection.client is None:
+        if client is None and _collected(self):
             raise RedisConnectionError('the broker connection was collected')
         with super().conn_or_acquire(client) as acquired:
             yield acquired
