@@ -34,7 +34,7 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 
-from src.db.engine import get_async_engine, get_sync_engine
+from src.db.engine import current_async_engine, get_sync_engine
 from src.db.scope_allowlist import CORE_TX_MODULES, DEPLOYMENT_TX_MODULES
 
 
@@ -193,9 +193,9 @@ def sync_core_tx(session: Session, reason: str) -> AbstractContextManager[Sessio
 
 
 def async_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Sessions over the process's API engine. ``expire_on_commit=False`` so an attribute read
-    after commit never does implicit I/O."""
-    return async_sessionmaker(get_async_engine(), expire_on_commit=False)
+    """Sessions over the engine bound to this context, else the API engine.
+    ``expire_on_commit=False`` so an attribute read after commit never does implicit I/O."""
+    return async_sessionmaker(current_async_engine(), expire_on_commit=False)
 
 
 def sync_session_factory() -> sessionmaker[Session]:

@@ -11,10 +11,18 @@ a thread or outside the loop (claim, heartbeat, terminal write) uses the child's
 In the API process request code uses the async engine, and the 1 s and 5 s polls use their own
 one-connection sync engine so they never queue behind requests. An async session is never
 handed to a thread and a sync connection is never used from the loop.
+
+``async_session_factory`` is how services reach the async engine, and it follows
+``current_async_engine``: the engine bound to the running context by ``bind_async_engine``,
+else the API engine. A process that is not the API (the job runtime, a worker, a script, the
+migrate step) binds its own engine before it starts any task. Python copies the current context
+into every task it creates (https://docs.python.org/3/library/contextvars.html), so a binding
+made around a handler or an entry coroutine reaches everything that coroutine awaits or spawns.
 """
 
 from __future__ import annotations
 
+import contextvars
 import os
 import threading
 from contextlib import contextmanager
@@ -44,6 +52,9 @@ CHILD_POOL_SIZE = 2
 
 _lock = threading.Lock()
 _engines: dict[tuple[str, int], Any] = {}
+_bound_async_engine: contextvars.ContextVar[AsyncEngine | None] = contextvars.ContextVar(
+    'op_db_async_engine', default=None
+)
 
 
 def database_url(
@@ -111,6 +122,26 @@ def get_async_engine() -> AsyncEngine:
         )
 
     return _cached('async', build)
+
+
+@contextmanager
+def bind_async_engine(engine: AsyncEngine) -> Iterator[AsyncEngine]:
+    """Make ``engine`` the one ``async_session_factory`` uses inside this block.
+
+    The caller owns the engine and disposes it. The binding is a context variable, so it is
+    seen by this coroutine and by every task created while it is set.
+    """
+    token = _bound_async_engine.set(engine)
+    try:
+        yield engine
+    finally:
+        _bound_async_engine.reset(token)
+
+
+def current_async_engine() -> AsyncEngine:
+    """The bound engine, else the API request-path engine (which fails closed off the API)."""
+    bound = _bound_async_engine.get()
+    return bound if bound is not None else get_async_engine()
 
 
 def get_poll_engine() -> Engine:
@@ -200,6 +231,8 @@ async def dispose_engines() -> None:
 
 
 __all__ = [
+    'bind_async_engine',
+    'current_async_engine',
     'dispose_engines',
     'dispose_inherited_engines',
     'get_async_engine',
