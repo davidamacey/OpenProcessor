@@ -13,7 +13,7 @@ from src.db.types import NOW, UUIDV7, check, in_list
 
 
 REGISTRY_MIGRATED_FROM = ('class_registry_file', 'opensearch_registry_doc')
-PROJECTION_TASK_KINDS = ('class_rename', 'class_merge', 'cluster_partition')
+PROJECTION_TASK_KINDS = ('class_rename', 'class_merge', 'cluster_partition', 'near_dup_run')
 
 
 class ClassRegistry(Base):

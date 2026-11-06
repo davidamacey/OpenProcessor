@@ -12,7 +12,7 @@ from src.db.base import Base
 
 pytestmark = pytest.mark.db
 
-HEAD = '0002_research_seams'
+HEAD = '0003_near_duplicates'
 
 
 def test_there_is_exactly_one_head() -> None:

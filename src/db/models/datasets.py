@@ -215,3 +215,10 @@ class HoldoutFreeze(Base):
     snapshot_storage_key: Mapped[str | None]
     frozen_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     frozen_by: Mapped[str]
+    near_dup_image_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('near_dup_runs.id', ondelete='SET NULL')
+    )
+    near_dup_item_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('near_dup_runs.id', ondelete='SET NULL')
+    )
+    moved_by_near_dup: Mapped[int] = mapped_column(Integer, server_default='0')
