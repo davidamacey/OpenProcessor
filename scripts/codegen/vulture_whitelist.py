@@ -184,3 +184,9 @@ _.list_all  # src/routers/curation/research_configs.py, GET /{kind}
 _.get_one  # src/routers/curation/research_configs.py, GET /{kind}/{name}
 _.put_one  # src/routers/curation/research_configs.py, PUT /{kind}/{name}
 _.delete_one  # src/routers/curation/research_configs.py, DELETE /{kind}/{name}
+
+# The job runtime's timing constants (lane 3A); each line goes with its first production reader.
+_.LEASE_TTL_S  # src/domain/job_timing.py, read by the claim and the heartbeat thread
+_.HEARTBEAT_TICK_S  # src/domain/job_timing.py, read by the heartbeat thread
+_.FENCE_MARGIN_S  # src/domain/job_timing.py, read by the heartbeat thread's may_write
+_.PROGRESS_MIN_INTERVAL_S  # src/domain/job_timing.py, read by the progress throttle
