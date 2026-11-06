@@ -102,3 +102,8 @@ _.ALL_STEPS  # the registry the next-steps completeness test enumerates
 _.PlanReport  # src/schemas/processing_plan.py, response model of the plan-aware routes (P2)
 _.ProcessingPlan  # src/schemas/processing_plan.py, request model of the plan-aware routes (P2)
 _.to_request  # ProcessingPlan.to_request, called by the route that parses the plan (P2)
+
+# Landed ahead of their callers (B2 stage 1): the storage seam is first used by the repository and
+# job lanes of stage 2 onward. Delete these entries when the first production caller lands.
+_.build_rooted_store  # src/clients/storage/roots.py, the BlobStore every storage consumer builds
+_.storage_root_paths  # src/config/storage.py, the physical roots build_rooted_store maps
