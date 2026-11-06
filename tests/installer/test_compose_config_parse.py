@@ -65,7 +65,9 @@ def parse(fn: str, text: str) -> list[str]:
 def test_container_names_match_the_real_config(tmp_path: Path) -> None:
     text = real_config(tmp_path)
     cfg = json.loads(text)
-    expected = sorted(s['container_name'] for s in cfg['services'].values())
+    expected = sorted(
+        s['container_name'] for s in cfg['services'].values() if 'container_name' in s
+    )
     assert sorted(parse('compose_config_container_names', text)) == expected
     assert all(n.startswith('opinst-test-') for n in expected)
 
