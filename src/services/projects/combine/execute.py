@@ -31,6 +31,7 @@ from src.services.projects.combine.image_copy import CopyContext, copy_page
 from src.services.projects.combine.mapping import CombineMapping
 from src.services.projects.combine.models import CombineRequest
 from src.services.projects.combine.plan import Analysis, duplicates_from_wire, duplicates_wire
+from src.services.projects.combine.spaces import plan_space_copy
 from src.utils.timeutil import now_iso
 
 
@@ -144,7 +145,6 @@ async def run_combine(
     plan: Plan,
     sources: list[ProjectRecord],
     target: ProjectRecord,
-    embedding_dim: int,
     settle: Callable[[bool], Awaitable[None]],
     enqueue_pending: PendingEnqueue,
 ) -> dict[str, Any] | None:
@@ -168,7 +168,7 @@ async def run_combine(
             target_ids=ids,
             names=[await class_names_by_id(r) for r in sources],
             fields=get_region_fields(),
-            embedding_dim=embedding_dim,
+            spaces=[await plan_space_copy(r, target) for r in sources],
             now=now_iso(),
             duplicates=plan.duplicates,
             originals=plan.originals,

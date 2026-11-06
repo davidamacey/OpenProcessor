@@ -6,7 +6,6 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from src.config.curation_accessors import get_curation_config
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.db.session import async_session_factory
@@ -45,9 +44,13 @@ _CLONE_AXES = ['settings_defaults', 'activations', 'prompt_packs']
 _SLUG_ERRORS = frozenset({'slug_taken', 'slug_retired', 'slug_invalid'})
 
 
-def target_embedding_dim() -> int:
-    """The vector size the target (the process-wide encoder) uses."""
-    return get_curation_config().encoder_embedding_dim
+def target_space_keys() -> frozenset[str]:
+    """The space keys a new target will have: its default encoder's (every project is created
+    with the default spaces)."""
+    from src.domain.embedding_spaces import space_key
+    from src.services.projects.store import DEFAULT_ENCODER
+
+    return frozenset({space_key(*DEFAULT_ENCODER)})
 
 
 def report_of(issues: list[CombineIssue]) -> ValidationReport:
@@ -75,7 +78,7 @@ async def preview(client: Any, request: CombineRequest) -> tuple[CombinePreview,
     slug_available = not any(e.code in _SLUG_ERRORS for e in errors)
     if len(records) != len(request.sources):
         return _unreadable(request, errors, warnings, slug_available), None
-    analysis = await analyze(client, request, records, target_dim=target_embedding_dim())
+    analysis = await analyze(client, request, records, target_keys=target_space_keys())
     states = [await source_state(client, r) for r in records]
     result = build_preview(
         analysis,

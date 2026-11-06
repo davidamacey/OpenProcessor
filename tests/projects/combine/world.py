@@ -18,12 +18,15 @@ from _class_registry_fake import registry_of
 from curation.query_fakes import QueryFakeOpenSearch
 from PIL import Image
 
+from src.clients.curation_opensearch.base import default_knn_spec
 from src.config.curation_accessors import base_curation_config
 from src.config.curation_roles import IndexRole
+from src.config.project_context import current_project
 from src.config.projects import ProjectRecord, new_project_record
+from src.domain.embedding_spaces import EmbeddingSpaceError, ResolvedSpace, Target, legacy_names
 from src.services.detection.geometry import crop_id as make_crop_id
 from src.services.projects import registry as registry_module
-from src.services.projects.combine import service as combine_service
+from src.services.projects.combine import service as combine_service, spaces as combine_spaces
 from src.services.projects.combine.models import CombineRequest
 from src.services.projects.registry import ProjectRegistry
 
@@ -34,6 +37,27 @@ if TYPE_CHECKING:
 
 NOW = '2026-10-01T00:00:00+00:00'
 DIM = 4
+DEFAULT_KEY = 'pe_core_l14_336_v1'
+
+
+def legacy_space(target: Target, key: str = DEFAULT_KEY, dim: int = DIM) -> ResolvedSpace:
+    """A project's primary space of ``target`` with the 0.6.0 physical names, as the registry
+    serves it."""
+    names = legacy_names(target)
+    return ResolvedSpace(
+        space_key=key,
+        target=target,
+        vector_field=names.vector_field,
+        state_field=names.state_field,
+        nested_path=names.nested_path,
+        dim=dim,
+        index_role='images' if target is Target.FRAME else 'items',
+        model_key=key.rsplit('_v', 1)[0],
+        model_version=1,
+        triton_image_model=None,
+        triton_text_model=None,
+        knn_method=default_knn_spec(),
+    )
 
 
 def jpeg_bytes(seed: int) -> bytes:
@@ -78,12 +102,23 @@ class World:
         self.registry = StubRegistry(self.records)
         monkeypatch.setattr(registry_module, '_REGISTRY', self.registry)
         self._seed = 0
-        monkeypatch.setattr(combine_service, 'target_embedding_dim', lambda: DIM)
+        monkeypatch.setattr(combine_service, 'target_space_keys', lambda: frozenset({DEFAULT_KEY}))
+        monkeypatch.setattr(combine_spaces, 'embedding_space', self._embedding_space)
+        self.space_keys: dict[str, str] = {}
+        """slug -> the space key of that project's primary spaces (default: ``DEFAULT_KEY``)."""
         self.settled: list[bool] = []
         self.pending: list[tuple[str, list[str]]] = []
         # set by a db test: every project then gets a real projects row under its own slug (the
         # test starts from an empty projects table, as pg_registry leaves it)
         self.pg: Any = None
+
+    async def _embedding_space(self, target: Target, key: str | None = None) -> ResolvedSpace:
+        """``embedding_space`` for the bound project: its primary space, or the live one named
+        ``key`` (there is exactly one per target)."""
+        held = self.space_keys.get(current_project().record.slug, DEFAULT_KEY)
+        if key is not None and key != held:
+            raise EmbeddingSpaceError('embedding_space_not_found', f'no live space {key}')
+        return legacy_space(target, held)
 
     async def _client(self) -> QueryFakeOpenSearch:
         return self.fake
@@ -376,7 +411,6 @@ async def run_job(
             plan=load_plan(params, document),
             sources=sources,
             target=target,
-            embedding_dim=DIM,
             settle=settle,
             enqueue_pending=enqueue,
         )

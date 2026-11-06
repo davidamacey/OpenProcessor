@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from src.services.curation.dataset_import.project_source import SourceImage
     from src.services.projects.combine.mapping import CombineMapping
     from src.services.projects.combine.models import CombineRequest
+    from src.services.projects.combine.spaces import SpaceCopy
 
 _BULK_BATCH = 500
 PendingEnqueue = Callable[[str, list[str]], Awaitable[None]]
@@ -56,7 +57,8 @@ class CopyContext:
     target_ids: dict[str, int]
     names: list[dict[int, str]]
     fields: RegionFields
-    embedding_dim: int
+    spaces: list[SpaceCopy]
+    """Per source: which of its vectors the target can hold (:mod:`.spaces`)."""
     now: str
     duplicates: dict[tuple[int, str], tuple[int, str]]
     originals: dict[tuple[int, str], tuple[str, str]]
@@ -145,7 +147,7 @@ def _item_docs(
                 job_id=ctx.job_id,
                 origin_project=project,
                 now=ctx.now,
-                embedding_dim=ctx.embedding_dim,
+                spaces=ctx.spaces[source_index],
                 fields=ctx.fields,
             )
             ctx.counts['embeddings_dropped'] += dropped
@@ -253,7 +255,7 @@ async def _copy_image(
                 job_id=ctx.job_id,
                 origin_project=project,
                 now=ctx.now,
-                embedding_dim=ctx.embedding_dim,
+                spaces=ctx.spaces[source_index],
                 negative_for=negative_for,
             ),
         }

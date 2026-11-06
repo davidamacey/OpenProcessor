@@ -14,7 +14,6 @@ from sqlalchemy import select
 
 from src.db.models.datasets import CombineRun
 from src.services.projects import lifecycle
-from src.services.projects.combine import service
 from src.services.projects.combine.execute import load_plan, run_combine
 from src.services.projects.registry import get_project_registry
 
@@ -78,7 +77,6 @@ async def run_combine_job(ctx: JobContext, client: Any) -> dict[str, Any] | None
         plan=plan,
         sources=sources,
         target=target,
-        embedding_dim=service.target_embedding_dim(),
         settle=_settle_for(client, target),
         enqueue_pending=_enqueue_for(ctx),
     )

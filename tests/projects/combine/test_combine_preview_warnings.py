@@ -12,7 +12,7 @@ from src.services.config_store.documents import activate, save_config
 from src.services.projects.combine import service
 
 from .test_combine_preview import BOX
-from .world import DIM, World
+from .world import DEFAULT_KEY, DIM, World
 
 
 MAPPING = {
@@ -27,18 +27,18 @@ async def _warnings(world: World, **extra: Any) -> dict[str, Any]:
     return {w.code + (f':{w.project}' if w.project else ''): w for w in result.warnings}
 
 
-def _two_projects(world: World, *, b_dim: int = DIM) -> None:
+def _two_projects(world: World, *, b_key: str | None = None) -> None:
     for slug in ('a', 'b'):
         world.project(slug, ['car'])
+    if b_key is not None:
+        world.space_keys['b'] = b_key
     world.add_image('a', items=[{'cls': 'car', 'bbox': BOX}], vector=True)
-    world.add_image('b', items=[{'cls': 'car', 'bbox': BOX, 'pe_embedding': [0.3] * b_dim}])
+    world.add_image('b', items=[{'cls': 'car', 'bbox': BOX, 'pe_embedding': [0.3] * DIM}])
 
 
 @pytest.mark.asyncio
-async def test_a_source_vector_of_another_dimension_warns_with_its_item_count(
-    world: World,
-) -> None:
-    _two_projects(world, b_dim=DIM + 3)
+async def test_a_source_in_another_space_warns_with_its_item_count(world: World) -> None:
+    _two_projects(world, b_key='mobileclip2_s2_v1')
     found = await _warnings(world)
     assert 'embedding_model_mismatch:a' not in found
     warning = found['embedding_model_mismatch:b']
@@ -46,13 +46,20 @@ async def test_a_source_vector_of_another_dimension_warns_with_its_item_count(
     assert warning.detail == {
         'project': 'b',
         'items': 1,
-        'source_dim': DIM + 3,
-        'target_dim': DIM,
+        'source_space': 'mobileclip2_s2_v1',
+        'target_spaces': [DEFAULT_KEY],
     }
 
 
 @pytest.mark.asyncio
-async def test_matching_vector_dimensions_do_not_warn(world: World) -> None:
+async def test_the_same_dimension_in_another_space_still_warns(world: World) -> None:
+    """The check compares space keys: a model with the target's dimension is still another model."""
+    _two_projects(world, b_key='other_model_v2')
+    assert 'embedding_model_mismatch:b' in await _warnings(world)
+
+
+@pytest.mark.asyncio
+async def test_matching_space_keys_do_not_warn(world: World) -> None:
     _two_projects(world)
     assert not [c for c in await _warnings(world) if c.startswith('embedding_model_mismatch')]
 

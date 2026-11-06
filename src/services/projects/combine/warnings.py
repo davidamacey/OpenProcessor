@@ -8,11 +8,12 @@ import hashlib
 import json
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
+from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import embedded_clause
 from src.services.projects.combine.models import CombineIssue
+from src.services.projects.combine.spaces import primary_space
 
 
 if TYPE_CHECKING:
@@ -22,48 +23,42 @@ if TYPE_CHECKING:
 _HAS_VECTOR = embedded_clause()
 
 
-async def _stored_vector_dim(client: Any, record: ProjectRecord) -> tuple[int, int | None]:
-    """``(items with a vector, the vector length of one of them)``. The index
-    mapping fixes one dimension per index, so one sample speaks for all."""
+async def _items_with_vectors(client: Any, record: ProjectRecord) -> int:
     index = record.resources.indexes[IndexRole.ITEMS]
     with bind_project(record, read_only=True):
-        count = (await client.count(index=index, body={'query': _HAS_VECTOR})).get('count') or 0
-        if not count:
-            return 0, None
-        resp = await client.search(
-            index=index,
-            body={'size': 1, 'query': _HAS_VECTOR, '_source': [ITEM_EMBEDDING_FIELD]},
-        )
-    hits = (resp.get('hits') or {}).get('hits') or []
-    vector = (hits[0].get('_source') or {}).get(ITEM_EMBEDDING_FIELD) if hits else None
-    return int(count), len(vector) if isinstance(vector, list) else None
+        return int((await client.count(index=index, body={'query': _HAS_VECTOR})).get('count') or 0)
 
 
 async def embedding_model_mismatch(
-    client: Any, records: list[ProjectRecord], target_dim: int
+    client: Any, records: list[ProjectRecord], target_keys: frozenset[str]
 ) -> list[CombineIssue]:
-    """One warning per source whose stored vectors have a dimension the target
-    encoder does not produce. The executor (``transform_item``) drops those
-    vectors and defers the items for re-embedding; this reports the cost
-    first. Items carry no encoder id, so the dimension is the whole check."""
+    """One warning per source whose primary item space is not a space the target will have.
+
+    The comparison is by ``space_key`` (model and version), not by dimension: two models can
+    share a dimension and still produce vectors that mean different things. The executor
+    (``transform_item``) drops those vectors and defers the items for re-embedding; this reports
+    the cost first."""
     out: list[CombineIssue] = []
     for record in records:
-        count, dim = await _stored_vector_dim(client, record)
-        if dim is None or dim == target_dim:
+        held = await primary_space(record, Target.ITEM)
+        if held is None or held.space_key in target_keys:
+            continue
+        count = await _items_with_vectors(client, record)
+        if not count:
             continue
         out.append(
             CombineIssue(
                 code='embedding_model_mismatch',
                 severity='warning',
                 project=record.slug,
-                message=f"'{record.slug}' has up to {count} items embedded at {dim} "
-                f'dimensions; the target encoder uses {target_dim}. Those vectors are not '
-                'copied and the items are deferred for re-embedding',
+                message=f"'{record.slug}' has up to {count} items embedded in the space "
+                f"'{held.space_key}'; the target will not have it ({sorted(target_keys)}). "
+                'Those vectors are not copied and the items are deferred for re-embedding',
                 detail={
                     'project': record.slug,
                     'items': count,
-                    'source_dim': dim,
-                    'target_dim': target_dim,
+                    'source_space': held.space_key,
+                    'target_spaces': sorted(target_keys),
                 },
             )
         )
