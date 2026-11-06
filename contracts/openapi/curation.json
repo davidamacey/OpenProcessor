@@ -48281,6 +48281,346 @@
         ]
       }
     },
+    "/curation/projects/{project}/near_dup_profiles": {
+      "get": {
+        "operationId": "list_near_dup_profile_curation_projects__project__near_dup_profiles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/active": {
+      "get": {
+        "operationId": "active_near_dup_profile_curation_projects__project__near_dup_profiles_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "axis",
+            "required": false,
+            "schema": {
+              "default": "near_dup",
+              "title": "Axis",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Active Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/{name}": {
+      "delete": {
+        "operationId": "delete_near_dup_profile_curation_projects__project__near_dup_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      },
+      "get": {
+        "operationId": "get_near_dup_profile_curation_projects__project__near_dup_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      },
+      "put": {
+        "operationId": "put_near_dup_profile_curation_projects__project__near_dup_profiles__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchConfigPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/{name}/activate": {
+      "post": {
+        "operationId": "activate_near_dup_profile_curation_projects__project__near_dup_profiles__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
     "/curation/projects/{project}/open_vocab": {
       "get": {
         "operationId": "list_open_vocab_curation_projects__project__open_vocab_get",
