@@ -9,8 +9,9 @@ Defines request/response models for:
 
 from datetime import datetime
 from enum import Enum
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ExportFormat(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
@@ -141,3 +142,98 @@ class ModelDeleteResponse(BaseModel):
     deleted_files: list[str]
     unloaded_from_triton: bool
     message: str
+
+
+# --- Engine and encoder contracts (research seams S-1, S-2, X-5) -------------------------------
+# Stored as jsonb on model_engines and embedding_model_versions and validated on write and read,
+# so a decoder or kernel change is a contract diff instead of an edit hidden in two files.
+
+
+class _Contract(BaseModel):
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+
+class SizeRange(_Contract):
+    """A dynamic dimension as TensorRT optimization-profile ``min <= opt <= max``."""
+
+    min: int = Field(ge=1)
+    opt: int = Field(ge=1)
+    max: int = Field(ge=1)
+
+    @model_validator(mode='after')
+    def _ordered(self) -> Self:
+        if not self.min <= self.opt <= self.max:
+            msg = (
+                f'size range must satisfy min <= opt <= max, got {self.min}, {self.opt}, {self.max}'
+            )
+            raise ValueError(msg)
+        return self
+
+
+class NormalizeSpec(_Contract):
+    """``(pixel * scale - mean) / std`` per channel, applied outside the graph."""
+
+    mean: tuple[float, float, float]
+    std: tuple[float, float, float]
+    scale: float = Field(gt=0)
+
+
+class EngineInputContract(_Contract):
+    """Every pixel input of an engine: what a caller must produce for it."""
+
+    dtype: Literal['uint8', 'fp16', 'fp32']
+    layout: Literal['NCHW']
+    size: tuple[int | SizeRange, int | SizeRange] | SizeRange
+    color: Literal['RGB', 'BGR']
+    normalize: Literal['in_graph'] | NormalizeSpec
+    resize: Literal['letterbox', 'short_edge_center_crop', 'stretch', 'native_width']
+    interpolation: Literal['pil_bilinear', 'bilinear', 'area']
+    fill: int = Field(default=0, ge=0, le=255)
+    pad_split: Literal['floor_half', 'ultralytics_round'] | None = None
+    max_side: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode='after')
+    def _fixed_dims_positive(self) -> Self:
+        if isinstance(self.size, tuple) and any(isinstance(d, int) and d < 1 for d in self.size):
+            msg = 'a fixed size dimension must be at least 1'
+            raise ValueError(msg)
+        return self
+
+
+class EngineOutputContract(_Contract):
+    """What an engine returns, so consumers check the contract instead of the model name."""
+
+    kind: Literal['end2end_boxes', 'embedding', 'anchors_raw', 'ctc_logits', 'ctc_argmax']
+    shapes: list[list[int]] = Field(min_length=1)  # -1 marks a dynamic dimension
+    dtypes: list[Literal['uint8', 'int32', 'int64', 'fp16', 'fp32']] = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def _one_dtype_per_output(self) -> Self:
+        if len(self.shapes) != len(self.dtypes):
+            msg = 'shapes and dtypes must list the same outputs'
+            raise ValueError(msg)
+        return self
+
+
+class TextPrefixes(_Contract):
+    query: str = ''
+    document: str = ''
+
+
+class TextInputSpec(_Contract):
+    context_length: int = Field(ge=1)
+    prefixes: TextPrefixes = TextPrefixes()
+
+
+class EncoderInputSpec(_Contract):
+    """The logical encoder input; ``image`` is the contract of its ready Triton image engine."""
+
+    image: EngineInputContract | None = None
+    text: TextInputSpec | None = None
+
+    @model_validator(mode='after')
+    def _has_a_modality(self) -> Self:
+        if self.image is None and self.text is None:
+            msg = 'an encoder input spec needs an image or a text input'
+            raise ValueError(msg)
+        return self
