@@ -27,6 +27,7 @@ from src.db.models.projects import (
     ProjectIndex,
     ProjectSlug,
 )
+from src.domain.storage_keys import make_key
 
 
 if TYPE_CHECKING:
@@ -171,7 +172,7 @@ def _row(project: Project, indexes: Mapping[str, str]) -> ProjectRow:
         paused_by=project.paused_by,
         origin=project.origin,
         index_prefix=project.index_prefix,
-        storage_prefix=project.storage_prefix,
+        storage_prefix=make_key(*project.storage_prefix.split('/')),
         model_prefix=project.model_prefix,
         mlflow_experiment=project.mlflow_experiment,
         created_at=project.created_at,

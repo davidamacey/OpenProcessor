@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.clients.storage.keys import ROOT_NAMES, ParsedKey, make_key, parse_key
+from src.domain.storage_keys import ROOT_NAMES, ParsedKey, make_key, parse_key
 
 
 UNSAFE = 'unsafe storage|unknown storage root|max_side'
