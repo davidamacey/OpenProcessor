@@ -262,3 +262,17 @@ $PY scripts/research/near_dup/tiers.py perceptual --manifest <manifest.json> --v
 $PY scripts/research/near_dup/tiers.py cost --images <large images dir> --out cost.json
 $PY scripts/research/near_dup/report.py --raw artifacts_local/near_dup --out docs/benchmarks/near_duplicate_detection
 ```
+
+---
+
+## 7. Tier 2 registration (written 2026-11-06, before any tier-2 score)
+
+Requested by the coordinator after the tier-1 note: confirm the tier-1 cuts on a second seeded sample of the same size, through the live ingest route, and explain the harness-versus-live gap (finding 4).
+
+- Sample: 2,000 originals (1,000 COCO val2017 + 1,000 Open Images, the same local sources), seed `20261106`, **disjoint by SHA-256 from every tier-1 original and copy** and from every pin; the same 13 transforms, so 28,000 items; manifest `artifacts_local/near_dup/t2/near_dup_2000_t2.json`.
+- Stack: the compose files of the repository under project name `op-nd-t2` only, local images `openprocessor-local/*:main-5a155215`, Triton, API and OpenSearch only, GPU 0 only (`TRITON_GPU_ID=0`, `API_GPU_ID=0`), ports in a 146xx band, models copied to scratch (no write into the live checkout). Engines are the existing built plans; none is built. `docker compose -p op-nd-t2 down -v` at the end.
+- Routes: MobileCLIP (core space) through `POST /ingest/batch` (the route of `dedupe_r1.json`), vector read back from the stored `global_embedding`, and the route's own `duplicate_group_id` read back; PE through the live GPU-decode model `gpu_image_prep` (`whole_embedding`, the vector the curation ingest stores as `pe_embedding`) called on the same Triton, L2-normalised by the script. Both on the same files, in family order.
+- Budget: at most 15 GPU minutes with the lock held and 90 minutes of wall clock. Families are submitted in order so that a stop at the budget leaves complete families; the verdict is computed on the completed families only and the count is stated.
+- Verdict rule: cuts fixed from tier 1, nothing re-chosen. PE single linkage 0.925 and core (MobileCLIP) single linkage 0.965 are each **confirmed** when, on the tier-2 sample, they meet the four registered bars of section 1.8 against the control cosine 0.98 on the same vectors (false-group-rate point estimate <= 0.5 %; recall >= 0.90 on `T-q60` and `T-half`; >= 0.80 on `T-crop90`; no transform below the control). A cut that meets the point estimates but whose false-group Wilson upper bound exceeds 0.5 % is "confirmed on the point estimate, interval open".
+- Gap explanation: cosine of each live vector to the harness vector of the same file (median, minimum, per transform), then exact grouping on the live vectors at cosine 0.98 against the route's stored groups. Equal vectors with different groups point at the route (assignment, approximate search, refresh); different vectors point at decode, resize or the embedding.
+- Public data only; no set P.
