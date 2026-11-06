@@ -15,6 +15,7 @@ from src.clients.occ import OCCFinalConflictError
 from src.config import get_settings
 from src.config.faces import FacesDisabledError
 from src.core.cors import add_lan_cors
+from src.core.db_session import install_database_error_handlers
 from src.core.error_handlers import (
     faces_disabled_response,
     triton_deadline_response,
@@ -215,6 +216,7 @@ def create_app() -> FastAPI:
     application.exception_handler(TritonDeadlineError)(triton_deadline_response)
     application.exception_handler(UpstreamError)(upstream_unavailable_response)
     application.exception_handler(FacesDisabledError)(faces_disabled_response)
+    install_database_error_handlers(application)
 
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)

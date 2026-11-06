@@ -200,6 +200,19 @@ class PgDatabase:
     def engine(self, role: str = 'app', **kwargs: Any) -> Engine:
         return create_engine(self.url(role), **kwargs)
 
+    def environ(self) -> dict[str, str]:
+        """The OP_DB_* variables that point a process at this database."""
+        s = self.settings
+        return {
+            'OP_DB_HOST': s.host,
+            'OP_DB_DIRECT_HOST': s.direct_host,
+            'OP_DB_PORT': str(s.port),
+            'OP_DB_NAME': s.name,
+            'OP_DB_APP_PASSWORD_FILE': str(s.app_password_file),
+            'OP_DB_OWNER_PASSWORD_FILE': str(s.owner_password_file),
+            'OP_DB_SUPER_PASSWORD_FILE': str(s.super_password_file),
+        }
+
     def conninfo(self, role: str = 'app') -> str:
         u = self.url(role)
         return psycopg.conninfo.make_conninfo(
@@ -282,3 +295,17 @@ def two_sessions(pg: PgDatabase) -> Iterator[tuple[Session, Session]]:
         first.close()
         second.close()
         engine.dispose()
+
+
+@pytest.fixture
+def pg_env(pg: PgDatabase, monkeypatch: pytest.MonkeyPatch) -> Iterator[PgDatabase]:
+    """Point this process's settings at ``pg`` and drop the engines a test built."""
+    from src.db import engine as db_engine
+
+    for name, value in pg.environ().items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv('WEB_CONCURRENCY', '4')
+    yield pg
+    for engine in list(db_engine._engines.values()):  # test-only cache reset
+        (engine.sync_engine if hasattr(engine, 'sync_engine') else engine).dispose()
+    db_engine._engines.clear()
