@@ -13,6 +13,7 @@ from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 from src.services.projects.stats import project_stats
 
+from . import _promoted_seed as promoted_seed
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
@@ -49,7 +50,9 @@ def test_project_stats_counts_and_disk() -> None:
     registry = ProjectRegistry()
     set_project_registry(registry)
     asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars'))
+    asyncio.run(lifecycle.create_project(client, slug='dogs', display_name='Dogs'))
     asyncio.run(registry.ensure_fresh())
+    asyncio.run(promoted_seed.seed())
     record = registry.get('cars')
     assert record is not None
 
@@ -87,9 +90,7 @@ def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, mo
         ('cars__det_v2', 'cars'),
     ):
         (models / name).mkdir(parents=True)
-        import _fake_model_registry
-
-        _fake_model_registry.CURRENT.promote(name, owner=owner)
+        promoted_seed.stage(name, project=owner)
     monkeypatch.setattr(
         'src.services.training.triton_repo.resolve_triton_models_dir', lambda: models
     )
@@ -98,6 +99,8 @@ def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, mo
     registry = ProjectRegistry()
     set_project_registry(registry)
     asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars'))
+    asyncio.run(lifecycle.create_project(client, slug='dogs', display_name='Dogs'))
+    asyncio.run(promoted_seed.seed())
     asyncio.run(registry.ensure_fresh())
     record = registry.get('cars')
     assert record is not None

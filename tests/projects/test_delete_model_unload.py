@@ -14,6 +14,7 @@ from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 from src.services.training import triton_promote
 
+from . import _promoted_seed as promoted_seed
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 
@@ -38,13 +39,8 @@ def _env(tmp_path, monkeypatch):
 
 
 def _write_promote_json(tmp_path, model_name: str, *, project: str, shared: bool) -> None:
-    model_dir = tmp_path / 'triton_models' / model_name
-    model_dir.mkdir(parents=True, exist_ok=True)
-    import _fake_model_registry
-
-    _fake_model_registry.CURRENT.promote(
-        model_name, owner=project, shared_with=['someone_else'] if shared else []
-    )
+    (tmp_path / 'triton_models' / model_name).mkdir(parents=True, exist_ok=True)
+    promoted_seed.stage(model_name, project=project, shared=shared)
 
 
 def test_dry_run_reports_owned_promoted_model(tmp_path) -> None:
@@ -55,6 +51,7 @@ def test_dry_run_reports_owned_promoted_model(tmp_path) -> None:
         set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
+        await promoted_seed.seed()
 
         report = await lifecycle.dry_run_delete(client, slug='cars')
         assert report['promoted_models'] == ['cars__detector_v1']
@@ -75,6 +72,7 @@ def test_dry_run_reports_a_private_promoted_model_too(tmp_path) -> None:
         set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
+        await promoted_seed.seed()
 
         report = await lifecycle.dry_run_delete(client, slug='cars')
         assert report['promoted_models'] == ['cars__private_v1']
@@ -109,6 +107,7 @@ def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None
         set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
+        await promoted_seed.seed()
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
         deleting = await lifecycle.delete_project(slug='cars', confirm='cars', force=True)
@@ -144,6 +143,7 @@ def test_real_delete_unloads_a_private_promoted_model_with_no_force(tmp_path, mo
         set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
+        await promoted_seed.seed()
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
         # No force=True: a private model must never trip `in_use`.
