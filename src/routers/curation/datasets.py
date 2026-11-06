@@ -148,7 +148,7 @@ async def _import_service(
     if pe_encoder is None:
         raise api_error(503, 'config_store_unavailable', 'PE encoder not initialized')
     try:
-        profile = (await refreshed_ingest_profiles(opensearch)).primary
+        profile = (await refreshed_ingest_profiles()).primary
     except (ValueError, IngestProfileUnresolvedError) as exc:
         raise api_error(503, 'config_store_unavailable', f'ingest misconfigured: {exc}') from exc
     if need_detector and not profile.detector_model:

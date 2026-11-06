@@ -333,8 +333,8 @@ per box) with filters that all apply to the same box.
 ## Config store
 
 Prompt packs, region profiles and the VLM activation are **versioned data**,
-stored per project in the `configs` index (VLM endpoints are deployment-wide in
-`op_global_configs`).
+stored per project in PostgreSQL (`config_documents`, `config_revisions`,
+`config_activations`); VLM endpoints are deployment-wide documents of the same tables.
 
 - **Revisions.** Saving a named pack or profile writes a new revision; old
   revisions stay readable.

@@ -36,10 +36,13 @@ from src.db.models.config import (
 )
 from src.db.models.projects import DeploymentSetting, Project
 from src.db.repos.config_activations import (
+    ActiveBody,
     activate,
     get_activation,
     get_activations,
     list_activation_events,
+    list_active_bodies,
+    list_axis_state,
     load_activation_events,
 )
 from src.db.repos.config_base import (
@@ -80,6 +83,7 @@ __all__ = [
     'GLOBAL_EPOCH_COUNTER',
     'ActivationEvent',
     'ActivationEventLoad',
+    'ActiveBody',
     'ActiveConflictError',
     'ActiveRef',
     'AxisKindError',
@@ -108,6 +112,8 @@ __all__ = [
     'get_deployment_setting',
     'get_epoch',
     'list_activation_events',
+    'list_active_bodies',
+    'list_axis_state',
     'list_configs',
     'list_probes',
     'list_revisions',

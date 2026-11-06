@@ -12,12 +12,14 @@ place that owns "how a cross-project clone read is scoped."
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from src.config.projects import ProjectRecord
     from src.schemas.curation.config_common import ValidationReport
 
@@ -64,18 +66,17 @@ async def resolve_clone_source_project(from_project: str) -> ProjectRecord:
     return source_record
 
 
-async def read_source_record(
+async def read_source_record[T](
     *,
     from_project: str | None,
     target_slug: str,
-    opensearch: Any,
-    resolve: Any,
-) -> Any:
+    resolve: Callable[[], Awaitable[T]],
+) -> T:
     """Resolve the clone source record for either the local-project path
     (``from_project`` unset or equal to the target) or the cross-project
     path (bound read-only for the duration of ``resolve``).
 
-    ``resolve(opensearch)`` is an async callable that reads whichever
+    ``resolve()`` is an async callable that reads whichever
     axis-specific record (pack/profile) is being cloned, using
     ``get_config_store()`` for *whichever project is currently bound* --
     the caller doesn't need to know which project that is.
@@ -90,29 +91,22 @@ async def read_source_record(
 
     if not from_project or from_project == target_slug:
         store = get_config_store()
-        await store.ensure_fresh(opensearch)
-        return await resolve(opensearch)
+        await store.ensure_fresh()
+        return await resolve()
 
     source_record = await resolve_clone_source_project(from_project)
     with bind_project(source_record, read_only=True):
         source_store = get_config_store()
-        await source_store.ensure_fresh(opensearch)
-        source = await resolve(opensearch)
+        await source_store.ensure_fresh()
+        source = await resolve()
 
     # M-5 fix: the target's own store must be current after the
     # cross-project bind exits, not whatever this process last cached --
     # a stored name written by another worker/process is otherwise
     # invisible to the uniqueness check that runs right after this.
     target_store = get_config_store()
-    await target_store.ensure_fresh(opensearch)
+    await target_store.ensure_fresh()
     return source
-
-
-def cloned_from_tag(*, source_project: str, name: str, revision: int | None) -> str:
-    """``'<project>:<name>[@<revision>]'`` provenance tag (no ``@`` part for a
-    template, which has no revision) both clone
-    routes stamp on the new record's ``cloned_from``."""
-    return f'{source_project}:{name}' + (f'@{revision}' if revision is not None else '')
 
 
 def cloned_description(requested: str | None, source_description: str) -> str:
@@ -120,14 +114,13 @@ def cloned_description(requested: str | None, source_description: str) -> str:
     shipped template's own description is not inherited."""
     if requested is not None:
         return requested
-    from src.services.config_store.index import TEMPLATE_DESCRIPTION
+    from src.services.config_store.documents import TEMPLATE_DESCRIPTION
 
     return '' if source_description == TEMPLATE_DESCRIPTION else source_description
 
 
 __all__ = [
     'cloned_description',
-    'cloned_from_tag',
     'read_source_record',
     'resolve_clone_source_project',
 ]

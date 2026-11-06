@@ -52,6 +52,7 @@ PROJECT_STATE_KEYS = (
     'region_drain',
     'region_dependency_health',
     'vlm_external_ack',
+    'open_vocab_gate',
 )
 
 

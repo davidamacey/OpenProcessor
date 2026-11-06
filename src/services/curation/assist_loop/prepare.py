@@ -56,11 +56,10 @@ async def prepare_loop(opensearch: AsyncOpenSearch, request: AssistLoopRequest) 
     pack_name, pack_revision = await resolve_run_prompt_pack(opensearch, request.prompt_pack)
     pack = resolve_pack(pack_name, pack_revision)
     vlm = await resolve_run_vlm(
-        opensearch, request.vlm, pack=pack, acknowledge_external=request.acknowledge_external
+        request.vlm, pack=pack, acknowledge_external=request.acknowledge_external
     )
     require_run_vlm(vlm)
     audit_vlm = await resolve_audit_vlm(
-        opensearch,
         request.audit.vlm,
         pack=pack,
         acknowledge_external=request.audit.acknowledge_external,

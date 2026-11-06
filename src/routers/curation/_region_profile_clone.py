@@ -5,18 +5,16 @@ ratchet (same pattern as ``_models_sharing.py``/``models.py``).
 
 from __future__ import annotations
 
-from typing import Any
-
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._common import router
 from src.routers.curation._region_profile_models import RegionProfileCloneRequest, RegionProfileDoc
 from src.services.config_store import RevisionConflictError
 from src.services.config_store.clone_shared import (
     cloned_description,
-    cloned_from_tag,
     read_source_record,
     reject_invalid_clone_name,
 )
+from src.services.config_store.documents import CloneSource
 from src.services.config_store.profile_validation import validate_profile
 from src.services.config_store.profiles import (
     ProfileRecord,
@@ -29,10 +27,10 @@ from src.services.curation.class_registry_names import registry_class_names
 
 
 async def _resolve_clone_source(
-    client: Any, *, name: str, revision: int | None, source: str | None
+    *, name: str, revision: int | None, source: str | None
 ) -> ProfileRecord:
     if source == 'stored' and revision is not None:
-        record = await get_revision_record(client, name, revision)
+        record = await get_revision_record(name, revision)
         if record is None:
             raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
         return record
@@ -42,7 +40,7 @@ async def _resolve_clone_source(
             raise api_error(404, 'not_found', f'{name!r} has no {source} source')
         return record
     if revision is not None:
-        record = await get_revision_record(client, name, revision)
+        record = await get_revision_record(name, revision)
         if record is not None:
             return record
     record = build_record(name, revision=revision)
@@ -52,24 +50,19 @@ async def _resolve_clone_source(
 
 
 @router.post('/region_profiles/{name}/clone', response_model=RegionProfileDoc, status_code=201)
-async def clone_region_profile(
-    name: str, body: RegionProfileCloneRequest, opensearch: OpenSearchDep
-) -> RegionProfileDoc:
+async def clone_region_profile(name: str, body: RegionProfileCloneRequest) -> RegionProfileDoc:
     from src.config import get_curation_config
     from src.routers.curation.region_profiles import _to_doc
     from src.services.detection.segmenter_health import configured_segmenter_health
 
     target_slug = get_curation_config().project_slug
 
-    async def _resolve(client: Any) -> ProfileRecord:
-        return await _resolve_clone_source(
-            client, name=name, revision=body.revision, source=body.source
-        )
+    async def _resolve() -> ProfileRecord:
+        return await _resolve_clone_source(name=name, revision=body.revision, source=body.source)
 
     source = await read_source_record(
         from_project=body.from_project,
         target_slug=target_slug,
-        opensearch=opensearch,
         resolve=_resolve,
     )
 
@@ -104,12 +97,11 @@ async def clone_region_profile(
             422, 'validation_failed', 'the cloned profile has content errors', report=report
         )
 
-    cloned_from = cloned_from_tag(
-        source_project=body.from_project or target_slug, name=name, revision=source.revision
+    cloned_from = CloneSource(
+        body.from_project or target_slug, 'region_profile', name, source.revision
     )
     try:
         record = await save_profile(
-            opensearch,
             name=body.new_name,
             body=new_body,
             expected_revision=None,

@@ -410,7 +410,7 @@ async def region_statuses() -> dict[str, Any]:
 
 
 @router.get('/regions/vocabulary', response_model=RegionVocabularyResponse)
-async def regions_vocabulary(opensearch: OpenSearchDep) -> dict[str, Any]:
+async def regions_vocabulary() -> dict[str, Any]:
     """The deployment-configured detector/segmenter/verifier vocabulary.
 
     ``{detectors: [{id, label, role, filterable}], region_sources:
@@ -426,5 +426,5 @@ async def regions_vocabulary(opensearch: OpenSearchDep) -> dict[str, Any]:
     with contextlib.suppress(Exception):
         # Best-effort: the verifier entries come from the endpoint registry;
         # an unreachable store just leaves them out.
-        await refresh_vlm_state(opensearch)
+        await refresh_vlm_state()
     return region_vocabulary_catalog()

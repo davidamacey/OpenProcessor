@@ -111,10 +111,10 @@ def project_ingest_profiles() -> IngestProfiles:
     )
 
 
-async def refreshed_ingest_profiles(client: Any) -> IngestProfiles:
+async def refreshed_ingest_profiles() -> IngestProfiles:
     """:func:`project_ingest_profiles` after refreshing the snapshot when it is
     over a second old, so an activation made through another worker is seen."""
-    await get_config_store().ensure_fresh(client)
+    await get_config_store().ensure_fresh()
     return project_ingest_profiles()
 
 

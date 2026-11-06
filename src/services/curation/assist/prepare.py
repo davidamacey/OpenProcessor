@@ -144,7 +144,6 @@ async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) ->
     _check_pack(request, pack)
     await _check_classes(request)
     vlm = await resolve_run_vlm(
-        opensearch,
         request.vlm,
         pack=pack,
         acknowledge_external=request.acknowledge_external,

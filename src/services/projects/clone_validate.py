@@ -104,7 +104,7 @@ async def _validate_clone(
 
         with bind_project(target_record):
             target_store = get_config_store()
-            await target_store.ensure_fresh(client)
+            await target_store.ensure_fresh()
             if target_store.current.packs:
                 raise rejection(
                     409,
@@ -154,45 +154,36 @@ async def _validate_clone(
         #     the ensuing `ActiveConflictError`/`RevisionConflictError`.
         #     Fix: check the source's active NAME (per axis) against the
         #     target's config-store snapshot for either kind, up front.
-        from opensearchpy.exceptions import NotFoundError
-
         from src.services.config_store import get_config_store
-        from src.services.config_store.index import ConfigAxis, ConfigKind, get_activation
+        from src.services.config_store.documents import (
+            ConfigAxis,
+            ConfigKind,
+            current_revision,
+            read_activation,
+        )
 
         activation_axes: tuple[ConfigAxis, ...] = ('prompt_pack', 'detection_profile')
 
-        with bind_project(source, read_only=True):
-            from src.config import get_curation_config as _get_src_cfg
-
-            source_index = _get_src_cfg().configs_index
-            source_active_names: dict[ConfigAxis, str | None] = {}
-            # the revision goes
-            # with the name below, both needed to re-resolve the
-            # SOURCE's exact activated body for the target-context gate
-            # check.
-            source_active_refs: dict[ConfigAxis, tuple[str, int | None] | None] = {}
-            for axis in activation_axes:
-                src_activation = await get_activation(client, source_index, axis)
-                src_name = (src_activation or {}).get('name')
-                source_active_names[axis] = src_name
-                source_active_refs[axis] = (
-                    (src_name, (src_activation or {}).get('revision')) if src_name else None
-                )
+        source_active_names: dict[ConfigAxis, str | None] = {}
+        # the revision goes with the name below, both needed to re-resolve the SOURCE's exact
+        # activated body for the target-context gate check.
+        source_active_refs: dict[ConfigAxis, tuple[str, int | None] | None] = {}
+        for axis in activation_axes:
+            src_activation = await read_activation(source.slug, axis)
+            src_name = src_activation.name if src_activation is not None else None
+            source_active_names[axis] = src_name
+            source_active_refs[axis] = (
+                (src_name, src_activation.revision)
+                if src_name and src_activation is not None
+                else None
+            )
 
         with bind_project(target_record):
-            from src.config import get_curation_config as _get_cfg
-
-            target_index = _get_cfg().configs_index
             target_store = get_config_store()
-            await target_store.ensure_fresh(client)
+            await target_store.ensure_fresh()
             for axis in activation_axes:
-                # `get_activation` already maps a
-                # real (or fake -- tests/projects/conftest.py's
-                # ``FakeLifecycleOpenSearch.get`` now raises like the real
-                # client) 404 to `None` itself; nothing here can still
-                # raise `NotFoundError`/`KeyError`.
-                existing = await get_activation(client, target_index, axis)
-                if existing and existing.get('name'):
+                existing = await read_activation(target_record.slug, axis)
+                if existing is not None and existing.name:
                     raise rejection(
                         409,
                         'target_not_empty',
@@ -201,15 +192,9 @@ async def _validate_clone(
                         project=target_record.slug,
                     )
                 # `activate()`'s own OCC check compares `expected_active`
-                # against exactly `{'name':..., 'revision':...}` built
-                # from the stored doc, not the raw `_source` (which also
-                # carries `doc_type`/`axis`/`activated_at`/`previous`) --
-                # normalize the same way here so this genuinely matches.
-                target_activations[axis] = (
-                    {'name': existing.get('name'), 'revision': existing.get('revision')}
-                    if existing is not None
-                    else None
-                )
+                # against exactly `{'name':..., 'revision':...}` -- present
+                # the same shape here so this genuinely matches.
+                target_activations[axis] = existing.as_expected() if existing is not None else None
 
                 source_name = source_active_names.get(axis)
                 if source_name:
@@ -222,18 +207,10 @@ async def _validate_clone(
                     # `_clone_activations`'s `save_config(...,
                     # expected_revision=None)` would then partially write
                     # before hitting `RevisionConflictError`. Read the
-                    # specific doc straight from the client instead of
+                    # document straight from the database instead of
                     # trusting the cached snapshot.
-                    from src.services.config_store.index import config_doc_id
-
                     kind: ConfigKind = 'prompt_pack' if axis == 'prompt_pack' else 'region_profile'
-                    doc_id = config_doc_id(kind, source_name)
-                    try:
-                        await client.get(index=target_index, id=doc_id)
-                        name_taken = True
-                    except NotFoundError:
-                        name_taken = False
-                    if name_taken:
+                    if await current_revision(kind=kind, name=source_name) is not None:
                         raise rejection(
                             409,
                             'target_not_empty',
@@ -253,7 +230,6 @@ async def _validate_clone(
             )
 
             await check_activation_pair_in_target_context(
-                client,
                 source=source,
                 target_record=target_record,
                 source_active_refs=source_active_refs,
@@ -268,13 +244,12 @@ async def _validate_clone(
     for named in (OPEN_VOCAB, INGEST_PROFILE):
         if named.axis in resolved_axes:
             target_activations[named.axis] = await validate_named_axis_clone(
-                client, axis=named, target_record=target_record
+                axis=named, target_record=target_record
             )
     if 'vlm_activation' in resolved_axes:
         from src.services.projects.clone_vlm import validate_vlm_activation_clone
 
         target_activations['vlm'] = await validate_vlm_activation_clone(
-            client,
             source=source,
             target_record=target_record,
             with_activations='activations' in resolved_axes,

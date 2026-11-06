@@ -86,7 +86,7 @@ async def _resolve_pack_pin(
         # refreshes when it needs to.
         from src.services.config_store import get_config_store
 
-        await get_config_store().ensure_fresh(opensearch)
+        await get_config_store().ensure_fresh()
     if prompt_pack_resolved:
         return prompt_pack, prompt_pack_revision, prompt_pack_omitted
     # A direct synchronous call (never ``prompt_pack_resolved``, even with an explicit
@@ -272,7 +272,7 @@ async def run_auto_label(
     reject_detection_profile(detection_profile)
     if isinstance(vlm, str) and not vlm_resolved and not run_vlm:
         # Refused even when this run has no VLM stage, as /start does.
-        await resolve_run_vlm(opensearch, vlm, pack=None, acknowledge_external=acknowledge_external)
+        await resolve_run_vlm(vlm, pack=None, acknowledge_external=acknowledge_external)
     prompt_pack, prompt_pack_revision, prompt_pack_omitted = await _resolve_pack_pin(
         opensearch,
         prompt_pack,

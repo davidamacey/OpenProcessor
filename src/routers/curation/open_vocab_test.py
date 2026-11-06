@@ -61,7 +61,7 @@ async def test_open_vocab_target(
             pil = decode_upload(body.image_base64)
     except TrialImageError as exc:
         raise api_error(422, 'validation_failed', str(exc)) from exc
-    vlm_visible = await active_vlm_visible(opensearch) if body.gating.tier2_vlm_precheck else None
+    vlm_visible = await active_vlm_visible() if body.gating.tier2_vlm_precheck else None
     try:
         outcome = await run_open_vocab_test(
             opensearch,

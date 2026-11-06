@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._common import OpenSearchDep, get_class_registry, router
+from src.routers.curation._common import get_class_registry, router
 from src.services.curation.reprocess_vocabulary import (
     VocabEntry,
     filter_field_vocabulary,
@@ -288,7 +288,7 @@ async def _build_segmenter() -> list[SegmenterEntry]:
     ]
 
 
-async def _build_vlm(opensearch: Any) -> VlmBlock:
+async def _build_vlm() -> VlmBlock:
     """The ``vlm`` block from the endpoint registry (the ``env`` built-in
     among the entries); ``active`` is the BOUND project's."""
     from src.services.config_store import get_config_store
@@ -302,7 +302,7 @@ async def _build_vlm(opensearch: Any) -> VlmBlock:
     from src.services.labeling.vlm_url_policy import acompute_locality
 
     with contextlib.suppress(Exception):
-        await refresh_vlm_state(opensearch)
+        await refresh_vlm_state()
     try:
         active = active_vlm_endpoint()
     except VlmEndpointUnavailableError:
@@ -421,15 +421,13 @@ def _build_model_choices(detectors: list[DetectorEntry], ocr: OcrBlock) -> list[
 
 
 @router.get('/config/vocabulary', response_model=ConfigVocabularyResponse)
-async def get_config_vocabulary(
-    opensearch: OpenSearchDep, include_other_projects: bool = False
-) -> ConfigVocabularyResponse:
+async def get_config_vocabulary(include_other_projects: bool = False) -> ConfigVocabularyResponse:
     detectors = await _build_detectors(include_other_projects=include_other_projects)
     ocr = await _build_ocr()
     return ConfigVocabularyResponse(
         detectors=detectors,
         segmenters=await _build_segmenter(),
-        vlm=await _build_vlm(opensearch),
+        vlm=await _build_vlm(),
         ocr=ocr,
         model_choices=_build_model_choices(detectors, ocr),
         text_reader_modes=_build_text_reader_modes(),

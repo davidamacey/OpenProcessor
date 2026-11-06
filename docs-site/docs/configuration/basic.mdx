@@ -41,8 +41,8 @@ configuration changed. For one service, run
 |---|---|---|
 | `.env` (this page and [Advanced](./advanced.mdx)) | Ports, GPU ids, model names, source mounts, limits, the paths projects are created under | A text editor, then recreate the container |
 | Project record | A project's OpenSearch index names, class registry, export root, upload root, bake-off roots and job directories. Fixed when the project is created | `POST /curation/projects` |
-| Project config store (a `configs` index per project) | Prompt packs, region profiles, the active VLM endpoint, the keymap, strategy defaults, with revisions and rollback | `/curation/projects/{project}/prompt_packs`, `/region_profiles`, `/vlm/endpoints`, `/keymap`, `/settings` |
-| Global config store (`op_global_configs`) | The VLM endpoint registry, shared by every project | `/curation/vlm/endpoints` |
+| Project config store (PostgreSQL tables) | Prompt packs, region profiles, the active VLM endpoint, the keymap, strategy defaults, with revisions and rollback | `/curation/projects/{project}/prompt_packs`, `/region_profiles`, `/vlm/endpoints`, `/keymap`, `/settings` |
+| Global config store (deployment-wide documents in PostgreSQL) | The VLM endpoint registry, shared by every project | `/curation/vlm/endpoints` |
 
 A project's paths are resolved once, at creation, from the variables in
 [Projects](./advanced.mdx#projects) and stored in its record. Changing

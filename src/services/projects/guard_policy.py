@@ -12,7 +12,6 @@ import contextvars
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
-from src.config.env import env_str
 from src.config.project_context import current_project, try_current_project
 from src.config.projects import project_index_prefix
 from src.services.projects.guard_errors import ProjectReadOnly, _refuse
@@ -45,31 +44,6 @@ def bind_index_inventory_read() -> Generator[None, None, None]:
         yield
     finally:
         _INDEX_INVENTORY.reset(token)
-
-
-_GLOBAL_CONFIGS_READ: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    'op_global_configs_read', default=False
-)
-
-
-@contextmanager
-def global_configs_read() -> Generator[None, None, None]:
-    """Allow READS of the ``op_global_configs`` registry (the VLM
-    endpoint registry) while a project is bound. Project-scoped code
-    (a run's ``?vlm=``, the worker's per-project runtime) resolves the
-    deployment-wide endpoints through the config store, which enters this
-    for its own reads only; a write to that index while bound is still
-    refused (global routes run unbound), and so is any raw access outside
-    the block."""
-    token = _GLOBAL_CONFIGS_READ.set(True)
-    try:
-        yield
-    finally:
-        _GLOBAL_CONFIGS_READ.reset(token)
-
-
-def _global_configs_index() -> str:
-    return env_str('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
 
 
 _READ = frozenset({'GET', 'HEAD'})
@@ -162,12 +136,6 @@ def _check_targets(
         if owner is None:
             if name.startswith(project_index_prefix()):
                 raise _refuse(f'{name!r} belongs to no known project', target=name)
-            if bound is not None and name == _global_configs_index() and not write:
-                if _GLOBAL_CONFIGS_READ.get():
-                    continue
-                raise _refuse(
-                    f'{name!r} is readable while bound only through the config store', target=name
-                )
             if bound is not None:
                 raise _refuse(f'{name!r} is not an index of the bound project', target=name)
             continue

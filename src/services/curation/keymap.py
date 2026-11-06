@@ -2,7 +2,7 @@
 
 The action registry (``src/config/keymap_actions.json``) is static data
 shared by every project. What varies per project is the *override map*
-stored on the project's ``configs`` index (doc id ``keymap:default``):
+stored in the project's ``project_keymaps`` row:
 ``{action_id: [combo, ...]}``. The effective keymap is defaults (+)
 overrides.
 

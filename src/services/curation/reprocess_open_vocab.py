@@ -50,11 +50,11 @@ logger = get_logger(__name__)
 MAX_CONSECUTIVE_OUTAGES = 3
 
 
-async def current_active_set(opensearch: AsyncOpenSearch) -> tuple[OpenVocabSet, int | None] | None:
+async def current_active_set() -> tuple[OpenVocabSet, int | None] | None:
     """The activated set and revision (read fresh from the config store), or
     ``None`` when none is active."""
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     ov = active_open_vocab_set()
     ref = store.current.active_open_vocab
     if ov is None or not isinstance(ref, tuple):
@@ -62,10 +62,10 @@ async def current_active_set(opensearch: AsyncOpenSearch) -> tuple[OpenVocabSet,
     return ov, ref[1]
 
 
-async def active_set_for_run(opensearch: AsyncOpenSearch) -> tuple[OpenVocabSet, int | None]:
+async def active_set_for_run() -> tuple[OpenVocabSet, int | None]:
     """:func:`current_active_set`, or :class:`ReprocessTargetsError` when none
     is active: a run never guesses or defaults a set."""
-    found = await current_active_set(opensearch)
+    found = await current_active_set()
     if found is None:
         raise ReprocessTargetsError('no open-vocabulary set is active; activate one first')
     return found
@@ -75,7 +75,7 @@ async def plan_open_vocab_scope(
     opensearch: AsyncOpenSearch, image_ids: list[str], not_found: int
 ) -> ReprocessScopeResult:
     """The dry-run result of the scope (read-only)."""
-    ov, _revision = await active_set_for_run(opensearch)
+    ov, _revision = await active_set_for_run()
     targets = len(ov.enabled_targets)
     url = first_segmenter_url()
     instances = await segmenter_instances(url) if url else None
@@ -134,7 +134,6 @@ class OpenVocabPass:
     @classmethod
     async def start(
         cls,
-        opensearch: AsyncOpenSearch,
         ov: OpenVocabSet,
         revision: int | None,
         segment: SegmentImage,
@@ -146,17 +145,17 @@ class OpenVocabPass:
         windows when ``tier3_hit_rate`` is on."""
         gate = GateContext()
         if ov.gating.tier2_vlm_precheck:
-            gate.vlm_visible = await active_vlm_visible(opensearch)
+            gate.vlm_visible = await active_vlm_visible()
             if gate.vlm_visible is None:
                 result.detail['vlm_precheck_unavailable'] = 1
         if ov.gating.tier3_hit_rate.enabled:
-            gate.tracker = await load_tracker(opensearch)
+            gate.tracker = await load_tracker()
         return cls(ov, revision, segment, result, gate)
 
-    async def finish(self, opensearch: AsyncOpenSearch) -> None:
+    async def finish(self) -> None:
         """Persist what the pass learned (tier-3 windows)."""
         if self.gate.tracker is not None:
-            await save_tracker(opensearch, self.gate.tracker)
+            await save_tracker(self.gate.tracker)
 
     @property
     def tripped(self) -> bool:

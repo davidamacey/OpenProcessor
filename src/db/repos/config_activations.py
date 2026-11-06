@@ -8,13 +8,20 @@ from "off".
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import and_, delete, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
-from src.db.models.config import ConfigActivation, ConfigActivationEvent, ConfigDocument
+from src.db.models.config import (
+    ConfigActivation,
+    ConfigActivationEvent,
+    ConfigDocument,
+    ConfigRevision,
+)
+from src.db.models.projects import Project
 from src.db.repos.config_base import (
     AXIS_KIND,
     DEFAULT_ACTOR,
@@ -150,9 +157,8 @@ async def activate(
     previous_revision = held.revision if held else None
 
     if config_id is None:
-        if held is None:
-            raise ActiveConflictError(None)
-        await _cas_delete(session, project_id, axis, held)
+        if held is not None:
+            await _cas_delete(session, project_id, axis, held)
         target_id, target_revision = None, None
     else:
         if revision is None:
@@ -308,3 +314,74 @@ async def load_activation_events(
                 activated_by=event.by,
             )
         )
+
+
+@dataclass(frozen=True)
+class ActiveBody:
+    """One project's active document on an axis, at the pinned revision."""
+
+    slug: str
+    name: str
+    revision: int
+    body: dict[str, Any]
+
+
+async def list_active_bodies(session: AsyncSession, axis: str) -> list[ActiveBody]:
+    """The pinned body each project that is not being deleted has activated on ``axis``."""
+    rows = await session.execute(
+        select(Project.slug, ConfigDocument.name, ConfigActivation.revision, ConfigRevision.body)
+        .select_from(ConfigActivation)
+        .join(Project, Project.id == ConfigActivation.project_id)
+        .join(ConfigDocument, ConfigDocument.id == ConfigActivation.config_id)
+        .join(
+            ConfigRevision,
+            and_(
+                ConfigRevision.config_id == ConfigActivation.config_id,
+                ConfigRevision.revision == ConfigActivation.revision,
+            ),
+        )
+        .where(ConfigActivation.axis == axis, Project.status != 'deleting')
+        .order_by(Project.slug)
+    )
+    return [ActiveBody(*r) for r in rows.all()]
+
+
+async def list_axis_state(session: AsyncSession, axis: str) -> dict[str, ActiveRef | None]:
+    """``slug -> activation`` of ``axis`` for every project not being deleted.
+
+    ``None`` means the project never activated the axis; an ``off`` ref means it switched it off.
+    """
+    slugs = dict(
+        (
+            await session.execute(
+                select(Project.id, Project.slug).where(Project.status != 'deleting')
+            )
+        ).all()
+    )
+    out: dict[str, ActiveRef | None] = dict.fromkeys(slugs.values())
+    named = await session.execute(
+        select(
+            ConfigActivation.project_id,
+            ConfigDocument.id,
+            ConfigDocument.name,
+            ConfigActivation.revision,
+        )
+        .join(ConfigDocument, ConfigDocument.id == ConfigActivation.config_id)
+        .where(ConfigActivation.axis == axis)
+    )
+    held: set[uuid.UUID] = set()
+    for project_id, config_id, name, revision in named.all():
+        if project_id in slugs:
+            held.add(project_id)
+            out[slugs[project_id]] = ActiveRef(
+                axis, 'active', config_id, AXIS_KIND[axis], name, revision
+            )
+    ever = await session.execute(
+        select(ConfigActivationEvent.project_id)
+        .where(ConfigActivationEvent.axis == axis)
+        .distinct()
+    )
+    for (project_id,) in ever.all():
+        if project_id in slugs and project_id not in held:
+            out[slugs[project_id]] = ActiveRef(axis, 'off')
+    return out

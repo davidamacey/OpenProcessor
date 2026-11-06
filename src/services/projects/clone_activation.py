@@ -24,39 +24,21 @@ class ActivatedConfig:
     body: Any
 
 
-async def read_activated_config(
-    client: Any, record: ProjectRecord, axis: Any, kind: Any
-) -> ActivatedConfig | None:
-    """The config ``record`` has ACTIVE on ``axis``: its name, revision and
-    the body that was activated (the immutable ``<kind>:<name>@<rev>`` copy,
-    not whatever ``<kind>:<name>`` holds now, which diverges once the source
-    saves again without reactivating). ``None`` when the axis is off, unset,
-    an env/file id that was never stored (no revision copy), or its revision
-    copy is gone. A malformed stored doc raises."""
-    from opensearchpy.exceptions import NotFoundError
+async def read_activated_config(record: ProjectRecord, axis: Any) -> ActivatedConfig | None:
+    """The config ``record`` has ACTIVE on ``axis``: its name, revision and the body that was
+    activated (the immutable revision, not whatever the document holds now, which diverges once
+    the source saves again without reactivating). ``None`` when the axis is off, unset, or its
+    revision is gone."""
+    from src.services.config_store.documents import read_activation
 
-    from src.config import get_curation_config
-    from src.services.config_store.index import config_doc_id, get_activation
-
-    with bind_project(record, read_only=True):
-        index = get_curation_config().configs_index
-        activation = await get_activation(client, index, axis)
-        if not activation or not activation.get('name'):
-            return None
-        name = activation['name']
-        revision = activation.get('revision')
-        try:
-            stored = await client.get(index=index, id=config_doc_id(kind, name, revision))
-        except NotFoundError:
-            return None
-    body = (stored.get('_source') or {}).get('body')
-    if body is None:
+    read = await read_activation(record.slug, axis)
+    # a registered config (no revision) is not copied: the target has it already
+    if read is None or read.name is None or read.revision is None or read.body is None:
         return None
-    return ActivatedConfig(name=name, revision=revision, body=body)
+    return ActivatedConfig(name=read.name, revision=read.revision, body=read.body)
 
 
 async def _clone_activations(
-    client: Any,
     *,
     target_record: ProjectRecord,
     source: ProjectRecord,
@@ -72,24 +54,26 @@ async def _clone_activations(
     project. Never raises on "nothing to clone" -- only on a genuine
     write failure."""
 
-    from src.services.config_store.index import ConfigAxis, ConfigKind, activate, save_config
+    from src.services.config_store.documents import ConfigAxis, ConfigKind, activate, save_config
 
     axis_kinds: tuple[tuple[ConfigAxis, ConfigKind], ...] = (
         ('prompt_pack', 'prompt_pack'),
         ('detection_profile', 'region_profile'),
     )
     for axis, kind in axis_kinds:
-        activated = await read_activated_config(client, source, axis, kind)
+        activated = await read_activated_config(source, axis)
         if activated is None:
             continue
         name, body = activated.name, activated.body
         revision = activated.revision
 
         with bind_project(target_record):
-            from src.config import get_curation_config as _get_cfg
-            from src.services.config_store.index import ActiveConflictError, RevisionConflictError
+            from src.services.config_store.documents import (
+                ActiveConflictError,
+                CloneSource,
+                RevisionConflictError,
+            )
 
-            target_index = _get_cfg().configs_index
             # the fix
             # re-read the target store's cache here to detect a sibling
             # `prompt_packs` axis write, but that cache has a 1s TTL
@@ -126,16 +110,14 @@ async def _clone_activations(
                 if sibling_written is not None and sibling_written.body == body:
                     revision = sibling_written.revision
                 else:
-                    doc = await save_config(
-                        client,
-                        target_index,
+                    saved, _ = await save_config(
                         kind=kind,
                         name=name,
                         body=body,
                         expected_revision=sibling_written.revision if sibling_written else None,
-                        cloned_from=source.slug,
+                        cloned_from=CloneSource(source.slug, kind, name, activated.revision),
                     )
-                    revision = doc['revision']
+                    revision = saved.revision
                 # N3 fix: use the REAL existing target doc captured during
                 # validation (`_validate_clone`) as `expected_active`,
                 # not a bare `None` -- a target that once deactivated this
@@ -144,12 +126,11 @@ async def _clone_activations(
                 # raised a false 409 here, after every other axis had
                 # already committed.
                 await activate(
-                    client,
-                    target_index,
                     axis=axis,
                     name=name,
                     revision=revision,
                     expected_active=(target_activations or {}).get(axis),
+                    reason='clone',
                 )
             except RevisionConflictError as exc:
                 raise rejection(

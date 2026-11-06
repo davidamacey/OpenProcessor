@@ -42,12 +42,6 @@ def _preflight() -> None:
 
     faces_enabled()
 
-    # A global config index name inside the project namespace is a
-    # misconfiguration: refuse to start rather than serve a broken store.
-    from src.services.config_store.global_store import global_configs_index
-
-    global_configs_index()
-
     # The lifespan runs unbound; steps that touch project data bind each
     # project in turn (src.services.projects.bootstrap). Resolve the region
     # profile before serving: a bad profile file fails startup up front.

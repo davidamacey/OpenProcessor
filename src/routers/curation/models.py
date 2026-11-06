@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from src.config import get_curation_config
 from src.config.env import env_str
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, logger, router
+from src.routers.curation._common import logger, router
 from src.routers.curation._models_class_mapping import (
     bound_registry,
     dedupe_triton_rows,
@@ -92,12 +92,12 @@ def _parse_triton_metrics(text: str) -> dict[str, dict[str, float]]:
     return out
 
 
-async def _models_other_projects_run(opensearch: Any) -> frozenset[str]:
+async def _models_other_projects_run() -> frozenset[str]:
     """The models other projects' active ingest profiles run (the listing's
     ``is_region_protected`` flag); 503 when a project cannot be read, since the
     flag would otherwise under-report."""
     try:
-        return await models_run_by_other_projects(opensearch, get_curation_config().project_slug)
+        return await models_run_by_other_projects(get_curation_config().project_slug)
     except (OpenSearchException, OSError, RuntimeError) as exc:
         raise api_error(
             503,
@@ -108,7 +108,6 @@ async def _models_other_projects_run(opensearch: Any) -> frozenset[str]:
 
 @router.get('/models/status')
 async def models_status(
-    opensearch: OpenSearchDep,
     include_other_projects: Annotated[
         bool,
         Query(description="Also list other projects' promoted models their owners shared"),
@@ -148,7 +147,7 @@ async def models_status(
         except httpx.HTTPError as exc:
             logger.warning('models_status_metrics_failed', error=str(exc))
 
-    used_elsewhere = await _models_other_projects_run(opensearch)
+    used_elsewhere = await _models_other_projects_run()
 
     def _build_triton_entry(
         name: str,
@@ -327,7 +326,6 @@ class UnloadModelResponse(BaseModel):
 @router.delete('/models/{model_name}', response_model=UnloadModelResponse)
 async def unload_model(
     model_name: str,
-    opensearch: OpenSearchDep,
     force: Annotated[
         bool,
         Query(description='Bypass the region-detector / core-pipeline / ingest-detector guard'),
@@ -361,7 +359,6 @@ async def unload_model(
         is_core = await check_unload(
             model_name,
             force=force,
-            client=opensearch,
             own_project=get_curation_config().project_slug,
         )
     except UnloadRefusedError as exc:
@@ -369,7 +366,7 @@ async def unload_model(
 
     if not force:
         try:
-            ingest = await refreshed_ingest_profiles(opensearch)
+            ingest = await refreshed_ingest_profiles()
         except Exception as exc:
             raise api_error(
                 503,

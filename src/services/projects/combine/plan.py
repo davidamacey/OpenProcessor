@@ -386,7 +386,7 @@ async def analyze(
             )
         )
     warnings.extend(await embedding_model_mismatch(client, records, target_dim))
-    warnings.extend(await region_profiles_differ(client, request, records))
+    warnings.extend(await region_profiles_differ(request, records))
     return Analysis(
         request=request,
         records=records,

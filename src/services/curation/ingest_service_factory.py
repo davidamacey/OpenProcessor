@@ -25,7 +25,7 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
             detail='PE encoder not initialized; ingest is unavailable until app startup completes',
         )
     try:
-        profiles = await refreshed_ingest_profiles(opensearch)
+        profiles = await refreshed_ingest_profiles()
     except (ValueError, IngestProfileUnresolvedError) as exc:
         raise RequestRejectedError(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
     profile, secondary = profiles.primary, profiles.secondary
