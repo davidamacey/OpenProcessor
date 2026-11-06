@@ -130,3 +130,12 @@ def test_worker_init_rejects_retired_env(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv('VLM_URL', 'http://x')
     with pytest.raises(RuntimeError, match='VLM_URL'):
         _on_worker_init()
+
+
+def test_workers_use_the_transport_that_survives_a_collected_connection(worker_conf: Any) -> None:
+    from src.tasks.app import app
+    from src.tasks.runtime.redis_transport import Transport
+
+    assert worker_conf.broker_transport == gpu_app.BROKER_TRANSPORT
+    with app.connection_for_read() as connection:
+        assert type(connection.transport) is Transport
