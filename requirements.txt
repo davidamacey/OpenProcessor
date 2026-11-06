@@ -1,13 +1,14 @@
 # Core Web Framework
 fastapi==0.162.0  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
-uvicorn[standard]>=0.41.0
-python-multipart
-orjson  # 2-3x faster JSON encoding/decoding vs stdlib json
-pydantic-settings  # Pydantic v2 settings management
+uvicorn[standard]==0.54.0
+python-multipart==0.0.33
+orjson==3.13.0  # 2-3x faster JSON encoding/decoding vs stdlib json
+pydantic==2.14.3  # same pin as requirements-test.txt: fastapi only floors it and the OpenAPI contract depends on the exact release
+pydantic-settings==2.16.2  # Pydantic v2 settings management
 
 # YOLO and Triton
 ultralytics==8.4.197  # exact: the export head changed inside 8.4.x (#447), so a range lets builds differ; 8.4.174+ is needed for torch_safe_load(safe_only=True) on uploads. Keep requirements-test.txt and pyproject.toml on the same pin. The YOLO11 EfficientNMS export toolchain stays isolated in /opt/venv-y11 (requirements-export-y11.txt) until the single-version move in docs/design/model_family_versions_plan.md.
-tritonclient[all]
+tritonclient[all]==2.74.0
 
 # ONNX runtime stack. The engine-build toolchain (TensorRT, ModelOpt, onnxsim, ...) is NOT here:
 # it ships only in the export image (requirements-export.txt).
@@ -29,42 +30,42 @@ numpy
 scipy
 
 # HTTP Client
-requests
-aiohttp
-httpx
-httpcore  # imported directly by src/services/labeling/vlm_pinning.py (pinned VLM transport)
+requests==2.34.2
+aiohttp==3.14.5
+httpx==0.28.1
+httpcore==1.0.9  # imported directly by src/services/labeling/vlm_pinning.py (pinned VLM transport)
 
 # src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
-boto3
-botocore
+boto3==1.43.125
+botocore==1.43.125
 
 # Benchmarking and Visualization
 matplotlib
 seaborn
 pandas
-psutil
-tqdm
-tabulate
+psutil==7.2.2
+tqdm==4.70.1
+tabulate==0.10.0
 
 # Configuration
-pyyaml
+pyyaml==6.0.3
 
 # Structured Logging
-cachetools>=7.2  # Bounded TTL/LRU per-process caches (src/services/curation/, settings_doc.py)
-structlog>=24.1.0  # Structured logging with context and JSON output
-tenacity>=8.2  # Retry/backoff for src/services/labeling/vlm_client.py (VLM HTTP calls)
+cachetools==7.3.0  # Bounded TTL/LRU per-process caches (src/services/curation/, settings_doc.py)
+structlog==26.1.0  # Structured logging with context and JSON output
+tenacity==9.2.1  # Retry/backoff for src/services/labeling/vlm_client.py (VLM HTTP calls)
 
 # Metrics
-prometheus-client>=0.20  # /metrics exposition + HTTP latency histogram
+prometheus-client==0.26.0  # /metrics exposition + HTTP latency histogram
 
 # OpenSearch for Visual Search
-opensearch-py>=2.3.0  # Async OpenSearch client with k-NN support
+opensearch-py==3.2.0  # Async OpenSearch client with k-NN support
 transformers>=4.30.0  # CLIP tokenizer for text-to-image search
 
 # MobileCLIP dependencies
 timm  # pytorch-image-models - required for MobileCLIP architecture
 huggingface_hub  # For downloading MobileCLIP checkpoints
-ftfy  # Text cleaning for CLIP tokenizer (required by open_clip)
+ftfy==6.3.1  # Text cleaning for CLIP tokenizer (required by open_clip)
 # F-13(b) (fresh-start E2E findings 2026-09-25): >=2.24.0 resolved to
 # 2.32.0 in the built image, which has no MobileCLIP2 configs at all
 # ("Model config for MobileCLIP2-S2 not found") -- native MobileCLIP2-S2
@@ -80,22 +81,22 @@ cupy-cuda12x>=14.2,<15
 faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)
 
 # Duplicate Detection
-imohash  # Fast constant-time image hashing (48KB sampled, ~1ms for any file size)
+imohash==1.1.0  # Fast constant-time image hashing (48KB sampled, ~1ms for any file size)
 
 # Perception Encoder (PE) runtime deps. The `perception_models` package
 # itself (top-level `core`) is installed by the Dockerfile with --no-deps:
 # its own requirements exact-pin ~30 research packages (timm==1.0.15,
 # numpy==2.1.2, wandb, lm-eval, ...) that conflict with open-clip-torch>=3.2
 # (timm>=1.0.17). core.vision_encoder only needs the packages below.
-einops
-regex
+einops==0.8.2
+regex==2026.9.29
 
 # Curation Clustering (lazily imported -- ImportError only surfaces on first
 # call to a clustering endpoint if these are missing from the image)
 scikit-learn  # src/services/curation/clustering/orchestrator.py, methods/ahc.py, backend.py; scripts/curation/bakeoff/sample.py
 umap-learn  # src/services/curation/clustering/embedding_reduce.py, umap_state.py, backend.py; src/services/curation/embedding_viz.py
 hdbscan  # src/services/curation/clustering/methods/hdbscan.py
-joblib  # src/services/curation/clustering/umap_state.py, embedding_viz.py
+joblib==1.6.0  # src/services/curation/clustering/umap_state.py, embedding_viz.py
 
 # GPU arbiter (src/services/training/gpu_arbiter.py): stops/starts
 # GPU-resident sibling containers (docker.sock mount, OP_GPU_ARBITER_*)
@@ -103,4 +104,4 @@ joblib  # src/services/curation/clustering/umap_state.py, embedding_viz.py
 # same device. S-5 (full_stack_audit.md): without this package, every
 # call falls back to a sentinel-only pause that never actually stops
 # anything -- fail-open. Pin the SDK, not "docker" the CLI wrapper.
-docker>=7,<8
+docker==7.2.0

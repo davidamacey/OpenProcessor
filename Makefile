@@ -301,6 +301,10 @@ contracts: ## Regenerate the committed API contracts under contracts/
 contracts-check: ## Fail if any committed API contract under contracts/ is stale
 	$(PYTHON) scripts/codegen/generate_contracts.py --check
 
+.PHONY: gate
+gate: ## Run the local gate: installs, then the py and fe tracks in parallel (scripts/dev/gate.sh)
+	scripts/dev/gate.sh all
+
 # ==================================================================================
 # Release (local, not CI -- see installer plan §11.1 item 2)
 # ==================================================================================

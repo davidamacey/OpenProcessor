@@ -101,3 +101,143 @@ def test_tensorrt_pin_matches_the_triton_image_everywhere() -> None:
     (version,) = re.findall(r'^ARG TRT_VERSION=(\S+)', triton, re.M)
     assert _pinned_trt('requirements-export.txt') == version
     assert _pinned_trt('requirements-export-y11.txt') == version
+
+
+# ---------------------------------------------------------------------------
+# Exact pins, identical across manifests (ENV-11; docs/design/v070_rebuild/01_package_pins.md
+# section 5). pip-style requirement lines are parsed by hand: `packaging` is not a test dep
+# and only name, extras and the `==` version matter here.
+# ---------------------------------------------------------------------------
+
+_REQ_RE = re.compile(
+    r'^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[(?P<extras>[^\]]*)\])?\s*(?P<spec>.*)$'
+)
+
+# Packages the pin series has not reached yet (part B of the series). SHRINK-ONLY: part B
+# deletes each name in the commit that pins it, and its last commit leaves this empty. A
+# name here that no manifest declares loosely any more is rejected below, so a pinned
+# package cannot stay on the list.
+_UNPINNED_UNTIL_PART_B = frozenset(
+    {
+        'numpy',
+        'scipy',
+        'scikit-learn',
+        'umap-learn',
+        'hdbscan',
+        'pandas',
+        'matplotlib',
+        'seaborn',
+        'opencv-python',
+        'simplejpeg',
+        'transformers',
+        'timm',
+        'huggingface-hub',
+        'open-clip-torch',
+        'torch',
+        'torchvision',
+        'onnx',
+        'onnxruntime',
+        'onnxruntime-gpu',
+        'cupy-cuda12x',
+        'faiss-cpu',
+        'faiss-gpu-cu12',
+        # Pillow is imported directly but declared nowhere yet; part B adds `Pillow==...`
+        # together with simplejpeg (it decodes images).
+        'pillow',
+    }
+)
+_NOT_YET_DECLARED = frozenset({'pillow'})
+
+# One distribution family, one version: the extra or build differs, the release must not.
+_VERSION_FAMILIES = {
+    'onnxruntime-gpu': 'onnxruntime',
+    'opencv-python-headless': 'opencv-python',
+}
+# CPU and CUDA builds of faiss are versioned independently and never share a venv.
+_NO_SHARED_VERSION = frozenset({'faiss-cpu', 'faiss-gpu-cu12'})
+
+
+def _parse(line: str) -> tuple[str, str] | None:
+    text = line.split('#', 1)[0].strip()
+    if not text or text.startswith('-'):
+        return None
+    match = _REQ_RE.match(text.split(';', 1)[0].strip())
+    assert match, text
+    name = match['name'].lower().replace('_', '-')
+    return name, match['spec'].replace(' ', '')
+
+
+def _file_specs(path: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for ln in (ROOT / path).read_text(encoding='utf-8').splitlines():
+        if parsed := _parse(ln):
+            out[parsed[0]] = parsed[1]
+    return out
+
+
+def _pyproject_specs(group: str | None = None) -> dict[str, str]:
+    with (ROOT / 'pyproject.toml').open('rb') as f:
+        project = tomllib.load(f)['project']
+    deps = project['dependencies'] if group is None else project['optional-dependencies'][group]
+    return dict(p for d in deps if (p := _parse(d)))
+
+
+def _runtime_manifests() -> dict[str, dict[str, str]]:
+    return {
+        'requirements.txt': _file_specs('requirements.txt'),
+        'pyproject.toml': _pyproject_specs(),
+        'requirements-test.txt': _file_specs('requirements-test.txt'),
+    }
+
+
+def _family(name: str) -> str:
+    return _VERSION_FAMILIES.get(name, name)
+
+
+def test_exact_pins_are_identical_across_runtime_manifests() -> None:
+    versions: dict[str, dict[str, str]] = {}
+    for manifest, specs in _runtime_manifests().items():
+        for name, spec in specs.items():
+            if spec.startswith('==') and name not in _NO_SHARED_VERSION:
+                versions.setdefault(_family(name), {})[manifest] = spec
+    differing = {n: v for n, v in versions.items() if len(set(v.values())) > 1}
+    assert not differing, differing
+
+
+def test_dev_tools_match_between_pyproject_and_the_test_requirements() -> None:
+    dev = _pyproject_specs('dev')
+    tests = _file_specs('requirements-test.txt')
+    differing = {n: (s, tests[n]) for n, s in dev.items() if n in tests and s != tests[n]}
+    assert not differing, differing
+
+
+def test_ruff_pin_equals_the_pre_commit_rev() -> None:
+    config = (ROOT / '.pre-commit-config.yaml').read_text(encoding='utf-8')
+    (rev,) = re.findall(r'ruff-pre-commit\s*\n\s*rev:\s*v(\S+)', config)
+    assert _pyproject_specs('dev')['ruff'] == f'=={rev}'
+    assert _file_specs('requirements-test.txt')['ruff'] == f'=={rev}'
+
+
+def _loose_runtime_lines() -> set[str]:
+    """Names with a floor, a range or no version in any pinned manifest."""
+    loose = set()
+    groups = [*_runtime_manifests().values(), _pyproject_specs('dev')]
+    for specs in groups:
+        loose |= {n for n, s in specs.items() if not re.fullmatch(r'==[^,<>=!~]+', s)}
+    return loose
+
+
+def test_no_floor_and_no_unpinned_runtime_line_outside_part_b() -> None:
+    unexpected = sorted(_loose_runtime_lines() - _UNPINNED_UNTIL_PART_B)
+    assert not unexpected, f'pin these with == (owner rule, 01_package_pins.md): {unexpected}'
+
+
+def test_the_part_b_allowlist_only_shrinks() -> None:
+    stale = sorted(_UNPINNED_UNTIL_PART_B - _loose_runtime_lines() - _NOT_YET_DECLARED)
+    assert not stale, f'already pinned everywhere, delete from the allowlist: {stale}'
+
+
+def test_pydantic_is_declared_explicitly_in_every_runtime_manifest() -> None:
+    """fastapi only constrains pydantic loosely; the OpenAPI contract depends on the exact one."""
+    for manifest, specs in _runtime_manifests().items():
+        assert specs.get('pydantic', '').startswith('=='), manifest
