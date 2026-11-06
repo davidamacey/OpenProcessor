@@ -127,8 +127,10 @@ def test_class_sources_endpoint(clean_env: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 
 # Seeds a synthetic live-test dataset with its own fixed cohort values; not
-# a deployment writer.
-_SCAN_EXCLUDED = {'scripts/curation/seed_live_harness.py'}
+# a deployment writer. The 0.6.0 fixture generator writes 0.6.0-shaped data
+# on purpose ('detector' was a 0.6.0 source); it is the upgrade's input, not a
+# writer of this release.
+_SCAN_EXCLUDED = {'scripts/curation/seed_live_harness.py', 'scripts/db/make_v060_fixture.py'}
 
 _QUERY_KEYS = frozenset({'term', 'terms', 'match', 'match_phrase', 'prefix', 'wildcard'})
 
