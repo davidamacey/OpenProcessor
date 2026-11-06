@@ -252,9 +252,9 @@ the settings index), written with optimistic concurrency: every change is one ve
 read-modify-write that re-reads and re-applies on a conflict, so two users, an import, a
 combine and the open-vocabulary pass can add classes at once without losing one or giving
 two classes one id. `ensure_class` is idempotent by name for the automated writers. A 0.6.0
-`class_registry.json` is moved by `openprocessor curation migrate-registry` (run by
-`upgrade` and `repair`); until then the class routes answer 409 `registry_not_migrated`.
-The file is now only an export snapshot, the training pin and what a rollback writes back.
+`class_registry.json` is loaded into the database by the one-step control-data upgrade
+(`scripts/db/upgrade_from_060.py`, run by `openprocessor upgrade`). The file is now only an
+export snapshot and the training pin.
 See [opensearch_schema_design.md](opensearch_schema_design.md#the-class-registry).
 
 **Class identity is the name.** The class registry assigns indexes, but every boundary maps by

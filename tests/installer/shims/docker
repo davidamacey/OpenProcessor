@@ -22,7 +22,8 @@
 #   pg_dump / pg_restore / psql: `compose exec ... pg_dump` prints a fake custom-format header;
 #                       pg_restore and psql read stdin and need allow_mutations (they change data)
 #   compose_ps          the answer to `compose ps --format ...` (one line per service)
-#   migrate_fail        present -> a `compose run` of the class registry migration fails
+#   upgrade_fail        present -> a `compose run` of the 0.6.0 upgrade (scripts.db.upgrade_from_060) fails
+#   rollback_fail       present -> a `compose run` of the 0.6.0 rollback (scripts.db.rollback_to_060) fails
 #   up_hangs            present -> `compose up` creates up_started and blocks (a
 #                       long recreate a test can interrupt)
 # Writes mutations.log: every state-changing call, whether allowed or not.
@@ -261,8 +262,12 @@ JSON
             ;;
         run)
             refuse compose run
-            if [[ -e "${state}/migrate_fail" && " ${args[*]:-} " == *" scripts.curation.migrate_class_registry "* ]]; then
-                echo "class registry migration failed (shim)" >&2
+            if [[ -e "${state}/upgrade_fail" && " ${args[*]:-} " == *" scripts.db.upgrade_from_060 "* ]]; then
+                echo "0.6.0 upgrade failed (shim)" >&2
+                exit 1
+            fi
+            if [[ -e "${state}/rollback_fail" && " ${args[*]:-} " == *" scripts.db.rollback_to_060 "* ]]; then
+                echo "0.6.0 rollback failed (shim)" >&2
                 exit 1
             fi
             ;;

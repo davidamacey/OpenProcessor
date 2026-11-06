@@ -1,4 +1,4 @@
-"""If OpenSearch is unreachable when the API starts, the project bootstrap
+"""If the control database is unreachable when the API starts, the project bootstrap
 must keep retrying in the background, not give up for the life of the
 process. Before, one failed attempt meant no ``default`` record on a fresh
 install, no registry poll loop and no region-class seed."""
@@ -17,22 +17,24 @@ pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_retries_until_opensearch_is_reachable(
-    fake_registry_client: Any, monkeypatch: pytest.MonkeyPatch
+async def test_bootstrap_retries_until_the_database_is_reachable(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.services.projects import bootstrap, guard
+    from src.services.projects import bootstrap
 
     attempts = 0
 
-    async def _flaky_client() -> Any:
+    real = bootstrap.bootstrap_default_project
+
+    async def _flaky_bootstrap() -> Any:
         nonlocal attempts
         attempts += 1
         if attempts < 3:
-            raise ConnectionError('OpenSearch connection failed')
-        return fake_registry_client
+            raise ConnectionError('database connection failed')
+        return await real()
 
     seeded: list[str] = []
-    monkeypatch.setattr(guard, 'make_curation_opensearch', _flaky_client)
+    monkeypatch.setattr(bootstrap, 'bootstrap_default_project', _flaky_bootstrap)
     monkeypatch.setattr(bootstrap, '_BOOTSTRAP_RETRY_INITIAL_S', 0.01)
 
     async def _seed() -> None:

@@ -41,7 +41,6 @@ class LeaseKind(enum.StrEnum):
     COMBINE = 'combine'
     BULK_INGEST = 'bulk_ingest'
     SOURCE_SCAN = 'source_scan'
-    LEGACY_REPAIR = 'legacy_repair'
     LABEL_OP = 'label_op'
     LABEL_UNDO = 'label_undo'
     SELECTION = 'selection'

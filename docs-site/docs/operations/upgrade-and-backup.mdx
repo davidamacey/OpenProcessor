@@ -186,11 +186,11 @@ Rollback is not an `openprocessor` subcommand; call the installer script:
 ./setup-openprocessor.sh --rollback
 ```
 
-Before it restores any file it writes every project's class registry back to
-`class_registry.json` (`openprocessor curation migrate-registry --all --reverse`),
-so the older version sees every class, including the ones added after the
-0.7.0 migration. Without a running OpenSearch it says so and prints the command
-to run by hand.
+When the install was upgraded from 0.6.x, it first rebuilds the 0.6.0 control
+indexes and files from the newest upgrade bundle (`.install/upgrade-0.6.0-<utc>/`),
+checks them against the bundle, and then abandons the PostgreSQL data written
+since (it asks first). Classes, configurations and jobs created after the upgrade
+are not carried back.
 
 It restores the newest backup of a **different version** than the one
 installed and re-pins that version's images. Backups made by a same-version
@@ -200,18 +200,24 @@ not restore OpenSearch data. It restarts the stack unless you add `--no-start`; 
 rebuild engines with `./openprocessor models install`. If you also need the data from before the
 upgrade, restore your data backup (below).
 
-## The class registry moves to OpenSearch (0.7.0)
+## The control data moves to PostgreSQL (0.7.0)
 
-Since 0.7.0 each project's class registry is an OpenSearch document, not
-`class_registry.json`. `upgrade` and `repair` of an existing install migrate every
-project once the stack is healthy: a dry-run report first, then the migration, both
-saved under `.install/registry_migration/`. Every class id is kept and the file is
-renamed `class_registry.json.migrated` (never deleted). If the migration fails the
-installer exits 8 and names the report; until it passes, class routes answer
-`409 registry_not_migrated` (inference keeps working). A checkout upgrade
-(`git pull`, `make up`) must run `./openprocessor curation migrate-registry --all`
-itself. Per-write backups of the registry file (`class_registry.<timestamp>.json`) no
-longer exist: back up OpenSearch, and every export carries its own `class_registry.json`.
+Since 0.7.0 projects, class registries, configurations, activations, settings, label
+operations and job records live in PostgreSQL, not in OpenSearch documents and files.
+`upgrade` of a 0.6.x install moves them once, after the backup and before anything
+starts: it stops the stack, runs the database migrations, exports a bundle to
+`.install/upgrade-0.6.0-<utc>/`, loads it in one transaction, verifies the rows against
+the bundle and only then deletes the 0.6.0 control indexes and files. Every class id is
+kept. If the verify fails nothing is deleted: the installer names
+`UPGRADE_REPORT.json` in the bundle, and you fix the cause and run `upgrade` again, run
+`--rollback`, or load again with `python -m scripts.db.upgrade_from_060 --reset`. A
+project that activated a built-in (the `OP_VLM_URL` endpoint, a built-in or file prompt
+pack, an env or registered region profile) keeps it as a stored document at revision 1,
+built from the environment the upgrade runs in. If a built-in does not resolve there
+(for example `OP_VLM_URL` is unset, or a prompt pack file is missing), the upgrade stops
+before it changes anything and names it; restore the 0.6.0 setting and run it again. A checkout upgrade (`git pull`, `make up`) from 0.6.0
+runs the same step with `python -m scripts.db.upgrade_from_060`. Afterwards
+`./openprocessor db verify` reports class disagreements, missing indexes and storage.
 
 ## What lives where
 

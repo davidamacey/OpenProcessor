@@ -31,7 +31,12 @@ _INDEX_CONST_NAMES = {
 # API client wrapper (guarded by make_curation_opensearch) and the guard
 # module's own factories.
 _CLIENT_FACTORIES = frozenset(
-    {'src/clients/opensearch/client.py', 'src/services/projects/guard.py'}
+    {
+        'src/clients/opensearch/client.py',
+        'src/services/projects/guard.py',
+        # the 0.6.0 upgrade reads every project's control indexes, which the guard refuses
+        'src/services/upgrade/from_060/admin_client.py',
+    }
 )
 
 _CURATION_REQUEST_CODE = (
