@@ -108,6 +108,9 @@ _WIRE_NAME_RE = re.compile(
     + r')(?![A-Za-z0-9_])'
 )
 
+# A dotted import path of a repo module (``src.tasks.region_text``) is not a storage name.
+_MODULE_PATH_RE = re.compile(r'(?:src|scripts)(?:\.[A-Za-z_][A-Za-z0-9_]*)+')
+
 # path (relative, posix) -> {wire name: the exact number of times it is
 # spelled in that file}.
 LITERAL_ALLOWLIST: dict[str, dict[str, int]] = {
@@ -325,6 +328,8 @@ def _string_findings(tree: ast.AST) -> list[tuple[int, str]]:
             if isinstance(node, ast.Constant | ast.JoinedStr | ast.BinOp | ast.Call)
             else None
         )
+        if folded is not None and _MODULE_PATH_RE.fullmatch(folded):
+            return
         if folded is not None:
             found.extend((node.lineno, m.group(1)) for m in _WIRE_NAME_RE.finditer(folded))  # type: ignore[attr-defined]
             return
@@ -497,10 +502,26 @@ def test_the_scanner_catches_every_access_shape(snippet: str) -> None:
         "y = getattr(box, 'score')\n",
         'y = vars(box)\n',
         "y = src.get('region_' + name)\n",
+        # a dotted import path of a repo module is a module name, not a storage name
+        "TASK_MODULES = ('src.tasks.region_text',)\n",
+        "m = importlib.import_module('scripts.curation.region_score')\n",
     ],
 )
 def test_the_scanner_ignores_per_box_element_access_and_live_names(snippet: str) -> None:
     assert scan_source(snippet) == [], snippet
+
+
+@pytest.mark.parametrize(
+    'snippet',
+    [
+        "x = src.get('region_text')\n",
+        "x = 'doc.region_score'\n",
+        "x = 'srcx.region_text'\n",
+        "x = 'src.tasks.region_text = 1'\n",
+    ],
+)
+def test_a_module_path_exemption_does_not_hide_a_real_use(snippet: str) -> None:
+    assert scan_source(snippet), snippet
 
 
 def test_the_allowlist_exempts_exactly_its_literals() -> None:

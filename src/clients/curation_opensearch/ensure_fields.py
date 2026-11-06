@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Any
 from src.clients.curation_opensearch.base import (
     F,
     _is_recoverable_mapping_conflict,
-    _knn_field,
     config,
+    default_knn_spec,
+    knn_field_body,
     logger,
 )
 from src.clients.curation_opensearch.bodies_core import (
@@ -438,7 +439,7 @@ async def ensure_items_embedding_fields(
     index = config.items_index
     body = {
         'properties': {
-            'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
+            'pe_embedding': knn_field_body(default_knn_spec(), config.encoder_embedding_dim),
         }
     }
     try:

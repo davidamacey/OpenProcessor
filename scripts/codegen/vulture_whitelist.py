@@ -161,3 +161,17 @@ _.load_config_document  # src/db/repos/config.py, called by the 0.6.0 upgrade (l
 _.load_setting  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
 _.load_keymap  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
 _.put_keymap  # src/db/repos/settings.py, written by the keymap service (2C-5)
+
+# Embedding registry: public functions whose production callers land with the projects, config,
+# upgrade and re-index work. Delete each entry with its first production caller.
+_.sync_catalog  # src/services/embedding_spaces/catalog.py, called by scripts/db/migrate.py after Alembic
+_.embedding_space  # src/services/embedding_spaces/resolve.py, called by every vector reader
+_.note_config_epoch  # src/services/embedding_spaces/resolve.py, called by the config_epoch poll
+_.default_space_rows  # src/services/embedding_spaces/spaces.py, called by the project create and the upgrade
+_.add_spaces  # src/db/repos/embedding_spaces.py, called with default_space_rows by the project create and the upgrade
+_.register_space  # src/services/embedding_spaces/spaces.py, called by the space routes
+_.begin_build  # src/services/embedding_spaces/spaces.py, called by the re-index job
+_.mark_ready  # src/services/embedding_spaces/spaces.py, called by the re-index job
+_.retire_space  # src/services/embedding_spaces/spaces.py, called by the space routes
+_.finish_retire  # src/services/embedding_spaces/spaces.py, called by the re-index job in clear mode
+_.list_project_spaces  # src/services/embedding_spaces/spaces.py, called by the space routes

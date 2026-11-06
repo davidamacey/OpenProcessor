@@ -17,6 +17,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.tasks.runtime',  # the job wrapper claims a job by id before it knows the project
     'src.services.jobs',  # job start and status across scopes, reaper rules
     'src.services.projects',  # the project registry, create, patch, delete and its job
+    'src.services.embedding_spaces',  # the model catalog sync and the project lookup of the space resolver
     'src.services.upgrade',  # the 0.6.0 control-data step
     'src.services.config_store',  # resolves a slug to its id; deployment-wide endpoints and profiles
     'scripts.db',  # migration runner and db verify
