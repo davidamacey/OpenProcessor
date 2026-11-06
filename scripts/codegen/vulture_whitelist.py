@@ -185,28 +185,6 @@ _.get_one  # src/routers/curation/research_configs.py, GET /{kind}/{name}
 _.put_one  # src/routers/curation/research_configs.py, PUT /{kind}/{name}
 _.delete_one  # src/routers/curation/research_configs.py, DELETE /{kind}/{name}
 
-# The job runtime's timing constants (lane 3A); each line goes with its first production reader.
-_.LEASE_TTL_S  # src/domain/job_timing.py, read by the claim and the heartbeat thread
-_.HEARTBEAT_TICK_S  # src/domain/job_timing.py, read by the heartbeat thread
-_.FENCE_MARGIN_S  # src/domain/job_timing.py, read by the heartbeat thread's may_write
-_.PROGRESS_MIN_INTERVAL_S  # src/domain/job_timing.py, read by the progress throttle
-
-# src/db/repos/jobs.py (lane 3A): called by the job service and the task wrapper, which land in
-# the next commits of the lane; each line goes with its first production caller.
-_.heartbeat  # src/tasks/runtime/heartbeat.py
-_.interrupt  # src/tasks/runtime/job_task.py, worker shutdown
-_.pause_running  # src/tasks/runtime/job_task.py
-_.queue_yield  # src/tasks/runtime/job_task.py
-_.request_pause  # src/tasks/runtime/context.py, ctx.request_pause
-
-# src/services/jobs/service.py (lane 3A): the entry points the family lanes' routes and starters call.
-_.start_job  # src/services/jobs/service.py, called by every family's start route
-_.insert_job  # src/services/jobs/service.py, called by reaper rules e and i inside their transaction
-_.cancel_job  # src/services/jobs/service.py, called by every family's cancel route
-_.pause_job  # src/services/jobs/service.py, called by the pausable families' pause routes
-_.resume_job  # src/services/jobs/service.py, called by the pausable families' resume routes
-_.with_rows  # src/services/jobs/service.py, start_job's hook for the family's domain rows
-
 # STAND-IN, delete after lane 3B merges: this lane codes against a local copy of 3B's
 # src/db/repos/events.py (not committed); the callers of these functions live in 3B's listener
 # and SSE modules, which this branch does not have.
@@ -216,14 +194,11 @@ _.head_cursor  # src/db/repos/events.py (3B), called by src/services/events/sse.
 _.insert_event_async  # src/db/repos/events.py (3B), called by src/services/events/publish.py
 _.oldest_cursor  # src/db/repos/events.py (3B), called by src/services/events/sse.py
 _.project_id_for_slug  # src/db/repos/events.py (3B), called by src/services/events/sse.py
-_.delete_older_than  # src/db/repos/events.py (3B), called by reaper rule f (src/services/jobs/reaper.py, lane 3A)
 
-# src/tasks/runtime (lane 3A): wired by the task wrapper and register_job in the next commit.
-_.JobHeartbeat  # src/tasks/runtime/heartbeat.py, started by src/tasks/runtime/job_task.py
-_.DbInventoryWriter  # src/tasks/runtime/inventory.py, registered by register_job
-_.head_transaction  # src/tasks/runtime/scoped.py, the wrapper's first read
+# The job runtime's entry points that the family lanes (stages 4 and 5) call (lane 3A).
 _.__getattr__  # type: ignore[attr-defined]  # src/clients/__init__.py, PEP 562 module attribute hook
-_.resume_from  # src/tasks/runtime/context.py, read by the resumable handlers of stages 4 and 5
+_.pause_job  # src/services/jobs/service.py, called by the pausable families' pause routes
+_.resume_job  # src/services/jobs/service.py, called by the pausable families' resume routes
+_.resume_from  # src/tasks/runtime/context.py, read by the resumable handlers
 _.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist loop, re-index, backfill)
 _.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands
-_.register_job  # src/tasks/runtime/register.py, called by every family's task module
