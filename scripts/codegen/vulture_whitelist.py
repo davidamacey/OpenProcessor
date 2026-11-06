@@ -222,3 +222,8 @@ _.delete_older_than  # src/db/repos/events.py (3B), called by reaper rule f (src
 _.JobHeartbeat  # src/tasks/runtime/heartbeat.py, started by src/tasks/runtime/job_task.py
 _.DbInventoryWriter  # src/tasks/runtime/inventory.py, registered by register_job
 _.head_transaction  # src/tasks/runtime/scoped.py, the wrapper's first read
+_.__getattr__  # type: ignore[attr-defined]  # src/clients/__init__.py, PEP 562 module attribute hook
+_.resume_from  # src/tasks/runtime/context.py, read by the resumable handlers of stages 4 and 5
+_.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist loop, re-index, backfill)
+_.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands
+_.register_job  # src/tasks/runtime/register.py, called by every family's task module

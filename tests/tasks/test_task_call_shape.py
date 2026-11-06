@@ -25,9 +25,18 @@ def worker_app(queue_env: None):
     return app
 
 
-def test_noop_succeeds_with_the_args_enqueue_sends(worker_app) -> None:
-    result = worker_app.tasks['op.infra.noop'].apply(args=['job-1'], task_id='job-1')
-    assert result.successful(), result.traceback
+def test_noop_is_the_wrapper_task_of_its_kind(worker_app) -> None:
+    """``op.infra.noop`` runs through ``register_job``: the kind's limits, the job id as its argument.
+
+    Running it needs a claimed ``jobs`` row; ``tests/tasks/test_job_task_wrapper.py`` covers that
+    against a database.
+    """
+    from src.config.job_kinds import KINDS
+
+    task = worker_app.tasks['op.infra.noop']
+    assert task.soft_time_limit == KINDS['noop'].soft_limit_s
+    assert task.time_limit == KINDS['noop'].hard_limit_s
+    assert list(inspect.signature(task.run).parameters) == ['job_id']
 
 
 @pytest.mark.parametrize('name', sorted(ROUTES))

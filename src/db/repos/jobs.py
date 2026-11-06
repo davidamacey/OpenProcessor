@@ -258,18 +258,22 @@ class JobHead:
     id: uuid.UUID
     project_id: uuid.UUID | None
     kind: str
+    project_slug: str | None
     project_status: str | None
 
 
 def read_head(session: Session, job_id: uuid.UUID) -> JobHead | None:
     row = session.execute(
         text(
-            'SELECT j.id, j.project_id, j.kind, p.status AS project_status FROM jobs j '
+            'SELECT j.id, j.project_id, j.kind, p.slug AS project_slug, p.status AS project_status '
+            'FROM jobs j '
             'LEFT JOIN projects p ON p.id = j.project_id WHERE j.id = :id'
         ),
         {'id': job_id},
     ).first()
-    return None if row is None else JobHead(row.id, row.project_id, row.kind, row.project_status)
+    if row is None:
+        return None
+    return JobHead(row.id, row.project_id, row.kind, row.project_slug, row.project_status)
 
 
 @dataclass(frozen=True)
