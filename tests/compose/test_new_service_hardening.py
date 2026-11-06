@@ -26,8 +26,6 @@ PYTHON_SERVICES = (
 # Spike S0: the postgres entrypoint starts as root, chowns PGDATA, reads the mode-600 secret
 # (DAC_OVERRIDE) and drops to postgres (SETUID, SETGID). Without CHOWN or DAC_OVERRIDE it does not start.
 POSTGRES_CAPS = {'CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID'}
-# Valkey's wrapper copies the conf as root (DAC_OVERRIDE, CHOWN) and the image drops to valkey.
-VALKEY_CAPS = {'CHOWN', 'DAC_OVERRIDE', 'SETGID', 'SETUID'}
 
 
 def _svc(name: str) -> dict[str, Any]:
@@ -47,10 +45,13 @@ def test_python_services_run_with_no_capabilities(name: str) -> None:
     assert not svc.get('cap_add')
 
 
-@pytest.mark.parametrize(('name', 'caps'), [('postgres', POSTGRES_CAPS), ('valkey', VALKEY_CAPS)])
-def test_postgres_and_valkey_keep_only_the_capabilities_the_spike_measured(
-    name: str, caps: set[str]
-) -> None:
-    svc = _svc(name)
+def test_postgres_keeps_only_the_capabilities_the_spike_measured() -> None:
+    svc = _svc('postgres')
     assert svc['cap_drop'] == ['ALL']
-    assert set(svc['cap_add']) == caps
+    assert set(svc['cap_add']) == POSTGRES_CAPS
+
+
+def test_valkey_runs_as_a_plain_user_with_no_capability() -> None:
+    svc = _svc('valkey')
+    assert svc['cap_drop'] == ['ALL']
+    assert not svc.get('cap_add')

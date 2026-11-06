@@ -189,3 +189,17 @@ def test_config_show_redacts_the_password_file_settings(tmp_path: Path, key: str
     assert done.returncode == 0, done.stderr
     assert f'{key}=***' in done.stdout
     assert 'API_PORT=4603' in done.stdout
+
+
+def test_the_installing_users_ids_are_recorded_in_an_existing_env_and_kept(tmp_path: Path) -> None:
+    (tmp_path / '.env').write_text('API_PORT=4603\nOP_UID=4242\n')
+    assert _run(tmp_path, tmp_path)[0].returncode == 0
+    text = (tmp_path / '.env').read_text()
+    assert 'OP_UID=4242\n' in text, 'a value already there is never overwritten'
+    assert f'OP_GID={os.getgid()}\n' in text
+    assert 'API_PORT=4603\n' in text
+
+
+def test_no_env_file_is_created_just_for_the_ids(tmp_path: Path) -> None:
+    assert _run(tmp_path, tmp_path)[0].returncode == 0
+    assert not (tmp_path / '.env').exists()

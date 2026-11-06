@@ -209,14 +209,14 @@ def test_the_unhealthy_comment_is_in_the_compose_file() -> None:
     assert 'nothing acts on `unhealthy`; `restart:` fires only when the main process exits' in text
 
 
-def test_valkey_reads_its_conf_from_a_tmpfs_copy_the_dropped_user_can_read() -> None:
-    """Spike S0: the image drops to `valkey`, which cannot read a mode-600 file of the host user."""
+def test_valkey_runs_as_the_installing_user_and_reads_its_conf_in_place() -> None:
+    """Rule B (spikes S0 and S1): the image drops to uid 999, which cannot read a mode-600 conf of
+    the installing user, so the service runs as that user instead and needs no capability."""
     vk = _svc('valkey')
-    entry = ' '.join(vk['entrypoint'])
-    assert 'cat /run/secrets/op_valkey/valkey.conf > /run/valkey/valkey.conf' in entry
-    assert 'chown valkey:valkey /run/valkey/valkey.conf' in entry
-    assert vk['command'][1] == '/run/valkey/valkey.conf'
-    assert any(str(t).startswith('/run/valkey') for t in vk['tmpfs'])
+    assert vk['user'] == '${OP_UID:-1000}:${OP_GID:-1000}'
+    assert 'entrypoint' not in vk
+    assert vk['command'][1] == '/run/secrets/op_valkey/valkey.conf'
+    assert './secrets/valkey:/run/secrets/op_valkey:ro' in vk['volumes']
 
 
 def _overlay(path: str) -> dict[str, Any]:
@@ -298,3 +298,9 @@ def test_cluster_worker_is_cpu_only() -> None:
     assert 'devices' not in str(svc.get('deploy', {}))
     assert not any('GPU' in e or 'CUDA' in e for e in _env('cluster-worker'))
     assert 'runtime' not in svc
+
+
+def test_live_harness_valkey_uses_the_same_user_rule() -> None:
+    vk = _overlay('docker/test/compose.yml')['services']['valkey']
+    assert vk['user'] == '1000:1000'
+    assert 'entrypoint' not in vk

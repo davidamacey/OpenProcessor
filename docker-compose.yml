@@ -403,28 +403,15 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - SETGID
-      - SETUID
     restart: unless-stopped
-    # The conf holds only requirepass. The image drops to the `valkey` user before the server
-    # starts, and that user cannot read a mode-600 file owned by the installing user, so the
-    # wrapper (root) copies the conf to a private tmpfs first (spike S0). noeviction: a full
-    # broker refuses new messages instead of dropping queued jobs.
-    entrypoint:
-      - sh
-      - -c
-      - |
-        umask 077
-        cat /run/secrets/op_valkey/valkey.conf > /run/valkey/valkey.conf
-        chown valkey:valkey /run/valkey/valkey.conf
-        exec docker-entrypoint.sh "$$@"
-      - valkey
+    # Runs as the installing user (OP_UID/OP_GID, written to .env by the installer): the image
+    # otherwise drops to uid 999, which cannot read the mode-600 conf and password of that user
+    # (spikes S0 and S1). The conf holds only requirepass. noeviction: a full broker refuses new
+    # messages instead of dropping queued jobs.
+    user: "${OP_UID:-1000}:${OP_GID:-1000}"
     command:
       - valkey-server
-      - /run/valkey/valkey.conf
+      - /run/secrets/op_valkey/valkey.conf
       - --appendonly
       - "yes"
       - --appendfsync
@@ -433,8 +420,6 @@ services:
       - ${OP_VALKEY_MAXMEMORY:-1gb}
       - --maxmemory-policy
       - noeviction
-    tmpfs:
-      - /run/valkey:mode=0755
     volumes:
       - openprocessor-queue:/data
       - ./secrets/valkey:/run/secrets/op_valkey:ro
