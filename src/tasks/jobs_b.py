@@ -68,6 +68,17 @@ async def class_projection_sync(ctx: JobContext) -> Any:
         return await run_projection_sync(ctx, await ctx.client('opensearch'))
 
 
+# --- combine -----------------------------------------------------------------------------------
+
+
+async def combine(ctx: JobContext) -> Any:
+    from src.services.projects.combine.job import run_combine_job
+
+    with _bound(await _record(ctx)):
+        return await run_combine_job(ctx, await ctx.client('opensearch'))
+
+
 _FACTORIES = {'opensearch': _opensearch}
 register_job('class_merge', class_merge, client_factories=_FACTORIES)
 register_job('class_projection_sync', class_projection_sync, client_factories=_FACTORIES)
+register_job('combine', combine, client_factories=_FACTORIES)

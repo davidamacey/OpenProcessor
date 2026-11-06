@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import io
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from _class_registry_fake import registry_of
@@ -57,6 +58,9 @@ class StubRegistry(ProjectRegistry):
     def get(self, slug: str) -> ProjectRecord | None:
         return self.records.get(slug)
 
+    async def lookup(self, slug: str) -> ProjectRecord | None:
+        return self.records.get(slug)
+
     def snapshot(self) -> dict[str, ProjectRecord]:  # type: ignore[override]
         return dict(self.records)
 
@@ -68,7 +72,6 @@ class World:
         self.tmp = tmp_path
         monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
         monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-        monkeypatch.setenv('OP_COMBINE_JOBS_DIR', str(tmp_path / 'combine_jobs'))
         monkeypatch.setattr(curation_mod, '_default_curation_config', None)
         self.fake = QueryFakeOpenSearch()
         self.records: dict[str, ProjectRecord] = {}
@@ -77,6 +80,7 @@ class World:
         self._seed = 0
         monkeypatch.setattr(combine_service, 'target_embedding_dim', lambda: DIM)
         self.settled: list[bool] = []
+        self.pending: list[tuple[str, list[str]]] = []
         # set by a db test: every project then gets a real projects row under its own slug (the
         # test starts from an empty projects table, as pg_registry leaves it)
         self.pg: Any = None
@@ -244,52 +248,143 @@ class World:
         )
 
 
+class FakeJobContext:
+    """The slice of ``JobContext`` the combine body uses, recording what it writes.
+
+    ``cancel_after`` cancels once that many checkpoints were written (a cancel request the
+    heartbeat would have delivered); ``resume_from`` is the cursor a previous attempt left.
+    """
+
+    def __init__(
+        self,
+        params: dict[str, Any],
+        *,
+        resume_from: Any = None,
+        job_id: uuid.UUID | None = None,
+        cancel_after: int | None = None,
+    ) -> None:
+        self.job_id = job_id or uuid.uuid4()
+        self.project_id = uuid.uuid4()
+        self.project_slug = 'combined'
+        self.params = params
+        self.resume_from = resume_from
+        self.cursor: Any = resume_from
+        self.checkpoints: list[Any] = []
+        self.stages: list[str | None] = []
+        self.lease_lost = False
+        self._cancel_after = cancel_after
+
+    def cancelled(self) -> bool:
+        return self._cancel_after is not None and len(self.checkpoints) >= self._cancel_after
+
+    def lost(self) -> bool:
+        return self.lease_lost
+
+    async def progress(
+        self,
+        done: int,
+        total: int | None = None,
+        stage: str | None = None,
+        counters: Any = None,
+        *,
+        force: bool = False,
+    ) -> None:
+        del done, total, counters, force
+        self.stages.append(stage)
+
+    async def checkpoint(self, cursor: Any) -> None:
+        self.cursor = cursor
+        self.checkpoints.append(cursor)
+
+
+@dataclasses.dataclass
+class Run:
+    """How one run of the body ended: its context, its result (``None`` when it stopped) and the
+    error it raised, if any."""
+
+    ctx: FakeJobContext
+    params: dict[str, Any]
+    document: dict[str, Any]
+    result: dict[str, Any] | None
+    error: BaseException | None = None
+
+    @property
+    def job_id(self) -> str:
+        return str(self.ctx.job_id)
+
+    @property
+    def status(self) -> str:
+        if self.error is not None:
+            return 'failed'
+        if self.result is None:
+            return 'cancelled' if self.ctx.cancelled() else 'stopped'
+        return 'completed'
+
+    @property
+    def report(self) -> dict[str, Any]:
+        return (self.result or {}).get('report', {})
+
+
 async def run_job(
-    world: World, request: CombineRequest, *, target_slug: str | None = None, resume: Any = None
-) -> tuple[Any, ProjectRecord]:
-    """Preview, persist the plan and run the job body exactly as ``start``
-    does after creating the target (the lifecycle writes are not part of the
-    job). ``resume``: an existing store to resume instead of starting."""
+    world: World,
+    request: CombineRequest,
+    *,
+    target_slug: str | None = None,
+    resume: Run | None = None,
+    cancel_after: int | None = None,
+    lease_lost: bool = False,
+    reraise: bool = False,
+) -> tuple[Run, ProjectRecord]:
+    """Preview, plan and run the job body exactly as a worker does after ``start`` created the
+    target (the lifecycle writes and the queueing are not part of the body). ``resume``: the
+    earlier run to continue from its checkpoint, on its own plan."""
     from src.services.projects.combine import service
-    from src.services.projects.combine.execute import load_plan, persist_plan, run_combine
-    from src.services.projects.combine.store import create_job, new_job_id
+    from src.services.projects.combine.execute import load_plan, plan_documents, run_combine
 
     slug = target_slug or request.target.slug
     if resume is None:
         result, analysis = await service.preview(world.fake, request)
         assert result.ok, result.errors
         assert analysis is not None
-        store = create_job(new_job_id())
-        persist_plan(store, analysis, result.preview_sha)
+        params, document = plan_documents(analysis, result.preview_sha)
         sources = analysis.records
         target = world.project(slug, [], status='building')
-        store.job.write(
-            {
-                'status': 'queued',
-                'target': slug,
-                'sources': [r.slug for r in sources],
-                'total': sum(s.images for s in analysis.stats),
-            }
-        )
+        ctx = FakeJobContext(params, cancel_after=cancel_after)
     else:
-        store = resume
-        sources = [world.records[s.project] for s in load_plan(store).request.sources]
+        params, document = resume.params, resume.document
+        sources = [world.records[s.project] for s in load_plan(params, document).request.sources]
         target = world.records[slug]
-        store.job.clear_signals()
+        ctx = FakeJobContext(
+            params,
+            resume_from=resume.ctx.cursor,
+            job_id=resume.ctx.job_id,
+            cancel_after=cancel_after,
+        )
 
     async def settle(ok: bool) -> None:
         world.settled.append(ok)
 
-    await run_combine(
-        world.fake,
-        store=store,
-        plan=load_plan(store),
-        sources=sources,
-        target=target,
-        embedding_dim=DIM,
-        settle=settle,
-    )
-    return store, target
+    async def enqueue(level: str, member_ids: list[str]) -> None:
+        world.pending.append((level, list(member_ids)))
+
+    ctx.lease_lost = lease_lost
+    run = Run(ctx, params, document, None)
+    try:
+        run.result = await run_combine(
+            ctx,
+            world.fake,
+            plan=load_plan(params, document),
+            sources=sources,
+            target=target,
+            embedding_dim=DIM,
+            settle=settle,
+            enqueue_pending=enqueue,
+        )
+    except Exception as exc:
+        if reraise:
+            raise
+        run.error = exc
+    return run, target
 
 
 def tree_hash(root: Path) -> str:

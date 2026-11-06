@@ -1,18 +1,19 @@
 """The combine job body (projects plan section 6): registry, images and items
-page by page with a durable per-chunk mark, the holdout record, then a
-terminal status. The target project's own status (``building`` -> ``active``
-or ``failed``) is the caller's (:func:`~src.services.projects.lifecycle.
-finish_building`), handed in as ``settle`` and awaited BEFORE the job's
-terminal status is written, so a job never reads done while its target is
-still ``building``.
+page by page with a durable checkpoint per chunk, the holdout record, then the
+result. The target project's own status (``building`` -> ``active`` or ``failed``)
+is the caller's (:func:`~src.services.projects.lifecycle.finish_building`), handed
+in as ``settle`` and awaited BEFORE the job's terminal status is written, so a job
+never reads done while its target is still ``building``.
 
-Resume re-reads the persisted plan (``request.json`` + ``mapping.json``), never
-the sources' current classes, so a resumed run copies what the preview showed.
+The job runs in the target's scope (``jobs.project_id`` is the target); the sources are
+read through the project binding of each source in turn. Resume re-reads the persisted
+plan (the job parameters and the run's ``class_mapping``), never the sources' current
+classes, so a resumed run copies what the preview showed; the cursor is the job
+checkpoint: the last image id per source and the counters so far.
 """
 
 from __future__ import annotations
 
-import uuid
 from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -34,32 +35,17 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Mapping
 
     from src.config.projects import ProjectRecord
-    from src.services.curation.dataset_import.store import ImportStore
-    from src.services.curation.file_job import FileJob
+    from src.services.projects.combine.image_copy import PendingEnqueue
+    from src.tasks.runtime.context import JobContext
 
 logger = get_logger(__name__)
 
 
-class FencedError(Exception):
-    """Another worker has claimed this job since this one started."""
-
-
-def ensure_owner(job: FileJob, claim: str) -> None:
-    """Raise :class:`FencedError` unless ``claim`` is still the job's claim.
-
-    Every worker writes a fresh claim into the job state when it starts
-    (:func:`run_combine`) and re-checks it at each chunk boundary, so a worker
-    that stalled past the stale heartbeat window and was taken over stops at
-    its next boundary instead of writing alongside its successor. The check
-    and the write after it are not atomic across processes: a fenced worker
-    can still finish the chunk it is in (chunk writes are deterministic-id
-    ``index`` ops, so that is repeated work, not duplicates).
-    """
-    if job.read().get('claim') != claim:
-        raise FencedError(claim)
+class LeaseLostError(Exception):
+    """The job lost its lease (another worker owns it now): stop without writing."""
 
 
 @dataclass
@@ -73,55 +59,51 @@ class Plan:
     images_total: int
 
 
-def persist_plan(store: ImportStore, analysis: Analysis, preview_sha: str) -> None:
+def plan_documents(analysis: Analysis, preview_sha: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """``(job params, run class_mapping document)`` of a previewed combine."""
     prints = {(f.source_index, f.image_id): f for f in analysis.fingerprints}
     needed = set(analysis.duplicates.values())
-    store.write_request({**analysis.request.model_dump(mode='json'), 'preview_sha': preview_sha})
-    store.write_mapping(
-        {
-            'target_classes': analysis.mapping.target_classes,
-            'per_source': {
-                slug: {
-                    name: {'kind': t.kind, 'class_name': t.class_name} for name, t in table.items()
-                }
-                for slug, table in analysis.mapping.per_source.items()
-            },
-            'duplicates': duplicates_wire(analysis.duplicates),
-            'originals': {
-                f'{i}:{image}': [prints[(i, image)].path, prints[(i, image)].imohash]
-                for i, image in needed
-            },
-            'images_total': sum(s.images for s in analysis.stats),
-            'target_class_ids': {},
-        }
-    )
+    params = {**analysis.request.model_dump(mode='json'), 'preview_sha': preview_sha}
+    document = {
+        'target_classes': analysis.mapping.target_classes,
+        'per_source': {
+            slug: {name: {'kind': t.kind, 'class_name': t.class_name} for name, t in table.items()}
+            for slug, table in analysis.mapping.per_source.items()
+        },
+        'duplicates': duplicates_wire(analysis.duplicates),
+        'originals': {
+            f'{i}:{image}': [prints[(i, image)].path, prints[(i, image)].imohash]
+            for i, image in needed
+        },
+        'images_total': sum(s.images for s in analysis.stats),
+    }
+    return params, document
 
 
-def load_plan(store: ImportStore) -> Plan:
-    raw = store.read_request()
+def load_plan(params: Mapping[str, Any], document: Mapping[str, Any]) -> Plan:
+    raw = dict(params)
     raw.pop('preview_sha', None)
     request = CombineRequest.model_validate(raw)
-    saved = store.read_mapping()
     mapping = CombineMapping(
-        target_classes=list(saved['target_classes']),
+        target_classes=list(document['target_classes']),
         per_source={
             slug: {
                 name: MapTarget(kind=row['kind'], class_name=row.get('class_name'))
                 for name, row in table.items()
             }
-            for slug, table in saved['per_source'].items()
+            for slug, table in document['per_source'].items()
         },
     )
     originals = {}
-    for key, (path, imohash) in saved['originals'].items():
+    for key, (path, imohash) in document['originals'].items():
         i, _, image = key.partition(':')
         originals[(int(i), image)] = (path, imohash)
     return Plan(
         request=request,
         mapping=mapping,
-        duplicates=duplicates_from_wire(saved['duplicates']),
+        duplicates=duplicates_from_wire(document['duplicates']),
         originals=originals,
-        images_total=int(saved.get('images_total') or 0),
+        images_total=int(document.get('images_total') or 0),
     )
 
 
@@ -141,68 +123,44 @@ def page_size() -> int:
     return env_int('OP_COMBINE_PAGE_SIZE', 200, minimum=1)
 
 
-def _resume_points(done: dict[int, dict[str, Any]]) -> dict[int, str]:
-    last: dict[int, str] = {}
-    for report in done.values():
-        source = report.get('source')
-        if isinstance(source, int):
-            last[source] = max(last.get(source, ''), str(report.get('last') or ''))
-    return last
+def _sum_counts(counts: Mapping[str, Any] | None) -> Counter[str]:
+    return Counter({k: v for k, v in (counts or {}).items() if isinstance(v, int)})
 
 
-def _sum_reports(done: dict[int, dict[str, Any]]) -> Counter[str]:
-    total: Counter[str] = Counter()
-    for report in done.values():
-        total.update({k: v for k, v in report.items() if isinstance(v, int) and k != 'source'})
-    return total
+def _resume_points(cursor: Mapping[str, Any] | None) -> dict[int, str]:
+    last = (cursor or {}).get('last') or {}
+    return {int(source): str(image) for source, image in last.items()}
 
 
-async def _publish(job_id: str, target: str, state: dict[str, Any]) -> None:
-    from src.services.events.publish import apublish_global_event
-
-    await apublish_global_event(
-        'combine.progress',
-        target=target,
-        job_id=job_id,
-        phase=state.get('phase'),
-        done=state.get('done'),
-        total=state.get('total'),
-        status=state.get('status'),
-    )
+def _check_lease(ctx: JobContext) -> None:
+    if ctx.lost():
+        raise LeaseLostError(str(ctx.job_id))
 
 
 async def run_combine(
+    ctx: JobContext,
     client: Any,
     *,
-    store: ImportStore,
     plan: Plan,
     sources: list[ProjectRecord],
     target: ProjectRecord,
     embedding_dim: int,
     settle: Callable[[bool], Awaitable[None]],
-) -> bool:
-    """Run (or resume) one combine to a terminal job status. ``settle(ok)``
-    moves the target out of ``building`` and runs before that status is
-    written (a cancelled or fenced run never settles). Never raises:
-    a failure is recorded as ``failed`` with its error. ``False`` when another
-    worker claimed the job meanwhile (:class:`FencedError`): this one wrote
-    nothing after that and its caller must not settle the target."""
-    job = store.job
-    job_id = store.import_id
-    claim = uuid.uuid4().hex
-    job.touch_heartbeat()
+    enqueue_pending: PendingEnqueue,
+) -> dict[str, Any] | None:
+    """Run (or resume) one combine; the result is ``{report, next_steps}``.
+
+    ``settle(ok)`` moves the target out of ``building`` and runs before the job ends. A failure
+    settles the target as failed and re-raises, so the wrapper records the job as ``failed``
+    with the error; a cancelled run settles it failed as well (cancel is terminal) and returns
+    ``None``. A run that lost its lease writes nothing more.
+    """
     try:
-        done = store.chunks_done()
-        job.update(
-            status='running', phase='registry', total=plan.images_total, error=None, claim=claim
-        )
+        await ctx.progress(0, plan.images_total, 'registry')
         ids = await build_target_registry(target, plan.mapping.target_classes)
-        saved = store.read_mapping()
-        saved['target_class_ids'] = ids
-        store.write_mapping(saved)
-        ctx = CopyContext(
+        copy_ctx = CopyContext(
             client=client,
-            job_id=job_id,
+            job_id=str(ctx.job_id),
             request=plan.request,
             sources=sources,
             target=target,
@@ -214,45 +172,45 @@ async def run_combine(
             now=now_iso(),
             duplicates=plan.duplicates,
             originals=plan.originals,
+            enqueue_pending=enqueue_pending,
         )
-        if not await _copy_all(ctx, store, plan, done, claim):
-            await _finish(ctx, store, claim, settle)
-    except FencedError:
-        logger.warning('combine_worker_fenced', job_id=job_id, claim=claim)
-        return False
+        cancelled, counts = await _copy_all(ctx, copy_ctx, plan)
+        if cancelled:
+            await _settle_quietly(settle, False)
+            return None
+        return await _finish(ctx, copy_ctx, settle, counts, plan.images_total)
+    except LeaseLostError:
+        logger.warning('combine_lease_lost', job_id=str(ctx.job_id))
+        return None
+    except SettleError:
+        raise
+    except Exception:
+        _check_lease(ctx)
+        await _settle_quietly(settle, False)
+        raise
+
+
+async def _settle_quietly(settle: Callable[[bool], Awaitable[None]], ok: bool) -> None:
+    try:
+        await settle(ok)
     except Exception as exc:
-        logger.error('combine_failed', job_id=job_id, error=str(exc))
-        try:
-            ensure_owner(job, claim)
-        except FencedError:
-            return False
-        error = str(exc)[:300]
-        if not isinstance(exc, SettleError):
-            try:
-                await settle(False)
-            except Exception as settle_exc:
-                logger.error('combine_settle_failed', job_id=job_id, error=str(settle_exc))
-                error = f'{error}; could not fail the target: {settle_exc}'[:300]
-        job.update(status='failed', error=error, finished_at=now_iso())
-    finally:
-        await _publish(job_id, target.slug, job.read())
-    return True
+        logger.error('combine_settle_failed', error=str(exc))
 
 
 async def _copy_all(
-    ctx: CopyContext, store: ImportStore, plan: Plan, done: dict[int, dict[str, Any]], claim: str
-) -> bool:
-    """Every unfinished chunk; ``True`` when the job was cancelled."""
-    job = store.job
-    job.update(phase='images')
-    resume = _resume_points(done)
-    chunk = max(done, default=-1) + 1
-    report = _sum_reports(done)
+    ctx: JobContext, copy_ctx: CopyContext, plan: Plan
+) -> tuple[bool, Counter[str]]:
+    """Every unfinished chunk: ``(cancelled, counters)``."""
+    cursor: Mapping[str, Any] | None = ctx.resume_from
+    resume = _resume_points(cursor)
+    last: dict[str, str] = {str(k): v for k, v in resume.items()}
+    chunk = int((cursor or {}).get('chunk', 0))
+    report = _sum_counts((cursor or {}).get('counts'))
     for source_index, (source, record) in enumerate(
-        zip(plan.request.sources, ctx.sources, strict=True)
+        zip(plan.request.sources, copy_ctx.sources, strict=True)
     ):
         pages = iter_source_pages(
-            ctx.client,
+            copy_ctx.client,
             record,
             validated_only=source.include.label_states == 'validated_only',
             with_vectors=True,
@@ -260,21 +218,17 @@ async def _copy_all(
             start_after=resume.get(source_index),
         )
         async for page in pages:
-            ensure_owner(job, claim)
-            if job.cancel_requested():
-                job.update(status='cancelled', finished_at=now_iso())
-                return True
-            counts = await copy_page(ctx, source_index, page)
-            ensure_owner(job, claim)
-            store.mark_chunk_done(
-                chunk, {'source': source_index, 'last': page[-1].image_id, **counts}
-            )
-            chunk += 1
+            _check_lease(ctx)
+            if ctx.cancelled():
+                return True, report
+            counts = await copy_page(copy_ctx, source_index, page)
             report.update(counts)
+            last[str(source_index)] = page[-1].image_id
+            chunk += 1
+            await ctx.checkpoint({'chunk': chunk, 'last': dict(last), 'counts': dict(report)})
             seen = report['images_copied'] + report['images_duplicate']
-            job.update(done=seen, report=dict(report), updated_at=now_iso())
-            await _publish(store.import_id, ctx.target.slug, job.read())
-    return False
+            await ctx.progress(seen, plan.images_total, 'images', dict(report))
+    return False, report
 
 
 class SettleError(Exception):
@@ -282,42 +236,43 @@ class SettleError(Exception):
 
 
 async def _finish(
-    ctx: CopyContext, store: ImportStore, claim: str, settle: Callable[[bool], Awaitable[None]]
-) -> None:
-    job = store.job
-    ensure_owner(job, claim)
-    job.update(phase='holdout')
-    with bind_project(ctx.target):
-        await ctx.client.indices.refresh(index=ctx.items_index)
-    mode = ctx.request.holdout
+    ctx: JobContext,
+    copy_ctx: CopyContext,
+    settle: Callable[[bool], Awaitable[None]],
+    counts: Counter[str],
+    total: int,
+) -> dict[str, Any]:
+    _check_lease(ctx)
+    seen = counts['images_copied'] + counts['images_duplicate']
+    await ctx.progress(seen, total, 'holdout', dict(counts), force=True)
+    with bind_project(copy_ctx.target):
+        await copy_ctx.client.indices.refresh(index=copy_ctx.items_index)
+    mode = copy_ctx.request.holdout
+    job_id = str(ctx.job_id)
     extra: dict[str, Any] = {}
     if mode == 'preserve_union':
-        extra = await holdout.record_union(ctx.client, ctx.target, ctx.items_index, store.import_id)
+        extra = await holdout.record_union(
+            copy_ctx.client, copy_ctx.target, copy_ctx.items_index, job_id
+        )
     elif mode == 'recompute':
-        extra = await holdout.recompute(ctx.client, ctx.target, ctx.items_index, store.import_id)
-    report = {**_sum_reports(store.chunks_done()), **extra}
-    next_steps = [recluster_items()]
-    ensure_owner(job, claim)  # the holdout step is long; a takeover may have landed in it
+        extra = await holdout.recompute(
+            copy_ctx.client, copy_ctx.target, copy_ctx.items_index, job_id
+        )
+    report = {**counts, **extra}
+    _check_lease(ctx)  # the holdout step is long; a takeover may have landed in it
     try:
         await settle(True)
     except Exception as exc:
         raise SettleError(f'could not finish the target: {exc}') from exc
-    job.update(
-        status='completed',
-        phase='done',
-        report=report,
-        next_steps=next_steps,
-        finished_at=now_iso(),
-    )
+    return {'report': report, 'next_steps': [recluster_items()]}
 
 
 __all__ = [
-    'FencedError',
+    'LeaseLostError',
     'Plan',
     'SettleError',
     'build_target_registry',
-    'ensure_owner',
     'load_plan',
-    'persist_plan',
+    'plan_documents',
     'run_combine',
 ]

@@ -50,12 +50,12 @@ async def combine_start(body: CombineStartRequest) -> CombineStartResponse:
 
 @global_router.get('/projects/combine/{job_id}', response_model=CombineJobResponse)
 async def combine_status(job_id: str) -> CombineJobResponse:
-    return CombineJobResponse(**service.job_state(job_id))
+    return CombineJobResponse(**await service.job_state(job_id))
 
 
 @global_router.post('/projects/combine/{job_id}/cancel', response_model=CombineJobResponse)
 async def combine_cancel(job_id: str) -> CombineJobResponse:
-    return CombineJobResponse(**service.cancel(job_id))
+    return CombineJobResponse(**await service.cancel(job_id))
 
 
 @global_router.post('/projects/combine/{job_id}/resume', response_model=CombineJobResponse)

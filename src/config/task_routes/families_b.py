@@ -8,4 +8,5 @@ from src.config.queue import TaskQueues
 ROUTES: dict[str, str] = {
     'op.families_b.class_merge': TaskQueues.JOBS,
     'op.families_b.class_projection_sync': TaskQueues.JOBS,
+    'op.families_b.combine': TaskQueues.JOBS,
 }

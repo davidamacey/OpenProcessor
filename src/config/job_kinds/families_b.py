@@ -31,4 +31,15 @@ KINDS: tuple[JobKind, ...] = (
         exclusive_group='class_registry_write',
         auto_resume=True,
     ),
+    JobKind(
+        name='combine',
+        task_name='op.families_b.combine',
+        queue=TaskQueues.JOBS,
+        project_scope='target',
+        soft_limit_s=24 * _H,
+        hard_limit_s=24 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='combine',
+        auto_resume=True,
+    ),
 )

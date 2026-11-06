@@ -34,7 +34,7 @@ async def test_a_region_class_becomes_a_region_box_on_its_parent(world: World) -
             {'cls': 'wheel', 'bbox': WHEEL_OUT},
         ],
     )
-    store, _ = await run_job(world, world.request(['p'], MAPPING))
+    run, _ = await run_job(world, world.request(['p'], MAPPING))
     F = get_region_fields()
     items = list(world.items('combined').values())
     parent = next(d for d in items if d.get('class_name') == 'car')
@@ -47,7 +47,7 @@ async def test_a_region_class_becomes_a_region_box_on_its_parent(world: World) -
     assert 'class_name' not in standalone[0]
     # The wheel is never an item of its own class.
     assert {d.get('class_name') for d in items} == {'car', None}
-    report = store.job.read()['report']
+    report = run.report
     assert (report['regions_attached'], report['regions_standalone']) == (1, 1)
 
 

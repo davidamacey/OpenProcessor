@@ -166,7 +166,7 @@ src/services/curation/reprocess_open_vocab.py	1	triage every return-empty handle
 src/services/curation/selection/job.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/source_image_cache.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/stale_label_source_repair.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/startup_reconcile.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/startup_reconcile.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/strategy_defaults.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/strategy_registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/field_coverage.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -191,7 +191,7 @@ src/services/labeling/vlm_prompt_resolution.py	8	triage every return-empty handl
 src/services/model_export.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/bootstrap.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/capacity.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/projects/combine/execute.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/combine/execute.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/delete.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/delete_models.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/lifecycle.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
