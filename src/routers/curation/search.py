@@ -25,9 +25,8 @@ from src.routers.curation._page_models import SearchSimilarResponse, SearchTextR
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
-from src.utils.search_timing import bind_search_timer, search_span
+from src.utils.search_timing import bind_search_timer
 
 
 logger = get_logger(__name__)
@@ -120,9 +119,6 @@ async def search_text(
         )
 
     with bind_search_timer('text') as timer:
-        with search_span('bootstrap'):
-            await ensure_indexes(opensearch)
-
         # Looked up at call time so a test replaces the accessor in one place
         # (src.app.resources), not in every caller.
         from src.app.resources import get_shared_executor
@@ -229,9 +225,6 @@ async def search_similar(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     with bind_search_timer('similar') as timer:
-        with search_span('bootstrap'):
-            await ensure_indexes(opensearch)
-
         try:
             result = await semantic_search.semantic_similar_search(
                 opensearch=opensearch,

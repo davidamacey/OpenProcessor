@@ -22,7 +22,6 @@ from src.services.curation.holdout import (
     select_test_holdout,
     write_freeze_snapshot,
 )
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.utils.timeutil import now_iso
 
 
@@ -53,7 +52,6 @@ async def freeze_test_holdout(
     inside the transaction that wraps the flagging: a database error refuses the
     freeze before any item changes, and a failed flagging rolls the row back.
     """
-    await ensure_indexes(opensearch)
     # Refuse re-run if an existing holdout exists.
     if not force:
         try:

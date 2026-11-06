@@ -89,7 +89,7 @@ def test_header_reports_overlap_not_sum(monkeypatch: pytest.MonkeyPatch):
     # knn and the count run together: the page span is the longer one, not their sum
     assert stages['knn_page'] < 80
     assert stages['os_took_ms'] == 7
-    assert {'bootstrap', 'encode', 'filter_build', 'hydrate'} <= stages.keys()
+    assert {'encode', 'filter_build', 'hydrate'} <= stages.keys()
     assert set(stages) - {'os_took_ms', 'encode_cache_hit'} <= set(SEARCH_STAGES)
 
 

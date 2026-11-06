@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field
 
 from src.config.env import env_bool
 from src.routers.curation._common import OpenSearchDep, router
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.utils.upstream_errors import UpstreamError
 
 
@@ -46,7 +45,6 @@ async def scores_compute(
             status_code=400,
             detail='curation scoring is disabled (set OP_SCORES_ENABLED=1 to enable)',
         )
-    await ensure_indexes(opensearch)
 
     from src.services.curation.item_scores import available_scorers, job as scores_job
 
@@ -85,7 +83,6 @@ async def scores_cancel() -> dict[str, Any]:
 
 @router.get('/scores/coverage')
 async def scores_coverage(opensearch: OpenSearchDep) -> dict[str, Any]:
-    await ensure_indexes(opensearch)
     from src.services.curation.item_scores import job as scores_job
 
     coverage = await scores_job.compute_coverage(opensearch)

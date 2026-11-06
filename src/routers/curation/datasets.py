@@ -58,7 +58,6 @@ from src.services.curation.dataset_import.upload import (
     UploadTooLargeError,
     receive_archive,
 )
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_detector import (
     IngestProfileUnresolvedError,
@@ -259,7 +258,6 @@ async def start_dataset_import(
     opensearch: OpenSearchDep,
     registry: RegistryDep,
 ) -> DatasetImportJob:
-    await ensure_indexes(opensearch)
     prepared = await _prepare(body, registry)
     if body.expected_import_key and body.expected_import_key != prepared.import_key:
         raise api_error(

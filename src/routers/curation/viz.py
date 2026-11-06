@@ -36,7 +36,6 @@ from pydantic import BaseModel
 
 from src.config.env import env_bool, env_int
 from src.routers.curation._common import OpenSearchDep, router
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.utils.upstream_errors import UpstreamError
 
 
@@ -73,7 +72,6 @@ async def viz_projection_rebuild(
         )
     if scope == 'cluster' and cluster_id is None:
         raise HTTPException(status_code=400, detail='cluster_id is required when scope=cluster')
-    await ensure_indexes(opensearch)
 
     from src.services.curation import embedding_viz
 
@@ -152,7 +150,6 @@ async def viz_projection(
             status_code=400,
             detail='UMAP viz projection is disabled (set OP_VIZ_PROJECTION_ENABLED=1 to enable)',
         )
-    await ensure_indexes(opensearch)
 
     from src.services.curation import embedding_viz_read
 

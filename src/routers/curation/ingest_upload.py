@@ -21,7 +21,6 @@ from src.routers.curation._common_models import (
     IngestImageResponse,
 )
 from src.routers.curation.ingest import _batch_response
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.curation.upload_ingest import (
     EarlyFailure,
@@ -134,7 +133,6 @@ async def curation_ingest_upload(
             ),
         )
     paths = _parse_upload_paths(image_paths, images)
-    await ensure_indexes(opensearch)
     service = await get_ingest_service(opensearch, registry)
 
     entries = [

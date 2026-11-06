@@ -40,7 +40,6 @@ from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resol
 )
 from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.services.curation import review_empty_reason, review_reasons
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.curation.review_request import (
     ReviewFilters,
@@ -146,7 +145,6 @@ async def review_queue(
     class validation. Order: the applied sort (``sort_applied``), then
     ``crop_id``.
     """
-    await ensure_indexes(opensearch)
     guard_page_depth(page, page_size)
     if review_empty_reason.region_queue_is_off(tab):
         return {
@@ -266,7 +264,6 @@ async def review_locate(
     ``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the
     items sorting before it, so any depth costs the same.
     """
-    await ensure_indexes(opensearch)
     filters = _filters(
         include_test,
         text,

@@ -29,7 +29,6 @@ from src.services.curation.audit import (
     pending_query,
     start_audit,
 )
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 
@@ -43,7 +42,6 @@ async def audit_start(body: AuditStartRequest, opensearch: OpenSearchDep) -> dic
     and are not validated, held out, excluded, dismissed, imported suggestions or
     already drawn. ``409 audit_no_candidates`` when none are eligible. Marking a crop
     never changes its class."""
-    await ensure_indexes(opensearch)
     result = await start_audit(
         opensearch, min_per_class=body.min_per_class, sample_size=body.sample_size
     )
@@ -65,7 +63,6 @@ async def audit_queue(
 ) -> dict[str, Any]:
     """Drawn crops still waiting for a human label, in a stable order."""
     guard_page_depth(page, page_size)
-    await ensure_indexes(opensearch)
     try:
         resp = await opensearch.search(
             index=items_index(),
@@ -99,5 +96,4 @@ async def audit_report(
     """Per-class precision of the detector and the VLM with Wilson 95% intervals, the
     confusion matrix and the outcome counts. A class with fewer than ``min_per_class``
     audited crops is flagged ``insufficient_sample``."""
-    await ensure_indexes(opensearch)
     return await load_report(opensearch, min_per_class=min_per_class)

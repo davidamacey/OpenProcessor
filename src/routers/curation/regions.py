@@ -29,7 +29,6 @@ from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
@@ -123,7 +122,6 @@ async def list_regions(
             status_code=400,
             detail=f'box_state must be one of {sorted(BOX_STATES)}; got {box_state!r}',
         )
-    await ensure_indexes(opensearch)
 
     parts: list[dict[str, Any]] = []
     if box_state is not None:
@@ -361,7 +359,6 @@ async def training_candidates(
     row carries ``selection_reason``.
     """
     F = get_region_fields()
-    await ensure_indexes(opensearch)
     query, box_clause, reason = _training_candidate_query(mode)
     filters = list(query['bool']['filter'])
     if class_id is not None:

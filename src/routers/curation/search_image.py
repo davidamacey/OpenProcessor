@@ -21,7 +21,6 @@ from src.routers.curation.search import _get_pe_encoder, _semantic_search_enable
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search_image
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.rejections import rejection
 
@@ -93,8 +92,6 @@ async def search_image(
         data = await image.read(cap + 1)
         if len(data) > cap:
             raise rejection(413, 'upload_too_large', f'picture exceeds {cap} bytes')
-
-    await ensure_indexes(opensearch)
 
     try:
         return await semantic_search_image.semantic_image_search(

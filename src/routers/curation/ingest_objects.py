@@ -44,7 +44,6 @@ from src.services.curation.bulk_ingest.object_store import (
     S3NotConfiguredError,
     get_object_store,
 )
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.curation.upload_ingest import EarlyFailure, StagedEntry, stage_and_ingest
 
@@ -114,7 +113,6 @@ async def curation_ingest_objects(
         )
     for item in body.items:
         _check_allowed(s3, item.bucket, item.key)
-    await ensure_indexes(opensearch)
     service = await get_ingest_service(opensearch, registry)
 
     refs = [ObjectRef(i.bucket, i.key, i.etag.strip('"'), i.version_id, i.size) for i in body.items]

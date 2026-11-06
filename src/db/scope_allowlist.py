@@ -23,6 +23,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.services.upgrade',  # the 0.6.0 control-data step
     'src.services.config_store',  # resolves a slug to its id; deployment-wide endpoints and profiles
     'scripts.db',  # migration runner and db verify
+    'scripts.opensearch',  # the one-shot index migrate reads the projects table
     'scripts.admin',  # admin command-line tools
 )
 

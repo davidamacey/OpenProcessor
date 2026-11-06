@@ -13,7 +13,6 @@ from fastapi import Query
 
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.review_terms import (
     raw_label_clusters_body,
     raw_label_clusters_response,
@@ -49,7 +48,6 @@ async def review_unmatched_terms(
     Returns:
         ``{"total_unmatched": <int>, "top_terms": [{"label": str, "count": int}, ...]}``
     """
-    await ensure_indexes(opensearch)
     body = unmatched_terms_body(size)
     try:
         resp = await opensearch.search(index=items_index(), body=body)
@@ -97,7 +95,6 @@ async def review_raw_label_clusters(
         ``{"status": "ok|empty", "clusters": [{cluster_id, cluster_name,
         n_crops, n_unmatched, sample_terms, parent_class_suggestion}, ...]}``
     """
-    await ensure_indexes(opensearch)
     body = raw_label_clusters_body(size, samples_per_cluster)
     try:
         resp = await opensearch.search(index=items_index(), body=body)

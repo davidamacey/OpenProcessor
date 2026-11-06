@@ -55,7 +55,6 @@ from src.routers.curation._common_models import (
 )
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_detector import (
     IngestProfileUnresolvedError,
     refreshed_ingest_profiles,
@@ -94,7 +93,6 @@ async def curation_ingest_image(
     """Ingest a single image from a path already reachable inside the container."""
     if not is_servable_image_path(body.path):
         raise HTTPException(status_code=422, detail=f'{body.path}: {UNSERVABLE_PATH_ERROR}')
-    await ensure_indexes(opensearch)
     [image_bytes] = await read_files([body.path])
     if isinstance(image_bytes, OSError):
         raise HTTPException(
@@ -149,7 +147,6 @@ async def curation_ingest_batch(
             status_code=413,
             detail=f'{len(body.items)} items exceeds the per-request limit of {max_items}',
         )
-    await ensure_indexes(opensearch)
     service = await get_ingest_service(opensearch, registry)
 
     images: list[bytes] = []
@@ -264,7 +261,6 @@ async def ingest_status(
     that ``ingest_run_id`` -- an upload run's own images doc field,
     set by ``POST /ingest/upload``'s optional ``run_id`` form field.
     """
-    await ensure_indexes(opensearch)
     query: dict[str, Any] = (
         {'term': {'ingest_run_id': run_id}} if run_id is not None else {'match_all': {}}
     )
@@ -413,7 +409,6 @@ async def ingest_region_drain(
     from src.services.detection.profile_registry import region_profile_or_neutral
     from src.services.triton_control import TritonControlService
 
-    await ensure_indexes(opensearch)
     fields = get_region_fields()
     body = {
         'size': 0,

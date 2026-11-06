@@ -26,7 +26,6 @@ from src.services.curation.crop_listing import (
 )
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
-from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.wire import item_source_excludes, serialize_item
 
 
@@ -150,7 +149,6 @@ async def list_crops(
     crops a classifier scored below the value (``confidence``) OR that have no classifier
     prediction at all (blind spots).
     """
-    await ensure_indexes(opensearch)
     if ids is not None:
         wanted = list(dict.fromkeys(i for i in (x.strip() for x in ids.split(',')) if i))
         if len(wanted) > MAX_IDS:

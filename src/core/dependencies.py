@@ -5,9 +5,8 @@ Uses FastAPI's Depends() pattern for proper lifecycle management.
 Resources are created once and reused across requests.
 """
 
-import asyncio
 import logging
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import tritonclient.grpc as grpcclient
 import tritonclient.grpc.aio as grpcclient_aio
@@ -17,6 +16,9 @@ from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_client_manager import TritonClientManager
 from src.config.settings import get_settings
 
+
+if TYPE_CHECKING:
+    import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -119,48 +121,30 @@ class OpenSearchClientFactory:
 
 
 async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
-    """Best-effort create the core + curation OpenSearch indexes at startup.
+    """Refuse to start unless every active project's indexes carry the current schema stamp.
 
-    Wrapped so a missing/not-yet-up OpenSearch instance doesn't block
-    startup -- the curation router retries its own create on the first
-    /curation/* request. Nothing else creates the core visual_search_*
-    indexes, so a fresh install's first /ingest previously auto-created them with a dynamic
-    (non-knn_vector) mapping, silently breaking every k-NN search
-    forever after; create_all_indexes is idempotent, so calling it here
-    on every boot is safe (see OpenSearchClient._search_index /
-    IndexMappingError for the read-side half of this fix).
+    Index creation, the mapping migrations and the kNN warm-up run once in the ``db-migrate``
+    step (``scripts/opensearch/migrate.py``), not in every worker: this only reads the stamps,
+    one ``_mapping`` request per project, and raises
+    :class:`~src.services.curation.index_bootstrap.MappingNotCurrentError`
+    (``opensearch_mapping_not_current``, naming the index) when one is wrong or missing.
+    A project the registry has not yet read cannot be checked here; the registry bootstrap
+    that runs first retries until it can.
 
-    Returns the background kNN-graph-warmup task (fire-and-forget, never
-    blocks startup, its own failures are logged and swallowed), or None
-    if bootstrap itself failed.
+    Returns ``None`` always: the lifespan, which this lane does not own, still stores a returned
+    warm-up task and the warm-up now belongs to ``db-migrate``.
     """
-    try:
-        from src.services.curation.index_bootstrap import ensure_indexes, warm_knn_indexes
-        from src.services.projects.bootstrap import for_each_project
+    from src.clients.curation_opensearch.lifecycle import curation_index_names
+    from src.services.curation.index_bootstrap import check_mappings_current
+    from src.services.projects.bootstrap import for_each_project
 
-        os_client = await OpenSearchClientFactory.get_client()
-        await os_client.create_all_indexes(force_recreate=False)
-        logger.info('core_visual_search_indexes_bootstrapped')
-        for slug in for_each_project():
-            # The full bootstrap (index creation, mapping migrations, classes
-            # self-heal) is cached per (worker, project), so paying it here keeps
-            # it off the first request of every recycled worker (#356). Indexes
-            # already stamped with the current schema cost one read (#376). A
-            # failure is logged inside and leaves the project uncached, so a
-            # request retries.
-            if await ensure_indexes(os_client.client):
-                logger.info(f'curation_indexes_bootstrapped project={slug}')
-            else:
-                logger.warning(f'curation_indexes_bootstrap_deferred project={slug}')
-
-        async def _warm_every_project() -> None:
-            for _slug in for_each_project():
-                await warm_knn_indexes(os_client.client)
-
-        return asyncio.create_task(_warm_every_project())
-    except Exception as exc:
-        logger.warning(f'curation_indexes_bootstrap_skipped: {exc}')
-        return None
+    os_client: OpenSearchClient | None = None
+    for slug in for_each_project(('active', 'archived')):
+        if os_client is None:
+            os_client = await OpenSearchClientFactory.get_client()
+        await check_mappings_current(os_client.client, curation_index_names())
+        logger.info(f'curation_index_mappings_current project={slug}')
+    return None
 
 
 # =============================================================================

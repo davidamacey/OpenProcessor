@@ -18,11 +18,6 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     fake_os.count = AsyncMock(return_value={'count': 0})
-    for target in (
-        'src.routers.curation.audit.ensure_indexes',
-        'src.routers.curation.crops_list.ensure_indexes',
-    ):
-        monkeypatch.setattr(target, AsyncMock(return_value=None))
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
