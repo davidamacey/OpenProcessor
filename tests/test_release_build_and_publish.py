@@ -317,11 +317,21 @@ case "$1" in
 esac
 """,
     )
-    orig_dirs = [
-        d for d in os.environ['PATH'].split(os.pathsep) if not (Path(d) / 'trivy').exists()
-    ]
+    # Dropping a PATH dir that holds trivy would also drop the coreutils beside it when
+    # trivy lives in /usr/bin, so such a dir is mirrored with every entry except trivy.
+    path_dirs: list[str] = []
+    for i, d in enumerate(os.environ['PATH'].split(os.pathsep)):
+        if not (Path(d) / 'trivy').exists():
+            path_dirs.append(d)
+            continue
+        mirror = tmp_path / f'path_without_trivy_{i}'
+        mirror.mkdir()
+        for entry in Path(d).iterdir():
+            if entry.name != 'trivy':
+                (mirror / entry.name).symlink_to(entry)
+        path_dirs.append(str(mirror))
     env = os.environ.copy()
-    env['PATH'] = os.pathsep.join([str(bindir), *orig_dirs])
+    env['PATH'] = os.pathsep.join([str(bindir), *path_dirs])
     result = subprocess.run(
         [
             str(sandbox / 'scripts' / 'release' / 'build_and_publish.sh'),
