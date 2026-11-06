@@ -110,7 +110,7 @@ def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
-        deleting = await lifecycle.delete_project(client, slug='cars', confirm='cars', force=True)
+        deleting = await lifecycle.delete_project(slug='cars', confirm='cars', force=True)
         assert deleting.status == 'deleting'
         finished = (await lifecycle.delete_project_finish(client, slug='cars')).record
         assert finished.status == 'deleted'
@@ -146,7 +146,7 @@ def test_real_delete_unloads_a_private_promoted_model_with_no_force(tmp_path, mo
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
         # No force=True: a private model must never trip `in_use`.
-        deleting = await lifecycle.delete_project(client, slug='cars', confirm='cars')
+        deleting = await lifecycle.delete_project(slug='cars', confirm='cars')
         assert deleting.status == 'deleting'
         finished = (await lifecycle.delete_project_finish(client, slug='cars')).record
         assert finished.status == 'deleted'

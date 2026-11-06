@@ -81,7 +81,8 @@ def _resolve(project: Target) -> uuid.UUID | str | None:
     if isinstance(project, _Global):
         return None
     if project is None:
-        return current_project().record.slug
+        record = current_project().record
+        return record.id or record.slug
     return project
 
 

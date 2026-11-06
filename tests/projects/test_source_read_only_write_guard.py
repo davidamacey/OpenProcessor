@@ -154,11 +154,11 @@ def test_clone_prompt_packs_source_bind_blocks_planted_write(monkeypatch) -> Non
 
     orig_ensure_fresh = ConfigStore.ensure_fresh
 
-    async def _probing_ensure_fresh(self: ConfigStore, probe_client: Any, *a: Any, **kw: Any):
+    async def _probing_ensure_fresh(self: ConfigStore, *a: Any, **kw: Any):
         bound = try_current_project()
         if bound is not None and bound.record.slug == 'source':
             _plant_write_probe()
-        return await orig_ensure_fresh(self, probe_client, *a, **kw)
+        return await orig_ensure_fresh(self, *a, **kw)
 
     monkeypatch.setattr(ConfigStore, 'ensure_fresh', _probing_ensure_fresh)
     with pytest.raises(ProjectReadOnly):
@@ -170,20 +170,37 @@ def test_clone_prompt_packs_source_bind_blocks_planted_write(monkeypatch) -> Non
 
 
 def test_clone_activations_source_bind_blocks_planted_write(monkeypatch) -> None:
-    """``clone.py:360`` (``_clone_activations``) -- ``bind_project(source,
-    read_only=True)`` around ``get_activation``."""
+    """``clone_activation_gate.py`` -- ``bind_project(source, read_only=True)`` around the source
+    config store's ``ensure_fresh``, reached once the source has an active pack."""
     client = FakeLifecycleOpenSearch()
-    _source, target = asyncio.run(_seed(client))
+    source, target = asyncio.run(_seed(client))
 
-    from src.services.config_store.documents import get_activation as orig_get_activation
+    from src.config.project_context import bind_project
+    from src.services.config_store.documents import activate, save_config
+    from src.services.config_store.store import ConfigStore
 
-    async def _probing_get_activation(probe_client: Any, index: str, axis: Any):
+    async def _activate_a_pack_on_the_source() -> None:
+        with bind_project(source):
+            saved, _ = await save_config(
+                kind='prompt_pack',
+                name='wheel',
+                body={'class_system': 'wheel'},
+                expected_revision=None,
+            )
+            await activate(
+                axis='prompt_pack', name='wheel', revision=saved.revision, expected_active=None
+            )
+
+    asyncio.run(_activate_a_pack_on_the_source())
+    orig_ensure_fresh = ConfigStore.ensure_fresh
+
+    async def _probing_ensure_fresh(self: ConfigStore, *a: Any, **kw: Any):
         bound = try_current_project()
         if bound is not None and bound.record.slug == 'source':
             _plant_write_probe()
-        return await orig_get_activation(probe_client, index, axis)
+        return await orig_ensure_fresh(self, *a, **kw)
 
-    monkeypatch.setattr('src.services.config_store.index.get_activation', _probing_get_activation)
+    monkeypatch.setattr(ConfigStore, 'ensure_fresh', _probing_ensure_fresh)
     with pytest.raises(ProjectReadOnly):
         asyncio.run(
             lifecycle.clone_settings(
@@ -197,11 +214,11 @@ def test_read_source_record_bind_blocks_planted_write(monkeypatch) -> None:
     cross-project resolver both prompt-pack and region-profile clone
     routers use."""
     client = FakeLifecycleOpenSearch()
-    _source, _target = asyncio.run(_seed(client))
+    asyncio.run(_seed(client))
 
     from src.services.config_store.clone_shared import read_source_record
 
-    async def _resolve_and_plant(_opensearch: Any) -> str:
+    async def _resolve_and_plant() -> str:
         _plant_write_probe()
         return 'never reached'
 
@@ -210,7 +227,6 @@ def test_read_source_record_bind_blocks_planted_write(monkeypatch) -> None:
             read_source_record(
                 from_project='source',
                 target_slug='target',
-                opensearch=client,
                 resolve=_resolve_and_plant,
             )
         )

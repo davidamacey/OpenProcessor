@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import io
-import uuid
 from typing import TYPE_CHECKING, Any
 
 from _class_registry_fake import registry_of
@@ -78,7 +77,9 @@ class World:
         self._seed = 0
         monkeypatch.setattr(combine_service, 'target_embedding_dim', lambda: DIM)
         self.settled: list[bool] = []
-        self.pg: Any = None  # set by a db test: every project then gets a real projects row
+        # set by a db test: every project then gets a real projects row under its own slug (the
+        # test starts from an empty projects table, as pg_registry leaves it)
+        self.pg: Any = None
 
     async def _client(self) -> QueryFakeOpenSearch:
         return self.fake
@@ -104,9 +105,7 @@ class World:
         if self.pg is not None:
             from _records_world import make_project_row
 
-            record = dataclasses.replace(
-                record, id=make_project_row(self.pg, f'{slug}-{uuid.uuid4().hex[:8]}')
-            )
+            record = dataclasses.replace(record, id=make_project_row(self.pg, slug))
         registry_of(record).seed(list(classes))
         self.records[slug] = record
         return record

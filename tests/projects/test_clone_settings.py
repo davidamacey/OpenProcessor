@@ -64,9 +64,14 @@ def test_clone_settings_copies_defaults() -> None:
     from src.config.project_context import bind_project
 
     with bind_project(source):
-        from src.services.curation.settings_store import update_curation_settings
+        from src.services.curation.settings_store import (
+            get_curation_settings,
+            update_curation_settings,
+        )
 
-        asyncio.run(update_curation_settings({'axis_x': 'value_x'}, expected_revision=0))
+        # a created project already holds its settings row, so a write names the stored revision
+        revision = asyncio.run(get_curation_settings(fresh=True))['revision']
+        asyncio.run(update_curation_settings({'axis_x': 'value_x'}, expected_revision=revision))
 
     asyncio.run(
         lifecycle.clone_settings(

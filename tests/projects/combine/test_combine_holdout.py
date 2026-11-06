@@ -16,8 +16,8 @@ pytestmark = pytest.mark.db
 
 
 @pytest.fixture(autouse=True)
-def _database(world: World, pg_env) -> None:
-    world.pg = pg_env
+def _database(world: World, pg_registry) -> None:
+    world.pg = pg_registry
 
 
 BOX = [0.1, 0.1, 0.5, 0.5]
