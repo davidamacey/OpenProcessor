@@ -13,6 +13,12 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Breaking: the control plane needs PostgreSQL and Valkey, and new secrets.** The stack adds `postgres` (PostgreSQL 18), `valkey` (Valkey 9), `db-migrate` (one-shot schema and index migration), `jobs-worker`, `jobs-beat`, `periodic-worker`, `open-vocab-worker`, `cluster-worker` and `flower` (port 4613, bound to `OP_BIND_ADDRESS`). The API and the workers refuse to start until PostgreSQL, Valkey and OpenSearch answer at the schema revision the image carries. The installer creates `secrets/postgres/`, `secrets/valkey/` and `secrets/flower/`. Back up `secrets/` and the PostgreSQL volume together; `./openprocessor db backup` and `./openprocessor db restore` cover the database.
+- **Breaking: upgrading from 0.6.0 is one step.** `./openprocessor upgrade` stops the services, starts PostgreSQL, Valkey and OpenSearch, migrates the schema, copies the 0.6.0 control data (projects, classes, configs, settings, label operations, holdout freezes) into PostgreSQL, verifies it, and only then deletes the 0.6.0 copy from OpenSearch. A failed verification stops the upgrade, writes `UPGRADE_REPORT.json` next to the backup bundle and deletes nothing. Class ids are kept; `class_registry.json` is renamed `class_registry.json.migrated`. An upgrade from 0.6.0 cannot use `--no-start`. `./setup-openprocessor.sh --rollback` restores the 0.6.0 control data from the newest bundle; anything written to PostgreSQL after the upgrade is not carried back.
+- **Breaking: `PUT /curation/projects/{project}/settings` requires `expected_revision`.** `GET` returns the current `revision`; a stale value answers `409 revision_conflict`.
+- **Breaking: retired environment variables stop startup.** `OP_EVENT_BUS`, `OP_EVENT_LOG_MAX_BYTES`, `OP_REGION_DRAIN_STATE_DIR`, `OP_GLOBAL_CONFIGS_INDEX` and `OP_PROJECTS_INDEX` are refused with a message naming them; remove them from `.env`.
+- **Breaking: the class registry moved to PostgreSQL**, superseding the OpenSearch registry document described below: the error codes `registry_not_migrated`, `registry_full` and `registry_conflict` and the `migrate-registry` command are gone.
+
 - **`/ready` (and `/health`) now probes the database, the task queue and free disk space.** A down database or queue, or a data or OpenSearch volume below `OP_DISK_CRITICAL_PCT` (default 3 %) free, answers 503 naming it; below `OP_DISK_LOW_PCT` (default 10 %) the body says `disk: low` and stays 200. Ingest, import and dataset or model upload starts answer 507 `insufficient_storage` at critical. The gauge `op_disk_free_ratio{volume}` exports the free fraction. `/live` still probes nothing. Probes now run one after another instead of concurrently.
 - **Celery workers and beat exit at start** when the database is unreachable (after a 60 s wait) or at another schema revision than the image.
 - **Breaking: error bodies no longer carry `error_type`.** The 500 body and the Triton-unavailable 503 body hold `detail` and `request_id`; use `request_id` and the server log (which still records the exception class).
@@ -69,6 +75,13 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 
+- **Control data in PostgreSQL.** Projects, classes, config documents and their activations, settings, holdout freezes, label operations, events and jobs are PostgreSQL rows; row-level security isolates each project's rows.
+- **A job runtime on Celery.** Jobs are rows in the `jobs` table run by Celery workers (`jobs-worker`, `periodic-worker`, `open-vocab-worker`, `cluster-worker`), with `jobs-beat` for periodic work. A reaper runs every 30 seconds: it recovers jobs whose worker died, resumes interrupted resumable jobs, and prunes old events and finished jobs. The existing job families still run as before and move onto it in a following change.
+- **Job routes.** `GET /curation/projects/{project}/jobs` lists a project's jobs (newest first, filtered by `kind` and `status`, keyset pages) and `GET /curation/projects/{project}/jobs/{job_id}` returns one; another project's job answers `404 job_not_found`.
+- **Serving, cluster and assist-loop presets** as revisioned documents like the prompt packs: `/curation/serving_profiles` (deployment-wide), `/curation/projects/{project}/cluster_profiles` and `/curation/projects/{project}/assist_loop_presets`, each with list, get, put, delete and activate.
+- **`./openprocessor db backup|restore|verify`** (`verify` reports class drift, missing indexes and storage problems).
+- **Settings** `OP_DB_*` (host, port, database, roles, password files, pooler, SSL mode), `OP_API_REPLICAS` and `OP_DB_API_CONNECTIONS_TOTAL` (connection pool sizing), `OP_QUEUE_URL` and `OP_QUEUE_PASSWORD_FILE` (the task queue).
+
 - `scripts/codegen/check_file_locks.py`: a shrink-only guard against file locks guarding cross-process state, and a live lease race test (`tests/live/test_job_lease_live.py`).
 - **A `small` GPU profile for 12 GB cards** (#42). The installer and `setup.sh` pick it for a Triton card with 12 to 15 GB free (`standard` is now 16 GB and up, `minimal` under 12 GB): all models, one instance each, max batch 16. It builds engines with the new small TensorRT target (2 GB workspace, engine max batch halved, floor 16). `./openprocessor models install|repair` take `--build-target default|small` and `--workspace GB`; `.env` keys `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`. `standard` is unchanged. See INSTALLATION.md, "12 GB cards".
 - Engine build stamps record the build target and workspace, so a changed target rebuilds only the affected engines and a switch between `standard` and `full` rebuilds nothing. Stamps written before this release count as the default target and workspace, so an upgrade rebuilds nothing.
@@ -108,6 +121,14 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
+- **Events are PostgreSQL rows streamed over SSE with resumable ids.** `GET /curation/events`, `GET /curation/projects/{project}/events` and `GET /curation/projects/{project}/pipeline/events` send an `id:` on every event; a client reconnecting with `Last-Event-ID` resumes there, and an expired or foreign cursor gets a `reset` event. The file event bus and the in-process event hub are gone.
+- **The class registry is a PostgreSQL table** written with optimistic concurrency (classes, names, hotkeys, the next class id).
+- **OpenSearch index creation and mapping migration run once, in `db-migrate`.** The API no longer creates or migrates indexes at worker start; it refuses to start when a project's index mapping is not current.
+- **Pause is stored in PostgreSQL** (`POST /curation/projects/{project}/pause` and `.../resume`), so every worker reads the same state.
+- **Detection and VLM stream workers share projects**: each replica claims a fair share in PostgreSQL instead of every replica taking every project.
+- **Cancel and pause are database writes.** No Celery revoke is sent; a worker refuses a message for a cancelled or paused job when it claims it.
+- **A VLM endpoint cannot target a control-plane service** (PostgreSQL, Valkey, the job workers, Flower).
+
 - Every Python dependency outside the model-output set is pinned to an exact version (`==`), identical across `requirements.txt`, `requirements-test.txt` and `pyproject.toml`, at the newest release on 2026-11-05: the web layer (uvicorn 0.54.0, pydantic 2.14.3 now declared explicitly, pydantic-settings 2.16.2), the clients (opensearch-py 3.2.0, tritonclient 2.74.0, boto3 and botocore 1.43.125, aiohttp 3.14.5), the pure-Python libraries and the dev and test tools (pytest 9.2.0, pytest-asyncio 1.4.1.post1, pytest-cov 7.1.0, ruff 0.17.4, pre-commit 4.7.0). A test now fails on any floor or unpinned line outside a shrink-only list of the packages that can change model output (numpy, OpenCV, torch, the ONNX set, the Hugging Face stack, Pillow), which are pinned with the next GPU check. The images rebuild.
 - `make gate` (`scripts/dev/gate.sh [py|fe|all]`) runs the local pre-PR checks: the installs first, then the Python track (pre-commit, the offline suite with the `addopts` marker expression, the contract and docs checks) and the frontend track (check, lint, knip, unit tests, build, e2e, the docs site build) in parallel, one log per step and a summary with exit codes, holding new steps while the host load is high.
 - CI runs only the checks a change needs a change needs and runs the offline suite in 4 balanced shards: docs-only pull requests skip the full suite, each image is rebuilt and Trivy-scanned only when its base image or requirements change (the weekly scan still covers all), and the suite takes about 16 minutes instead of 77. Coverage is combined across shards and checked once.
@@ -136,6 +157,11 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - **`/embed/image` and `TritonClient.encode_image` share one MobileCLIP preprocessor** (`center_crop_cpu`, cv2 bilinear instead of Pillow). Vectors can differ slightly from earlier ones, and a 300x187 image no longer loses a row to truncation; stored vectors are not recomputed.
 
 ### Removed
+
+- **Six per-project OpenSearch index roles** (`configs`, `classes`, `settings`, `umap_state`, `umap_viz_state`, `labels_confirmed`). A project keeps `images`, `items` and a transitional `leases` index for the job families not yet on the job runtime.
+- **The `op_projects` and `op_global_configs` indexes**; the upgrade moves their data to PostgreSQL.
+- **`./openprocessor curation migrate-registry`** and `scripts/curation/migrate_class_registry.py`; the upgrade does the move.
+- **`POST /curation/projects/{project}/classes/sync_to_opensearch`.**
 
 - **Breaking: `detector` is gone from the ingest policy** (`GET`/`PUT /ingest/policy`, and its 422 `detector_not_servable` / 503 responses). It moved to ingest profiles. There is no migration: a `detector` already stored in a project's policy is reset when the policy is next read (logged as `retired_policy_field_reset`, naming the replacement), and the project runs the deployment's `OP_INGEST_PRIMARY_*` detector until you create and activate an ingest profile.
 

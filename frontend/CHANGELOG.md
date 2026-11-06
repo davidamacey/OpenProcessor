@@ -27,10 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The label-operation dialog no longer shows the "members not recorded" notice: every operation records its members, so `members_known` is gone from the wire and the UI. Label operations may have the kinds `assist_loop_propagate` and `assist_loop_review`, and their ids are UUIDs.
 - Dev dependency bumps within their ranges (the closed Dependabot group #474, regenerated with `npm update`): vite 8.3.6, vitest 5.1.0, eslint 10.14.0, eslint-plugin-svelte 3.24.0, globals 17.14.0, knip 6.44.1, svelte-check 4.7.8, tailwindcss and `@tailwindcss/vite` 4.3.4. TypeScript stays on 6.0 and jsdom on 30.x.
 - Dev dependency bumps (dependabot #433, re-applied by hand): `@sveltejs/adapter-static` 4.0.1, `@sveltejs/kit` 3.1.1, `@types/node` 26.6.6, `knip` 6.44.0; the `node` and `nginx-unprivileged` image digests (#423).
 
 - Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
+
+### Removed
+
+- The classes page "Sync to OpenSearch" button and its client call: the class registry is stored in PostgreSQL and the route is gone.
 
 ### Added
 
