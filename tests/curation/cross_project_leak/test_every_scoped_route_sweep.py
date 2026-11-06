@@ -165,6 +165,8 @@ def _sweep(
     route issued, counted per index role)."""
     app, records = env.app, env.records
     own_indexes = set(records[slug].resources.indexes.values())
+    # An event names its project by the bound record's row id (a record without one by slug).
+    own_event_targets = {slug, str(records[slug].id)}
     foreign_indexes = {
         name: other
         for other, record in records.items()
@@ -219,7 +221,7 @@ def _sweep(
         leaks.extend(
             f'{tag}: event {event.get("type")} went to project {event.get("project")!r}'
             for event in route_events
-            if event.get('project') != slug and key not in UNBOUND_BY_DESIGN
+            if event.get('project') not in own_event_targets and key not in UNBOUND_BY_DESIGN
         )
 
         body = response.text
