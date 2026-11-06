@@ -50,7 +50,7 @@ deleted) and the registry models in `src/clients/curation_opensearch/__init__.py
 `src/services/curation/class_ensure.py`; `src/routers/curation/{classes,classes_write,classes_merge,classes_crops,_class_hotkeys,_class_models,class_seed}.py`;
 every call site of the registry API (`rg -ln "get_registry|ensure_class|add_class|ClassRegistry" src scripts`)
 outside files another stage-2 lane owns, including the scripts no lane owned before (review fix
-R-18): `scripts/curation/repair_merged_active_classes.py`, `scripts/curation/seed_class_registry.py`,
+R-18): `scripts/curation/seed_class_registry.py`,
 `scripts/curation/seed_live_harness.py` (the live harness seed would break otherwise); tests under
 `tests/classes/`, `tests/db/test_class_registry.py`; the fake it retires: `tests/_registry_doc_fake.py` (R-14).
 
