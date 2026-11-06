@@ -9240,6 +9240,31 @@
         "title": "DatasetUndoRequest",
         "type": "object"
       },
+      "DatasetUploadAccepted": {
+        "description": "The archive is stored and its extraction queued. The job's result carries\n``{upload_id, dataset_path, bytes, files}`` once it completes.",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "queued",
+            "title": "Status",
+            "type": "string"
+          },
+          "upload_id": {
+            "title": "Upload Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "job_id",
+          "status"
+        ],
+        "title": "DatasetUploadAccepted",
+        "type": "object"
+      },
       "DatasetUploadLimits": {
         "properties": {
           "max_bytes": {
@@ -9266,34 +9291,6 @@
           "preview_max_files"
         ],
         "title": "DatasetUploadLimits",
-        "type": "object"
-      },
-      "DatasetUploadResponse": {
-        "properties": {
-          "bytes": {
-            "title": "Bytes",
-            "type": "integer"
-          },
-          "dataset_path": {
-            "title": "Dataset Path",
-            "type": "string"
-          },
-          "files": {
-            "title": "Files",
-            "type": "integer"
-          },
-          "upload_id": {
-            "title": "Upload Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "upload_id",
-          "dataset_path",
-          "bytes",
-          "files"
-        ],
-        "title": "DatasetUploadResponse",
         "type": "object"
       },
       "DeleteBlockingIssue": {
@@ -44045,6 +44042,7 @@
     },
     "/curation/projects/{project}/datasets/uploads": {
       "post": {
+        "description": "Store the archive and queue its extraction (`dataset_upload_extract`); nothing is\nextracted in the request. Poll the job: its result names the extracted `dataset_path`.",
         "operationId": "upload_dataset_curation_projects__project__datasets_uploads_post",
         "parameters": [
           {
@@ -44068,11 +44066,11 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatasetUploadResponse"
+                  "$ref": "#/components/schemas/DatasetUploadAccepted"
                 }
               }
             },

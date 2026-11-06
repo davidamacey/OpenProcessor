@@ -16,6 +16,7 @@ from fastapi import File, Query, Response, UploadFile
 
 from src.config import get_curation_config
 from src.core.disk_space import DISK_GUARD
+from src.db.session import async_session_factory
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._dataset_import_models import (
@@ -28,11 +29,11 @@ from src.routers.curation._dataset_import_models import (
     DatasetPreview,
     DatasetUndoReportWire,
     DatasetUndoRequest,
-    DatasetUploadResponse,
+    DatasetUploadAccepted,
 )
 from src.routers.curation._dataset_import_views import job_wire, preview_wire
 from src.routers.curation._dataset_issue_wire import issues_to_wire
-from src.services.curation.dataset_import import runner
+from src.services.curation.dataset_import import runner, upload_job
 from src.services.curation.dataset_import.context import ImportContext
 from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest
 from src.services.curation.dataset_import.paths import (
@@ -53,11 +54,7 @@ from src.services.curation.dataset_import.store import (
     open_store,
 )
 from src.services.curation.dataset_import.undo import UndoContext, undo_import
-from src.services.curation.dataset_import.upload import (
-    ArchiveInvalidError,
-    UploadTooLargeError,
-    receive_archive,
-)
+from src.services.curation.dataset_import.upload import UploadTooLargeError
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_detector import (
     IngestProfileUnresolvedError,
@@ -209,30 +206,27 @@ async def _context(
 @router.post(
     '/datasets/uploads',
     dependencies=[DISK_GUARD],
-    response_model=DatasetUploadResponse,
-    status_code=201,
+    response_model=DatasetUploadAccepted,
+    status_code=202,
 )
-async def upload_dataset(file: Annotated[UploadFile, File()]) -> DatasetUploadResponse:
-    cfg = get_curation_config()
+async def upload_dataset(file: Annotated[UploadFile, File()]) -> DatasetUploadAccepted:
+    """Store the archive and queue its extraction (`dataset_upload_extract`); nothing is
+    extracted in the request. Poll the job: its result names the extracted `dataset_path`."""
 
     async def stream() -> Any:
         while chunk := await file.read(1024 * 1024):
             yield chunk
 
     try:
-        result = await receive_archive(stream(), upload_root=Path(cfg.upload_root))
+        async with async_session_factory()() as session:
+            upload_id, job = await upload_job.receive_and_queue(
+                session, stream(), filename=file.filename or 'dataset'
+            )
     except UploadTooLargeError as exc:
         raise api_error(
             413, 'upload_too_large', 'the archive is over the upload limit', limit=exc.limit
         ) from None
-    except ArchiveInvalidError as exc:
-        raise api_error(422, 'archive_invalid', str(exc)) from None
-    return DatasetUploadResponse(
-        upload_id=result.upload_id,
-        dataset_path=str(result.dataset_path),
-        bytes=result.bytes,
-        files=result.files,
-    )
+    return DatasetUploadAccepted(upload_id=str(upload_id), job_id=str(job.id), status='queued')
 
 
 # ------------------------------------------------------------------ preview

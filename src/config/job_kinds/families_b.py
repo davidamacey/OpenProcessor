@@ -42,4 +42,15 @@ KINDS: tuple[JobKind, ...] = (
         exclusive_group='combine',
         auto_resume=True,
     ),
+    JobKind(
+        name='dataset_upload_extract',
+        task_name='op.families_b.dataset_upload_extract',
+        queue=TaskQueues.JOBS,
+        project_scope='project',
+        soft_limit_s=3 * _H,
+        hard_limit_s=3 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='dataset_upload',
+        exclusive_scope='upload_id',
+    ),
 )

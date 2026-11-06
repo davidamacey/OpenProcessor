@@ -226,49 +226,61 @@ def _existing_upload(final: Path, upload_id: str, size: int) -> UploadResult:
     return UploadResult(upload_id, _single_root(final), size, files)
 
 
-async def receive_archive(stream: AsyncIterator[bytes], *, upload_root: Path) -> UploadResult:
-    """Stream ``stream`` to disk, then extract it content-addressed.
+async def receive_to_file(
+    stream: AsyncIterator[bytes], destination: Path, *, cap: int | None = None
+) -> tuple[int, str]:
+    """Stream ``stream`` into ``destination`` (written aside, then moved into place).
 
-    Raises :class:`UploadTooLargeError` the moment the stream passes
-    ``OP_DATASET_UPLOAD_MAX_BYTES`` and :class:`ArchiveInvalidError` for an
-    unsafe archive (nothing is left extracted).
+    Returns ``(bytes, sha256)``. Raises :class:`UploadTooLargeError` the moment the stream passes
+    ``cap`` (default ``OP_DATASET_UPLOAD_MAX_BYTES``); nothing is left behind then.
+    """
+    limit = cap if cap is not None else limits.upload_max_bytes()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    part = destination.with_name(f'{destination.name}.part')
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with part.open('wb') as fh:
+            async for chunk in stream:
+                size += len(chunk)
+                if size > limit:
+                    raise UploadTooLargeError(limit)
+                digest.update(chunk)
+                fh.write(chunk)
+        part.replace(destination)
+    finally:
+        part.unlink(missing_ok=True)
+    return size, digest.hexdigest()
+
+
+def extract_received(archive: Path, *, sha256: str, size: int, upload_root: Path) -> UploadResult:
+    """Extract a received ``archive`` content-addressed under ``<upload_root>/datasets/``.
+
+    Raises :class:`ArchiveInvalidError` for an unsafe archive (nothing is left extracted). A
+    second extraction of the same bytes finds the first and only refreshes its age.
     """
     root = datasets_root(upload_root)
     incoming = root / '.incoming'
     incoming.mkdir(parents=True, exist_ok=True)
     mark_project_dir(root)
-    cap = limits.upload_max_bytes()
-    tmp = incoming / f'{uuid.uuid4().hex}.part'
-    digest = hashlib.sha256()
-    size = 0
+    upload_id = sha256[:16]
+    final = root / upload_id
+    if _populated(final):
+        return _existing_upload(final, upload_id, size)
+    staging = incoming / f'{uuid.uuid4().hex}.dir'
     try:
-        with tmp.open('wb') as fh:
-            async for chunk in stream:
-                size += len(chunk)
-                if size > cap:
-                    raise UploadTooLargeError(cap)
-                digest.update(chunk)
-                fh.write(chunk)
-        upload_id = digest.hexdigest()[:16]
-        final = root / upload_id
-        if _populated(final):
-            return _existing_upload(final, upload_id, size)
-        staging = incoming / f'{uuid.uuid4().hex}.dir'
+        files, _written = safe_extract(archive, staging)
         try:
-            files, _written = safe_extract(tmp, staging)
-            try:
-                staging.replace(final)
-            except OSError:
-                # A concurrent upload of the same archive finished first: its
-                # extraction is identical, and must not be removed under it.
-                if not _populated(final):
-                    raise
-                return _existing_upload(final, upload_id, size)
-        finally:
-            shutil.rmtree(staging, ignore_errors=True)
-        return UploadResult(upload_id, _single_root(final), size, files)
+            staging.replace(final)
+        except OSError:
+            # A concurrent extraction of the same archive finished first: it is identical, and
+            # must not be removed under it.
+            if not _populated(final):
+                raise
+            return _existing_upload(final, upload_id, size)
     finally:
-        tmp.unlink(missing_ok=True)
+        shutil.rmtree(staging, ignore_errors=True)
+    return UploadResult(upload_id, _single_root(final), size, files)
 
 
 def sweep_uploads(
@@ -318,7 +330,8 @@ __all__ = [
     'UploadResult',
     'UploadTooLargeError',
     'datasets_root',
-    'receive_archive',
+    'extract_received',
+    'receive_to_file',
     'safe_extract',
     'sweep_uploads',
     'upload_id_of',

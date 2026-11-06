@@ -244,11 +244,13 @@ class DatasetUndoRequest(BaseModel):
     deprecate_created_classes: bool = True
 
 
-class DatasetUploadResponse(BaseModel):
+class DatasetUploadAccepted(BaseModel):
+    """The archive is stored and its extraction queued. The job's result carries
+    ``{upload_id, dataset_path, bytes, files}`` once it completes."""
+
     upload_id: str
-    dataset_path: str
-    bytes: int
-    files: int
+    job_id: str
+    status: Literal['queued']
 
 
 class DatasetFormatInfo(BaseModel):

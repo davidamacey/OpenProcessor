@@ -138,9 +138,10 @@ def test_reprocess_and_upload_dirs_are_marked_with_their_project(
     import io
     import zipfile
 
+    from curation.dataset_import.upload_support import receive_archive
     from src.config.project_context import ProjectDirMismatchError, bind_project
     from src.services.curation import reprocess_job
-    from src.services.curation.dataset_import.upload import datasets_root, receive_archive
+    from src.services.curation.dataset_import.upload import datasets_root
 
     monkeypatch.setenv('OP_REPROCESS_JOBS_DIR', str(leak_env.root / 'reprocess'))
     buf = io.BytesIO()

@@ -15,9 +15,10 @@ from src.services.curation.dataset_import.upload import (
     ArchiveInvalidError,
     UploadTooLargeError,
     datasets_root,
-    receive_archive,
     safe_extract,
 )
+
+from .upload_support import receive_archive
 
 
 if TYPE_CHECKING:
@@ -239,8 +240,7 @@ async def test_upload_over_the_cap_is_refused_mid_stream_and_leaves_nothing(
         await receive_archive(endless(), upload_root=tmp_path)
     assert exc.value.limit == 2500
     assert read <= 3000  # stopped as soon as it passed the cap
-    root = datasets_root(tmp_path)
-    assert [p.name for p in root.rglob('*') if p.is_file()] == ['.project']
+    assert not datasets_root(tmp_path).exists()  # nothing was extracted, no directory made
 
 
 @pytest.mark.asyncio

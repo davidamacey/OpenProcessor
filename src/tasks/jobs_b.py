@@ -68,6 +68,16 @@ async def class_projection_sync(ctx: JobContext) -> Any:
         return await run_projection_sync(ctx, await ctx.client('opensearch'))
 
 
+# --- dataset import ----------------------------------------------------------------------------
+
+
+async def dataset_upload_extract(ctx: JobContext) -> Any:
+    from src.services.curation.dataset_import.upload_job import run_extract
+
+    with _bound(await _record(ctx)):
+        return await run_extract(ctx)
+
+
 # --- combine -----------------------------------------------------------------------------------
 
 
@@ -79,6 +89,7 @@ async def combine(ctx: JobContext) -> Any:
 
 
 _FACTORIES = {'opensearch': _opensearch}
+register_job('dataset_upload_extract', dataset_upload_extract)
 register_job('class_merge', class_merge, client_factories=_FACTORIES)
 register_job('class_projection_sync', class_projection_sync, client_factories=_FACTORIES)
 register_job('combine', combine, client_factories=_FACTORIES)
