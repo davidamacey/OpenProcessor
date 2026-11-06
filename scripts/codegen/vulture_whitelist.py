@@ -128,3 +128,4 @@ _.record_capabilities  # InventoryWriter protocol method, called by start_invent
 _.touch_devices  # InventoryWriter protocol method, called by refresh_inventory on the registered writer
 _.upsert_devices  # InventoryWriter protocol method, called by start_inventory on the registered writer
 _.capabilities  # parameter of the InventoryWriter protocol method, filled by the registered writer
+_.bind_request_id  # src/core/logging.py, binds the id on both ContextVars; tests/integration/test_request_id_propagation.py asserts the binding

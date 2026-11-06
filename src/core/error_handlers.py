@@ -57,7 +57,6 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
             'request_id': req_id,
         },
         headers={
-            'X-Request-ID': req_id,
             'Retry-After': str(TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS),
         },
     )
@@ -80,7 +79,6 @@ async def triton_deadline_response(request: Request, exc: TritonDeadlineError) -
             'request_id': req_id,
             'error_type': type(exc).__name__,
         },
-        headers={'X-Request-ID': req_id},
     )
 
 
@@ -104,7 +102,6 @@ async def upstream_unavailable_response(request: Request, exc: UpstreamError) ->
             'request_id': req_id,
         },
         headers={
-            'X-Request-ID': req_id,
             'Retry-After': str(TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS),
         },
     )
@@ -126,5 +123,4 @@ async def faces_disabled_response(request: Request, exc: FacesDisabledError) -> 
     return JSONResponse(
         status_code=400,
         content={'detail': str(exc), 'error': 'faces_disabled', 'request_id': req_id},
-        headers={'X-Request-ID': req_id},
     )

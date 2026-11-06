@@ -23,6 +23,7 @@ from kombu.exceptions import KombuError
 
 from src.config.queue import QueueSettings, TaskQueues, broker_transport_options
 from src.config.task_routes import ROUTES, celery_task_routes
+from src.tasks.log_context import install_log_context
 
 
 if TYPE_CHECKING:
@@ -57,6 +58,7 @@ def producer_app() -> Celery:
 
 def _build_producer(broker_url: str | None) -> Celery:
     """``broker_url`` is for tests (an in-memory broker); production reads the queue settings."""
+    install_log_context()
     app = Celery('openprocessor-producer', set_as_current=False)
     app.config_from_object(
         {

@@ -11,6 +11,7 @@ from typing import Any
 from celery.signals import beat_init, worker_init
 
 from src.config.retired_env import reject_retired_env
+from src.tasks.log_context import install_log_context
 from src.tasks.runtime.gpu_app import build_app, install_worker_signals
 
 
@@ -36,6 +37,7 @@ TASK_MODULES = (
 
 app = build_app(TASK_MODULES)
 install_worker_signals()
+install_log_context()
 
 
 @worker_init.connect(weak=False)

@@ -41,7 +41,6 @@ def too_large_response() -> JSONResponse:
             'max_file_size_mb': cap_mb,
             'request_id': req_id,
         },
-        headers={'X-Request-ID': req_id},
     )
 
 
