@@ -8,14 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import pytest
-from fixtures.job_fixtures import FakeProducer  # noqa: F401
 from fixtures.job_rows import insert_row, make_project, sql
+from fixtures.reaper_support import Broker, environment, reaper, row, status
 
 from src.clients import task_queue
 from src.config.job_kinds import KINDS
 from src.config.job_kinds.kind import JobKind
 from src.config.queue import TaskQueues
-from src.services.jobs.reaper import Reaper
 
 
 if TYPE_CHECKING:
@@ -27,25 +26,6 @@ pytestmark = pytest.mark.db
 PAST = dt.datetime.now(dt.UTC) - dt.timedelta(hours=1)
 
 
-class Broker:
-    """A fake producer and marker: records dispatches, answers a chosen marker state."""
-
-    def __init__(self) -> None:
-        self.sent: list[tuple[str, uuid.UUID]] = []
-        self.marker = task_queue.QueuedState.ABSENT
-        self.down = False
-        self.lock = threading.Lock()
-
-    def dispatch(self, kind: str, job_id: uuid.UUID) -> None:
-        if self.down:
-            raise task_queue.QueueUnavailable('broker down')
-        with self.lock:
-            self.sent.append((kind, job_id))
-
-    def state(self, _job_id: str) -> task_queue.QueuedState:
-        return self.marker
-
-
 @pytest.fixture
 def broker() -> Broker:
     return Broker()
@@ -53,38 +33,7 @@ def broker() -> Broker:
 
 @pytest.fixture
 def env(pg, pg_env, monkeypatch):
-    """The database environment and the announcements muted."""
-    monkeypatch.setattr('src.services.jobs.reaper.wake', lambda _project: None)
-    # the reaper acts across projects: start every test from an empty control plane
-    for table in (
-        'search_projection_tasks',
-        'stream_worker_claims',
-        'worker_capabilities',
-        'gpu_devices',
-        'events',
-        'jobs',
-    ):
-        sql(pg, f'DELETE FROM {table}')
-    yield pg
-    import asyncio
-
-    from src.db.engine import dispose_engines
-
-    asyncio.run(dispose_engines())
-
-
-def reaper(broker: Broker, **kwargs) -> Reaper:
-    return Reaper(queued_state=broker.state, dispatcher=broker.dispatch, **kwargs)
-
-
-def row(pg, job_id):
-    cols = 'status, retry_count, attempt, error_code, owner, dispatch_count, pause_reason'
-    [found] = sql(pg, f'SELECT {cols} FROM jobs WHERE id = %s', job_id)
-    return found
-
-
-def status(pg, job_id) -> str:
-    return row(pg, job_id)[0]
+    yield from environment(pg, monkeypatch)
 
 
 # --- a clean database -----------------------------------------------------------------------
