@@ -58,6 +58,46 @@ services:
       - ./VERSION:/app/VERSION:ro
       - ./examples:/app/examples:ro
 
+  # The control-plane Python services use the same image as api. Celery does not hot-reload: after
+  # editing ./src or ./scripts, `docker compose -p <name> restart jobs-worker` (likewise
+  # periodic-worker, open-vocab-worker, jobs-beat, flower; db-migrate runs again on `up`).
+  db-migrate:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  jobs-worker:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./examples:/app/examples:ro
+
+  periodic-worker:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  open-vocab-worker:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  jobs-beat:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
+  flower:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
   # The frontend builds from ./frontend (its Dockerfile is a multi-stage static build + nginx).
   cropwright:
     build:

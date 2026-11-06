@@ -215,3 +215,59 @@ def test_valkey_reads_its_conf_from_a_tmpfs_copy_the_dropped_user_can_read() -> 
     assert 'chown valkey:valkey /run/valkey/valkey.conf' in entry
     assert vk['command'][1] == '/run/valkey/valkey.conf'
     assert any(str(t).startswith('/run/valkey') for t in vk['tmpfs'])
+
+
+def _overlay(path: str) -> dict[str, Any]:
+    from compose._helpers import REPO_ROOT, _load_yaml
+
+    return _load_yaml(REPO_ROOT / path)
+
+
+DEV_PYTHON = (
+    'db-migrate',
+    'jobs-worker',
+    'periodic-worker',
+    'open-vocab-worker',
+    'jobs-beat',
+    'flower',
+)
+
+
+@pytest.mark.parametrize('name', DEV_PYTHON)
+def test_dev_overlay_builds_and_mounts_source_for_the_new_python_services(name: str) -> None:
+    svc = _overlay('docker-compose.dev.yml')['services'][name]
+    assert svc['build']['target'] == 'api'
+    assert './src:/app/src:ro' in svc['volumes']
+    assert './scripts:/app/scripts:ro' in svc['volumes']
+
+
+def test_dev_overlay_says_celery_does_not_hot_reload() -> None:
+    from compose._helpers import REPO_ROOT
+
+    text = (REPO_ROOT / 'docker-compose.dev.yml').read_text()
+    assert 'Celery does not hot-reload' in text
+    assert 'restart jobs-worker' in text
+
+
+HARNESS_NEW = ('postgres', 'valkey', 'db-migrate', 'jobs-worker', 'periodic-worker', 'jobs-beat')
+
+
+@pytest.mark.parametrize('name', HARNESS_NEW)
+def test_live_harness_runs_the_control_plane_without_fixed_names_or_host_ports(name: str) -> None:
+    harness = _overlay('docker/test/compose.yml')
+    svc = harness['services'][name]
+    assert 'container_name' not in svc, 'the harness scales jobs-worker with --scale'
+    assert 'ports' not in svc
+    assert harness['name'] == 'op-live-verify'
+
+
+def test_live_harness_api_waits_for_the_migration_and_never_mounts_the_docker_socket() -> None:
+    from compose._helpers import REPO_ROOT
+
+    harness = _overlay('docker/test/compose.yml')
+    assert harness['services']['api']['depends_on']['db-migrate']['condition'] == (
+        'service_completed_successfully'
+    )
+    assert 'docker.sock' not in (REPO_ROOT / 'docker/test/compose.yml').read_text().replace(
+        '/var/run/docker.sock is NEVER mounted', ''
+    )
