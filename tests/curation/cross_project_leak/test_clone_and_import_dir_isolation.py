@@ -33,12 +33,9 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     the target.
     """
     client = TestClient(leak_env.app, raise_server_exceptions=False)
-    from src.config.curation_roles import IndexRole
-
     _stored_prompt_pack(leak_env, 'alpha')
     _stored_region_profile(leak_env, 'alpha')
-    source_configs_index = leak_env.records['alpha'].resources.indexes[IndexRole.CONFIGS]
-    target_configs_index = leak_env.records['beta'].resources.indexes[IndexRole.CONFIGS]
+    source_indexes = set(leak_env.records['alpha'].resources.indexes.values())
 
     writes_before = list(leak_env.transport.writes)
 
@@ -55,8 +52,8 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     assert r2.status_code == 201, r2.text
 
     new_writes = leak_env.transport.writes[len(writes_before) :]
-    assert source_configs_index not in new_writes
-    assert target_configs_index not in new_writes  # the config store is PostgreSQL
+    # the config store is PostgreSQL: a clone writes no OpenSearch document of the source
+    assert not source_indexes & set(new_writes)
 
     alpha = SCOPED.format(project='alpha')
     beta = SCOPED.format(project='beta')

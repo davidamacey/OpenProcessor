@@ -52,7 +52,6 @@ from curation.cross_project_leak._constants import API, CLASS_NAMES, SCOPED, SLU
 from curation.cross_project_leak._route_bodies import route_bodies, route_params
 from curation.cross_project_leak._route_tables import (
     CROP_FOR,
-    CROSS_PROJECT_CONFIG_READS,
     EXPECTED_5XX,
     NO_WRITE,
     POSTGRES_BACKED_PREFIXES,
@@ -164,8 +163,6 @@ def _sweep(
     """Call every scoped route (or those ``only`` accepts) as ``slug``.
     Returns (leaks, routes that wrote, the OpenSearch request shapes each
     route issued, counted per index role)."""
-    from src.config.curation_roles import IndexRole
-
     app, records = env.app, env.records
     own_indexes = set(records[slug].resources.indexes.values())
     foreign_indexes = {
@@ -173,11 +170,6 @@ def _sweep(
         for other, record in records.items()
         if other != slug
         for name in record.resources.indexes.values()
-    }
-    foreign_configs = {
-        record.resources.indexes[IndexRole.CONFIGS]: other
-        for other, record in records.items()
-        if other != slug
     }
     foreign_markers = [m for other in SLUGS if other != slug for m in _markers(other)]
     bodies = route_bodies(slug, records[slug].resources.export_root)
@@ -217,12 +209,6 @@ def _sweep(
         )
 
         for bound, _verb, os_url, index in route_accesses:
-            if (
-                key in CROSS_PROJECT_CONFIG_READS
-                and _verb == 'GET'
-                and foreign_configs.get(index) == bound
-            ):
-                continue
             if index == '*' or index in foreign_indexes:
                 leaks.append(
                     f'{tag}: bound={bound} reached {foreign_indexes.get(index, "every")!r} '

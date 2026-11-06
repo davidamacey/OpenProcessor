@@ -7,15 +7,14 @@ running the ``env`` built-in -- so a deleted project used to show up in
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from curation.cross_project_leak import _env as _sweep
-from curation.cross_project_leak._seeders import _promoted_model
+from curation.cross_project_leak._seeders import _clear_activations, _promoted_model
 from fastapi.testclient import TestClient
 
 from projects.test_model_sharing_used_by import MODEL, _activate_profile, _put
-from src.config.curation_roles import IndexRole
 from src.db.repos import projects as repo
 from src.services.projects.registry import get_project_registry
 from src.services.projects.store import run_repo
@@ -50,12 +49,9 @@ def _remove(env: LeakEnv, slug: str, status: str) -> None:
 
 def _vlm_runners(name: str) -> list[str]:
     """What ``GET /vlm/endpoints`` (``active_in``) and ``DELETE`` read."""
-    from src.core.dependencies import app_state
     from src.services.config_store.vlm_usage import activations_by_project, slugs_running
 
-    wrapper = app_state._opensearch_client
-    assert wrapper is not None
-    activations = asyncio.run(activations_by_project(wrapper.client))
+    activations = asyncio.run(activations_by_project())
     return slugs_running(activations, name)
 
 
@@ -79,17 +75,13 @@ def test_every_listing_drops_a_project_once_it_is_deleted(leak_env: LeakEnv, sta
 
 
 def test_a_project_with_no_activation_that_still_exists_runs_env(leak_env: LeakEnv) -> None:
-    index = leak_env.records['beta'].resources.indexes[IndexRole.CONFIGS]
-    leak_env.transport.store[index].pop('activation:vlm')
+    _clear_activations(leak_env, 'beta', 'vlm')
     assert _vlm_runners('env') == ['beta']
 
 
-def test_read_each_project_skips_gone_projects(leak_env: LeakEnv) -> None:
-    from src.services.config_store.project_usage import read_each_project
-
-    async def _slug(_index: str) -> str:
-        return 'seen'
+def test_the_activation_listing_skips_gone_projects(leak_env: LeakEnv) -> None:
+    from src.services.config_store.vlm_usage import activations_by_project
 
     _remove(leak_env, 'beta', 'deleted')
-    seen: Any = asyncio.run(read_each_project(_slug))
+    seen = asyncio.run(activations_by_project())
     assert set(seen) == {'alpha', 'default'}
