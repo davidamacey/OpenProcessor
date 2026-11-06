@@ -166,7 +166,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             for c in reg.classes
         ],
         thresholds=thresholds,
-        reserved_hotkeys=await project_reserved_hotkeys(opensearch),
+        reserved_hotkeys=await project_reserved_hotkeys(),
     )
 
 

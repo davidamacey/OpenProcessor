@@ -126,7 +126,7 @@ def test_keymap_source_bind_blocks_planted_write(monkeypatch) -> None:
     client = FakeLifecycleOpenSearch()
     _source, target = asyncio.run(_seed(client))
 
-    async def _probing_get_keymap_doc(_client: Any, _index: str) -> Any:
+    async def _probing_get_keymap_doc() -> Any:
         _plant_write_probe()
         from src.services.curation.keymap import KeymapDoc
 

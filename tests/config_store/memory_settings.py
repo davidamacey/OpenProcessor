@@ -25,6 +25,8 @@ class _Row:
         self.refresh_state: dict[str, Any] | None = None
         self.refresh_revision = 0
         self.projection: dict[str, Any] | None = None
+        self.keymap: dict[str, list[str]] = {}
+        self.keymap_revision = 0
 
 
 class MemorySettings:
@@ -112,6 +114,51 @@ class MemorySettings:
         row.refresh_state = state.model_dump(exclude={'revision'})
         return RefreshState(**row.refresh_state, revision=row.refresh_revision)
 
+    async def get_keymap_doc(self):
+        from src.services.curation.keymap import KeymapDoc
+
+        row = self._row
+        return KeymapDoc(
+            overrides=dict(row.keymap),
+            revision=row.keymap_revision,
+            updated_at=None if row.keymap_revision == 0 else '2026-01-01T00:00:00+00:00',
+            is_default=not row.keymap,
+        )
+
+    async def save_keymap_doc(self, *, overrides, expected_revision):
+        from src.services.curation.keymap import KeymapDoc, load_registry
+
+        row = self._row
+        if expected_revision != row.keymap_revision:
+            raise RevisionConflictError(row.keymap_revision)
+        registry = load_registry()
+        row.keymap = {
+            aid: combos
+            for aid, combos in overrides.items()
+            if aid in registry.actions and list(combos) != list(registry.actions[aid].default)
+        }
+        row.keymap_revision += 1
+        return KeymapDoc(
+            overrides=dict(row.keymap),
+            revision=row.keymap_revision,
+            updated_at='2026-01-01T00:00:00+00:00',
+            is_default=not row.keymap,
+        )
+
+    async def publish_keymap_changed(self, doc):
+        from src.services.curation.event_hub import get_event_hub
+
+        get_event_hub().publish(
+            {
+                'type': 'config.changed',
+                'topic': 'config',
+                'axis': 'keymap',
+                'name': None,
+                'config_revision': 0,
+                'keymap_revision': doc.revision,
+            }
+        )
+
     async def load_run_metadata(self):
         from src.services.curation.embedding_viz_read import ProjectionNotBuiltError
 
@@ -179,6 +226,10 @@ def install(monkeypatch: pytest.MonkeyPatch) -> MemorySettings:
         ('src.services.curation.vlm_rep_claims', 'write_policy', memory.write_policy),
     ):
         monkeypatch.setattr(f'{module}.{name}', replacement)
+    for module in ('src.services.curation.keymap', 'src.routers.curation.keymap'):
+        monkeypatch.setattr(f'{module}.get_keymap_doc', memory.get_keymap_doc)
+        monkeypatch.setattr(f'{module}.save_keymap_doc', memory.save_keymap_doc)
+        monkeypatch.setattr(f'{module}.publish_keymap_changed', memory.publish_keymap_changed)
     monkeypatch.setattr(
         'src.services.curation.embedding_viz_read._load_run_metadata', memory.load_run_metadata
     )

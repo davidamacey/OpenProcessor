@@ -178,13 +178,11 @@ def test_clone_keymap_axis_all_or_nothing_reports_class_conflicts(
     target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
     saved: dict[str, dict[str, list[str]]] = {}
 
-    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else target_doc
 
-    async def _fake_save(
-        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
-    ) -> KeymapDoc:
+    async def _fake_save(*, overrides: dict[str, list[str]], expected_revision: int) -> KeymapDoc:
         current = try_current_project()
         saved[current.record.slug if current else '?'] = overrides
         return KeymapDoc(
@@ -248,13 +246,11 @@ def test_clone_keymap_axis_copies_overrides_when_no_conflicts(
     target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
     saved: dict[str, dict[str, list[str]]] = {}
 
-    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else target_doc
 
-    async def _fake_save(
-        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
-    ) -> KeymapDoc:
+    async def _fake_save(*, overrides: dict[str, list[str]], expected_revision: int) -> KeymapDoc:
         current = try_current_project()
         saved[current.record.slug if current else '?'] = overrides
         return KeymapDoc(
@@ -295,7 +291,7 @@ def _clone_keymap(
     target = registry.get('target')
     assert target is not None
 
-    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         if current and current.record.slug == 'source':
             return KeymapDoc(
@@ -305,9 +301,7 @@ def _clone_keymap(
 
     saves: list[dict[str, list[str]]] = []
 
-    async def _fake_save(
-        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
-    ) -> KeymapDoc:
+    async def _fake_save(*, overrides: dict[str, list[str]], expected_revision: int) -> KeymapDoc:
         saves.append(overrides)
         return KeymapDoc(
             overrides=overrides, revision=expected_revision + 1, updated_at=None, is_default=False

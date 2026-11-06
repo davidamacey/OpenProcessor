@@ -28,6 +28,8 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
         'labels_confirmed_index',
         'classes_index',
         'settings_index',
+        'umap_state_index',
+        'umap_viz_state_index',
         'configs_index',
         'class_registry_path',
         'export_root',

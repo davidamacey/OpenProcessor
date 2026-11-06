@@ -138,11 +138,11 @@ def test_clone_settings_route_serves_keymap_conflicts_structured(
     )
     target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
 
-    async def _fake_get(_client, _index) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else target_doc
 
-    async def _fake_save(_client, _index, *, overrides, expected_revision) -> KeymapDoc:
+    async def _fake_save(*, overrides, expected_revision) -> KeymapDoc:
         return KeymapDoc(
             overrides=overrides,
             revision=expected_revision + 1,
@@ -220,11 +220,11 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
     )
     default_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
 
-    async def _fake_get(_client, _index) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else default_doc
 
-    async def _fake_save(_client, _index, *, overrides, expected_revision) -> KeymapDoc:
+    async def _fake_save(*, overrides, expected_revision) -> KeymapDoc:
         return KeymapDoc(
             overrides=overrides,
             revision=expected_revision + 1,

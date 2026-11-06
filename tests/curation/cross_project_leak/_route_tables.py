@@ -5,6 +5,11 @@ from __future__ import annotations
 from curation.cross_project_leak._constants import SCOPED
 
 
+# Routes whose data is rows in PostgreSQL, not documents in an OpenSearch index: this sweep watches
+# OpenSearch accesses and files, so it cannot see them. Their isolation is row-level security,
+# proven in the database tier (tests/db/test_row_level_security.py, tests/config_store/).
+POSTGRES_BACKED_PREFIXES: tuple[str, ...] = ('/cluster_profiles', '/assist_loop_presets')
+
 # Mutating routes that write nothing by design (read-only work under POST,
 # or an event with no data write), and why. Every other mutating route must
 # really write in the sweep.
@@ -50,6 +55,19 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/search/image'): 'kNN search by a stored or uploaded picture; stores nothing',
     ('POST', '/train/preflight'): 'read-only validation under POST',
     ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
+    (
+        'PUT',
+        '/ingest/policy',
+    ): 'writes the project_settings row, which this OpenSearch sweep cannot see',
+    (
+        'PUT',
+        '/vlm/policy',
+    ): 'writes the project_settings row, which this OpenSearch sweep cannot see',
+    ('PUT', '/keymap'): 'writes the project_keymaps row, which this OpenSearch sweep cannot see',
+    (
+        'POST',
+        '/keymap/reset',
+    ): 'writes the project_keymaps row, which this OpenSearch sweep cannot see',
     ('POST', '/reprocess/jobs/{job_id}/cancel'): (
         'touches a cancel flag only for a live job; the sweep has none (the live path is '
         'covered in test_reprocess_entrypoints)'

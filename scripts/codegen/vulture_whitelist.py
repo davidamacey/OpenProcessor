@@ -157,7 +157,6 @@ _.load_vlm_endpoint  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane
 _.load_config_document  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane 2E)
 _.load_setting  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
 _.load_keymap  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
-_.put_keymap  # src/db/repos/settings.py, written by the keymap service (2C-5)
 
 # Embedding registry: public functions whose production callers land with the projects, config,
 # upgrade and re-index work. Delete each entry with its first production caller.

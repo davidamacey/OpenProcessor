@@ -151,7 +151,6 @@ src/services/curation/ingest_items.py	2	triage every return-empty handler in PR 
 src/services/curation/ingest_writer.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/item_delete.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/item_scores/job.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/keymap.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/open_vocab_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/open_vocab_ingest.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/open_vocab_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

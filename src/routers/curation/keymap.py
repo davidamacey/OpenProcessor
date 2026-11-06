@@ -163,7 +163,7 @@ async def get_keymap(opensearch: OpenSearchDep) -> KeymapGetResponse:
     from src.config import get_curation_config
 
     cfg = get_curation_config()
-    doc = await get_keymap_doc(opensearch, cfg.configs_index)
+    doc = await get_keymap_doc()
     return _build_response(
         doc, project=cfg.project_slug, classes=await _classes_payload(opensearch)
     )
@@ -180,7 +180,7 @@ async def validate_keymap_route(
     from src.config import get_curation_config
 
     cfg = get_curation_config()
-    current = await get_keymap_doc(opensearch, cfg.configs_index)
+    current = await get_keymap_doc()
     proposed = dict(body.overrides)
     classes = await _classes_payload(opensearch)
     from src.services.curation.keymap_validator import validate_keymap
@@ -328,12 +328,7 @@ async def _write_keymap(
         unbound, cleared = await _unbind_classes(opensearch, class_conflicts)
 
     try:
-        new_doc = await save_keymap_doc(
-            opensearch,
-            cfg.configs_index,
-            overrides=merged,
-            expected_revision=expected_revision,
-        )
+        new_doc = await save_keymap_doc(overrides=merged, expected_revision=expected_revision)
     except RevisionConflictError as exc:
         await _restore_classes(opensearch, cleared)
         raise api_error(
@@ -348,7 +343,7 @@ async def _write_keymap(
 
     if unbound:
         await _publish_classes_changed()
-    await publish_keymap_changed(new_doc, cfg.configs_index, opensearch)
+    await publish_keymap_changed(new_doc)
     logger.info(event, project=cfg.project_slug, revision=new_doc.revision)
     response = _build_response(
         new_doc, project=cfg.project_slug, classes=await _classes_payload(opensearch)
@@ -366,7 +361,7 @@ async def put_keymap(
 
     cfg = get_curation_config()
     expected_revision = _resolve_expected_revision(body.expected_revision, if_match)
-    current = await get_keymap_doc(opensearch, cfg.configs_index)
+    current = await get_keymap_doc()
     if expected_revision != current.revision:
         raise api_error(
             409,
@@ -401,7 +396,7 @@ async def reset_keymap(
 
     cfg = get_curation_config()
     expected_revision = _resolve_expected_revision(body.expected_revision, if_match)
-    current = await get_keymap_doc(opensearch, cfg.configs_index)
+    current = await get_keymap_doc()
     if expected_revision != current.revision:
         raise api_error(
             409,
