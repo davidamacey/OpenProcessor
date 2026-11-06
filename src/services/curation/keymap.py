@@ -228,20 +228,20 @@ async def get_keymap_doc() -> KeymapDoc:
 async def publish_keymap_changed(doc: KeymapDoc) -> None:
     """The ``config.changed`` event of a keymap write, carrying both the keymap's own revision and
     the project's ``config_epoch`` the write bumped."""
-    from src.services.curation.event_hub import get_event_hub
+    from src.services.events.publish import apublish
 
     project_id = await bound_project_id()
     async with async_session_factory()() as session, project_tx(session, project_id):
         epoch = await config_repo.get_epoch(session, project_id)
-    get_event_hub().publish(
+    await apublish(
+        'config.changed',
         {
-            'type': 'config.changed',
             'topic': 'config',
             'axis': 'keymap',
             'name': None,
             'config_revision': epoch,
             'keymap_revision': doc.revision,
-        }
+        },
     )
 
 

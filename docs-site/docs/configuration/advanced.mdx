@@ -333,8 +333,6 @@ reads eval sets from its own `bakeoff_eval` directory (see
 | `OP_API` | `http://localhost:4603` | API base for worker scripts |
 | `OP_AUTO_LABEL_STATE_DIR` | `/jobs/auto_label` | Parent of each project's auto-label job state |
 | `OP_EVENT_API_URL` | falls back to `OP_API_BASE_URL`, then `OP_API` | Where the detection worker publishes events |
-| `OP_EVENT_BUS` | `file` | `file` shares events across uvicorn workers; `process` keeps them in-process |
-| `OP_EVENT_LOG_MAX_BYTES` | `8388608` | Rotation size of the shared event log |
 | `OP_HEARTBEAT_DIR` | `/tmp/openprocessor_heartbeat` | Worker heartbeat files (container-local) |
 | `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL` | `.../vlm_worker/pause.sentinel` | Global pause files (the GPU arbiter's). A project pauses itself with `POST .../pause` |
 | `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` | `/jobs/viz`, `20000` | |

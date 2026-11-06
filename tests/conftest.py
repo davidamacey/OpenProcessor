@@ -21,6 +21,8 @@ import pytest
 pytest_plugins = [
     'fixtures.postgres',
     'fixtures.db_marker_policy',
+    'fixtures.event_capture',
+    'fixtures.postgres_events',
     'config_store.memory_settings',
     'config_store.memory_config',
 ]

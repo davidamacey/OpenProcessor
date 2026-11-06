@@ -96,7 +96,7 @@ async def write_vlm_activation(
         active_vlm_ack_at=acked.get(endpoint.ref) if endpoint is not None else None,
         acked_refs=frozenset(acked),
     )
-    publish_config_changed('vlm', name, result.epoch)
+    await publish_config_changed('vlm', name, result.epoch)
     return result
 
 

@@ -19,7 +19,7 @@ from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
-from src.services.curation.event_hub import publish_crop_classified
+from src.services.events.publish import apublish_crops_classified
 from src.services.labeling.run_labeler import vlm_stamp
 
 
@@ -166,20 +166,20 @@ def updates_from_predictions(
     return updates_by_id, proposals
 
 
-def publish_classified(updates_by_id: dict[str, dict[str, Any]]) -> None:
-    """Live UI updates per written crop."""
-    for raw_id, doc in updates_by_id.items():
-        if 'class_source' not in doc:
-            continue  # empty answer: the class did not change
-        try:
-            publish_crop_classified(
-                str(raw_id),
-                class_id=doc.get('class_id'),
-                class_name=doc.get('class_name'),
-                class_source=doc.get('class_source', ''),
-            )
-        except (OSError, RuntimeError, ValueError) as exc:  # nosec B112 — advisory
-            logger.debug('event_publish_failed', error=str(exc))
+async def publish_classified(updates_by_id: dict[str, dict[str, Any]]) -> None:
+    """Live UI updates per written crop, in one transaction."""
+    await apublish_crops_classified(
+        [
+            {
+                'crop_id': str(raw_id),
+                'class_id': doc.get('class_id'),
+                'class_name': doc.get('class_name'),
+                'class_source': doc.get('class_source', ''),
+            }
+            for raw_id, doc in updates_by_id.items()
+            if 'class_source' in doc  # an empty answer did not change the class
+        ]
+    )
 
 
 async def write_updates(
@@ -213,7 +213,7 @@ async def write_updates(
     except OpenSearchException as exc:
         logger.warning('pipeline_bulk_failed', error=str(exc))
     else:
-        publish_classified(updates_by_id)
+        await publish_classified(updates_by_id)
 
 
 __all__ = [

@@ -393,7 +393,7 @@ async def index_items(
             )
         )
     await _cache_crops(service, cids, crop_items)
-    service._publish_created(created_ids, image_path)
+    await service._publish_created(created_ids, image_path)
 
     return IndexOutcome(
         result=IngestResult(

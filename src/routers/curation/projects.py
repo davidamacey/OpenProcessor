@@ -71,14 +71,14 @@ global_router = APIRouter(
 _BACKGROUND_DELETE_TASKS: dict[str, asyncio.Task[None]] = {}
 
 
-def _publish_lifecycle_event(event_type: str, record: Any, **extra: Any) -> None:
+async def _publish_lifecycle_event(event_type: str, record: Any, **extra: Any) -> None:
     """M5 step 9: every project.* lifecycle event on the global stream
     (never scoped -- these routes act *on* a project, not *within* one),
     so any open Cropwright tab (not just the one that made the request)
     learns about create/patch/archive/unarchive/delete."""
-    from src.services.curation.event_hub import publish_global_event
+    from src.services.events.publish import apublish_global_event
 
-    publish_global_event(
+    await apublish_global_event(
         event_type,
         target=record.slug,
         status=record.status,
@@ -203,7 +203,7 @@ async def create_project(body: CreateProjectRequest) -> ProjectLifecycleResponse
         clone_settings_from=body.clone_settings_from,
         clone_axes=body.clone_axes,
     )
-    _publish_lifecycle_event('project.created', record)
+    await _publish_lifecycle_event('project.created', record)
     return await _summary_response(record, warnings)
 
 
@@ -220,7 +220,7 @@ async def patch_project(
         description=body.description,
         expected_revision=body.expected_revision,
     )
-    _publish_lifecycle_event('project.updated', record)
+    await _publish_lifecycle_event('project.updated', record)
     return await _summary_response(record)
 
 
@@ -233,7 +233,7 @@ async def archive_project(
     record = await lifecycle.archive_project(
         client, slug=project, expected_revision=body.expected_revision
     )
-    _publish_lifecycle_event('project.archived', record)
+    await _publish_lifecycle_event('project.archived', record)
     return await _summary_response(record)
 
 
@@ -246,7 +246,7 @@ async def unarchive_project(
     record = await lifecycle.unarchive_project(
         client, slug=project, expected_revision=body.expected_revision
     )
-    _publish_lifecycle_event('project.unarchived', record)
+    await _publish_lifecycle_event('project.unarchived', record)
     return await _summary_response(record)
 
 
@@ -263,7 +263,7 @@ async def clone_settings_route(
         axes=body.axes,
         expected_revision=body.expected_revision,
     )
-    _publish_lifecycle_event('project.updated', record)
+    await _publish_lifecycle_event('project.updated', record)
     return await _summary_response(record, keymap_clone_conflicts=keymap_clone_conflicts)
 
 
@@ -305,7 +305,7 @@ async def delete_project(
             # (docstring above; delta 10) -- published only once the
             # tombstone write itself succeeded, never on a busy/failed
             # retry (M3/M4 leave the record retryable with no event).
-            _publish_lifecycle_event(
+            await _publish_lifecycle_event(
                 'project.deleted',
                 finished.record,
                 mlflow_cleanup=finished.mlflow_cleanup.to_wire(),

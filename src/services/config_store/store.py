@@ -284,21 +284,16 @@ async def activate_axis(
         registered=registered,
     )
     if publish_event:
-        publish_config_changed(axis, name, result.epoch)
+        await publish_config_changed(axis, name, result.epoch)
     return result
 
 
-def publish_config_changed(axis: str, name: str | None, epoch: int) -> None:
-    from src.services.curation.event_hub import get_event_hub
+async def publish_config_changed(axis: str, name: str | None, epoch: int) -> None:
+    from src.services.events.publish import apublish
 
-    get_event_hub().publish(
-        {
-            'type': 'config.changed',
-            'topic': 'config',
-            'axis': axis,
-            'name': name,
-            'config_revision': epoch,
-        }
+    await apublish(
+        'config.changed',
+        {'topic': 'config', 'axis': axis, 'name': name, 'config_revision': epoch},
     )
 
 

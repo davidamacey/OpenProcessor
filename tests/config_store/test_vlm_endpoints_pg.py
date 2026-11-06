@@ -219,3 +219,33 @@ async def test_a_clone_of_an_endpoint_keeps_its_source_revision(pg_env) -> None:
         cloned_from=CloneSource(None, 'vlm_endpoint', source, 1),
     )
     assert clone.cloned_from == f'{source}@1'
+
+
+def _global_vlm_events(pg) -> list[tuple[str, dict[str, Any]]]:
+    import psycopg
+
+    with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
+        return [
+            (row[0], row[1])
+            for row in conn.execute(
+                "SELECT type, payload FROM events WHERE project_id IS NULL AND type = 'vlm.changed' "
+                'ORDER BY id'
+            )
+        ]
+
+
+@pytest.mark.asyncio
+async def test_every_write_is_announced_on_the_global_stream(pg_env) -> None:
+    from src.services.labeling.vlm_catalog import load_catalog
+
+    before = len(_global_vlm_events(pg_env))
+    name = _name()
+    body = _body()
+    saved = await save_endpoint(name=name, body=body, expected_revision=None)
+    await record_probe(name=name, revision=saved.revision, body=body, record=_probe())
+    await set_local_desired(catalog_id=load_catalog()[0].id)
+    await delete_endpoint(name=name, expected_revision=saved.revision)
+    announced = _global_vlm_events(pg_env)[before:]
+    assert len(announced) == 4
+    assert all(payload['topic'] == 'vlm' for _, payload in announced)
+    assert {payload['axis'] for _, payload in announced} == {'registry', 'local_vlm'}

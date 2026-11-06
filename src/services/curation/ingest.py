@@ -42,7 +42,7 @@ Pipeline, per image:
 7. Crop-cache write (:func:`~src.services.curation.source_image_cache.write_crop_cache`).
 8. After a successful write, one advisory ``crop.created`` event per
    newly created item on the in-process event hub
-   (:func:`~src.services.curation.event_hub.publish_crop_created`).
+   (:func:`~src.services.events.publish.apublish_crops_created`).
 
 Sibling modules, split out of this one to keep each to one concern:
 
@@ -71,7 +71,6 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.event_hub import publish_crop_created
 from src.services.curation.ingest_dedup import IngestDedupMixin
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
@@ -98,6 +97,7 @@ from src.services.curation.ingest_models import (
 from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.curation.ops_metrics import record_ingest_result
+from src.services.events.publish import apublish_crops_created
 from src.utils.cpu_pool import encoded_nbytes, run_cpu
 
 
@@ -341,20 +341,14 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         return record_ingest_result(outcome.result)
 
     @staticmethod
-    def _publish_created(crop_ids: list[str], image_path: str) -> None:
-        """Announce newly written items on the live-update event hub.
+    async def _publish_created(crop_ids: list[str], image_path: str) -> None:
+        """Announce newly written items on the live-update event stream.
 
         Only ids ``occ_upsert_bulk`` confirmed as created are published —
-        a re-ingest update or a rejected create is not a new crop. Events
-        are advisory (the hub never blocks: bounded per-subscriber queues,
-        drop-oldest), so a publish error is logged and swallowed rather
-        than failing an ingest whose writes already succeeded.
+        a re-ingest update or a rejected create is not a new crop. One
+        transaction per call; a failed write is raised, not swallowed.
         """
-        for crop_id in crop_ids:
-            try:
-                publish_crop_created(crop_id, image_path)
-            except Exception as exc:
-                logger.warning('ingest_event_publish_failed', crop_id=crop_id, error=str(exc))
+        await apublish_crops_created([(crop_id, image_path) for crop_id in crop_ids])
 
     async def refresh_indexes(self) -> None:
         """Make this call's writes visible to search (stats, previews) once the

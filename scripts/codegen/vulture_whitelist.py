@@ -147,6 +147,11 @@ _.EngineOutputContract  # src/schemas/models.py, validated by the engine export 
 _.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
 _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)
 
+# Event publish and retention (B2 stage 3, lane 3B).
+_.delete_older_than  # src/db/repos/events.py, called by reaper rule f (lane 3A)
+_._send_wakes  # src/services/events/publish.py, a SQLAlchemy after_commit listener registered by decorator
+_._drop_wakes  # src/services/events/publish.py, a SQLAlchemy after_rollback listener registered by decorator
+_.StreamingResponse  # src/app/factory.py, named only in a string cast
 # Landed ahead of their callers (B2 stage 2, lane 2A): the repository is wired by the registry,
 # guard and lifecycle commits of the same lane. Delete each entry with its caller.
 _.load_project  # src/db/repos/projects.py, called by the 0.6.0 upgrade step (lane 2E)

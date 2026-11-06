@@ -462,30 +462,16 @@ def test_class_put_rejects_taken_hotkey_as_config_error_detail(
 
 
 def test_config_changed_event_published_once_on_put(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, captured_events: list[dict]
 ) -> None:
-    from src.services.curation import event_hub
-
-    monkeypatch.setenv('OP_EVENT_BUS', 'process')
-    event_hub._HUB = None
-
-    async def _run() -> None:
-        hub = event_hub.get_event_hub()
-        sub = await hub.subscribe(project='default')
-        client.put(
-            f'{PREFIX}/keymap',
-            json={'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}},
-        )
-        event = sub.queue.get_nowait()
-        assert event['type'] == 'config.changed'
-        assert event['axis'] == 'keymap'
-        assert event['project'] == 'default'
-        assert sub.queue.empty()
-
-    import asyncio
-
-    asyncio.run(_run())
-    event_hub._HUB = None
+    client.put(
+        f'{PREFIX}/keymap',
+        json={'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}},
+    )
+    (event,) = captured_events
+    assert event['type'] == 'config.changed'
+    assert event['axis'] == 'keymap'
+    assert event['project'] == 'default'
 
 
 def test_keymap_save_failure_is_a_500_and_the_class_hotkey_survives(

@@ -17,6 +17,10 @@ from PIL import Image
 from prometheus_client import REGISTRY
 
 
+async def _no_publish(*_a: object, **_k: object) -> None:
+    return None
+
+
 def _count(stage: str) -> float:
     return REGISTRY.get_sample_value('op_pipeline_stage_seconds_count', {'stage': stage}) or 0.0
 
@@ -155,7 +159,7 @@ def index_service(tmp_path):
         config=SimpleNamespace(crop_cache_dir=str(tmp_path / 'crops'), crop_cache_max_bytes=0),
         region_seed_status=None,
         _bulk_index=_bulk_index,
-        _publish_created=lambda *_a, **_k: None,
+        _publish_created=_no_publish,
     )
 
 

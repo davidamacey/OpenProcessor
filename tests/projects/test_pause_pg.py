@@ -133,24 +133,19 @@ def test_pause_state_reports_global_gpu_training_claim(
 
 
 def test_pause_publishes_a_global_event(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    captured_events: list[dict],
 ) -> None:
     import src.config.curation_accessors as curation_config_mod
-    from src.services.curation import event_hub
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
-    published: list[tuple[str, dict]] = []
-    monkeypatch.setattr(
-        event_hub,
-        'publish_global_event',
-        lambda event_type, **fields: published.append((event_type, fields)),
-    )
-
     assert app_client.post('/curation/projects/default/pause').status_code == 200
     assert app_client.post('/curation/projects/default/resume').status_code == 200
-    assert published == [
-        ('project.paused', {'target': 'default'}),
-        ('project.resumed', {'target': 'default'}),
+    assert [(e['type'], e['target'], e['project']) for e in captured_events] == [
+        ('project.paused', 'default', None),
+        ('project.resumed', 'default', None),
     ]
