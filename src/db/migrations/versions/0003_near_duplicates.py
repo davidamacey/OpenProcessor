@@ -1,5 +1,5 @@
 """Near-duplicate tables, the holdout freeze columns, the near_dup profile kind and axis,
-and the open-vocabulary gate as a VLM usage source.
+the open-vocabulary gate as a VLM usage source, and the import ledger's per-image detail.
 
 Revision ID: 0003_near_duplicates
 Revises: 0002_research_seams
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 from src.db.migrations.schema_0003 import security, tables
 
@@ -62,6 +63,15 @@ def upgrade() -> None:
     tables.create()
     security.create()
     op.add_column(
+        'dataset_import_images',
+        sa.Column(
+            'detail',
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
+    )
+    op.add_column(
         'holdout_freezes',
         sa.Column('near_dup_image_run_id', sa.Uuid(), nullable=True),
     )
@@ -102,6 +112,7 @@ def downgrade() -> None:
     )
     for column in ('moved_by_near_dup', 'near_dup_item_run_id', 'near_dup_image_run_id'):
         op.drop_column('holdout_freezes', column)
+    op.drop_column('dataset_import_images', 'detail')
     for table in reversed(tables.TABLES):
         op.drop_table(table)
     security.drop_function()
