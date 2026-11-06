@@ -9,6 +9,7 @@ from typing import Any
 from opensearchpy.exceptions import OpenSearchException
 from sqlalchemy.exc import SQLAlchemyError
 
+from src.config.database import DatabaseConfigError
 from src.core.logging import get_logger
 from src.services.config_store.index import config_poll_interval_s
 from src.services.config_store.store import get_config_store
@@ -78,7 +79,7 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
     while True:
         try:
             known_epochs.update(await poll_config_epochs(known_epochs))
-        except SQLAlchemyError as exc:
+        except (SQLAlchemyError, DatabaseConfigError) as exc:
             logger.warning('config_epoch_poll_failed', error=str(exc))
         try:
             # the deployment-wide VLM registry, refreshed unbound (its

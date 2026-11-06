@@ -28,6 +28,17 @@ from src.services.config_store.store import ConfigStore
 
 pytestmark = pytest.mark.unbound
 
+
+@pytest.fixture(autouse=True)
+def _no_epoch_poll(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise the store refresh of the poll loop; the epoch poll has its own db tests."""
+
+    async def nothing(_known: dict) -> dict:
+        return {}
+
+    monkeypatch.setattr('src.services.config_store.store_poll.poll_config_epochs', nothing)
+
+
 INDEX = 'op_prj_alpha__configs'
 
 
