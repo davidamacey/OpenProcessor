@@ -1,18 +1,15 @@
 """Issue #161: a state file that exists but cannot be read must not look idle.
 
 ``FileJob.is_live`` is the busy check behind every job's start guard (promote,
-reprocess, dataset import, combine, bulk ingest, probe, item scores, selection,
-embedding viz, auto label). Reading it as idle would start a second job beside one
+dataset import, combine, bulk ingest, auto label). Reading it as idle would start a second job beside one
 that may still be running."""
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
 
-from src.services.curation import probe_job
 from src.services.curation.file_job import FileJob
 
 
@@ -53,15 +50,3 @@ def test_read_still_returns_empty_for_status_polls(tmp_path: Path) -> None:
     job = FileJob(tmp_path)
     job.state_file.write_text('{not json')
     assert job.read() == {}
-
-
-def test_a_probe_job_refuses_to_start_over_an_unreadable_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe'))
-    job = probe_job._job()
-    job.directory.mkdir(parents=True, exist_ok=True)
-    job.state_file.write_text('{not json')
-
-    with pytest.raises(probe_job.ProbeJobBusyError):
-        asyncio.run(probe_job.start_probe_job('j2', 'train-1', tmp_path / 'm.pt', object()))

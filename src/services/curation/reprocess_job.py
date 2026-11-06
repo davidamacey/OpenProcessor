@@ -1,278 +1,189 @@
-"""The file-backed reprocess job (``detect`` / ``embed`` over many images).
+"""The queued reprocess job (``detect`` / ``embed`` over many images).
 
-State lives under ``<OP_REPROCESS_JOBS_DIR>/projects/<slug>/<job_id>/`` on
-the shared ``/jobs`` volume (:class:`~src.services.curation.file_job.FileJob`):
-every API worker process sees the same ``state.json`` / heartbeat / cancel
-flag, so status and cancel work whichever process a request lands on, and
-one job per project runs at a time (the ``reprocess`` lease + a live-job check).
-
-``request.json`` is everything the run needs: the resolved image ids, the
-scopes, and the index names the request was planned against.
-:func:`run_job` reads only that and the dependencies it is handed, so a
-process that never saw the API call can consume it; it refuses to run if
-the bound project's indexes are not the ones the request was planned for.
+The start route inserts a ``reprocess`` row through ``start_job`` and stores the resolved image
+ids in ``job_items`` in the same transaction; a Celery worker runs :func:`run_reprocess`. The
+run is resumable: after each slice of images it writes ``{'done', 'results'}`` as the job's
+checkpoint, so a delivery that dies (worker stop, the reaper's rule a) continues at the next
+slice instead of starting over. It refuses to run when the bound project's indexes are not the
+ones the request was planned against.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
-import uuid
-from datetime import UTC, datetime
+import time
+from datetime import datetime  # noqa: TC003 - pydantic reads the annotation
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
-from src.config.env import env_path
-from src.config.project_context import (
-    current_project,
-    ensure_marked_dir,
-    mark_project_dir,
-    project_jobs_dir,
-)
-from src.core.logging import get_logger
-from src.domain.job_lease import LeaseKind
-from src.services.curation.file_job import FileJob
-from src.services.curation.lease_heartbeat import LeaseHeartbeat, acquire_heartbeat, run_leased
+from src.db.repos import job_items
 from src.services.curation.reprocess_embed_spec import EmbedSpec
 from src.services.curation.reprocess_images import process_images
-from src.services.curation.reprocess_models import ReprocessJobInfo, ReprocessScope
-from src.utils.timeutil import now_iso
+from src.services.curation.reprocess_models import (
+    ReprocessJobInfo,
+    ReprocessScope,
+    ReprocessScopeResult,
+)
+from src.services.jobs.service import start_job
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    import uuid
 
     from opensearchpy import AsyncOpenSearch
+    from sqlalchemy.ext.asyncio import AsyncSession
 
+    from src.db.repos.jobs import JobRow
+    from src.schemas.jobs import JobView
     from src.services.curation.ingest import CurationIngestService
+    from src.tasks.runtime.context import JobContext
 
-logger = get_logger(__name__)
-
-ACTIVE = frozenset({'queued', 'running'})
-
-_tasks: dict[str, asyncio.Task[None]] = {}
-
-
-class ReprocessBusyError(Exception):
-    """A reprocess job is already running for this project."""
-
-    def __init__(self, job_id: str) -> None:
-        super().__init__(f'reprocess job {job_id} is already running')
-        self.job_id = job_id
+KIND = 'reprocess'
+SLICE_IMAGES = 256
+"""Images between two checkpoints (four chunks of ``process_images``)."""
+ACTIVE = frozenset({'queued', 'running', 'paused', 'cancelling'})
+_POLL_AFTER_S = 2
 
 
-def jobs_root() -> Path:
-    """The bound project's reprocess jobs dir (resolved per call so tests
-    can ``monkeypatch.setenv``)."""
-    return mark_project_dir(project_jobs_dir(env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')))
+async def start(
+    session: AsyncSession,
+    project: uuid.UUID,
+    *,
+    request: dict[str, Any],
+    scopes: list[ReprocessScope],
+    image_ids: list[str],
+    embed: EmbedSpec | None = None,
+) -> JobRow:
+    """Queue the job (409 ``job_busy`` while another reprocess of the project is active)."""
+    cfg = get_curation_config()
+    params = {
+        'request': request,
+        'scopes': scopes,
+        'embed': embed.model_dump() if embed is not None else None,
+        'images_total': len(image_ids),
+        'items_index': cfg.items_index,
+        'images_index': cfg.images_index,
+    }
+
+    async def rows(inner: AsyncSession, job: JobRow) -> None:
+        await job_items.add_items(inner, job.id, image_ids)
+
+    started = await start_job(
+        session, KIND, project, params=params, requested_by='api', with_rows=rows
+    )
+    return started.job
 
 
-def _job(job_id: str) -> FileJob:
-    # job ids are minted here; never let a path segment through.
-    if not job_id or '/' in job_id or '\\' in job_id or job_id.startswith('.'):
-        raise KeyError(job_id)
-    return FileJob(jobs_root() / job_id)
+def _iso(value: datetime | None) -> str | None:
+    return None if value is None else value.isoformat()
 
 
-def _job_dirs() -> list[Path]:
-    root = jobs_root()
-    return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
-
-
-def running_job_ids() -> list[tuple[str, str | None]]:
-    """``[(job_id, started_at)]`` of live jobs in the bound project."""
-    out = []
-    for path in _job_dirs():
-        job = FileJob(path)
-        if job.is_live(ACTIVE):
-            out.append((path.name, job.read().get('started_at')))
-    return out
-
-
-def reconcile_orphaned_jobs() -> bool:
-    """Startup repair for the bound project: a job left active by a dead
-    process becomes ``interrupted``."""
-    repaired = False
-    for path in _job_dirs():
-        repaired |= FileJob(path).reconcile(active_statuses=ACTIVE, error_prefix='reprocess job')
-    return repaired
-
-
-def read_job(job_id: str) -> ReprocessJobInfo | None:
-    try:
-        job = _job(job_id)
-    except KeyError:
-        return None
-    state = job.read()
-    if not state:
-        return None
-    state = job.served_state(ACTIVE, error_prefix='reprocess job')
-    for key in ('started_at', 'updated_at', 'finished_at'):
-        # Startup reconciliation stamps ``finished_at`` as an epoch number.
-        if isinstance(state.get(key), int | float):
-            state[key] = datetime.fromtimestamp(state[key], UTC).isoformat()
+def job_info(view: JobView) -> ReprocessJobInfo:
+    """The family's wire view of a ``reprocess`` job row."""
+    params = view.params or {}
+    progress = view.progress
+    counters = progress.get('counters') or {}
+    results = (view.result or {}).get('results') or []
     return ReprocessJobInfo(
-        job_id=job_id,
-        poll_after_s=2 if state.get('status') in ACTIVE else None,
-        **{k: v for k, v in state.items() if k in ReprocessJobInfo.model_fields and k != 'job_id'},
+        job_id=view.id,
+        status=view.status,
+        scopes=params.get('scopes') or [],
+        images_total=int(params.get('images_total') or progress.get('total') or 0),
+        images_done=int(progress.get('done') or 0),
+        images_failed=int(counters.get('failed') or 0),
+        error=view.error_message,
+        started_at=_iso(view.started_at),
+        updated_at=_iso(view.updated_at),
+        finished_at=_iso(view.finished_at),
+        results=[ReprocessScopeResult.model_validate(r) for r in results],
+        poll_after_s=_POLL_AFTER_S if view.status in ACTIVE else None,
     )
 
 
-async def create_job(
-    opensearch: AsyncOpenSearch,
-    *,
-    request: dict[str, Any],
-    scopes: list[ReprocessScope],
-    image_ids: list[str],
-    embed: EmbedSpec | None = None,
-) -> tuple[FileJob, LeaseHeartbeat]:
-    """Claim the per-project singleton (the ``reprocess`` lease) and persist
-    ``request.json`` plus a ``queued`` state. Raises :class:`ReprocessBusyError` when a
-    job is live. Nothing runs yet: :func:`run_job` starts the heartbeat and releases the
-    lease."""
-    ensure_marked_dir(jobs_root())
-    live = running_job_ids()
-    if live:
-        raise ReprocessBusyError(live[0][0])
-    job_id = f'rp_{datetime.now(UTC):%Y%m%dT%H%M%S}_{uuid.uuid4().hex[:6]}'
-    job = _job(job_id)
-    beat = await acquire_heartbeat(
-        opensearch,
-        LeaseKind.REPROCESS,
-        None,
-        job_id,
-        job=job,
-        busy=lambda holder: ReprocessBusyError(holder or 'starting'),
-    )
-    try:
-        job.directory.mkdir(parents=True)
-        cfg = get_curation_config()
-        (job.directory / 'request.json').write_text(
-            json.dumps(
-                {
-                    'request': request,
-                    'scopes': scopes,
-                    'image_ids': image_ids,
-                    'embed': embed.model_dump() if embed is not None else None,
-                    'project': current_project().record.slug,
-                    'items_index': cfg.items_index,
-                    'images_index': cfg.images_index,
-                }
-            ),
-            encoding='utf-8',
+def _merge(into: ReprocessScopeResult, part: ReprocessScopeResult) -> None:
+    for name in ('selected', 'locked_skipped', 'queued', 'not_found', 'failed'):
+        setattr(into, name, getattr(into, name) + getattr(part, name))
+    for key, value in part.detail.items():
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            into.detail[key] = value
+        else:
+            current = into.detail.get(key, 0)
+            into.detail[key] = (current if isinstance(current, int | float) else 0) + value
+
+
+def _failed_images(results: dict[ReprocessScope, ReprocessScopeResult]) -> int:
+    return max((r.failed + r.not_found for r in results.values()), default=0)
+
+
+def _check_planned_for_this_project(params: Any) -> None:
+    cfg = get_curation_config()
+    if (params['items_index'], params['images_index']) != (cfg.items_index, cfg.images_index):
+        raise RuntimeError(
+            "the job was planned for other indexes than the bound project's; refusing to run"
         )
-        job.clear_signals()
-        job.write(
-            {
-                'status': 'queued',
-                'scopes': scopes,
-                'images_total': len(image_ids),
-                'images_done': 0,
-                'images_failed': 0,
-                'started_at': now_iso(),
-                'updated_at': now_iso(),
-            }
-        )
-        job.touch_heartbeat()
-    except BaseException:
-        await beat.release(opensearch)
-        raise
-    return job, beat
 
 
-async def start_job(
-    opensearch: AsyncOpenSearch,
-    service: CurationIngestService,
-    *,
-    request: dict[str, Any],
-    scopes: list[ReprocessScope],
-    image_ids: list[str],
-    embed: EmbedSpec | None = None,
-) -> str:
-    """:func:`create_job`, then schedule :func:`run_job` in this process."""
-    job, beat = await create_job(
-        opensearch, request=request, scopes=scopes, image_ids=image_ids, embed=embed
-    )
-    _tasks[job.directory.name] = asyncio.create_task(run_job(job, opensearch, service, beat))
-    return job.directory.name
+async def run_reprocess(
+    ctx: JobContext, opensearch: AsyncOpenSearch, service: CurationIngestService
+) -> tuple[dict[str, Any], bool]:
+    """Execute the job: the existing :func:`process_images`, slice by slice, resumable.
 
-
-def cancel_job(job_id: str) -> bool:
-    """Touch the cancel flag of a live job; ``False`` when there is none."""
-    try:
-        job = _job(job_id)
-    except KeyError:
-        return False
-    if not job.is_live(ACTIVE):
-        return False
-    job.request_cancel()
-    return True
-
-
-async def run_job(
-    job: FileJob, opensearch: AsyncOpenSearch, service: CurationIngestService, beat: LeaseHeartbeat
-) -> None:
-    """Execute the job persisted at ``job.directory`` under the lease ``beat`` holds, and
-    release it at the end. Needs nothing but the files there and the dependencies passed
-    in."""
-    beat.start()
-    await run_leased(beat, opensearch, _execute(job, opensearch, service))
-
-
-async def _execute(
-    job: FileJob, opensearch: AsyncOpenSearch, service: CurationIngestService
-) -> None:
-    try:
-        payload = json.loads((job.directory / 'request.json').read_text(encoding='utf-8'))
-        cfg = get_curation_config()
-        if (payload['items_index'], payload['images_index']) != (cfg.items_index, cfg.images_index):
-            raise RuntimeError(
-                "the job was planned for other indexes than the bound project's; refusing to run"
-            )
-    except Exception as exc:
-        job.update(status='failed', error=str(exc), finished_at=now_iso(), updated_at=now_iso())
-        return
-    job.update(status='running', updated_at=now_iso())
-
-    def _progress(done: int, failed: int) -> None:
-        job.update(images_done=done, images_failed=failed, updated_at=now_iso())
-        job.touch_heartbeat()
-
-    try:
-        results, cancelled = await process_images(
+    Returns the result mapping and whether any image failed (the handler wraps it)."""
+    params = ctx.params
+    _check_planned_for_this_project(params)
+    scopes: list[ReprocessScope] = list(params['scopes'])
+    embed = EmbedSpec(**params['embed']) if params.get('embed') else None
+    total = int(params['images_total'])
+    cursor = ctx.resume_from or {}
+    done = int(cursor.get('done', 0))
+    results = {s: ReprocessScopeResult(scope=s) for s in scopes}
+    for stored in cursor.get('results', []):
+        part = ReprocessScopeResult.model_validate(stored)
+        results[part.scope] = part
+    resumed_at = done
+    started = time.monotonic()
+    cancelled = False
+    while done < total:
+        if ctx.cancelled():
+            cancelled = True
+            break
+        async with ctx.session() as session:
+            ids = await job_items.read_items(session, ctx.job_id, start=done, limit=SLICE_IMAGES)
+        if not ids:
+            raise RuntimeError(f'job_items holds {done} of the {total} images of this job')
+        parts, cancelled = await process_images(
             opensearch,
             service,
-            scopes=payload['scopes'],
-            image_ids=payload['image_ids'],
-            embed=EmbedSpec(**payload['embed']) if payload.get('embed') else None,
-            should_cancel=job.cancel_requested,
-            on_progress=_progress,
+            scopes=scopes,
+            image_ids=ids,
+            embed=embed,
+            should_cancel=ctx.cancelled,
         )
-        failed = any(r.failed or r.not_found for r in results)
-        status = 'cancelled' if cancelled else 'completed_with_errors' if failed else 'completed'
-        job.update(
-            status=status,
-            results=[r.model_dump() for r in results],
-            finished_at=now_iso(),
-            updated_at=now_iso(),
-        )
-    except asyncio.CancelledError:
-        job.update(status='cancelled', finished_at=now_iso(), updated_at=now_iso())
-        raise
-    except Exception as exc:
-        logger.error('reprocess_job_failed', job=job.directory.name, error=str(exc))
-        job.update(status='failed', error=str(exc), finished_at=now_iso(), updated_at=now_iso())
+        for part in parts:
+            _merge(results[part.scope], part)
+        if cancelled:
+            break
+        done += len(ids)
+        await ctx.checkpoint({'done': done, 'results': [r.model_dump() for r in results.values()]})
+        await ctx.progress(done, total, 'processing', {'failed': _failed_images(results)})
+    wall = time.monotonic() - started
+    images = done - resumed_at
+    failed = any(r.failed or r.not_found for r in results.values())
+    return (
+        {
+            'results': [r.model_dump() for r in results.values()],
+            'cancelled': cancelled,
+            'perf_summary': {
+                'images': images,
+                'wall_s': wall,
+                'images_per_s': images / wall if wall > 0 else 0.0,
+                'decode_routes': {},
+                'stage_seconds': {},
+                'pe_calls_per_image': 0.0,
+                'servers': [] if ctx.server is None else [ctx.server],
+            },
+        },
+        failed,
+    )
 
 
-__all__ = [
-    'ACTIVE',
-    'ReprocessBusyError',
-    'cancel_job',
-    'create_job',
-    'jobs_root',
-    'read_job',
-    'reconcile_orphaned_jobs',
-    'run_job',
-    'running_job_ids',
-    'start_job',
-]
+__all__ = ['ACTIVE', 'KIND', 'SLICE_IMAGES', 'job_info', 'run_reprocess', 'start']

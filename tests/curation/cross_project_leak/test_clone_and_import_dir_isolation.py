@@ -132,17 +132,15 @@ def test_bulk_ingest_runs_of_alpha_are_invisible_to_beta_and_a_misplaced_dir_is_
         open_store(run_id)
 
 
-def test_reprocess_and_upload_dirs_are_marked_with_their_project(
+def test_upload_dirs_are_marked_with_their_project(
     leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import io
     import zipfile
 
     from src.config.project_context import ProjectDirMismatchError, bind_project
-    from src.services.curation import reprocess_job
     from src.services.curation.dataset_import.upload import datasets_root, receive_archive
 
-    monkeypatch.setenv('OP_REPROCESS_JOBS_DIR', str(leak_env.root / 'reprocess'))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w') as zf:
         zf.writestr('ds/data.yaml', 'names: [a]')
@@ -154,8 +152,6 @@ def test_reprocess_and_upload_dirs_are_marked_with_their_project(
         await receive_archive(body(), upload_root=record.resources.upload_root)
 
     with bind_project(leak_env.records['alpha']):
-        reprocess_job.jobs_root().mkdir(parents=True)
-        assert (reprocess_job.jobs_root() / '.project').read_text() == 'alpha'
         asyncio.run(upload(leak_env.records['alpha']))
         alpha_uploads = datasets_root(leak_env.records['alpha'].resources.upload_root)
         assert (alpha_uploads / '.project').read_text() == 'alpha'

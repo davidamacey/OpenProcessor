@@ -19,7 +19,7 @@ it directly without a router.
 
 from __future__ import annotations
 
-import asyncio
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -80,21 +80,23 @@ def _orthonormal_pool(n: int, d: int = 8) -> list[tuple[str, list[float]]]:
 def test_scope_query_always_excludes_test_holdout() -> None:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope())
+    q = _build_scope_query(SelectDiverseScope(), 'pe_embedding')
     assert {'term': {'test_holdout': True}} in q['bool']['must_not']
 
 
 def test_scope_query_cluster_id_filter() -> None:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope(cluster_id=10173))
+    q = _build_scope_query(SelectDiverseScope(cluster_id=10173), 'pe_embedding')
     assert {'term': {'cluster_id': 10173}} in q['bool']['must']
 
 
 def test_scope_query_generic_filters_scalar_and_list() -> None:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope(filters={'class_id': 7, 'source': ['a', 'b']}))
+    q = _build_scope_query(
+        SelectDiverseScope(filters={'class_id': 7, 'source': ['a', 'b']}), 'pe_embedding'
+    )
     assert {'term': {'class_id': 7}} in q['bool']['must']
     assert {'terms': {'source': ['a', 'b']}} in q['bool']['must']
 
@@ -102,7 +104,7 @@ def test_scope_query_generic_filters_scalar_and_list() -> None:
 def test_scope_query_review_tab_reuses_review_queries() -> None:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope(review_tab='outliers'))
+    q = _build_scope_query(SelectDiverseScope(review_tab='outliers'), 'pe_embedding')
     # review_queries.build_tab_query's 'outliers' tab adds the
     # cluster_distance clause verbatim (outlier_flagged -- never
     # written anywhere -- was deleted, so this is no longer wrapped in a
@@ -115,7 +117,7 @@ def test_scope_query_unknown_review_tab_raises_http_400() -> None:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
     with pytest.raises(RequestRejectedError) as exc_info:
-        _build_scope_query(SelectDiverseScope(review_tab='not_a_real_tab'))
+        _build_scope_query(SelectDiverseScope(review_tab='not_a_real_tab'), 'pe_embedding')
     assert exc_info.value.status_code == 400
 
 
@@ -317,10 +319,15 @@ def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
 
 
 @pytest.fixture
-def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
+def select_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from src.core.db_session import get_db
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setenv('OP_SELECT_JOBS_DIR', str(tmp_path / 'select'))
+    async def space(_target):
+        return SimpleNamespace(vector_field='pe_embedding')
+
+    monkeypatch.setattr('src.routers.curation.select.embedding_space', space)
+    monkeypatch.setattr('src.routers.curation.select.current_project_id', lambda: 'project-id')
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
@@ -332,9 +339,23 @@ def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+
+    async def no_database():
+        yield None
+
+    app.dependency_overrides[get_db] = no_database
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
     return client
+
+
+def _job_seam(monkeypatch: pytest.MonkeyPatch, latest) -> AsyncMock:
+    start = AsyncMock()
+    monkeypatch.setattr('src.services.curation.selection.job.start', start)
+    monkeypatch.setattr(
+        'src.services.curation.latest_job.latest_job', AsyncMock(return_value=latest)
+    )
+    return start
 
 
 def test_select_diverse_disabled_400(
@@ -382,48 +403,46 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
 def test_select_diverse_job_path_for_large_pool(
     select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Force the job path via a tiny OP_SELECT_SYNC_MAX_OPS, then drive
-    the lifecycle exactly like test_scores_router.py does: monkeypatch
-    the background coroutine to hang on a controlled asyncio.Event so the
-    'running' state is observable deterministically."""
-    from src.services.curation.selection import job as select_job
-
+    """A tiny OP_SELECT_SYNC_MAX_OPS forces the job path: the route queues the job and answers
+    202 with its state (the queue, busy and run paths are in ``tests/curation/jobs_a``)."""
     monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '1')
     select_app_client.fake_os.count = AsyncMock(return_value={'count': 50_000})
-
-    hang_forever = asyncio.Event()
-
-    async def _fake_run_selection_job(job_id, opensearch, index, query, k, seed_crop_id, max_n):
-        select_job._job().touch_heartbeat()
-        await hang_forever.wait()
-
-    monkeypatch.setattr(select_job, 'run_selection_job', _fake_run_selection_job)
+    queued = SimpleNamespace(
+        id='j1',
+        status='queued',
+        started_at=None,
+        finished_at=None,
+        error_message=None,
+        params={'k': 1000, 'scope': {}},
+        progress={},
+        result=None,
+    )
+    start = _job_seam(monkeypatch, queued)
 
     r = select_app_client.post('/curation/projects/default/select/diverse', json={'k': 1000})
+
     assert r.status_code == 202
-    body = r.json()
-    assert body['status'] == 'running'
-    assert body['k'] == 1000
-
-    r_status = select_app_client.get('/curation/projects/default/select/status')
-    assert r_status.json()['status'] == 'running'
-
-    r_double = select_app_client.post('/curation/projects/default/select/diverse', json={'k': 500})
-    assert r_double.status_code == 409
-
-    r_cancel = select_app_client.post('/curation/projects/default/select/cancel')
-    assert r_cancel.status_code == 200
-    assert r_cancel.json()['cancelled'] is True
-    assert select_job.is_cancelled()
+    assert (r.json()['status'], r.json()['k']) == ('queued', 1000)
+    assert start.await_args.kwargs['k'] == 1000
+    assert start.await_args.kwargs['embedding_field'] == 'pe_embedding'
 
 
-def test_select_status_idle_with_no_job(select_app_client: TestClient) -> None:
+def test_select_status_idle_with_no_job(
+    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _job_seam(monkeypatch, None)
     r = select_app_client.get('/curation/projects/default/select/status')
     assert r.status_code == 200
     assert r.json()['status'] == 'idle'
 
 
-def test_select_cancel_with_no_job_running(select_app_client: TestClient) -> None:
+def test_select_cancel_with_no_job_running(
+    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _job_seam(monkeypatch, None)
+    monkeypatch.setattr(
+        'src.services.curation.latest_job.cancel_latest', AsyncMock(return_value=False)
+    )
     r = select_app_client.post('/curation/projects/default/select/cancel')
     assert r.status_code == 200
     assert r.json()['cancelled'] is False
@@ -486,7 +505,7 @@ def test_selection_overlay_query_filters_never_write(monkeypatch: pytest.MonkeyP
     field -- forbidden or otherwise -- is ever written."""
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope(cluster_id=42))
+    q = _build_scope_query(SelectDiverseScope(cluster_id=42), 'pe_embedding')
     # cluster_id is allowed to appear inside a {'term': {...}} *query*
     # clause (read-side scoping) -- assert it never appears as a `doc`/
     # write body key, which this query-builder never produces at all.

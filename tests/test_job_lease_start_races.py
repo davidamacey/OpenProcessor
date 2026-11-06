@@ -44,67 +44,6 @@ async def _idle(*_: object, **__: object) -> None:
     await asyncio.sleep(60)
 
 
-async def _start_item_scores(client: Any) -> str:
-    from src.services.curation.item_scores import job
-
-    job.run_scoring_job = _idle  # type: ignore[assignment]
-    _widen_check(job)
-    try:
-        await job.start_job(client, ['x'])
-    except RuntimeError:
-        return 'busy'
-    return 'started'
-
-
-async def _start_selection(client: Any) -> str:
-    from src.services.curation.selection import job
-
-    job.run_selection_job = _idle  # type: ignore[assignment]
-    _widen_check(job)
-    try:
-        await job.start_job(client, index='i', query={}, k=1, seed_crop_id=None, scope={}, max_n=10)
-    except RuntimeError:
-        return 'busy'
-    return 'started'
-
-
-async def _start_embedding_viz(client: Any) -> str:
-    from src.services.curation import embedding_viz
-
-    embedding_viz.run_projection_job = _idle  # type: ignore[assignment]
-    _widen_check(embedding_viz)
-    try:
-        await embedding_viz.start_job(client, scope='residual')
-    except RuntimeError:
-        return 'busy'
-    return 'started'
-
-
-async def _start_probe(client: Any) -> str:
-    from pathlib import Path
-
-    from src.services.curation import probe_job
-
-    probe_job._run = _idle  # type: ignore[assignment]
-    _widen_check(probe_job)
-    try:
-        await probe_job.start_probe_job('j', 't', Path('/x/best.pt'), client)
-    except probe_job.ProbeJobBusyError:
-        return 'busy'
-    return 'started'
-
-
-async def _start_reprocess(client: Any) -> str:
-    from src.services.curation import reprocess_job
-
-    _widen_check(reprocess_job, 'running_job_ids')
-    try:
-        await reprocess_job.create_job(client, request={}, scopes=['embed'], image_ids=['a'])
-    except reprocess_job.ReprocessBusyError:
-        return 'busy'
-    return 'started'
-
-
 async def _start_assist(client: Any) -> str:
     from src.core.exceptions import RequestRejectedError
     from src.services.curation.assist import job
@@ -203,16 +142,11 @@ async def _start_region_fp_centroids(client: Any) -> str:
 
 
 STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
-    'item_scores': (_start_item_scores, {'OP_SCORES_STATE_DIR': 'scores'}),
-    'selection': (_start_selection, {'OP_SELECT_JOBS_DIR': 'selection'}),
-    'embedding_viz': (_start_embedding_viz, {'OP_VIZ_JOBS_DIR': 'viz'}),
-    'reprocess': (_start_reprocess, {'OP_REPROCESS_JOBS_DIR': 'reprocess'}),
     'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
     'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
     'promote': (_start_promote, {'OP_TRAIN_JOBS_DIR': 'train'}),
     'autolabel': (_start_autolabel, {'OP_AUTO_LABEL_STATE_DIR': 'autolabel'}),
     'assist_loop': (_start_assist_loop, {'OP_ASSIST_LOOP_JOBS_DIR': 'loops'}),
-    'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),
     'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
     'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),
 }

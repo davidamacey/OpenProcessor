@@ -50408,7 +50408,7 @@
     },
     "/curation/projects/{project}/probe/cancel": {
       "post": {
-        "description": "Best-effort cancel of the active probe job.",
+        "description": "Cancel the active probe job, if there is one.",
         "operationId": "probe_cancel_curation_projects__project__probe_cancel_post",
         "parameters": [
           {
@@ -50453,7 +50453,7 @@
     },
     "/curation/projects/{project}/probe/run": {
       "post": {
-        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. ``422`` when\n``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. GPU\nclaim (when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "description": "Queue a probe pass from a finished training run's export (202 with the job).\n\n``409`` when the referenced training job isn't finished or has no exported checkpoint, and\n``409 job_busy`` while a probe job is active. ``422`` when ``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. A requested ``gpu`` is\nclaimed by the worker through the arbiter ``POST /train/start`` uses; a claim failure fails\nthe job (see ``src.services.curation.probe_job``).",
         "operationId": "probe_run_curation_projects__project__probe_run_post",
         "parameters": [
           {
@@ -50477,7 +50477,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
@@ -53815,6 +53815,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Job Id",
               "type": "string"
             }
@@ -53859,7 +53860,7 @@
     },
     "/curation/projects/{project}/reprocess/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Ask a live job to stop after its current chunk.",
+        "description": "Ask a live job to stop after its current slice of images.",
         "operationId": "cancel_reprocess_job_curation_projects__project__reprocess_jobs__job_id__cancel_post",
         "parameters": [
           {
@@ -53867,6 +53868,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Job Id",
               "type": "string"
             }
@@ -55455,6 +55457,7 @@
     },
     "/curation/projects/{project}/scores/compute": {
       "post": {
+        "description": "Queue the scoring job (202 with its state; 409 `job_busy` while one is active).",
         "operationId": "scores_compute_curation_projects__project__scores_compute_post",
         "parameters": [
           {
@@ -55478,7 +55481,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
@@ -57278,7 +57281,7 @@
     },
     "/curation/projects/{project}/select/diverse": {
       "post": {
-        "description": "Pool-scale diversity selection — k-center-greedy over an arbitrary\nscope (cluster / review tab / generic filters), bigger than what fits\nin one ``GET /curation/crops`` page.\n\nAnswers inline (``200``, ``{crop_ids, method, version, n_pool}``) when\nthe scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;\notherwise starts a background job and returns ``202`` with\n``{job_id, status: 'running', ...}`` — poll ``GET /curation/select/status``.\nNever writes anything to OpenSearch (read-only selection).",
+        "description": "Pool-scale diversity selection — k-center-greedy over an arbitrary\nscope (cluster / review tab / generic filters), bigger than what fits\nin one ``GET /curation/crops`` page.\n\nAnswers inline (``200``, ``{crop_ids, method, version, n_pool}``) when\nthe scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;\notherwise queues a ``selection`` job and returns ``202`` with\n``{job_id, status: 'queued', ...}`` (409 ``job_busy`` while one is active) — poll ``GET /curation/select/status``.\nNever writes anything to OpenSearch (read-only selection).",
         "operationId": "select_diverse_curation_projects__project__select_diverse_post",
         "parameters": [
           {
@@ -57331,7 +57334,7 @@
     },
     "/curation/projects/{project}/select/status": {
       "get": {
-        "description": "Poll a backgrounded ``POST /curation/select/diverse`` job. ``result`` is\npopulated once ``status == 'completed'`` with the same\n``{crop_ids, method, version, n_pool}`` shape the sync path returns\ndirectly.",
+        "description": "Poll a queued ``POST /curation/select/diverse`` job. ``result`` is populated once\n``status == 'completed'`` with the same ``{crop_ids, method, version, n_pool}`` shape the\nsync path returns directly.",
         "operationId": "select_status_curation_projects__project__select_status_get",
         "parameters": [
           {
@@ -59642,7 +59645,7 @@
     },
     "/curation/projects/{project}/viz/projection/rebuild": {
       "post": {
-        "description": "Start the background UMAP-viz fit job. Never fits inline — always\nreturns immediately with the job's initial ``{status: 'running', ...}``\nstate (``202``); poll ``GET {prefix}/viz/projection/status``.",
+        "description": "Queue the UMAP-viz fit job. Never fits inline: answers `202` with the job's state (`409\njob_busy` while one is active); poll ``GET {prefix}/viz/projection/status``.",
         "operationId": "viz_projection_rebuild_curation_projects__project__viz_projection_rebuild_post",
         "parameters": [
           {
@@ -59683,7 +59686,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {

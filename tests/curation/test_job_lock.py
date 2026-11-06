@@ -1,6 +1,6 @@
 """Unit tests for the cross-process singleton-start lock
 (src.services.curation.job_lock), shared by item_scores.job and
-probe_job's start_job/start_probe_job.
+the job modules' start functions.
 """
 
 from __future__ import annotations

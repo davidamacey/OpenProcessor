@@ -18,7 +18,7 @@ from curation.reprocess_fixtures import (
     make_service,
     servable_root,
 )
-from src.services.curation import reprocess_embed, reprocess_job
+from src.services.curation import reprocess_embed
 from src.services.curation.ingest_index import PARKED_CLUSTER_ID
 from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_models import (
@@ -238,16 +238,6 @@ async def test_a_cap_embeds_only_the_limit(tmp_path: Path, monkeypatch: pytest.M
     )
     await apply_reprocess(fake, req, service_factory=_factory(service))
     assert pe.crop_calls == 2
-
-
-@pytest.mark.asyncio
-async def test_a_second_concurrent_job_is_busy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_REPROCESS_JOBS_DIR', str(tmp_path / 'jobs'))
-    await reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=['a'])
-    with pytest.raises(reprocess_job.ReprocessBusyError):
-        await reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=['b'])
 
 
 def test_limit_and_sample_apply_to_a_filter_only() -> None:

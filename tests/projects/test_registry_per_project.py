@@ -143,20 +143,10 @@ def test_job_dirs_nest_per_project_default_included(tmp_path: Any, monkeypatch: 
     from pathlib import Path
 
     from src.config.project_context import bind_project
-    from src.services.curation import embedding_viz, probe_job
-    from src.services.curation.item_scores import job as scores_job
-    from src.services.curation.selection import job as select_job
+    from src.services.curation.assist import job as assist_job
 
-    monkeypatch.setenv('OP_SCORES_STATE_DIR', str(tmp_path / 'scores'))
-    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe'))
-    monkeypatch.setenv('OP_SELECT_JOBS_DIR', str(tmp_path / 'select'))
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
-    dirs = {
-        'scores': scores_job._state_dir,
-        'probe': probe_job._jobs_dir,
-        'select': select_job._jobs_dir,
-        'viz': embedding_viz._jobs_dir,
-    }
+    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist'))
+    dirs = {'assist': assist_job.jobs_root}
     # tests/conftest.py binds `default` for this test: it nests like any project.
     for name, fn in dirs.items():
         assert fn() == Path(tmp_path / name / 'projects' / 'default')

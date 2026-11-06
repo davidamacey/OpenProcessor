@@ -12,9 +12,10 @@ from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.db.repos import settings as settings_repo
 from src.db.session import async_session_factory, project_tx
+from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import embedded_clause
 from src.services.config_store.bound_project import bound_project_id
-from src.services.curation.embedding_viz import EMBEDDING_FIELD
+from src.services.embedding_spaces.resolve import embedding_space
 
 
 if TYPE_CHECKING:
@@ -95,7 +96,8 @@ async def get_cached_projection(
     """
     meta = await _load_run_metadata()
 
-    scope_must: list[dict[str, Any]] = [embedded_clause(EMBEDDING_FIELD)]
+    embedding_field = (await embedding_space(Target.ITEM)).vector_field
+    scope_must: list[dict[str, Any]] = [embedded_clause(embedding_field)]
     scope_must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
     if cluster_id is not None:
         scope_must.append({'term': {'cluster_id': cluster_id}})

@@ -20,12 +20,7 @@ from src.domain.job_lease import Acquired, LeaseKind
 logger = get_logger(__name__)
 
 JOB_MODULES: tuple[tuple[str, LeaseKind], ...] = (
-    ('src.services.curation.item_scores.job', LeaseKind.ITEM_SCORES),
-    ('src.services.curation.selection.job', LeaseKind.SELECTION),
-    ('src.services.curation.embedding_viz', LeaseKind.EMBEDDING_VIZ),
     ('src.services.curation.autolabel.job', LeaseKind.AUTOLABEL),
-    ('src.services.curation.probe_job', LeaseKind.PROBE),
-    ('src.services.curation.reprocess_job', LeaseKind.REPROCESS),
     ('src.services.curation.assist.job', LeaseKind.ASSIST_RUN),
     ('src.services.curation.dataset_import.runner', LeaseKind.DATASET_IMPORT),
     ('src.services.training.promote_job', LeaseKind.PROMOTE),

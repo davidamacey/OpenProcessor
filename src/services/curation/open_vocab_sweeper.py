@@ -90,13 +90,19 @@ async def default_service(opensearch: AsyncOpenSearch) -> CurationIngestService:
 
 
 async def _sweep_all_projects(service_factory: ServiceFactory) -> None:
-    from src.services.curation.reprocess_job import jobs_root
+    from src.config.env import env_path
+    from src.config.project_context import mark_project_dir, project_jobs_dir
     from src.services.projects.bootstrap import for_each_project
     from src.services.projects.guard import make_curation_opensearch
 
     for slug in for_each_project():
         try:
-            with exclusive_start_lock(jobs_root() / 'open_vocab_sweep.lock') as mine:
+            with exclusive_start_lock(
+                mark_project_dir(
+                    project_jobs_dir(env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess'))
+                )
+                / 'open_vocab_sweep.lock'
+            ) as mine:
                 if not mine:
                     continue
                 taken = await sweep_pending_open_vocab(

@@ -75,7 +75,7 @@ def _cluster_members() -> dict[str, Any]:
 def _select_diverse() -> dict[str, Any]:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    return _build_scope_query(SelectDiverseScope())
+    return _build_scope_query(SelectDiverseScope(), 'pe_embedding')
 
 
 @pytest.mark.parametrize(

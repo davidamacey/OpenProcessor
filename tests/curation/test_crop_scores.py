@@ -1,7 +1,7 @@
 """Tests for the crop_scores/ overlay scorers.
 
 Pure-math tests against synthetic embeddings — no OpenSearch, no faiss
-index files on disk. ``compute_uniqueness`` / ``compute_near_dup_groups``
+index files on disk. ``compute_uniqueness``
 are the testable cores; the ``*Scorer`` classes are thin OpenSearch-facing
 wrappers exercised separately in ``test_scores_router.py``.
 """
@@ -12,7 +12,6 @@ import numpy as np
 import pytest
 
 from src.services.curation.item_scores import SCORER_METADATA, available_scorers, get_scorer
-from src.services.curation.item_scores.near_dup import NearDupScorer, compute_near_dup_groups
 from src.services.curation.item_scores.uniqueness import compute_uniqueness
 
 
@@ -80,73 +79,6 @@ def test_uniqueness_degenerate_inputs_return_zeros() -> None:
 
 # =============================================================================
 # Near-duplicate — exact/near-identical rows group; distinct rows don't
-# =============================================================================
-
-
-def test_near_dup_groups_exact_duplicates_only() -> None:
-    rng = np.random.default_rng(1)
-    dim = 16
-    base = rng.normal(size=(8, dim))
-    base /= np.linalg.norm(base, axis=1, keepdims=True)
-    # Sanity: random high-dim unit vectors are (with overwhelming
-    # probability) far below the 0.98 dup threshold pairwise.
-    sims = base @ base.T
-    np.fill_diagonal(sims, -1.0)
-    assert sims.max() < 0.98, f'synthetic base vectors are not well separated: max sim {sims.max()}'
-
-    dup = base[0] + rng.normal(scale=1e-6, size=dim)
-    dup /= np.linalg.norm(dup)
-    embeddings = np.vstack([base, dup]).astype(np.float32)
-
-    groups = compute_near_dup_groups(embeddings, threshold=0.98)
-    assert len(groups) == 1
-    assert set(groups[0]) == {0, 8}
-
-
-def test_near_dup_no_groups_when_all_distinct() -> None:
-    rng = np.random.default_rng(2)
-    embeddings = rng.normal(size=(10, 16)).astype(np.float32)
-    embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
-    groups = compute_near_dup_groups(embeddings, threshold=0.98)
-    assert groups == []
-
-
-def test_near_dup_bucket_scoping_matches_global_for_small_pools() -> None:
-    """When centroids are supplied but nlist >= n, bucket-scoping degrades
-    to a single global pass (no bucket boundary should split a real dup
-    pair) — regression guard for the O(n^2)-avoidance code path."""
-    rng = np.random.default_rng(3)
-    dim = 16
-    base = rng.normal(size=(6, dim))
-    base /= np.linalg.norm(base, axis=1, keepdims=True)
-    dup = base[2] + rng.normal(scale=1e-6, size=dim)
-    dup /= np.linalg.norm(dup)
-    embeddings = np.vstack([base, dup]).astype(np.float32)
-
-    global_groups = compute_near_dup_groups(embeddings, threshold=0.98)
-    # centroids.shape[0] >= n short-circuits to the global path in
-    # compute_near_dup_groups, matching production's small-pool behaviour.
-    centroids = rng.normal(size=(embeddings.shape[0] + 2, dim)).astype(np.float32)
-    centroids /= np.linalg.norm(centroids, axis=1, keepdims=True)
-    bucketed_groups = compute_near_dup_groups(embeddings, threshold=0.98, centroids=centroids)
-    assert bucketed_groups == global_groups
-
-
-def test_near_dup_raises_when_centroid_store_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``NearDupScorer._load_centroids`` must fail loudly when the persisted
-    IVF centroid store is missing, not silently degrade to an unscoped
-    global O(n^2) pass over the full residual pool -- the exact cost
-    bucket-scoping exists to avoid."""
-    from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
-
-    monkeypatch.setattr(IVFCentroidStore, 'load', lambda _self: False)
-    scorer = NearDupScorer()
-    with pytest.raises(RuntimeError, match='IVF centroid store'):
-        scorer._load_centroids()
-
-
-# =============================================================================
-# Regression guard — no scorer ever writes a cluster field
 # =============================================================================
 
 

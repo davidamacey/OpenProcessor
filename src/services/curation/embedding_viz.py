@@ -14,8 +14,8 @@ Non-negotiable design rules:
    ``clustering/methods/``.
 2. **Never fits on a request path.** ``fit_projection`` (the only
    function importing ``umap`` / calling ``.fit_transform``) is reachable
-   solely from :func:`run_projection_job`, scheduled only by
-   :func:`start_job` (``POST /curation/viz/projection/rebuild``).
+   solely from :func:`run_projection_job`, queued only by
+   :func:`start` (``POST /curation/viz/projection/rebuild``).
    ``GET /curation/viz/projection`` calls only
    :func:`get_cached_projection`, a plain OpenSearch ``search`` over
    already-written ``viz_x``/``viz_y`` fields — enforced by
@@ -41,46 +41,43 @@ delegates to
 with a ``cluster_id`` term filter (same building block the select router
 uses). Both paths already exclude ``test_holdout=true`` crops.
 
-Job-runner pattern mirrors :mod:`src.services.curation.item_scores.job`'s
-singleton state.json/heartbeat/cancel.flag conventions rather than
-:mod:`src.services.curation.selection.job`'s, since (like
-``item_scores.job``, unlike the read-only ``selection.job``) this job
-*writes* fields back via a bulk update. Every rebuild does one full fresh
-``fit_transform`` and writes coordinates; persisting the fitted reducer
-is for provenance only, not a functional requirement.
+The job is a queued ``embedding_viz`` job (one at a time per project); a Celery worker runs
+:func:`run_projection_job`. UMAP is imported inside the task, never at module import. Every
+rebuild does one full fresh ``fit_transform`` and writes coordinates; persisting the fitted
+reducer is for provenance only, not a functional requirement.
 """
 
 from __future__ import annotations
 
 import asyncio
-import time
-import uuid
-from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.config import get_curation_config
 from src.config.curation_accessors import items_index
-from src.config.env import env_path
-from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.db.repos import settings as settings_repo
 from src.db.session import async_session_factory, project_tx
+from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import embedded_clause
-from src.domain.job_lease import LeaseKind
 from src.services.config_store.bound_project import bound_project_id
 from src.services.curation.clustering.umap_state import reducer_stored, save_reducer
-from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
-from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
+from src.services.curation.latest_job import common_state
+from src.services.embedding_spaces.resolve import embedding_space
+from src.services.jobs.service import start_job
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    import uuid
 
     from opensearchpy import AsyncOpenSearch
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.db.repos.jobs import JobRow
+    from src.schemas.jobs import JobView
+    from src.tasks.runtime.context import JobContext
 
 
 logger = get_logger(__name__)
@@ -108,7 +105,7 @@ VIZ_PROJECTION_VERSION = 'umap_viz_v1'
 # The integer the projection_states row stores; the items keep the string stamp above.
 VIZ_PROJECTION_NUMBER = int(VIZ_PROJECTION_VERSION.rsplit('v', 1)[1])
 
-EMBEDDING_FIELD = 'pe_embedding'
+KIND = 'embedding_viz'
 
 # max_result_window is 10000; get_cached_projection() pages with search_after
 # in chunks of this size instead of a single oversized `size: max_points`.
@@ -118,134 +115,44 @@ EMBEDDING_FIELD = 'pe_embedding'
 # max_n *after* the fetch, deterministically (seeded) to avoid shard bias.
 DEFAULT_MAX_N = 20_000
 
-_ACTIVE = frozenset({'running'})
 
-# See item_scores.job's identical comment: asyncio only holds a weak
-# reference internally, so an unreferenced task can be garbage-collected
-# mid-run. Kept alive per the singleton contract start_job()/_is_busy()
-# enforce via the state file.
-_active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
-
-
-def _jobs_dir() -> Path:
-    """Resolved fresh each call so tests can override via monkeypatch
-    (same convention as ``item_scores.job._state_dir``)."""
-    return project_jobs_dir(env_path('OP_VIZ_JOBS_DIR', '/jobs/viz'))
-
-
-def _job() -> FileJob:
-    return FileJob(_jobs_dir())
-
-
-@dataclass
-class _JobState:
-    job_id: str = ''
-    status: str = 'idle'  # 'idle' | 'running' | 'completed' | 'failed' | 'cancelled'
-    scope: str = ''
-    cluster_id: int | None = None
-    n_pool: int = 0
-    n_written: int = 0
-    started_at: float = 0.0
-    finished_at: float = 0.0
-    error: str | None = None
-    projection_version: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def _read_state() -> _JobState:
-    state = _JobState()
-    for k, v in _job().read().items():
-        if hasattr(state, k):
-            setattr(state, k, v)
-    return state
-
-
-def is_cancelled() -> bool:
-    return _job().cancel_requested()
-
-
-def _is_busy() -> bool:
-    return _job().is_live(_ACTIVE)
-
-
-def reconcile_orphaned_jobs() -> bool:
-    """Startup-only repair: see :mod:`src.services.curation.job_reconcile`.
-
-    Called from ``src.main``'s lifespan before any request is served —
-    nothing in this process can legitimately hold ``status='running'``
-    yet, so a leftover 'running' state.json is necessarily orphaned by a
-    prior process. Returns True if the file was rewritten.
-    """
-    return _job().reconcile(active_statuses=_ACTIVE, error_prefix='viz projection job')
-
-
-def get_state() -> dict[str, Any]:
-    """Read-only snapshot. A stale heartbeat is reported as ``failed`` in the returned view
-    only: a status poll never writes state (persisting stays with the lease/startup
-    reconcile and ``FileJob.served_state``; mirrors ``item_scores.job.get_state``'s contract)."""
-    state = _read_state()
-    if state.status == 'running':
-        age = _job().heartbeat_age()
-        if age is not None and age > HEARTBEAT_STALE_S:
-            state.status = 'failed'
-            state.error = state.error or f'viz projection job heartbeat stale ({age:.1f}s ago)'
-            state.finished_at = state.finished_at or time.time()
-    return state.to_dict()
-
-
-async def start_job(
-    opensearch: AsyncOpenSearch,
+async def start(
+    session: AsyncSession,
+    project: uuid.UUID,
     *,
     scope: str,
     cluster_id: int | None = None,
     max_n: int = DEFAULT_MAX_N,
-) -> dict[str, Any]:
-    """Take the projection lease, write 'running' state, then schedule the background fit
-    job. Raises ``RuntimeError`` if a run is already in flight -- the router surfaces this
-    as HTTP 409 (same contract as ``item_scores.job.start_job``).
-    """
+) -> JobRow:
+    """Queue the projection fit (409 ``job_busy`` while one is active; ``ValueError`` for a bad
+    ``scope``)."""
     if scope not in {'residual', 'cluster'}:
         raise ValueError(f"scope must be 'residual' or 'cluster', got {scope!r}")
     if scope == 'cluster' and cluster_id is None:
         raise ValueError("cluster_id is required when scope='cluster'")
-    busy = RuntimeError('viz projection job already in progress')
-    if _is_busy():
-        raise busy
-    job_id = uuid.uuid4().hex
-    beat = await acquire_heartbeat(
-        opensearch, LeaseKind.EMBEDDING_VIZ, None, job_id, job=_job(), busy=lambda _holder: busy
+    started = await start_job(
+        session,
+        KIND,
+        project,
+        params={'scope': scope, 'cluster_id': cluster_id, 'max_n': max_n},
+        requested_by='api',
     )
-    try:
-        _job().clear_signals()
-        state = _JobState(
-            job_id=job_id,
-            status='running',
-            scope=scope,
-            cluster_id=cluster_id,
-            started_at=time.time(),
-        )
-        _job().write(state.to_dict())
-    except BaseException:
-        await beat.release(opensearch)
-        raise
-    beat.start()
-    _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
-        run_leased(
-            beat,
-            opensearch,
-            run_projection_job(job_id, opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n),
-        )
-    )
-    return state.to_dict()
+    return started.job
 
 
-def cancel_job() -> bool:
-    if not _is_busy():
-        return False
-    _job().request_cancel()
-    return True
+def state_dict(view: JobView | None) -> dict[str, Any]:
+    """The ``/viz/projection/status`` wire of a job row."""
+    params = (view.params if view else None) or {}
+    progress = (view.progress if view else None) or {}
+    result = (view.result if view else None) or {}
+    return {
+        **common_state(view),
+        'scope': params.get('scope', ''),
+        'cluster_id': params.get('cluster_id'),
+        'n_pool': int(progress.get('total') or 0),
+        'n_written': int(result.get('n_written') or 0),
+        'projection_version': result.get('projection_version'),
+    }
 
 
 def _l2_normalize(x: np.ndarray) -> np.ndarray:
@@ -275,6 +182,7 @@ async def _fetch_pool(
     scope: str,
     cluster_id: int | None,
     max_n: int,
+    embedding_field: str,
 ) -> tuple[list[str], np.ndarray]:
     """Reuse the two existing embedding-fetch helpers rather than a third
     scroll/PIT implementation (module docstring point 3)."""
@@ -284,14 +192,14 @@ async def _fetch_pool(
         query = {
             'bool': {
                 'filter': [
-                    embedded_clause(EMBEDDING_FIELD),
+                    embedded_clause(embedding_field),
                     {'term': {'cluster_id': cluster_id}},
                 ],
                 'must_not': [{'term': {'test_holdout': True}}],
             }
         }
         ids, embeddings, truncated = await fetch_pool_embeddings(
-            opensearch, items_index(), query, cap=max_n, embedding_field=EMBEDDING_FIELD
+            opensearch, items_index(), query, cap=max_n, embedding_field=embedding_field
         )
         if truncated:
             # fetch_pool_embeddings returns an empty array when truncated
@@ -303,7 +211,7 @@ async def _fetch_pool(
                 items_index(),
                 query,
                 cap=10 * max_n,
-                embedding_field=EMBEDDING_FIELD,
+                embedding_field=embedding_field,
             )
             ids, embeddings = _subsample(ids, embeddings, max_n)
         return ids, embeddings
@@ -427,90 +335,47 @@ async def fit_projection(embeddings: np.ndarray) -> tuple[np.ndarray, str]:
     return xy, fitted_at
 
 
-async def run_projection_job(
-    job_id: str,
-    opensearch: AsyncOpenSearch,
-    *,
-    scope: str,
-    cluster_id: int | None,
-    max_n: int,
-) -> None:
-    """Actual compute body: one pool fetch, one UMAP fit, one bulk write.
-    A dedicated (non-underscore) symbol so tests can monkeypatch it
-    wholesale, same reasoning as ``item_scores.job.run_scoring_job``."""
-    state = _read_state()
-    if state.job_id != job_id:
-        return
-    _job().touch_heartbeat()
-    try:
-        ids, embeddings = await _fetch_pool(
-            opensearch, scope=scope, cluster_id=cluster_id, max_n=max_n
-        )
-        state.n_pool = len(ids)
-        _job().write(state.to_dict())
-        _job().touch_heartbeat()
-
-        if not ids:
-            state.status = 'completed'
-            state.n_written = 0
-            state.finished_at = time.time()
-            _job().write(state.to_dict())
-            return
-
-        if is_cancelled():
-            state.status = 'cancelled'
-            state.finished_at = time.time()
-            _job().write(state.to_dict())
-            return
-
-        xy, fitted_at = await fit_projection(embeddings)
-        _job().touch_heartbeat()
-
-        if is_cancelled():
-            state.status = 'cancelled'
-            state.finished_at = time.time()
-            _job().write(state.to_dict())
-            return
-
-        n_written = await _bulk_write_coordinates(opensearch, ids, xy)
-        await _save_run_metadata(
-            scope=scope,
-            cluster_id=cluster_id,
-            n_points=n_written,
-            fitted_at=fitted_at,
-        )
-
-        state.status = 'completed'
-        state.n_written = n_written
-        state.projection_version = VIZ_PROJECTION_VERSION
-        state.finished_at = time.time()
-        _job().write(state.to_dict())
-    except asyncio.CancelledError:
-        state.status = 'cancelled'
-        state.finished_at = time.time()
-        _job().write(state.to_dict())
-        raise
-    except Exception as exc:
-        logger.error('curation_viz_projection_job_failed', job_id=job_id, error=str(exc))
-        state.status = 'failed'
-        state.error = str(exc)
-        state.finished_at = time.time()
-        _job().write(state.to_dict())
+async def run_projection_job(ctx: JobContext, opensearch: AsyncOpenSearch) -> dict[str, Any]:
+    """Actual compute body: one pool fetch, one UMAP fit, one bulk write. A cancel is checked
+    before the fit and before the write (the fit itself cannot be interrupted)."""
+    params = ctx.params
+    embedding_field = (await embedding_space(Target.ITEM)).vector_field
+    ids, embeddings = await _fetch_pool(
+        opensearch,
+        scope=params['scope'],
+        cluster_id=params['cluster_id'],
+        max_n=params['max_n'],
+        embedding_field=embedding_field,
+    )
+    await ctx.progress(0, len(ids), 'fitting')
+    if not ids:
+        return {'n_written': 0}
+    if ctx.cancelled():
+        return {'cancelled': True}
+    xy, fitted_at = await fit_projection(embeddings)
+    if ctx.cancelled():
+        return {'cancelled': True}
+    n_written = await _bulk_write_coordinates(opensearch, ids, xy)
+    await _save_run_metadata(
+        scope=params['scope'],
+        cluster_id=params['cluster_id'],
+        n_points=n_written,
+        fitted_at=fitted_at,
+    )
+    return {'n_written': n_written, 'projection_version': VIZ_PROJECTION_VERSION}
 
 
 __all__ = [
     'DEFAULT_MAX_N',
+    'KIND',
     'VIZ_METRIC',
     'VIZ_MIN_DIST',
     'VIZ_N_COMPONENTS',
     'VIZ_N_NEIGHBORS',
     'VIZ_PROJECTION_VERSION',
     'VIZ_RANDOM_STATE',
-    'cancel_job',
     'fit_projection',
-    'get_state',
-    'is_cancelled',
-    'reconcile_orphaned_jobs',
     'run_projection_job',
-    'start_job',
+    'start',
+    'state_dict',
 ]

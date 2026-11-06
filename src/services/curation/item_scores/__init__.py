@@ -11,13 +11,11 @@ from typing import Any
 
 from src.services.curation.item_scores.base import CropScorer, ScoreResult
 from src.services.curation.item_scores.mistakenness import MistakennessScorer
-from src.services.curation.item_scores.near_dup import NearDupScorer
 from src.services.curation.item_scores.uniqueness import UniquenessScorer
 
 
 _SCORERS: dict[str, type[CropScorer]] = {
     UniquenessScorer.name: UniquenessScorer,
-    NearDupScorer.name: NearDupScorer,
     MistakennessScorer.name: MistakennessScorer,
 }
 
@@ -29,11 +27,6 @@ SCORER_METADATA: dict[str, dict[str, Any]] = {
         'label': 'Uniqueness',
         'requires_field': 'uniqueness_score',
         'writes': UniquenessScorer.writes,
-    },
-    NearDupScorer.name: {
-        'label': 'Near-duplicate',
-        'requires_field': 'dup_group_id',
-        'writes': NearDupScorer.writes,
     },
     MistakennessScorer.name: {
         'label': 'Mistakenness',

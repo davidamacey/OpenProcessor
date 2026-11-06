@@ -27,11 +27,13 @@ Two things are exercised here:
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import numpy as np
 import pytest
 
+from curation.jobs_a.ctx import FakeCtx
 from src.services.curation.item_scores import job as scores_job
 from src.services.curation.item_scores.base import ScoreResult
 
@@ -180,16 +182,6 @@ class _SpyScorer:
         return ScoreResult(scorer=self.name, version=self.version, scored_at='t', fields={})
 
 
-@pytest.fixture
-def _job_state_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_SCORES_STATE_DIR', str(tmp_path / 'scores'))
-
-
-def _seed_running_job(job_id: str, scorer_names: list[str]) -> None:
-    state = scores_job._JobState(job_id=job_id, status='running', scorers=list(scorer_names))
-    scores_job._job().write(state.to_dict())
-
-
 async def _run_with_spies(
     monkeypatch: pytest.MonkeyPatch,
     scorer_names: list[str],
@@ -198,9 +190,7 @@ async def _run_with_spies(
     residual_pool: tuple[list[str], np.ndarray] | None = None,
     probe_pool_ids: list[str] | None = None,
     fail_residual_fetch: bool = False,
-) -> None:
-    job_id = 'job-1'
-    _seed_running_job(job_id, scorer_names)
+) -> dict[str, Any]:
 
     monkeypatch.setattr(
         'src.services.curation.item_scores.get_scorer',
@@ -224,17 +214,17 @@ async def _run_with_spies(
 
     monkeypatch.setattr(scores_job, '_fetch_probe_scored_ids', _fake_probe_ids)
 
-    await scores_job.run_scoring_job(job_id, opensearch=object(), scorer_names=scorer_names)
+    ctx = FakeCtx(uuid.uuid4(), uuid.uuid4(), {'scorers': scorer_names})
+    return await scores_job.run_scoring_job(ctx, object(), scorer_names)
 
 
-@pytest.mark.usefixtures('_job_state_dir')
 @pytest.mark.asyncio
 async def test_uniqueness_still_receives_residual_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     spy = _SpyScorer('uniqueness', 'residual')
     residual_ids = ['r1', 'r2', 'r3']
     residual_embeddings = np.ones((3, 4), dtype=np.float32)
 
-    await _run_with_spies(
+    state = await _run_with_spies(
         monkeypatch,
         ['uniqueness'],
         {'uniqueness': spy},
@@ -245,20 +235,16 @@ async def test_uniqueness_still_receives_residual_pool(monkeypatch: pytest.Monke
     assert spy.calls[0]['ids'] == residual_ids
     assert np.array_equal(spy.calls[0]['embeddings'], residual_embeddings)
 
-    state = scores_job.get_state()
-    assert state['status'] == 'completed'
-    assert state['total'] == 3
     assert state['results']['uniqueness']['pool'] == 'residual'
     assert state['results']['uniqueness']['pool_size'] == 3
 
 
-@pytest.mark.usefixtures('_job_state_dir')
 @pytest.mark.asyncio
 async def test_mistakenness_receives_probe_scored_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     spy = _SpyScorer('mistakenness', 'probe_scored')
     probe_ids = ['machine_labeled_item', 'plain_item']
 
-    await _run_with_spies(
+    state = await _run_with_spies(
         monkeypatch,
         ['mistakenness'],
         {'mistakenness': spy},
@@ -270,13 +256,10 @@ async def test_mistakenness_receives_probe_scored_pool(monkeypatch: pytest.Monke
     assert spy.calls[0]['ids'] == probe_ids
     assert spy.calls[0]['embeddings'].shape == (2, 0)
 
-    state = scores_job.get_state()
-    assert state['status'] == 'completed'
     assert state['results']['mistakenness']['pool'] == 'probe_scored'
     assert state['results']['mistakenness']['pool_size'] == 2
 
 
-@pytest.mark.usefixtures('_job_state_dir')
 @pytest.mark.asyncio
 async def test_only_needed_pools_are_fetched(monkeypatch: pytest.MonkeyPatch) -> None:
     """scorers=['mistakenness'] must never call
@@ -292,8 +275,6 @@ async def test_only_needed_pools_are_fetched(monkeypatch: pytest.MonkeyPatch) ->
         fail_residual_fetch=True,
     )
 
-    state = scores_job.get_state()
-    assert state['status'] == 'completed'
     assert len(spy.calls) == 1
     assert spy.calls[0]['ids'] == ['a', 'b', 'c']
 

@@ -24,7 +24,7 @@ exactly one of explicit ``crop_ids``, explicit ``image_ids`` or a ``filter``
 :func:`plan_reprocess` is read-only and returns the per-scope counts a dry
 run serves. :func:`apply_reprocess` plans, then executes: ``region`` and
 ``vlm`` are OCC bulk flips done in the call; ``detect`` / ``embed`` run in
-the call for a few images and as a file-backed job
+the call for a few images and as a queued ``reprocess`` job
 (:mod:`~src.services.curation.reprocess_job`) above
 ``OP_REPROCESS_SYNC_MAX`` images.
 """
@@ -36,13 +36,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
+from src.config.project_context import current_project_id
+from src.services.curation import reprocess_job
 from src.services.curation.dataset_import.limits import reprocess_sync_max
 from src.services.curation.item_selection import resolve_ids
 from src.services.curation.reprocess_detect import redetect_image
 from src.services.curation.reprocess_embed import reembed_items
 from src.services.curation.reprocess_embed_spec import EmbedSpec, plan_embed_counts
 from src.services.curation.reprocess_images import IMAGE_SCOPES, process_images
-from src.services.curation.reprocess_job import read_job, start_job
 from src.services.curation.reprocess_locks import class_locked, class_locked_clause, item_locked
 from src.services.curation.reprocess_models import (
     ReprocessRequest,
@@ -70,10 +71,12 @@ from src.services.curation.reprocess_targets import (
     validate_targets,
 )
 from src.services.curation.reprocess_vlm import apply_vlm, vlm_class_clause, vlm_restore_update
+from src.services.jobs import status as job_status
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.services.curation.ingest import CurationIngestService
 
@@ -351,10 +354,13 @@ async def apply_reprocess(
     request: ReprocessRequest,
     *,
     service_factory: ServiceFactory | None = None,
+    session: AsyncSession | None = None,
 ) -> ReprocessResponse:
     """Plan, then (unless ``dry_run``) execute. ``service_factory`` builds
     the ingest service ``detect`` / ``embed`` need; it is only awaited when
-    one of those scopes runs."""
+    one of those scopes runs. ``session`` is the request's database session: a
+    ``detect`` / ``embed`` pass over more than ``OP_REPROCESS_SYNC_MAX`` images is
+    queued as a ``reprocess`` job through it (409 ``job_busy`` while one is active)."""
     plan = await plan_reprocess(opensearch, request)
     if request.dry_run:
         return ReprocessResponse(dry_run=True, scopes=plan.results)
@@ -373,20 +379,25 @@ async def apply_reprocess(
 
     image_scopes = [s for s in _ORDER if s in by_scope and s in IMAGE_SCOPES]
     if image_scopes and plan.image_ids:
-        if service_factory is None:
-            raise ReprocessTargetsError('detect and embed need an ingest service')
-        service = await service_factory()
         if len(plan.image_ids) > reprocess_sync_max():
-            job_id = await start_job(
-                opensearch,
-                service,
+            if session is None:
+                raise ReprocessTargetsError('a reprocess job needs a database session')
+            project = current_project_id()
+            queued = await reprocess_job.start(
+                session,
+                project,
                 request=request.model_dump(),
                 scopes=image_scopes,
                 image_ids=plan.image_ids,
                 embed=plan.embed,
             )
-            job_info = read_job(job_id)
+            job_info = reprocess_job.job_info(
+                await job_status.get_job(session, queued.id, project=project)
+            )
         else:
+            if service_factory is None:
+                raise ReprocessTargetsError('detect and embed need an ingest service')
+            service = await service_factory()
             done, _ = await process_images(
                 opensearch,
                 service,

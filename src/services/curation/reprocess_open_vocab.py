@@ -243,7 +243,9 @@ class OpenVocabPass:
             if on_image is not None:
                 on_image()
 
-        await asyncio.gather(*(one(i, d) for i, d in docs.items()))
+        async with asyncio.TaskGroup() as group:
+            for image_id, doc in docs.items():
+                group.create_task(one(image_id, doc))
         return cancelled
 
 

@@ -18,7 +18,7 @@ items are pulled (smoke runs only — a k-NN/near-dup score computed over a
 truncated pool is not representative of the full one).
 
     python3 scripts/curation/backfill_scores.py --dry-run
-    python3 scripts/curation/backfill_scores.py --apply --scorers uniqueness,near_dup
+    python3 scripts/curation/backfill_scores.py --apply --scorers uniqueness,mistakenness
 
 Requires ``OP_SCORES_ENABLED=1`` (or ``--force``) — same feature-flag gate
 as the API path, so an operator can't accidentally backfill scores the
