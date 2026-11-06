@@ -68,7 +68,7 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 
 Same branch model as B2: one agent per worktree, lanes run only targeted red/green tests and static
 checks on touched files, the coordinator merges `--no-ff` (one merge commit per track) and runs
-**one** full gate for B4 (section 7). Opus plans, Sonnet implements and reviews. Every brief
+**one** full gate for B4 (section 7). Opus plans and coordinates, Sonnet implements and reviews (D-85). Every brief
 forbids `pgrep -f`, `pkill -f` and sleep/until loops, and names its `-p`, GPU, worktree and
 deadline.
 
@@ -512,7 +512,9 @@ are deleted there. B4 has no events track.
 
 ## 17. Ready-to-paste lane briefs
 
-Common to every B4 brief: read `docs/design/v070_rebuild/05_b4_stateless_api.md` (your track's section
+Common to every B4 brief: model Sonnet, effort medium for every track (owner-approved 2026-11-05, D-85;
+[00_master_plan.md](00_master_plan.md) section 7 step 3a; Haiku, low, may re-run a track's targeted tests
+and summarize logs). Read `docs/design/v070_rebuild/05_b4_stateless_api.md` (your track's section
 and sections 1-3, 9), `docs/design/v070_rebuild/03_b2_overview.md` section 5, `02b_jobs_locking_events.md` sections 2 and 8, CLAUDE.md,
 CONTRIBUTING.md, `docs/design/engineering_standards.md`. Red test on the unchanged base first
 (record it), then the fix and the control; `make contracts` in the same commit as a wire change;

@@ -569,10 +569,14 @@ v0.7.0 release.
 
 ## 17. Lane agent briefs (ready to paste)
 
-Common block for every brief (paste first):
+Common block for every brief (paste first). Model and effort (owner-approved 2026-11-05, D-85;
+[00_master_plan.md](00_master_plan.md) section 7 step 3a): Sonnet for every track; effort **high** for
+`export` and `decoders`, **medium** for `deps`, `stagea`, `families`, `frame` and `docs`; the gate agent
+is Sonnet, medium, and a failed gate step is root-caused by the coordinator (Opus, high) when Sonnet
+stalls. The B5 sub-batch files reuse this block and name their own efforts.
 
 ```text
-You are a Sonnet implementation agent for OpenProcessor B3. Read CLAUDE.md, docs/VISION_AND_GOALS.md
+You are a Sonnet implementation agent for OpenProcessor B3 (effort <high|medium>). Read CLAUDE.md, docs/VISION_AND_GOALS.md
 and docs/design/v070_rebuild/04_b3_ultralytics_one_version.md (your task IDs are there; it wins over
 older plans). Work ONLY in your worktree <repo>-wt-b3-<track> on branch b3/<track>. Never push,
 merge, rebase another branch, or touch another worktree or the live stack. Commit one concern per

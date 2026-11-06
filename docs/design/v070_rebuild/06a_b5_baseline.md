@@ -239,7 +239,7 @@ decision and the numbers.
 
 Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
 `<repo>-wt-b5a-<track>`, branch `b5a/<track>`, file `docs/design/v070_rebuild/06a_b5_baseline.md`, and
-these additions: "Benchmarks follow `docs/design/v070_rebuild/06_b5_overview.md` M-1..M-10. Stack:
+these additions (model and effort, D-85: Sonnet, medium for every track): "Benchmarks follow `docs/design/v070_rebuild/06_b5_overview.md` M-1..M-10. Stack:
 `docker compose -p op-b5a-bench` only, GPU 0 only (GPU 2 only if the coordinator says the peer
 agreed). Announce heavy runs through the coordinator. Project slugs start with `b5a-`; never touch
 `baseline-*` projects. Public data only."

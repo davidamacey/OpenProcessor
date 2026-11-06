@@ -218,10 +218,10 @@ Append-only shared files (`env.template`, `src/config/retired_env.py`, the basel
 **Goal.** The packages that cannot change model output move to exact `==` pins at their newest
 versions in a small PR of their own, so a dependency regression never blocks or muddies the B2 PRs. Versions are the latest releases at bump time (D-70).
 
-| Order | Lane | Branch | Owns | Brief | Issues |
-|---|---|---|---|---|---|
-| 1 | Pins part A: tooling, pure-Python libraries, web layer, clients | `deps/pins-part-a` (from `main`) | `requirements.txt`, `requirements-test.txt`, `.pre-commit-config.yaml` (the ruff `rev` moves to v0.17.4), `pyproject.toml` (existing dependency lines only), `tests/test_requirements_contract.py`, `frontend/package.json` and its lock (the dev-group bump of PR #474, which is closed, regenerated with `npm update` of that group plus the lock) | [01](01_package_pins.md) section 7.1, part A | N20 (#480) |
-| 1 | The local gate: `make gate` (owner-approved gap, 2026-11-04) | `tools/make-gate` (from `main`, merged into `deps/pins-part-a` before its sweep) | `Makefile` (the `gate` target only), new `scripts/dev/gate.sh`, new `tests/dev/test_gate_script.py`, `CONTRIBUTING.md` (one paragraph) | section 4.0a below | - |
+| Order | Lane | Branch | Owns | Brief | Issues | Model / effort (D-85) |
+|---|---|---|---|---|---|---|
+| 1 | Pins part A: tooling, pure-Python libraries, web layer, clients | `deps/pins-part-a` (from `main`) | `requirements.txt`, `requirements-test.txt`, `.pre-commit-config.yaml` (the ruff `rev` moves to v0.17.4), `pyproject.toml` (existing dependency lines only), `tests/test_requirements_contract.py`, `frontend/package.json` and its lock (the dev-group bump of PR #474, which is closed, regenerated with `npm update` of that group plus the lock) | [01](01_package_pins.md) section 7.1, part A | N20 (#480) | Sonnet, medium |
+| 1 | The local gate: `make gate` (owner-approved gap, 2026-11-04) | `tools/make-gate` (from `main`, merged into `deps/pins-part-a` before its sweep) | `Makefile` (the `gate` target only), new `scripts/dev/gate.sh`, new `tests/dev/test_gate_script.py`, `CONTRIBUTING.md` (one paragraph) | section 4.0a below | - | Sonnet, medium |
 
 **Sweep and exit.** One CPU offline sweep (the 4 CI shards, run through the new `make gate`, which
 is its own first user), pre-commit `--all-files`,
@@ -281,15 +281,15 @@ sequential, the existing `gather` included.
 
 **Preconditions.** W2.0 merged; `int/b2-control-plane` cut from `main`. The CI shards (PR #477, merged 2026-11-04) and this plan set are already on `main`.
 
-| Order | Lane (plain name) | Branch | Owns | Brief | Issues |
-|---|---|---|---|---|---|
-| 0 | Control-plane package pins, the `db` marker and its deselection in `addopts` (coordinator commit) | on `int/b2-control-plane` | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (the new packages at the latest releases at bump time: Celery 5.7.0, kombu 5.7.0, redis-py 8.1.0, D-70 which reversed D-66 on 2026-11-05; the `db` marker, the `addopts` expression), `tests/test_control_plane_pins.py` | [03a](03a_stage1_foundation.md) lane 1-0 | #451 |
-| 1 | The schema and the database layer | `b2/db-core` | [03a](03a_stage1_foundation.md) lane 1A (minus the `pyproject.toml` marker, now in lane 0) | 03a lane 1A | N19 (#479) |
-| 1 | The Celery app, queues, the producer | `b2/queue-core` | 03a lane 1B | 03a lane 1B | #451, #464 (OPS-2 box) |
-| 1 | Services, secrets, installer, CLI | `b2/compose-installer` | 03a lane 1C | 03a lane 1C | N19 (#479) |
-| 1 | The storage seam | `b2/storage-seam` | 03a lane 1E | 03a lane 1E | N19 (#479) |
-| 2 | Health, readiness, the CI database job, the offline commands, the worker-start schema check, the connection budget | `b2/health-ci` (after 1A and 1B merged) | 03a lane 1D (adds `Makefile`, the `ci.yml` and `CONTRIBUTING.md` marker commands, `src/tasks/app.py`'s worker-start call, `tests/config/test_db_connection_budget.py`) | 03a lane 1D | N19 (#479) |
-| 2 | The research-seam tables: serving reports, clustering partitions, the embedding registry, the assist-loop record (approved, RD-1) | `b2/db-research-seams` (after 1A merged) | 03a lane 1F (revision `0002_research_seams`, its model files, `src/domain/clustering_vocab.py`, the contract models in `src/schemas/models.py`) | 03a lane 1F; [02d](02d_research_seam_schema.md) | #398, #346, #365, #466 (seams only) |
+| Order | Lane (plain name) | Branch | Owns | Brief | Issues | Model / effort (D-85) |
+|---|---|---|---|---|---|---|
+| 0 | Control-plane package pins, the `db` marker and its deselection in `addopts` (coordinator commit) | on `int/b2-control-plane` | `requirements.txt`, `requirements-test.txt`, `pyproject.toml` (the new packages at the latest releases at bump time: Celery 5.7.0, kombu 5.7.0, redis-py 8.1.0, D-70 which reversed D-66 on 2026-11-05; the `db` marker, the `addopts` expression), `tests/test_control_plane_pins.py` | [03a](03a_stage1_foundation.md) lane 1-0 | #451 | Opus (coordinator), medium |
+| 1 | The schema and the database layer | `b2/db-core` | [03a](03a_stage1_foundation.md) lane 1A (minus the `pyproject.toml` marker, now in lane 0) | 03a lane 1A | N19 (#479) | Sonnet, high |
+| 1 | The Celery app, queues, the producer | `b2/queue-core` | 03a lane 1B | 03a lane 1B | #451, #464 (OPS-2 box) | Sonnet, medium |
+| 1 | Services, secrets, installer, CLI | `b2/compose-installer` | 03a lane 1C | 03a lane 1C | N19 (#479) | Sonnet, medium |
+| 1 | The storage seam | `b2/storage-seam` | 03a lane 1E | 03a lane 1E | N19 (#479) | Sonnet, medium |
+| 2 | Health, readiness, the CI database job, the offline commands, the worker-start schema check, the connection budget | `b2/health-ci` (after 1A and 1B merged) | 03a lane 1D (adds `Makefile`, the `ci.yml` and `CONTRIBUTING.md` marker commands, `src/tasks/app.py`'s worker-start call, `tests/config/test_db_connection_budget.py`) | 03a lane 1D | N19 (#479) | Sonnet, medium |
+| 2 | The research-seam tables: serving reports, clustering partitions, the embedding registry, the assist-loop record (approved, RD-1) | `b2/db-research-seams` (after 1A merged) | 03a lane 1F (revision `0002_research_seams`, its model files, `src/domain/clustering_vocab.py`, the contract models in `src/schemas/models.py`) | 03a lane 1F; [02d](02d_research_seam_schema.md) | #398, #346, #365, #466 (seams only) | Sonnet, medium |
 
 Merge order: lane 0, 1A, 1E, 1B, 1C, 1F, then 1D. The pieces that need 1A's code while 1A is still
 coding moved into 1D (R-18) and 1F. Research seams inside existing lanes: 1A-13 (02d section 1),
@@ -320,17 +320,17 @@ PostgreSQL; OpenSearch keeps two indexes per project; the one-step 0.6.0 upgrade
 tested; the job start, claim, heartbeat, cancel, reaper and the event feed exist (no family moves
 yet).
 
-| Order | Lane | Branch | Owns | Brief | Issues |
-|---|---|---|---|---|---|
-| 1 | Projects, slugs, index ownership, pause | `b2/projects-pg` | [03b](03b_stage2_control_data.md) lane 2A | 03b 2A | N19 (#479) |
-| 1 | The class registry | `b2/classes-pg` | 03b lane 2B | 03b 2B | N19 (#479) |
-| 1 | Config store, VLM endpoints, settings, keymap, view state | `b2/config-pg` | 03b lane 2C | 03b 2C | N19 (#479) |
-| 1 | Holdout freezes, label-operation records, project markers | `b2/records-pg` | 03b lane 2D | 03b 2D | N19 (#479), #473 (part c) |
-| 1 | The one-step 0.6.0 upgrade and its rollback | `b2/upgrade-060` | 03b lane 2E | 03b 2E | N19 (#479) |
-| 1 | The job runtime and the reaper | `b2/job-runtime` | [03c](03c_stage3_job_runtime.md) lane 3A | 03c 3A | #451 |
-| 1 | Events in PostgreSQL and resumable SSE | `b2/events-pg` | 03c lane 3B | 03c 3B | #451 |
-| 1 | The embedding catalog and spaces (approved, RD-1) | `b2/embedding-registry` | 03b lane ES-A | 03b ES-A | #365 (seams) |
-| 2 | Remove the OpenSearch control indexes | `b2/opensearch-control-removal` (after 2A-2E and ES-A merged) | 03b lane 2F | 03b 2F | N19 (#479) |
+| Order | Lane | Branch | Owns | Brief | Issues | Model / effort (D-85) |
+|---|---|---|---|---|---|---|
+| 1 | Projects, slugs, index ownership, pause | `b2/projects-pg` | [03b](03b_stage2_control_data.md) lane 2A | 03b 2A | N19 (#479) | Sonnet, medium |
+| 1 | The class registry | `b2/classes-pg` | 03b lane 2B | 03b 2B | N19 (#479) | Sonnet, medium |
+| 1 | Config store, VLM endpoints, settings, keymap, view state | `b2/config-pg` | 03b lane 2C | 03b 2C | N19 (#479) | Sonnet, medium |
+| 1 | Holdout freezes, label-operation records, project markers | `b2/records-pg` | 03b lane 2D | 03b 2D | N19 (#479), #473 (part c) | Sonnet, medium |
+| 1 | The one-step 0.6.0 upgrade and its rollback | `b2/upgrade-060` | 03b lane 2E | 03b 2E | N19 (#479) | Sonnet, high |
+| 1 | The job runtime and the reaper | `b2/job-runtime` | [03c](03c_stage3_job_runtime.md) lane 3A | 03c 3A | #451 | Sonnet, high |
+| 1 | Events in PostgreSQL and resumable SSE | `b2/events-pg` | 03c lane 3B | 03c 3B | #451 | Sonnet, medium |
+| 1 | The embedding catalog and spaces (approved, RD-1) | `b2/embedding-registry` | 03b lane ES-A | 03b ES-A | #365 (seams) | Sonnet, medium |
+| 2 | Remove the OpenSearch control indexes | `b2/opensearch-control-removal` (after 2A-2E and ES-A merged) | 03b lane 2F | 03b 2F | N19 (#479) | Sonnet, medium |
 
 Cuts: 2A-2E, ES-A and 3B from the merged W2.1 head; **3A after 2A merged** (it reads projects through
 2A's repository, R-18); 2F after 2A-2E and ES-A merged. Merge order: ES-A, 2A, 2B, 2C, 2D, 2E, 2F, then 3B, then 3A
@@ -389,23 +389,23 @@ research lanes now run beside the ports, each owning its files once; the few cal
 against signatures fixed in [03d](03d_stage4_job_families.md). The former W2.3b is folded into this
 wave; section 3a lists every rework item and its resolution.
 
-| Order | Lane | Branch | Owns | Brief | Issues |
-|---|---|---|---|---|---|
-| 1 | Promotion and the model registry | `b2/promote-models` | [03e](03e_stage5_gpu_queues.md) lane 5D | 03e 5D | #451 |
-| 1 | Clustering on versioned partitions: `cluster_run`, activation, projection, the `cluster_id` split; person grouping written as a partition (moved from 4C); the loop's partition reader | `b2/clustering` | [03d](03d_stage4_job_families.md) lane 4F | 03d 4F | #346 (S-core) |
-| 1 | Auto-label and the assist loop as queue consumers; the loop's own record, pause, budgets, slices and usage (gaps G-2, G-3); the IVF retrain check deleted with the worker, not ported | `b2/trigger-workers` | 03d lane 4D | 03d 4D | #451, #466 (pause, events, budgets) |
-| 1 | Near-duplicates: one service, two levels, run-scoped groups, the exact key, the `source_backfill` job | `b2/near-duplicates` | 03d lane ND-A (revision `0003_near_duplicates`, the wave's one revision-writing lane) | 03d ND-A | #416, #473 (part a) |
-| 1 | Reprocess, assist runs, scores (the `near_dup` scorer deleted, not ported), probe, selection, viz, label operations and their undo as queued jobs (D-75) | `b2/families-a` | 03d lane 4A | 03d 4A | #451 |
-| 1 | Dataset upload and import, combine, class merge and the name projection | `b2/families-b` | 03d lane 4B | 03d 4B | #451 |
-| 1 | Bulk ingest, source polls, open-vocabulary drain, project delete (batched, RR-7), directory ingest | `b2/families-c` | 03d lane 4C (person grouping moved to 4F) | 03d 4C | #451 |
-| 1 | Training as a GPU queue consumer | `b2/gpu-train` | 03e lane 5A | 03e 5A | #451 |
-| 1 | Model upload and export as GPU queue jobs | `b2/gpu-export` | 03e lane 5B | 03e 5B | #451 |
-| 1 | The bake-off evaluator as a GPU queue consumer | `b2/gpu-eval` | 03e lane 5C | 03e 5C | #451 |
-| 1 | The embedding re-index job (time-sliced, RR-20) and the space routes | `b2/embedding-reindex` | 03d lane ES-B | 03d ES-B | #365 (seams) |
-| 2 | The near-duplicate holdout guard (replaces 2D-4) | `b2/near-dup-holdout` (cut after 4F and ND-A merged) | 03d lane ND-B | 03d ND-B | #473 (part c) |
-| 2 | Remove the shared per-project job-directory plumbing once every caller is gone (the expand/contract "contract" step) | `b2/job-dirs-cleanup` (cut after every order-1 lane merged) | 03e lane 5E | 03e 5E | #451 |
-| 3 | Periodic work to beat, every tick (the cluster-refresh and near-duplicate ticks included); the old job infrastructure and the cluster-refresh daemon deleted; queue and job metrics | `b2/beat-periodic` (cut after every order-1 and order-2 lane merged) | [03f](03f_stage6_scheduler_scaleout.md) lane 6A | 03f 6A | #451, #453, #464 (OPS-2 act part) |
-| 3 | Compose for every consumer, no `container_name`, scale, the arbiter worker, the public hardening of the services it changes, monitoring with the job dashboard and alerts, the PgBouncer overlay, the per-card Triton shape, the DCGM fields; `curation-cluster-refresh` deleted | `b2/scale-out-compose` (cut with 6A) | 03f lane 6B | 03f 6B | #451 |
+| Order | Lane | Branch | Owns | Brief | Issues | Model / effort (D-85) |
+|---|---|---|---|---|---|---|
+| 1 | Promotion and the model registry | `b2/promote-models` | [03e](03e_stage5_gpu_queues.md) lane 5D | 03e 5D | #451 | Sonnet, medium |
+| 1 | Clustering on versioned partitions: `cluster_run`, activation, projection, the `cluster_id` split; person grouping written as a partition (moved from 4C); the loop's partition reader | `b2/clustering` | [03d](03d_stage4_job_families.md) lane 4F | 03d 4F | #346 (S-core) | Sonnet, high |
+| 1 | Auto-label and the assist loop as queue consumers; the loop's own record, pause, budgets, slices and usage (gaps G-2, G-3); the IVF retrain check deleted with the worker, not ported | `b2/trigger-workers` | 03d lane 4D | 03d 4D | #451, #466 (pause, events, budgets) | Sonnet, medium |
+| 1 | Near-duplicates: one service, two levels, run-scoped groups, the exact key, the `source_backfill` job | `b2/near-duplicates` | 03d lane ND-A (revision `0003_near_duplicates`, the wave's one revision-writing lane) | 03d ND-A | #416, #473 (part a) | Sonnet, medium |
+| 1 | Reprocess, assist runs, scores (the `near_dup` scorer deleted, not ported), probe, selection, viz, label operations and their undo as queued jobs (D-75) | `b2/families-a` | 03d lane 4A | 03d 4A | #451 | Sonnet, medium |
+| 1 | Dataset upload and import, combine, class merge and the name projection | `b2/families-b` | 03d lane 4B | 03d 4B | #451 | Sonnet, medium |
+| 1 | Bulk ingest, source polls, open-vocabulary drain, project delete (batched, RR-7), directory ingest | `b2/families-c` | 03d lane 4C (person grouping moved to 4F) | 03d 4C | #451 | Sonnet, medium |
+| 1 | Training as a GPU queue consumer | `b2/gpu-train` | 03e lane 5A | 03e 5A | #451 | Sonnet, medium |
+| 1 | Model upload and export as GPU queue jobs | `b2/gpu-export` | 03e lane 5B | 03e 5B | #451 | Sonnet, medium |
+| 1 | The bake-off evaluator as a GPU queue consumer | `b2/gpu-eval` | 03e lane 5C | 03e 5C | #451 | Sonnet, medium |
+| 1 | The embedding re-index job (time-sliced, RR-20) and the space routes | `b2/embedding-reindex` | 03d lane ES-B | 03d ES-B | #365 (seams) | Sonnet, medium |
+| 2 | The near-duplicate holdout guard (replaces 2D-4) | `b2/near-dup-holdout` (cut after 4F and ND-A merged) | 03d lane ND-B | 03d ND-B | #473 (part c) | Sonnet, medium |
+| 2 | Remove the shared per-project job-directory plumbing once every caller is gone (the expand/contract "contract" step) | `b2/job-dirs-cleanup` (cut after every order-1 lane merged) | 03e lane 5E | 03e 5E | #451 | Sonnet, medium |
+| 3 | Periodic work to beat, every tick (the cluster-refresh and near-duplicate ticks included); the old job infrastructure and the cluster-refresh daemon deleted; queue and job metrics | `b2/beat-periodic` (cut after every order-1 and order-2 lane merged) | [03f](03f_stage6_scheduler_scaleout.md) lane 6A | 03f 6A | #451, #453, #464 (OPS-2 act part) | Sonnet, medium |
+| 3 | Compose for every consumer, no `container_name`, scale, the arbiter worker, the public hardening of the services it changes, monitoring with the job dashboard and alerts, the PgBouncer overlay, the per-card Triton shape, the DCGM fields; `curation-cluster-refresh` deleted | `b2/scale-out-compose` (cut with 6A) | 03f lane 6B | 03f 6B | #451 | Sonnet, medium |
 
 Merge order: 5D, 4F, 4D, ND-A, 4A, 4B, 4C, 5A, 5B, 5C, ES-B, then ND-B, 5E, then 6A, 6B. Why: 4F
 fixes `record_partition`, `group_lineage`, `assign.place_new`, the `PartitionReader` and the cluster
@@ -456,12 +456,12 @@ land; the permanent docs describe the control plane. PR2 already moved all perio
 deleted `FileJob`, the job files, the leases and every file lock, and gave every consumer its compose
 service, monitoring and the PgBouncer overlay. Then the one B2 sweep.
 
-| Order | Lane | Branch | Owns | Brief | Issues |
-|---|---|---|---|---|---|
-| 1 | Readers resolve their vector field through the embedding registry, the two constants deleted; the space-aware `_msearch` of semantic search (moved from B4 4A-5); the in-process text encoders deleted (moved from B4 4B-7) | `b2/embedding-readers` | [03f](03f_stage6_scheduler_scaleout.md) lane ES-C (the files left after W2.3a; the coordinator lists them at the cut) | 03f ES-C | #365 (seams) |
-| 1 | Hardening: the private items SEC-4 and SEC-5 (the public `no-new-privileges` and `cap_drop` lines were written by 1C and 6B with their services) | `b2/hardening` | 03f lane 6C | 03f 6C | #461, #462 |
-| 2 | Cropwright follows the queued states, every new control and `embedding_states` (the former `b2/frontend-spaces` folded in) | `b2/frontend-queued` (after ES-C merged and `make contracts-check` is green) | [03d](03d_stage4_job_families.md) lane 4E | 03d 4E | #451 |
-| 3 | Docs (last) | `b2/docs` | 03f lane 6D | 03f 6D | N19 (#479) |
+| Order | Lane | Branch | Owns | Brief | Issues | Model / effort (D-85) |
+|---|---|---|---|---|---|---|
+| 1 | Readers resolve their vector field through the embedding registry, the two constants deleted; the space-aware `_msearch` of semantic search (moved from B4 4A-5); the in-process text encoders deleted (moved from B4 4B-7) | `b2/embedding-readers` | [03f](03f_stage6_scheduler_scaleout.md) lane ES-C (the files left after W2.3a; the coordinator lists them at the cut) | 03f ES-C | #365 (seams) | Sonnet, medium |
+| 1 | Hardening: the private items SEC-4 and SEC-5 (the public `no-new-privileges` and `cap_drop` lines were written by 1C and 6B with their services) | `b2/hardening` | 03f lane 6C | 03f 6C | #461, #462 | Sonnet, medium |
+| 2 | Cropwright follows the queued states, every new control and `embedding_states` (the former `b2/frontend-spaces` folded in) | `b2/frontend-queued` (after ES-C merged and `make contracts-check` is green) | [03d](03d_stage4_job_families.md) lane 4E | 03d 4E | #451 | Sonnet, medium |
+| 3 | Docs (last) | `b2/docs` | 03f lane 6D | 03f 6D | N19 (#479) | Sonnet, medium |
 
 Merge order: ES-C, 6C, 4E, 6D.
 
@@ -504,16 +504,16 @@ image; and, judged by the same GPU gate, every dependency bump that can change m
 pandas with the numeric stack, CuPy 14, the Hugging Face stack, Pillow and simplejpeg), then the
 MLflow and Dependabot tail of the pin series.
 
-| Order | Lane | Branch | Owns | Brief | Issues |
-|---|---|---|---|---|---|
-| 1 | Pins part B: the model-output set and the image pins (D-67) | `deps/pins-part-b` | the three manifests, `requirements-export.txt` and the `export` extra (versions only), `docker/trainer/requirements.txt`, `scripts/curation/bakeoff/requirements.txt`, `Dockerfile.triton`, `docker/hardened/triton/Dockerfile`, `docker/segmenter/Dockerfile`, new `docker/triton/requirements.txt` and `docker/segmenter/requirements.txt`, the root `Dockerfile` (the evaluator's inline `mlflow`), `docker-compose.yml` (`MLFLOW_IMAGE` only), `CONTRIBUTING.md` and `.github/workflows/ci.yml` (the CPU torch-pair commands only), `.github/dependabot.yml`, `tests/test_requirements_contract.py` | [01](01_package_pins.md) section 7, part B; [04](04_b3_ultralytics_one_version.md) track `deps` | N20 (#480), #458 |
-| 1 | Each adapter declares its box frame (GPU-14 final; touches no B2 file, R-18) | `b3/frame` | 04 track `frame` | 04 B3-G1 | #458 |
-| 2 | Stage A: the pin, the second environment deleted, the trainer on the pin | `b3/stagea` (from the pins part B merge) | 04 track `stagea` | 04 B3-A1..A4 (A5 only if D-38 yes) | #458 |
-| 3 | The family registry and the full CPU matrix | `b3/families` (from `b3/stagea`) | 04 track `families` | 04 B3-F1..F3 | #458, #368 (first slice) |
-| - | Stage A point recorded | coordinator | | 04 section 4 | |
-| 4 | One export module (Stage B) | `b3/export` | 04 track `export` | 04 B3-E1..E7 | #458 |
-| 4 | Fused-only decoders (Stage B) | `b3/decoders` | 04 track `decoders` | 04 B3-D1..D3 | #458 |
-| 5 | Docs for the stage that ships (after the gate verdict) | `b3/docs` | 04 track `docs` | 04 B3-W1 | #458 |
+| Order | Lane | Branch | Owns | Brief | Issues | Model / effort (D-85) |
+|---|---|---|---|---|---|---|
+| 1 | Pins part B: the model-output set and the image pins (D-67) | `deps/pins-part-b` | the three manifests, `requirements-export.txt` and the `export` extra (versions only), `docker/trainer/requirements.txt`, `scripts/curation/bakeoff/requirements.txt`, `Dockerfile.triton`, `docker/hardened/triton/Dockerfile`, `docker/segmenter/Dockerfile`, new `docker/triton/requirements.txt` and `docker/segmenter/requirements.txt`, the root `Dockerfile` (the evaluator's inline `mlflow`), `docker-compose.yml` (`MLFLOW_IMAGE` only), `CONTRIBUTING.md` and `.github/workflows/ci.yml` (the CPU torch-pair commands only), `.github/dependabot.yml`, `tests/test_requirements_contract.py` | [01](01_package_pins.md) section 7, part B; [04](04_b3_ultralytics_one_version.md) track `deps` | N20 (#480), #458 | Sonnet, medium |
+| 1 | Each adapter declares its box frame (GPU-14 final; touches no B2 file, R-18) | `b3/frame` | 04 track `frame` | 04 B3-G1 | #458 | Sonnet, medium |
+| 2 | Stage A: the pin, the second environment deleted, the trainer on the pin | `b3/stagea` (from the pins part B merge) | 04 track `stagea` | 04 B3-A1..A4 (A5 only if D-38 yes) | #458 | Sonnet, medium |
+| 3 | The family registry and the full CPU matrix | `b3/families` (from `b3/stagea`) | 04 track `families` | 04 B3-F1..F3 | #458, #368 (first slice) | Sonnet, medium |
+| - | Stage A point recorded | coordinator | | 04 section 4 | | Opus (coordinator), medium |
+| 4 | One export module (Stage B) | `b3/export` | 04 track `export` | 04 B3-E1..E7 | #458 | Sonnet, high |
+| 4 | Fused-only decoders (Stage B) | `b3/decoders` | 04 track `decoders` | 04 B3-D1..D3 | #458 | Sonnet, high |
+| 5 | Docs for the stage that ships (after the gate verdict) | `b3/docs` | 04 track `docs` | 04 B3-W1 | #458 | Sonnet, medium |
 
 Merge order: pins part B, `frame`, `stagea`, `families`, Stage A point, `export`, `decoders`, the
 GPU gate, `docs`. `requirements-export-y11.txt` is not bumped by pins part B: B3-A2 deletes it.
@@ -550,13 +550,13 @@ the owner ([04](04_b3_ultralytics_one_version.md) section 6, "Contingency").
 sized per process from totals; project creation leaves the request; the same answers with 1 and N
 workers and replicas.
 
-| Order | Lane | Branch | Owns | Brief | Issues |
-|---|---|---|---|---|---|
-| 1 | Request fan-out becomes bulk writes; the ingest data plane as task groups (codes from `main` after B2 PR2, section 4.0b) | `b4/bulk-occ` | [05](05_b4_stateless_api.md) track 4A | 05 section 4 | #451, #464 (CC-10 box), #473 (part b) |
-| 2 | Project creation (#439) | `b4/project-create` | 05 track 4D | 05 section 6 | #439 |
-| 3 | The worker knob and the statelessness ratchet | `b4/worker-knob` | 05 track 4B | 05 section 5 | #451 |
-| 2 | Capture metadata and GPS coordinates at ingest under the project's `location_policy` (default `store`; RD-51 reversed), the location purge; exports keep the embedded GPS (RD-54) unless the project's policy is `drop` (CM-5) (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` (after 4A, 4D and the privacy lane merged) | [05](05_b4_stateless_api.md) section 6c | 05 section 6c (CM-1..CM-4) | #348 (the one v0.7.0 slice) |
-| 1 | Privacy and security items (owner decision 7 of 2026-11-04) | `b4/privacy-hardening` | the files named in the maintainers' private notes; the coordinator checks they are disjoint from 4A, 4B and 4D before the cut and moves any shared file's task into the owning track | the private notes; public text stays neutral (one line per issue); plus one docs task, `SECURITY.md`: a plain statement that, when external use is enabled, external VLM endpoints and the hosted research judge may receive any region kind and contact-sheet image (OI-1, OI-2; the matching `docs/CURATION.md` sentence is in track 4D, which owns that file in W4) | #468, #470, #472 (#469 and #471 close with no code change, traceability section 4) |
+| Order | Lane | Branch | Owns | Brief | Issues | Model / effort (D-85) |
+|---|---|---|---|---|---|---|
+| 1 | Request fan-out becomes bulk writes; the ingest data plane as task groups (codes from `main` after B2 PR2, section 4.0b) | `b4/bulk-occ` | [05](05_b4_stateless_api.md) track 4A | 05 section 4 | #451, #464 (CC-10 box), #473 (part b) | Sonnet, medium |
+| 2 | Project creation (#439) | `b4/project-create` | 05 track 4D | 05 section 6 | #439 | Sonnet, medium |
+| 3 | The worker knob and the statelessness ratchet | `b4/worker-knob` | 05 track 4B | 05 section 5 | #451 | Sonnet, medium |
+| 2 | Capture metadata and GPS coordinates at ingest under the project's `location_policy` (default `store`; RD-51 reversed), the location purge; exports keep the embedded GPS (RD-54) unless the project's policy is `drop` (CM-5) (research spatial L-C1; RD-5 approved) | `b4/capture-metadata` (after 4A, 4D and the privacy lane merged) | [05](05_b4_stateless_api.md) section 6c | 05 section 6c (CM-1..CM-4) | #348 (the one v0.7.0 slice) | Sonnet, medium |
+| 1 | Privacy and security items (owner decision 7 of 2026-11-04) | `b4/privacy-hardening` | the files named in the maintainers' private notes; the coordinator checks they are disjoint from 4A, 4B and 4D before the cut and moves any shared file's task into the owning track | the private notes; public text stays neutral (one line per issue); plus one docs task, `SECURITY.md`: a plain statement that, when external use is enabled, external VLM endpoints and the hosted research judge may receive any region kind and contact-sheet image (OI-1, OI-2; the matching `docs/CURATION.md` sentence is in track 4D, which owns that file in W4) | #468, #470, #472 (#469 and #471 close with no code change, traceability section 4) | Sonnet, medium |
 
 Merge order: 4A, 4D, privacy lane, capture lane, 4B (its ratchet allowlist must
 see the others' final code). The privacy lane owns `SECURITY.md` in W4 and writes both
@@ -591,6 +591,12 @@ audit BA-6). It merges into the integration branch active at the time and rides 
 that a later wave rewrites is typed by that wave's lane in the same commit as the rewrite (B4 4A for
 `review_resolve` and `edit_undo`, 4D for project creation, 5d for `/analyze` and `/ingest`, W5e for its
 routes). #465 closes when the last router is typed, with the 5d PR at the latest.
+
+### Model and effort for W5a-W5e and the filler lanes (D-85)
+
+Sonnet, high: the W5b decode-once GPU tracks `decode`, `prep` and `codec`. Sonnet, medium: every other
+W5a-W5e lane and track, and every typed-response filler lane. Measurement-only tracks (`ref`,
+`profile`, `p0`) are run by the coordinator (Opus, medium) or a Sonnet gate agent (medium).
 
 ### W5a Public baseline (B5a; GPU window 2 opens)
 
@@ -755,12 +761,26 @@ Lanes never run a full suite, `--all-files`, the live harness or a GPU.
    worktree, branch, compose project (`-p`, or none), GPU (none in every lane), and a deadline.
    Every brief forbids `pgrep -f`, `pkill -f`, sleep and until loops, `git stash`, `--no-verify`,
    pushing, merging and touching another checkout, and says to read each cited official doc before
-   coding and cite it in the commit. Sonnet implements; reviews are Sonnet too.
+   coding and cite it in the commit. Each brief names its model and effort from step 3a and the
+   wave's lane table.
+
+**3a. Model and effort (owner-approved 2026-11-05, D-85).**
+
+| Model | Effort | Who uses it, for what |
+|---|---|---|
+| Opus | medium; high only to root-cause a failed gate or live run | the coordinator: wave kick-off, merges, judgment calls, verifying agents' claims; plan changes; root-causing a failed gate or live run when Sonnet stalls |
+| Sonnet | **high** for the risky lanes: 1A (schema and row-level security), 3A (job runtime: claims, reaper), 2E (the 0.6.0 upgrade), 4F (clustering partitions), the B3 `export` and `decoders` tracks, the W5b decode-once GPU tracks (`decode`, `prep`, `codec`); **medium** for every other lane | every coding lane; lane code reviews; plan-text passes; issue and PR text |
+| Haiku | low | mechanical work: re-running a lane's targeted tests and reporting pass or fail, summarizing check logs, file-ownership and cross-reference scans, drafting CHANGELOG entries from commits, inventory searches |
+
+The coordinator stays responsible for every claim a Haiku or Sonnet agent reports: a Haiku
+pass/fail report is read against the log it summarizes before a merge, and Opus decides.
+
 4. **Worktrees.** `git worktree add <repo>-wt-<lane> -b <branch> int/<batch>` per lane; one agent per
    worktree; never two writers in one.
 5. **Lane done.** The report lists commits, each red output and green output, files touched, and
-   anything not done. The coordinator re-runs the lane's targeted tests in the lane worktree before
-   merging (claims are checked, not trusted).
+   anything not done. The lane's targeted tests are re-run in the lane worktree before merging (a
+   Haiku agent may run them and report pass or fail with the log, D-85; the coordinator reads the log:
+   claims are checked, not trusted).
 6. **Merges.** `git merge --no-ff` in the wave's order, one merge commit per lane; generated
    `contracts/` conflicts are resolved by `make contracts` on the merged tree inside the merge
    commit; append-only files keep both sides. A failing lane reverts alone (`git revert -m 1`).
@@ -768,7 +788,7 @@ Lanes never run a full suite, `--all-files`, the live harness or a GPU.
    tracks in parallel, xdist capped by the host load; heavy and live runs one at a time,
    announced, with their own `-p`. The coordinator never extends a budget; a step that overruns
    stops and is reported.
-8. **PR.** The coordinator's closing commit adds the PR's entries under `## [Unreleased]` in the root `CHANGELOG.md` (and `frontend/CHANGELOG.md` when `frontend/` changed), Keep a Changelog sections, because CI's "CHANGELOG entry for backend changes" job fails a code PR without one; this applies to W2.0, each of the three B2 PRs and every later wave PR. Each PR's entries, its Breaking items included, are written once in that PR and never rewritten later (D-84: lane 6D no longer owns the root `CHANGELOG.md`; the list of B2 entries in [03f](03f_stage6_scheduler_scaleout.md) 6D says which PR writes each). Local CI parity first (every job of `ci.yml`, and `frontend.yml` when `frontend/`
+8. **PR.** The coordinator's closing commit adds the PR's entries under `## [Unreleased]` in the root `CHANGELOG.md` (and `frontend/CHANGELOG.md` when `frontend/` changed), Keep a Changelog sections, because CI's "CHANGELOG entry for backend changes" job fails a code PR without one; this applies to W2.0, each of the three B2 PRs and every later wave PR (a Haiku agent drafts the entries from the PR's commits, D-85; the coordinator checks them). Each PR's entries, its Breaking items included, are written once in that PR and never rewritten later (D-84: lane 6D no longer owns the root `CHANGELOG.md`; the list of B2 entries in [03f](03f_stage6_scheduler_scaleout.md) 6D says which PR writes each). Local CI parity first (every job of `ci.yml`, and `frontend.yml` when `frontend/`
    changed, the changelog rules included). Ask the owner before pushing. Push the integration
    branch, open one PR against `main` (`gh pr create`; B2 opens three, PR1 after W2.2, PR2 after W2.3a and PR3 after W2.4, each with its own checks from section 4, none tagged, each leaving `main` bootable), check `gh pr checks`, verify the push with
    `git ls-remote`. Merge with a merge commit on green CI and the owner's yes.

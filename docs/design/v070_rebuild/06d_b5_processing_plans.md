@@ -196,7 +196,8 @@ name (source plan 9.7), GPU 0 (GPU 2 when agreed).
 
 ## 11. Lane briefs (ready to paste)
 
-Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
+Common block: as in `04_b3_ultralytics_one_version.md` section 17 (model and effort, D-85: Sonnet,
+medium for every track; `p0` is run by the coordinator, Opus, medium, or a Sonnet gate agent), with worktree
 `<repo>-wt-b5d-<track>`, branch `b5d/<track>`, file `docs/design/v070_rebuild/06d_b5_processing_plans.md`
 and `docs/design/processing_plans_plan.md` (read sections 3-10 first), plus: "Benchmarks and parity
 per `06_b5_overview.md` against `ref-b5a`. Stack `docker compose -p op-b5d-bench`, GPU 0 only

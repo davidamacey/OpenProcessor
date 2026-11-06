@@ -202,8 +202,14 @@ collection hook of 1D-3) and its one registration line in `tests/conftest.py` (1
 
 ## Lane brief (common block; add the lane's section)
 
+Model and effort (owner-approved 2026-11-05, D-85; [00_master_plan.md](00_master_plan.md) section 7
+step 3a): every B2 lane is a Sonnet agent; effort **high** for 1A (schema and row-level security), 3A
+(job runtime: claims, reaper), 2E (the 0.6.0 upgrade) and 4F (clustering partitions), **medium** for
+every other lane. Lane code reviews are Sonnet; re-running a lane's targeted tests and summarizing its
+logs may be a Haiku agent (effort low); the coordinator (Opus, medium) merges and judges.
+
 ```
-You are a B2 stage-1 lane agent (Sonnet). Worktree <repo>-wt-b2-<lane>, branch b2/<lane>, cut from
+You are a B2 stage-1 lane agent (Sonnet, effort <high|medium>). Worktree <repo>-wt-b2-<lane>, branch b2/<lane>, cut from
 int/b2-control-plane after lane 1-0. Read: docs/design/v070_rebuild/03_b2_overview.md (sections 3-4),
 docs/design/v070_rebuild/03a_stage1_foundation.md (your lane), the 02/02a/02b/02c sections it cites,
 CLAUDE.md, CONTRIBUTING.md, docs/design/engineering_standards.md. Review codes in the text (R-n, RC-n,

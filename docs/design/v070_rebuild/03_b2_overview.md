@@ -121,7 +121,9 @@ still use the earlier letters, see the "Old short names" note in [00_master_plan
   tests, `make contracts-check`, the `db` tier (`-m db`, minutes, no GPU; D-63) and the Docker-free
   offline suite in its 4 shards (owner decision 2026-11-04, MQ-3). One full sweep
   for the batch, in PR3 (section 9; PR1 and PR2 carry a part check and a short smoke).
-- Opus plans; Sonnet implements and reviews. Every brief forbids `pgrep -f`, `pkill -f` and
+- Opus plans and coordinates (effort medium); Sonnet implements and reviews (effort high for 1A, 3A,
+  2E and 4F, medium otherwise); Haiku re-runs targeted tests, summarizes logs and drafts CHANGELOG
+  entries (effort low) (D-85, master section 7 step 3a). Every brief forbids `pgrep -f`, `pkill -f` and
   sleep/until loops, and names its compose project (`-p`), its GPU (none for every B2 lane), its
   worktree and its deadline. Spikes use their own `-p` and run `down -v` at the end.
 

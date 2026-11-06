@@ -265,7 +265,8 @@ evaluation is its own plan file (`docs/design/`) before any code. Rust adds no s
 
 Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
 `<repo>-wt-b5b-<track>`, branch `b5b/<track>`, file `docs/design/v070_rebuild/06b_b5_decode_once.md`,
-plus: "Benchmarks and parity follow `06_b5_overview.md` M-1..M-10 and section 6, against
+model and effort (D-85): Sonnet, **high** for the decode-once GPU tracks `decode`, `prep` and `codec`,
+medium for `profile` and `routes`; plus: "Benchmarks and parity follow `06_b5_overview.md` M-1..M-10 and section 6, against
 `ref-b5a`. Stack `docker compose -p op-b5b-bench`, GPU 0 only unless the coordinator says GPU 2 is
 agreed. Project slugs start with `b5b-`. Evaluate the library named in your task before writing
 custom code and put the comparison in the PR."
