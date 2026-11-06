@@ -40,8 +40,10 @@ def box_pack(world: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         attributes=[AttributeSpec(key='rim', values=['alloy', 'steel'], applies_to='box')],
     )
 
-    def build(_name: Any, _revision: Any = None, *, endpoint: Any = None) -> Any:
-        labeler = real(None, None, endpoint=endpoint)
+    def build(
+        _name: Any, _revision: Any = None, *, endpoint: Any = None, usage_source: Any = None
+    ) -> Any:
+        labeler = real(None, None, endpoint=endpoint, usage_source=usage_source)
         labeler._pack = pack
         return labeler
 

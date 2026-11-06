@@ -89,8 +89,10 @@ def car_pack(stack: Any, monkeypatch: pytest.MonkeyPatch) -> None:
 def _labeler_for(pack: Any) -> Any:
     from src.services.labeling.run_labeler import get_vlm_labeler as real
 
-    def build(_name: Any, _revision: Any = None, *, endpoint: Any = None) -> Any:
-        labeler = real(None, None, endpoint=endpoint)
+    def build(
+        _name: Any, _revision: Any = None, *, endpoint: Any = None, usage_source: Any = None
+    ) -> Any:
+        labeler = real(None, None, endpoint=endpoint, usage_source=usage_source)
         labeler._pack = pack
         return labeler
 

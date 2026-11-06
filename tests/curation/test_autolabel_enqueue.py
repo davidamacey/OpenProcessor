@@ -81,3 +81,35 @@ async def test_a_job_id_of_another_kind_or_project_is_unknown(pg, bound, produce
         with pytest.raises(RequestRejectedError) as unknown:
             await service.by_id(session, str(uuid.uuid4()))
     assert unknown.value.status_code == 404
+
+
+async def test_cancel_while_running_asks_then_the_worker_ends_it(
+    pg, bound, producer, wakes
+) -> None:
+    async with async_session_factory()() as session:
+        started = await service.start(session, {})
+    sql(
+        pg,
+        "UPDATE jobs SET status = 'running', fencing_token = 1, attempt = 1, owner = 'test', "
+        "started_at = now(), heartbeat_at = now(), lease_expires_at = now() + interval '1 hour' "
+        'WHERE id = %s',
+        uuid.UUID(started['job_id']),
+    )
+    async with async_session_factory()() as session:
+        assert await service.cancel(session, requested_by='test') is True
+    async with async_session_factory()() as session:
+        assert (await service.by_id(session, started['job_id']))['status'] == 'cancelling'
+
+
+async def test_pause_and_resume_a_queued_job(pg, bound, producer, wakes) -> None:
+    async with async_session_factory()() as session:
+        started = await service.start(session, {})
+    async with async_session_factory()() as session:
+        assert await service.pause(session) is True
+    async with async_session_factory()() as session:
+        paused = await service.by_id(session, started['job_id'])
+    assert (paused['status'], paused['pause_reason']) == ('paused', 'user')
+    async with async_session_factory()() as session:
+        assert await service.resume(session) is True
+    async with async_session_factory()() as session:
+        assert (await service.by_id(session, started['job_id']))['status'] == 'queued'

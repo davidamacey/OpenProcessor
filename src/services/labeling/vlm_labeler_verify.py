@@ -5,11 +5,11 @@ Split out of ``vlm_labeler.py``.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 
 from src.core.logging import get_logger
+from src.services.labeling.vlm_chunks import run_chunks
 from src.services.labeling.vlm_client import extract_message_content, extract_reasoning_content
 from src.services.labeling.vlm_labeler_core import _RESULTS_ENVELOPE, VlmLabelerCore, _b64_jpeg
 from src.services.labeling.vlm_models import RegionCrop, VlmRegionVerdict, VlmTransportError
@@ -117,10 +117,7 @@ class VerifyOps(VlmLabelerCore):
         per_call = max(1, min(per_call, self.max_images_per_call))
 
         chunks = [crops[i : i + per_call] for i in range(0, len(crops), per_call)]
-        chunk_results_list = await asyncio.gather(
-            *[self._verify_region_chunk(c) for c in chunks],
-            return_exceptions=False,
-        )
+        chunk_results_list = await run_chunks([self._verify_region_chunk(c) for c in chunks])
         results: list[VlmRegionVerdict] = []
         for cr in chunk_results_list:
             results.extend(cr)

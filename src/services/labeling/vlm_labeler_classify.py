@@ -5,11 +5,11 @@ Split out of ``vlm_labeler.py``.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 from src.services.labeling.vlm_attributes import parse_attributes
+from src.services.labeling.vlm_chunks import run_chunks
 from src.services.labeling.vlm_client import extract_message_content, extract_reasoning_content
 from src.services.labeling.vlm_labeler_core import _RESULTS_ENVELOPE, VlmLabelerCore, _b64_jpeg
 from src.services.labeling.vlm_models import ItemCrop, VlmClassPrediction
@@ -54,18 +54,14 @@ class ClassifyOps(VlmLabelerCore):
         if not class_names:
             raise ValueError('class_names must be a non-empty list')
 
-        # Fire all chunks in parallel (asyncio.gather) so upstream
-        # concurrency isn't artificially capped by a sequential
-        # `for await`. The TokenBucket (requests_per_second) is the
+        # Chunks run in parallel under a bound (run_chunks), not one after another.
+        # The TokenBucket (requests_per_second) is the
         # actual global rate limit.
         chunks = [
             crops[i : i + self.max_images_per_call]
             for i in range(0, len(crops), self.max_images_per_call)
         ]
-        chunk_results_list = await asyncio.gather(
-            *[self._label_chunk(c, class_names) for c in chunks],
-            return_exceptions=False,
-        )
+        chunk_results_list = await run_chunks([self._label_chunk(c, class_names) for c in chunks])
         results: list[VlmClassPrediction] = []
         for cr in chunk_results_list:
             results.extend(cr)
@@ -288,8 +284,8 @@ class ClassifyOps(VlmLabelerCore):
             per_call = self.open_images_per_call
         per_call = max(1, min(per_call, self.max_images_per_call))
         chunks = [crops[i : i + per_call] for i in range(0, len(crops), per_call)]
-        chunk_results_list = await asyncio.gather(
-            *[
+        chunk_results_list = await run_chunks(
+            [
                 self._label_chunk_open(
                     c,
                     class_names,
@@ -297,8 +293,7 @@ class ClassifyOps(VlmLabelerCore):
                     cluster_hint=cluster_hint,
                 )
                 for c in chunks
-            ],
-            return_exceptions=False,
+            ]
         )
         results: list[VlmClassPrediction] = []
         for cr in chunk_results_list:
