@@ -139,3 +139,4 @@ _.touch_devices  # InventoryWriter protocol method, called by refresh_inventory 
 _.upsert_devices  # InventoryWriter protocol method, called by start_inventory on the registered writer
 _.capabilities  # parameter of the InventoryWriter protocol method, filled by the registered writer
 _.bind_request_id  # src/core/logging.py, binds the id on both ContextVars; tests/integration/test_request_id_propagation.py asserts the binding
+_.basic_auth  # scripts/flower/flowerconfig.py, an option Flower reads by name from its --conf file
