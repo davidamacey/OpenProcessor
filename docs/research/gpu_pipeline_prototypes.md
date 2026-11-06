@@ -19,11 +19,11 @@ Everything in this section was fixed before any score was taken.
 |---|---|---|---|---|
 | A | `coco_bench_2000` pin, 640 px class | first 50 | first 200 | pin order |
 | B | `commons_hires_500` pin, 12-24 MP | first 50 | first 200 | pin order |
-| P | seeded sample of the owner's private photos, about 21 MP, one shared local copy, content-hash names | first 50 | first 200 | order of the seeded draw (seed 20261104) |
+| P | seeded sample of the owner's private photos, one shared local copy, content-hash names | first 50 | first 200 | order of the seeded draw (seed 20261104) |
 | OI-1024 | 200 Open Images images whose longest side is 1,024 px, drawn with seed 20261104 | - | 200 (PR-1 only) | draw order |
 | EXIF fixtures | about 40 files generated from public images: orientation tags 1-8, progressive, truncated, CMYK, 4:4:4, 4:2:2, 4:2:0, restart markers | all | all (PR-1 only) | file name |
 
-Set P is described by aggregates only in tracked text. Every dataset path is an argument.
+Set P is reported in tracked text only as whether a registered bar was met (09g section 6.8); no set P figure is tracked. Every dataset path is an argument.
 
 ### 1.2 PR-0, the harness and the honest GPU number
 
@@ -55,7 +55,7 @@ Feeds 5a-S4: the decoder per size class (RD-14, RD-17). Control arm: D-a, the sh
 | CPU reference columns, not arms | simplejpeg (libjpeg-turbo) and Pillow with `draft` (the 5c-K4 column) |
 
 That is two arms plus the control (the limit is three). Size classes: A (about 0.3 MP), OI-1024
-(about 0.7 MP), B and P (12-24 MP), and the EXIF fixtures for coverage only.
+(about 0.7 MP), B and P (high-resolution photos), and the EXIF fixtures for coverage only.
 
 Common conditions: 16 worker threads (or the library's own 16 CPU threads) for every arm, input
 cache dropped per repetition, one untimed warm-up block of 64 images per arm, three counted
@@ -142,8 +142,8 @@ Run before any GPU command, `CUDA_VISIBLE_DEVICES` empty, sets A, B and P.
 
 | Prototype | Result |
 |---|---|
-| PR-0 | letterbox with the shipped resampling weights on the CPU against the Pillow reference: 50/50 pass the tensor gate on each of A, B and P (worst mean abs diff 0.17 / 0.07 / 0.05 grey, worst max 1); two runs byte-identical |
-| PR-1 | router verdicts and CPU decode columns end to end: A 50 passed, B 47 passed (3 declined), P 50 passed; simplejpeg and Pillow `draft` columns run |
+| PR-0 | letterbox with the shipped resampling weights on the CPU against the Pillow reference: 50/50 pass the tensor gate on each of A and B (worst mean abs diff 0.17 / 0.07 grey, worst max 1); set P: bar met; two runs byte-identical |
+| PR-1 | router verdicts and CPU decode columns end to end: A 50 passed, B 47 passed (3 declined); set P: ran; simplejpeg and Pillow `draft` columns run |
 | PR-2 | the four reference operations run on 50 images per set: letterbox gate 50/50 on each set, squares 3 x 336 x 336, deterministic |
 
 ## 3. gpu:PR-0, the harness and the honest GPU number
@@ -160,7 +160,6 @@ Images per second below are the counted images per wall second of each repetitio
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | 29.4 / 32.0 / 31.7 | 0.08 | 0 | 7 / 8 / 8 | 91 / 100 / 98 | 0.83 | 0.91 | 41.4 |
 | B | 35.1 / 52.0 / 54.9 | 0.38 | 12 | 8 / 9 / 9 | 59 / 76 / 78 | 0.48 | 0.72 | 18.9 |
-| P | 44.2 / 48.2 / 49.9 | 0.12 | 0 | 10 / 11 / 11 | 83 / 88 / 87 | 0.64 | 0.72 | 27.5 |
 
 GPU kernel ms per image by stage (nsys, NVTX ranges):
 
@@ -168,15 +167,13 @@ GPU kernel ms per image by stage (nsys, NVTX ranges):
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | 0.00 | 0.22 | 0.04 | 3.40 | 0.02 | 0.12 | 37.57 | 0.04 | 0.03 | 0.00 |
 | B | 0.00 | 1.11 | 0.34 | 2.42 | 0.22 | 0.04 | 13.60 | 1.12 | 0.07 | 0.00 |
-| P | 0.00 | 1.18 | 0.55 | 3.20 | 0.39 | 0.11 | 19.76 | 2.03 | 0.23 | 0.00 |
 
-**First run (host load 16 to 88; set P ran at load 85):**
+**First run (host load 16 to 88):**
 
 | set | images/s per rep | spread | declined | load at start | NVML util % | kernel-busy share | PE share of GPU ms | GPU kernel ms/image |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | 28.4 / 30.4 / 30.1 | 0.07 | 0 | 16 / 17 / 17 | 93 / 100 / 97 | 0.87 | 0.90 | 42.2 |
 | B | 37.6 / 48.1 / 51.9 | 0.30 | 13 | 23 / 25 / 27 | 64 / 74 / 80 | 0.28 | 0.74 | 16.1 |
-| P | 25.3 / 39.4 / 41.9 | 0.42 | 0 | 88 / 85 / 85 | 47 / 73 / 77 | 0.57 | 0.72 | 26.7 |
 
 GPU kernel ms per image by stage (nsys, NVTX ranges):
 
@@ -184,31 +181,28 @@ GPU kernel ms per image by stage (nsys, NVTX ranges):
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | 0.00 | 0.23 | 0.04 | 3.62 | 0.02 | 0.12 | 38.08 | 0.04 | 0.03 | 0.00 |
 | B | 0.00 | 1.03 | 0.23 | 1.80 | 0.16 | 0.03 | 11.83 | 0.92 | 0.07 | 0.00 |
-| P | 0.00 | 1.17 | 0.55 | 2.99 | 0.37 | 0.11 | 19.35 | 1.94 | 0.23 | 0.00 |
 
 Bars (section 1.2):
 
 | Bar | Result |
 |---|---|
-| kernel output deterministic and inside the tensor gate | yes on every set: every checked image passes the gate against the Pillow/OpenCV reference (letterbox, whole-frame square, crop squares; worst mean abs diff 0.22 grey, worst max 4); with equal detector rectangles two runs are byte-identical. The detector (not the kernels) moved a crop rectangle between two runs on 1 of 40 images (A), 1 of 38 (B) and 4 of 40 (P) |
-| stage split stable (spread of repetitions at most 0.25) | A yes (0.08); B and P no (0.38 and 0.12 in the rerun, 0.30 and 0.42 in the first run): the first repetition of B is consistently 22 to 36 % slower than the next two in both runs, cause not found |
+| kernel output deterministic and inside the tensor gate | yes on every set: every checked image passes the gate against the Pillow/OpenCV reference (letterbox, whole-frame square, crop squares; worst figures on A and B: mean abs diff 0.21 grey, max 3; set P met the gate too); with equal detector rectangles two runs are byte-identical. The detector (not the kernels) moved a crop rectangle between two runs on 1 of 40 images (A) and 1 of 38 (B); set P: kernels met the bar |
+| stage split stable (spread of repetitions at most 0.25) | A yes (0.08); B no (0.38 in the rerun, 0.30 in the first run); set P met in the rerun and not met in the first run: the first repetition of B is consistently 22 to 36 % slower than the next two in both runs, cause not found |
 | honest GPU number | SM Active is **not measurable** here: `nsys --gpu-metrics-devices` and DCGM need profiling rights this host denies (`ERR_NVGPUCTRPERM`, `dcgmi` is absent). Substitute: share of the traced window with at least one kernel resident (an upper bound on SM active) and NVML utilization |
 
 **Findings.**
 
-1. PE is most of the GPU kernel time but not equally: 91 % on set A (6 detections a photo), 72 % on the
-   high-resolution photos of B and P (1.7 and 2.4 detections a photo). Whole-frame blur sums are the
-   second largest stage on those (1.1 and 2.0 GPU ms a photo), then decode (1.1 and 1.2) and detect.
-2. The GPU is not saturated on photos. Kernel-busy share (an upper bound on SM active) is 0.48 (B) and
-   0.64 (P) in the rerun (0.28 and 0.57 in the first run) against 0.83 on A (0.87 first run). NVML
-   utilization reads 76 to 88 % on B and P while at most 64 % of the time has a kernel running, so the NVML number
-   overstates how busy the SMs are. Wall time per photo is spent on the host: decode takes 61 to
-   87 ms of wall per photo across 16 workers (the GPU part of it is about 1 ms).
+1. PE is most of the GPU kernel time but not equally: 91 % on set A (6 detections a photo), 72 % on B (under 2 detections a photo); on P it met the 70 % line. Whole-frame blur sums are the
+   second largest stage on those (about 1 GPU ms a photo on B), then decode and detect.
+2. The GPU is not saturated on photos. Kernel-busy share (an upper bound on SM active) is 0.48 on B in the rerun (0.28 in the first run)
+   against 0.83 on A (0.87 first run); on set P it was below the 0.85 line in both runs. NVML
+   utilization reads higher than the kernel-busy share on the photo sets, so the NVML number
+   overstates how busy the SMs are. Wall time per photo is spent on the host: decode takes 87 ms of wall per B photo across 16 workers (the GPU part of it is about 1 ms).
 3. Peak device memory (NVML, one process with 16 lanes and 4 TensorRT contexts per engine): 10,432 MiB (A) to 16,310 MiB (B).
 
 **Decision it feeds (5a-R0, programme stop rule: SM active above 85 % with PE at least 70 % of GPU ms).**
-The PE leg holds on every set (72 to 91 %). The SM-active leg cannot be measured, but its upper
-bound is below 85 % on B and P in both runs (0.28 to 0.64) and on A in the rerun (0.83), so the rule
+The PE leg holds on every set (72 to 91 % on A and B; met on P). The SM-active leg cannot be measured, but its upper
+bound is below 85 % on B in both runs (0.28 to 0.48), on set P (below the line in both runs) and on A in the rerun (0.83), so the rule
 **does not stop optimization work** on photos; on set A it is undetermined in the first run (0.87) and not met
 in the rerun. Taking the decision on today's behaviour (no stop) is therefore safe. A direct SM-active
 reading needs the host's profiling counters enabled by the owner (NVIDIA driver parameter
@@ -219,10 +213,10 @@ reading needs the host's profiling counters enabled by the owner (NVIDIA driver 
 **What ran.** Control D-a (shipped ctypes nvJPEG `GPU_HYBRID` lanes) against nvImageCodec `HYBRID_CPU_GPU`
 at batch 1, 8 and 64 (`fancy_upsampling=1`) and DALI `mixed` at batch 64 with
 `hybrid_huffman_threshold` 0 and the default, on the first 200 files of A, OI-1024, B and P (the
-router passes 200, 200, 185 and 200 of them; set B has 14 progressive files and one without an end
+router passes 200, 200 and 185 of the first three; set B has 14 progressive files and one without an end
 marker). Three counted repetitions, blocks of 64 files, paired bootstrap over 9 blocks. GPU ms per
 photo is kernel plus copy time from one `nsys` traced repetition. Host load at the runs: A 19 to 20,
-OI 35 to 36 (above the 35 hold line, noisy), B 20 to 22, P 26 to 30; the reruns of all four ran at 8 to 16.
+OI 35 to 36 (above the 35 hold line, noisy), B 20 to 22; the reruns of all four ran at 8 to 16.
 
 **First run:**
 
@@ -265,18 +259,10 @@ Set B: 200 files, 15 declined by the router {'gpu': 185, 'progressive': 14, 'tru
 
 CPU columns: pillow_draft640 50.4 images/s; simplejpeg 53.7 images/s
 
-Set P: 200 files, 0 declined by the router {'gpu': 200}
+Set P: summarized in section 4.1 (bar status only).
 
-| arm | images/s (median of blocks) | ratio to control [95 % interval] | rep spread | host CPU s/image | GPU ms/image (kernel + copy) | gate pass/fail |
-| --- | --- | --- | --- | --- | --- | --- |
-| control | 207.1 | 1.00 (control) | 0.24 | 0.0501 | 2.58 | 200/0 |
-| dali:0:64 | 218.4 | 1.05 [0.50, 1.17] | 0.54 | 0.0554 | 2.12 | 200/0 |
-| dali:default:64 | 217.1 | 1.05 [0.73, 1.17] | 0.21 | 0.0538 | 2.08 | 200/0 |
-| nvimgcodec:hybrid:1 | 25.2 | 0.12 [0.10, 0.14] | 0.06 | 0.0403 | 2.23 | 200/0 |
-| nvimgcodec:hybrid:64 | 278.2 | 1.34 [1.14, 1.55] | 0.19 | 0.0466 | 2.73 | 200/0 |
-| nvimgcodec:hybrid:8 | 89.4 | 0.43 [0.38, 0.48] | 0.01 | 0.0512 | 2.43 | 200/0 |
-
-CPU columns: pillow_draft640 75.0 images/s; simplejpeg 65.1 images/s
+**Set P (4.1, bar status only, figures not tracked):** the margin is a near miss for nvImageCodec batch 64
+(throughput clause met in both runs, GPU-ms clause not met); not met for DALI and for the other nvImageCodec batches.
 
 **Rerun at lower load (throughput only; GPU ms is not repeated):**
 
@@ -319,18 +305,7 @@ Set B: 200 files, 15 declined by the router {'gpu': 185, 'progressive': 14, 'tru
 
 CPU columns: pillow_draft640 73.4 images/s; simplejpeg 59.8 images/s
 
-Set P: 200 files, 0 declined by the router {'gpu': 200}
-
-| arm | images/s (median of blocks) | ratio to control [95 % interval] | rep spread | host CPU s/image | GPU ms/image (kernel + copy) | gate pass/fail |
-| --- | --- | --- | --- | --- | --- | --- |
-| control | 209.3 | 1.00 (control) | 0.35 | 0.0478 | n/a | 200/0 |
-| dali:0:64 | 222.2 | 1.06 [0.62, 1.24] | 0.55 | 0.0495 | n/a | 200/0 |
-| dali:default:64 | 236.9 | 1.13 [0.82, 1.30] | 0.21 | 0.0476 | n/a | 200/0 |
-| nvimgcodec:hybrid:1 | 24.2 | 0.12 [0.09, 0.13] | 0.07 | 0.0411 | n/a | 200/0 |
-| nvimgcodec:hybrid:64 | 290.6 | 1.39 [1.12, 1.44] | 0.20 | 0.0462 | n/a | 200/0 |
-| nvimgcodec:hybrid:8 | 99.4 | 0.47 [0.37, 0.55] | 0.14 | 0.0477 | n/a | 200/0 |
-
-CPU columns: pillow_draft640 84.8 images/s; simplejpeg 74.9 images/s
+Set P: summarized in section 4.1 (bar status only).
 
 Coverage on 51 fixtures (orientation tags 1-8, progressive, truncated, CMYK, grey, 4:4:4, 4:2:2, 4:2:0,
 restart markers; three source images) and on the 15 files of set B the router declines:
@@ -349,17 +324,17 @@ restart markers; three source images) and on the 15 files of set B the router de
 | A, 0.3 MP | DALI hht 0, batch 64 | 1.53 [1.38, 1.73], rerun 2.04 [1.51, 2.69]; GPU ms/photo 0.135 vs 0.133 (+1.2 %, one trace, resolution 0.002 ms) | yes on throughput in both runs; GPU-ms clause met within resolution |
 | OI-1024, 0.8 MP | DALI hht 0, batch 64 | 1.31 [1.01, 1.88], rerun 1.42 [0.87, 1.75]; GPU ms 0.162 vs 0.163 | no: the rerun interval includes 1.0 and control spread was 0.65 |
 | B, 12-24 MP | nvImageCodec batch 64 | 1.10 [1.02, 1.15], rerun 1.02 [0.98, 1.12]; GPU ms 3.08 vs 2.87 (+7 %) | no |
-| P, about 21 MP | nvImageCodec batch 64 | 1.34 [1.14, 1.55], rerun 1.39 [1.12, 1.44]; GPU ms 2.73 vs 2.58 (+6 %) | no: throughput clause met, GPU-ms clause not (higher) |
+| P, high-resolution photos | nvImageCodec batch 64 | figures not tracked (09g 6.8) | near miss: throughput clause met in both runs, GPU-ms clause not met (higher) |
 
-DALI is below control on B (0.60 to 0.81) and about equal on P (1.05 to 1.13, intervals include 1.0).
+DALI is below control on B (0.60 to 0.81) and does not meet the margin on P (intervals include 1.0).
 nvImageCodec at batch 1 and 8 is far below control (0.10 to 0.47) because one caller thread feeds it.
 CPU columns (16 threads): simplejpeg 2,683 / 2,701 images/s on A (the control GPU lanes 1,829 / 1,597),
-1,078 / 1,004 on OI (control 1,570 / 1,473), 53.7 on B and 65.1 on P; Pillow `draft(640)` 1,407 on A, 319 on OI, 50 on B and 75 on P.
+1,078 / 1,004 on OI (control 1,570 / 1,473), 53.7 on B; Pillow `draft(640)` 1,407 on A, 319 on OI, 50 on B.
 
 **Findings.**
 
 1. Large photos (B, P): keep the shipped lanes. No arm passes the registered margin; the nearest is nvImageCodec at
-   batch 64 on P (+34 to +39 % images/s, +6 % GPU ms, 3 to 7 % less host CPU a photo) which is not a win on B and is
+   batch 64 on P (a near miss: faster, but the GPU-ms clause fails) which is not a win on B and is
    only reachable through a batch API with one calling thread.
 2. Sub-megapixel images (A, and OI less clearly): DALI `mixed` with hht 0 at batch 64 is about 1.5 to 2 times
    the shipped lanes with the same GPU ms, but the CPU libjpeg-turbo route already decodes A at the same speed
@@ -381,10 +356,10 @@ did not hold in the rerun) and the CPU route is the real competitor. Nothing is 
 linear, `cvtcolor`, `convertto`, `laplacian`), the within-K-b fused variant for the whole-frame square
 (`resize_crop_convert_reformat`) and K-c (DALI `fn.resize`, antialias on for the letterbox and the whole
 square, off for the crops, one-image pipelines). Frames decoded by the shipped lanes, crop rectangles
-from the shipped detector plan (first 200 images of A and B, first 100 of P), per operation wall time over
-3 repetitions (1 repetition on P), tensor gates against the Pillow / OpenCV references, box and PE
+from the shipped detector plan (first 200 images of A and B, a shorter sample of P), per operation wall time over
+3 repetitions (fewer on P), tensor gates against the Pillow / OpenCV references, box and PE
 parity against the control arm, GPU ms from `nsys` NVTX ranges (A: two passes, B and P: one pass, because the
-passes cost 6 minutes each and the row budget was spent). Host load 13 to 17 (A), 13 (B), 7 (P) at the end of the runs.
+passes cost 6 minutes each and the row budget was spent). Host load 13 to 17 (A) and 13 (B) at the end of the runs.
 
 Set A: errors {'K-c': 'blur_sums:K-c has no Laplacian operator; the blur sums stay on K-a;'}
 
@@ -440,48 +415,27 @@ Set B: errors {'K-c': 'blur_sums:K-c has no Laplacian operator; the blur sums st
 | K-b-fused | 0.6258 | 0.975 | 0.99996 / 0.9123 | 0.0 |
 | K-c | 0.7086 | 0.995 | 0.99996 / 0.9929 | None |
 
-Set P: errors {'K-c': 'blur_sums:K-c has no Laplacian operator; the blur sums stay on K-a;'}
+Set P: summarized in section 5.1 (bar status only).
 
-| arm | operation | wall ms median / p90 | GPU kernel ms/image (two passes) | gate pass/n | worst mean / max abs |
-| --- | --- | --- | --- | --- | --- |
-| K-a | blur_sums | 1.34 / 1.65 | 1.173 | - | - |
-| K-a | crop_squares | 2.45 / 5.25 | 0.064 | 236/236 | 0.15 / 4 |
-| K-a | letterbox | 0.63 / 0.66 | 0.266 | 100/100 | 0.06 / 1 |
-| K-a | whole_square | 0.29 / 0.32 | 0.160 | 100/100 | 0.08 / 1 |
-| K-b | blur_sums | 3.94 / 5.65 | 2.898 | - | - |
-| K-b | crop_squares | 0.62 / 1.34 | 0.203 | 236/236 | 0.15 / 4 |
-| K-b | letterbox | 0.65 / 0.74 | 0.247 | 100/100 | 0.02 / 1 |
-| K-b | whole_square | 0.47 / 0.55 | 0.257 | 100/100 | 0.03 / 1 |
-| K-b-fused | blur_sums | 3.91 / 5.55 | 2.897 | - | - |
-| K-b-fused | crop_squares | 0.63 / 1.33 | 0.203 | 236/236 | 0.15 / 4 |
-| K-b-fused | letterbox | 0.54 / 0.57 | 0.247 | 100/100 | 0.02 / 1 |
-| K-b-fused | whole_square | 0.16 / 0.18 | 0.015 | 0/100 | 13.43 / 220 |
-| K-c | crop_squares | 2.03 / 4.46 | 0.009 | 234/236 | 0.15 / 10 |
-| K-c | letterbox | 1.53 / 1.70 | 0.014 | 70/100 | 0.06 / 18 |
-| K-c | whole_square | 1.17 / 1.36 | 0.004 | 80/100 | 0.08 / 20 |
-
-| arm | P-box | P-item | PE cosine median / p01 | blur max relative diff |
-| --- | --- | --- | --- | --- |
-| K-a | 0.9788 | 1.000 | 1.00000 / 1.0000 | 0.0 |
-| K-b | 0.4492 | 1.000 | 0.99995 / 0.9992 | 0.0 |
-| K-b-fused | 0.4492 | 1.000 | 0.99995 / 0.9406 | 0.0 |
-| K-c | 0.5720 | 1.000 | 0.99996 / 0.9995 | None |
+**Set P (5.1, bar status only, figures not tracked):** K-b met the tensor gate on every image, did not meet the
+GPU-ms clause and did not meet the P-box bar (the control against itself was already at or below the bar); the fused
+variant did not meet the tensor gate; K-c met the gate only in part. K-c GPU ms is not valid.
 
 **Caveats on the numbers above.**
 
 - K-c GPU ms is **not valid**: DALI launches its kernels from its own executor threads, so they fall outside the calling thread's NVTX range. Only K-c's wall time and gates count.
-- P-box compares detector boxes at the registered 1 px tolerance in frame pixels. At a 6 to 8 times downscale one pixel of the 640 canvas is 6 to 8 frame pixels and the detector moves boxes by that much on tiny input differences: the control compared with itself is 0.9984 (A), 0.9908 (B), 0.9788 (P, below the 0.98 bar) because the plan is not bit-stable between two calls. On B and P every non-identical arm (K-b 0.63 and 0.45) misses the bar for that reason as well as because it is a different resampler; PE vectors stay within the bar for K-b (median 0.99995 to 0.99997, p01 0.9986 to 0.9992).
-- The blur sums of K-b equal K-a's Laplacian variances to the last printed digit (relative difference 0), but cost 9 times (A), 2.1 times (B) and 2.5 times (P) the GPU ms and 3 to 13 times the wall ms.
+- P-box compares detector boxes at the registered 1 px tolerance in frame pixels. At a 6 to 8 times downscale one pixel of the 640 canvas is 6 to 8 frame pixels and the detector moves boxes by that much on tiny input differences: the control compared with itself is 0.9984 (A), 0.9908 (B) and, on set P, also at or below the 0.98 bar, because the plan is not bit-stable between two calls. On B (K-b 0.63) and P every non-identical arm misses the bar for that reason as well as because it is a different resampler; PE vectors stay within the bar for K-b (median 0.99996 or better on A and B, p01 0.9986 to 0.9991).
+- The blur sums of K-b equal K-a's Laplacian variances to the last printed digit (relative difference 0), but cost 9 times (A) and 2.1 times (B) the GPU ms, and more on P, and 3 to 13 times the wall ms.
 
 **Findings.**
 
 1. CV-CUDA reproduces the Pillow letterbox, the Pillow whole-frame square and the OpenCV crop squares within the tensor gate on
    every image of every set (K-b letterbox is a little closer to Pillow than K-a: 0.02 to 0.06 vs 0.06 to 0.19 mean abs diff).
-2. K-b is not cheaper in GPU time: letterbox -7 % on P and B (one pass, inside the noise), +15 % on A; whole-frame square +57 % to +64 %; crop squares +19 % (A), +185 % (B), +217 % (P); blur sums 2 to 9 times.
-   Summed over the three resize operations K-b costs 24 to 44 % more GPU ms than K-a; with blur 1.9 to 2.6 times. Together the shipped kernels
-   are 0.25 % (A), 6.6 % (B) and 6.0 % (P) of a photo's GPU kernel ms (PR-0 rerun), blur sums being most of it on photos.
-3. The fused whole-frame square is 4 to 11 times cheaper in GPU ms than K-a, but it resizes without antialiasing and fails the tensor gate (0 of 200 on B, 9 of 200 on A, 0 of 100 on P; max abs diff 104 to 220).
-4. DALI `fn.resize` passes the letterbox gate on A and fails it on B (91 of 200) and P (70 of 100); the whole-frame square passes 196/200, 120/200 and 80/100 (A, B, P); the non-antialiased crops pass 115 of 1,273 (A), 197 of 326 (B) and 234 of 236 (P). Its letterbox and square take 2 to 4 times the wall time of K-a (each call is a pipeline run; the crops 0.8 to 3 times), and it has no Laplacian operator.
+2. K-b is not cheaper in GPU time: letterbox -7 % on B (one pass, inside the noise), +15 % on A; whole-frame square +57 % to +64 %; crop squares +19 % (A), +185 % (B); blur sums 2 to 9 times; set P: GPU-ms clause not met.
+   Summed over the three resize operations K-b costs 24 to 29 % more GPU ms than K-a on A and B; with blur 1.9 to 2.6 times. Together the shipped kernels
+   are 0.25 % (A) and 6.6 % (B) of a photo's GPU kernel ms (PR-0 rerun), blur sums being most of it on photos.
+3. The fused whole-frame square is 4 to 11 times cheaper in GPU ms than K-a, but it resizes without antialiasing and fails the tensor gate (0 of 200 on B, 9 of 200 on A, and on set P; max abs diff 104 to 217 on A and B).
+4. DALI `fn.resize` passes the letterbox gate on A and fails it on B (91 of 200) and on set P; the whole-frame square passes 196/200 (A) and 120/200 (B); the non-antialiased crops pass 115 of 1,273 (A) and 197 of 326 (B). Its letterbox and square take 2 to 4 times the wall time of K-a (each call is a pipeline run; the crops 0.8 to 3 times), and it has no Laplacian operator.
 
 **Decision it feeds (5b-G2, a library that passes replaces the custom kernels).** None passes: K-b meets the
 tensor gate but its GPU ms is higher, K-b's boxes miss the P-box bar on photos, the fused variant and K-c fail the tensor gate.
@@ -492,7 +446,7 @@ so a CV-CUDA adoption for maintainability would not move throughput, but it fail
 
 | Prototype | Feeds | Verdict |
 |---|---|---|
-| PR-0 | 5a-R0 programme stop rule | the rule is not met on photos (SM active at most 0.64); PE share 72 to 91 %; SM active itself unmeasurable (counters denied); decision: no stop, continue |
+| PR-0 | 5a-R0 programme stop rule | the rule is not met on photos (SM active upper bound below 0.85 on B and P); PE leg met on every set; SM active itself unmeasurable (counters denied); decision: no stop, continue |
 | PR-1 | 5a-S4 decoder per size class | keep the shipped lanes for 12-24 MP; DALI mixed hht 0 batch 64 is a tier-2 candidate for sub-megapixel images on set A only, with the CPU route as the comparison; nvImageCodec batch 64 on set P is a near miss (GPU-ms clause) |
 | PR-2 | 5b-G2 CV-CUDA vs custom kernels | the custom kernels stay; CV-CUDA passes correctness but costs more GPU ms and misses P-box on photos |
 
@@ -500,7 +454,7 @@ so a CV-CUDA adoption for maintainability would not move throughput, but it fail
 
 Wall seconds of GPU 0 commands held under the lock (including smoke runs and runs stopped for a harness
 bug; the stopped runs are in the totals): PR-0 about 0.15 h of 0.5; PR-1 about 0.51 h of 1.5; PR-2 about 0.53 h of 0.5
-(6 % over: one run was stopped and repeated after fixing a PE batch-size bug in the harness; the second profile pass of B was dropped and P ran on 100 images to stay near the budget). Total about 1.2 GPU h.
+(6 % over: one run was stopped and repeated after fixing a PE batch-size bug in the harness; the second profile pass of B was dropped and P ran on a shorter sample to stay near the budget). Total about 1.2 GPU h.
 Per-command seconds are kept in local ledgers next to the raw outputs (not committed); small result files are in
 `docs/benchmarks/gpu_pipeline_pr0_pr2/` with `SHA256SUMS` (public sets only; set P files stay local).
 
@@ -508,7 +462,7 @@ Per-command seconds are kept in local ledgers next to the raw outputs (not commi
 
 - SM active is not measured (profiling counters denied). A direct reading would turn the PR-0 bound into a number.
 - The host stayed busy (load above 16 for most first runs). The reruns (load 7 to 16) agree with the first runs on every verdict above except the OI-1024 interval of DALI (kept as "no").
-- PR-1 GPU ms comes from one traced pass without an interval; the "GPU ms not higher" clause is therefore judged on a point estimate (A +1.2 %, B +7 %, P +6 %).
+- PR-1 GPU ms comes from one traced pass without an interval; the "GPU ms not higher" clause is therefore judged on a point estimate (A +1.2 %, B +7 %; set P: clause not met).
 - Detector plan run-to-run variation (box moves of a pixel or more between two calls on the same canvas) is a floor for every box-parity bar.
 - B repetition 1 is consistently slower than repetitions 2 and 3 in PR-0; not explained.
 - The progressive-file routing finding (section 4, finding 3) used 14 files of set B and three fixtures; it is not a registered result.
