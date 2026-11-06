@@ -19,10 +19,7 @@ report for the full rationale):
   per-cycle blowup) without wiring a new ``_msearch``-shaped call
   into the existing ``_fetch_pending`` helper, which only knows how
   to search one (bound) project's index at a time.
-* Per-project pause is a file flag
-  (``<project_state_dir>/pipeline_paused.flag``), not a
-  ``pipeline.paused`` settings-doc field -- no such field exists yet
-  on this branch (re-checked; see task instructions).
+* Per-project pause is ``projects.paused_at`` on the registry snapshot.
 * The liveness doc is a small JSON file under
   ``<project_state_dir>/runtime_detection_worker_<host>.json``, not an
   OpenSearch ``configs`` index doc -- no ``IndexRole.CONFIGS`` /

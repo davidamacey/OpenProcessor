@@ -81,6 +81,16 @@ def current_project_id() -> uuid.UUID:
     return project_id
 
 
+def current_storage_prefix() -> str:
+    """``projects.storage_prefix`` of the bound project: the relative key prefix of its files
+    behind the storage seam (``projects/<slug>``). Never a filesystem path."""
+    record = current_project().record
+    if not record.storage_prefix:
+        msg = f"project '{record.slug}' has no storage prefix"
+        raise ProjectHasNoIdError(msg)
+    return record.storage_prefix
+
+
 def try_current_project() -> BoundProject | None:
     """Non-raising variant of :func:`current_project`, for the few call
     sites where "nothing bound" is a legitimate state rather than a bug --

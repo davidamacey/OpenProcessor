@@ -5,7 +5,6 @@ finish-pass inputs")."""
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
@@ -16,14 +15,16 @@ from fastapi.testclient import TestClient
 from src.routers.curation import projects as projects_router
 from src.routers.curation._project_deps import install_project_exception_handlers
 from src.services.projects import lifecycle
-from src.services.projects.registry import (
-    ProjectRegistry,
-    get_record_with_seq,
-    set_project_registry,
-    write_record,
-)
+from src.services.projects.records import record_from_row
+from src.services.projects.registry import ProjectRegistry, set_project_registry
+from src.services.projects.store import get_row
 
-from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
+from .conftest import (
+    FakeLifecycleOpenSearch,
+    amutate_project,
+    fake_ensure_indexes,
+    seed_default_project,
+)
 
 
 if TYPE_CHECKING:
@@ -100,18 +101,12 @@ def _create(slug: str, client: _CountingOpenSearch) -> Any:
 
 
 def _stored(client: _CountingOpenSearch, slug: str) -> Any:
-    record = asyncio.run(get_record_with_seq(client, slug))[0]
-    assert record is not None
-    return record
+    return record_from_row(asyncio.run(get_row(slug)))
 
 
 def _set_status(client: _CountingOpenSearch, slug: str, status: ProjectStatus) -> None:
     async def _run() -> None:
-        record, seq, term = await get_record_with_seq(client, slug)
-        assert record is not None
-        await write_record(
-            client, replace(record, status=status), if_seq_no=seq, if_primary_term=term
-        )
+        await amutate_project(slug, status=status)
         await projects_router.get_project_registry().ensure_fresh()
 
     asyncio.run(_run())

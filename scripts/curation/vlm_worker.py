@@ -19,7 +19,7 @@ Usage
     .venv/bin/python scripts/curation/vlm_worker.py --until-empty   # one drain pass
 
 Projects: each producer cycle discovers the active projects, skips
-paused ones (``<project_state_dir>/pipeline_paused.flag``) and gives
+paused ones (``projects.paused_at``) and gives
 each a fair share of the fetch, rotating which project goes first. A
 project's crops are read from its own items index (through the guarded
 OpenSearch client, bound to that project) and sent to its own

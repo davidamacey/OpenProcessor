@@ -394,8 +394,12 @@ async def amutate_project(slug: str, **columns: Any) -> None:
     from src.db.repos import projects as repo
     from src.services.projects.store import run_repo
 
+    values = dict(columns)
+    if 'status' in values:  # the table ties a prior status to 'deleting'
+        values.setdefault('pre_delete_status', 'active' if values['status'] == 'deleting' else None)
+
     async def _set(session: Any) -> None:
-        await session.execute(update(Project).where(Project.slug == slug).values(**columns))
+        await session.execute(update(Project).where(Project.slug == slug).values(**values))
         await repo.bump_projects_revision(session)
 
     await run_repo('mutate a test project', _set)

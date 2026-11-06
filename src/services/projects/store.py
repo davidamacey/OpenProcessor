@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.db.repos import projects as repo
+from src.db.repos import embedding_spaces as spaces_repo, projects as repo
 from src.db.session import async_session_factory, deployment_tx
+from src.services.embedding_spaces import spaces as embedding_spaces
 from src.services.rejections import rejection
 
 
@@ -75,3 +76,30 @@ async def get_row(slug: str) -> repo.ProjectRow:
         return row
 
     return await run_repo('read a project', read)
+
+
+DEFAULT_ENCODER = ('pe_core_l14_336', 1)
+
+
+class DefaultEncoderMissingError(RuntimeError):
+    """The catalog has no default encoder version: a project cannot be created without one."""
+
+
+async def create_with_default_spaces(
+    session: AsyncSession, new: repo.NewProject
+) -> repo.ProjectRow:
+    """The create transaction: every project row plus its three primary, ready default spaces.
+
+    One transaction, so a failure in either leaves nothing behind. ``load_project`` (the upgrade)
+    does not call this: the upgrade writes its own spaces, with the knn method of each live index.
+    """
+    row = await repo.create_project(session, new)
+    model_key, version = DEFAULT_ENCODER
+    encoder = await session.run_sync(lambda s: spaces_repo.get_model_version(s, model_key, version))
+    if encoder is None:
+        msg = f'embedding model {model_key} v{version} is not in embedding_model_versions'
+        raise DefaultEncoderMissingError(msg)
+    await spaces_repo.add_spaces(
+        session, embedding_spaces.default_space_rows(row.id, encoder, created_by=new.created_by)
+    )
+    return row

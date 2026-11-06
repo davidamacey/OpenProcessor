@@ -35,7 +35,7 @@ from src.services.projects.lifecycle_checks import (
 )
 from src.services.projects.records import new_project_for, record_from_row
 from src.services.projects.registry import get_project_registry
-from src.services.projects.store import get_row, run_repo
+from src.services.projects.store import create_with_default_spaces, get_row, run_repo
 from src.services.rejections import rejection
 
 
@@ -154,7 +154,7 @@ async def create_project(
     # the same slug waits for the first and loses with 409 slug_taken (or slug_retired).
     row = await run_repo(
         'create a project',
-        repo.create_project,
+        create_with_default_spaces,
         new_project_for(slug, display_name=display_name, description=description, origin=origin),
     )
     record = record_from_row(row)

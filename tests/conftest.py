@@ -53,6 +53,10 @@ class _EnvDefaultProjectRecord:
     created_at = ''
     updated_at = ''
     origin = None
+    id = None
+    paused_at = None
+    paused_by = None
+    pre_delete_status = None
 
     @property
     def resources(self) -> object:
@@ -487,4 +491,11 @@ def pg_registry(pg: Any, pg_env: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr('src.db.session.get_async_engine', new_task_async_engine)
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         conn.execute('TRUNCATE project_slugs, projects CASCADE')
+    # a project create writes its default spaces against the shipped encoder catalog
+    from sqlalchemy.orm import Session
+
+    from src.services.embedding_spaces.catalog import sync_catalog
+
+    with Session(pg.engine('app')) as session:
+        sync_catalog(session)
     return pg_env

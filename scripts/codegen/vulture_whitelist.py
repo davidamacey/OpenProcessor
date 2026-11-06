@@ -150,7 +150,7 @@ _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_researc
 # Landed ahead of their callers (B2 stage 2, lane 2A): the repository is wired by the registry,
 # guard and lifecycle commits of the same lane. Delete each entry with its caller.
 _.load_project  # src/db/repos/projects.py, called by the 0.6.0 upgrade step (lane 2E)
-_.set_paused  # src/db/repos/projects.py, called by the pause routes
+_.current_storage_prefix  # src/config/project_context.py, the bound project's storage key prefix; called by the storage users of lanes 2B-2D and stage 3
 _.current_project_id  # src/config/project_context.py, the bound project's database id; called by the repositories of lanes 2B-2D
 
 # Embedding registry: public functions whose production callers land with the projects, config,
@@ -158,8 +158,8 @@ _.current_project_id  # src/config/project_context.py, the bound project's datab
 _.sync_catalog  # src/services/embedding_spaces/catalog.py, called by scripts/db/migrate.py after Alembic
 _.embedding_space  # src/services/embedding_spaces/resolve.py, called by every vector reader
 _.note_config_epoch  # src/services/embedding_spaces/resolve.py, called by the config_epoch poll
-_.default_space_rows  # src/services/embedding_spaces/spaces.py, called by the project create and the upgrade
-_.add_spaces  # src/db/repos/embedding_spaces.py, called with default_space_rows by the project create and the upgrade
+_.default_space_rows  # src/services/embedding_spaces/spaces.py, called by the upgrade (the project create calls it already)
+_.add_spaces  # src/db/repos/embedding_spaces.py, called with default_space_rows by the upgrade (the project create calls it already)
 _.register_space  # src/services/embedding_spaces/spaces.py, called by the space routes
 _.begin_build  # src/services/embedding_spaces/spaces.py, called by the re-index job
 _.mark_ready  # src/services/embedding_spaces/spaces.py, called by the re-index job

@@ -14,6 +14,7 @@ from src.core.logging import get_logger
 from src.db.repos import projects as repo
 from src.db.session import async_session_factory, deployment_tx
 from src.services.projects.records import new_project_for, record_from_row
+from src.services.projects.store import create_with_default_spaces
 
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ async def bootstrap_default_project() -> ProjectRecord:
     async with async_session_factory()() as session:
         try:
             async with deployment_tx(session, 'bootstrap the default project'):
-                row = await repo.create_project(
+                row = await create_with_default_spaces(
                     session,
                     new_project_for(
                         DEFAULT_SLUG,

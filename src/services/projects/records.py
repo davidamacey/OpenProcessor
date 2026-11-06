@@ -32,6 +32,7 @@ def record_from_row(row: ProjectRow) -> ProjectRecord:
         pre_delete_status=row.pre_delete_status,
         paused_at=row.paused_at.isoformat() if row.paused_at is not None else None,
         paused_by=row.paused_by,
+        storage_prefix=row.storage_prefix,
     )
 
 

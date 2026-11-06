@@ -29,7 +29,7 @@ scripts.curation.cluster_refresh_daemon``) or as a cron job invoking
 ``--once``.
 
 Projects: each iteration discovers the active projects, skips paused
-ones (``<project_state_dir>/pipeline_paused.flag``) and checks every
+ones (``projects.paused_at``) and checks every
 other one in rotating order, with a growth counter per project. A
 project's count reads its own items index (guarded client, bound to that
 project); its refresh calls its own ``{prefix}/projects/{slug}/...``

@@ -106,6 +106,8 @@ class ProjectRecord:
     id: uuid.UUID | None = None
     paused_at: str | None = None
     paused_by: str | None = None
+    # Relative key prefix of the project's files behind the storage seam ('projects/<slug>').
+    storage_prefix: str = ''
 
 
 def project_index_prefix() -> str:

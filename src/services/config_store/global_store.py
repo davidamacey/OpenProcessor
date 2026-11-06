@@ -69,9 +69,7 @@ GLOBAL_CONFIGS_INDEX_BODY: dict[str, Any] = {
 
 async def ensure_global_configs_index(client: Any) -> None:
     """Create ``op_global_configs`` with its explicit mapping if it does
-    not exist yet -- mirrors
-    ``src.services.projects.bootstrap.ensure_projects_index`` for
-    ``op_projects``. Idempotent; call at startup before the first
+    not exist yet. Idempotent; call at startup before the first
     global-store read/write. Needs no project bound (this index belongs
     to none)."""
     index = global_configs_index()
