@@ -28,6 +28,7 @@ dependencies = [
     "uvicorn[standard]>=0.41.0",
     "python-multipart",
     "orjson",
+    "pydantic==2.14.2",
     "pydantic-settings",
     "ultralytics==8.4.197",
     "tritonclient[all]",
