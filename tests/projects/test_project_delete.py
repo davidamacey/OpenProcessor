@@ -77,7 +77,7 @@ def test_delete_default_is_protected() -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
 
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project(client, slug='default', confirm='default'))
+        asyncio.run(lifecycle.delete_project(slug='default', confirm='default'))
     assert exc_info.value.detail['error'] == 'project_protected'
 
     dry_run = asyncio.run(lifecycle.dry_run_delete(client, slug='default'))
@@ -90,7 +90,7 @@ def test_delete_confirm_mismatch() -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='not-alpha'))
+        asyncio.run(lifecycle.delete_project(slug='alpha', confirm='not-alpha'))
     assert exc_info.value.detail['error'] == 'confirm_mismatch'
 
 
@@ -104,7 +104,7 @@ def test_delete_last_active_project_refused() -> None:
     )
     asyncio.run(registry.ensure_fresh())
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project(client, slug='only', confirm='only'))
+        asyncio.run(lifecycle.delete_project(slug='only', confirm='only'))
     assert exc_info.value.detail['error'] == 'last_active_project'
 
 
@@ -118,7 +118,7 @@ def test_delete_removes_exact_indexes_and_tombstones_slug() -> None:
     assert alpha_record is not None
     expected_indexes = set(alpha_record.resources.indexes.values())
 
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
@@ -137,7 +137,7 @@ def test_delete_finish_is_idempotent_after_crash_between_steps() -> None:
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
 
-    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     first = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
     assert first.status == 'deleted'
     # A crash could leave delete_project_finish re-run against an
@@ -160,7 +160,7 @@ def test_delete_refuses_from_building_or_deleting(monkeypatch) -> None:
     asyncio.run(registry.ensure_fresh())
 
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+        asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert exc_info.value.detail['error'] == 'invalid_transition'
 
 
@@ -182,7 +182,7 @@ def test_delete_finish_rolls_back_to_pre_delete_status_on_drain_timeout(monkeypa
     # 'deleting' and into delete_project_finish's drain wait -- the
     # exact race M3 exists to catch (a writer picked up between the
     # check and the flip).
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
     assert deleting.pre_delete_status == 'active'
 
@@ -229,7 +229,7 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
 
     client.indices.delete = _delete_but_fail_one  # type: ignore[method-assign]
 
-    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'project_busy'
@@ -278,7 +278,7 @@ def test_drain_timeout_rollback_preserves_a_concurrent_patch(monkeypatch) -> Non
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
 
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     from src.services.projects import busy, delete as delete_mod
@@ -333,7 +333,7 @@ def test_delete_finish_reports_mlflow_cleanup_outcome(monkeypatch) -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
-    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     finished = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert finished.mlflow_cleanup.outcome == 'skipped_not_configured'
 
@@ -354,7 +354,7 @@ def test_delete_removes_bulk_ingest_and_reprocess_job_dirs(tmp_path, monkeypatch
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
-    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
 
     for root in (bulk, reprocess):
@@ -376,7 +376,7 @@ def test_delete_removes_the_assist_loop_job_dirs(tmp_path, monkeypatch) -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
-    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
 
     assert not (loops / 'projects' / 'alpha').exists()

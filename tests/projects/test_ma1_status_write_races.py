@@ -101,7 +101,7 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
         # registry snapshot in sync with the direct mutation above.
         await registry.refresh_strict()
 
-        deleting = await lifecycle.delete_project(client, slug='gamma', confirm='gamma')
+        deleting = await lifecycle.delete_project(slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
         tombstoned = (await lifecycle.delete_project_finish(client, slug='gamma')).record
         assert tombstoned.status == 'deleted'
@@ -136,7 +136,7 @@ def test_second_finish_cannot_delete_a_project_the_first_finish_rolled_back(monk
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
 
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.6)
@@ -203,7 +203,7 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
 
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     # The first finish to start draining is A: it times out (and rolls back); B's drain outlasts
@@ -335,7 +335,7 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
         await amutate_project('gamma', updated_at=stale_updated_at)
         await registry.refresh_strict()
 
-        deleting = await lifecycle.delete_project(client, slug='gamma', confirm='gamma')
+        deleting = await lifecycle.delete_project(slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
         tombstoned = (await lifecycle.delete_project_finish(client, slug='gamma')).record
         assert tombstoned.status == 'deleted'

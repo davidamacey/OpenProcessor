@@ -148,7 +148,7 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
         )
 
         with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project(client, slug='cars', confirm='cars')
+            await lifecycle.delete_project(slug='cars', confirm='cars')
 
         detail = exc_info.value.detail
         assert detail['error'] == 'project_busy'

@@ -87,7 +87,7 @@ def test_delete_refuses_path_escape_for_corrupted_train_jobs_dir(tmp_path, monke
     corrupted = replace(record, resources=replace(record.resources, train_jobs_dir=escaped_dir))
     _corrupt_stored(monkeypatch, corrupted)
 
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     with pytest.raises(RequestRejectedError) as exc_info:
@@ -159,7 +159,7 @@ def test_delete_refuses_path_escape_when_dir_points_at_the_shared_root_itself(
     )
     _corrupt_stored(monkeypatch, corrupted)
 
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     with pytest.raises(RequestRejectedError) as exc_info:
@@ -193,7 +193,7 @@ def test_path_escape_check_runs_before_the_irreversible_index_delete(monkeypatch
     )
     _corrupt_stored(monkeypatch, corrupted)
 
-    deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     with pytest.raises(RequestRejectedError) as exc_info:

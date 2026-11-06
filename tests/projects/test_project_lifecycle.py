@@ -115,7 +115,7 @@ def test_create_project_slug_retired_after_delete() -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
-    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha again'))
