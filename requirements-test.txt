@@ -25,11 +25,11 @@
 # schema naming/shape changes between releases; bump together with
 # `make contracts`.
 fastapi==0.162.0
-pydantic==2.14.2
-uvicorn[standard]>=0.41.0
-python-multipart
-orjson
-pydantic-settings
+pydantic==2.14.3
+uvicorn[standard]==0.54.0
+python-multipart==0.0.33
+orjson==3.13.0
+pydantic-settings==2.16.2
 
 # tests/test_pe_rearrange_shim.py compares the shim with einops.rearrange (it skips without it)
 einops==0.8.2
