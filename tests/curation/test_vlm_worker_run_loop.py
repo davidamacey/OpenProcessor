@@ -67,7 +67,7 @@ class Fakes:
     async def close(self) -> None:
         self.closed = True
 
-    async def _projects(self, _opensearch: Any, _registry: Any, only: str | None) -> list[Any]:
+    async def _projects(self, _registry: Any, only: str | None) -> list[Any]:
         return [p for p in self.projects if only in (None, p.slug)]
 
     async def _fetch(self, _opensearch: Any, **kw: Any) -> list[str]:
