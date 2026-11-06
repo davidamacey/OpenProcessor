@@ -22,6 +22,9 @@ from fastapi.testclient import TestClient
 pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 
+pytest_plugins = ['_records_world']
+
+
 def _client(fake: Any) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
@@ -52,6 +55,8 @@ def _down() -> AsyncMock:
         '/curation/projects/default/crops/c1/history',
     ],
 )
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_outage_is_503(path: str) -> None:
     r = _client(_down()).get(path)
     assert r.status_code == 503, (path, r.status_code, r.text)

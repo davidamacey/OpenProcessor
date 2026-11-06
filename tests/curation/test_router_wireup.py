@@ -372,6 +372,8 @@ def test_unlabel_crop_clears_stale_human_provenance(
         ),
     ],
 )
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_human_class_writers_replace_detector_provenance(
     app_client: Any, fake_opensearch: AsyncMock, method: str, url: str, body: dict[str, Any]
 ) -> None:
