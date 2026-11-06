@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from src.config.job_kinds import (
+    b2_embedding,
     b4_fanout,
     b4_project,
+    clustering,
     families_a,
     families_b,
     families_c,
@@ -12,7 +14,11 @@ from src.config.job_kinds import (
     gpu_export,
     gpu_train,
     infra,
+    near_dup,
+    near_dup_core,
     promote,
+    region_text,
+    source_backfill,
     trigger,
 )
 from src.config.job_kinds.kind import JobKind
@@ -30,6 +36,12 @@ _MODULES = (
     promote,
     b4_fanout,
     b4_project,
+    clustering,
+    b2_embedding,
+    near_dup,
+    near_dup_core,
+    source_backfill,
+    region_text,
 )
 
 

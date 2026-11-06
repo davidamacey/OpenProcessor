@@ -122,3 +122,9 @@ _.make_app  # src/tasks/runtime/gpu_app.py, called by the trainer, export and ev
 _.mark_queued  # src/clients/task_queue.py, called by start_job in the job service (stage 3)
 _.clear_queued  # src/clients/task_queue.py, called by the job claim and the reaper (stage 3)
 _.queued_state  # src/clients/task_queue.py, read by reaper rule c (stage 3)
+_.set_inventory_writer  # src/tasks/runtime/gpu_app.py, called by the job runtime once it owns the database writer (stage 3)
+_.refresh_inventory  # src/tasks/runtime/gpu_app.py, called on every job heartbeat (stage 3)
+_.record_capabilities  # InventoryWriter protocol method, called by start_inventory on the registered writer
+_.touch_devices  # InventoryWriter protocol method, called by refresh_inventory on the registered writer
+_.upsert_devices  # InventoryWriter protocol method, called by start_inventory on the registered writer
+_.capabilities  # parameter of the InventoryWriter protocol method, filled by the registered writer

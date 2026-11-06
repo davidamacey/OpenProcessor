@@ -26,6 +26,12 @@ TASK_MODULES = (
     'src.tasks.b4_fanout',
     'src.tasks.b4_project',
     'src.tasks.beat_schedule',
+    'src.tasks.clustering',
+    'src.tasks.embedding_reindex',
+    'src.tasks.near_dup',
+    'src.tasks.near_dup_core',
+    'src.tasks.source_backfill',
+    'src.tasks.region_text',
 )
 
 app = build_app(TASK_MODULES)
