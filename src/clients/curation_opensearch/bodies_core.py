@@ -13,7 +13,9 @@ from src.clients.curation_opensearch.base import (
     default_knn_spec,
     knn_field_body,
 )
+from src.clients.curation_opensearch.cluster_fields import CLUSTER_ITEM_MAPPING
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
+from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_ITEM_MAPPING
 from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
@@ -132,16 +134,6 @@ def _images_body() -> dict[str, Any]:
 _CLASS_HISTORY_MAPPING: dict[str, Any] = {
     'type': 'object',
     'enabled': False,
-}
-
-# Cluster geometry written by the clustering run
-# (src/services/curation/clustering/cluster_geometry.py): the cluster id a
-# stored cluster_distance was measured against, so a reader can tell a
-# distance that went stale when the item moved to another cluster.
-CLUSTER_GEOMETRY_MAPPING: dict[str, Any] = {
-    'cluster_distance_cluster_id': {'type': 'integer'},
-    # Cluster whose centroid is nearest the item (cluster purity, DQ-M2).
-    'cluster_nearest_id': {'type': 'integer'},
 }
 
 _EXCLUSION_MAPPING: dict[str, Any] = {
@@ -317,12 +309,8 @@ def _items_body() -> dict[str, Any]:
                 'vlm_label_cluster_name': {'type': 'keyword'},
                 'vlm_label_cluster_distance': {'type': 'float'},
                 'confidence': {'type': 'float'},
-                'cluster_id': {'type': 'integer'},
-                'cluster_distance': {'type': 'float'},
-                'cluster_subid': {'type': 'keyword'},  # AHC sub-cluster id (e.g. "47a")
-                **CLUSTER_GEOMETRY_MAPPING,
+                **CLUSTER_ITEM_MAPPING,
                 **ITEMS_EXTRA_MAPPING,
-                'cluster_auto_suggest': {'type': 'keyword'},
                 # Primary-subject ranking + blur quality (computed at ingest,
                 # backfilled for legacy items). crop_rank_in_image=1 is the
                 # largest-area item in its source photo. blur_lap_ratio is the
@@ -411,12 +399,7 @@ def _items_body() -> dict[str, Any]:
                 'mistakenness_method': {'type': 'keyword'},
                 'mistakenness_version': {'type': 'keyword'},
                 'mistakenness_scored_at': {'type': 'date'},
-                'dup_group_id': {'type': 'keyword'},
-                'dup_group_size': {'type': 'integer'},
-                'dup_is_representative': {'type': 'boolean'},
-                'dup_threshold': {'type': 'float'},
-                'dup_method': {'type': 'keyword'},
-                'dup_scored_at': {'type': 'date'},
+                **NEAR_DUP_ITEM_MAPPING,
                 'created_at': {'type': 'date'},
                 'updated_at': {'type': 'date'},
                 # Secondary image-encoder embedding for semantic search

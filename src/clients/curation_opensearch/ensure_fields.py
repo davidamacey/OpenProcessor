@@ -16,10 +16,10 @@ from src.clients.curation_opensearch.base import (
 from src.clients.curation_opensearch.bodies_core import (
     _CLASS_HISTORY_MAPPING,
     _EXCLUSION_MAPPING,
-    CLUSTER_GEOMETRY_MAPPING,
     _region_auto_confirm_mapping,
     _region_boxes_mapping,
 )
+from src.clients.curation_opensearch.cluster_fields import CLUSTER_GEOMETRY_MAPPING
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
