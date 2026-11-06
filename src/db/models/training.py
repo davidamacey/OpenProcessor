@@ -96,7 +96,7 @@ class ModelEngine(Base):
             'trt_version',
             'gpu_arch',
             'build_profile',
-            name='uq_model_engines_triton_model_name_trt_version_gpu_arch_build_profile',
+            name='uq_model_engines_build_key',
         ),
         check('precision', in_list('precision', ENGINE_PRECISIONS)),
         check('build_profile', in_list('build_profile', ENGINE_BUILD_PROFILES)),

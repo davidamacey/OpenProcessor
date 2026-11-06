@@ -25,6 +25,10 @@ _.postprocess  # ultralytics Predictor method replaced on the instance; the fram
 _.intra_op_num_threads  # onnxruntime SessionOptions attribute, read by the runtime
 _.catIds  # pycocotools COCOeval.params attribute, read by the evaluator
 _.connect_unix_socket  # httpcore AsyncNetworkBackend protocol method, called by the connection pool
+_.downgrade  # Alembic calls a revision module's downgrade() by name
+_.down_revision  # Alembic reads the revision module attributes by name
+_.branch_labels  # Alembic reads the revision module attributes by name
+_.depends_on  # Alembic reads the revision module attributes by name
 _.get_col_spec  # SQLAlchemy UserDefinedType hook, called by the DDL compiler
 _.get_next  # onnxruntime CalibrationDataReader protocol, called by the quantizer
 _.rewind  # onnxruntime CalibrationDataReader protocol, called by the quantizer

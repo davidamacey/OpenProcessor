@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import CheckConstraint, text
+from sqlalchemy.dialects.postgresql.base import ischema_names
 from sqlalchemy.types import UserDefinedType
 
 
@@ -32,3 +33,7 @@ def in_list(column: str, values: tuple[str, ...]) -> str:
     """``column IN ('a', 'b')`` for a closed set whose one Python source is the caller's tuple."""
     quoted = ', '.join("'" + v.replace("'", "''") + "'" for v in values)
     return f'{column} IN ({quoted})'
+
+
+# Lets reflection (``alembic check``) recognise the column instead of warning about an unknown type.
+ischema_names['xid8'] = Xid8
