@@ -144,18 +144,6 @@ async def _start_promote(client: Any) -> str:
     return 'started' if created else 'busy'
 
 
-async def _start_assist_loop(client: Any) -> str:
-    from src.core.exceptions import RequestRejectedError
-    from src.services.curation.assist_loop import job
-
-    _widen_check(job, 'live_loop_ids')
-    try:
-        await job.create_loop(client, state={'status': 'queued'}, request={})
-    except RequestRejectedError:
-        return 'busy'
-    return 'started'
-
-
 async def _start_region_job(client: Any, which: str) -> str:
     """The region jobs return a snapshot either way, so a run counts as started when its
     own body ran in this process."""
@@ -195,7 +183,6 @@ STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
     'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
     'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
     'promote': (_start_promote, {'OP_TRAIN_JOBS_DIR': 'train'}),
-    'assist_loop': (_start_assist_loop, {'OP_ASSIST_LOOP_JOBS_DIR': 'loops'}),
     'probe': (_start_probe, {'OP_PROBE_JOBS_DIR': 'probe'}),
     'region_cluster': (_start_region_cluster, {'OP_STATE_DIR': 'state'}),
     'region_fp_centroids': (_start_region_fp_centroids, {'OP_STATE_DIR': 'state'}),

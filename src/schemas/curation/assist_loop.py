@@ -101,6 +101,13 @@ class AssistLoopRequest(BaseModel):
         default=None, description='Required to start; a dry run sizes the loop without one.'
     )
     audit: LoopAudit = Field(default_factory=LoopAudit)
+    on_budget: Literal['pause', 'complete'] = Field(
+        default='pause',
+        description=(
+            "'pause': a reached limit pauses the loop (raise it with the budget route, then "
+            "resume); 'complete': the nodes the budget cannot cover are left unvisited."
+        ),
+    )
     vlm_concurrency: int = Field(default=16, ge=1, le=128)
     node_concurrency: int = Field(default=8, ge=1, le=32)
     dry_run: bool = True
@@ -109,7 +116,16 @@ class AssistLoopRequest(BaseModel):
 # ---------------------------------------------------------------------- the record
 
 LoopStatus = Literal[
-    'dry_run', 'queued', 'running', 'paused', 'completed', 'cancelled', 'failed', 'interrupted'
+    'dry_run',
+    'queued',
+    'running',
+    'paused',
+    'cancelling',
+    'completed',
+    'completed_with_errors',
+    'cancelled',
+    'failed',
+    'interrupted',
 ]
 
 
@@ -165,6 +181,12 @@ class LoopPartition(BaseModel):
     eligible_items: int
 
 
+class LoopUnitBudget(BaseModel):
+    limit: int | None = Field(description='null: uncapped.')
+    reserved: int
+    spent: int
+
+
 class LoopPoolBudget(BaseModel):
     max_crops: int
     max_requests: int
@@ -172,12 +194,59 @@ class LoopPoolBudget(BaseModel):
     crops_reserved: int
     requests_spent: int
     requests_reserved: int
+    prompt_tokens: LoopUnitBudget | None = Field(
+        default=None, description='Reserved as an estimate; spent from the endpoint usage.'
+    )
+    completion_tokens: LoopUnitBudget | None = None
 
 
 class LoopBudgetView(BaseModel):
     vlm: LoopPoolBudget
     audit: LoopPoolBudget | None = None
     wall_s: float
+    max_wall_s: float | None = None
+    usage_missing: int = Field(
+        default=0, description='Answered calls whose response had no usage; charged in full.'
+    )
+
+
+class AssistLoopControl(BaseModel):
+    """What may be done with the loop now; decided by the backend."""
+
+    state: Literal[
+        'queued',
+        'running',
+        'pausing',
+        'paused',
+        'cancelling',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelled',
+        'interrupted',
+    ] = Field(description="'pausing' is a running loop with a pause requested.")
+    can_pause: bool
+    can_resume: bool
+    can_cancel: bool
+    can_edit_budget: bool
+    can_rollback: bool
+    resume_blocked_reason: Literal['project_paused', 'vlm_unavailable'] | None = None
+
+
+class LoopBudgetLimit(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    pool: Literal['vlm', 'audit']
+    unit: Literal['crops', 'requests', 'prompt_tokens', 'completion_tokens', 'wall_s']
+    limit_value: int | None = Field(
+        ge=0, description='null: uncapped (never for the vlm crop limit).'
+    )
+
+
+class AssistLoopBudgetEdit(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    limits: list[LoopBudgetLimit] = Field(min_length=1, max_length=10)
 
 
 class LoopLevel(BaseModel):
@@ -218,10 +287,15 @@ class AssistLoopState(BaseModel):
         default=None,
         description=(
             "'done', 'budget_crops', 'budget_requests' or 'budget_time' (completed); "
-            "'vlm_failed' (failed: every VLM call of a node failed; resumable)."
+            "'vlm_failed' (failed)."
         ),
     )
-    pause_reason: str | None = Field(default=None, description="'user' or 'audit'.")
+    pause_reason: Literal['user', 'audit', 'budget', 'project_paused', 'vlm_unavailable'] | None = (
+        Field(default=None)
+    )
+    control: AssistLoopControl | None = Field(default=None, description='null on a dry run.')
+    iteration: int = 1
+    slices: int = Field(default=0, description='Deliveries of the loop job so far.')
     created_at: str | None = None
     started_at: str | None = None
     finished_at: str | None = None
@@ -302,12 +376,15 @@ class LoopRollbackResponse(BaseModel):
 
 
 __all__ = [
+    'AssistLoopBudgetEdit',
+    'AssistLoopControl',
     'AssistLoopList',
     'AssistLoopRequest',
     'AssistLoopState',
     'LoopAudit',
     'LoopAuditView',
     'LoopBudget',
+    'LoopBudgetLimit',
     'LoopBudgetView',
     'LoopDecision',
     'LoopGate',
@@ -328,6 +405,7 @@ __all__ = [
     'LoopScope',
     'LoopStatus',
     'LoopTotals',
+    'LoopUnitBudget',
     'LoopVlmPin',
     'LoopVote',
 ]

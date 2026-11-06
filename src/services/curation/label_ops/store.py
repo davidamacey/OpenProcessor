@@ -39,6 +39,7 @@ from src.domain.label_ops import (
     OpFingerprint,
     label_fingerprint,
     move_fingerprint,
+    propagated_fingerprint,
 )
 from src.services.rejections import rejection
 from src.utils.timeutil import now_iso
@@ -134,9 +135,10 @@ async def create_op(new: NewLabelOp) -> LabelOpRecord:
     async with async_session_factory()() as session, project_tx(session, project_id):
         op_id = await new_label_operation_id(session)
         at = now_iso()
-        if new.kind == 'label':
+        if new.kind in ('label', 'assist_loop_propagate'):
             assert new.class_name is not None
-            fingerprint = label_fingerprint(
+            make = label_fingerprint if new.kind == 'label' else propagated_fingerprint
+            fingerprint = make(
                 op_id=str(op_id), writer=new.writer, at=at, class_name=new.class_name
             )
         else:

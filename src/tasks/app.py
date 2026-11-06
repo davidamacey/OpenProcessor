@@ -24,6 +24,7 @@ TASK_MODULES = (
     'src.tasks.jobs_b',
     'src.tasks.jobs_c',
     'src.tasks.trigger',
+    'src.tasks.assist_loop',
     'src.tasks.promote',
     'src.tasks.periodic',
     'src.tasks.b4_fanout',

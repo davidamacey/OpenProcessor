@@ -6,7 +6,6 @@ Also the per-crop answers the assist chunk now reports.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -19,9 +18,6 @@ from src.services.curation.assist_loop.evaluate import GateParams, judge
 from src.services.curation.class_write_guard import ClassWriteGuard
 from src.services.curation.vlm_class_batch import class_context
 
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 GATE = GateParams(theta=0.9, alpha=0.05, max_dissent=1)
 REGISTRY = frozenset({'car', 'truck'})
@@ -149,8 +145,8 @@ def test_two_validated_members_are_too_few_to_veto() -> None:
 
 
 @pytest.fixture
-def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
-    w = make_world(tmp_path, monkeypatch)
+def world(monkeypatch: pytest.MonkeyPatch) -> World:
+    w = make_world(monkeypatch)
     w.add_cluster(10001, {'car': 3, 'truck': 2}, prefix='a')
     return w
 

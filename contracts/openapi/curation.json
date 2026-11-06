@@ -647,6 +647,92 @@
         "title": "AssistContext",
         "type": "object"
       },
+      "AssistLoopBudgetEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "limits": {
+            "items": {
+              "$ref": "#/components/schemas/LoopBudgetLimit"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Limits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "limits"
+        ],
+        "title": "AssistLoopBudgetEdit",
+        "type": "object"
+      },
+      "AssistLoopControl": {
+        "description": "What may be done with the loop now; decided by the backend.",
+        "properties": {
+          "can_cancel": {
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_edit_budget": {
+            "title": "Can Edit Budget",
+            "type": "boolean"
+          },
+          "can_pause": {
+            "title": "Can Pause",
+            "type": "boolean"
+          },
+          "can_resume": {
+            "title": "Can Resume",
+            "type": "boolean"
+          },
+          "can_rollback": {
+            "title": "Can Rollback",
+            "type": "boolean"
+          },
+          "resume_blocked_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "project_paused",
+                  "vlm_unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume Blocked Reason"
+          },
+          "state": {
+            "description": "'pausing' is a running loop with a pause requested.",
+            "enum": [
+              "queued",
+              "running",
+              "pausing",
+              "paused",
+              "cancelling",
+              "completed",
+              "completed_with_errors",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "can_pause",
+          "can_resume",
+          "can_cancel",
+          "can_edit_budget",
+          "can_rollback"
+        ],
+        "title": "AssistLoopControl",
+        "type": "object"
+      },
       "AssistLoopList": {
         "properties": {
           "loops": {
@@ -699,6 +785,16 @@
             "minimum": 1.0,
             "title": "Node Concurrency",
             "type": "integer"
+          },
+          "on_budget": {
+            "default": "pause",
+            "description": "'pause': a reached limit pauses the loop (raise it with the budget route, then resume); 'complete': the nodes the budget cannot cover are left unvisited.",
+            "enum": [
+              "pause",
+              "complete"
+            ],
+            "title": "On Budget",
+            "type": "string"
           },
           "prompt_pack": {
             "anyOf": [
@@ -768,6 +864,17 @@
               }
             ]
           },
+          "control": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistLoopControl"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null on a dry run."
+          },
           "created_at": {
             "anyOf": [
               {
@@ -801,6 +908,11 @@
             ],
             "title": "Finished At"
           },
+          "iteration": {
+            "default": 1,
+            "title": "Iteration",
+            "type": "integer"
+          },
           "levels": {
             "items": {
               "$ref": "#/components/schemas/LoopLevel"
@@ -833,13 +945,19 @@
           "pause_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "user",
+                  "audit",
+                  "budget",
+                  "project_paused",
+                  "vlm_unavailable"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "'user' or 'audit'.",
             "title": "Pause Reason"
           },
           "pinned": {
@@ -850,6 +968,12 @@
           },
           "request": {
             "$ref": "#/components/schemas/AssistLoopRequest"
+          },
+          "slices": {
+            "default": 0,
+            "description": "Deliveries of the loop job so far.",
+            "title": "Slices",
+            "type": "integer"
           },
           "started_at": {
             "anyOf": [
@@ -868,7 +992,9 @@
               "queued",
               "running",
               "paused",
+              "cancelling",
               "completed",
+              "completed_with_errors",
               "cancelled",
               "failed",
               "interrupted"
@@ -885,7 +1011,7 @@
                 "type": "null"
               }
             ],
-            "description": "'done', 'budget_crops', 'budget_requests' or 'budget_time' (completed); 'vlm_failed' (failed: every VLM call of a node failed; resumable).",
+            "description": "'done', 'budget_crops', 'budget_requests' or 'budget_time' (completed); 'vlm_failed' (failed).",
             "title": "Stop Reason"
           },
           "totals": {
@@ -6667,6 +6793,8 @@
               "assist_loop_busy",
               "assist_loop_running",
               "assist_loop_not_resumable",
+              "budget_below_spent",
+              "budget_not_editable",
               "no_roots",
               "clustering_running",
               "scope_changed",
@@ -6688,6 +6816,17 @@
             ],
             "title": "Error",
             "type": "string"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
           },
           "hard_limit": {
             "anyOf": [
@@ -6809,6 +6948,17 @@
             ],
             "title": "Owner Project"
           },
+          "pool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool"
+          },
           "project": {
             "anyOf": [
               {
@@ -6855,6 +7005,17 @@
               }
             ],
             "title": "Promote Min Precision"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           },
           "reasons": {
             "anyOf": [
@@ -6939,6 +7100,17 @@
               }
             ],
             "title": "Unbound Class Hotkeys"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
           },
           "unknown_names": {
             "anyOf": [
@@ -16492,6 +16664,50 @@
         "title": "LoopBudget",
         "type": "object"
       },
+      "LoopBudgetLimit": {
+        "additionalProperties": false,
+        "properties": {
+          "limit_value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: uncapped (never for the vlm crop limit).",
+            "title": "Limit Value"
+          },
+          "pool": {
+            "enum": [
+              "vlm",
+              "audit"
+            ],
+            "title": "Pool",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "crops",
+              "requests",
+              "prompt_tokens",
+              "completion_tokens",
+              "wall_s"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pool",
+          "unit",
+          "limit_value"
+        ],
+        "title": "LoopBudgetLimit",
+        "type": "object"
+      },
       "LoopBudgetView": {
         "properties": {
           "audit": {
@@ -16503,6 +16719,23 @@
                 "type": "null"
               }
             ]
+          },
+          "max_wall_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Wall S"
+          },
+          "usage_missing": {
+            "default": 0,
+            "description": "Answered calls whose response had no usage; charged in full.",
+            "title": "Usage Missing",
+            "type": "integer"
           },
           "vlm": {
             "$ref": "#/components/schemas/LoopPoolBudget"
@@ -16971,6 +17204,16 @@
       },
       "LoopPoolBudget": {
         "properties": {
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopUnitBudget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crops_reserved": {
             "title": "Crops Reserved",
             "type": "integer"
@@ -16986,6 +17229,17 @@
           "max_requests": {
             "title": "Max Requests",
             "type": "integer"
+          },
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopUnitBudget"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reserved as an estimate; spent from the endpoint usage."
           },
           "requests_reserved": {
             "title": "Requests Reserved",
@@ -17184,6 +17438,37 @@
           "skipped"
         ],
         "title": "LoopTotals",
+        "type": "object"
+      },
+      "LoopUnitBudget": {
+        "properties": {
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: uncapped.",
+            "title": "Limit"
+          },
+          "reserved": {
+            "title": "Reserved",
+            "type": "integer"
+          },
+          "spent": {
+            "title": "Spent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "limit",
+          "reserved",
+          "spent"
+        ],
+        "title": "LoopUnitBudget",
         "type": "object"
       },
       "LoopVlmPin": {
@@ -37187,13 +37472,13 @@
             }
           },
           {
-            "description": "Only queued and running loops.",
+            "description": "Only queued, running and pausing loops.",
             "in": "query",
             "name": "active",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Only queued and running loops.",
+              "description": "Only queued, running and pausing loops.",
               "title": "Active",
               "type": "boolean"
             }
@@ -37250,6 +37535,22 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -37292,7 +37593,7 @@
     },
     "/curation/projects/{project}/assist/loops/{loop_id}": {
       "get": {
-        "description": "One loop: its status, budget, per-level record, totals and audit. A loop whose worker\ndied reads ``interrupted`` until resumed.",
+        "description": "One loop: its status, budget, per-level record, totals, audit and what may be done\nwith it now (`control`). A loop whose worker died reads `interrupted` until resumed.",
         "operationId": "get_assist_loop_curation_projects__project__assist_loops__loop_id__get",
         "parameters": [
           {
@@ -37342,9 +37643,71 @@
         ]
       }
     },
+    "/curation/projects/{project}/assist/loops/{loop_id}/budget": {
+      "patch": {
+        "description": "Set limits of a queued, running or paused loop. A limit under what is already spent\nplus reserved is 409 `budget_below_spent`; the loop is never resumed by an edit.",
+        "operationId": "edit_assist_loop_budget_curation_projects__project__assist_loops__loop_id__budget_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistLoopBudgetEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistLoopState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Assist Loop Budget",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/assist/loops/{loop_id}/cancel": {
       "post": {
-        "description": "Stop a live loop after the requests in flight; what it wrote stays (roll it back to\nundo). A loop still waiting for the worker is cancelled at once.",
+        "description": "Stop a live loop after the requests in flight; what it wrote stays (roll it back to\nundo). Cancel is final: a stopped loop that should continue is paused, not cancelled. A\nloop still waiting for a worker is cancelled at once. 409 `job_finished` for a loop that\nalready ended.",
         "operationId": "cancel_assist_loop_curation_projects__project__assist_loops__loop_id__cancel_post",
         "parameters": [
           {
@@ -37608,9 +37971,61 @@
         ]
       }
     },
+    "/curation/projects/{project}/assist/loops/{loop_id}/pause": {
+      "post": {
+        "description": "Ask the loop to pause at its next node boundary (`control.state` is `pausing` until\nit does); requests in flight finish. A queued loop pauses at once; a paused one stays\npaused. 409 `job_cancelling` or `job_finished` otherwise.",
+        "operationId": "pause_assist_loop_curation_projects__project__assist_loops__loop_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistLoopState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Assist Loop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/assist/loops/{loop_id}/resume": {
       "post": {
-        "description": "Queue an `interrupted`, `paused` or `cancelled` loop (or a `failed` one with `stop_reason` `vlm_failed`) again; it continues from its\nevent log. 409 `assist_loop_not_resumable` for any other status, `assist_loop_busy` while\nanother loop is live.",
+        "description": "Queue a `paused` or `interrupted` loop again; it continues from its tables. 409\n`resume_blocked` names the reason (`project_paused`, `vlm_unavailable`), `job_busy` while\nanother loop is live, `job_finished` for a loop that ended.",
         "operationId": "resume_assist_loop_curation_projects__project__assist_loops__loop_id__resume_post",
         "parameters": [
           {
@@ -37662,7 +38077,7 @@
     },
     "/curation/projects/{project}/assist/loops/{loop_id}/rollback": {
       "post": {
-        "description": "Restore the items the loop propagated (only those of `node_paths` when given) to the\nclass state before it wrote them. A dry run (the default) counts. An item changed by\nanyone since the loop wrote it, or locked, validated, excluded or in the holdout, is kept\nand counted in `kept_changed`. 409 `assist_loop_running` while the loop is live: cancel it\nfirst.",
+        "description": "Undo the loop's propagations (only those of `node_paths` when given): each is a label\noperation, restored only while the item is as the loop left it. A dry run (the default)\ncounts. An item changed by anyone since, or locked, validated, excluded or in the holdout,\nis kept and counted in `kept_changed`. 409 `assist_loop_running` while the loop is live:\ncancel or pause it first.",
         "operationId": "rollback_assist_loop_curation_projects__project__assist_loops__loop_id__rollback_post",
         "parameters": [
           {

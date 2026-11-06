@@ -16,13 +16,17 @@ again.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.domain.ingest_class_sources import PROPAGATED_CLASS_SOURCE
 from src.services.curation.assist.apply import SAME_SCOPE_JACCARD
-from src.services.curation.assist.apply_write import write_class_to_ids
+from src.services.curation.class_label import class_label_update
+from src.services.curation.class_write_guard import class_state_token, class_write_locked
+from src.services.curation.label_ops.record import recorded_relabel
+from src.services.curation.label_ops.store import NewLabelOp
 
 
 if TYPE_CHECKING:
@@ -33,6 +37,7 @@ if TYPE_CHECKING:
     from src.services.curation.assist.proposal import ClassAnswer
     from src.services.curation.assist_loop.partition import PartitionReader
     from src.services.curation.class_label import ItemLabel
+    from src.services.curation.label_ops.record import Merger
 
 SKIP_REASONS = ('dissent', 'drifted', 'locked', 'token_changed', 'conflicts')
 """Why a member of a passed node was not written."""
@@ -47,6 +52,63 @@ class PropagateResult:
     written_ids: list[str] = field(default_factory=list)
     skipped: dict[str, int] = field(default_factory=dict)
     """``dissent``, ``drifted``, ``locked``, ``token_changed``, ``conflicts``."""
+    label_op_id: str | None = None
+    """The label operation the write was recorded as; ``None`` when nothing was written."""
+
+
+@dataclass
+class _Written:
+    updated_ids: list[str]
+    conflicts: int
+    locked: int
+    changed: int
+    op_id: str | None
+
+
+async def _write_recorded(
+    opensearch: AsyncOpenSearch,
+    ids: list[str],
+    label: ItemLabel,
+    tokens: Mapping[str, tuple[Any, ...]],
+) -> _Written:
+    """:func:`write_class_to_ids`' merge, written as a recorded label operation."""
+    if not ids:
+        return _Written([], 0, 0, 0, None)
+    locked: set[str] = set()
+    changed: set[str] = set()
+
+    def merger_for(op_id: str) -> Merger:
+        tagged = dataclasses.replace(label, op_id=op_id)
+
+        def merge(current: dict[str, Any]) -> dict[str, Any]:
+            crop_id = str(current.get('crop_id', ''))
+            if class_write_locked(current):
+                locked.add(crop_id)
+                return {}
+            if tokens.get(crop_id) != class_state_token(current):
+                changed.add(crop_id)
+                return {}
+            return class_label_update(current, tagged)
+
+        return merge
+
+    op = NewLabelOp(
+        kind='assist_loop_propagate',
+        writer=label.writer,
+        class_name=label.class_name,
+        class_id=label.class_id,
+        target='crop_ids',
+        selected=len(ids),
+    )
+    out = await recorded_relabel(opensearch, ids, op=op, merger_for=merger_for)
+    skipped = locked | changed
+    return _Written(
+        [i for i in out['updated_ids'] if i not in skipped],
+        len(out['conflicts']),
+        len(locked),
+        len(changed),
+        out['op_id'],
+    )
 
 
 async def _written_by(opensearch: AsyncOpenSearch, ids: Sequence[str], run_id: str) -> set[str]:
@@ -87,18 +149,19 @@ async def propagate_node(
     if drift > STALE_DRIFT:
         return PropagateResult(stale=True, drift=round(drift, 4), skipped=skipped)
     ids = [i for i in rest if where.get(i) == root_key]
-    written = await write_class_to_ids(
-        opensearch, ids, label, tokens={i: tokens[i] for i in ids if i in tokens}
+    written = await _write_recorded(
+        opensearch, ids, label, {i: tokens[i] for i in ids if i in tokens}
     )
-    skipped['locked'] = len(written.skipped_locked)
-    skipped['token_changed'] = len(written.skipped_changed)
-    skipped['conflicts'] = len(written.conflicts)
+    skipped['locked'] = written.locked
+    skipped['token_changed'] = written.changed
+    skipped['conflicts'] = written.conflicts
     landed = set(written.updated_ids) | already
     return PropagateResult(
         stale=False,
         drift=round(drift, 4),
         written_ids=[i for i in eligible if i in landed],
         skipped=skipped,
+        label_op_id=written.op_id,
     )
 
 

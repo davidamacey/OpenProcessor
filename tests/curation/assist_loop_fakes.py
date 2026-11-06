@@ -1,6 +1,6 @@
 """Fakes for the auto-label loop tests: a world of clustered items with a ground-truth class
 each, a deterministic VLM whose accuracy is set per class, and a helper that runs one loop
-over them with the real driver, evaluator, writer and job directory.
+over them with the real driver, evaluator and writer, and the loop's record in PostgreSQL.
 
 Nothing here is the code under test: the item store is the query-capable fake OpenSearch and
 the VLM is a labeler object answering from the ground truth.
@@ -11,27 +11,45 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
-import os
+import sys
+import uuid
 from collections.abc import Callable, Mapping
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import psycopg
 from _class_registry_fake import InMemoryRegistry, use_registry
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from curation.query_fakes import QueryFakeOpenSearch
+from src.clients.storage.roots import RootedStore
 from src.config.curation_accessors import base_curation_config
+from src.db import session as db
+from src.db.repos import assist_loop as budget_repo, assist_loop_record as rows
 from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.assist_loop.audit import AuditJudge, Auditor, AuditParams
 from src.services.curation.assist_loop.budget import BudgetLimits, LoopBudget
-from src.services.curation.assist_loop.driver import LoopDeps, LoopOutcome, LoopParams, run_loop
+from src.services.curation.assist_loop.driver import (
+    LoopDeps,
+    LoopOutcome,
+    LoopParams,
+    finish,
+    prepare,
+    schedule,
+)
 from src.services.curation.assist_loop.evaluate import VlmAsker
+from src.services.curation.assist_loop.node_step import RunControl
 from src.services.curation.assist_loop.partition import (
     ClusterFieldPartition,
     PartitionReader,
     PartitionScope,
 )
-from src.services.curation.assist_loop.store import LoopStore
+from src.services.curation.assist_loop.record import LoopRecord
+from src.services.curation.assist_loop.snapshots import SnapshotStore
 from src.services.curation.class_write_guard import ClassWriteGuard
 from src.services.curation.vlm_class_batch import class_context
 from src.services.labeling.vlm_client import VlmIdentity
@@ -40,9 +58,14 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import AsyncIterator
 
     import pytest
+    from fixtures.postgres import PgDatabase
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'db'))
+from _research_seed import make_loop_run, make_project
+
 
 ITEMS = base_curation_config().items_index
 CLASSES = ('car', 'truck', 'bus', 'van', 'tractor')
@@ -71,6 +94,7 @@ class FakeVlm:
         seed: int = 0,
         answers: Mapping[str, str | None] | None = None,
         model: str = 'fake-vlm',
+        usage_per_image: tuple[int, int] | None = None,
     ) -> None:
         self.truth = truth
         self.accuracy = accuracy
@@ -83,6 +107,8 @@ class FakeVlm:
         self.asked: list[str] = []
         self.requests = 0
         self.before_answer: Callable[[list[str]], None] | None = None
+        self.usage_per_image = usage_per_image
+        """``(prompt, completion)`` tokens the fake endpoint reports per image; ``None``: no usage."""
 
     def _accuracy(self, cls: str) -> float:
         if isinstance(self.accuracy, Mapping):
@@ -109,6 +135,21 @@ class FakeVlm:
     ) -> list[VlmClassPrediction]:
         del class_catalog
         ids = [c.img_id for c in crops]
+        if self.usage_per_image is not None:
+            from src.services.labeling.vlm_usage import record_call
+
+            prompt, completion = self.usage_per_image
+            await record_call(
+                endpoint_name='fake',
+                source=None,
+                payload={},
+                response={
+                    'usage': {
+                        'prompt_tokens': prompt * len(ids),
+                        'completion_tokens': completion * len(ids),
+                    }
+                },
+            )
         self.asked.extend(ids)
         self.requests += 1
         if self.before_answer is not None:
@@ -185,22 +226,110 @@ class World:
         return next(c.class_id for c in self.registry.load().classes if c.class_name == name)
 
 
-def make_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
+def make_world(monkeypatch: pytest.MonkeyPatch) -> World:
     """A world whose registry holds :data:`CLASSES`, installed as the bound project's. The
-    job files skip ``fsync``: durability is the store's own test, not these."""
+    label-operation store is its own module's test: here a propagation is the same merge,
+    written without a record."""
+    from src.services.curation.assist_loop import propagate
+    from src.services.curation.crop_bulk import occ_bulk_human_relabel
+
     registry = InMemoryRegistry()
     for name in CLASSES:
         registry.add(name)
     use_registry(registry)
-    monkeypatch.setattr(os, 'fsync', lambda _fd: None)
+
+    async def recorded(opensearch: Any, ids: list[str], *, op: Any, merger_for: Any) -> Any:
+        out = await occ_bulk_human_relabel(
+            opensearch, ids, merger_for(str(uuid.uuid4())), writer_id=op.writer
+        )
+        return {**out, 'op_id': None}
+
+    monkeypatch.setattr(propagate, 'recorded_relabel', recorded)
     return World(registry)
+
+
+SLUG = 'loop-test'
+
+
+@dataclass
+class LoopEnv:
+    """A project, and where a run's blobs go; runs are made with :meth:`new_run`."""
+
+    pg: PgDatabase
+    project: uuid.UUID
+    store: RootedStore
+
+    @classmethod
+    def make(cls, pg: PgDatabase, tmp_path: Path) -> LoopEnv:
+        with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
+            project = make_project(conn, f'loop-{uuid.uuid4().hex[:8]}')
+        return cls(pg, project, RootedStore({'projects': tmp_path}))
+
+    def new_run(
+        self,
+        *,
+        max_crops: int = 100_000,
+        max_requests: int | None = None,
+        max_wall_s: float | None = None,
+        images_per_call: int = 4,
+        vlm_concurrency: int = 4,
+        audit_max_crops: int = 500,
+    ) -> RunRef:
+        """A running job (fencing token 1) with its run and budget rows."""
+        limits = BudgetLimits.from_request(
+            max_vlm_crops=max_crops,
+            max_vlm_requests=max_requests,
+            max_wall_s=max_wall_s,
+            images_per_call=images_per_call,
+            vlm_concurrency=vlm_concurrency,
+            audit_max_crops=audit_max_crops,
+        )
+        with psycopg.connect(self.pg.conninfo('super'), autocommit=True) as conn:
+            run = make_loop_run(conn, self.project)
+            job = conn.execute(
+                'SELECT job_id FROM assist_loop_runs WHERE id = %s', (run,)
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO assist_loop_iterations (run_id, ordinal, status) VALUES (%s, 1, 'open')",
+                (run,),
+            )
+            conn.execute(
+                "UPDATE jobs SET status = 'running', fencing_token = 1, attempt = 1, "
+                "owner = 'test', started_at = now(), heartbeat_at = now(), "
+                "lease_expires_at = now() + interval '1 hour' WHERE id = %s",
+                (job,),
+            )
+        return RunRef(run, job, 1, limits)
+
+    async def sessions_for(self, engine: Any) -> Callable[[], Any]:
+        @asynccontextmanager
+        async def sessions() -> AsyncIterator[AsyncSession]:
+            async with (
+                AsyncSession(engine, expire_on_commit=False) as session,
+                db.project_tx(session, self.project),
+            ):
+                yield session
+
+        return sessions
+
+
+@dataclass
+class RunRef:
+    run_id: uuid.UUID
+    job_id: uuid.UUID
+    token: int
+    limits: BudgetLimits
+    cancel: bool = False
+    pause: bool = False
+    seeded: bool = False
 
 
 @dataclass
 class Run:
     outcome: LoopOutcome
-    store: LoopStore
+    record: LoopRecord
     budget: LoopBudget
+    ref: RunRef
 
 
 def loop_params(**over: Any) -> LoopParams:
@@ -214,44 +343,32 @@ def loop_params(**over: Any) -> LoopParams:
         'min_node_size': 40,
         'node_concurrency': 4,
         'images_per_call': 4,
+        'on_budget': 'complete',
     }
     options.update(over)
     return LoopParams(**options)
 
 
-async def drive(
+async def noop_progress(*_a: Any) -> None:
+    return None
+
+
+async def build_deps(
     world: World,
-    directory: Path,
     vlm: FakeVlm,
+    lp: LoopParams,
+    record: LoopRecord,
+    budget: LoopBudget,
     *,
-    max_crops: int = 100_000,
-    max_requests: int | None = None,
-    max_wall_s: float | None = None,
     vlm_concurrency: int = 4,
-    scope: PartitionScope | None = None,
-    clock: Callable[[], float] | None = None,
-    store: LoopStore | None = None,
     reader: PartitionReader | None = None,
     audit: AuditParams | None = None,
     judge: FakeVlm | None = None,
-    audit_max_crops: int = 500,
-    **params: Any,
-) -> Run:
-    """Run one loop (or resume the one in ``directory``) to its end."""
-    store = store or LoopStore(directory)
-    lp = loop_params(**params)
-    limits = BudgetLimits.from_request(
-        max_vlm_crops=max_crops,
-        max_vlm_requests=max_requests,
-        max_wall_s=max_wall_s,
-        images_per_call=lp.images_per_call,
-        vlm_concurrency=vlm_concurrency,
-        audit_max_crops=audit_max_crops,
-    )
-    budget = LoopBudget(store, limits, **({'clock': clock} if clock else {}))
+) -> LoopDeps:
+    """The loop's dependencies over the fake world and the fake VLMs."""
     ctx = await class_context(vlm, ClassWriteGuard('assist_run'), revision=None)
     meta = RunMeta(
-        run_id=store.loop_id,
+        run_id=record.loop_id,
         created_at=CREATED_AT,
         vlm_endpoint=vlm.identity.endpoint_ref,
         vlm_model=vlm.identity.model,
@@ -271,7 +388,7 @@ async def drive(
     )
     if audit is not None and judge is not None:
         deps.auditor = Auditor(
-            store,
+            record,
             budget,
             AuditJudge(
                 world.os,  # type: ignore[arg-type]
@@ -282,36 +399,162 @@ async def drive(
             audit,
             seed=lp.seed,
         )
-    outcome = await run_loop(
-        store, lp, deps, budget, scope or PartitionScope(cluster_ids=None, min_root_size=40)
+    return deps
+
+
+async def drive(
+    world: World,
+    env: LoopEnv,
+    vlm: FakeVlm,
+    *,
+    ref: RunRef | None = None,
+    max_crops: int = 100_000,
+    max_requests: int | None = None,
+    max_wall_s: float | None = None,
+    vlm_concurrency: int = 4,
+    scope: PartitionScope | None = None,
+    clock: Callable[[], float] | None = None,
+    reader: PartitionReader | None = None,
+    audit: AuditParams | None = None,
+    judge: FakeVlm | None = None,
+    audit_max_crops: int = 500,
+    slice_due: Callable[[], bool] | None = None,
+    arm: Callable[[LoopRecord], None] | None = None,
+    **params: Any,
+) -> Run:
+    """Run one slice of a loop (a new one, or ``ref``'s) to its stop."""
+    lp = loop_params(**params)
+    ref = ref or env.new_run(
+        max_crops=max_crops,
+        max_requests=max_requests,
+        max_wall_s=max_wall_s,
+        images_per_call=lp.images_per_call,
+        vlm_concurrency=vlm_concurrency,
+        audit_max_crops=audit_max_crops,
     )
-    return Run(outcome, store, budget)
+    engine = create_async_engine(env.pg.url('app'), poolclass=NullPool)
+    try:
+        sessions = await env.sessions_for(engine)
+        async with sessions() as session:
+            row = await session.run_sync(lambda s: rows.run_by_id(s, ref.run_id))
+            if not ref.seeded:
+                await session.run_sync(
+                    lambda s: budget_repo.seed_budgets(s, ref.run_id, ref.limits.seed())
+                )
+                ref.seeded = True
+        assert row is not None
+        row = replace_run(row, seed=lp.seed)
+        record = LoopRecord(
+            sessions,
+            row,
+            token=ref.token,
+            snapshots=SnapshotStore(SLUG, ref.run_id, store=env.store),
+        )
+        if arm is not None:
+            arm(record)
+        budget = LoopBudget(record, **({'clock': clock} if clock else {}))
+        await budget.start_slice()
+        deps = await build_deps(
+            world,
+            vlm,
+            lp,
+            record,
+            budget,
+            vlm_concurrency=vlm_concurrency,
+            reader=reader,
+            audit=audit,
+            judge=judge,
+        )
+        control = RunControl(
+            cancelled=lambda: ref.cancel,
+            paused=lambda: ref.pause,
+            slice_due=slice_due or (lambda: False),
+            progress=noop_progress,
+        )
+        loop_run = await prepare(
+            record,
+            lp,
+            deps,
+            budget,
+            scope or PartitionScope(cluster_ids=None, min_root_size=40),
+            control,
+        )
+        outcome = await schedule(loop_run)
+        await finish(loop_run, outcome)
+        return Run(outcome, record, budget, ref)
+    finally:
+        await engine.dispose()
 
 
-def decisions(store: LoopStore) -> dict[str, str]:
+def replace_run(row: rows.RunRow, **over: Any) -> rows.RunRow:
+    import dataclasses
+
+    return dataclasses.replace(row, **over)
+
+
+def decisions(record: LoopRecord) -> dict[str, str]:
     """Final decision kind per node path."""
-    out: dict[str, str] = {}
-    for event in store.events():
-        if event['event'] == 'decision':
-            out[event['path']] = event['kind']
-    return out
-
-
-def propagated_ids(store: LoopStore) -> dict[str, list[str]]:
     return {
-        e['path']: sorted(e['written_ids']) for e in store.events() if e['event'] == 'propagated'
+        path: node.decision['kind']
+        for path, node in record.tree.nodes.items()
+        if node.decision is not None and node.step == 'done'
+    }
+
+
+async def reload(env: LoopEnv, ref: RunRef) -> LoopRecord:
+    """A fresh record over the run's rows, as a new slice would load them."""
+    engine = create_async_engine(env.pg.url('app'), poolclass=NullPool)
+    try:
+        sessions = await env.sessions_for(engine)
+        async with sessions() as session:
+            row = await session.run_sync(lambda s: rows.run_by_id(s, ref.run_id))
+        assert row is not None
+        record = LoopRecord(
+            sessions,
+            row,
+            token=ref.token,
+            snapshots=SnapshotStore(SLUG, ref.run_id, store=env.store),
+        )
+        await record.load()
+        return record
+    finally:
+        await engine.dispose()
+
+
+def propagated_ids(record: LoopRecord) -> dict[str, list[str]]:
+    import asyncio as _a
+
+    return {
+        path: sorted(_a.run(record.written_ids(node)))
+        for path, node in record.tree.nodes.items()
+        if node.propagated is not None
     }
 
 
 class Killed(BaseException):
-    """The process died: nothing after this point reaches the disk or the item store."""
+    """The process died: nothing after this point reaches the tables or the item store."""
 
 
 class KillSwitch:
-    """Kills the loop at the ``occurrence``-th ``event`` (``when`` it is appended: just
-    ``before`` or just ``after``). From then on every write to the job directory and the
-    item store raises :class:`Killed`, like a dead process; reads still work so the test
-    can look."""
+    """Kills the loop at the ``occurrence``-th call of the record method ``event`` (``when`` it
+    is made: just ``before`` or just ``after`` its rows are committed). From then on every
+    write to the tables and the item store raises :class:`Killed`, like a dead process."""
+
+    WRITES = (
+        'admit',
+        'select',
+        'record_answers',
+        'forget_failed',
+        'decide',
+        'gate_pass',
+        'begin_propagate',
+        'finish_propagate',
+        'split',
+        'record_audit_chunk',
+        'set_audit',
+        'save_counts',
+        'pin_roots',
+    )
 
     def __init__(self, event: str, occurrence: int, when: str = 'after') -> None:
         self.event = event
@@ -331,27 +574,25 @@ class KillSwitch:
                 self.tripped = True
                 raise Killed
 
-    def arm(self, store: LoopStore, os_fake: QueryFakeOpenSearch) -> None:
-        real_append = store.append
-        real_json = store.write_json
-        real_members = store.write_node_members
+    def arm_record(self, record: LoopRecord) -> None:
+        for name in self.WRITES:
+            real = getattr(record, name)
+
+            def wrapped(*a: Any, _real: Any = real, _name: str = name, **kw: Any) -> Any:
+                async def run() -> Any:
+                    self._check()
+                    self._count(_name, 'before')
+                    out = await _real(*a, **kw)
+                    self._count(_name, 'after')
+                    return out
+
+                return run()
+
+            setattr(record, name, wrapped)
+
+    def arm_os(self, os_fake: QueryFakeOpenSearch) -> None:
         real_bulk = os_fake.bulk
         real_update = os_fake.update
-
-        def append(kind: str, /, **fields: Any) -> dict[str, Any]:
-            self._check()
-            self._count(kind, 'before')
-            event = real_append(kind, **fields)
-            self._count(kind, 'after')
-            return event
-
-        def write_json(name: str, value: Any) -> None:
-            self._check()
-            real_json(name, value)
-
-        def write_members(path: str, ids: Any) -> str:
-            self._check()
-            return real_members(path, ids)
 
         async def bulk(**kw: Any) -> dict[str, Any]:
             self._check()
@@ -361,9 +602,6 @@ class KillSwitch:
             self._check()
             return await real_update(**kw)
 
-        store.append = append  # type: ignore[method-assign]
-        store.write_json = write_json  # type: ignore[method-assign]
-        store.write_node_members = write_members  # type: ignore[method-assign]
         os_fake.bulk = bulk  # type: ignore[method-assign]
         os_fake.update = update  # type: ignore[method-assign]
         self._restore = (os_fake, real_bulk, real_update)
@@ -386,3 +624,15 @@ def without_times(value: Any) -> Any:
     if isinstance(value, list):
         return [without_times(v) for v in value]
     return value
+
+
+def counts_of(env: LoopEnv, run: Run) -> dict[str, Any]:
+    """The iteration row's counts (the per-level rows and totals the status routes serve)."""
+    import psycopg
+
+    with psycopg.connect(env.pg.conninfo('super'), autocommit=True) as conn:
+        found = conn.execute(
+            'SELECT counts FROM assist_loop_iterations WHERE run_id = %s', (run.ref.run_id,)
+        ).fetchone()
+    assert found is not None
+    return dict(found[0])

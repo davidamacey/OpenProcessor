@@ -3,10 +3,6 @@
 from __future__ import annotations
 
 
-STOP_REASON = 'vlm_failed'
-"""``stop_reason`` of a loop that stopped because every call of a step failed."""
-
-
 class VlmFailedError(RuntimeError):
     """Every VLM call of a step failed (endpoint down, unknown model, rejected request).
 

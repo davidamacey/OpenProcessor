@@ -215,3 +215,11 @@ def _ingest_test_detector_labels(monkeypatch: pytest.MonkeyPatch) -> None:
         return {0: 'gadget', 1: 'widget'} if model_name == 'primary_end2end' else real(model_name)
 
     monkeypatch.setattr(ingest_profiles, 'get_class_names', names_for)
+
+
+@pytest.fixture
+def loop_env(pg: Any, tmp_path: Any, captured_events: Any) -> Any:
+    """A project in the test database for the assist loop, with blobs under ``tmp_path``."""
+    from curation.assist_loop_fakes import LoopEnv
+
+    return LoopEnv.make(pg, tmp_path)
