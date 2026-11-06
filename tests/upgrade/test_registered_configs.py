@@ -28,7 +28,7 @@ async def test_a_builtin_pack_and_the_env_region_profile_load_as_stored_revision
         'FROM config_activations a JOIN projects p ON p.id = a.project_id '
         'JOIN config_documents d ON d.id = a.config_id '
         'JOIN config_revisions r ON r.config_id = d.id AND r.revision = a.revision '
-        "WHERE p.slug = 'lean' ORDER BY a.axis",
+        "WHERE p.slug = 'lean' AND a.axis <> 'near_dup' ORDER BY a.axis",
     )
     pack = registered_for('prompt_pack', GENERIC_REGION_PACK.name)
     profile = registered_for('detection_profile', 'region')
@@ -44,7 +44,7 @@ async def test_a_builtin_pack_and_the_env_region_profile_load_as_stored_revision
     assert rows(
         clean_db,
         'SELECT e.axis, e.to_revision FROM config_activation_events e JOIN projects p ON p.id = e.project_id '
-        "WHERE p.slug = 'lean' ORDER BY e.axis",
+        "WHERE p.slug = 'lean' AND e.axis <> 'near_dup' ORDER BY e.axis",
     ) == [('detection_profile', 1), ('prompt_pack', 1)]
 
 

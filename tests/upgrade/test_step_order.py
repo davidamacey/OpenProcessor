@@ -13,7 +13,7 @@ pytestmark = pytest.mark.db
 
 def test_the_steps_are_discovered_in_order() -> None:
     names = [steps.step_name(m) for m in steps.discover()]
-    assert names == ['serving_profile', 'embedding_spaces', 'legacy_repair']
+    assert names == ['serving_profile', 'embedding_spaces', 'legacy_repair', 'near_duplicates']
     orders = [m.ORDER for m in steps.discover()]
     assert orders == sorted(orders)
 
@@ -39,7 +39,12 @@ async def test_the_steps_ran_in_order_and_a_second_load_adds_nothing_new(
     make_runner, clean_db
 ) -> None:
     result = await make_runner().run()
-    assert result.steps_run == ['serving_profile', 'embedding_spaces', 'legacy_repair']
+    assert result.steps_run == [
+        'serving_profile',
+        'embedding_spaces',
+        'legacy_repair',
+        'near_duplicates',
+    ]
     # idempotent: the second run is refused by the gate, and the rows stay one set
     with clean_db.engine('super').connect() as conn:
         spaces = conn.execute(text('SELECT count(*) FROM embedding_spaces')).scalar_one()
