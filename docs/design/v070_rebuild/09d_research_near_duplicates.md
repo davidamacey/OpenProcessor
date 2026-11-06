@@ -782,6 +782,18 @@ equal bars.
 
 ---
 
+**PW-1 outcomes (2026-11-06; [results](../../research/near_duplicate_detection.md)).** About 0.5 GPU hours with
+tier 2. P0: product-engine parity passes (PE median cosine 0.99992). P1 tier 1 chose PE 0.925 and core 0.965
+(single linkage) on every split; tier 2 through the live core route confirms **core 0.965 (score 0.9825)** on
+the point estimate (copy recall 0.905 against 0.563 at 0.98, no mixed group in 357) and does **not** confirm PE
+0.925 (JPEG q60 recall 0.896, bar 0.90). Lane ND-A therefore seeds `near_dup_profile` with core 0.965 (labelled
+"tier 2, point estimate") and keeps PE at 0.98; 0.92 for PE is a post-tag RW-4 run. Crop level, leak cut and `k`
+stay at today's values. P2: no hash tier (PDQ costs 12.8 ms per 640 px image against a 1.4 ms allowance);
+SHA-256 at about 319 MB/s single thread. Tier 2 also showed that today's core route groups copies far worse than
+its own vectors allow (the stored group ties a q60 copy to its original 3 % of the time, exact grouping on the
+same vectors 61 %): the per-batch approximate assignment over an unrefreshed batch, which ND-C's single-writer
+grouping job replaces.
+
 ## 7. Production design
 
 ### 7.1 Flow
