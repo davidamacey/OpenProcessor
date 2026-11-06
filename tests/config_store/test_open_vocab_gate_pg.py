@@ -9,7 +9,7 @@ from src.services.curation.open_vocab_gate import load_tracker, save_tracker
 from src.services.detection.segmenter_gate import HitRateTracker
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture(scope='module', autouse=True)

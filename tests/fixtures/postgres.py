@@ -17,6 +17,7 @@ import itertools
 import os
 import re
 import tempfile
+import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from sqlalchemy.engine import Engine
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 # The image and digest of the Postgres service in docker-compose.yml.
 POSTGRES_IMAGE = (
@@ -48,6 +50,9 @@ _PASSWORDS = {
     'super': 'op-test-super-password',
 }
 _CONNECT_TIMEOUT_S = 5
+# Database names carry this per-process token: two sessions on one shared server (OP_TEST_DATABASE_URL)
+# must not drop each other's template or collide on a copy.
+_RUN_ID = uuid.uuid4().hex[:8]
 
 
 class DatabaseUnavailable(RuntimeError):  # noqa: N818  # named for the condition, not as an error class
@@ -244,7 +249,7 @@ def _settings_for(server: PgServer, dbname: str, secrets: Path) -> DatabaseSetti
 @pytest.fixture(scope='session')
 def _pg_template(pg_server: PgServer) -> Iterator[tuple[PgServer, str, Path]]:
     worker = os.environ.get('PYTEST_XDIST_WORKER', 'main')
-    template = f'op_template_{worker}'
+    template = f'op_template_{_RUN_ID}_{worker}'
     with tempfile.TemporaryDirectory(prefix='op-pg-secrets-') as raw:
         secrets = Path(raw)
         _run_as_super(
@@ -270,7 +275,7 @@ def pg(_pg_template: tuple[PgServer, str, Path]) -> Iterator[PgDatabase]:
     """A fresh copy of the migrated template for one test module."""
     server, template, secrets = _pg_template
     worker = os.environ.get('PYTEST_XDIST_WORKER', 'main')
-    name = f'op_t_{worker}_{next(_counter)}'
+    name = f'op_t_{_RUN_ID}_{worker}_{next(_counter)}'
     _run_as_super(
         server,
         sql.SQL('CREATE DATABASE {} TEMPLATE {}').format(
@@ -301,13 +306,55 @@ def two_sessions(pg: PgDatabase) -> Iterator[tuple[Session, Session]]:
 
 @pytest.fixture
 def pg_env(pg: PgDatabase, monkeypatch: pytest.MonkeyPatch) -> Iterator[PgDatabase]:
-    """Point this process's settings at ``pg`` and drop the engines a test built."""
+    """Point this process's settings at ``pg`` and drop the engines a test built.
+
+    It sets no ``WEB_CONCURRENCY``: only the API has one, so a test that exercises the API engine
+    sets it itself and a test that calls a service binds ``bound_async_engine``.
+    """
     from src.db import engine as db_engine
 
     for name, value in pg.environ().items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setenv('WEB_CONCURRENCY', '4')
     yield pg
     for engine in list(db_engine._engines.values()):  # test-only cache reset
         (engine.sync_engine if hasattr(engine, 'sync_engine') else engine).dispose()
     db_engine._engines.clear()
+
+
+@pytest.fixture
+def bound_async_engine(pg_env: PgDatabase) -> Iterator[AsyncEngine]:
+    """The engine a worker's entry point binds, for a test that calls a service directly.
+
+    ``NullPool``, so a test that runs several event loops never reuses a connection from a
+    closed one.
+    """
+    from src.db import engine as db_engine
+
+    engine = db_engine.new_task_async_engine('op-test')
+    with db_engine.bind_async_engine(engine):
+        yield engine
+    engine.sync_engine.dispose()
+
+
+@pytest.fixture
+def api_async_engine(pg_env: PgDatabase, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test double for the API's request-path engine, for tests that drive the app.
+
+    ``TestClient`` and ``ASGITransport`` run the app on a portal thread or loop that does not
+    inherit the test's bound engine, so the app reaches ``get_async_engine``. The double is a
+    ``NullPool`` engine (no ``WEB_CONCURRENCY`` needed, no connection reused across the test's
+    several event loops). A test of the real API pool sets ``WEB_CONCURRENCY`` and uses
+    ``get_async_engine`` itself.
+    """
+    from src.db import engine as db_engine
+
+    monkeypatch.setattr(
+        db_engine, 'get_async_engine', lambda: db_engine.new_task_async_engine('op-test-api')
+    )
+
+
+@pytest.fixture
+def api_worker_env(pg_env: PgDatabase, monkeypatch: pytest.MonkeyPatch) -> PgDatabase:
+    """The environment of an API worker (``WEB_CONCURRENCY``), for a test of the real API engine."""
+    monkeypatch.setenv('WEB_CONCURRENCY', '4')
+    return pg_env

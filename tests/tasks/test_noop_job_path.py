@@ -13,7 +13,7 @@ from src.db.session import async_session_factory
 from src.services.jobs.service import start_job
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture

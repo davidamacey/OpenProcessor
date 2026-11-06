@@ -57,6 +57,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from src.config import get_curation_config
+from src.db.engine import run_with_engine
 from src.services.classes.registry import get_class_registry
 from src.services.curation.registry_reclassify import (
     UnmatchedLabelSource,
@@ -135,7 +136,7 @@ def main() -> int:
         p.error('--page-size must be positive')
     if args.start_after and args.label_prefix and len(args.label_prefix) > 1:
         p.error('--start-after resumes a single --label-prefix run')
-    return asyncio.run(_async_main(args))
+    return asyncio.run(run_with_engine(_async_main(args), 'op-reclassify-after-registry-growth'))
 
 
 if __name__ == '__main__':

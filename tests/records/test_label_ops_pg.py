@@ -11,7 +11,6 @@ from _seed import make_project
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 
-from src.db.engine import get_async_engine
 from src.db.repos.records import (
     MEMBER_BATCH,
     LabelOperationLoad,
@@ -30,7 +29,7 @@ from src.db.repos.records import (
 from src.db.session import async_session_factory, deployment_tx, project_tx
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 _MEMBER_INSERT = re.compile(r'INSERT INTO label_operation_members', re.IGNORECASE)
 
@@ -54,9 +53,9 @@ class _Inserts:
 
 
 @pytest.fixture
-def inserts(pg_env):
+def inserts(bound_async_engine):
     counter = _Inserts()
-    sync_engine = get_async_engine().sync_engine
+    sync_engine = bound_async_engine.sync_engine
     event.listen(sync_engine, 'before_cursor_execute', counter)
     yield counter
     event.remove(sync_engine, 'before_cursor_execute', counter)

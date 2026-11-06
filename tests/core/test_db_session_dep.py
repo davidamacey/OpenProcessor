@@ -18,7 +18,7 @@ from src.db.session import deployment_tx
 if typing.TYPE_CHECKING:
     from fixtures.postgres import PgDatabase
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('api_worker_env')]
 
 
 def test_the_dependency_is_declared_with_function_scope() -> None:

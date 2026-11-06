@@ -14,7 +14,7 @@ from src.services.classes import registry as registry_module
 from src.services.classes.registry import ClassRegistry
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture

@@ -53,6 +53,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.config.region_state import RegionStatus  # noqa: E402 - needs the sys.path fix above
+from src.db.engine import run_with_engine  # noqa: E402  # import follows the sys.path setup above
 from src.services.curation.region_class import ensure_region_class  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.guard import make_script_opensearch  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.script_binding import add_project_argument, bind_script_project  # noqa: E402 - needs the sys.path fix above
@@ -511,7 +512,7 @@ def main() -> int:
         from src.config import get_curation_config
 
         args.source_root = str(get_curation_config().source_root)
-    return asyncio.run(_seed(args))
+    return asyncio.run(run_with_engine(_seed(args), 'op-seed-live-harness'))
 
 
 if __name__ == '__main__':

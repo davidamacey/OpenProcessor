@@ -12,7 +12,7 @@ from src.db.repos import events as repo
 from src.db.session import async_session_factory, project_tx
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture(scope='module')

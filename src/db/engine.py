@@ -11,10 +11,19 @@ a thread or outside the loop (claim, heartbeat, terminal write) uses the child's
 In the API process request code uses the async engine, and the 1 s and 5 s polls use their own
 one-connection sync engine so they never queue behind requests. An async session is never
 handed to a thread and a sync connection is never used from the loop.
+
+``async_session_factory`` is how services reach the async engine, and it follows
+``current_async_engine``: the engine bound to the running context by ``bind_async_engine``,
+else the API engine. A process that is not the API (the job runtime, a worker, a script, the
+migrate step) binds its own engine before it starts any task: ``run_with_engine`` for a
+worker, a script or a one-shot step. Python copies the current context
+into every task it creates (https://docs.python.org/3/library/contextvars.html), so a binding
+made around a handler or an entry coroutine reaches everything that coroutine awaits or spawns.
 """
 
 from __future__ import annotations
 
+import contextvars
 import os
 import threading
 from contextlib import contextmanager
@@ -29,7 +38,7 @@ from src.config.database import DatabaseSettings
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Awaitable, Callable, Iterator
 
     from sqlalchemy.engine import Connection, Engine
     from sqlalchemy.ext.asyncio import AsyncEngine
@@ -41,9 +50,14 @@ POOL_RECYCLE_S = 1800
 JOB_STATEMENT_TIMEOUT = '30min'
 JOB_LOCK_TIMEOUT = '30s'
 CHILD_POOL_SIZE = 2
+# A worker that shares its two connections among concurrent coroutines waits longer than a request.
+WORKER_POOL_TIMEOUT_S = 30
 
 _lock = threading.Lock()
 _engines: dict[tuple[str, int], Any] = {}
+_bound_async_engine: contextvars.ContextVar[AsyncEngine | None] = contextvars.ContextVar(
+    'op_db_async_engine', default=None
+)
 
 
 def database_url(
@@ -113,6 +127,26 @@ def get_async_engine() -> AsyncEngine:
     return _cached('async', build)
 
 
+@contextmanager
+def bind_async_engine(engine: AsyncEngine) -> Iterator[AsyncEngine]:
+    """Make ``engine`` the one ``async_session_factory`` uses inside this block.
+
+    The caller owns the engine and disposes it. The binding is a context variable, so it is
+    seen by this coroutine and by every task created while it is set.
+    """
+    token = _bound_async_engine.set(engine)
+    try:
+        yield engine
+    finally:
+        _bound_async_engine.reset(token)
+
+
+def current_async_engine() -> AsyncEngine:
+    """The bound engine, else the API request-path engine (which fails closed off the API)."""
+    bound = _bound_async_engine.get()
+    return bound if bound is not None else get_async_engine()
+
+
 def get_poll_engine() -> Engine:
     """One connection for the API's registry and config polls, apart from the request pool."""
 
@@ -150,6 +184,41 @@ def new_task_async_engine(application_name: str | None = None) -> AsyncEngine:
         poolclass=pool.NullPool,
         pool_pre_ping=True,
     )
+
+
+def new_worker_async_engine(application_name: str) -> AsyncEngine:
+    """A small bounded async pool for a long-running worker or script (``pool_size=2``).
+
+    The caller binds it with ``bind_async_engine`` and disposes it; ``run_with_engine`` does both.
+    """
+    settings = DatabaseSettings.from_env()
+    return create_async_engine(
+        database_url(settings, application_name=f'{application_name}-{os.getpid()}'),
+        connect_args=_connect_args(settings, job_limits=True),
+        **_pool_options(CHILD_POOL_SIZE, timeout=WORKER_POOL_TIMEOUT_S),
+    )
+
+
+async def run_with_engine[T](
+    awaitable: Awaitable[T], application_name: str, *, one_shot: bool = False
+) -> T:
+    """Await ``awaitable`` with its own engine bound, then dispose the engine.
+
+    The entry point of every process that is not the API wraps its coroutine in this:
+    ``asyncio.run(run_with_engine(main(), 'op-name'))``. The binding is made inside the loop's
+    root task, so every task the coroutine creates inherits it. ``one_shot`` (migrate, verify)
+    uses a ``NullPool`` engine that holds no idle connection; otherwise a pool of two.
+    """
+    engine = (
+        new_task_async_engine(application_name)
+        if one_shot
+        else new_worker_async_engine(application_name)
+    )
+    try:
+        with bind_async_engine(engine):
+            return await awaitable
+    finally:
+        await engine.dispose()
 
 
 @contextmanager
@@ -200,11 +269,15 @@ async def dispose_engines() -> None:
 
 
 __all__ = [
+    'bind_async_engine',
+    'current_async_engine',
     'dispose_engines',
     'dispose_inherited_engines',
     'get_async_engine',
     'get_poll_engine',
     'get_sync_engine',
     'new_task_async_engine',
+    'new_worker_async_engine',
     'one_off_connection',
+    'run_with_engine',
 ]

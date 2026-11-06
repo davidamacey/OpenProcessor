@@ -12,7 +12,7 @@ from src.services.events.listener import Overflow
 from src.services.events.publish import GLOBAL, apublish
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.mark.asyncio

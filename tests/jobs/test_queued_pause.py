@@ -12,7 +12,7 @@ from src.services.jobs.service import pause_job, resume_job, start_job
 from src.tasks.runtime.job_task import run_job
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 async def run(fn, *args, **kwargs):

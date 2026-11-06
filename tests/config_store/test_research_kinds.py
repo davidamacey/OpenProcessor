@@ -16,7 +16,7 @@ from src.db.session import async_session_factory, deployment_tx, project_tx
 from src.schemas.curation.research_config import AssistLoopPresetBody, ServingProfileBody
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine', 'api_async_engine')]
 
 SERVING: dict[str, Any] = {
     'servers': [

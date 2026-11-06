@@ -14,7 +14,7 @@ from sqlalchemy import text
 from src.db import engine as db_engine
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('api_worker_env')]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

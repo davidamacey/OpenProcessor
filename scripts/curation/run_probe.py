@@ -49,6 +49,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from src.config import get_curation_config
+from src.db.engine import run_with_engine
 from src.services.curation.probe_models import PROBE_ARCHITECTURES
 from src.services.curation.probe_predictions import count_probe_candidates, run_probe_inference
 from src.services.projects.guard import make_script_opensearch
@@ -160,7 +161,7 @@ def main() -> int:
     bind_script_project(args.project)
     if args.page_size <= 0:
         p.error('--page-size must be positive')
-    return asyncio.run(_async_main(args))
+    return asyncio.run(run_with_engine(_async_main(args), 'op-run-probe'))
 
 
 if __name__ == '__main__':

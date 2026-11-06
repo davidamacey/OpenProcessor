@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from src.services.events.listener import EventListener
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 def _app(listener: EventListener) -> FastAPI:

@@ -54,6 +54,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src.clients.occ import is_locked_class, occ_skip_on_conflict_bulk
 from src.config.curation_accessors import items_index
+from src.db.engine import run_with_engine
 from src.domain.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.projects.guard import make_script_opensearch
@@ -233,7 +234,11 @@ def main() -> int:
     add_project_argument(p)
     args = p.parse_args()
     bind_script_project(args.project)
-    return asyncio.run(_run(args.opensearch_url, apply=args.apply))
+    return asyncio.run(
+        run_with_engine(
+            _run(args.opensearch_url, apply=args.apply), 'op-revert-class-cluster-promotions'
+        )
+    )
 
 
 if __name__ == '__main__':

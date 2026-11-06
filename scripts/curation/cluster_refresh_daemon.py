@@ -64,6 +64,7 @@ from scripts.curation._project_worker_utils import (
 )
 from src.config.env import env_bool, env_int
 from src.config.project_context import bind_project
+from src.db.engine import run_with_engine
 from src.services.curation.clustering.refresh_schedule import (
     ACTIVE_JOB_STATUSES,
     Action,
@@ -516,7 +517,7 @@ def main() -> int:
     if args.project:
         # Fails fast on an unknown/unbindable slug.
         bind_script_project(args.project)
-    return asyncio.run(run(args))
+    return asyncio.run(run_with_engine(run(args), 'op-cluster-refresh-daemon'))
 
 
 if __name__ == '__main__':

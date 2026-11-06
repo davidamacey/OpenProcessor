@@ -48,6 +48,7 @@ if str(_REPO_ROOT) not in sys.path:
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool_core import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
+from src.db.engine import run_with_engine
 from src.domain.region_boxes import box_query
 from src.services.curation.region_box_embeddings import EMBEDDED_BOX_STATES, missing_boxes
 from src.services.curation.reprocess_embed import EmbedTarget, reembed_items
@@ -181,7 +182,10 @@ def main() -> int:
     args = p.parse_args()
     bind_script_project(args.project)
     return asyncio.run(
-        _run(args.opensearch_url, args.triton_url, apply=args.apply, max_docs=args.max_docs)
+        run_with_engine(
+            _run(args.opensearch_url, args.triton_url, apply=args.apply, max_docs=args.max_docs),
+            'op-backfill-region-embeddings',
+        )
     )
 
 

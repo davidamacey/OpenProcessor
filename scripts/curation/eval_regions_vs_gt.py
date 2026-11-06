@@ -81,6 +81,7 @@ from scripts.curation._project_worker_utils import curation_api_prefix, scoped_u
 from scripts.curation.ingest_upload import map_identifier, parse_path_map
 from scripts.curation.yolo_dataset import DatasetError, discover, label_path_for
 from src.config import RegionStatus, get_curation_config, get_region_fields
+from src.db.engine import run_with_engine
 from src.services.curation.region_eval import DEFAULT_ACCEPTED_STATUSES, EvalResult, run_eval
 from src.services.curation.region_eval_data import CohortImage
 from src.services.curation.region_eval_geometry import RegionFrameError, parse_yolo_labels
@@ -468,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
     pos = sum(1 for c in cohort if c.positive)
     logger.info('cohort: %d frames (%d with GT regions, %d background)', len(cohort), pos,
                 len(cohort) - pos)  # fmt: skip
-    return asyncio.run(_async_main(args, cohort))
+    return asyncio.run(run_with_engine(_async_main(args, cohort), 'op-eval-regions-vs-gt'))
 
 
 if __name__ == '__main__':

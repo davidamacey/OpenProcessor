@@ -13,7 +13,7 @@ from src.services.curation.clustering import refresh_state_store, umap_state
 from src.services.curation.policy_doc_store import PolicyConflictError
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture(scope='module', autouse=True)

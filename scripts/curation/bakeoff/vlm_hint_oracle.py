@@ -28,6 +28,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from src.db.engine import run_with_engine
+
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
@@ -141,7 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     if args.cmd == 'dump':
-        return asyncio.run(_dump(args))
+        return asyncio.run(run_with_engine(_dump(args), 'op-vlm-hint-oracle'))
     try:
         result = compare(load_records(args.off), load_records(args.on))
     except ValueError as exc:

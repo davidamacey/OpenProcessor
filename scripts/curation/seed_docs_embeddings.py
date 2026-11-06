@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from src.db.engine import run_with_engine  # noqa: E402  # import follows the sys.path setup above
 from src.domain.embedding_state import not_embedded_clause  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.guard import make_script_opensearch  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.script_binding import add_project_argument, bind_script_project  # noqa: E402  # import follows the sys.path setup above
@@ -117,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     bind_script_project(args.project)
-    return asyncio.run(_seed(args))
+    return asyncio.run(run_with_engine(_seed(args), 'op-seed-docs-embeddings'))
 
 
 if __name__ == '__main__':

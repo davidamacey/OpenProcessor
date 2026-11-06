@@ -32,7 +32,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from src.db.engine import get_sync_engine, new_task_async_engine
+from src.db.engine import bind_async_engine, get_sync_engine, new_task_async_engine
 from src.db.repos import job_events, jobs as repo
 from src.domain import job_perf, job_states as js, job_timing
 from src.tasks.runtime import hooks
@@ -210,7 +210,10 @@ async def _main(
         server=server,
     )
     loop = asyncio.get_running_loop()
-    task = asyncio.ensure_future(handler(ctx))
+    # The handler task copies the context it is created in, so every service it awaits (or
+    # spawns a task for) reaches the database through this task's engine, not the API engine.
+    with bind_async_engine(engine):
+        task = asyncio.ensure_future(handler(ctx))
     timed_out = False
 
     def soft_limit() -> None:

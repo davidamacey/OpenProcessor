@@ -55,6 +55,7 @@ from scripts.curation.vlm_cli import parse_args
 from scripts.curation.vlm_pending import _filter_fresh_ids, fetch_pending_ids
 from scripts.curation.worker.crash import crash_on_unhandled_exception
 from src.config.project_context import bind_project
+from src.db.engine import run_with_engine
 from src.services.curation.ops_metrics import start_worker_metrics_server
 from src.services.curation.vlm_scope import ScopeCache
 from src.services.curation.worker_liveness import heartbeat_loop
@@ -520,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         bind_script_project(args.project)
     start_worker_metrics_server(os.environ.get('OP_VLM_WORKER_METRICS_PORT', '4610'))
     try:
-        return asyncio.run(run(args))
+        return asyncio.run(run_with_engine(run(args), 'op-vlm-worker'))
     except KeyboardInterrupt:
         return 130
 

@@ -13,7 +13,7 @@ from src.services.embedding_spaces.flip import promote
 from tests.embedding_spaces._seed import make_project, shipped_engines
 
 
-pytestmark = [pytest.mark.db, pytest.mark.asyncio]
+pytestmark = [pytest.mark.db, pytest.mark.asyncio, pytest.mark.usefixtures('bound_async_engine')]
 
 
 class _Record:

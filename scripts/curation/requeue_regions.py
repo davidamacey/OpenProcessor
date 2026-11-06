@@ -71,6 +71,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from src.config import RegionStatus
+from src.db.engine import run_with_engine
 from src.services.curation.region_requeue import REQUEUE_TARGETS, REQUEUEABLE_STATUSES
 from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_models import (
@@ -197,7 +198,7 @@ def main() -> int:
         ),
         dry_run=args.dry_run,
     )
-    return asyncio.run(_async_main(args, request))
+    return asyncio.run(run_with_engine(_async_main(args, request), 'op-requeue-regions'))
 
 
 if __name__ == '__main__':
