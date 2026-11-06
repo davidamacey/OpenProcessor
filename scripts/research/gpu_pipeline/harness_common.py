@@ -106,14 +106,12 @@ def environment(gpu_index: int | None) -> dict[str, Any]:
             ]
         )
         env['gpu'] = q
-        env['compute_apps'] = _run(
-            [
-                'nvidia-smi',
-                f'--id={gpu_index}',
-                '--query-compute-apps=pid,name',
-                '--format=csv,noheader',
-            ]
+        apps = _run(
+            ['nvidia-smi', f'--id={gpu_index}', '--query-compute-apps=pid', '--format=csv,noheader']
         )
+        env['compute_processes_at_start'] = len(
+            apps.splitlines()
+        )  # a count: names are not recorded
     return env
 
 
@@ -196,4 +194,4 @@ def paired_bootstrap_ratio(
 
 def write_json(path: Path, obj: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, indent=1, sort_keys=True, default=float))
+    path.write_text(json.dumps(obj, indent=1, sort_keys=True, default=float) + '\n')
