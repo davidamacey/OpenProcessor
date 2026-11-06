@@ -1,12 +1,12 @@
 """The FastAPI application factory: middleware, exception handlers and router mounting."""
 
 import time
-import uuid
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import cast
 
 import orjson
+from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
@@ -22,7 +22,7 @@ from src.core.error_handlers import (
     triton_unavailable_response,
     upstream_unavailable_response,
 )
-from src.core.logging import bind_request_id, get_logger, get_request_id
+from src.core.logging import get_logger, get_request_id, is_safe_request_id
 from src.core.request_origin import RequestOriginMiddleware
 from src.core.upload_limits import (
     UploadTooLargeError,
@@ -98,7 +98,7 @@ def create_app() -> FastAPI:
         Industry standard: timing included in both header (X-Process-Time) and response body.
         """
         start_time = time.time()
-        req_id = get_request_id()  # Get from context set by request_id_middleware
+        req_id = get_request_id()  # set by CorrelationIdMiddleware
 
         # A body larger than any upload the server accepts is refused before it is read.
         # An exception raised in this layer never reaches the exception handlers (it would
@@ -150,7 +150,6 @@ def create_app() -> FastAPI:
                     k: v for k, v in response.headers.items() if k.lower() != 'content-length'
                 }
                 new_headers['X-Process-Time'] = f'{duration_ms:.2f}ms'
-                new_headers['X-Request-ID'] = req_id
 
                 # Create new response with modified body
                 return Response(
@@ -266,28 +265,11 @@ def create_app() -> FastAPI:
         ).observe(time.monotonic() - started)
         return response
 
-    # Request ID Middleware (defined last, runs first in LIFO order)
-    @application.middleware('http')
-    async def request_id_middleware(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        """
-        Add correlation ID (X-Request-ID) to all requests.
-
-        If client provides X-Request-ID header, use it. Otherwise generate a new UUID.
-        The request ID is available via get_request_id() in any code path, and
-        bind_request_id() also attaches it to every structlog event on this task.
-        """
-        # Get or generate request ID
-        req_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())[:8]
-        bind_request_id(req_id)
-
-        # Process request
-        response = await call_next(request)
-
-        # Add request ID to response headers
-        response.headers['X-Request-ID'] = req_id
-        return response
+    # Outermost, so every other middleware and handler sees the id (get_request_id()). The
+    # id is validated, not trusted: it is echoed in the response and written to logs.
+    application.add_middleware(
+        CorrelationIdMiddleware, header_name='X-Request-ID', validator=is_safe_request_id
+    )
 
     # Include Routers - Clean API structure without track naming
     application.include_router(health_router)  # /health - Health checks

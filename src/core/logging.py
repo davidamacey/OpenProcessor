@@ -9,26 +9,32 @@ Provides:
 """
 
 import logging
+import re
 import sys
 import time
-from contextvars import ContextVar
 from typing import Any
 
 import structlog
+from asgi_correlation_id import correlation_id
 
 
-# Request-scoped correlation ID. Set by the HTTP middleware in
-# ``src.main`` (FastAPI) and by worker processes per task. Lives here
-# (not in src.main) so service-layer modules can import it without
-# pulling the FastAPI app at import time — background workers run
-# outside the FastAPI process and would otherwise be unable to bind
-# the ID.
-request_id_ctx: ContextVar[str] = ContextVar('request_id', default='-')
+# Request-scoped correlation ID: the ContextVar of ``asgi-correlation-id``. The
+# ``CorrelationIdMiddleware`` sets it per HTTP request and ``src.tasks.runtime.log_context`` per Celery
+# task. Lives behind this module so service-layer code can read it without importing the FastAPI
+# app, and background workers can bind it outside the FastAPI process.
+request_id_ctx = correlation_id
+
+_SAFE_REQUEST_ID = re.compile(r'[A-Za-z0-9._-]{1,128}')
+
+
+def is_safe_request_id(value: str) -> bool:
+    """A client-supplied ``X-Request-ID`` is logged and echoed, so it must be short and plain."""
+    return _SAFE_REQUEST_ID.fullmatch(value) is not None
 
 
 def get_request_id() -> str:
     """Return the current request ID, or ``'-'`` when unbound."""
-    return request_id_ctx.get()
+    return request_id_ctx.get() or '-'
 
 
 def bind_request_id(request_id: str) -> None:
@@ -43,6 +49,16 @@ def bind_request_id(request_id: str) -> None:
     """
     request_id_ctx.set(request_id)
     structlog.contextvars.bind_contextvars(request_id=request_id)
+
+
+def add_request_id(
+    _logger: Any, _method: str, event_dict: structlog.typing.EventDict
+) -> structlog.typing.EventDict:
+    """Write the correlation id into every event, including the middleware's own requests."""
+    request_id = request_id_ctx.get()
+    if request_id and 'request_id' not in event_dict:
+        event_dict['request_id'] = request_id
+    return event_dict
 
 
 _OUTAGE_LOGGERS = ('opensearch', 'elastic_transport')
@@ -134,6 +150,7 @@ def configure_logging(json_logs: bool = True, log_level: str = 'INFO') -> None:
         # other future contextvar) lands in the event dict before any
         # other processor inspects it.
         structlog.contextvars.merge_contextvars,
+        add_request_id,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt='iso'),

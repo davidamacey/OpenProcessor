@@ -113,3 +113,30 @@ _.to_request  # ProcessingPlan.to_request, called by the route that parses the p
 _.build_rooted_store  # src/clients/storage/roots.py, the BlobStore every storage consumer builds
 _.storage_root_paths  # src/config/storage.py, the physical roots build_rooted_store maps
 _.crop_key  # src/clients/storage/keys.py, the crop-cache key; its first caller is the crop sizing work
+
+# Landed ahead of their consumers (B2 stage 1, lane 1B): the advisory-lock classes are first used
+# by the periodic task bodies and the beat/migrate runners of later lanes, and QUEUE_PROFILE by
+# the consumer-from-compose test. Delete each entry in the change that adds its production caller.
+_.BEAT  # src/config/advisory_locks.py, session lock of the single beat (stage 6)
+_.MIGRATE  # src/config/advisory_locks.py, session lock of the schema migration runner (lane 1A)
+_.INGEST_DISPATCH  # src/config/advisory_locks.py, periodic ingest dispatcher body (stage 4)
+_.OPEN_VOCAB_SWEEP  # src/config/advisory_locks.py, periodic open-vocabulary sweep (stage 4)
+_.CACHE_PRUNE  # src/config/advisory_locks.py, periodic cache prune (stage 6)
+_.GPU_ARBITER  # src/config/advisory_locks.py, periodic arbiter tick (stage 6)
+_.CLUSTER_REFRESH  # src/config/advisory_locks.py, periodic clustering refresh (stage 6)
+_.REAPER  # src/config/advisory_locks.py, the reaper tick (stage 3)
+_.NEAR_DUP_RESCORE  # src/config/advisory_locks.py, periodic near-duplicate rescore (stage 4)
+_.QUEUE_PROFILE  # src/config/queue.py, queue -> compose profile table the consumers-from-compose test reads
+_._on_worker_init  # src/tasks/app.py, connected to Celery's worker_init signal by decorator
+_._on_beat_init  # src/tasks/app.py, connected to Celery's beat_init signal by decorator
+_.make_app  # src/tasks/runtime/gpu_app.py, called by the trainer, export and evaluator images (stage 5)
+_.mark_queued  # src/clients/task_queue.py, called by start_job in the job service (stage 3)
+_.clear_queued  # src/clients/task_queue.py, called by the job claim and the reaper (stage 3)
+_.queued_state  # src/clients/task_queue.py, read by reaper rule c (stage 3)
+_.set_inventory_writer  # src/tasks/runtime/gpu_app.py, called by the job runtime once it owns the database writer (stage 3)
+_.refresh_inventory  # src/tasks/runtime/gpu_app.py, called on every job heartbeat (stage 3)
+_.record_capabilities  # InventoryWriter protocol method, called by start_inventory on the registered writer
+_.touch_devices  # InventoryWriter protocol method, called by refresh_inventory on the registered writer
+_.upsert_devices  # InventoryWriter protocol method, called by start_inventory on the registered writer
+_.capabilities  # parameter of the InventoryWriter protocol method, filled by the registered writer
+_.bind_request_id  # src/core/logging.py, binds the id on both ContextVars; tests/integration/test_request_id_propagation.py asserts the binding
