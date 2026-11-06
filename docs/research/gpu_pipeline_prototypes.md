@@ -113,3 +113,24 @@ overruns is reported so and the decision is taken on today's behaviour. An arm t
 | PR-2 | 0.5 | at the budget |
 
 GPU hours are wall hours of the `flock`-held commands on GPU 0, summed from the run logs.
+
+### 1.7 Amendments made before any score
+
+1. **PR-2 GPU ms interval.** GPU ms per photo per operation comes from `nsys` traces of two full
+   passes (200 images each, NVTX range per arm and operation). "Not higher than the control" means
+   the arm's median of the two passes is at most the control's, and a "lower" claim needs the
+   difference to exceed the larger relative difference between that arm's own two passes. Wall ms
+   per operation (median over 3 repetitions of 200 images, p90 beside it) is reported next to it as
+   context: it includes host launch cost and is not the registered comparison.
+2. **PR-2 fused op.** `resize_crop_convert_reformat` (CV-CUDA) is tried for the whole-frame square
+   only, as a within-K-b variant (it resizes without Pillow antialiasing, so it is expected to fail
+   the tensor gate on large downscales); it is reported as its own row and does not add an arm.
+3. **PR-2 reference noise floor.** The detector plan is not bit-stable between two calls on the same
+   canvas (observed in the tier-1 smoke before scoring), so P-box and P-item are reported for the
+   control against itself (the floor) and every arm is judged against `min(0.98, floor)` for P-box.
+4. **PR-0 determinism.** "Byte-identical between two runs" is evaluated on images whose detector
+   rectangles are equal in both runs (the kernels get the same inputs); images where the detector
+   moved a rectangle are counted and reported separately.
+5. **PR-0 stage GPU ms.** The per-stage GPU ms come from the NVTX ranges of one traced repetition;
+   TensorRT per-layer ranges are switched off in the harness so kernels fall into the stage that
+   called them.
