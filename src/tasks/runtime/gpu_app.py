@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 
 
 APP_NAME = 'openprocessor'
+# kombu's Redis transport, minus the unacked-restore crash on connection loss (see the module).
+BROKER_TRANSPORT = 'src.tasks.runtime.redis_transport.Transport'
 DEFAULT_SOFT_TIME_LIMIT_S = 10800
 DEFAULT_TIME_LIMIT_S = 11700
 
@@ -54,6 +56,7 @@ def static_config(include: Sequence[str]) -> dict[str, Any]:
         'task_acks_late': True,
         'task_retry_on_worker_lost': True,
         'worker_prefetch_multiplier': 1,
+        'broker_transport': BROKER_TRANSPORT,
         'broker_transport_options': broker_transport_options(),
         'broker_connection_retry_on_startup': True,
         'broker_connection_max_retries': None,
