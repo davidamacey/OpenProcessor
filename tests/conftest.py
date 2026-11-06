@@ -18,7 +18,7 @@ import pytest
 
 
 # The `db` tier's PostgreSQL fixtures (pg, two_sessions); inert unless a test asks for them.
-pytest_plugins = ['fixtures.postgres']
+pytest_plugins = ['fixtures.postgres', 'fixtures.db_marker_policy']
 
 # OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
 # DEFAULT_MODEL). A deterministic test value, set before any test module
