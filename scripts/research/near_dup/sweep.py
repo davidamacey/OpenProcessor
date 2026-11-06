@@ -175,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         '--limit-originals', type=int, default=0, help='tier-0 smoke: first N families only'
     )
+    p.add_argument('--copydays-root', type=Path, help='write the Copydays encode list instead')
     r = sub.add_parser('run', help='the sweep for one space')
     r.add_argument('--manifest', type=Path, required=True)
     r.add_argument('--vectors', type=Path, required=True, help='encode.py output prefix')
@@ -221,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.copydays_vectors and args.copydays_root:
         cx = np.load(args.copydays_vectors.with_suffix('.npy'))
         result['copydays'] = run_copydays(
-            cx, json.loads(args.copydays_rows.read_text()), args.guard, GRID
+            cx, build_sets.read_copydays(args.copydays_root), args.guard, GRID
         )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=1))
