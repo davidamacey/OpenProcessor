@@ -120,9 +120,11 @@ def producer(monkeypatch: pytest.MonkeyPatch, kinds: dict[str, JobKind]) -> Fake
 
 @pytest.fixture
 def wakes(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Any]]:
-    """The Valkey wake-ups the service sends, recorded instead of sent."""
+    """The Valkey wake-ups the service and the runtime send, recorded instead of sent."""
     recorded: list[Any] = []
     monkeypatch.setattr('src.services.jobs.service.wake', recorded.append)
+    for module in ('job_task', 'context'):
+        monkeypatch.setattr(f'src.tasks.runtime.{module}.wake', recorded.append)
     return recorded
 
 

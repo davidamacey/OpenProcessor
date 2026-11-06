@@ -175,7 +175,7 @@ def test_a_cancel_request_ends_cancelled(pg, engine, kinds) -> None:
     async def handler(ctx):
         started.set()
         while not ctx.cancelled():
-            await ctx.progress(0, None, 'working')
+            await ctx.progress(0, None, 'working', force=True)
             await asyncio.sleep(0.05)
         return {'stopped': True}
 

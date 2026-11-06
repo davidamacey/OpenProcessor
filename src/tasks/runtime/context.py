@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.repos import job_events, jobs as repo
+from src.domain import job_timing
 from src.tasks.runtime.event_wakeup import wake
 from src.tasks.runtime.scoped import async_job_transaction
 
@@ -94,6 +95,8 @@ class JobContext:
         self._clients: dict[str, Any] = {}
         self._clock = clock
         self._started = clock()
+        self._last_progress_at: float | None = None
+        self._last_stage: str | None = None
         self._unwritten: dict[str, Any] | None = None
 
     # --- cooperative control ---------------------------------------------------------------
@@ -138,11 +141,22 @@ class JobContext:
         total: int | None = None,
         stage: str | None = None,
         counters: Mapping[str, Any] | None = None,
+        *,
+        force: bool = False,
     ) -> None:
-        """Record a full progress snapshot."""
+        """Record a full progress snapshot, at most once per ``PROGRESS_MIN_INTERVAL_S`` and
+        always on a stage change; a skipped snapshot is kept and written with the next one."""
         snapshot = {'done': done, 'total': total, 'stage': stage, 'counters': dict(counters or {})}
         self._unwritten = snapshot
-        await self._write_progress(snapshot)
+        now = self._clock()
+        due = (
+            force
+            or self._last_progress_at is None
+            or stage != self._last_stage
+            or now - self._last_progress_at >= job_timing.PROGRESS_MIN_INTERVAL_S
+        )
+        if due:
+            await self._write_progress(snapshot)
 
     async def flush_progress(self) -> None:
         """Write the last snapshot a throttled call skipped (the wrapper calls this at the end)."""
@@ -156,6 +170,8 @@ class JobContext:
             )
             if control is not None:
                 await session.run_sync(lambda s: job_events.emit_progress(s, self._job, snapshot))
+        self._last_progress_at = self._clock()
+        self._last_stage = snapshot['stage']
         self._unwritten = None
         if control is None:
             self._beat.lost.set()
