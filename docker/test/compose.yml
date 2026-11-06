@@ -23,6 +23,63 @@
 
 name: op-live-verify
 
+# The environment of every process that runs the api image (the API, Celery, the workers).
+x-process-env: &process-env
+  OP_DB_HOST: postgres
+  OP_DB_NAME: openprocessor
+  OP_DB_APP_PASSWORD_FILE: /run/secrets/op_pg/app_password
+  OP_QUEUE_URL: redis://valkey:6379/0
+  OP_QUEUE_PASSWORD_FILE: /run/secrets/op_valkey/password
+  # The app reads `opensearch_url` (src/config/settings.py, env_prefix
+  # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
+  OPENSEARCH_URL: http://opensearch:9200
+  # AsyncTritonPool.initialize() only constructs gRPC client objects;
+  # it never dials. A deliberately unresolvable host proves no code
+  # path on the verified surface needs Triton.
+  TRITON_URL: triton-unavailable:8001
+  # Serve byte-identical paths to what an existing labeler frontend
+  # already calls, so it can be pointed at the harness without a
+  # rebuild. Every curation router builds its prefix at module
+  # import, so this must be set before src.main is imported.
+  OP_API_PREFIX: /curation
+  # Belt and braces: every project index (and the registry index)
+  # carries the `verify_` prefix, and tests/live/conftest.py refuses
+  # to run if any of them does not. `default` is bootstrapped as
+  # verify_prj_default__<role>.
+  OP_PROJECT_INDEX_PREFIX: verify_prj_
+  # Writable, host-visible filesystem roots.
+  OP_PROJECTS_DATA_ROOT: /verify-data/projects
+  OP_SOURCE_ROOT: /verify-data/images
+  OP_STATE_DIR: /verify-data/state
+  OP_CROP_CACHE_DIR: /verify-data/crop_cache
+  # Shared job-file protocol with the fake trainer.
+  OP_TRAIN_JOBS_DIR: /jobs
+  OP_SCORES_STATE_DIR: /jobs/scores
+  OP_SELECT_JOBS_DIR: /jobs/select
+  OP_VIZ_JOBS_DIR: /jobs/viz
+  OP_AUTO_LABEL_STATE_DIR: /jobs/auto_label
+  # OpenAI-compatible endpoint (src/services/labeling/vlm_client.py).
+  OP_VLM_URL: http://fake-vlm:8000/v1
+  OP_VLM_MODEL: fake-vlm
+  OP_VLM_API_KEY: EMPTY
+  # A configured secondary classifier is what makes `secondary_model` a
+  # classifier class_source (the seeded cls* rows carry it); no model is
+  # ever called.
+  OP_INGEST_SECONDARY_DETECTOR_MODEL: seeded_classifier
+  # Region routes 409 without an active region profile, and the text
+  # routes need a text-bearing one.
+  OP_REGION_PROFILE_PATH: /region_profile.json
+  # This harness has no in-compose vLLM to switch (keeps the live
+  # guard's local-model routes on their no_local_vlm path).
+  OP_LOCAL_VLM_ENDPOINT: ''
+  # Three write endpoints are disabled by default; without these the
+  # harness would "exercise" them and only ever see 400.
+  OP_SCORES_ENABLED: '1'
+  OP_SELECT_DIVERSE_ENABLED: '1'
+  OP_VIZ_PROJECTION_ENABLED: '1'
+  HF_HOME: /tmp/hf
+  HF_HUB_CACHE: /tmp/hf/hub
+
 services:
   # Docker creates a missing bind-mount source as root:root, which the
   # non-root app user (uid 1000) then cannot write to (PermissionError on
@@ -194,61 +251,11 @@ services:
       - ./verify-data/jobs:/jobs
       - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
-    environment: &api-env
-      - OP_DB_HOST=postgres
-      - OP_DB_NAME=openprocessor
-      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
-      - OP_QUEUE_URL=redis://valkey:6379/0
-      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
-      # The app reads `opensearch_url` (src/config/settings.py, env_prefix
-      # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
-      - OPENSEARCH_URL=http://opensearch:9200
-      # AsyncTritonPool.initialize() only constructs gRPC client objects;
-      # it never dials. A deliberately unresolvable host proves no code
-      # path on the verified surface needs Triton.
-      - TRITON_URL=triton-unavailable:8001
-      # Serve byte-identical paths to what an existing labeler frontend
-      # already calls, so it can be pointed at the harness without a
-      # rebuild. Every curation router builds its prefix at module
-      # import, so this must be set before src.main is imported.
-      - OP_API_PREFIX=/curation
-      # Belt and braces: every project index (and the registry index)
-      # carries the `verify_` prefix, and tests/live/conftest.py refuses
-      # to run if any of them does not. `default` is bootstrapped as
-      # verify_prj_default__<role>.
-      - OP_PROJECT_INDEX_PREFIX=verify_prj_
-      # Writable, host-visible filesystem roots.
-      - OP_PROJECTS_DATA_ROOT=/verify-data/projects
-      - OP_SOURCE_ROOT=/verify-data/images
-      - OP_STATE_DIR=/verify-data/state
-      - OP_CROP_CACHE_DIR=/verify-data/crop_cache
-      # Shared job-file protocol with the fake trainer.
-      - OP_TRAIN_JOBS_DIR=/jobs
-      - OP_SCORES_STATE_DIR=/jobs/scores
-      - OP_SELECT_JOBS_DIR=/jobs/select
-      - OP_VIZ_JOBS_DIR=/jobs/viz
-      - OP_AUTO_LABEL_STATE_DIR=/jobs/auto_label
-      # OpenAI-compatible endpoint (src/services/labeling/vlm_client.py).
-      - OP_VLM_URL=http://fake-vlm:8000/v1
-      - OP_VLM_MODEL=fake-vlm
-      - OP_VLM_API_KEY=EMPTY
-      # A configured secondary classifier is what makes `secondary_model` a
-      # classifier class_source (the seeded cls* rows carry it); no model is
-      # ever called.
-      - OP_INGEST_SECONDARY_DETECTOR_MODEL=seeded_classifier
-      # Region routes 409 without an active region profile, and the text
-      # routes need a text-bearing one.
-      - OP_REGION_PROFILE_PATH=/region_profile.json
-      # This harness has no in-compose vLLM to switch (keeps the live
-      # guard's local-model routes on their no_local_vlm path).
-      - OP_LOCAL_VLM_ENDPOINT=
-      # Three write endpoints are disabled by default; without these the
-      # harness would "exercise" them and only ever see 400.
-      - OP_SCORES_ENABLED=1
-      - OP_SELECT_DIVERSE_ENABLED=1
-      - OP_VIZ_PROJECTION_ENABLED=1
-      - HF_HOME=/tmp/hf
-      - HF_HUB_CACHE=/tmp/hf/hub
+    environment:
+      <<: *process-env
+      # Only the API sets this: it sizes the API pool (src/config/api_pools.py). The workers and
+      # the Celery children do not, so a service that reaches the API pool there fails here too.
+      WEB_CONCURRENCY: '1'
     command:
       - uvicorn
       - src.main:app
@@ -284,7 +291,7 @@ services:
   jobs-worker:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     volumes: *api-volumes
-    environment: *api-env
+    environment: *process-env
     command: celery -A src.tasks.app worker -Q jobs --concurrency=2 --hostname jobs@%h -E
     depends_on: &worker-deps
       api:
@@ -295,7 +302,7 @@ services:
   periodic-worker:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     volumes: *api-volumes
-    environment: *api-env
+    environment: *process-env
     command: celery -A src.tasks.app worker -Q periodic -c 1 --hostname periodic@%h -E
     depends_on: *worker-deps
     networks:
@@ -304,7 +311,7 @@ services:
   jobs-beat:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     volumes: *api-volumes
-    environment: *api-env
+    environment: *process-env
     command: celery -A src.tasks.app beat -s /tmp/celerybeat-schedule
     deploy:
       replicas: 1
@@ -321,7 +328,7 @@ services:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-assist-loop-worker
     volumes: *api-volumes
-    environment: *api-env
+    environment: *process-env
     command: ["python", "-m", "scripts.curation.assist_loop_worker"]
     depends_on:
       api:
