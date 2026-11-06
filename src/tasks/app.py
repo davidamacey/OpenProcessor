@@ -40,11 +40,30 @@ install_worker_signals()
 install_log_context()
 
 
+def _require_current_schema() -> None:
+    """Exit unless the database answers and is at this image's head.
+
+    Unlike the API, a worker or beat never runs on a database it cannot reach or on another
+    revision. Celery logs an ``Exception`` raised by a signal receiver and carries on, so the
+    refusal is a ``SystemExit`` (https://docs.celeryq.dev/en/stable/userguide/signals.html).
+    """
+    # Imported here: importing this module must not import SQLAlchemy (test_no_cuda_import).
+    from src.db import schema_check
+
+    try:
+        schema_check.wait_for_dependencies({'database': schema_check.database_probe})
+        schema_check.check_control_plane()
+    except (schema_check.DependencyUnavailableError, schema_check.SchemaNotCurrentError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 @worker_init.connect(weak=False)
 def _on_worker_init(**_: Any) -> None:
     reject_retired_env()
+    _require_current_schema()
 
 
 @beat_init.connect(weak=False)
 def _on_beat_init(**_: Any) -> None:
     reject_retired_env()
+    _require_current_schema()
