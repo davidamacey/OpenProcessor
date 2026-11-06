@@ -342,7 +342,7 @@ async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
     )
 
     cfg = get_curation_config()
-    policy = await get_ingest_policy(opensearch)
+    policy = await get_ingest_policy()
     try:
         detector = _detector_info((await refreshed_ingest_profiles(opensearch)).primary)
     except (ValueError, IngestProfileUnresolvedError) as exc:

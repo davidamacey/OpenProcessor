@@ -48,7 +48,7 @@ async def _apply_clone(
     if 'settings_defaults' in axes:
         from src.services.projects.clone_settings import clone_settings_document
 
-        await clone_settings_document(client, source=source, target_record=target_record)
+        await clone_settings_document(source=source, target_record=target_record)
 
     if 'classes' in axes:
         from src.services.classes.registry import registry_for
@@ -65,7 +65,6 @@ async def _apply_clone(
             await ensure_region_class()
 
     if 'keymap' in axes:
-        from src.config import get_curation_config
         from src.services.curation.keymap import (
             get_keymap_doc,
             publish_keymap_changed,
@@ -74,11 +73,9 @@ async def _apply_clone(
         from src.services.curation.keymap_validator import validate_keymap
 
         with bind_project(source, read_only=True):
-            src_cfg = get_curation_config()
-            source_keymap = await get_keymap_doc(client, src_cfg.configs_index)
+            source_keymap = await get_keymap_doc()
         with bind_project(target_record):
-            target_cfg = get_curation_config()
-            target_keymap = await get_keymap_doc(client, target_cfg.configs_index)
+            target_keymap = await get_keymap_doc()
             from src.services.classes.registry import get_class_registry
 
             target_classes = [
@@ -123,13 +120,10 @@ async def _apply_clone(
                 )
             else:
                 new_target_doc = await save_keymap_doc(
-                    client,
-                    target_cfg.configs_index,
-                    overrides=source_keymap.overrides,
-                    expected_revision=target_keymap.revision,
+                    overrides=source_keymap.overrides, expected_revision=target_keymap.revision
                 )
                 # Tabs already open on the target should refresh.
-                await publish_keymap_changed(new_target_doc, target_cfg.configs_index, client)
+                await publish_keymap_changed(new_target_doc)
 
     written_packs: dict[str, Any] = {}
     if 'prompt_packs' in axes:

@@ -15,8 +15,6 @@ either). Same optimistic-revision contract as the policies.
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 from src.services.curation.policy_doc_store import read_policy, write_policy
@@ -37,11 +35,11 @@ class RepClaims(BaseModel):
     claims: list[RepClaim] = Field(default_factory=list)
 
 
-async def read_rep_claims(client: Any) -> tuple[RepClaims, dict[str, Any] | None]:
-    return await read_policy(client, KEY, RepClaims)
+async def read_rep_claims() -> tuple[RepClaims, int]:
+    return await read_policy(KEY, RepClaims)
 
 
-async def write_rep_claims(client: Any, new: RepClaims, resp: dict[str, Any] | None) -> None:
+async def write_rep_claims(new: RepClaims, revision: int) -> None:
     """Raises :class:`~src.services.curation.policy_doc_store.PolicyConflictError`
-    when another writer stored claims since ``resp`` was read."""
-    await write_policy(client, KEY, new, resp)
+    when another writer changed the settings since ``revision`` was read."""
+    await write_policy(KEY, new, revision)

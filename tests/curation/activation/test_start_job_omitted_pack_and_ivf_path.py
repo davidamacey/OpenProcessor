@@ -91,7 +91,7 @@ async def test_omitted_stale_settings_doc_pack_is_ignored_and_echo_matches_label
     only source of truth) and the job echoes exactly what it ran."""
 
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.settings_doc.get_curation_settings',
+        'src.services.curation.settings_store.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     summary = await run_auto_label(opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs())
@@ -169,7 +169,7 @@ async def test_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_omit
 
     monkeypatch.setattr(job, 'start_job', _fake_start)
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.settings_doc.get_curation_settings',
+        'src.services.curation.settings_store.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     await pipeline_start.pipeline_auto_label_start(opensearch=object(), item_filter=ItemFilter())

@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -147,8 +148,8 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
     install_project_exception_handlers(app)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     api = VlmApi(
-        client=TestClient(app),
-        lenient=TestClient(app, raise_server_exceptions=False),
+        client=revision_aware(TestClient(app)),
+        lenient=revision_aware(TestClient(app, raise_server_exceptions=False)),
         fake_os=fake_os,
         dns=dns,
     )

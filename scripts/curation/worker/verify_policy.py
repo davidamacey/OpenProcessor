@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
 from opensearchpy.exceptions import OpenSearchException
 
@@ -22,7 +21,7 @@ def reset_cache() -> None:
     _cache.clear()
 
 
-async def project_region_verify(opensearch: Any) -> str:
+async def project_region_verify() -> str:
     """The bound project's ``region_verify`` policy (``vlm`` when never set), re-read
     at most every :data:`POLICY_TTL_S`. A read that fails keeps the last value."""
     slug = get_curation_config().project_slug
@@ -31,7 +30,7 @@ async def project_region_verify(opensearch: Any) -> str:
     if cached is not None and now - cached[0] < POLICY_TTL_S:
         return cached[1]
     try:
-        value = (await get_vlm_policy(opensearch)).region_verify
+        value = (await get_vlm_policy()).region_verify
     except (OpenSearchException, OSError) as exc:
         logger.warning('region_verify_policy_read_failed', project=slug, error=str(exc))
         return cached[1] if cached is not None else 'vlm'

@@ -14,20 +14,19 @@ from __future__ import annotations
 import functools
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from opensearchpy.exceptions import ConflictError, NotFoundError
-
 from src.core.logging import get_logger
+from src.db.repos import config as config_repo, settings as settings_repo
+from src.db.repos.config import RevisionConflictError as RepoRevisionConflictError
+from src.db.session import async_session_factory, project_tx
+from src.services.config_store.bound_project import bound_project_id
 
 
 logger = get_logger(__name__)
 
 _ACTIONS_JSON_PATH = Path(__file__).resolve().parents[2] / 'config' / 'keymap_actions.json'
-
-KEYMAP_DOC_ID = 'keymap:default'
 
 _MODIFIER_ORDER = ('ctrl', 'meta', 'alt', 'shift')
 
@@ -208,108 +207,64 @@ class KeymapDoc:
     is_default: bool
 
 
-class RevisionConflictError(Exception):
-    def __init__(self, current_revision: int) -> None:
-        self.current_revision = current_revision
-        super().__init__(f'keymap revision conflict (current={current_revision})')
+RevisionConflictError = RepoRevisionConflictError
 
 
-async def get_keymap_doc(client: Any, index: str) -> KeymapDoc:
-    try:
-        doc = await client.get(index=index, id=KEYMAP_DOC_ID)
-    except NotFoundError:
+async def get_keymap_doc() -> KeymapDoc:
+    """The bound project's override map; revision ``0`` and the defaults for a project with no row."""
+    project_id = await bound_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        row = await settings_repo.get_keymap(session, project_id)
+    if row is None:
         return KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
-    src = doc['_source']
-    overrides = src.get('overrides') or {}
     return KeymapDoc(
-        overrides=overrides,
-        revision=int(src.get('revision', 0)),
-        updated_at=src.get('updated_at'),
-        is_default=not overrides,
+        overrides=row.overrides,
+        revision=row.revision,
+        updated_at=row.updated_at.isoformat(),
+        is_default=not row.overrides,
     )
 
 
-async def publish_keymap_changed(doc: KeymapDoc, configs_index: str, client: Any) -> None:
-    """The ``config.changed`` event of a keymap write, carrying both the
-    keymap doc's own revision and the deployment-wide ``config_revision`` the
-    write bumped (CW-K section 4.4)."""
-    from src.services.config_store.index import get_config_revision
+async def publish_keymap_changed(doc: KeymapDoc) -> None:
+    """The ``config.changed`` event of a keymap write, carrying both the keymap's own revision and
+    the project's ``config_epoch`` the write bumped."""
     from src.services.curation.event_hub import get_event_hub
 
-    config_revision = await get_config_revision(client, configs_index)
+    project_id = await bound_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        epoch = await config_repo.get_epoch(session, project_id)
     get_event_hub().publish(
         {
             'type': 'config.changed',
             'topic': 'config',
             'axis': 'keymap',
             'name': None,
-            'config_revision': config_revision,
+            'config_revision': epoch,
             'keymap_revision': doc.revision,
         }
     )
 
 
-async def save_keymap_doc(
-    client: Any, index: str, *, overrides: dict[str, list[str]], expected_revision: int
-) -> KeymapDoc:
-    """OCC write of the whole override map. An override equal to the
-    action's default is dropped so ``is_default`` stays honest (CW-K
-    §4.3)."""
+async def save_keymap_doc(*, overrides: dict[str, list[str]], expected_revision: int) -> KeymapDoc:
+    """OCC write of the whole override map. An override equal to the action's default is dropped so
+    ``is_default`` stays honest (CW-K §4.3). A stale ``expected_revision`` is
+    :class:`RevisionConflictError`."""
     registry = load_registry()
     cleaned = {
         aid: combos
         for aid, combos in overrides.items()
         if aid in registry.actions and list(combos) != list(registry.actions[aid].default)
     }
-    doc_id = KEYMAP_DOC_ID
-    seq_no = primary_term = None
-    current_revision = 0
-    try:
-        current = await client.get(index=index, id=doc_id)
-        current_revision = int(current['_source'].get('revision', 0))
-        seq_no = current.get('_seq_no')
-        primary_term = current.get('_primary_term')
-    except NotFoundError:
-        pass
-
-    if expected_revision != current_revision:
-        raise RevisionConflictError(current_revision)
-
-    now = datetime.now(UTC).isoformat()
-    next_revision = current_revision + 1
-    doc = {
-        'doc_type': 'keymap',
-        'overrides': cleaned,
-        'revision': next_revision,
-        'updated_at': now,
-    }
-    index_kwargs: dict[str, Any] = {'index': index, 'id': doc_id, 'body': doc}
-    if seq_no is not None:
-        index_kwargs['if_seq_no'] = seq_no
-        index_kwargs['if_primary_term'] = primary_term
-    else:
-        index_kwargs['op_type'] = 'create'
-    try:
-        await client.index(**index_kwargs)
-    except ConflictError as exc:
-        # Re-read for the real current revision rather than reporting a
-        # meaningless -1 -- a concurrent writer landed between our GET
-        # above and this index() call.
-        try:
-            latest = await client.get(index=index, id=doc_id)
-            real_current = int(latest['_source'].get('revision', 0))
-        except Exception:
-            real_current = -1
-        raise RevisionConflictError(real_current) from exc
-
-    # The atomic bump_config_revision (painless script + retry_on_conflict)
-    # -- not a second read-then-write, so a concurrent config write can't
-    # lose an increment (M6).
-    from src.services.config_store.index import bump_config_revision
-
-    await bump_config_revision(client, index)
+    project_id = await bound_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        row = await settings_repo.put_keymap(
+            session, project_id, overrides=cleaned, expected_revision=expected_revision
+        )
     return KeymapDoc(
-        overrides=cleaned, revision=next_revision, updated_at=now, is_default=not cleaned
+        overrides=cleaned,
+        revision=row.revision,
+        updated_at=row.updated_at.isoformat(),
+        is_default=not cleaned,
     )
 
 

@@ -219,7 +219,6 @@ async def test_the_ingest_service_runs_the_active_profile_and_the_policy(
     assert plain.profile.detector_model == 'env_model'
 
     await put_ingest_policy(
-        fake,
         IngestPolicyBody(detect=DetectFilter(class_resolution='by_name')),
         expected_revision=0,
     )
@@ -374,25 +373,23 @@ def test_put_stores_the_clustering_switch(world: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_stored_policy_detector_is_reset_with_a_logged_message(world: Any) -> None:
+async def test_a_stored_policy_detector_is_reset_with_a_logged_message(
+    world: Any, memory_settings: Any
+) -> None:
     from structlog.testing import capture_logs
 
-    from src.config import IndexRole, index_name
     from src.services.curation.ingest_policy import IngestPolicyBody
     from src.services.curation.ingest_policy_store import get_ingest_policy, put_ingest_policy
-    from src.services.curation.policy_doc_store import SETTINGS_DOC_ID
 
-    _, fake, *_ = world
-    index = index_name(get_curation_config(), IndexRole.SETTINGS)
     stored = {
         'revision': 4,
         'detect': {'min_confidence': 0.3},
         'detector': {'model': 'legacy', 'version': '1'},
     }
-    await fake.index(index=index, id=SETTINGS_DOC_ID, body={'ingest_policy': stored})
+    memory_settings.policies['ingest_policy'] = stored
 
     with capture_logs() as logs:
-        policy = await get_ingest_policy(fake)
+        policy = await get_ingest_policy()
     assert policy.revision == 4
     assert policy.detect.min_confidence == 0.3
     reset = [e for e in logs if e['event'] == 'retired_policy_field_reset']
@@ -401,8 +398,8 @@ async def test_a_stored_policy_detector_is_reset_with_a_logged_message(world: An
     assert 'ingest profile' in reset[0]['use']
 
     plain = IngestPolicyBody(**policy.model_dump(exclude={'revision'}))
-    await put_ingest_policy(fake, plain, expected_revision=4)
-    after = (await fake.get(index=index, id=SETTINGS_DOC_ID))['_source']['ingest_policy']
+    await put_ingest_policy(plain, expected_revision=4)
+    after = memory_settings.policies['ingest_policy']
     assert 'detector' not in after
 
 

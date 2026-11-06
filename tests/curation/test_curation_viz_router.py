@@ -15,6 +15,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store.memory_settings import current
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -176,9 +177,7 @@ def test_rebuild_cluster_scope_passes_cluster_id_through(
 
 def test_get_projection_not_built(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    from opensearchpy.exceptions import NotFoundError
-
-    app_client.fake_os.get = AsyncMock(side_effect=NotFoundError(404, 'nf', {}))
+    current().projection = None
 
     r = app_client.get('/curation/projects/default/viz/projection')
     assert r.status_code == 404
@@ -190,7 +189,12 @@ def test_get_projection_read_failure_is_503_not_not_built(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    app_client.fake_os.get = AsyncMock(side_effect=ConnectionError('opensearch down'))
+    from src.services.curation.embedding_viz_read import ProjectionUnavailableError
+
+    async def _down() -> None:
+        raise ProjectionUnavailableError('database is down')
+
+    monkeypatch.setattr('src.services.curation.embedding_viz_read._load_run_metadata', _down)
 
     r = app_client.get('/curation/projects/default/viz/projection')
     assert r.status_code == 503
@@ -201,14 +205,10 @@ def test_get_projection_serves_cached_points(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    app_client.fake_os.get = AsyncMock(
-        return_value={
-            '_source': {
-                'projection_version': 'umap_viz_v1',
-                'fitted_at': '2026-09-11T00:00:00+00:00',
-            }
-        }
-    )
+    current().projection = {
+        'projection_version': 'umap_viz_v1',
+        'fitted_at': '2026-09-11T00:00:00+00:00',
+    }
     app_client.fake_os.search = AsyncMock(
         return_value={
             'hits': {
@@ -250,9 +250,7 @@ def test_get_projection_max_points_caps_the_search_size(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    app_client.fake_os.get = AsyncMock(
-        return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
-    )
+    current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
     app_client.fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     app_client.fake_os.count = AsyncMock(return_value={'count': 0})
 
@@ -296,9 +294,7 @@ def test_get_projection_never_imports_or_calls_fit(
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _boom)
     monkeypatch.setattr(embedding_viz, 'start_job', _boom)
 
-    app_client.fake_os.get = AsyncMock(
-        return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
-    )
+    current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
     app_client.fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     app_client.fake_os.count = AsyncMock(return_value={'count': 0})
 

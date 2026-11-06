@@ -132,7 +132,7 @@ async def _fetch_pending(
     }
     resp = await opensearch.search(index=items_index(), body=body)
     hits = (resp.get('hits') or {}).get('hits') or []
-    policy_verify = await project_region_verify(opensearch) if hits else 'vlm'
+    policy_verify = await project_region_verify() if hits else 'vlm'
     tasks: list[_ItemTask] = []
     for h in hits:
         src = h.get('_source') or {}

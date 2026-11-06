@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from config_store.memory_settings import current
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import SettingsFakeOpenSearch
-from src.config import IndexRole, get_curation_config, index_name
 
 
 URL = '/curation/projects/default/vlm/policy'
@@ -61,8 +61,7 @@ def test_put_round_trips_and_bumps_the_revision(
     got = client.get(URL).json()
     assert (got['scope'], got['per_cluster'], got['conf_max']) == ('representatives', 3, 0.8)
     assert client.put(URL, json={'expected_revision': 1}).json()['scope'] == 'all'
-    settings = fake.docs(index_name(get_curation_config(), IndexRole.SETTINGS))['default']
-    assert settings['vlm_policy']['revision'] == 2
+    assert current().policies['vlm_policy']['revision'] == 2
 
 
 def test_stale_expected_revision_is_409_and_writes_nothing(

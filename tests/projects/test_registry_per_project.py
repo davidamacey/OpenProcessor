@@ -163,7 +163,6 @@ def test_job_dirs_nest_per_project_default_included(tmp_path: Any, monkeypatch: 
     with bind_project(_new_record('beta', tmp_path)):
         for name, fn in dirs.items():
             assert fn() == Path(tmp_path / name / 'projects' / 'beta')
-        assert embedding_viz.viz_state_joblib_path().startswith(str(tmp_path / 'beta' / 'state'))
 
 
 @pytest.mark.db

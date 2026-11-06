@@ -6,11 +6,12 @@ from typing import Any
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
+from config_store.memory_settings import current
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import SettingsFakeOpenSearch
-from src.config import IndexRole, get_curation_config, index_name
+from src.config import get_curation_config
 
 
 URL = '/curation/projects/default/ingest/policy'
@@ -95,8 +96,7 @@ def test_put_round_trips_and_bumps_the_revision(
     second = client.put(URL, json={'expected_revision': 1})
     assert second.json()['revision'] == 2
     assert client.get(URL).json()['embedding']['mode'] == 'all'
-    settings = fake.docs(index_name(get_curation_config(), IndexRole.SETTINGS))['default']
-    assert settings['ingest_policy']['revision'] == 2
+    assert current().policies['ingest_policy']['revision'] == 2
 
 
 def test_stale_expected_revision_is_409_and_writes_nothing(

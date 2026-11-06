@@ -9,8 +9,6 @@ project. The read/write mechanics are the shared optimistic-revision store in
 
 from __future__ import annotations
 
-from typing import Any
-
 from src.services.curation.ingest_policy import IngestPolicy, IngestPolicyBody
 from src.services.curation.policy_doc_store import PolicyConflictError, read_policy, write_policy
 
@@ -26,20 +24,18 @@ RETIRED_FIELDS = {
 }
 
 
-async def get_ingest_policy(client: Any) -> IngestPolicy:
+async def get_ingest_policy() -> IngestPolicy:
     """The bound project's policy; the defaults when none was ever written."""
-    return (await read_policy(client, KEY, IngestPolicy, retired_fields=RETIRED_FIELDS))[0]
+    return (await read_policy(KEY, IngestPolicy, retired_fields=RETIRED_FIELDS))[0]
 
 
-async def put_ingest_policy(
-    client: Any, body: IngestPolicyBody, *, expected_revision: int
-) -> IngestPolicy:
+async def put_ingest_policy(body: IngestPolicyBody, *, expected_revision: int) -> IngestPolicy:
     """Replace the policy. Raises :class:`PolicyConflictError` when
     ``expected_revision`` is not the stored revision (or a concurrent writer won)."""
-    current, resp = await read_policy(client, KEY, IngestPolicy, retired_fields=RETIRED_FIELDS)
+    current, row_revision = await read_policy(KEY, IngestPolicy, retired_fields=RETIRED_FIELDS)
     if current.revision != expected_revision:
         msg = f'stored revision is {current.revision}, expected {expected_revision}'
         raise PolicyConflictError(msg)
     new = IngestPolicy(revision=current.revision + 1, **body.model_dump())
-    await write_policy(client, KEY, new, resp)
+    await write_policy(KEY, new, row_revision)
     return new

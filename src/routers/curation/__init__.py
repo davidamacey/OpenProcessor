@@ -73,6 +73,7 @@ import src.routers.curation.regions_boxes_edit
 import src.routers.curation.regions_edit
 import src.routers.curation.regions_fp
 import src.routers.curation.reprocess
+import src.routers.curation.research_configs
 
 
 import src.routers.curation.review_terms  # isort: skip

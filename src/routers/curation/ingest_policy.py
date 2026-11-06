@@ -75,7 +75,7 @@ async def get_policy(opensearch: OpenSearchDep) -> IngestPolicy:
     """The project's ingest policy; the defaults (store and embed everything)
     when none was ever written."""
     await ensure_indexes(opensearch)
-    return await get_ingest_policy(opensearch)
+    return await get_ingest_policy()
 
 
 @router.put(
@@ -99,9 +99,7 @@ async def put_policy(
         await _known_slugs()
     )  # before the write: a refused answer must not follow a stored policy
     try:
-        stored = await put_ingest_policy(
-            opensearch, policy_body, expected_revision=body.expected_revision
-        )
+        stored = await put_ingest_policy(policy_body, expected_revision=body.expected_revision)
     except PolicyConflictError as exc:
         raise api_error(409, 'revision_conflict', f'ingest policy changed: {exc}') from exc
     return IngestPolicyPutResponse(

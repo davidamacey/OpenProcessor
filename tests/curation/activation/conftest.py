@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _curation_app import mount_curation_routers
+from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -15,13 +16,10 @@ from curation._fake_config_opensearch import FakeConfigOpenSearch
 
 @pytest.fixture(autouse=True)
 def _reset_caches():
-    from src.clients.curation_opensearch import settings_doc
     from src.services.config_store.store import reset_config_stores
 
-    settings_doc._settings_cache.clear()
     reset_config_stores()
     yield
-    settings_doc._settings_cache.clear()
     reset_config_stores()
 
 
@@ -36,7 +34,7 @@ def app_client(monkeypatch):
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
+    client = revision_aware(TestClient(app))
     client.fake_os = fake_os  # type: ignore[attr-defined]
     return client
 

@@ -2,9 +2,7 @@
 ``GET /methods``'s per-axis ``default``
 flag and every real endpoint's omitted-param resolution must share.
 
-Uses the same ``FakeSettingsOpenSearch`` fake as
-``test_curation_settings_client.py`` so a "PUT then resolve" round trip
-exercises the real client functions, not a mock of them.
+Uses the in-memory settings row of ``config_store.memory_settings``.
 
 Imports ``resolve_effective_default`` from
 ``src.services.curation.strategy_defaults`` directly (not the
@@ -19,34 +17,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from config_store.memory_settings import MemorySettings
 
-from curation.test_curation_settings_client import FakeSettingsOpenSearch
-from src.clients.curation_opensearch import settings_doc
-from src.clients.curation_opensearch.settings_doc import update_curation_settings
 from src.services.curation.strategy_defaults import resolve_effective_default
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from config_store.memory_settings import MemorySettings
 
 
 @pytest.fixture
-def fake_os() -> FakeSettingsOpenSearch:
-    return FakeSettingsOpenSearch()
-
-
-@pytest.fixture(autouse=True)
-def _reset_settings_cache() -> Iterator[None]:
-    """See test_curation_settings_client.py's fixture of the same name --
-    every test here shares the same default settings index key."""
-    settings_doc._settings_cache.clear()
-    yield
-    settings_doc._settings_cache.clear()
+def fake_os(memory_settings) -> object:
+    """Stands for the client the callers pass; the settings row is the in-memory one."""
+    return object()
 
 
 @pytest.mark.asyncio
 async def test_no_override_falls_back_to_hardcoded_constant(
-    fake_os: FakeSettingsOpenSearch,
+    fake_os: object,
+    memory_settings: MemorySettings,
 ) -> None:
     from src.services.curation.clustering.methods import DEFAULT_METHOD
 
@@ -62,54 +51,66 @@ async def test_no_opensearch_client_skips_lookup_and_returns_hardcoded() -> None
 
 
 @pytest.mark.asyncio
-async def test_valid_override_is_returned(fake_os: FakeSettingsOpenSearch) -> None:
+async def test_valid_override_is_returned(fake_os: object, memory_settings) -> None:
     from src.services.curation.clustering.methods import available_methods
 
     non_default = next(m for m in available_methods() if m != 'ivf')
-    await update_curation_settings(fake_os, {'cluster': non_default})
+    await memory_settings.update_curation_settings(
+        {'cluster': non_default}, expected_revision=memory_settings.revision
+    )
     assert await resolve_effective_default('cluster', fake_os) == non_default
 
 
 @pytest.mark.asyncio
 async def test_stale_override_no_longer_advertised_falls_back(
-    fake_os: FakeSettingsOpenSearch,
+    fake_os: object,
+    memory_settings: MemorySettings,
 ) -> None:
     """An override that named a real id at PUT time but is no longer a
     currently-advertised id for the axis must fall back to the hardcoded
     constant rather than returning the dead id."""
     from src.services.curation.clustering.methods import DEFAULT_METHOD
 
-    await update_curation_settings(fake_os, {'cluster': 'a_method_that_no_longer_exists'})
+    await memory_settings.update_curation_settings(
+        {'cluster': 'a_method_that_no_longer_exists'}, expected_revision=memory_settings.revision
+    )
     assert await resolve_effective_default('cluster', fake_os) == DEFAULT_METHOD
 
 
 @pytest.mark.asyncio
 async def test_sort_axis_has_no_hardcoded_default_but_honors_a_valid_override(
-    fake_os: FakeSettingsOpenSearch,
+    fake_os: object,
+    memory_settings: MemorySettings,
 ) -> None:
     """'sort' has no single hardcoded default (only a per-tab mapping,
     see review_sorts.default_sort_for_tab) -- with no override this must
     return None, and a valid override must still resolve."""
     assert await resolve_effective_default('sort', fake_os) is None
 
-    await update_curation_settings(fake_os, {'sort': 'atypicality'})
+    await memory_settings.update_curation_settings(
+        {'sort': 'atypicality'}, expected_revision=memory_settings.revision
+    )
     assert await resolve_effective_default('sort', fake_os) == 'atypicality'
 
 
 @pytest.mark.asyncio
 async def test_sort_override_naming_a_shadow_id_falls_back_to_none(
-    fake_os: FakeSettingsOpenSearch,
+    fake_os: object,
+    memory_settings: MemorySettings,
 ) -> None:
     """A shadow/disabled sort id is not "currently advertised" for
     default-application purposes even though GET /methods still lists it
     -- an override naming one must not silently break every tab's queue."""
-    await update_curation_settings(fake_os, {'sort': 'uniqueness'})  # disabled by default (D2)
+    await memory_settings.update_curation_settings(
+        {'sort': 'uniqueness'}, expected_revision=memory_settings.revision
+    )  # disabled by default (D2)
     assert await resolve_effective_default('sort', fake_os) is None
 
 
 @pytest.mark.asyncio
 async def test_detection_profile_and_prompt_pack_resolve_their_single_entry(
-    fake_os: FakeSettingsOpenSearch,
+    fake_os: object,
+    memory_settings: MemorySettings,
 ) -> None:
     from src.services.detection import cascade_detect  # noqa: F401 - registers the profile
     from src.services.detection.profile_registry import get_default_profile_name

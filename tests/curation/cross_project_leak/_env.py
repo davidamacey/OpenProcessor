@@ -65,10 +65,9 @@ def leak_env(
     from cachetools import TTLCache
 
     import src.config.curation_accessors as curation_config_mod
-    from src.clients.curation_opensearch import settings_doc
     from src.config.curation_roles import IndexRole
     from src.core.dependencies import app_state, get_async_triton
-    from src.services.curation import event_hub, index_bootstrap
+    from src.services.curation import event_hub, index_bootstrap, settings_store
     from src.services.projects import guard, registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
@@ -130,9 +129,7 @@ def leak_env(
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
     # change which index roles a route reaches between the two passes: a frozen
     # clock keeps every entry fresh.
-    monkeypatch.setattr(
-        settings_doc, '_settings_cache', TTLCache(maxsize=64, ttl=5.0, timer=lambda: 0.0)
-    )
+    monkeypatch.setattr(settings_store, '_cache', TTLCache(maxsize=64, ttl=5.0, timer=lambda: 0.0))
     # A UMAP fit the fixture's small pool supports (the defaults need
     # more points than the fixture seeds).
     from src.services.curation.clustering import pool_size

@@ -18,7 +18,7 @@ import pytest
 
 
 # The `db` tier's PostgreSQL fixtures (pg, two_sessions); inert unless a test asks for them.
-pytest_plugins = ['fixtures.postgres', 'fixtures.db_marker_policy']
+pytest_plugins = ['fixtures.postgres', 'fixtures.db_marker_policy', 'config_store.memory_settings']
 
 # OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
 # DEFAULT_MODEL). A deterministic test value, set before any test module
@@ -277,7 +277,7 @@ _PROCESS_CACHES = (
     ('src.services.curation.field_coverage', '_COVERAGE_CACHE'),
     ('src.services.curation.diverse_order', '_ORDER_CACHE'),
     ('src.services.curation.clustering.outliers', '_CACHE'),
-    ('src.clients.curation_opensearch.settings_doc', '_settings_cache'),
+    ('src.services.curation.settings_store', '_cache'),
     ('src.clients.curation_opensearch.ensure_overlay_fields', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),

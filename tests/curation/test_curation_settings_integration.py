@@ -14,35 +14,19 @@ real endpoints' omitted-param resolution from the settings document.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation.test_curation_settings_client import FakeSettingsOpenSearch
-
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-
-@pytest.fixture(autouse=True)
-def _reset_settings_cache() -> Iterator[None]:
-    """See test_curation_settings_router.py's fixture of the same name."""
-    from src.clients.curation_opensearch import settings_doc
-
-    settings_doc._settings_cache.clear()
-    yield
-    settings_doc._settings_cache.clear()
-
 
 @pytest.fixture
-def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeSettingsOpenSearch()
+    fake_os = object()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -51,7 +35,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
+    client = revision_aware(TestClient(app))
     client.fake_os = fake_os  # type: ignore[attr-defined]
     return client
 

@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from PIL import Image
 
-from curation.query_fakes import SettingsFakeOpenSearch
 from src.domain.embedding_state import DEFERRED
 from src.services.curation.ingest_index import ImageContext, index_items
 from src.services.curation.ingest_policy import (
@@ -122,14 +121,11 @@ def test_no_automatic_clustering_places_no_item(
 def test_the_policy_store_round_trips_the_clustering_switch() -> None:
     from src.services.curation.ingest_policy_store import get_ingest_policy, put_ingest_policy
 
-    fake = SettingsFakeOpenSearch({})
-
     async def go() -> bool:
         await put_ingest_policy(
-            fake,
             IngestPolicyBody(clustering={'automatic': False}),
             expected_revision=0,  # type: ignore[arg-type]
         )
-        return (await get_ingest_policy(fake)).clustering.automatic
+        return (await get_ingest_policy()).clustering.automatic
 
     assert asyncio.run(go()) is False

@@ -488,6 +488,10 @@ class CurationSettingsResponse(BaseModel):
     defaults: dict[str, str] = Field(default_factory=dict)
     updated_at: str | None = None
     updated_by: str | None = None
+    revision: int = Field(
+        default=0,
+        description='Send it back as `expected_revision` on the next PUT; 0 while never written.',
+    )
     resource_links: list[ResourceLink] = Field(default_factory=resource_links_from_config)
 
 
@@ -495,7 +499,7 @@ class CurationSettingsUpdateRequest(BaseModel):
     """``PUT /curation/settings`` body -- partial by design. Only the axes
     present here are validated + merged into the stored document; axes
     already set are left untouched (see
-    ``src.clients.curation_opensearch.update_curation_settings``).
+    ``src.services.curation.settings_store.update_curation_settings``).
 
     A value of ``null`` for an axis clears that axis's shared override
     (falls back to that endpoint's own hardcoded default / each /review
@@ -505,6 +509,11 @@ class CurationSettingsUpdateRequest(BaseModel):
     Cropwright settings-UI integration pass)."""
 
     defaults: dict[str, str | None] = Field(default_factory=dict)
+    expected_revision: int = Field(
+        ge=0,
+        description='The `revision` of the settings this edit was made against (GET /settings); '
+        'a stale one is a 409 `revision_conflict`.',
+    )
 
 
 class _PublishEvent(BaseModel):

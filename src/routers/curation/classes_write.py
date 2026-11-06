@@ -59,13 +59,13 @@ async def create_registry_class(
 
 
 @router.post('/classes', status_code=status.HTTP_201_CREATED)
-async def create_class(payload: ClassCreateRequest, opensearch: OpenSearchDep) -> dict[str, Any]:
+async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
     """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);
     an optional ``hotkey_letter`` is validated like on update before
     anything is written, against the bound project's stored keymap."""
     reg = get_class_registry()
     keymap_overrides = (
-        await project_keymap_overrides(opensearch) if payload.hotkey_letter is not None else None
+        await project_keymap_overrides() if payload.hotkey_letter is not None else None
     )
     try:
         return await create_registry_class(
@@ -81,9 +81,7 @@ async def create_class(payload: ClassCreateRequest, opensearch: OpenSearchDep) -
 
 
 @router.put('/classes/{class_id}')
-async def update_class(
-    class_id: int, payload: ClassUpdateRequest, opensearch: OpenSearchDep
-) -> dict[str, Any]:
+async def update_class(class_id: int, payload: ClassUpdateRequest) -> dict[str, Any]:
     """Rename, regroup, or assign/clear a hotkey on a class."""
     reg = get_class_registry()
     try:
@@ -93,7 +91,7 @@ async def update_class(
                 payload.hotkey_letter,
                 class_id=class_id,
                 registry_obj=await reg.snapshot(),
-                keymap_overrides=await project_keymap_overrides(opensearch),
+                keymap_overrides=await project_keymap_overrides(),
             )
         # Name, group and hotkey change in one versioned write: two PUTs to different
         # classes (or fields) never overwrite each other.
