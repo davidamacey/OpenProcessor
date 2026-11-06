@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from src.db.engine import get_sync_engine, new_task_async_engine
 from src.db.repos import job_events, jobs as repo
-from src.domain import job_states as js, job_timing
+from src.domain import job_perf, job_states as js, job_timing
 from src.tasks.runtime import hooks
 from src.tasks.runtime.context import JobContext, JobResult, Paused, Yield
 from src.tasks.runtime.event_wakeup import wake
@@ -341,7 +341,8 @@ def _write_returned(
         return repo.queue_yield(session, job.id, token), True
     try:
         stored = _mapping(result)
-    except TypeError as exc:
+        job_perf.check_result(kind.name, stored)
+    except (job_perf.ResultCheckError, TypeError) as exc:
         return _fail(session, job, 'result_invalid', str(exc)[:_MESSAGE_CHARS], 'failed'), False
     status = js.COMPLETED_WITH_ERRORS if with_errors else js.COMPLETED
     return repo.finish(session, job.id, token, status=status, outcome=status, result=stored), False

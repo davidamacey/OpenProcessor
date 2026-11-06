@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+from src.domain.job_perf import JobPerfSummary
+
 
 JobErrorCode = Literal[
     'job_busy',
@@ -17,3 +19,5 @@ JobErrorCode = Literal[
     'queue_unavailable',
     'unknown_job_kind',
 ]
+
+__all__ = ['JobErrorCode', 'JobPerfSummary']
