@@ -193,11 +193,27 @@ _.PROGRESS_MIN_INTERVAL_S  # src/domain/job_timing.py, read by the progress thro
 
 # src/db/repos/jobs.py (lane 3A): called by the job service and the task wrapper, which land in
 # the next commits of the lane; each line goes with its first production caller.
-_.insert_queued  # src/services/jobs/service.py, start_job
-_.mark_dispatched  # src/services/jobs/service.py, after the enqueue
-_.fail_queued  # src/services/jobs/service.py (broker down) and the task wrapper
 _.heartbeat  # src/tasks/runtime/heartbeat.py
 _.interrupt  # src/tasks/runtime/job_task.py, worker shutdown
 _.pause_running  # src/tasks/runtime/job_task.py
 _.queue_yield  # src/tasks/runtime/job_task.py
 _.request_pause  # src/tasks/runtime/context.py, ctx.request_pause
+
+# src/services/jobs/service.py (lane 3A): the entry points the family lanes' routes and starters call.
+_.start_job  # src/services/jobs/service.py, called by every family's start route
+_.insert_job  # src/services/jobs/service.py, called by reaper rules e and i inside their transaction
+_.cancel_job  # src/services/jobs/service.py, called by every family's cancel route
+_.pause_job  # src/services/jobs/service.py, called by the pausable families' pause routes
+_.resume_job  # src/services/jobs/service.py, called by the pausable families' resume routes
+_.with_rows  # src/services/jobs/service.py, start_job's hook for the family's domain rows
+
+# STAND-IN, delete after lane 3B merges: this lane codes against a local copy of 3B's
+# src/db/repos/events.py (not committed); the callers of these functions live in 3B's listener
+# and SSE modules, which this branch does not have.
+_.cursor_from_future  # src/db/repos/events.py (3B), called by src/services/events/sse.py
+_.fetch_after  # src/db/repos/events.py (3B), called by src/services/events/listener.py
+_.head_cursor  # src/db/repos/events.py (3B), called by src/services/events/sse.py
+_.insert_event_async  # src/db/repos/events.py (3B), called by src/services/events/publish.py
+_.oldest_cursor  # src/db/repos/events.py (3B), called by src/services/events/sse.py
+_.project_id_for_slug  # src/db/repos/events.py (3B), called by src/services/events/sse.py
+_.delete_older_than  # src/db/repos/events.py (3B), called by reaper rule f (src/services/jobs/reaper.py, lane 3A)
