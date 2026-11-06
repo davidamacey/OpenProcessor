@@ -15,6 +15,9 @@ if TYPE_CHECKING:
     import datetime as dt
     import uuid
 
+ENV_NAME = 'env'  # the VLM endpoint built from OP_VLM_URL / OP_VLM_MODEL
+ENV_REVISION = 1  # the one revision the upgrade stores for it
+
 
 @dataclass(frozen=True)
 class ProjectSrc:
@@ -92,7 +95,7 @@ class ActivationSrc:
     from_name: str | None
     from_revision: int | None
     to_name: str | None  # ``None``: the axis was turned off
-    to_revision: int
+    to_revision: int | None  # ``None`` with ``to_name`` ``None``: off
     kind: str
     at: dt.datetime
 
@@ -184,6 +187,7 @@ class VlmEndpointSrc:
 @dataclass(frozen=True)
 class GlobalData:
     endpoints: tuple[VlmEndpointSrc, ...] = ()
+    env_probe: ProbeSrc | None = None  # the last probe of the ``env`` built-in, if any
     local_vlm_desired: dict[str, Any] | None = None
     projects_revision: int = 0
 

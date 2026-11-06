@@ -118,11 +118,6 @@ class ProjectRegistry:
         """Every ``active`` project, for workers that discover the whole fleet."""
         return [record for record in self.snapshot().values() if record.status == 'active']
 
-    def existing_projects(self) -> list[ProjectRecord]:
-        """Every project that is not being deleted: the one set a cross-project "who uses X"
-        listing may count."""
-        return [record for record in self.snapshot().values() if record.status != 'deleting']
-
     def archived_projects(self) -> list[ProjectRecord]:
         """Every ``archived`` project, for maintenance scripts that still clean up its files."""
         return [record for record in self.snapshot().values() if record.status == 'archived']

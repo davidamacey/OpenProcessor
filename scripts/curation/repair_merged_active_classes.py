@@ -16,9 +16,7 @@ never touches ``merged_into``, crop data, or the target class.
 
 Dry run by default (read-only, prints what it would change);
 ``--apply`` writes the registry document (through the same
-``ClassRegistry.set_deprecated`` path ``POST /classes/{id}/deprecate`` uses). A
-``class_registry.json`` migrated from such a file carries the state over, so
-this still applies after ``openprocessor curation migrate-registry``.
+``ClassRegistry.set_deprecated`` path ``POST /classes/{id}/deprecate`` uses).
 
     python3 scripts/curation/repair_merged_active_classes.py
     python3 scripts/curation/repair_merged_active_classes.py --apply

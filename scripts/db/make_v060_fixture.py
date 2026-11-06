@@ -11,9 +11,7 @@ endpoint with a probe, a settings document, a keymap, a holdout freeze, label op
 ingest source with a ``queue.sqlite``, a dataset import with a ledger, a training run, a
 promotion, a combine run, an active reprocess job and the leftover auto-label files.
 
-Index bodies come from the 0.6.0 writers (``bodies_other.py``, ``global_store.py``,
-``bootstrap.py``; identical to ``git show v0.6.0:...`` for these indexes apart from additive
-fields). The output is deterministic: running it twice gives the same bytes.
+Index bodies are in ``v060_index_bodies.py``. The output is deterministic: running it twice gives the same bytes.
 """
 
 from __future__ import annotations
@@ -26,16 +24,21 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from scripts.db.v060_index_bodies import (
+    GLOBAL_CONFIGS_INDEX_BODY,
+    PROJECTS_INDEX_BODY,
+    configs_body as _configs_body,
+    images_body,
+    index,
+    items_body,
+)
 from src.clients.curation_opensearch.bodies_other import (
     _classes_body,
-    _configs_body,
     _labels_confirmed_body,
     _settings_body,
     _umap_state_body,
     _umap_viz_state_body,
 )
-from src.services.config_store.global_store import GLOBAL_CONFIGS_INDEX_BODY
-from src.services.projects.bootstrap import PROJECTS_INDEX_BODY
 
 
 ROOT = '{ROOT}'
@@ -44,49 +47,6 @@ T0 = '2026-01-01T00:00:00+00:00'
 T1 = '2026-01-02T00:00:00+00:00'
 T2 = '2026-01-03T00:00:00+00:00'
 OUT_DEFAULT = Path(__file__).resolve().parents[2] / 'tests' / 'upgrade' / 'fixtures' / 'v060'
-DIM = 1024
-
-
-def knn_field(engine: str) -> dict[str, Any]:
-    method: dict[str, Any] = {
-        'name': 'hnsw',
-        'space_type': 'cosinesimil',
-        'engine': engine,
-        'parameters': {'ef_construction': 128, 'm': 16},
-    }
-    return {'type': 'knn_vector', 'dimension': DIM, 'method': method}
-
-
-def items_body(engine: str) -> dict[str, Any]:
-    return {
-        'settings': {'index': {'number_of_shards': 1, 'number_of_replicas': 0, 'knn': True}},
-        'mappings': {
-            'properties': {
-                'crop_id': {'type': 'keyword'},
-                'class_id': {'type': 'integer'},
-                'class_name': {'type': 'keyword'},
-                'embedding_state': {'type': 'keyword'},
-                'pe_embedding': knn_field(engine),
-                'region_box_embeddings': {
-                    'type': 'nested',
-                    'properties': {'box_id': {'type': 'keyword'}, 'embedding': knn_field(engine)},
-                },
-            }
-        },
-    }
-
-
-def images_body(engine: str) -> dict[str, Any]:
-    return {
-        'settings': {'index': {'number_of_shards': 1, 'number_of_replicas': 0, 'knn': True}},
-        'mappings': {
-            'properties': {'image_id': {'type': 'keyword'}, 'pe_embedding': knn_field(engine)}
-        },
-    }
-
-
-def index(body: dict[str, Any], docs: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {'mappings': body['mappings'], 'settings': body['settings'], 'docs': docs or {}}
 
 
 def roles(slug: str, *, folded: bool) -> dict[str, str]:
@@ -671,7 +631,14 @@ def build_opensearch() -> dict[str, Any]:
         'c1': {**item('c1', 0, 'car'), 'class_id_history': [OTHER_ENTRY, OP_ENTRY]},
         'c2': {**item('c2', 0, 'car'), 'class_id_history': [OTHER_ENTRY]},
     })  # fmt: skip
-    folded = {**configs_docs(), 'default': settings_doc(), 'class_registry': classes_doc(),
+    # demo moved from the stored endpoint to the environment built-in (no revision) and acknowledged both
+    env_vlm = {
+        **activation('vlm', 'env', None, {'name': 'local-vlm', 'revision': 1}, T2),
+        **event(7, 'vlm', 'env', None, {'name': 'local-vlm', 'revision': 1}, T2),
+    }
+    env_vlm['activation:vlm']['acked_refs'] = {'local-vlm@1': T1, 'env@0123456789ab': T2}
+    env_vlm['activation:vlm']['external_ack_at'] = T2
+    folded = {**configs_docs(), **env_vlm, 'default': settings_doc(), 'class_registry': classes_doc(),
               'current': {'state_id': 'current', 'projection_version': 'umap_viz_v1', 'scope': 'all', 'cluster_id': None, 'n_points': 3, 'fitted_at': T2, 'n_components': 2, 'metric': 'cosine'}}  # fmt: skip
     out[demo_roles['configs']] = index(_configs_body(), folded)
     out[demo_roles['umap_state']] = index(_umap_state_body())

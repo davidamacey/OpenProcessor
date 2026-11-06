@@ -241,7 +241,6 @@ directory created. Run `./openprocessor help` for the list.
 | `faces purge [--dry-run] [--yes]` | report or delete every stored face record, person id and name, and the face FAISS files; `--yes` requires `OP_FACES_ENABLED=false` first (see [SECURITY.md](SECURITY.md#privacy-face-data)) |
 | `export <model>` / `download <model>` | export to TensorRT / download weights. Targets include `all`, `essential`, `status`; `export` also takes `yolo`, `scrfd`, `arcface`, `clip-image`, `clip-text`, `ocr`; `download` also takes `ocr` |
 | `curation [up\|down\|logs\|status]` | start, stop, follow or list the curation workers (`status` is the default) |
-| `curation migrate-registry [--project SLUG \| --all] [--dry-run] [--reverse]` | move each project's class registry between `class_registry.json` and its OpenSearch document (OpenSearch must be up); `upgrade` and `repair` run it for you |
 | `sample coco [--full]` | fetch the public COCO sample into `data/samples/` using the export image |
 | `config show` | print `.env` with every token, key, secret and password redacted |
 | `cropwright password` | set the Cropwright basic-auth login (an empty answer generates one) |
@@ -492,18 +491,18 @@ Run these from the install directory:
 ./setup-openprocessor.sh --uninstall [--purge-volumes] [--purge-data] [--remove-images]
 ```
 
-Since 0.7.0 the class registry is an OpenSearch document. `upgrade` and `repair` of an existing
-install migrate each project's `class_registry.json` after the stack is healthy (a dry-run report
-first; both reports are under `.install/registry_migration/`; every class id is kept and the file
-is renamed `class_registry.json.migrated`). If the migration fails the installer exits 8 and names
-the report, and class routes answer `409 registry_not_migrated` until
-`./openprocessor curation migrate-registry --all` passes. A checkout upgrade (`git pull`, `make up`)
-must run that command itself. `--rollback` first writes every registry back to
-`class_registry.json` (`--reverse`), so the older version sees every class, including the ones added
-after the migration. For a manual downgrade, run
-`./openprocessor curation migrate-registry --all --reverse` first; without it, rename
-`class_registry.json.migrated` back to `class_registry.json` in each project's data directory
-(classes added after the migration then exist only in the document: export them first).
+Upgrading an install older than 0.7.0 also moves the control data (projects, class registries,
+configurations, activations, settings, label operations, jobs and run records) out of OpenSearch and
+`class_registry.json` files into PostgreSQL, in one step with the backup first. `upgrade` stops the
+stack, runs the database migrations, exports a bundle (`.install/upgrade-0.6.0-<utc>/`), loads it
+in one transaction, verifies the rows against the bundle, and only then deletes the 0.6.0 control
+indexes and files; a verify that fails deletes nothing and names the report. It resumes at the first
+step that did not finish. `./setup-openprocessor.sh --rollback` rebuilds the 0.6.0 control indexes
+and files from the newest bundle and abandons what was written to PostgreSQL since (it asks first;
+classes, configurations and jobs created after the upgrade are not carried back). A checkout
+upgrade (`git pull`, `make up`) from 0.6.0 runs the same step with
+`python -m scripts.db.upgrade_from_060` (see its header); `./openprocessor db verify` reports the
+database against OpenSearch and storage afterwards.
 
 What each step does, the backups it makes, the 0.6.x image-split note and the data backup are in
 [Upgrade, repair and back up](docs-site/docs/operations/upgrade-and-backup.mdx). The flags are in the

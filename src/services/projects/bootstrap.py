@@ -74,19 +74,14 @@ async def bootstrap_default_project() -> ProjectRecord:
 async def _bootstrap_once() -> Any:
     """Upsert ``default``, read the registry and seed each project's region
     class. Raises while OpenSearch is unreachable or the registry unread."""
-    from src.services.projects.guard import make_curation_opensearch
     from src.services.projects.registry import get_project_registry
 
-    client = await make_curation_opensearch()
     await bootstrap_default_project()
     registry = get_project_registry()
     await registry.ensure_fresh()
     if not registry.refreshed:
         raise RuntimeError('project registry not readable yet')
     await _seed_region_classes()
-    from src.services.projects.legacy_repair import repair_legacy_projects
-
-    await repair_legacy_projects(client)
     return registry
 
 

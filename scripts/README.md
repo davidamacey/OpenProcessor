@@ -172,7 +172,6 @@ Most are dry-run by default and write only with `--apply`, under OCC; check `--h
 | `reclassify_after_registry_growth.py` | After adding classes or synonyms, promote unmatched items whose raw VLM label now resolves to an active class (never validated) |
 | `cluster_raw_labels.py` | Cluster the VLM's free-text class labels into candidate sub-classes and write the fields read by `GET /curation/projects/{project}/review/raw_label_clusters` (`--dry-run --report` previews) |
 | `seed_class_registry.py` | Seed or extend the project's class registry document from a detector ONNX's embedded names or a `data.yaml`, append-only; `--check` fails on class-order drift |
-| `migrate_class_registry.py` | Move each project's class registry between `class_registry.json` and its OpenSearch document (`--project`/`--all`, `--dry-run`, `--reverse`); run by `./openprocessor curation migrate-registry` and by `upgrade` |
 | `repair_empty_vlm_answers.py`, `repair_unmatched_class.py`, `repair_stale_label_source.py`, `repair_merged_active_classes.py`, `revert_class_cluster_promotions.py` | One-off data repairs for known legacy states; read each script's header before use |
 | `prune_exports.py`, `prune_training_runs.py` | Keep-last retention for export directories, finished training runs and bake-off output |
 | `seed_live_harness.py` | Seeds the throwaway `docker/test/compose.yml` live stack. It refuses to run against an index without a `verify_` prefix. Never point it at a real deployment |

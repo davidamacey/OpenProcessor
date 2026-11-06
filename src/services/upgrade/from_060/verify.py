@@ -83,13 +83,11 @@ def bulk_counts(bundle: Path, parsed: Parsed) -> dict[str, int]:
 
 def expected_counts(parsed: Parsed, bulk: dict[str, int]) -> dict[str, int]:
     projects = parsed.projects
-    configs = [d for pd in projects for d in pd.configs] + [
-        e.doc for e in parsed.global_data.endpoints
-    ]
+    configs = [d for pd in projects for d in pd.configs] + [e.doc for e in parsed.endpoints]
     config_ids: set[tuple[str | None, str, str]] = {
         (pd.project.slug, d.kind, d.name) for pd in projects for d in pd.configs
     }
-    config_ids |= {(None, e.doc.kind, e.doc.name) for e in parsed.global_data.endpoints}
+    config_ids |= {(None, e.doc.kind, e.doc.name) for e in parsed.endpoints}
     scoped_events = 0
     for pd in projects:
         known = {(k, n) for (owner, k, n) in config_ids if owner in (pd.project.slug, None)}
@@ -101,7 +99,7 @@ def expected_counts(parsed: Parsed, bulk: dict[str, int]) -> dict[str, int]:
     )
     probes = sum(
         1
-        for e in parsed.global_data.endpoints
+        for e in parsed.endpoints
         for p in e.probes
         if p.revision in {r.revision for r in e.doc.revisions}
     )

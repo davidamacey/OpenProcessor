@@ -18,8 +18,8 @@ PATH_PLUMBING = {
     'src/routers/curation/_project_views.py',
     'src/services/projects/registry.py',
     'src/services/projects/delete_paths.py',
-    # the 0.6.0 upgrade step (lane 2E) reads and renames the file once
-    'scripts/curation/migrate_class_registry.py',
+    # writes the 0.6.0 project documents the upgrade fixture is made of
+    'scripts/db/make_v060_fixture.py',
 }
 
 

@@ -925,12 +925,20 @@
     "revision": 2
    },
    "activation:vlm": {
-    "activated_at": "2026-01-02T00:00:00+00:00",
+    "acked_refs": {
+     "env@0123456789ab": "2026-01-03T00:00:00+00:00",
+     "local-vlm@1": "2026-01-02T00:00:00+00:00"
+    },
+    "activated_at": "2026-01-03T00:00:00+00:00",
     "axis": "vlm",
     "doc_type": "activation",
-    "name": "local-vlm",
-    "previous": null,
-    "revision": 1
+    "external_ack_at": "2026-01-03T00:00:00+00:00",
+    "name": "env",
+    "previous": {
+     "name": "local-vlm",
+     "revision": 1
+    },
+    "revision": null
    },
    "activation_event:00000000-0000-4000-8000-000000000001": {
     "activated_at": "2026-01-02T00:00:00+00:00",
@@ -982,6 +990,17 @@
     "name": null,
     "previous": {
      "name": "fast",
+     "revision": 1
+    },
+    "revision": null
+   },
+   "activation_event:00000000-0000-4000-8000-000000000007": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "vlm",
+    "doc_type": "activation_event",
+    "name": "env",
+    "previous": {
+     "name": "local-vlm",
      "revision": 1
     },
     "revision": null

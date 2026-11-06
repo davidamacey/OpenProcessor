@@ -17,12 +17,9 @@ OpenSearch and commit nothing. When a repository signature changes this is the o
 
 from __future__ import annotations
 
-import importlib
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete
-
-from src.db.models import ClassRegistry
+from src.db.repos import classes, config, projects, records, settings
 from src.services.upgrade.from_060.ids import stable_id
 
 
@@ -47,14 +44,7 @@ if TYPE_CHECKING:
 CREATED_BY = 'upgrade_from_060'
 
 
-def _repo(name: str) -> Any:
-    # Imported on use: the repositories land with lanes 2A-2D, and the module that calls them is
-    # this one only.
-    return importlib.import_module(f'src.db.repos.{name}')
-
-
 async def load_project(session: AsyncSession, p: ProjectSrc) -> uuid.UUID:
-    projects = _repo('projects')
     row = projects.ProjectLoad(
         slug=p.slug,
         display_name=p.display_name,
@@ -73,12 +63,10 @@ async def load_project(session: AsyncSession, p: ProjectSrc) -> uuid.UUID:
         paused_at=p.paused_at,
         origin=p.origin,
     )
-    result: uuid.UUID = await projects.load_project(session, row)
-    return result
+    return await projects.load_project(session, row)
 
 
 async def load_registry(session: AsyncSession, project_id: uuid.UUID, reg: RegistrySrc) -> None:
-    classes = _repo('classes')
     rows = [
         classes.ClassLoad(
             class_id=c.class_id,
@@ -93,9 +81,6 @@ async def load_registry(session: AsyncSession, project_id: uuid.UUID, reg: Regis
         )
         for c in reg.classes
     ]
-    # load_project writes the empty registry row a project create writes, and load_registry writes
-    # the registry row itself and refuses to find one: the empty row goes first (it has no classes).
-    await session.execute(delete(ClassRegistry).where(ClassRegistry.project_id == project_id))
     await classes.load_registry(
         session,
         project_id,
@@ -112,17 +97,20 @@ def config_id(owner: str | None, kind: str, name: str) -> uuid.UUID:
     return stable_id('config', owner or '', kind, name)
 
 
-def _document(doc: ConfigDocSrc, project_id: uuid.UUID | None) -> Any:
-    config = _repo('config')
+def _document(doc: ConfigDocSrc, project_id: uuid.UUID | None) -> config.ConfigDocumentLoad:
     return config.ConfigDocumentLoad(
         project_id=project_id,
         kind=doc.kind,
         name=doc.name,
         revisions=[
-            config.ConfigRevisionLoad(revision=r.revision, body=r.body, created_at=r.created_at)
+            config.ConfigRevisionLoad(
+                revision=r.revision,
+                body=r.body,
+                created_at=r.created_at,
+                description=doc.description if r is doc.revisions[-1] else '',
+            )
             for r in doc.revisions
         ],
-        description=doc.description,
         id=config_id(doc.project_slug, doc.kind, doc.name),
         created_at=doc.created_at,
         updated_at=doc.updated_at,
@@ -132,23 +120,20 @@ def _document(doc: ConfigDocSrc, project_id: uuid.UUID | None) -> Any:
 async def load_config(
     session: AsyncSession, project_id: uuid.UUID | None, doc: ConfigDocSrc
 ) -> uuid.UUID:
-    result: uuid.UUID = await _repo('config').load_config_document(
-        session, _document(doc, project_id)
-    )
-    return result
+    return await config.load_config_document(session, _document(doc, project_id))
 
 
 async def load_vlm_endpoint(session: AsyncSession, endpoint: VlmEndpointSrc) -> uuid.UUID:
     """A deployment-wide endpoint: its document, revisions and probes."""
-    config = _repo('config')
     known = {r.revision for r in endpoint.doc.revisions}
     probes = [
         config.ProbeLoad(revision=p.revision, probed_at=p.probed_at, ok=p.ok, result=p.result)
         for p in endpoint.probes
         if p.revision in known
     ]
-    row = config.VlmEndpointLoad(document=_document(endpoint.doc, None), probes=probes)
-    await config.load_vlm_endpoint(session, row)
+    await config.load_vlm_endpoint(
+        session, config.VlmEndpointLoad(document=_document(endpoint.doc, None), probes=probes)
+    )
     return config_id(None, endpoint.doc.kind, endpoint.doc.name)
 
 
@@ -159,12 +144,10 @@ async def load_activations(
     config_ids: Mapping[tuple[str, str], uuid.UUID],
 ) -> None:
     """The current activation of each axis is its last event; an event to ``None`` is "off"."""
-    config = _repo('config')
-    off = config.OFF_CONFIG_ID
     rows = [
         config.ActivationEventLoad(
             axis=e.axis,
-            to_config_id=off if e.to_name is None else config_ids[(e.kind, e.to_name)],
+            to_config_id=None if e.to_name is None else config_ids[(e.kind, e.to_name)],
             to_revision=e.to_revision,
             at=e.at,
             from_config_id=config_ids.get((e.kind, e.from_name)) if e.from_name else None,
@@ -178,27 +161,21 @@ async def load_activations(
     await config.load_activation_events(session, project_id, rows)
 
 
-async def load_settings(
-    session: AsyncSession, project_id: uuid.UUID, settings: SettingsSrc
-) -> None:
-    repo = _repo('settings')
-    await repo.load_setting(session, project_id, 'defaults', settings.defaults, revision=1)
-    for key, body in settings.policies.items():
-        await repo.load_setting(
+async def load_settings(session: AsyncSession, project_id: uuid.UUID, src: SettingsSrc) -> None:
+    await settings.load_setting(session, project_id, 'defaults', src.defaults, revision=1)
+    for key, body in src.policies.items():
+        await settings.load_setting(
             session, project_id, key, body, revision=max(1, int(body.get('revision') or 1))
         )
 
 
 async def load_keymap(session: AsyncSession, project_id: uuid.UUID, keymap: KeymapSrc) -> None:
-    await _repo('settings').load_keymap(
-        session, project_id, keymap.overrides, revision=keymap.revision
-    )
+    await settings.load_keymap(session, project_id, keymap.overrides, revision=keymap.revision)
 
 
 async def load_holdouts(
     session: AsyncSession, project_id: uuid.UUID, holdouts: Iterable[HoldoutSrc]
 ) -> None:
-    records = _repo('records')
     rows = [
         records.HoldoutFreezeLoad(
             id=h.id,
@@ -227,7 +204,6 @@ async def load_label_op(
     ``priors`` maps an item id to the state the operation replaced (undo reads it from the member
     row); an item with no entry loads ``None``, which undo keeps as changed.
     """
-    records = _repo('records')
     row = records.LabelOperationLoad(
         id=op.id,
         project_id=project_id,
@@ -247,7 +223,7 @@ async def load_state_marker(
 ) -> None:
     """A ``project_state`` row: ``cluster_refresh``, ``region_drain`` or ``region_dependency_health``."""
     body = {k: v for k, v in state.items() if k != 'revision'}
-    await _repo('records').load_project_state(
+    await records.load_project_state(
         session, project_id, key, body, revision=max(1, int(state.get('revision') or 1))
     )
 
@@ -257,7 +233,5 @@ async def ensure_class(
 ) -> int:
     """The id of the active class ``name``, added first when the registry lacks it (2B's
     ``ensure_class``: the one allocation path)."""
-    result: int = await _repo('classes').ensure_class(
-        session, project_id, name, group=group, notes=notes
-    )
-    return result
+    row, _ = await classes.ensure_class(session, project_id, name, group=group, notes=notes)
+    return row.class_id

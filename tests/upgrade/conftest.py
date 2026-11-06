@@ -1,17 +1,8 @@
-"""Install the load-contract stand-ins while lanes 2A-2D are not merged (see _contract_stubs)."""
+"""Fixtures of the 0.6.0 upgrade tests: a clean database, owner sessions and a runner over the fixture."""
 
 from __future__ import annotations
 
-import importlib.util
-
-
-if importlib.util.find_spec('src.db.repos.projects') is None:
-    from tests.upgrade import _contract_stubs
-
-    _contract_stubs.install()
-
-
-import datetime as dt  # after the stand-in install above, which other imports rely on
+import datetime as dt
 from typing import TYPE_CHECKING
 
 import pytest
@@ -34,6 +25,14 @@ CLEAR = (
     'DELETE FROM upgrade_runs',
 )
 NOW = dt.datetime(2026, 2, 1, tzinfo=dt.UTC)
+
+
+@pytest.fixture(autouse=True)
+def env_vlm(monkeypatch):
+    """The environment the upgrade runs in names a VLM, so a project that activated the built-in
+    ``env`` endpoint can be pointed at its stored body."""
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm-env:8000/v1')
+    monkeypatch.setenv('OP_VLM_MODEL', 'env-model')
 
 
 @pytest.fixture

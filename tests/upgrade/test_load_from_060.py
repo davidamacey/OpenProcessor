@@ -127,7 +127,7 @@ async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
     # an axis turned off ends in an off event (one per project) and has no activation row
     assert rows(
         clean_db,
-        'SELECT count(*) FILTER (WHERE e.to_revision = 0), '
+        'SELECT count(*) FILTER (WHERE e.to_config_id IS NULL AND e.to_revision IS NULL), '
         "(SELECT count(*) FROM config_activations a WHERE a.axis = 'ingest_profile') "
         "FROM config_activation_events e WHERE e.axis = 'ingest_profile'",
     ) == [(2, 0)]
@@ -138,7 +138,7 @@ async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
     ) == [(True,)]
     assert rows(clean_db, 'SELECT count(*) FROM vlm_endpoint_probes') == [
         (1,)
-    ]  # the env probe has no revision: not loaded
+    ]  # the env probe's fingerprint no longer matches the environment: not kept
     assert rows(
         clean_db,
         "SELECT value ->> 'catalog_id' FROM deployment_settings WHERE key = 'local_vlm_desired'",
@@ -153,6 +153,7 @@ async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
         'cluster_refresh',
         'region_drain',
         'region_dependency_health',
+        'vlm_external_ack',
     }
     assert rows(clean_db, 'SELECT count(*) FROM projection_states') == [(2,)]
     assert rows(clean_db, "SELECT paused_at IS NOT NULL FROM projects WHERE slug = 'demo'") == [

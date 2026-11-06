@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import delete
 
 from src.db.models import Event
-from src.services.upgrade.from_060 import control_rows, direct_rows, ledger_copy
+from src.services.upgrade.from_060 import control_rows, direct_rows, env_endpoint, ledger_copy
 from src.services.upgrade.from_060.model import LoadReport
 from src.services.upgrade.from_060.parse_core import parse_all
 from src.services.upgrade.from_060.parse_jobs import (
@@ -56,6 +56,7 @@ if TYPE_CHECKING:
         PromotionSrc,
         RetiredSlug,
         TrainingRunSrc,
+        VlmEndpointSrc,
     )
     from src.services.upgrade.from_060.snapshot import Snapshot
 
@@ -70,6 +71,9 @@ class Parsed:
         self.projects: list[ProjectData]
         self.retired: list[RetiredSlug]
         self.global_data, self.projects, self.retired = parse_all(snap, now=now)
+        self.endpoints: list[VlmEndpointSrc] = env_endpoint.endpoints_to_store(
+            self.global_data, self.projects, now=now
+        )
         by_slug = {p.project.slug: p.project for p in self.projects}
         self.holdouts: dict[str, tuple[HoldoutSrc, ...]] = {}
         self.label_ops: dict[str, tuple[LabelOpSrc, ...]] = {}
@@ -116,7 +120,7 @@ async def _load_configs(
     report: LoadReport,
 ) -> dict[tuple[str | None, str, str], uuid.UUID]:
     ids: dict[tuple[str | None, str, str], uuid.UUID] = {}
-    for endpoint in parsed.global_data.endpoints:
+    for endpoint in parsed.endpoints:
         doc = endpoint.doc
         ids[(None, doc.kind, doc.name)] = await control_rows.load_vlm_endpoint(session, endpoint)
         report.add('config_documents')

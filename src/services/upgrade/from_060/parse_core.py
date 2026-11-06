@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any
 from src.db.models.config import ACTIVATION_AXES
 from src.services.upgrade.from_060 import sources as legacy
 from src.services.upgrade.from_060.model import (
+    ENV_NAME,
+    ENV_REVISION,
     ActivationSrc,
     ClassSrc,
     ConfigDocSrc,
@@ -228,9 +230,9 @@ def parse_activations(
     """Activation events per axis in time order, ending in the axis's current activation.
 
     An axis turned off ends in an event to ``None`` (0.7.0 records "off" as an event, so "never
-    activated" stays distinct). The ``env`` built-in (an activation with no revision) names no
-    document 0.7.0 can point at; such events are skipped and the axis ends where the last
-    pointable event left it.
+    activated" stays distinct). The ``env`` VLM endpoint is pointed at its first revision. Any other
+    built-in (an activation with no revision) names no document the upgrade can store; such events
+    are skipped and the axis ends where the last pointable event left it.
     """
     events: dict[str, list[ActivationSrc]] = {}
     currents: dict[str, Mapping[str, Any]] = {}
@@ -259,18 +261,29 @@ def parse_activations(
     return out
 
 
+def _pinned(axis: str, name: Any, revision: Any) -> int | None:
+    """The revision an activation points at. The ``env`` VLM endpoint has none in 0.6.0 (the
+    environment is its body); the upgrade stores that body as its first revision."""
+    if revision is not None:
+        return int(revision)
+    return ENV_REVISION if axis == 'vlm' and name == ENV_NAME else None
+
+
 def _activation(doc: Mapping[str, Any], now: dt.datetime) -> ActivationSrc | None:
     axis = str(doc.get('axis'))
     name = doc.get('name')
-    if axis not in _AXIS_KIND or (name is not None and doc.get('revision') is None):
+    if axis not in _AXIS_KIND:
+        return None
+    to_revision = _pinned(axis, name, doc.get('revision'))
+    if name is not None and to_revision is None:
         return None
     previous = doc.get('previous') or {}
     return ActivationSrc(
         axis=axis,
         from_name=previous.get('name'),
-        from_revision=previous.get('revision'),
+        from_revision=_pinned(axis, previous.get('name'), previous.get('revision')),
         to_name=None if name is None else str(name),
-        to_revision=0 if name is None else int(doc['revision']),
+        to_revision=to_revision,
         kind=_AXIS_KIND[axis],
         at=parse_ts(doc.get('activated_at'), now),
     )
@@ -352,6 +365,15 @@ def parse_markers(snap: Snapshot, project: ProjectSrc) -> dict[str, Any]:
     return out
 
 
+def parse_vlm_ack(docs: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """The external endpoints the project acknowledged (``acked_refs``, ``name@revision`` to the
+    time), as the ``vlm_external_ack`` state. 0.6.0 kept them on the VLM activation document next
+    to ``external_ack_at``; 0.7.0 derives that field from the refs."""
+    activation = docs.get(f'{legacy.ACTIVATION_DOC_PREFIX}vlm') or {}
+    refs = {str(k): str(v) for k, v in (activation.get('acked_refs') or {}).items()}
+    return {'vlm_external_ack': {'acked_refs': refs}} if refs else {}
+
+
 # --- one project, and the deployment-wide documents -------------------------------------------
 
 
@@ -361,7 +383,7 @@ def parse_project_data(snap: Snapshot, project: ProjectSrc, *, now: dt.datetime)
     activations = parse_activations(docs, now=now)
     settings, refresh = parse_settings(snap, project)
     return ProjectData(
-        markers=parse_markers(snap, project),
+        markers={**parse_markers(snap, project), **parse_vlm_ack(docs)},
         project=project,
         registry=parse_registry(snap, project, now=now),
         configs=parse_config_docs(docs, project.slug, _referenced(activations), now=now),
@@ -376,8 +398,21 @@ def parse_project_data(snap: Snapshot, project: ProjectSrc, *, now: dt.datetime)
 def parse_global(snap: Snapshot, *, now: dt.datetime) -> GlobalData:
     docs = snap.index_docs(legacy.GLOBAL_CONFIGS_INDEX)
     probes: dict[str, list[ProbeSrc]] = {}
+    env_probe: ProbeSrc | None = None
     for doc in docs.values():
-        if doc.get('doc_type') != 'vlm_probe' or '@' not in str(doc.get('probe_key', '')):
+        if doc.get('doc_type') != 'vlm_probe':
+            continue
+        if doc.get('probe_key') == ENV_NAME:
+            record = (doc.get('body') or {}).get('record') or {}
+            env_probe = ProbeSrc(
+                name=ENV_NAME,
+                revision=ENV_REVISION,
+                probed_at=parse_ts(doc.get('probed_at') or record.get('probed_at'), now),
+                ok=bool(record.get('ok', False)),
+                result=doc.get('body') or {},
+            )
+            continue
+        if '@' not in str(doc.get('probe_key', '')):
             continue
         name, _, rev = str(doc['probe_key']).rpartition('@')
         record = (doc.get('body') or {}).get('record') or {}
@@ -400,6 +435,7 @@ def parse_global(snap: Snapshot, *, now: dt.datetime) -> GlobalData:
     desired = docs.get(legacy.LOCAL_DESIRED_DOC_ID)
     return GlobalData(
         endpoints=endpoints,
+        env_probe=env_probe,
         local_vlm_desired=dict(desired) if desired else None,
     )
 
@@ -411,7 +447,9 @@ def parse_all(
     global_data = parse_global(snap, now=now)
     projects = [parse_project_data(snap, p, now=now) for p in live]
     return (
-        GlobalData(global_data.endpoints, global_data.local_vlm_desired, revision),
+        GlobalData(
+            global_data.endpoints, global_data.env_probe, global_data.local_vlm_desired, revision
+        ),
         projects,
         retired,
     )

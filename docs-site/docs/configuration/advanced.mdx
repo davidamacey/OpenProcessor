@@ -33,7 +33,7 @@ What a project owns, resolved from those variables and the roots below:
 | Resource | Location |
 |---|---|
 | OpenSearch indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` for `images`, `items`, `labels_confirmed`, `classes`, `umap_state` and `configs`. Settings and projection state share the `configs` index |
-| Class registry | the `class_registry` document in the project's settings index (a legacy `{OP_PROJECTS_DATA_ROOT}/{slug}/class_registry.json` is moved there by `curation migrate-registry`) |
+| Class registry | the `class_registry` document in the project's settings index (a legacy `{OP_PROJECTS_DATA_ROOT}/{slug}/class_registry.json` is loaded by the 0.7.0 upgrade) |
 | Exports | `{OP_PROJECTS_DATA_ROOT}/{slug}/exports/` |
 | Bake-off eval sets | `{OP_PROJECTS_DATA_ROOT}/{slug}/bakeoff_eval/{curated,public,sample}` |
 | Uploads, state, bake-off job queue | `{OP_STATE_DIR}/projects/{slug}/` (`uploads/`, `bakeoff_jobs/`) |
