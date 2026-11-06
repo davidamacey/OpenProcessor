@@ -38,6 +38,8 @@ A_ORDER = ['truck', 'car']
 B_ORDER = ['car', 'truck', 'bus']
 A_BOXES = ['car 0.3 0.3 0.2 0.2', 'truck 0.7 0.7 0.2 0.2']
 B_BOXES = ['car 0.2 0.2 0.1 0.1', 'truck 0.5 0.5 0.1 0.1', 'bus 0.8 0.8 0.1 0.1']
+pytestmark = pytest.mark.db
+
 VALIDATED = {'class_validated': True, 'class_source': 'human', 'label_source': 'human'}
 
 
@@ -53,8 +55,11 @@ def populate(world: World, slug: str, rows: list[str]) -> dict[tuple[float, ...]
 
 
 @pytest.mark.asyncio
-async def test_class_identity_holds_through_a_combine(tmp_path: Path, monkeypatch) -> None:
+async def test_class_identity_holds_through_a_combine(
+    tmp_path: Path, monkeypatch, pg_registry
+) -> None:
     world = World(tmp_path, monkeypatch)
+    world.pg = pg_registry  # each project gets its real projects row, as the busy check needs
     world.project('proj-a', A_ORDER)
     world.project('proj-b', B_ORDER)
     # The two registries really do number the same names differently.
