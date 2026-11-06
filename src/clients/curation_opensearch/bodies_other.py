@@ -145,49 +145,26 @@ def _umap_viz_state_body() -> dict[str, Any]:
 
 
 def _configs_body() -> dict[str, Any]:
-    """The config store: prompt packs,
-    region profiles, activations, activation history and the
-    cross-process revision counter -- one doc per row, ``doc_type``
-    discriminates the shape (``config`` | ``revision`` | ``activation``
-    | ``activation_event`` | ``meta`` | ``runtime``).
+    """The project's ``__configs`` index, which now only carries the folded roles.
 
-    For a project created after this wave, ``resources_for_new`` also
-    points the ``SETTINGS`` and ``UMAP_VIZ_STATE`` roles at this same
-    index name (shard folding, owner D4, projects_plan.md §2.3), so this
-    mapping carries their properties too (``_settings_body()`` /
-    ``_umap_viz_state_body()``, field-for-field identical types --
-    verified conflict-free in ``test_configs_mapping_union.py``). Those
-    two roles are read/written by fixed doc id only (``default`` /
-    ``current``), never searched, and every config-store doc has a
-    ``doc_type`` while the folded docs have none, so a
-    ``doc_type``-filtered config-store query never sees them (see
-    ``test_folded_roles_by_id_only.py``).
+    The config store lives in PostgreSQL. ``resources_for_new`` points the ``SETTINGS`` and
+    ``UMAP_VIZ_STATE`` roles at this index name (shard folding, owner D4, projects_plan.md §2.3),
+    so this mapping carries their properties (``_settings_body()`` / ``_umap_viz_state_body()``,
+    field-for-field identical types, verified conflict-free in ``test_configs_mapping_union.py``).
+    Those roles are read and written by fixed doc id only (``default`` / ``current``), never
+    searched.
     """
     return {
         'settings': _plain_settings(),
         'mappings': {
             'dynamic': False,
             'properties': {
-                # -- config-store rows --
-                'doc_type': {'type': 'keyword'},
-                'kind': {'type': 'keyword'},
-                'name': {'type': 'keyword'},
-                'revision': {'type': 'integer'},
-                'body': {'type': 'object', 'enabled': False},
-                'description': {'type': 'keyword', 'ignore_above': 512, 'index': False},
-                'created_at': {'type': 'date'},
-                'updated_at': {'type': 'date'},
-                'updated_by': {'type': 'keyword'},
-                'cloned_from': {'type': 'keyword'},
-                'axis': {'type': 'keyword'},
-                'previous': {'type': 'object', 'enabled': False},
-                'config_revision': {'type': 'long'},
-                'process': {'type': 'keyword'},
-                'applied_at': {'type': 'date'},
                 # -- folded SETTINGS (op_curation_settings doc `default`) --
                 'defaults': {'type': 'object', 'enabled': False},
                 **POLICY_DOC_MAPPING,
                 **SETTINGS_OBJECT_KEYS_MAPPING,
+                'updated_at': {'type': 'date'},
+                'updated_by': {'type': 'keyword'},
                 # -- folded UMAP_VIZ_STATE (doc `current`) --
                 'state_id': {'type': 'keyword'},
                 'projection_version': {'type': 'keyword'},

@@ -1,19 +1,14 @@
 """The durable record of an import's frozen test split: written once
-when the import finishes, under the import freeze dir, never replacing the
-curated ``current.json``."""
+when the import finishes as a ``holdout_freezes`` row that is not current, never replacing the
+curated freeze."""
 
 from __future__ import annotations
 
-import contextlib
-from pathlib import Path
+import uuid
 from typing import TYPE_CHECKING
 
-from src.config import get_curation_config
-from src.services.curation.holdout import (
-    compute_holdout_sha,
-    mark_freeze_record_undone,
-    persist_freeze_record,
-)
+from src.db.session import async_session_factory
+from src.services.curation.holdout import forget_freeze, record_standing_freeze
 
 
 if TYPE_CHECKING:
@@ -23,7 +18,7 @@ if TYPE_CHECKING:
 _HOLDOUT_ACTIONS = frozenset({'created', 'updated', 'standalone', 'parent', 'proposal'})
 
 
-def persist_import_freeze(ctx: ImportContext, store: ImportStore) -> Path | None:
+async def persist_import_freeze(ctx: ImportContext, store: ImportStore) -> uuid.UUID | None:
     """Record every item the import put on a ``test`` frame as holdout."""
     crop_ids = sorted(
         {
@@ -37,28 +32,30 @@ def persist_import_freeze(ctx: ImportContext, store: ImportStore) -> Path | None
     if not crop_ids:
         return None
     state = store.job.read()
-    path = persist_freeze_record(
-        crop_ids=crop_ids,
-        sha=compute_holdout_sha(crop_ids),
-        cohort_spec={
-            'kind': 'import',
-            'import_id': ctx.import_id,
-            'source_sha': ctx.source_sha,
-            **(state.get('test_split') or {}),
-        },
-        per_class_counts={},
-        state_dir=Path(get_curation_config().project_state_dir) / 'test_holdout',
-        kind='import',
-    )
-    store.job.update(freeze_record=str(path))
-    return path
+    async with async_session_factory()() as session:
+        row = await record_standing_freeze(
+            session,
+            crop_ids=crop_ids,
+            cohort_spec={
+                'kind': 'import',
+                'import_id': ctx.import_id,
+                'source_sha': ctx.source_sha,
+                **(state.get('test_split') or {}),
+            },
+            per_class_counts={},
+            source=f'import:{ctx.import_id}',
+            frozen_by='import',
+        )
+    store.job.update(freeze_record=str(row.id))
+    return row.id
 
 
-def mark_freeze_undone(store: ImportStore) -> None:
+async def mark_freeze_undone(store: ImportStore) -> None:
+    """Drop the freeze row of an undone import: its items are no longer held out."""
     recorded = store.job.read().get('freeze_record')
     if recorded:
-        with contextlib.suppress(FileNotFoundError):
-            mark_freeze_record_undone(Path(recorded))
+        async with async_session_factory()() as session:
+            await forget_freeze(session, uuid.UUID(recorded))
 
 
 __all__ = ['mark_freeze_undone', 'persist_import_freeze']

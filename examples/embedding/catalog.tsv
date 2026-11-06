@@ -1,0 +1,10 @@
+# OpenProcessor embedding model catalog: the encoder versions a project can back a space with.
+# One file, one reader (src/services/embedding_spaces/catalog.py), the shape of examples/vlm/catalog.tsv.
+# Tab-separated; the first non-comment line names the columns. A row is immutable once synced:
+# a changed input_spec, weights or dimension is a NEW version row, never an edit.
+# modalities and matryoshka_dims are comma lists; input_spec is an EncoderInputSpec JSON object.
+# weights_sha256: the SHA-256 of the checkpoint file (PE: export/download_pe_weights.py pin;
+# MobileCLIP2: the Hub LFS object id of open_clip_pytorch_model.bin at the pinned commit).
+model_key	version	modalities	native_dim	matryoshka_dims	distance	input_spec	weights_ref	weights_sha256	precision	triton_image_model	triton_text_model	licence	status
+pe_core_l14_336	1	image,text	1024		cosine	{"image":{"dtype":"uint8","layout":"NCHW","size":[336,336],"color":"RGB","normalize":"in_graph","resize":"short_edge_center_crop","interpolation":"pil_bilinear","fill":0},"text":{"context_length":32,"prefixes":{"query":"","document":""}}}	hf:facebook/PE-Core-L14-336@bafb0f76541d399057e980a25947f67acec76575	0cdab5b338cbaa1e7a5dcd1b2fb4c9f4d5df1abd289564658edbab64a650e7e8	fp16	pe_image_encoder	pe_text_encoder	Apache-2.0	available
+mobileclip2_s2	1	image,text	512		cosine	{"image":{"dtype":"fp32","layout":"NCHW","size":[256,256],"color":"RGB","normalize":{"mean":[0.0,0.0,0.0],"std":[1.0,1.0,1.0],"scale":0.00392156862745098},"resize":"short_edge_center_crop","interpolation":"bilinear","fill":0},"text":{"context_length":77,"prefixes":{"query":"","document":""}}}	hf:timm/MobileCLIP2-S2-OpenCLIP@ac6b37c8fc40b62b623d09ed228a6f0c9bc29fe6	15179d4f3b2f348f6b7373eb50789cdaf226b9e54fde753e39bef789616884b6	fp16	mobileclip2_s2_image_encoder	mobileclip2_s2_text_encoder	see ATTRIBUTION.md	available

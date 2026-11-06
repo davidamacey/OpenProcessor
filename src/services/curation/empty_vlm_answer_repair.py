@@ -206,7 +206,7 @@ async def plan_repairs(
     """Scan ``index`` for candidates (paged by ``crop_id``) and plan each.
     Refuses (:class:`IngestProfileUnresolvedError`) when the bound project's ingest
     profile cannot be read, since which detector wrote a class depends on it."""
-    ingest = await refreshed_ingest_profiles(client)
+    ingest = await refreshed_ingest_profiles()
     plans: list[RepairPlan] = []
     cursor: list[Any] | None = None
     while True:

@@ -20,7 +20,15 @@ import pytest
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
+from .conftest import (
+    FakeLifecycleOpenSearch,
+    fake_ensure_indexes,
+    seed_default_project,
+    stored_status,
+)
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +48,7 @@ def _env(tmp_path, monkeypatch):
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 
@@ -73,9 +81,7 @@ def test_transient_registry_refresh_failure_after_building_write_ends_failed(mon
     ):
         asyncio.run(lifecycle.create_project(client, slug='gamma', display_name='Gamma'))
 
-    stored = client.docs.get('project:gamma')
-    assert stored is not None
-    assert stored['status'] == 'failed', 'must abort to failed, never reach active'
+    assert stored_status('gamma') == 'failed', 'must abort to failed, never reach active'
     assert not any(name.startswith('op_prj_gamma__') for name in client.indexes), (
         'the aborted create must never have created any of its own indexes'
     )
@@ -118,9 +124,7 @@ def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None
     ):
         asyncio.run(lifecycle.create_project(client, slug='gamma', display_name='Gamma'))
 
-    stored = client.docs.get('project:gamma')
-    assert stored is not None
-    assert stored['status'] == 'failed', 'must abort to failed, never reach active'
+    assert stored_status('gamma') == 'failed', 'must abort to failed, never reach active'
 
 
 def test_real_ensure_indexes_index_create_failure_ends_create_failed() -> None:
@@ -151,6 +155,4 @@ def test_real_ensure_indexes_index_create_failure_ends_create_failed() -> None:
     with pytest.raises(RuntimeError, match='missing indexes'):
         asyncio.run(lifecycle.create_project(client, slug='gamma', display_name='Gamma'))
 
-    stored = client.docs.get('project:gamma')
-    assert stored is not None
-    assert stored['status'] == 'failed', 'must abort to failed, never reach active'
+    assert stored_status('gamma') == 'failed', 'must abort to failed, never reach active'

@@ -1,37 +1,28 @@
 """The VLM endpoint registry's storage operations.
 
-Endpoints are global (deployment-wide): docs live in ``op_global_configs``
-(``vlm:<name>`` current, ``vlm:<name>@<rev>`` immutable copies,
-``vlm_probe:<name>@<rev>``, ``local_vlm:desired``) and are written through the
-OCC primitives, so revision numbers, conflicts and the config revision
-counter behave exactly like packs and profiles. Which endpoint a *project*
-runs is that project's own activation
-(:mod:`src.services.config_store.vlm_activation`).
+Endpoints are global (deployment-wide): each is a ``vlm_endpoint`` document with immutable
+revisions, its last probe per revision is a ``vlm_endpoint_probes`` row, and the desired local
+model is the ``local_vlm_desired`` deployment setting. Revision numbers, conflicts and the global
+config epoch behave exactly like packs and profiles. Which endpoint a *project* runs is that
+project's own activation (:mod:`src.services.config_store.vlm_activation`).
 
-These functions run on the global router, i.e. with NO project bound: the
-project guard refuses a bound write to this index.
+The ``env`` built-in (``OP_VLM_URL`` / ``OP_VLM_MODEL``) has no stored endpoint until it is
+activated or probed; then its body is stored as a system revision of the reserved ``env``
+document so an activation or a probe has a document to point at.
 """
 
 from __future__ import annotations
 
-import contextlib
 from typing import TYPE_CHECKING, Any
 
-from opensearchpy.exceptions import NotFoundError
-
+from src.db.repos import config as repo
+from src.services.config_store import documents
 from src.services.config_store.global_store import get_global_config_store
-from src.services.config_store.index import (
-    WRITE_REFRESH,
-    RevisionConflictError,
-    bump_config_revision,
-    delete_config as _delete_config,
-    save_config as _save_config,
-)
-from src.services.config_store.vlm_snapshot import LOCAL_DESIRED_DOC_ID, probe_doc_id
+from src.services.config_store.snapshot_load import LOCAL_VLM_DESIRED_KEY
 from src.services.labeling.vlm_endpoints import (
+    ENV_ENDPOINT_NAME,
     VlmEndpoint,
     probe_fingerprint,
-    probe_key,
     stored_endpoint,
 )
 from src.utils.timeutil import now_iso
@@ -40,34 +31,33 @@ from src.utils.timeutil import now_iso
 if TYPE_CHECKING:
     from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
 
+ENV_DESCRIPTION = 'From OP_VLM_URL / OP_VLM_MODEL'
+_SETTING_ATTEMPTS = 3
 
-async def _reload(client: Any, axis: str = 'registry') -> Any:
-    """Re-read the registry after a write: the exact state, not this
-    process's guess of it (another uvicorn worker may have written too), and
-    tell every open UI (``vlm.changed`` on the global stream)."""
+
+async def _reload(axis: str = 'registry') -> Any:
+    """Re-read the registry after a write: the exact state, not this process's guess of it
+    (another uvicorn worker may have written too), and tell every open UI (``vlm.changed`` on
+    the global stream)."""
     from src.services.events.publish import apublish_global_event
 
     store = get_global_config_store()
-    await store.refresh(client)
+    await store.refresh()
     await apublish_global_event('vlm.changed', axis=axis)
     return store.current
 
 
 async def save_endpoint(
-    client: Any,
     *,
     name: str,
     body: VlmEndpointBody,
     expected_revision: int | None,
     description: str = '',
-    cloned_from: str | None = None,
+    cloned_from: documents.CloneSource | None = None,
 ) -> VlmEndpoint:
     """Create (``expected_revision=None``) or save a new revision. Raises
-    :class:`RevisionConflictError` on a stale ``expected_revision``."""
-    store = get_global_config_store()
-    await _save_config(
-        client,
-        store.index,
+    :class:`~src.db.repos.config.RevisionConflictError` on a stale ``expected_revision``."""
+    await documents.save_config(
         kind='vlm_endpoint',
         name=name,
         body=body.normalized().model_dump(),
@@ -75,97 +65,88 @@ async def save_endpoint(
         description=description,
         cloned_from=cloned_from,
     )
-    snapshot = await _reload(client)
+    snapshot = await _reload()
     return stored_endpoint(snapshot.vlm_endpoints[name], snapshot.vlm_probes)
 
 
-async def list_revisions(client: Any, name: str) -> list[dict[str, Any]]:
-    """Every saved revision of ``name``, newest first (the immutable copies,
-    which survive a delete of the current doc)."""
-    store = get_global_config_store()
-    resp = await client.search(
-        index=store.index,
-        body={
-            'size': 1000,
-            'query': {
-                'bool': {
-                    'filter': [
-                        {'term': {'doc_type': 'revision'}},
-                        {'term': {'kind': 'vlm_endpoint'}},
-                        {'term': {'name': name}},
-                    ]
-                }
-            },
-            'sort': [{'revision': {'order': 'desc'}}],
-        },
-    )
-    return [hit['_source'] for hit in resp['hits']['hits']]
+async def list_revisions(name: str) -> list[repo.RevisionInfo]:
+    """Every saved revision of ``name``, newest first."""
+    return await documents.list_revisions(kind='vlm_endpoint', name=name) or []
 
 
-async def delete_endpoint(client: Any, *, name: str, expected_revision: int) -> None:
-    """Delete the current doc (revision copies stay, so revision numbers
-    are never reused and a project's pinned activation still resolves)."""
-    store = get_global_config_store()
-    await _delete_config(
-        client, store.index, kind='vlm_endpoint', name=name, expected_revision=expected_revision
+async def delete_endpoint(*, name: str, expected_revision: int) -> None:
+    """Delete the endpoint with its revisions and probes. A project's activation still pointing
+    at it refuses the delete (:class:`~src.db.repos.config.ConfigInUseError`)."""
+    await documents.delete_config(
+        kind='vlm_endpoint', name=name, expected_revision=expected_revision
     )
-    for doc in await list_revisions(client, name):
-        with contextlib.suppress(NotFoundError):
-            await client.delete(
-                index=store.index,
-                id=probe_doc_id(probe_key(name, int(doc['revision']))),
-                refresh=WRITE_REFRESH,
-            )
-    await bump_config_revision(client, store.index)
-    await _reload(client)
+    await _reload()
 
 
 async def record_probe(
-    client: Any, *, name: str, revision: int | None, body: VlmEndpointBody, record: VlmProbeRecord
+    *, name: str, revision: int | None, body: VlmEndpointBody, record: VlmProbeRecord
 ) -> None:
-    """Persist ``record`` as the last probe of ``name@revision`` (``revision``
-    is ``None`` only for the ``env`` built-in); another revision's probe is
-    never touched. Never bumps the endpoint revision; DOES bump the config revision, so every process (and every
-    worker's quiesce-and-swap) sees the new ``json_mode`` /
+    """Persist ``record`` as the last probe of ``name@revision`` (``revision`` is ``None`` only
+    for the ``env`` built-in, whose current body is stored first); another revision's probe is
+    never touched. Never bumps the endpoint revision; DOES bump the global epoch, so every
+    process (and every worker's quiesce-and-swap) sees the new ``json_mode`` /
     ``max_model_len`` / model root. ``body`` fingerprints what was probed."""
-    store = get_global_config_store()
     payload = {'fingerprint': probe_fingerprint(body), 'record': record.model_dump()}
-    key = probe_key(name, revision)
-    await client.index(
-        index=store.index,
-        id=probe_doc_id(key),
-        body={
-            'doc_type': 'vlm_probe',
-            'name': name,
-            'probe_key': key,
-            'probed_at': record.probed_at,
-            'body': payload,
-        },
-        refresh=WRITE_REFRESH,
-    )
-    await bump_config_revision(client, store.index)
-    await _reload(client)
+    async with documents.tx('record vlm probe') as session:
+        if revision is None:
+            doc = await repo.ensure_config(
+                session,
+                project_id=None,
+                kind='vlm_endpoint',
+                name=ENV_ENDPOINT_NAME,
+                body=body.model_dump(),
+                description=ENV_DESCRIPTION,
+            )
+        else:
+            found = await repo.get_config(
+                session, project_id=None, kind='vlm_endpoint', name=name, revision=revision
+            )
+            if found is None:
+                raise KeyError(f'{name}@{revision}')
+            doc = found
+        await repo.record_probe(
+            session, config_id=doc.id, revision=doc.revision, ok=record.ok, result=payload
+        )
+    await _reload()
 
 
-async def set_local_desired(client: Any, *, catalog_id: str) -> dict[str, Any]:
-    store = get_global_config_store()
-    doc = {'doc_type': 'local_vlm', 'catalog_id': catalog_id, 'requested_at': now_iso()}
-    await client.index(index=store.index, id=LOCAL_DESIRED_DOC_ID, body=doc, refresh=WRITE_REFRESH)
-    await bump_config_revision(client, store.index)
-    await _reload(client, 'local_vlm')
+async def _write_desired(value: dict[str, Any]) -> None:
+    for _ in range(_SETTING_ATTEMPTS):
+        async with documents.tx('write desired local vlm') as session:
+            current = await repo.get_deployment_setting(session, LOCAL_VLM_DESIRED_KEY)
+            try:
+                await repo.put_deployment_setting(
+                    session,
+                    key=LOCAL_VLM_DESIRED_KEY,
+                    value=value,
+                    expected_revision=current.revision if current else None,
+                )
+            except repo.RevisionConflictError:
+                continue
+            return
+    raise repo.RevisionConflictError(None)
+
+
+async def set_local_desired(*, catalog_id: str) -> dict[str, Any]:
+    doc = {'catalog_id': catalog_id, 'requested_at': now_iso()}
+    await _write_desired(doc)
+    await _reload('local_vlm')
     return doc
 
 
-async def clear_local_desired(client: Any) -> None:
-    store = get_global_config_store()
-    with contextlib.suppress(NotFoundError):
-        await client.delete(index=store.index, id=LOCAL_DESIRED_DOC_ID, refresh=WRITE_REFRESH)
-    await bump_config_revision(client, store.index)
-    await _reload(client, 'local_vlm')
+async def clear_local_desired() -> None:
+    """An empty value is "no desired local model" (the setting row is never deleted)."""
+    await _write_desired({})
+    await _reload('local_vlm')
 
 
 __all__ = [
-    'RevisionConflictError',
+    'ENV_DESCRIPTION',
     'clear_local_desired',
     'delete_endpoint',
     'list_revisions',

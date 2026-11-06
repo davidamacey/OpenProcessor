@@ -7,11 +7,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.services.labeling.vlm_url_policy as policy
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.labeling.vlm_endpoint_body import VlmProbeRecord
 
 
@@ -57,7 +57,6 @@ class VlmApi:
     client: TestClient
     #: The same app, but a server error is a 500 response, not an exception.
     lenient: TestClient
-    fake_os: FakeConfigOpenSearch
     dns: dict[str, list[str]]
     probe_record: list[VlmProbeRecord] = field(default_factory=lambda: [good_probe()])
     #: The ``api_key`` each probe was given, in call order.
@@ -119,7 +118,6 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
 
     assert _API == API
     assert vlm_catalog  # registers /vlm/catalog and /vlm/local* on the global router
-    fake_os = FakeConfigOpenSearch()
     dns = dict(DEFAULT_DNS)
     monkeypatch.setattr(policy, '_resolve', lambda host: list(dns.get(host, [])))
     monkeypatch.setattr(policy, '_docker_gateway_addresses', frozenset)
@@ -145,11 +143,10 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
         scoped_routers=list(curation_scoped_routers()),
     )
     install_project_exception_handlers(app)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: None
     api = VlmApi(
-        client=TestClient(app),
-        lenient=TestClient(app, raise_server_exceptions=False),
-        fake_os=fake_os,
+        client=revision_aware(TestClient(app)),
+        lenient=revision_aware(TestClient(app, raise_server_exceptions=False)),
         dns=dns,
     )
 
@@ -161,54 +158,6 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
 
     monkeypatch.setattr(vlm_endpoints, 'probe_endpoint', scripted_probe)
     return api
-
-
-class HybridOpenSearch:
-    """Config-store documents (a project's ``__configs`` index and the global
-    registry) go to :class:`FakeConfigOpenSearch`; everything else (items,
-    images, ...) to the query-evaluating item fake, so one client can serve a
-    route that reads the endpoint registry AND writes items."""
-
-    def __init__(self, cfg: FakeConfigOpenSearch, items: Any) -> None:
-        self.cfg = cfg
-        self.items = items
-        self.indices = self
-
-    def _pick(self, index: str) -> Any:
-        return (
-            self.cfg if index.endswith('__configs') or index == 'op_global_configs' else self.items
-        )
-
-    async def refresh(self, index: str, **_kw: Any) -> dict[str, Any]:
-        return await self._pick(index).indices.refresh(index=index)
-
-    async def get(self, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
-        return await self._pick(index).get(index=index, id=id, **kw)
-
-    async def index(self, index: str, **kw: Any) -> dict[str, Any]:
-        return await self._pick(index).index(index=index, **kw)
-
-    async def update(self, index: str, **kw: Any) -> dict[str, Any]:
-        return await self._pick(index).update(index=index, **kw)
-
-    async def delete(self, index: str, **kw: Any) -> dict[str, Any]:
-        return await self._pick(index).delete(index=index, **kw)
-
-    async def search(self, index: str | None = None, **kw: Any) -> dict[str, Any]:
-        return await self._pick(index or '').search(index=index, **kw)
-
-    async def count(self, index: str, **kw: Any) -> dict[str, Any]:
-        return await self._pick(index).count(index=index, **kw)
-
-    async def mget(self, **kw: Any) -> dict[str, Any]:
-        return await self.items.mget(**kw)
-
-    async def bulk(self, **kw: Any) -> dict[str, Any]:
-        return await self.items.bulk(**kw)
-
-    async def exists(self, index: str, **_kw: Any) -> bool:
-        del index
-        return True
 
 
 @pytest.fixture

@@ -288,7 +288,7 @@ def test_entry_point_per_run_selection_only_warns_about_context(vlm_api) -> None
 
     import asyncio
 
-    run = asyncio.run(resolve_run_vlm(vlm_api.fake_os, 'tiny', pack=None))
+    run = asyncio.run(resolve_run_vlm('tiny', pack=None))
     assert (run.name, run.revision) == ('tiny', 1)
 
 
@@ -302,13 +302,11 @@ def test_active_vlm_pairing_hook_reads_the_active_endpoint(vlm_api) -> None:
     vlm_api.probe_record[0] = TINY
     vlm_api.ready('tiny')
     assert vlm_api.activate('tiny', expected_active=None, force=True).status_code == 200
-    issues = asyncio.run(active_vlm_pairing_issues(vlm_api.fake_os, GENERIC_ITEM_PACK, None))
+    issues = asyncio.run(active_vlm_pairing_issues(GENERIC_ITEM_PACK, None))
     assert 'vlm_context_too_small' in [i.code for i in issues]
 
     # explicit "the VLM is being switched off in this request" pairs with nothing
-    off = asyncio.run(
-        active_vlm_pairing_issues(vlm_api.fake_os, GENERIC_ITEM_PACK, None, pending_vlm=None)
-    )
+    off = asyncio.run(active_vlm_pairing_issues(GENERIC_ITEM_PACK, None, pending_vlm=None))
     assert off == []
     assert ACTIVE.endswith('/vlm/endpoints')
 

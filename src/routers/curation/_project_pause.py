@@ -1,32 +1,20 @@
-"""``POST /pause`` / ``POST /resume`` -- per-project pipeline pause
-(projects_plan.md §5.1/§5.2).
+"""``POST /pause`` / ``POST /resume`` -- per-project pipeline pause.
 
-The workers (``scripts/curation/_project_worker_utils.py``'s
-``is_project_paused``) already read a file sentinel,
-``<project_state_dir>/pipeline_paused.flag`` -- that mechanism predates
-this route (the plan's ``pipeline.paused`` settings-doc field needs the
-config store, not merged here). This route is the missing write side:
-an operator (or Cropwright) flips the same flag file through the API
-instead of reaching into the container's filesystem by hand.
-
-A project's own pause never touches another project: the *global* GPU
-pause sentinel (the trainer's single-GPU claim) still pauses every
-project's workers regardless of this per-project flag.
+A pause is ``projects.paused_at``. The workers read it from the registry snapshot at the start of
+each cycle and skip a paused project while serving the others; the global GPU pause (the
+trainer's single-GPU claim) still pauses every project's workers regardless.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel
 
-from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
 from src.config.curation_accessors import get_curation_config
+from src.config.project_context import current_project
 from src.routers.curation._common import router
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from src.services.projects import pause as pause_service
 
 
 class PipelinePauseState(BaseModel):
@@ -50,10 +38,6 @@ def _global_gpu_training_reason() -> str | None:
         return None
     devices = lock.get('cuda_visible_devices') or ''
     return f'GPU training claim active (cuda_visible_devices={devices!r})'
-
-
-def _flag_path() -> Path:
-    return get_curation_config().project_state_dir / PIPELINE_PAUSED_FLAG_NAME
 
 
 def _state(*, project_paused: bool) -> PipelinePauseState:
@@ -85,9 +69,7 @@ async def _publish_pause_event(*, event_type: str, cfg: Any) -> None:
 async def pause_pipeline() -> PipelinePauseState:
     """Skip this project in every worker's next discovery cycle. Idempotent."""
     cfg = get_curation_config()
-    path = _flag_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.touch()
+    await pause_service.set_paused(cfg.project_slug, paused=True)
     await _publish_pause_event(event_type='project.paused', cfg=cfg)
     return _state(project_paused=True)
 
@@ -97,18 +79,17 @@ async def resume_pipeline() -> PipelinePauseState:
     """Clear this project's pause flag. Idempotent -- resuming an
     already-running project is a no-op, not an error."""
     cfg = get_curation_config()
-    _flag_path().unlink(missing_ok=True)
+    await pause_service.set_paused(cfg.project_slug, paused=False)
     await _publish_pause_event(event_type='project.resumed', cfg=cfg)
     return _state(project_paused=False)
 
 
 @router.get('/pause', response_model=PipelinePauseState)
 async def get_pipeline_pause_state() -> PipelinePauseState:
-    return _state(project_paused=_flag_path().exists())
+    return _state(project_paused=current_project().record.paused_at is not None)
 
 
 __all__ = [
-    'PIPELINE_PAUSED_FLAG_NAME',
     'PipelinePauseState',
     'get_pipeline_pause_state',
     'pause_pipeline',

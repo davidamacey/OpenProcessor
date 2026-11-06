@@ -297,7 +297,7 @@ def bind_task_project(task: _ItemTask) -> None:
     set_bound_project(task.project)
 
 
-async def bound_class_catalog(opensearch: Any) -> tuple[list[str], dict[str, int]]:
+async def bound_class_catalog() -> tuple[list[str], dict[str, int]]:
     """The bound project's VLM class catalog: the non-deprecated class
     names (the list sent in the prompt; a reply's ``class_id`` indexes it)
     and ``name -> registry class_id``.
@@ -305,17 +305,17 @@ async def bound_class_catalog(opensearch: Any) -> tuple[list[str], dict[str, int
     Resolved per call from the bound project's registry document (a snapshot
     cached per project and checked by version), never from a process-wide list:
     items of different projects must be classified against their own registry.
-    An unreadable or not-yet-migrated registry yields an empty catalog, which
+    An unreadable registry yields an empty catalog, which
     every caller already treats as "do not classify".
     """
-    from opensearchpy.exceptions import OpenSearchException
+    from sqlalchemy.exc import SQLAlchemyError
 
-    from src.clients.curation_opensearch.registry import get_class_registry
-    from src.core.exceptions import RequestRejectedError
+    from src.db.repos.classes import ClassRegistryError
+    from src.services.classes.registry import get_class_registry
 
     try:
-        registry = await get_class_registry().snapshot(opensearch)
-    except (RequestRejectedError, OpenSearchException) as exc:
+        registry = await get_class_registry().snapshot()
+    except (ClassRegistryError, SQLAlchemyError) as exc:
         logger.warning('class_registry_load_failed', error=str(exc))
         return [], {}
     from src.services.curation.region_class import item_classes
@@ -364,7 +364,7 @@ def _crop_jpeg_for_task(
     return load_item_crop_jpeg(crop_id, image_path, bbox)
 
 
-async def _is_secondary_shape(task: _ItemTask, opensearch: Any) -> bool:
+async def _is_secondary_shape(task: _ItemTask) -> bool:
     """True if the crop's class belongs to a secondary-shape group.
 
     Groups come from the active profile's ``secondary_shape_groups``
@@ -381,7 +381,7 @@ async def _is_secondary_shape(task: _ItemTask, opensearch: Any) -> bool:
     groups = region_profile().secondary_shape_groups
     if not groups:
         return False
-    group = await _class_group(opensearch, task.class_name)
+    group = await _class_group(task.class_name)
     if group:
         return group in groups
     # No registry entry for this class_name (e.g. a stale/renamed class,
@@ -390,14 +390,14 @@ async def _is_secondary_shape(task: _ItemTask, opensearch: Any) -> bool:
     return False
 
 
-async def _class_group(opensearch: Any, class_name: str) -> str | None:
+async def _class_group(class_name: str) -> str | None:
     """``class_name -> group`` via the class registry, or ``None`` if the
     class isn't registered."""
-    from src.clients.curation_opensearch.registry import get_class_registry
+    from src.services.classes.registry import get_class_registry
 
     if not class_name:
         return None
-    for entry in (await get_class_registry().snapshot(opensearch)).classes:
+    for entry in (await get_class_registry().snapshot()).classes:
         if entry.class_name == class_name:
             return entry.group or None
     return None

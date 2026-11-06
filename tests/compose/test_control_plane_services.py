@@ -109,10 +109,7 @@ def test_only_flower_publishes_a_port_and_on_loopback_by_default() -> None:
         ports = _svc(name).get('ports')
         if name == 'flower':
             assert ports
-            assert all(
-                str(p).startswith('${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:')
-                for p in ports
-            )
+            assert all(str(p).startswith('${OP_BIND_ADDRESS:-127.0.0.1}:') for p in ports)
             assert _svc(name)['profiles'] == ['monitoring']
         else:
             assert not ports, name

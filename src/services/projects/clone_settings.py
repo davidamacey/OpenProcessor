@@ -3,7 +3,7 @@ settings document, i.e. the strategy defaults, the ingest policy and the VLM pol
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.config.project_context import bind_project
 from src.services.curation.ingest_policy import IngestPolicyBody
@@ -16,31 +16,28 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
 
 
-async def clone_settings_document(
-    client: Any, *, source: ProjectRecord, target_record: ProjectRecord
-) -> None:
+async def clone_settings_document(*, source: ProjectRecord, target_record: ProjectRecord) -> None:
     """Copy the source's strategy defaults, ingest policy and VLM policy into the
     target (a source that never wrote a policy leaves the target on the defaults)."""
-    from src.clients.curation_opensearch.settings_doc import (
-        get_curation_settings,
-        update_curation_settings,
-    )
+    from src.services.curation.settings_store import get_curation_settings, update_curation_settings
 
     with bind_project(source, read_only=True):
-        source_settings = await get_curation_settings(client)
-        source_policy = await get_ingest_policy(client)
-        source_vlm_policy = await get_vlm_policy(client)
+        source_settings = await get_curation_settings(fresh=True)
+        source_policy = await get_ingest_policy()
+        source_vlm_policy = await get_vlm_policy()
     with bind_project(target_record):
-        await update_curation_settings(client, dict(source_settings.get('defaults', {})))
+        target_settings = await get_curation_settings(fresh=True)
+        await update_curation_settings(
+            dict(source_settings.get('defaults', {})),
+            expected_revision=target_settings['revision'],
+        )
         if source_policy.revision:
             await put_ingest_policy(
-                client,
                 IngestPolicyBody(**source_policy.model_dump(exclude={'revision'})),
-                expected_revision=(await get_ingest_policy(client)).revision,
+                expected_revision=(await get_ingest_policy()).revision,
             )
         if source_vlm_policy.revision:
             await put_vlm_policy(
-                client,
                 VlmPolicyBody(**source_vlm_policy.model_dump(exclude={'revision'})),
-                expected_revision=(await get_vlm_policy(client)).revision,
+                expected_revision=(await get_vlm_policy()).revision,
             )

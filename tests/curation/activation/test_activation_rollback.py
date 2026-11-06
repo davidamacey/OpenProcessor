@@ -30,52 +30,53 @@ def test_rollback_transient_error_aborts_before_commit(app_client, monkeypatch):
         ).status_code
         == 200
     )
-    fake = c.fake_os
-    orig_get = fake.get
-    # `pack_a@1`'s revision-copy doc is fetched TWICE on this path: once by the shared
-    # activation gate (to validate the body before writing anything), and once more by
-    # `_resolve_active_body` inside `activate_and_apply` (to pin the exact body onto the
-    # write). Fail only the SECOND fetch, so the gate itself succeeds and the transient
-    # error is isolated to the code inside `activate_and_apply`, after the gate cleared.
+    from src.db.repos import config as repo
+
+    orig_get = repo.get_config
+    # `pack_a@1` is fetched TWICE on this path: once by the shared activation gate (to
+    # validate the body before writing anything), and once more by the pinning of the exact
+    # body onto the write. Fail only the SECOND fetch, so the gate itself succeeds and the
+    # transient error is isolated to the code after the gate cleared.
     calls = {'n': 0}
 
-    async def flaky_get(*a, **kw):
-        if str(kw.get('id', '')).endswith('pack_a@1'):
+    async def flaky_get(session, *, project_id, kind, name, revision=None):
+        if name == 'pack_a' and revision == 1:
             calls['n'] += 1
             if calls['n'] >= 2:
                 raise ConnectionError('transient')
-        return await orig_get(*a, **kw)
+        return await orig_get(
+            session, project_id=project_id, kind=kind, name=name, revision=revision
+        )
 
-    monkeypatch.setattr(fake, 'get', flaky_get)
+    monkeypatch.setattr(repo, 'get_config', flaky_get)
     tc = TestClient(c.app, raise_server_exceptions=False)
     r = tc.post(
         f'{PREFIX}/active/rollback', json={'expected_active': {'name': 'pack_b', 'revision': 1}}
     )
-    monkeypatch.setattr(fake, 'get', orig_get)
+    monkeypatch.setattr(repo, 'get_config', orig_get)
     act = c.get(f'{PREFIX}/active').json()
     # `GET /active` is served from the in-process `ConfigStore` snapshot, which this
     # process never updates for the failed write either way, so it cannot tell "aborted
-    # before commit" from "committed, then 500'd". Only the STORED `activation:*` doc can.
+    # before commit" from "committed, then 500'd". Only the STORED activation can.
     import asyncio
 
-    from src.config import get_curation_config
-    from src.services.config_store.index import get_activation
+    from src.services.config_store.documents import get_activation_detail
 
-    stored = asyncio.run(get_activation(fake, get_curation_config().configs_index, 'prompt_pack'))
+    stored = asyncio.run(get_activation_detail('prompt_pack'))
     print(
         'rollback under transient ->',
         r.status_code,
         r.text[:160],
         '| persisted active (stale snapshot)',
         act,
-        '| stored activation doc',
+        '| stored activation',
         stored,
     )
     # Resolving the pinned body before writing the activation means a transient error
     # aborts BEFORE anything commits: the STORED doc must still name pack_b, not hold a
     # half-committed pack_a activation the caller was told (via a 500) never happened.
     assert stored is not None
-    assert stored.get('name') == 'pack_b'
+    assert stored.ref == ('pack_b', 1)
 
 
 def test_pack_rollback_cannot_bypass_multibox_gate(app_client, monkeypatch):

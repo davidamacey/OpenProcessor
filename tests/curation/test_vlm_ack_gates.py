@@ -10,13 +10,14 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store import memory_config
 
 from curation.conftest import SCOPED
 from src.config.curation_accessors import base_curation_config
-from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.core.exceptions import RequestRejectedError
+from src.services.config_store import documents
 
 
 def _record(slug: str) -> ProjectRecord:
@@ -58,28 +59,23 @@ def test_a_clone_refuses_an_acknowledged_external_endpoint(
     vlm_api.dns['api.vendor.com'] = ['93.184.216.34']
     vlm_api.ready('ext', base_url='https://api.vendor.com/v1', allow_external=True)
     source, target = _record('alpha'), _record('beta')
-    now = '2026-01-01T00:00:00+00:00'
-    vlm_api.fake_os._docs.setdefault(source.resources.indexes[IndexRole.CONFIGS], {})[
-        'activation:vlm'
-    ] = {
-        '_source': {
-            'doc_type': 'activation',
-            'axis': 'vlm',
-            'name': 'ext',
-            'revision': 1,
-            'activated_at': now,
-            'previous': None,
-            'acked_refs': {'ext@1': now},
-            'external_ack_at': now,
-        },
-        '_seq_no': 1,
-    }
+    memory = memory_config.current()
+    asyncio.run(
+        documents.activate(
+            axis='vlm',
+            name='ext',
+            revision=1,
+            expected_active=None,
+            ack_ref='ext@1',
+            project_id=memory.project_id('alpha'),
+        )
+    )
     monkeypatch.setattr(lifecycle_mod, '_resolve_existing', AsyncMock(return_value=source))
 
     async def clone() -> None:
         with bind_project(target):
             await lifecycle_mod.clone_settings(
-                vlm_api.fake_os, target_record=target, from_slug='alpha', axes=['vlm_activation']
+                None, target_record=target, from_slug='alpha', axes=['vlm_activation']
             )
 
     with pytest.raises(RequestRejectedError) as caught:

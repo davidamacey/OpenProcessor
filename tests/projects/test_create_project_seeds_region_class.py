@@ -12,13 +12,16 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from _registry_doc_fake import registry_of
+from _class_registry_fake import registry_of
 
 from src.config import DetectionProfile
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +61,7 @@ def _region_profile(monkeypatch):
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 

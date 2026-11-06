@@ -146,7 +146,7 @@ async def list_projects(
     except Exception:
         capacity = None
 
-    retired = sorted(slug for slug, record in snapshot.items() if record.status == 'deleted')
+    retired = sorted(registry.retired_slugs())
     return ProjectsResponse(
         default_slug=DEFAULT_SLUG,
         projects=summaries,
@@ -161,7 +161,7 @@ async def get_project(
     project: str,
 ) -> ProjectRecordResponse:
     record = await get_project_registry().lookup(project)
-    if record is None or record.status == 'deleted':
+    if record is None:
         raise api_error(404, 'project_not_found', f"no project named '{project}'", project=project)
 
     counts = ProjectCounts()
@@ -293,7 +293,7 @@ async def delete_project(
     if dry_run:
         report = await lifecycle.dry_run_delete(client, slug=project)
         return DeleteDryRunResponse(**report)
-    record = await lifecycle.delete_project(client, slug=project, confirm=confirm, force=force)
+    record = await lifecycle.delete_project(slug=project, confirm=confirm, force=force)
 
     async def _finish() -> None:
         try:

@@ -41,6 +41,9 @@ FILTERED_ROUTES = [
 ]
 
 
+pytest_plugins = ['_records_world']
+
+
 class _RecordingOS:
     def __init__(self) -> None:
         self.bodies: list[str] = []
@@ -100,6 +103,8 @@ PARAMS = {
     'path',
     ['/crops', '/review/all', '/stats/classes', '/stats/dataset', '/clusters', '/regions'],
 )
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_the_filter_reaches_the_query(
     app: FastAPI, fake_os: _RecordingOS, request: pytest.FixtureRequest, path: str
 ) -> None:

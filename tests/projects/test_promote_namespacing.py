@@ -191,7 +191,7 @@ def test_project_owns_model_prefix_isolation() -> None:
     from src.services.training.promoted_models import project_owns_model
 
     beta = _record('beta')
-    registry = ProjectRegistry(lambda: None)
+    registry = ProjectRegistry()
     registry._by_slug = {'beta': beta}
     registry._revision = 0
     set_project_registry(registry)

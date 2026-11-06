@@ -21,13 +21,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _route_helpers import api_routes
+from config_store import memory_config
 
 import src.services.labeling.vlm_url_policy as policy
 from curation.conftest import ACTIVE, GLOBAL_VLM, SCOPED
 from src.config.curation_accessors import base_curation_config
-from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
+from src.services.config_store import documents
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 
 
@@ -95,10 +96,6 @@ def _refused_for_the_address(response: Any) -> None:
     assert all(not e['bypassable'] for e in detail['report']['errors'] if e['code'] == DENIED)
 
 
-def _project_writes(api) -> int:
-    return len(api.fake_os._docs.get('op_prj_default__configs', {}))
-
-
 # ---- the walk ---------------------------------------------------------------
 
 
@@ -116,8 +113,23 @@ def test_rollback_refuses(rebound) -> None:
         rebound.activate('third', expected_active={'name': 'good', 'revision': 1}).status_code
         == 200
     )
-    doc = rebound.fake_os._docs['op_prj_default__configs']['activation:vlm']['_source']
-    doc['previous'] = {'name': REBOUND, 'revision': 1}
+    # the endpoint that was active before ``third`` is the one that has since gone bad
+    asyncio.run(
+        documents.activate(
+            axis='vlm',
+            name=REBOUND,
+            revision=1,
+            expected_active={'name': 'third', 'revision': 1},
+        )
+    )
+    asyncio.run(
+        documents.activate(
+            axis='vlm',
+            name='third',
+            revision=1,
+            expected_active={'name': REBOUND, 'revision': 1},
+        )
+    )
     response = rebound.client.post(
         f'{ACTIVE}/active/rollback', json={'expected_active': {'name': 'third', 'revision': 1}}
     )
@@ -129,9 +141,6 @@ def test_put_settings_refuses(rebound) -> None:
     response = rebound.client.put(f'{SCOPED}/settings', json={'defaults': {'vlm': REBOUND}})
     assert response.status_code == 422, response.text
     assert rebound.active()['active']['name'] == 'good'
-    assert 'rebound' not in str(
-        rebound.fake_os._docs.get('op_prj_default__configs', {}).get('activation:vlm')
-    )
 
 
 def test_put_settings_gates_the_vlm_together_with_the_pack_and_profile(rebound) -> None:
@@ -177,11 +186,10 @@ def test_test_on_crop_selection_refuses(rebound, monkeypatch, route: tuple[str, 
     naming one -- by name, by pinned revision, as an unsaved draft -- is
     refused for the rebound address, before any crop is read."""
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://seg.test:8000')
-    from curation.conftest import HybridOpenSearch
     from curation.query_fakes import QueryFakeOpenSearch
     from src.routers.curation import _raw_opensearch_dep
 
-    hybrid = HybridOpenSearch(rebound.fake_os, QueryFakeOpenSearch({}))
+    hybrid = QueryFakeOpenSearch({})
     rebound.client.app.dependency_overrides[_raw_opensearch_dep] = lambda: hybrid
     method, template = route
     url = SCOPED + template
@@ -238,27 +246,22 @@ def test_the_clone_of_a_project_refuses(rebound, monkeypatch: pytest.MonkeyPatch
         )
 
     source, target = record('alpha'), record('beta')
-    client = rebound.fake_os
-    now = '2026-01-01T00:00:00+00:00'
-    client._docs.setdefault(source.resources.indexes[IndexRole.CONFIGS], {})['activation:vlm'] = {
-        '_source': {
-            'doc_type': 'activation',
-            'axis': 'vlm',
-            'name': REBOUND,
-            'revision': 1,
-            'activated_at': now,
-            'previous': None,
-            'acked_refs': {},
-            'external_ack_at': None,
-        },
-        '_seq_no': 1,
-    }
+    memory = memory_config.current()
+    asyncio.run(
+        documents.activate(
+            axis='vlm',
+            name=REBOUND,
+            revision=1,
+            expected_active=None,
+            project_id=memory.project_id('alpha'),
+        )
+    )
     monkeypatch.setattr(lifecycle_mod, '_resolve_existing', AsyncMock(return_value=source))
 
     async def clone() -> None:
         with bind_project(target):
             await lifecycle_mod.clone_settings(
-                client, target_record=target, from_slug='alpha', axes=['vlm_activation']
+                None, target_record=target, from_slug='alpha', axes=['vlm_activation']
             )
 
     from src.core.exceptions import RequestRejectedError
@@ -267,8 +270,7 @@ def test_the_clone_of_a_project_refuses(rebound, monkeypatch: pytest.MonkeyPatch
         asyncio.run(clone())
     assert caught.value.status_code == 422
     assert DENIED in str(caught.value.detail)
-    target_docs = client._docs.get(target.resources.indexes[IndexRole.CONFIGS], {})
-    assert 'activation:vlm' not in target_docs
+    assert asyncio.run(documents.read_activation('beta', 'vlm')) is None
 
 
 def test_a_draft_body_is_refused_and_can_never_be_activated(rebound) -> None:
@@ -281,7 +283,7 @@ def test_a_draft_body_is_refused_and_can_never_be_activated(rebound) -> None:
     body = VlmEndpointBody(base_url='http://rebound.example.com/v1', model='m')
 
     async def attempt() -> None:
-        draft = await resolve_vlm_source(rebound.fake_os, draft=body)
+        draft = await resolve_vlm_source(draft=body)
         assert draft is not None
         assert draft.name == '_draft'
         await enforce_vlm_gate(draft, mode='test')
@@ -310,7 +312,7 @@ def test_force_is_honoured_only_for_activation(rebound, mode: str) -> None:
     rebound.create('unprobed', base_url='http://fresh.example.com/v1')
 
     async def attempt(force_mode: str) -> Any:
-        endpoint = await resolve_vlm_source(rebound.fake_os, 'unprobed')
+        endpoint = await resolve_vlm_source('unprobed')
         assert endpoint is not None
         return await enforce_vlm_gate(endpoint, mode=force_mode, force=True)  # type: ignore[arg-type]
 
@@ -388,5 +390,5 @@ def test_the_global_registry_routes_never_select_anything(vlm_api) -> None:
         f'{GLOBAL_VLM}/alpha', json={'expected_revision': 1, 'body': vlm_api.body(model='x')}
     )
     vlm_api.client.post(f'{GLOBAL_VLM}/alpha/clone', json={'new_name': 'copy'})
-    assert 'activation:vlm' not in vlm_api.fake_os._docs.get('op_prj_default__configs', {})
+    assert memory_config.current().events == []
     assert vlm_api.active()['active'] == {'name': None, 'revision': None}

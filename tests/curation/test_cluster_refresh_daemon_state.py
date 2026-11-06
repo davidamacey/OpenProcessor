@@ -1,7 +1,7 @@
 """Issues #235 and #280: the cluster-refresh daemon.
 
 #235: the growth state (items at the last retrain, the job in flight, the previous
-poll's count) lives in the project's settings document, so a restart neither retrains
+poll's count) lives in the project's ``project_state`` row, so a restart neither retrains
 a project that was just retrained nor starts a retrain in the middle of an ingest.
 
 #280: an audit-gate 409 from ``auto_promote`` means nothing was promoted; the retrain
@@ -14,12 +14,13 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
-from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 from projects.test_project_counts import _record
+from sqlalchemy.exc import OperationalError
 
 from curation.query_fakes import SettingsFakeOpenSearch
 from scripts.curation import cluster_refresh_daemon as d
 from src.config.project_context import bind_project
+from src.services.curation.clustering import refresh_state_store
 from src.services.curation.clustering.refresh_schedule import (
     Action,
     Observation,
@@ -28,11 +29,7 @@ from src.services.curation.clustering.refresh_schedule import (
     ScheduleBook,
     step,
 )
-from src.services.curation.clustering.refresh_state_store import (
-    RefreshState,
-    load_refresh_state,
-    save_refresh_state,
-)
+from src.services.curation.clustering.refresh_state_store import RefreshState
 from src.services.curation.policy_doc_store import PolicyConflictError
 
 
@@ -139,39 +136,27 @@ def test_a_promote_server_error_still_stops_the_retrain() -> None:
 # ---- #235 -----------------------------------------------------------------
 
 
-def test_the_state_round_trips_through_the_settings_document() -> None:
-    fake = _Fake()
-
+def test_the_state_round_trips_through_project_state() -> None:
     async def go() -> RefreshState:
-        saved = await save_refresh_state(
-            fake, RefreshState(last_trained_count=1200, job_id='j', prev_count=1300)
+        saved = await refresh_state_store.save_refresh_state(
+            RefreshState(last_trained_count=1200, job_id='j', prev_count=1300)
         )
         assert saved.revision == 1
-        return await load_refresh_state(fake)
+        return await refresh_state_store.load_refresh_state()
 
     stored = asyncio.run(go())
     assert (stored.last_trained_count, stored.job_id, stored.prev_count) == (1200, 'j', 1300)
 
 
 def test_saving_stale_state_conflicts() -> None:
-    fake = _Fake()
-
     async def go() -> None:
-        first = await save_refresh_state(fake, RefreshState(last_trained_count=1))
-        await save_refresh_state(fake, first.model_copy(update={'last_trained_count': 2}))
-        await save_refresh_state(fake, first.model_copy(update={'last_trained_count': 3}))
+        save = refresh_state_store.save_refresh_state
+        first = await save(RefreshState(last_trained_count=1))
+        await save(first.model_copy(update={'last_trained_count': 2}))
+        await save(first.model_copy(update={'last_trained_count': 3}))
 
     with pytest.raises(PolicyConflictError):
         asyncio.run(go())
-
-
-def test_an_unreadable_settings_document_fails_the_load() -> None:
-    class _Down(_Fake):
-        async def get(self, **_: Any) -> dict[str, Any]:
-            raise RuntimeError('opensearch is down')
-
-    with pytest.raises(RuntimeError, match='down'):
-        asyncio.run(load_refresh_state(_Down()))
 
 
 def test_a_restart_does_not_retrain_a_project_that_was_just_retrained() -> None:
@@ -228,12 +213,14 @@ def test_without_the_persisted_state_a_restart_would_start_early() -> None:
     assert step(restored, obs, 0.0, POLICY) is Action.DEFER
 
 
-def test_a_failed_state_load_skips_the_project_for_this_poll() -> None:
-    class _Down(_Fake):
-        async def get(self, **_: Any) -> dict[str, Any]:
-            raise RuntimeError('opensearch is down')
+def test_a_failed_state_load_skips_the_project_for_this_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def down() -> RefreshState:
+        raise RuntimeError('database is down')
 
-    api, fake = _Api(), _Down()
+    monkeypatch.setattr(d, 'load_refresh_state', down)
+    api, fake = _Api(), _Fake()
     fake.items = 1000
     sched = ScheduleBook().get('alpha')
 
@@ -242,26 +229,26 @@ def test_a_failed_state_load_skips_the_project_for_this_poll() -> None:
     assert not api.started
 
 
-def test_a_failed_save_is_retried_on_the_next_poll() -> None:
+def test_a_failed_save_is_retried_on_the_next_poll(monkeypatch: pytest.MonkeyPatch) -> None:
     fake, api = _Fake(), _Api()
     fake.items = 1000
     sched = ScheduleBook().get('alpha')
-    real_index: Callable[..., Any] = fake.index
+    real_save: Callable[..., Any] = d.save_refresh_state
     calls = {'n': 0}
 
-    async def flaky(**kw: Any) -> None:
+    async def flaky(state: RefreshState) -> RefreshState:
         calls['n'] += 1
         if calls['n'] <= 2:
-            raise OpenSearchConnectionError('N/A', 'opensearch is down', OSError('down'))
-        await real_index(**kw)
+            raise OperationalError('save', {}, OSError('database is down'))
+        return await real_save(state)
 
-    fake.index = flaky  # type: ignore[method-assign]
+    monkeypatch.setattr(d, 'save_refresh_state', flaky)
 
     _poll(api, fake, sched, 0.0)  # retrain dispatched, the save fails
     _poll(api, fake, sched, 10.0)  # the next poll saves it
 
     with bind_project(_record('alpha'), read_only=True):
-        stored = asyncio.run(load_refresh_state(fake))
+        stored = asyncio.run(refresh_state_store.load_refresh_state())
     assert stored.last_trained_count == 1000
     assert stored.trained_before is None  # the job completed by the second poll
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
+from src.services.config_store.documents import save_config
 
 
 if TYPE_CHECKING:
@@ -31,10 +31,10 @@ async def test_activation_publishes_one_config_changed_event_with_bound_project(
     from src.services.config_store.store import activate_axis, get_config_store
     from src.services.events.publish import GLOBAL_EVENT_TOPIC
 
-    client = FakeConfigOpenSearch()
+    await save_config(kind='region_profile', name='wheel', body={}, expected_revision=None)
     store = get_config_store()  # bound to 'default' by the autouse fixture
     await activate_axis(
-        store, client, axis='detection_profile', name='wheel', revision=1, expected_active=None
+        store, axis='detection_profile', name='wheel', revision=1, expected_active=None
     )
 
     (event,) = captured_events  # exactly one event
@@ -49,15 +49,14 @@ async def test_activation_publishes_one_config_changed_event_with_bound_project(
 async def test_deactivation_publishes_name_null(captured_events: list[dict]) -> None:
     from src.services.config_store.store import activate_axis, get_config_store
 
-    client = FakeConfigOpenSearch()
+    await save_config(kind='prompt_pack', name='wheel_pack', body={}, expected_revision=None)
     store = get_config_store()
     await activate_axis(
-        store, client, axis='prompt_pack', name='wheel_pack', revision=1, expected_active=None
+        store, axis='prompt_pack', name='wheel_pack', revision=1, expected_active=None
     )
     captured_events.clear()
     await activate_axis(
         store,
-        client,
         axis='prompt_pack',
         name=None,
         revision=None,

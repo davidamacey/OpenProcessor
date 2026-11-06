@@ -125,7 +125,6 @@ async def pipeline_auto_label_start(
         if vlm_attributes:
             require_item_attributes(resolve_pack(pack_name, pack_revision))
         vlm_run = await resolve_run_vlm(
-            opensearch,
             vlm,
             pack=resolve_pack(pack_name, pack_revision),
             acknowledge_external=acknowledge_external,

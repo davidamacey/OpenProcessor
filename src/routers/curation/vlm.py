@@ -63,7 +63,6 @@ async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) 
 
     pack_name = await _default_pack_name(opensearch)
     run = await resolve_run_vlm(
-        opensearch,
         vlm,
         pack=resolve_pack(pack_name),
         acknowledge_external=acknowledge_external,
@@ -137,7 +136,7 @@ async def vlm_label_batch(
     # endpoint is a 422 up front, never after the crops were read.
     labeler = await request_labeler(opensearch, vlm, acknowledge_external)
 
-    reg = await get_class_registry().snapshot(opensearch)
+    reg = await get_class_registry().snapshot()
     from src.services.curation.region_class import item_classes
 
     labelable = item_classes(reg.classes)

@@ -13,11 +13,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store.memory_settings import install, revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from curation.test_curation_settings_client import FakeSettingsOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.review_sorts import REVIEW_SORTS
 
@@ -161,7 +161,8 @@ def review_client(monkeypatch: pytest.MonkeyPatch):
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
-    return TestClient(app)
+    install(monkeypatch)
+    return revision_aware(TestClient(app))
 
 
 def test_review_route_reports_the_fallback(review_client: TestClient) -> None:
@@ -179,19 +180,18 @@ def test_review_route_reports_the_fallback(review_client: TestClient) -> None:
     assert 'uncertainty_entropy' in r.json()['sort_fallback_reason']
 
 
-class _SettingsWithCoverage(FakeSettingsOpenSearch):
+class _SettingsWithCoverage:
     def __init__(self, coverage: dict[str, int]) -> None:
-        super().__init__()
         self._cov = _CoverageOpenSearch(coverage)
 
     async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         return await self._cov.count(index=index, body=body)
 
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
+    async def search(self, *, index: str, body: dict[str, Any], **_kw: Any) -> dict[str, Any]:
         aggs = body.get('aggs') or {}
         if aggs and all('filter' in a for a in aggs.values()):
             return await self._cov.search(index=index, body=body)
-        return await super().search(index=index, body=body, **kw)
+        return {'hits': {'hits': []}}
 
 
 def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
@@ -206,7 +206,8 @@ def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
-    return TestClient(app)
+    install(monkeypatch)
+    return revision_aware(TestClient(app))
 
 
 def test_put_refuses_a_zero_coverage_sort_default(monkeypatch: pytest.MonkeyPatch) -> None:

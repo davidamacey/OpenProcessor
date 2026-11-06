@@ -12,21 +12,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.services.config_store import get_config_store
-from src.services.config_store.index import (
+from src.services.config_store import documents, get_config_store
+from src.services.config_store.documents import (
     TEMPLATE_DESCRIPTION,
     ActiveConflictError,
+    CloneSource,
     RevisionConflictError,
-    config_doc_id,
-    delete_config as _delete_config,
-    get_config_revision,
-    save_config as _save_config,
 )
 from src.services.config_store.profiles import RevisionSummary
-from src.services.config_store.snapshot import StoredConfig
+from src.services.config_store.stored_ops import delete_and_apply, save_and_apply
 
 
 if TYPE_CHECKING:
+    from src.services.config_store.documents import Activated
     from src.services.detection.open_vocab_set import OpenVocabSet
 
 SetSource = Literal['stored', 'template']
@@ -135,114 +133,71 @@ def build_record(name: str, *, revision: int | None = None) -> OpenVocabRecord |
     return None
 
 
-async def get_revision_record(client: Any, name: str, revision: int) -> OpenVocabRecord | None:
-    from opensearchpy.exceptions import NotFoundError
-
-    try:
-        doc = await client.get(
-            index=get_config_store().index, id=config_doc_id(_KIND, name, revision)
-        )
-    except NotFoundError:
+async def get_revision_record(name: str, revision: int) -> OpenVocabRecord | None:
+    stored = await documents.get_revision(kind='open_vocab_set', name=name, revision=revision)
+    if stored is None:
         return None
-    src = doc['_source']
     return _stored_record(
         name,
-        revision=int(src['revision']),
-        body=src.get('body') or {},
-        src=src,
+        revision=stored.revision,
+        body=stored.body,
+        src={
+            'description': stored.description,
+            'created_at': stored.created_at,
+            'updated_at': stored.updated_at,
+            'cloned_from': stored.cloned_from,
+        },
         read_only=True,
     )
 
 
-async def list_revisions(client: Any, name: str) -> list[RevisionSummary] | None:
-    store = get_config_store()
-    if name not in store.current.open_vocab_sets:
+async def list_revisions(name: str) -> list[RevisionSummary] | None:
+    if name not in get_config_store().current.open_vocab_sets:
         return None
-    resp = await client.search(
-        index=store.index,
-        body={
-            'size': 1000,
-            'query': {
-                'bool': {
-                    'filter': [
-                        {'term': {'doc_type': 'revision'}},
-                        {'term': {'kind': _KIND}},
-                        {'term': {'name': name}},
-                    ]
-                }
-            },
-            'sort': [{'revision': {'order': 'desc'}}],
-        },
-    )
+    infos = await documents.list_revisions(kind='open_vocab_set', name=name)
     return [
         RevisionSummary(
-            revision=int(hit['_source']['revision']),
-            saved_at=hit['_source'].get('updated_at'),
-            cloned_from=hit['_source'].get('cloned_from'),
-            description=hit['_source'].get('description') or '',
+            revision=i.revision,
+            saved_at=i.created_at.isoformat(),
+            cloned_from=i.cloned_from,
+            description=i.description,
         )
-        for hit in resp['hits']['hits']
+        for i in infos or []
     ]
 
 
 async def save_set(
-    client: Any,
     *,
     name: str,
     body: dict[str, Any],
     expected_revision: int | None,
     description: str = '',
-    cloned_from: str | None = None,
+    cloned_from: CloneSource | None = None,
 ) -> OpenVocabRecord:
-    store = get_config_store()
-    doc = await _save_config(
-        client,
-        store.index,
-        kind=_KIND,
+    await save_and_apply(
+        'open_vocab_set',
         name=name,
         body=body,
         expected_revision=expected_revision,
         description=description,
         cloned_from=cloned_from,
     )
-    store.apply_local(
-        config_revision=await get_config_revision(client, store.index),
-        open_vocab_set=StoredConfig(
-            kind=_KIND,
-            name=name,
-            revision=doc['revision'],
-            body=doc['body'],
-            description=doc['description'],
-            created_at=doc['created_at'],
-            updated_at=doc['updated_at'],
-            cloned_from=doc.get('cloned_from'),
-        ),
-    )
     record = build_record(name)
     assert record is not None
     return record
 
 
-async def delete_set(client: Any, *, name: str, expected_revision: int) -> None:
-    store = get_config_store()
-    await _delete_config(
-        client, store.index, kind=_KIND, name=name, expected_revision=expected_revision
-    )
-    store.apply_local(
-        config_revision=await get_config_revision(client, store.index),
-        open_vocab_set=None,
-        name=name,
-    )
+async def delete_set(*, name: str, expected_revision: int) -> None:
+    await delete_and_apply('open_vocab_set', name=name, expected_revision=expected_revision)
 
 
 async def activate_set(
-    client: Any, *, name: str | None, revision: int | None, expected_active: dict[str, Any] | None
-) -> dict[str, Any]:
+    *, name: str | None, revision: int | None, expected_active: dict[str, Any] | None
+) -> Activated:
     from src.services.config_store.store import activate_axis
 
     return await activate_axis(
         get_config_store(),
-        client,
         axis='open_vocab',
         name=name,
         revision=revision,
@@ -250,11 +205,11 @@ async def activate_set(
     )
 
 
-async def rollback_set(client: Any, *, expected_active: dict[str, Any] | None) -> dict[str, Any]:
+async def rollback_set(*, expected_active: dict[str, Any] | None) -> Activated:
     from src.services.config_store.activation_apply import rollback_axis
 
     return await rollback_axis(
-        get_config_store(), client, axis='open_vocab', expected_active=expected_active
+        get_config_store(), axis='open_vocab', expected_active=expected_active
     )
 
 

@@ -1,11 +1,8 @@
 """An in-memory project registry for worker tests.
 
-Multi-project workers discover their fleet through
-``src.services.projects.script_binding.script_project_registry``, which
-reads the projects index over the network. Worker tests that fake
-OpenSearch at ``make_script_opensearch`` must fake this too, or the
-registry's refresh hits the test's deliberately unresolvable host and
-the worker sees no projects to poll.
+Multi-project workers discover their fleet through a ``ProjectRegistry``, which
+reads Postgres. Worker tests that fake OpenSearch at ``make_script_opensearch``
+and have no database must install this too, or the worker sees no projects.
 """
 
 from __future__ import annotations
@@ -64,4 +61,6 @@ def install_static_project_registry(
         return registry
 
     monkeypatch.setattr('src.services.projects.script_binding.script_project_registry', _factory)
+    # the multi-project worker builds its registry from the class itself
+    monkeypatch.setattr('src.services.projects.registry.ProjectRegistry', _factory)
     return registry

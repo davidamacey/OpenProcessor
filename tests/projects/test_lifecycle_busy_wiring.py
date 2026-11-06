@@ -17,6 +17,9 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -44,7 +47,7 @@ def test_running_jobs_delegates_to_busy_module() -> None:
         # P3F item 3 (B2(a) residual): create_project's registry
         # refresh_strict() needs a real, reachable registry bound during
         # the create itself -- set it before create_project runs.
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
 
@@ -74,7 +77,7 @@ def test_archive_busy_409_carries_typed_job_refs(monkeypatch) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
 
@@ -111,7 +114,7 @@ def test_running_jobs_uses_the_real_label_when_the_source_provides_one(monkeypat
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
 
@@ -133,7 +136,7 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         _record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
@@ -169,7 +172,7 @@ def test_busy_message_names_the_jobs_and_hints_at_the_worker_settle(monkeypatch)
 
     async def _run() -> None:
         client = FakeLifecycleOpenSearch()
-        set_project_registry(ProjectRegistry(lambda: client))
+        set_project_registry(ProjectRegistry())
         await seed_default_project(client)
         record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
         monkeypatch.setattr(

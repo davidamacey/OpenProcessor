@@ -36,7 +36,13 @@ async def _drive(
     fake = _FakeOpenSearch({'c1': doc}, search_delay=0.0, lag_searches=0)
     policy = kw.pop('policy', None)
     if policy is not None:
-        fake.settings_doc = {'vlm_policy': {'scope': 'all', 'revision': 1, 'region_verify': policy}}
+        from config_store.memory_settings import current
+
+        current().policies['vlm_policy'] = {
+            'scope': 'all',
+            'revision': 1,
+            'region_verify': policy,
+        }
     mocks = await _drive_worker(
         tmp_path,
         monkeypatch,

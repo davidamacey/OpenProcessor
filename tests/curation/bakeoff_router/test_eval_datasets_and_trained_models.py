@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 from curation.bakeoff_router._helpers import LIVE_REMAP, _live_export, make_export, make_run
 from scripts.curation.bakeoff.freeze import test_sha as freeze_test_sha
@@ -73,7 +73,7 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
             self.classes = classes
 
     class _FakeRegistry:
-        async def snapshot(self, _client: object) -> _Loaded:
+        async def snapshot(self) -> _Loaded:
             # LIVE_EXPORT_ID_MAP maps registry r -> export r-1, so the
             # export's 5 test classes (eval ids 37/38/43/51/78) carry
             # registry ids 38/39/44/52/79. Registry id 38 is gone here --
@@ -275,12 +275,12 @@ def test_eval_datasets_unchanged_inputs_return_the_same_record(env: dict[str, Pa
 def test_eval_datasets_listing_is_503_when_the_registry_cannot_be_read(
     env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An outage must not read as "no class names": the listing refuses."""
-    from opensearchpy.exceptions import ConnectionError as OsConnectionError
+    """A registry outage must not read as "no class names": the listing refuses."""
+    from src.db.repos.classes import ClassRegistryError
 
     class _Down(InMemoryRegistry):
-        async def snapshot(self, _client: object = None, **_kw: object) -> object:
-            raise OsConnectionError('N/A', 'opensearch down', Exception('down'))
+        async def snapshot(self, **_kw: object) -> object:
+            raise ClassRegistryError('database down')
 
     down = _Down()
     monkeypatch.setattr('src.routers.curation.bakeoff.get_class_registry', lambda: down)

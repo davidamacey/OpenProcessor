@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -11,6 +10,14 @@ from src.services.curation.holdout import compute_holdout_sha, select_test_holdo
 from src.services.projects.combine import service
 
 from .world import World, run_job
+
+
+pytestmark = pytest.mark.db
+
+
+@pytest.fixture(autouse=True)
+def _database(world: World, pg_env) -> None:
+    world.pg = pg_env
 
 
 BOX = [0.1, 0.1, 0.5, 0.5]
@@ -60,6 +67,22 @@ def holdout_images(world: World) -> set[str]:
     return {d['image_id'] for d in world.items('combined').values() if d.get('test_holdout')}
 
 
+async def _freezes(target):
+    from src.db.repos.records import list_holdout_freezes
+    from src.db.session import async_session_factory, project_tx
+
+    async with async_session_factory()() as session, project_tx(session, target.id):
+        return await list_holdout_freezes(session, target.id)
+
+
+def _snapshot(key: str) -> dict:
+    from src.clients.storage.roots import build_rooted_store
+    from src.config.storage import storage_root_paths
+
+    with build_rooted_store(storage_root_paths()).open_read(key) as handle:
+        return json.load(handle)
+
+
 @pytest.mark.asyncio
 async def test_preserve_union_keeps_anything_test_in_any_source(world: World) -> None:
     ids = build(world)
@@ -80,10 +103,14 @@ async def test_preserve_union_keeps_anything_test_in_any_source(world: World) ->
         if image_id not in expect_test:
             assert doc['origin_image_id'] not in frozen_in_sources
 
-    freeze_dir = target.resources.project_state_dir / 'test_holdout' / 'imports'
-    (record_path,) = list(Path(freeze_dir).glob('*.json'))
-    record = json.loads(record_path.read_text())
     frozen = sorted(d['crop_id'] for d in world.items('combined').values() if d['test_holdout'])
+    [freeze] = await _freezes(target)
+    assert (freeze.is_current, freeze.item_count, freeze.source.startswith('combine:')) == (
+        False,
+        len(frozen),
+        True,
+    )
+    record = _snapshot(freeze.snapshot_storage_key)
     assert record['crop_ids'] == frozen
     assert record['test_holdout_sha'] == compute_holdout_sha(frozen)
     assert store.job.read()['report']['holdout_items'] == len(frozen)

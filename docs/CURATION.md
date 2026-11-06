@@ -80,14 +80,12 @@ endpoints are immutable revisions, and activation is a separate step.
 Class identity is the name, never the index. Anything that crosses a boundary (import,
 combine, export, train, promote) pairs classes by name.
 
-A project's class registry is one OpenSearch document, written with optimistic concurrency, so
-concurrent class writes never lose a class or give two classes one id. Four errors come from it:
-`409 registry_not_migrated` (the project still has a 0.6.x `class_registry.json` and no document;
-run `./openprocessor curation migrate-registry --project <slug>`, or `--all`, which `upgrade` and
-`repair` already run), `409 registry_full` (the 10,000-class bound), `409 registry_conflict` (five
-lost races in a row; retry) and the unchanged `409` on a duplicate class name. Inference routes and
-other projects are not affected by an unmigrated project. `class_registry.json` is now only an
-export snapshot and what a rollback writes back. Manage classes in
+A project's class registry lives in PostgreSQL (`class_registries` and `project_classes`). Writers
+of one project serialise on its registry row, so concurrent class writes never lose a class or give
+two classes one id, and ids are never reused. A class name compares by its normalized key (`Car`,
+`car` and `car ` are one class); a deprecated name can be reused by a new active class, and
+restoring a deprecated class while an active one holds its name answers `409`. There is no class
+cap. `class_registry.json` is only an export snapshot and a training pin. Manage classes in
 [Projects](../docs-site/docs/guides/projects.mdx) and the
 [Cropwright classes page](../docs-site/docs/cropwright/user-guide/classes.md). The
 rule is in [`ARCHITECTURE.md`](ARCHITECTURE.md) and

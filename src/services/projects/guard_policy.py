@@ -1,6 +1,6 @@
 """The project guard's allowlist and the verdict on a request.
 
-Split out of ``guard.py``: the registry-admin and global-configs-read
+Split out of ``guard.py``: the index-inventory and global-configs-read
 bindings, the allowlisted request shapes, and :func:`check_request`, which
 raises unless a request is an allowlisted shape whose every index belongs
 to the bound project.
@@ -12,7 +12,6 @@ import contextvars
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
-from src.config.env import env_str
 from src.config.project_context import current_project, try_current_project
 from src.config.projects import project_index_prefix
 from src.services.projects.guard_errors import ProjectReadOnly, _refuse
@@ -31,51 +30,20 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
 
 
-_REGISTRY_ADMIN: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    'op_registry_admin', default=False
+_INDEX_INVENTORY: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    'op_index_inventory', default=False
 )
 
 
 @contextmanager
-def bind_registry_admin() -> Generator[None, None, None]:
-    """Allow writes to the ``op_projects`` registry index and the one
-    cross-project metadata read (``_cat/indices`` doc counts) for the
-    duration of the block. Only project lifecycle code and the global
-    project list enter it."""
-    token = _REGISTRY_ADMIN.set(True)
+def bind_index_inventory_read() -> Generator[None, None, None]:
+    """Allow the one cross-project metadata read, ``_cat/indices`` (shard and store sizes), for the
+    duration of the block. Only the storage gauges enter it."""
+    token = _INDEX_INVENTORY.set(True)
     try:
         yield
     finally:
-        _REGISTRY_ADMIN.reset(token)
-
-
-_GLOBAL_CONFIGS_READ: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    'op_global_configs_read', default=False
-)
-
-
-@contextmanager
-def global_configs_read() -> Generator[None, None, None]:
-    """Allow READS of the ``op_global_configs`` registry (the VLM
-    endpoint registry) while a project is bound. Project-scoped code
-    (a run's ``?vlm=``, the worker's per-project runtime) resolves the
-    deployment-wide endpoints through the config store, which enters this
-    for its own reads only; a write to that index while bound is still
-    refused (global routes run unbound), and so is any raw access outside
-    the block."""
-    token = _GLOBAL_CONFIGS_READ.set(True)
-    try:
-        yield
-    finally:
-        _GLOBAL_CONFIGS_READ.reset(token)
-
-
-def _projects_index() -> str:
-    return env_str('OP_PROJECTS_INDEX', 'op_projects')
-
-
-def _global_configs_index() -> str:
-    return env_str('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
+        _INDEX_INVENTORY.reset(token)
 
 
 _READ = frozenset({'GET', 'HEAD'})
@@ -148,7 +116,7 @@ def _check_name(name: str) -> None:
 
 def owner_slug(index: str, snapshot: Mapping[str, ProjectRecord]) -> str | None:
     """The project slug that owns ``index``, or ``None`` for an index
-    owned by no project (``visual_search_*``, ``op_projects``, ...)."""
+    owned by no project (``visual_search_*``, ...)."""
     for slug, record in snapshot.items():
         if index in record.resources.indexes.values():
             return slug
@@ -162,25 +130,12 @@ def _check_targets(
     if not targets:
         raise _refuse('the request names no index (it would reach every index)')
     bound = try_current_project()
-    admin = _REGISTRY_ADMIN.get()
     for name in dict.fromkeys(targets):  # a bulk names the same index once per document
         _check_name(name)
         owner = owner_slug(name, snapshot)
         if owner is None:
-            if name == _projects_index():
-                if write and not admin:
-                    raise _refuse(
-                        'the project registry is writable only by lifecycle code', target=name
-                    )
-                continue
             if name.startswith(project_index_prefix()):
                 raise _refuse(f'{name!r} belongs to no known project', target=name)
-            if bound is not None and name == _global_configs_index() and not write:
-                if _GLOBAL_CONFIGS_READ.get():
-                    continue
-                raise _refuse(
-                    f'{name!r} is readable while bound only through the config store', target=name
-                )
             if bound is not None:
                 raise _refuse(f'{name!r} is not an index of the bound project', target=name)
             continue
@@ -256,8 +211,8 @@ def _check_pit_close(body: Any, handles: Mapping[str, str | None] | None) -> Non
 
 
 def _check_cat_indices(segs: list[str]) -> None:
-    if not _REGISTRY_ADMIN.get():
-        raise _refuse('_cat/indices is only for the global project list')
+    if not _INDEX_INVENTORY.get():
+        raise _refuse('_cat/indices is only for the index inventory read')
     for name in segs[2].split(','):
         _check_name(name)
 

@@ -13,23 +13,19 @@ from fastapi import HTTPException
 from src.routers.curation._api_error import api_error
 
 
-async def project_keymap_overrides(opensearch: Any) -> dict[str, list[str]]:
-    from src.config import get_curation_config
+async def project_keymap_overrides() -> dict[str, list[str]]:
     from src.services.curation.keymap import get_keymap_doc
 
-    cfg = get_curation_config()
-    doc = await get_keymap_doc(opensearch, cfg.configs_index)
+    doc = await get_keymap_doc()
     return doc.overrides
 
 
-async def project_reserved_hotkeys(opensearch: Any) -> list[str]:
+async def project_reserved_hotkeys() -> list[str]:
     """``reserved_hotkeys`` derived from the bound project's *stored*
     keymap overrides (CW-K §3.4), not just the defaults."""
-    from src.config import get_curation_config
     from src.services.curation.keymap import get_keymap_doc, reserved_hotkeys
 
-    cfg = get_curation_config()
-    doc = await get_keymap_doc(opensearch, cfg.configs_index)
+    doc = await get_keymap_doc()
     return reserved_hotkeys(doc.overrides)
 
 

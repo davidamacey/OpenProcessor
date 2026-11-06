@@ -10,7 +10,7 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation._ingest_profile_world import Pool, WorldOpenSearch, body
+from curation._ingest_profile_world import Pool, body
 
 
 PREFIX = '/curation/projects/default/ingest_profiles'
@@ -44,7 +44,7 @@ def client(monkeypatch: pytest.MonkeyPatch, pool: Pool) -> TestClient:
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    fake = WorldOpenSearch()
+    fake = object()  # the OpenSearch client: the ingest-profile routes never read it
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 

@@ -125,9 +125,7 @@ async def test_total_attempts_over_many_refresh_rounds_stay_within_the_bound() -
 async def test_a_policy_revision_change_or_a_restart_does_not_reopen_the_pool() -> None:
     sizes = {CAND: 10, CAND + 1: 10}
     fake = _Fake({ITEMS: _clusters(sizes)})
-    await put_vlm_policy(
-        fake, VlmPolicyBody(scope='representatives', per_cluster=3), expected_revision=0
-    )
+    await put_vlm_policy(VlmPolicyBody(scope='representatives', per_cluster=3), expected_revision=0)
     attempted: set[str] = set()
     for revision in range(1, 6):
         # a fresh cache each round = a worker restart; the revision moves too
@@ -137,7 +135,6 @@ async def test_a_policy_revision_change_or_a_restart_does_not_reopen_the_pool() 
         attempted.update(todo)
         _label(fake, todo)
         await put_vlm_policy(
-            fake,
             VlmPolicyBody(scope='representatives', per_cluster=3, conf_max=0.5 + revision / 100),
             expected_revision=revision,
         )

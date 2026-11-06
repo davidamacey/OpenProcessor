@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.domain.label_ops import LabelOpKind
+
 
 class LabelOpUndoPass(BaseModel):
     """One completed undo pass over an operation."""
@@ -23,7 +25,7 @@ class LabelOp(BaseModel):
     """One recorded bulk label or move. Class ids are never served: identity is the name."""
 
     op_id: str
-    kind: Literal['label', 'move']
+    kind: LabelOpKind
     at: str
     finished_at: str | None
     class_name: str | None
@@ -64,7 +66,6 @@ class LabelOpUndoResponse(BaseModel):
     op_id: str
     dry_run: bool
     status: str
-    members_known: bool
     matched: int
     restored: int
     already_undone: int

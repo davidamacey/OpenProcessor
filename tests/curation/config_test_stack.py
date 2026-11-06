@@ -16,10 +16,11 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from _registry_doc_fake import InMemoryRegistry, use_registry
+from _class_registry_fake import InMemoryRegistry, use_registry
+from config_store import memory_config
 from PIL import Image
 
-from curation.conftest import SCOPED, HybridOpenSearch, VlmApi, good_probe
+from curation.conftest import SCOPED, VlmApi, good_probe
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 
@@ -131,10 +132,19 @@ class Stack:
         return self.client.post(f'{SCOPED}{path}', json=body)
 
     def snapshot(self) -> dict[str, Any]:
-        """Every document of both stores, for a before/after comparison."""
+        """Everything the item store and the config repository hold, for a before/after comparison."""
+        memory = memory_config.current()
         return {
             'items': copy.deepcopy(self.items.store),
-            'configs': copy.deepcopy(self.api.fake_os._docs),
+            'configs': copy.deepcopy(
+                {
+                    'revisions': {str(d.id): d.revisions for d in memory.docs.values()},
+                    'active': memory.active,
+                    'events': memory.events,
+                    'probes': memory.probes,
+                    'state': memory.state,
+                }
+            ),
         }
 
 
@@ -174,7 +184,7 @@ def build_stack(vlm_api: VlmApi, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     use_registry(registry)
 
     items = QueryFakeOpenSearch({ITEMS: {}})
-    hybrid = HybridOpenSearch(vlm_api.fake_os, items)
+    hybrid = items
     vlm_api.client.app.dependency_overrides[_raw_opensearch_dep] = lambda: hybrid
 
     vlm_api.probe_record[0] = good_probe(root='org/a-root')

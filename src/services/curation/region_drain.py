@@ -7,41 +7,28 @@ counts. This computes the same verdict server-side so every client
 agrees, and so the parameters (``poll_interval_s`` / ``stable_polls``)
 are served, not hardcoded twice.
 
-**Multi-worker correctness (2026-09-25 fix).** ``api`` runs under
-``--workers=N`` -- separate OS processes. This used to keep the streak
-counter (``_StreakState``) in module memory: an ingest walker polling
-this endpoint every ``poll_interval_s`` lands on essentially a random
-worker process each time, so the streak reset on almost every poll and
-the ``drained`` verdict flapped depending purely on which process
-happened to answer -- never truly reaching ``stable_polls`` consecutive
-zeros from any single process's point of view. Fixed by persisting the
-same ``(streak, zero_since)`` pair to a small state.json under
-``OP_REGION_DRAIN_STATE_DIR`` (shared ``/jobs`` volume every worker
-mounts, same convention as the file-backed job runners in this package),
-atomically written on every call. This is a per-poll read-modify-write,
-not append-only, so two polls landing on different processes at the
-exact same instant could race and one increment could be lost -- that is
-an acceptable, self-correcting inaccuracy (the next poll fixes the count
-within one more ``poll_interval_s``), not a correctness issue: it only
-ever delays ``drained`` flipping true by at most one extra poll, and
-``pending_detection``/``pending_verification`` themselves are always read
-fresh from OpenSearch regardless.
+``api`` runs many worker processes and a walker's polls land on any of them, so the
+``(streak, zero_since)`` pair lives in the project's ``region_drain`` marker
+(``project_state``), updated with optimistic concurrency on its revision: two polls at the same
+instant retry instead of losing an increment.
 """
 
 from __future__ import annotations
 
-import contextlib
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.env import env_float, env_int, env_path
-from src.utils.atomic_write import atomic_write_json
+from src.config.env import env_float, env_int
+from src.config.project_context import current_project_id
+from src.db.repos.records import modify_project_state
+from src.db.session import project_tx
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+_KEY = 'region_drain'
 
 
 def region_drain_poll_interval_s() -> float:
@@ -54,46 +41,6 @@ def region_drain_stable_polls() -> int:
     return env_int('OP_REGION_DRAIN_STABLE_POLLS', 3)
 
 
-def _state_dir() -> Path:
-    """Resolved fresh each call so tests can override via monkeypatch
-    (same convention as the file-backed job runners' ``_state_dir`` /
-    ``_jobs_dir`` helpers)."""
-    from src.config.project_context import project_jobs_dir
-
-    # Per project: the streak/stall state describes one project's queue.
-    return project_jobs_dir(env_path('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain'))
-
-
-def _state_file() -> Path:
-    return _state_dir() / 'state.json'
-
-
-@dataclass
-class _StreakState:
-    streak: int = 0
-    zero_since: float | None = None  # epoch seconds
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def _read_state() -> _StreakState:
-    try:
-        raw = json.loads(_state_file().read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return _StreakState()
-    state = _StreakState()
-    for k, v in raw.items():
-        if hasattr(state, k):
-            setattr(state, k, v)
-    return state
-
-
-def _atomic_write(state: _StreakState) -> None:
-    _state_dir().mkdir(parents=True, exist_ok=True)
-    atomic_write_json(_state_file(), state.to_dict(), default=None)
-
-
 @dataclass(frozen=True)
 class DrainVerdict:
     drained: bool
@@ -101,31 +48,32 @@ class DrainVerdict:
     observed_at: str
 
 
-def observe_drain(total_unfinished: int, *, now: datetime | None = None) -> DrainVerdict:
-    """Update the persisted streak tracker and return the verdict for
-    this poll. Call once per ``GET /ingest/region_drain`` request, from
-    any worker process -- the state lives on shared disk, not in this
-    process's memory."""
+async def observe_drain(
+    session: AsyncSession, total_unfinished: int, *, now: datetime | None = None
+) -> DrainVerdict:
+    """Update the persisted streak tracker and return the verdict for this poll.
+
+    Call once per ``GET /ingest/region_drain`` request, from any worker process: the state is
+    the project's ``region_drain`` row, not this process's memory.
+    """
     ts = now or datetime.now(UTC)
     epoch = ts.timestamp()
-    state = _read_state()
-    if total_unfinished == 0:
-        state.streak += 1
-        if state.zero_since is None:
-            state.zero_since = epoch
-    else:
-        state.streak = 0
-        state.zero_since = None
-    _atomic_write(state)
 
-    stable_for_s = max(0.0, epoch - state.zero_since) if state.zero_since is not None else 0.0
-    drained = total_unfinished == 0 and state.streak >= region_drain_stable_polls()
+    def advance(current: dict[str, Any] | None) -> dict[str, Any]:
+        streak = int((current or {}).get('streak', 0))
+        zero_since = (current or {}).get('zero_since')
+        if total_unfinished == 0:
+            return {'streak': streak + 1, 'zero_since': epoch if zero_since is None else zero_since}
+        return {'streak': 0, 'zero_since': None}
+
+    project_id = current_project_id()
+    async with project_tx(session, project_id):
+        state = await modify_project_state(session, project_id, _KEY, advance)
+
+    zero_since = state['zero_since']
+    stable_for_s = max(0.0, epoch - zero_since) if zero_since is not None else 0.0
+    drained = total_unfinished == 0 and state['streak'] >= region_drain_stable_polls()
     return DrainVerdict(drained=drained, stable_for_s=stable_for_s, observed_at=ts.isoformat())
-
-
-def _reset_for_tests() -> None:
-    with contextlib.suppress(FileNotFoundError):
-        _state_file().unlink()
 
 
 __all__ = [

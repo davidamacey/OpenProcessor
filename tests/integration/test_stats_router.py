@@ -35,7 +35,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-pytestmark = pytest.mark.integration
+pytest_plugins = ['_records_world']
+pytestmark = [pytest.mark.integration, pytest.mark.db, pytest.mark.usefixtures('world')]
 
 
 def _fake_dataset_search_response() -> dict[str, Any]:
@@ -318,13 +319,12 @@ def test_stats_dataset_region_stall_reason_null_by_default(app_client: TestClien
 
 
 def test_stats_dataset_surfaces_region_stall_reason(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from src.config import DetectionProfile
     from src.routers.curation import _raw_opensearch_dep
     from src.services.triton_control import TritonControlService
 
-    monkeypatch.setenv('OP_REGION_DRAIN_STATE_DIR', str(tmp_path / 'region_drain'))
     monkeypatch.setattr(
         'src.routers.curation.stats.region_profile_or_neutral',
         lambda: DetectionProfile(name='active', detector_model='det_v1', segmenter_name=''),

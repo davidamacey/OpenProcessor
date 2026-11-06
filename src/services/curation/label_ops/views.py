@@ -3,7 +3,6 @@ carry its label, in the wire shape."""
 
 from __future__ import annotations
 
-from itertools import islice
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation_accessors import items_index
@@ -12,7 +11,7 @@ from src.services.curation.label_ops.store import (
     LABEL_OPS_KEEP,
     LabelOpRecord,
     ServedStatus,
-    iter_ops,
+    list_ops,
     served_status,
 )
 from src.services.rejections import rejection
@@ -83,7 +82,7 @@ async def list_label_ops(
     if after is not None and not LABEL_OP_ID_RE.fullmatch(after):
         raise rejection(422, 'invalid_request', f'{after!r} is not a label operation id')
     if not undoable_only:
-        window = list(islice(iter_ops(after=after), limit + 1))
+        window = await list_ops(limit=limit + 1, after=after)
         page = window[:limit]
         counts = await current_counts(opensearch, page)
         return _list_body(
@@ -92,11 +91,12 @@ async def list_label_ops(
             page[-1].op_id if len(window) > limit else None,
         )
     served: list[dict[str, Any]] = []
-    source = iter_ops(after=after)
+    cursor = after
     while len(served) <= limit:
-        chunk = list(islice(source, _COUNT_CHUNK))
+        chunk = await list_ops(limit=_COUNT_CHUNK, after=cursor)
         if not chunk:
             break
+        cursor = chunk[-1].op_id
         counts = await current_counts(opensearch, chunk)
         for record in chunk:
             wire = label_op_wire(

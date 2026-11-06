@@ -6,6 +6,7 @@ from typing import Any
 
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import KnnMethodSpec
 
 
 logger = get_logger(__name__)
@@ -24,8 +25,8 @@ F = get_region_fields()
 # =============================================================================
 
 
-def _knn_field(dim: int = config.embedding_dim) -> dict[str, Any]:
-    """Standard cosine k-NN HNSW field on the Lucene engine.
+def default_knn_spec() -> KnnMethodSpec:
+    """The k-NN method of a new project field: Lucene HNSW, cosine, sized from the config.
 
     Lucene stores the graph with the segment (no native graph memory), takes half the disk of
     faiss for the same vectors and keeps recall near 1.0 under the filters the review and
@@ -33,19 +34,36 @@ def _knn_field(dim: int = config.embedding_dim) -> dict[str, Any]:
     equals faiss's, so ``min_score`` is unchanged. Indexes created before this default keep
     their faiss fields: the engine of a field is fixed at creation.
     """
-    return {
+    return KnnMethodSpec(m=config.hnsw_m, ef_construction=config.hnsw_ef_construction)
+
+
+def knn_field_body(spec: KnnMethodSpec, dim: int) -> dict[str, Any]:
+    """The ``knn_vector`` mapping of one field from its method spec and dimension.
+
+    OpenSearch k-NN vector docs: https://docs.opensearch.org/latest/field-types/supported-field-types/knn-vector/
+    Optional spec members (``mode``, ``compression_level``, ``data_type``) appear only when set,
+    so a spec with none of them renders the exact body the fixed builder rendered before.
+    """
+    body: dict[str, Any] = {
         'type': 'knn_vector',
         'dimension': dim,
         'method': {
             'name': 'hnsw',
-            'space_type': 'cosinesimil',
-            'engine': 'lucene',
+            'space_type': spec.space_type,
+            'engine': spec.engine,
             'parameters': {
-                'ef_construction': config.hnsw_ef_construction,
-                'm': config.hnsw_m,
+                'ef_construction': spec.ef_construction,
+                'm': spec.m,
             },
         },
     }
+    if spec.data_type is not None:
+        body['data_type'] = spec.data_type
+    if spec.mode is not None:
+        body['mode'] = spec.mode
+    if spec.compression_level is not None:
+        body['compression_level'] = spec.compression_level
+    return body
 
 
 def _knn_settings() -> dict[str, Any]:

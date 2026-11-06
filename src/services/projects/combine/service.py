@@ -28,7 +28,7 @@ from src.services.projects.combine.plan import (
     resolve_sources,
     source_state,
 )
-from src.services.projects.registry import get_record_with_seq
+from src.services.projects.registry import get_project_registry
 from src.services.rejections import rejection
 from src.utils.timeutil import now_iso
 
@@ -282,7 +282,7 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
             'preview_stale',
             'a source changed since the preview this combine was started from; start a new combine',
         )
-    target, _seq, _term = await get_record_with_seq(client, state['target'])
+    target = await get_project_registry().lookup(state['target'])
     if target is None or target.status != 'building':
         raise rejection(409, 'combine_not_resumable', 'the target project is no longer building')
     beat = await lease.take(client, target, job_id, busy=_not_resumable_busy)

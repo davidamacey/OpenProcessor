@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
@@ -38,6 +38,9 @@ CFG = base_curation_config()
 ITEMS = CFG.items_index
 IMAGES = CFG.images_index
 CONFIRMED = CFG.labels_confirmed_index
+
+
+pytest_plugins = ['_records_world']
 
 
 def _item(doc_id: str, *, image: str, cluster_id: int = 7, **extra: Any) -> dict[str, Any]:
@@ -119,6 +122,8 @@ async def _human_label_paths(fake, registry, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp_path, monkeypatch):
     """The exact scenario of the reference hole: humans label, nothing is
     imported, the confirmed-labels index stays empty — export must not."""
@@ -135,6 +140,8 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures('reference_ingest_profiles')
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, monkeypatch):
     """The fifth "every label path" writer: dataset import.
 

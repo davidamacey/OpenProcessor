@@ -9,15 +9,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
-from src.services.curation.holdout import (
-    compute_holdout_sha,
-    persist_freeze_record,
-    select_test_holdout,
-)
+from src.db.session import async_session_factory
+from src.services.curation.holdout import record_standing_freeze, select_test_holdout
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    import uuid
 
     from src.config.projects import ProjectRecord
 
@@ -43,17 +40,22 @@ async def _scan(
             cursor = hits[-1].get('sort')
 
 
-def _freeze(target: ProjectRecord, crop_ids: list[str], spec: dict[str, Any]) -> Path | None:
+async def _freeze(
+    target: ProjectRecord, crop_ids: list[str], spec: dict[str, Any], job_id: str
+) -> uuid.UUID | None:
     if not crop_ids:
         return None
-    return persist_freeze_record(
-        crop_ids=crop_ids,
-        sha=compute_holdout_sha(crop_ids),
-        cohort_spec=spec,
-        per_class_counts={},
-        state_dir=target.resources.project_state_dir / 'test_holdout',
-        kind='import',
-    )
+    with bind_project(target):
+        async with async_session_factory()() as session:
+            row = await record_standing_freeze(
+                session,
+                crop_ids=crop_ids,
+                cohort_spec=spec,
+                per_class_counts={},
+                source=f'combine:{job_id}',
+                frozen_by='combine',
+            )
+    return row.id
 
 
 async def record_union(
@@ -62,8 +64,10 @@ async def record_union(
     """Write the freeze record of every item flagged test while copying."""
     docs = await _scan(client, target, items_index, {'term': {'test_holdout': True}})
     ids = [str(d['crop_id']) for d in docs]
-    path = _freeze(target, ids, {'kind': 'combine', 'job_id': job_id, 'holdout': 'preserve_union'})
-    return {'holdout_items': len(ids), 'freeze_record': str(path) if path else None}
+    freeze_id = await _freeze(
+        target, ids, {'kind': 'combine', 'job_id': job_id, 'holdout': 'preserve_union'}, job_id
+    )
+    return {'holdout_items': len(ids), 'freeze_record': str(freeze_id) if freeze_id else None}
 
 
 async def recompute(
@@ -85,11 +89,13 @@ async def recompute(
                 body.append({'index': {'_index': items_index, '_id': d['crop_id']}})
                 body.append({**d, 'test_holdout': str(d['crop_id']) in picked})
             await client.bulk(body=body, refresh=False)
-    path = _freeze(target, chosen, {'kind': 'combine', 'job_id': job_id, 'holdout': 'recompute'})
+    freeze_id = await _freeze(
+        target, chosen, {'kind': 'combine', 'job_id': job_id, 'holdout': 'recompute'}, job_id
+    )
     return {
         'holdout_items': len(chosen),
         'per_class_counts': {str(k): v for k, v in per_class.items()},
-        'freeze_record': str(path) if path else None,
+        'freeze_record': str(freeze_id) if freeze_id else None,
     }
 
 

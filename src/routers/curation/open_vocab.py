@@ -15,7 +15,7 @@ from fastapi import Query
 
 from src.core.wire_json import WireJSONResponse
 from src.routers.curation._api_error import active_conflict_error, api_error
-from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._common import router
 from src.routers.curation._open_vocab_models import (
     OpenVocabActivateRequest,
     OpenVocabActivateResponse,
@@ -111,9 +111,9 @@ async def get_open_vocab_schema() -> OpenVocabSchema:
 
 @router.post('/open_vocab/validate', response_model=ValidationReport)
 async def validate_open_vocab_route(
-    body: OpenVocabValidateRequest, opensearch: OpenSearchDep, for_activation: bool = False
+    body: OpenVocabValidateRequest, for_activation: bool = False
 ) -> Any:
-    await get_config_store().refresh(opensearch)
+    await get_config_store().refresh()
     return await validate_open_vocab(
         body.name,
         body.body.model_dump(),
@@ -124,17 +124,15 @@ async def validate_open_vocab_route(
 
 
 @router.get('/open_vocab/active', response_model=ActiveConfigResponse)
-async def get_active_open_vocab(opensearch: OpenSearchDep) -> ActiveConfigResponse:
-    return await build_active_config_response(opensearch, axis='open_vocab')
+async def get_active_open_vocab() -> ActiveConfigResponse:
+    return await build_active_config_response(axis='open_vocab')
 
 
 @router.post('/open_vocab/active/rollback', response_model=ActiveConfigResponse)
-async def rollback_active_open_vocab(
-    body: OpenVocabRollbackRequest, opensearch: OpenSearchDep
-) -> ActiveConfigResponse:
+async def rollback_active_open_vocab(body: OpenVocabRollbackRequest) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await rollback_set(opensearch, expected_active=expected)
+        await rollback_set(expected_active=expected)
     except LookupError as exc:
         if exc.args and exc.args[0] == 'previous_deleted':
             raise api_error(
@@ -145,31 +143,28 @@ async def rollback_active_open_vocab(
         ) from exc
     except ActiveConflictError as exc:
         raise _active_conflict(exc) from exc
-    return await build_active_config_response(opensearch, axis='open_vocab')
+    return await build_active_config_response(axis='open_vocab')
 
 
 @router.post('/open_vocab/deactivate', response_model=ActiveConfigResponse)
-async def deactivate_open_vocab(
-    body: OpenVocabDeactivateRequest, opensearch: OpenSearchDep
-) -> ActiveConfigResponse:
+async def deactivate_open_vocab(body: OpenVocabDeactivateRequest) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await activate_set(opensearch, name=None, revision=None, expected_active=expected)
+        await activate_set(name=None, revision=None, expected_active=expected)
     except ActiveConflictError as exc:
         raise _active_conflict(exc) from exc
-    return await build_active_config_response(opensearch, axis='open_vocab')
+    return await build_active_config_response(axis='open_vocab')
 
 
 @router.get('/open_vocab', response_model=OpenVocabList)
 async def list_open_vocab(
-    opensearch: OpenSearchDep,
     include_templates: bool = Query(
         default=False,
         description='Also return the shipped example templates in `templates`; they are omitted by default.',
     ),
 ) -> OpenVocabList:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     templates = set(template_names())
     records = [build_record(n) for n in sorted(all_known_names() - templates)]
     template_rows: list[OpenVocabTemplateSummary] = []
@@ -199,10 +194,8 @@ async def list_open_vocab(
 
 
 @router.post('/open_vocab', response_model=OpenVocabDoc, status_code=201)
-async def create_open_vocab(
-    body: OpenVocabCreateRequest, opensearch: OpenSearchDep
-) -> OpenVocabDoc:
-    await get_config_store().refresh(opensearch)
+async def create_open_vocab(body: OpenVocabCreateRequest) -> OpenVocabDoc:
+    await get_config_store().refresh()
     existing = all_known_names()
     report = await validate_open_vocab(
         body.name,
@@ -221,7 +214,6 @@ async def create_open_vocab(
             422, 'validation_failed', f'the set has {len(report.errors)} error(s)', report=report
         )
     record = await save_set(
-        opensearch,
         name=body.name,
         body=body.body.model_dump(),
         expected_revision=None,
@@ -231,8 +223,8 @@ async def create_open_vocab(
 
 
 @router.get('/open_vocab/{name}', response_model=OpenVocabDoc)
-async def get_open_vocab(name: str, opensearch: OpenSearchDep) -> Any:
-    await get_config_store().refresh(opensearch)
+async def get_open_vocab(name: str) -> Any:
+    await get_config_store().refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
@@ -242,10 +234,8 @@ async def get_open_vocab(name: str, opensearch: OpenSearchDep) -> Any:
 
 
 @router.get('/open_vocab/{name}/revisions', response_model=OpenVocabRevisionsResponse)
-async def list_open_vocab_revisions(
-    name: str, opensearch: OpenSearchDep
-) -> OpenVocabRevisionsResponse:
-    revisions = await list_revisions(opensearch, name)
+async def list_open_vocab_revisions(name: str) -> OpenVocabRevisionsResponse:
+    revisions = await list_revisions(name)
     if revisions is None:
         raise api_error(404, 'not_found', f'{name!r} is not a stored open-vocabulary set')
     return OpenVocabRevisionsResponse(
@@ -263,20 +253,16 @@ async def list_open_vocab_revisions(
 
 
 @router.get('/open_vocab/{name}/revisions/{revision}', response_model=OpenVocabDoc)
-async def get_open_vocab_revision(
-    name: str, revision: int, opensearch: OpenSearchDep
-) -> OpenVocabDoc:
-    record = await get_revision_record(opensearch, name, revision)
+async def get_open_vocab_revision(name: str, revision: int) -> OpenVocabDoc:
+    record = await get_revision_record(name, revision)
     if record is None:
         raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
     return _to_doc(record)
 
 
 @router.put('/open_vocab/{name}', response_model=OpenVocabDoc)
-async def save_open_vocab(
-    name: str, body: OpenVocabSaveRequest, opensearch: OpenSearchDep
-) -> OpenVocabDoc:
-    await get_config_store().refresh(opensearch)
+async def save_open_vocab(name: str, body: OpenVocabSaveRequest) -> OpenVocabDoc:
+    await get_config_store().refresh()
     existing = build_record(name)
     if existing is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
@@ -289,7 +275,6 @@ async def save_open_vocab(
         )
     try:
         record = await save_set(
-            opensearch,
             name=name,
             body=body.body.model_dump(),
             expected_revision=body.expected_revision,
@@ -301,11 +286,11 @@ async def save_open_vocab(
 
 
 @router.delete('/open_vocab/{name}', status_code=204)
-async def delete_open_vocab(name: str, expected_revision: int, opensearch: OpenSearchDep) -> None:
+async def delete_open_vocab(name: str, expected_revision: int) -> None:
     from fastapi import Response
 
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
@@ -315,7 +300,7 @@ async def delete_open_vocab(name: str, expected_revision: int, opensearch: OpenS
     if isinstance(ref, tuple) and ref[0] == name:
         raise api_error(409, 'in_use', f'{name!r} is the active open-vocabulary set')
     try:
-        await delete_set(opensearch, name=name, expected_revision=expected_revision)
+        await delete_set(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
         raise _revision_conflict(name, exc) from exc
     return Response(status_code=204)  # type: ignore[return-value]
@@ -323,25 +308,21 @@ async def delete_open_vocab(name: str, expected_revision: int, opensearch: OpenS
 
 @router.post('/open_vocab/{name}/activate', response_model=OpenVocabActivateResponse)
 async def activate_open_vocab(
-    name: str, body: OpenVocabActivateRequest, opensearch: OpenSearchDep
+    name: str, body: OpenVocabActivateRequest
 ) -> OpenVocabActivateResponse:
     from src.services.config_store.activation_gate import run_activation_gate
 
-    await get_config_store().refresh(opensearch)
+    await get_config_store().refresh()
     record = build_record(name, revision=body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
-    report = await run_activation_gate(
-        'open_vocab', name, record.revision, force=body.force, client=opensearch
-    )
+    report = await run_activation_gate('open_vocab', name, record.revision, force=body.force)
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await activate_set(
-            opensearch, name=name, revision=record.revision, expected_active=expected
-        )
+        await activate_set(name=name, revision=record.revision, expected_active=expected)
     except ActiveConflictError as exc:
         raise _active_conflict(exc) from exc
-    response = await build_active_config_response(opensearch, axis='open_vocab')
+    response = await build_active_config_response(axis='open_vocab')
     return OpenVocabActivateResponse(**response.model_dump(), validation=report)
 
 

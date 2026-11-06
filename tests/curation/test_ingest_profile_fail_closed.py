@@ -8,8 +8,8 @@ import time
 from typing import Any
 
 import pytest
+from config_store.memory_config import current as memory_config_now
 
-from curation._ingest_profile_world import WorldOpenSearch
 from src.services.config_store import get_config_store
 from src.services.config_store.store import reset_config_stores
 from src.services.curation.ingest_detector import (
@@ -47,41 +47,39 @@ def test_a_loaded_fresh_store_with_no_activation_uses_the_env_profile() -> None:
     assert (resolved.source, resolved.primary.detector_model) == ('env', 'env_model')
 
 
-class _Unreachable(WorldOpenSearch):
-    async def get(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        msg = 'opensearch down'
-        raise ConnectionError(msg)
-
-
 @pytest.mark.asyncio
 async def test_a_failed_first_refresh_refuses() -> None:
+    memory_config_now().down = True
     with pytest.raises(IngestProfileUnresolvedError):
-        await refreshed_ingest_profiles(_Unreachable())
+        await refreshed_ingest_profiles()
 
 
 @pytest.mark.asyncio
 async def test_a_failed_refresh_after_a_good_load_refuses_then_recovers() -> None:
-    good = WorldOpenSearch()
-    assert (await refreshed_ingest_profiles(good)).source == 'env'
+    memory = memory_config_now()
+    assert (await refreshed_ingest_profiles()).source == 'env'
     store = get_config_store()
-    await store.refresh(_Unreachable())
+    memory.down = True
+    await store.refresh()
     assert store.current.stale
     with pytest.raises(IngestProfileUnresolvedError):
         project_ingest_profiles()
-    # the outage ends with the revision unchanged: the store must clear `stale`
-    await store.refresh(good)
+    # the outage ends with the epoch unchanged: the store must clear `stale`
+    memory.down = False
+    await store.refresh()
     assert not store.current.stale
     assert project_ingest_profiles().source == 'env'
-
-
-class _NoHits(_Unreachable):
-    async def search(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        return {'hits': {'hits': []}}
 
 
 @pytest.mark.asyncio
 async def test_the_empty_answer_repair_scan_refuses_without_a_readable_profile() -> None:
     from src.services.curation.empty_vlm_answer_repair import plan_repairs
+
+    memory_config_now().down = True
+
+    class _NoHits:
+        async def search(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            return {'hits': {'hits': []}}
 
     with pytest.raises(IngestProfileUnresolvedError):
         await plan_repairs(_NoHits(), index='items')

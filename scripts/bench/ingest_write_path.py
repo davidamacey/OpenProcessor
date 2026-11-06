@@ -221,7 +221,7 @@ async def amain(args: argparse.Namespace) -> int:
     url = args.opensearch_url.rstrip('/')
     with httpx.Client(timeout=httpx.Timeout(600.0)) as http:
         sources = load_images(http, url, args.source_items, args.source_images)
-    await abind_script_project(args.project, opensearch_url=url)
+    await abind_script_project(args.project)
     client = make_script_opensearch([url], timeout=60)
     runs: list[dict[str, Any]] = []
     try:

@@ -3,11 +3,13 @@ the real routes, over an in-memory config store."""
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
 
 from curation.conftest import ACTIVE, GLOBAL_VLM, good_probe
+from src.services.config_store import documents
 
 
 def _err(response: Any) -> dict[str, Any]:
@@ -243,8 +245,17 @@ def test_rollback_to_an_unacknowledged_external_endpoint_is_refused(vlm_api) -> 
     vlm_api.ready('ext', **EXTERNAL)
     vlm_api.ready('lan')
     assert vlm_api.activate('lan', expected_active=None).status_code == 200
-    doc = vlm_api.fake_os._docs['op_prj_default__configs']['activation:vlm']['_source']
-    doc['previous'] = {'name': 'ext', 'revision': 1}
+    # activations that skipped the gate: ``ext`` (never acknowledged), then ``lan`` again
+    asyncio.run(
+        documents.activate(
+            axis='vlm', name='ext', revision=1, expected_active={'name': 'lan', 'revision': 1}
+        )
+    )
+    asyncio.run(
+        documents.activate(
+            axis='vlm', name='lan', revision=1, expected_active={'name': 'ext', 'revision': 1}
+        )
+    )
     response = vlm_api.client.post(
         f'{ACTIVE}/active/rollback', json={'expected_active': {'name': 'lan', 'revision': 1}}
     )

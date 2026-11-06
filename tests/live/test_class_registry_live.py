@@ -1,9 +1,9 @@
-"""The class registry document against the real server, which enforces ``if_seq_no`` itself.
+"""The class registry against the harness PostgreSQL, which serialises writers on the registry row.
 
 The harness runs the API with one worker (some cancel endpoints and the SSE hub keep in-process
 state), so the cross-process race runs at the store level: 8 spawned processes call ``add_class``
 with distinct names and then ``ensure_class`` with one shared name, straight against the
-harness OpenSearch. Then one HTTP sequence checks the routes read the same document.
+harness database. Then one HTTP sequence checks the routes read the same registry.
 """
 
 from __future__ import annotations
@@ -11,15 +11,11 @@ from __future__ import annotations
 import asyncio
 import multiprocessing as mp
 import uuid
-from pathlib import Path
 from typing import Any
 
 import pytest
-from opensearchpy import AsyncOpenSearch
 
-from src.clients.curation_opensearch.registry import REGISTRY_DOC_ID, ClassRegistry
-
-from .conftest import INDEXES, OPENSEARCH_URL
+from src.services.classes.registry import ClassRegistry, registry_for
 
 
 pytestmark = pytest.mark.live
@@ -29,24 +25,15 @@ PROCESSES = 8
 
 
 def _store() -> ClassRegistry:
-    return ClassRegistry(
-        index=INDEXES['settings'],
-        classes_index=INDEXES['classes'],
-        legacy_path=Path('/nonexistent/class_registry.json'),
-        project='default',
-    )
+    return registry_for('default')
 
 
 def _worker(prefix: str, number: int, barrier: Any) -> None:
     async def run() -> None:
-        client = AsyncOpenSearch(hosts=[OPENSEARCH_URL])
-        try:
-            store = _store()
-            barrier.wait()
-            await store.add_class(client, f'{prefix}_{number}')
-            await store.ensure_class(client, f'{prefix}_shared')
-        finally:
-            await client.close()
+        store = _store()
+        barrier.wait()
+        await store.add_class(f'{prefix}_{number}')
+        await store.ensure_class(f'{prefix}_shared')
 
     asyncio.run(run())
 
@@ -63,11 +50,7 @@ def _race(prefix: str) -> None:
 
 
 async def _snapshot() -> Any:
-    client = AsyncOpenSearch(hosts=[OPENSEARCH_URL])
-    try:
-        return await _store().snapshot(client)
-    finally:
-        await client.close()
+    return await _store().snapshot()
 
 
 @pytest.mark.parametrize('repeat', range(REPEATS))
@@ -83,7 +66,7 @@ def test_eight_processes_add_eight_distinct_classes_and_one_shared(repeat: int) 
     assert len({c.class_id for c in doc.classes}) == len(doc.classes), 'an id was handed out twice'
 
 
-def test_the_routes_read_and_write_the_same_document(api_client: Any, opensearch: Any) -> None:
+def test_the_routes_read_and_write_the_same_registry(api_client: Any) -> None:
     created = api_client.post('/classes', json={'name': 'live_doc_probe', 'group': 'harness'})
     assert created.status_code == 201, created.text
     class_id = created.json()['class_id']
@@ -95,7 +78,6 @@ def test_the_routes_read_and_write_the_same_document(api_client: Any, opensearch
     assert listed[class_id]['hotkey_letter'] == 'q'
     assert listed[class_id]['group'] == 'moved'
 
-    stored = opensearch.get(f'/{INDEXES["settings"]}/_doc/{REGISTRY_DOC_ID}').json()
-    entries = {c['class_id']: c for c in stored['_source']['class_registry']['classes']}
-    assert entries[class_id]['class_name'] == 'live_doc_probe'
-    assert entries[class_id]['hotkey_letter'] == 'q'
+    stored = {c.class_id: c for c in asyncio.run(_snapshot()).classes}
+    assert stored[class_id].class_name == 'live_doc_probe'
+    assert stored[class_id].hotkey_letter == 'q'

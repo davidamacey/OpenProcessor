@@ -8,14 +8,19 @@ the real app with the real guard installed.
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from curation.cross_project_leak import _env as _sweep
 from fastapi.testclient import TestClient
 
 
 if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 leak_env = _sweep.leak_env
@@ -54,19 +59,20 @@ def test_patch_and_archive_write_the_registry(leak_env: LeakEnv) -> None:
 
 
 def _mark_archived(leak_env: LeakEnv, slug: str) -> None:
-    """Archives ``slug`` in both the in-memory registry AND the seeded
-    ``op_projects`` store -- leak_env's ``ensure_fresh`` now does a real
-    (if simplified) re-sync from the store on every bind (B2), so a
-    registry-only mutation would be clobbered on the request's own
-    ``_resolve_and_bind`` call."""
-    from dataclasses import replace
+    """Archives ``slug`` in the database and refreshes the registry snapshot."""
+    import asyncio
 
-    from src.services.projects.registry import get_project_registry, projects_index, record_to_doc
+    from src.db.repos import projects as repo
+    from src.services.projects.registry import get_project_registry
+    from src.services.projects.store import run_repo
 
-    registry = get_project_registry()
-    archived = replace(registry._by_slug[slug], status='archived')
-    registry._by_slug[slug] = archived
-    leak_env.transport.store[projects_index()][f'project:{slug}'] = record_to_doc(archived)
+    async def _archive() -> None:
+        await run_repo(
+            'archive for the test', repo.set_status, slug, to='archived', from_states=('active',)
+        )
+        await get_project_registry().refresh_strict()
+
+    asyncio.run(_archive())
 
 
 def test_archive_then_write_is_read_only_and_unarchive_restores(leak_env: LeakEnv) -> None:
@@ -92,7 +98,7 @@ def test_stale_registry_write_is_refused_read_only(leak_env: LeakEnv) -> None:
     from src.services.projects.registry import get_project_registry
 
     registry = get_project_registry()
-    registry._failed_at = 0.0  # any non-None value makes .stale True
+    registry._failed_at = time.monotonic()  # inside the backoff: the next refresh is skipped
 
     client = _client(leak_env)
     write_resp = client.post('/curation/projects/beta/classes', json={'name': 'beta_new'})

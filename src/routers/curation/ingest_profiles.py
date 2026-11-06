@@ -16,7 +16,7 @@ from fastapi import Query, Response
 
 from src.core.wire_json import WireJSONResponse
 from src.routers.curation._api_error import active_conflict_error, api_error
-from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._common import router
 from src.routers.curation._ingest_profile_models import (
     IngestProfileActivateRequest,
     IngestProfileActivateResponse,
@@ -167,11 +167,11 @@ async def get_ingest_profile_schema() -> IngestProfileSchema:
 
 @router.post('/ingest_profiles/validate', response_model=ValidationReport)
 async def validate_ingest_profile_route(
-    body: IngestProfileValidateRequest, opensearch: OpenSearchDep, for_activation: bool = False
+    body: IngestProfileValidateRequest, for_activation: bool = False
 ) -> Any:
     from src.app.resources import get_async_triton_pool
 
-    await get_config_store().refresh(opensearch)
+    await get_config_store().refresh()
     return await validate_ingest_profile(
         body.name,
         body.body.model_dump(),
@@ -182,17 +182,17 @@ async def validate_ingest_profile_route(
 
 
 @router.get('/ingest_profiles/active', response_model=ActiveConfigResponse)
-async def get_active_ingest_profile(opensearch: OpenSearchDep) -> ActiveConfigResponse:
-    return await build_active_config_response(opensearch, axis='ingest_profile')
+async def get_active_ingest_profile() -> ActiveConfigResponse:
+    return await build_active_config_response(axis='ingest_profile')
 
 
 @router.post('/ingest_profiles/active/rollback', response_model=ActiveConfigResponse)
 async def rollback_active_ingest_profile(
-    body: IngestProfileRollbackRequest, opensearch: OpenSearchDep
+    body: IngestProfileRollbackRequest,
 ) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await rollback_profile(opensearch, expected_active=expected)
+        await rollback_profile(expected_active=expected)
     except LookupError as exc:
         if exc.args and exc.args[0] == 'previous_deleted':
             raise api_error(
@@ -203,31 +203,28 @@ async def rollback_active_ingest_profile(
         ) from exc
     except ActiveConflictError as exc:
         raise _active_conflict(exc) from exc
-    return await build_active_config_response(opensearch, axis='ingest_profile')
+    return await build_active_config_response(axis='ingest_profile')
 
 
 @router.post('/ingest_profiles/deactivate', response_model=ActiveConfigResponse)
-async def deactivate_ingest_profile(
-    body: IngestProfileDeactivateRequest, opensearch: OpenSearchDep
-) -> ActiveConfigResponse:
+async def deactivate_ingest_profile(body: IngestProfileDeactivateRequest) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await activate_profile(opensearch, name=None, revision=None, expected_active=expected)
+        await activate_profile(name=None, revision=None, expected_active=expected)
     except ActiveConflictError as exc:
         raise _active_conflict(exc) from exc
-    return await build_active_config_response(opensearch, axis='ingest_profile')
+    return await build_active_config_response(axis='ingest_profile')
 
 
 @router.get('/ingest_profiles', response_model=IngestProfileList)
 async def list_ingest_profiles(
-    opensearch: OpenSearchDep,
     include_templates: bool = Query(
         default=False,
         description='Also return the shipped example templates in `templates`; they are omitted by default.',
     ),
 ) -> IngestProfileList:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     templates = set(template_names())
     records = [build_record(n) for n in sorted(all_known_names() - templates)]
     template_rows: list[IngestProfileTemplateSummary] = []
@@ -254,10 +251,8 @@ async def list_ingest_profiles(
 
 
 @router.post('/ingest_profiles', response_model=IngestProfileDoc, status_code=201)
-async def create_ingest_profile(
-    body: IngestProfileCreateRequest, opensearch: OpenSearchDep
-) -> IngestProfileDoc:
-    await get_config_store().refresh(opensearch)
+async def create_ingest_profile(body: IngestProfileCreateRequest) -> IngestProfileDoc:
+    await get_config_store().refresh()
     existing = all_known_names()
     report = await validate_ingest_profile(
         body.name, body.body.model_dump(), existing_names=existing - {body.name}
@@ -277,7 +272,6 @@ async def create_ingest_profile(
             report=report,
         )
     record = await save_profile(
-        opensearch,
         name=body.name,
         body=body.body.model_dump(),
         expected_revision=None,
@@ -287,8 +281,8 @@ async def create_ingest_profile(
 
 
 @router.get('/ingest_profiles/{name}', response_model=IngestProfileDoc)
-async def get_ingest_profile(name: str, opensearch: OpenSearchDep) -> Any:
-    await get_config_store().refresh(opensearch)
+async def get_ingest_profile(name: str) -> Any:
+    await get_config_store().refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known ingest profile')
@@ -298,10 +292,8 @@ async def get_ingest_profile(name: str, opensearch: OpenSearchDep) -> Any:
 
 
 @router.get('/ingest_profiles/{name}/revisions', response_model=IngestProfileRevisionsResponse)
-async def list_ingest_profile_revisions(
-    name: str, opensearch: OpenSearchDep
-) -> IngestProfileRevisionsResponse:
-    revisions = await list_revisions(opensearch, name)
+async def list_ingest_profile_revisions(name: str) -> IngestProfileRevisionsResponse:
+    revisions = await list_revisions(name)
     if revisions is None:
         raise api_error(404, 'not_found', f'{name!r} is not a stored ingest profile')
     return IngestProfileRevisionsResponse(
@@ -319,20 +311,16 @@ async def list_ingest_profile_revisions(
 
 
 @router.get('/ingest_profiles/{name}/revisions/{revision}', response_model=IngestProfileDoc)
-async def get_ingest_profile_revision(
-    name: str, revision: int, opensearch: OpenSearchDep
-) -> IngestProfileDoc:
-    record = await get_revision_record(opensearch, name, revision)
+async def get_ingest_profile_revision(name: str, revision: int) -> IngestProfileDoc:
+    record = await get_revision_record(name, revision)
     if record is None:
         raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
     return _to_doc(record)
 
 
 @router.put('/ingest_profiles/{name}', response_model=IngestProfileDoc)
-async def save_ingest_profile(
-    name: str, body: IngestProfileSaveRequest, opensearch: OpenSearchDep
-) -> IngestProfileDoc:
-    await get_config_store().refresh(opensearch)
+async def save_ingest_profile(name: str, body: IngestProfileSaveRequest) -> IngestProfileDoc:
+    await get_config_store().refresh()
     existing = build_record(name)
     if existing is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known ingest profile')
@@ -348,7 +336,6 @@ async def save_ingest_profile(
         )
     try:
         record = await save_profile(
-            opensearch,
             name=name,
             body=body.body.model_dump(),
             expected_revision=body.expected_revision,
@@ -360,11 +347,9 @@ async def save_ingest_profile(
 
 
 @router.delete('/ingest_profiles/{name}', status_code=204)
-async def delete_ingest_profile(
-    name: str, expected_revision: int, opensearch: OpenSearchDep
-) -> None:
+async def delete_ingest_profile(name: str, expected_revision: int) -> None:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known ingest profile')
@@ -374,7 +359,7 @@ async def delete_ingest_profile(
     if isinstance(ref, tuple) and ref[0] == name:
         raise api_error(409, 'in_use', f'{name!r} is the active ingest profile')
     try:
-        await delete_profile(opensearch, name=name, expected_revision=expected_revision)
+        await delete_profile(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
         raise _revision_conflict(name, exc) from exc
     return Response(status_code=204)  # type: ignore[return-value]
@@ -382,28 +367,24 @@ async def delete_ingest_profile(
 
 @router.post('/ingest_profiles/{name}/activate', response_model=IngestProfileActivateResponse)
 async def activate_ingest_profile(
-    name: str, body: IngestProfileActivateRequest, opensearch: OpenSearchDep
+    name: str, body: IngestProfileActivateRequest
 ) -> IngestProfileActivateResponse:
     from src.services.config_store.activation_gate import run_activation_gate
 
-    await get_config_store().refresh(opensearch)
+    await get_config_store().refresh()
     record = build_record(name, revision=body.revision)
     if record is None and body.revision is not None:
         # the snapshot holds only each profile's current revision; an older one is read
-        record = await get_revision_record(opensearch, name, body.revision)
+        record = await get_revision_record(name, body.revision)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known ingest profile')
-    report = await run_activation_gate(
-        'ingest_profile', name, record.revision, force=body.force, client=opensearch
-    )
+    report = await run_activation_gate('ingest_profile', name, record.revision, force=body.force)
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await activate_profile(
-            opensearch, name=name, revision=record.revision, expected_active=expected
-        )
+        await activate_profile(name=name, revision=record.revision, expected_active=expected)
     except ActiveConflictError as exc:
         raise _active_conflict(exc) from exc
-    response = await build_active_config_response(opensearch, axis='ingest_profile')
+    response = await build_active_config_response(axis='ingest_profile')
     return IngestProfileActivateResponse(**response.model_dump(), validation=report)
 
 

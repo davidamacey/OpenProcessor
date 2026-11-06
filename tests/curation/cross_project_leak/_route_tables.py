@@ -5,6 +5,11 @@ from __future__ import annotations
 from curation.cross_project_leak._constants import SCOPED
 
 
+# Routes whose data is rows in PostgreSQL, not documents in an OpenSearch index: this sweep watches
+# OpenSearch accesses and files, so it cannot see them. Their isolation is row-level security,
+# proven in the database tier (tests/db/test_row_level_security.py, tests/config_store/).
+POSTGRES_BACKED_PREFIXES: tuple[str, ...] = ('/cluster_profiles', '/assist_loop_presets')
+
 # Mutating routes that write nothing by design (read-only work under POST,
 # or an event with no data write), and why. Every other mutating route must
 # really write in the sweep.
@@ -50,6 +55,19 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/search/image'): 'kNN search by a stored or uploaded picture; stores nothing',
     ('POST', '/train/preflight'): 'read-only validation under POST',
     ('POST', '/keymap/validate'): 'dry-run report; writes nothing',
+    (
+        'PUT',
+        '/ingest/policy',
+    ): 'writes the project_settings row, which this OpenSearch sweep cannot see',
+    (
+        'PUT',
+        '/vlm/policy',
+    ): 'writes the project_settings row, which this OpenSearch sweep cannot see',
+    ('PUT', '/keymap'): 'writes the project_keymaps row, which this OpenSearch sweep cannot see',
+    (
+        'POST',
+        '/keymap/reset',
+    ): 'writes the project_keymaps row, which this OpenSearch sweep cannot see',
     ('POST', '/reprocess/jobs/{job_id}/cancel'): (
         'touches a cancel flag only for a live job; the sweep has none (the live path is '
         'covered in test_reprocess_entrypoints)'
@@ -182,7 +200,20 @@ UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
 # "wrote nothing" check; every isolation check (foreign indexes, foreign
 # markers in the response, events, 5xx, cache parity, foreign files)
 # still applies to them.
+_CLASS_REGISTRY_IN_POSTGRES = (
+    'the class registry is rows in PostgreSQL keyed by project_id, not an OpenSearch index; '
+    'its per-project isolation is proven by tests/db/test_class_registry.py and the row-level '
+    'security tests'
+)
 UNSEEDED_WRITES: dict[tuple[str, str], str] = {
+    ('POST', '/pause'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
+    ('POST', '/resume'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
+    ('POST', '/classes'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('PUT', '/classes/{class_id}'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/{class_id}/restore'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/{class_id}/deprecate'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/merge'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/seed_from_detector'): _CLASS_REGISTRY_IN_POSTGRES,
     ('POST', '/bakeoff/run'): 'needs a resolvable contender model list, not seeded',
     ('POST', '/train/promote/{job_id}'): 'needs an exported best.onnx, not seeded',
     ('DELETE', '/models/{model_name}'): 'see EXPECTED_5XX: no live Triton to confirm the unload',

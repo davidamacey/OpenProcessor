@@ -153,12 +153,7 @@ async def run(args: argparse.Namespace) -> int:
     from src.services.projects.registry import ProjectRegistry
     from src.services.projects.script_binding import only_project
 
-    # Reuse the already-built (and, in tests, already-patched)
-    # `opensearch` client above -- a second script_project_registry()
-    # client would open its own real AsyncOpenSearch straight from
-    # args.opensearch, bypassing whatever fake a caller/test installed
-    # at make_script_opensearch.
-    registry = ProjectRegistry(lambda: opensearch)
+    registry = ProjectRegistry()
     project_filter = getattr(args, 'project', None)
 
     class _WorkerProjects:
@@ -201,10 +196,9 @@ async def run(args: argparse.Namespace) -> int:
     # project's sync, created here (before anything can create a live one) so
     # its snapshot only moves at a quiesce point like a project's own.
     registry_store = get_global_config_store(mode='pinned')
-    # M1: `runtime:detection_worker:<host>` is written at startup, at
-    # every swap, and at least every 60s (any_domain_plan.md sec 4.5
-    # steps 2.6 / L803-805) -- throttled per project so N active
-    # projects don't turn into N writes every single poll cycle.
+    # The worker's `config_runtime_reports` row is written at startup, at every swap, and at
+    # least every 60s -- throttled per project so N active projects don't turn into N writes
+    # every single poll cycle.
     _runtime_doc_last_written: dict[str, float] = {}
     _RUNTIME_DOC_INTERVAL_S = 60.0
     import socket as _socket
@@ -231,7 +225,6 @@ async def run(args: argparse.Namespace) -> int:
                 rt = await maybe_hot_reload(
                     store=store,
                     registry=registry_store,
-                    opensearch=opensearch,
                     holder=runtime_holder,
                     slug=record.slug,
                     pool=pool,
@@ -252,15 +245,11 @@ async def run(args: argparse.Namespace) -> int:
                     return
                 from scripts.curation.worker.runtime import (
                     applied_config_revision,
-                    upsert_project_runtime_doc,
+                    report_applied_config,
                 )
 
-                await upsert_project_runtime_doc(
-                    opensearch,
-                    index=store.index,
+                await report_applied_config(
                     hostname=_hostname,
-                    project=record.slug,
-                    runtime=rt,
                     config_revision=applied_config_revision(
                         store, registry_store, runtime_holder, record.slug
                     ),

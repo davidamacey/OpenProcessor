@@ -7,8 +7,6 @@ project, no versions.
 
 from __future__ import annotations
 
-from typing import Any
-
 from src.services.curation.policy_doc_store import PolicyConflictError, read_policy, write_policy
 from src.services.curation.vlm_policy import VlmPolicy, VlmPolicyBody
 
@@ -16,18 +14,18 @@ from src.services.curation.vlm_policy import VlmPolicy, VlmPolicyBody
 KEY = 'vlm_policy'
 
 
-async def get_vlm_policy(client: Any) -> VlmPolicy:
+async def get_vlm_policy() -> VlmPolicy:
     """The bound project's policy; the defaults (scope ``all``) when never written."""
-    return (await read_policy(client, KEY, VlmPolicy))[0]
+    return (await read_policy(KEY, VlmPolicy))[0]
 
 
-async def put_vlm_policy(client: Any, body: VlmPolicyBody, *, expected_revision: int) -> VlmPolicy:
+async def put_vlm_policy(body: VlmPolicyBody, *, expected_revision: int) -> VlmPolicy:
     """Replace the policy. Raises :class:`PolicyConflictError` when
     ``expected_revision`` is not the stored revision (or a concurrent writer won)."""
-    current, resp = await read_policy(client, KEY, VlmPolicy)
+    current, row_revision = await read_policy(KEY, VlmPolicy)
     if current.revision != expected_revision:
         msg = f'stored revision is {current.revision}, expected {expected_revision}'
         raise PolicyConflictError(msg)
     new = VlmPolicy(revision=current.revision + 1, **body.model_dump())
-    await write_policy(client, KEY, new, resp)
+    await write_policy(KEY, new, row_revision)
     return new

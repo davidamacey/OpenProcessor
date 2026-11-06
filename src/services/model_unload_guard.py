@@ -23,7 +23,6 @@ never by a hardcoded model list.
 from __future__ import annotations
 
 import contextlib
-from typing import Any
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
@@ -76,10 +75,10 @@ def is_region_protected_model(
     )
 
 
-async def models_run_by_other_projects(client: Any, own_project: str | None) -> frozenset[str]:
+async def models_run_by_other_projects(own_project: str | None) -> frozenset[str]:
     """Every model a project other than ``own_project`` runs as an ingest detector,
     read live from each project's config docs. Raises when a project is unreadable."""
-    by_project = await ingest_models_by_project(client)
+    by_project = await ingest_models_by_project()
     return frozenset().union(*(m for slug, m in by_project.items() if slug != own_project))
 
 
@@ -108,14 +107,12 @@ def external_service_model_names() -> frozenset[str]:
     return frozenset(names)
 
 
-async def check_unload(
-    model_name: str, *, force: bool, client: Any, own_project: str | None = None
-) -> bool:
+async def check_unload(model_name: str, *, force: bool, own_project: str | None = None) -> bool:
     """Raise :class:`UnloadRefusedError` unless ``model_name`` may be unloaded.
     Returns whether it is a core pipeline model (only reachable with
     ``force``), so the caller can warn that live inference is now down.
 
-    ``client`` reads every project's active ingest profile; ``own_project`` is the
+    ``own_project`` is the
     bound project of a project route (its own use is that route's to weigh)."""
     if model_name in external_service_model_names():
         raise UnloadRefusedError(
@@ -132,7 +129,7 @@ async def check_unload(
             'force=true. Manage it out of band.',
         )
     try:
-        by_project = await ingest_models_by_project(client)
+        by_project = await ingest_models_by_project()
     except Exception as exc:
         raise UnloadRefusedError(
             503,

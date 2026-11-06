@@ -13,11 +13,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.clients.curation_opensearch.registry import ClassRegistryError
+from src.services.classes.registry import ClassRegistryError
 
 
 def _entry(registry: InMemoryRegistry, class_id: int) -> Any:
@@ -257,7 +257,7 @@ def test_deprecated_class_disappears_from_non_deprecated_class_name_lists(
     orig = curation_train_mod.get_class_registry
     curation_train_mod.get_class_registry = lambda: registry
     try:
-        target_ids = asyncio.run(resolve_target_classes(spec, None))
+        target_ids = asyncio.run(resolve_target_classes(spec))
     finally:
         curation_train_mod.get_class_registry = orig
     assert 0 not in target_ids

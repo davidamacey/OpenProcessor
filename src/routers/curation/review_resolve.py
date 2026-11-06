@@ -15,7 +15,6 @@ from typing import Any
 from fastapi import HTTPException, Query
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers._errors import server_error
 from src.routers.curation._class_models import (
@@ -31,6 +30,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.classes_write import create_registry_class
+from src.services.classes.registry import ClassRegistryError
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.export_support import scroll_hits
 from src.services.curation.index_bootstrap import ensure_indexes
@@ -172,7 +172,7 @@ async def resolve_new_class_proposal(
     matched = len(crop_ids)
 
     store = get_class_registry()
-    reg = await store.snapshot(opensearch)
+    reg = await store.snapshot()
     created = False
     class_id: int | None
     class_name: str
@@ -184,7 +184,6 @@ async def resolve_new_class_proposal(
             try:
                 result = await create_registry_class(
                     store,
-                    opensearch,
                     name=payload.create.class_name,
                     group=payload.create.group,
                     notes=payload.create.notes or '',

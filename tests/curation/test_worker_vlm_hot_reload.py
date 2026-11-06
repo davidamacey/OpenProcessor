@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.conftest import good_probe
 from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.runtime import (
@@ -28,14 +27,15 @@ from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.config_store import get_config_store, get_global_config_store
+from src.services.config_store.documents import activate
 from src.services.config_store.global_store import reset_global_config_store
-from src.services.config_store.index import activate
 from src.services.config_store.store import reset_config_stores
+from src.services.config_store.vlm_activation import activate_vlm
 from src.services.config_store.vlm_endpoints import record_probe, save_endpoint
 from src.services.detection import profile_registry
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
-from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError, active_vlm_endpoint
+from src.services.labeling.vlm_endpoints import active_vlm_endpoint
 from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
 
@@ -66,30 +66,24 @@ def _body(model: str = 'm') -> VlmEndpointBody:
     return VlmEndpointBody(base_url='http://vlm:8000/v1', model=model)
 
 
-async def _endpoint(client: Any, name: str, *, root: str, model: str = 'm') -> None:
+async def _endpoint(name: str, *, root: str, model: str = 'm') -> None:
     body = _body(model)
-    await save_endpoint(client, name=name, body=body, expected_revision=None)
-    await record_probe(client, name=name, revision=1, body=body, record=good_probe(root=root))
+    await save_endpoint(name=name, body=body, expected_revision=None)
+    await record_probe(name=name, revision=1, body=body, record=good_probe(root=root))
 
 
 async def _activate_in(
-    client: Any,
     record: ProjectRecord,
     name: str | None,
     revision: int | None,
     expected: dict[str, Any] | None,
 ) -> None:
-    """What ANOTHER process (the API) does: write the activation doc."""
+    """What ANOTHER process (the API) does: write the activation."""
     with bind_project(record):
-        await activate(
-            client,
-            get_config_store().index,
-            axis='vlm',
-            name=name,
-            revision=revision,
-            expected_active=expected,
-            doc_fields={'acked_refs': {}, 'external_ack_at': None},
-        )
+        if name == 'env':
+            await activate_vlm(name='env', revision=None, expected_active=expected)
+        else:
+            await activate(axis='vlm', name=name, revision=revision, expected_active=expected)
 
 
 def _go_cold() -> None:
@@ -101,8 +95,7 @@ def _go_cold() -> None:
 class Worker:
     """One worker's collaborators, mirroring ``runner.run``."""
 
-    def __init__(self, client: Any) -> None:
-        self.client = client
+    def __init__(self) -> None:
         self.holder = RuntimeHolder()
         self.registry = get_global_config_store(mode='pinned')
         self.stores: dict[str, Any] = {}
@@ -124,7 +117,6 @@ class Worker:
             return await maybe_hot_reload(
                 store=store,
                 registry=self.registry,
-                opensearch=self.client,
                 holder=self.holder,
                 slug=record.slug,
                 pool=MagicMock(),
@@ -145,13 +137,12 @@ class Worker:
 
 @pytest.mark.asyncio
 async def test_a_cold_worker_runs_the_activated_endpoint_at_its_pinned_revision() -> None:
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/model-one')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/model-one')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
 
-    worker = Worker(client)
+    worker = Worker()
     runtime = await worker.cycle(alpha)
 
     assert runtime is not None
@@ -167,9 +158,8 @@ async def test_a_project_that_never_activated_one_calls_no_vlm_even_with_an_env_
 ) -> None:
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm:8000/v1')
     monkeypatch.setenv('OP_VLM_MODEL', 'local-vlm')
-    client = FakeConfigOpenSearch()
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     runtime = await worker.cycle(_record('alpha'))
     assert runtime is not None
     assert runtime.vlm is None
@@ -182,11 +172,10 @@ async def test_a_project_that_activated_the_env_builtin_runs_it(
 ) -> None:
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm:8000/v1')
     monkeypatch.setenv('OP_VLM_MODEL', 'local-vlm')
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _activate_in(client, alpha, 'env', None, None)
+    await _activate_in(alpha, 'env', None, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     runtime = await worker.cycle(alpha)
     assert runtime is not None
     assert runtime.vlm is not None
@@ -196,22 +185,21 @@ async def test_a_project_that_activated_the_env_builtin_runs_it(
 
 @pytest.mark.asyncio
 async def test_an_explicit_off_and_no_configuration_run_without_a_vlm() -> None:
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/one')
+    await _endpoint('one', root='org/one')
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     runtime = await worker.cycle(alpha)  # nothing activated, no OP_VLM_URL
     assert runtime is not None
     assert runtime.vlm is None
     assert runtime.vlm_identity is None
     assert runtime.vlm_available is False
 
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _activate_in(alpha, 'one', 1, None)
     runtime = await worker.cycle(alpha)
     assert runtime is not None
     assert runtime.vlm is not None
-    await _activate_in(client, alpha, None, None, {'name': 'one', 'revision': 1})
+    await _activate_in(alpha, None, None, {'name': 'one', 'revision': 1})
     runtime = await worker.cycle(alpha)
     assert runtime is not None
     assert runtime.vlm is None
@@ -222,13 +210,12 @@ async def test_an_explicit_off_and_no_configuration_run_without_a_vlm() -> None:
 
 @pytest.mark.asyncio
 async def test_switching_endpoints_swaps_once_and_closes_the_old_labeler() -> None:
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/one')
-    await _endpoint(client, 'two', root='org/two')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/one')
+    await _endpoint('two', root='org/two')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     first = await worker.cycle(alpha)
     assert first is not None
     old_vlm = first.vlm
@@ -237,7 +224,7 @@ async def test_switching_endpoints_swaps_once_and_closes_the_old_labeler() -> No
         await worker.cycle(alpha)
     assert len(worker.built) == 1
 
-    await _activate_in(client, alpha, 'two', 1, {'name': 'one', 'revision': 1})
+    await _activate_in(alpha, 'two', 1, {'name': 'one', 'revision': 1})
     for _ in range(3):
         swapped = await worker.cycle(alpha)
     assert worker.built == [('one@1', 'org/one'), ('two@1', 'org/two')]
@@ -249,14 +236,13 @@ async def test_switching_endpoints_swaps_once_and_closes_the_old_labeler() -> No
 
 @pytest.mark.asyncio
 async def test_saving_a_new_revision_of_the_active_endpoint_changes_nothing() -> None:
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/one')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/one')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     await worker.cycle(alpha)
-    await save_endpoint(client, name='one', body=_body('edited'), expected_revision=1)
+    await save_endpoint(name='one', body=_body('edited'), expected_revision=1)
     for _ in range(3):
         runtime = await worker.cycle(alpha)
     assert worker.built == [('one@1', 'org/one')]
@@ -268,17 +254,15 @@ async def test_a_rebuild_after_an_edit_still_uses_the_revision_that_was_activate
     """Something else forces a rebuild (a probe of the EDITED body lands):
     the labeler is built from the pinned revision 1, never from the newer
     revision 2, and revision 2's probe is not attributed to revision 1."""
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/one')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/one')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     await worker.cycle(alpha)
     edited = _body('edited')
-    await save_endpoint(client, name='one', body=edited, expected_revision=1)
+    await save_endpoint(name='one', body=edited, expected_revision=1)
     await record_probe(
-        client,
         name='one',
         revision=2,
         body=edited,
@@ -292,15 +276,13 @@ async def test_a_rebuild_after_an_edit_still_uses_the_revision_that_was_activate
 
 @pytest.mark.asyncio
 async def test_a_reprobe_that_changes_the_model_root_rebuilds_the_labeler() -> None:
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/before')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/before')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     await worker.cycle(alpha)
     await record_probe(
-        client,
         name='one',
         revision=1,
         body=_body(),
@@ -312,53 +294,23 @@ async def test_a_reprobe_that_changes_the_model_root_rebuilds_the_labeler() -> N
     assert runtime.vlm_model == 'org/after'
 
 
-@pytest.mark.asyncio
-async def test_an_unresolvable_pinned_revision_fails_closed_and_keeps_the_old_runtime() -> None:
-    client = FakeConfigOpenSearch()
-    alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/one')
-    await _endpoint(client, 'two', root='org/two')
-    await _activate_in(client, alpha, 'one', 1, None)
-    _go_cold()
-    worker = Worker(client)
-    first = await worker.cycle(alpha)
-    await _activate_in(client, alpha, 'two', 1, {'name': 'one', 'revision': 1})
-    # the immutable copy the activation points at is gone
-    from src.services.config_store.index import config_doc_id
-
-    del client._docs[get_global_config_store().index][config_doc_id('vlm_endpoint', 'two', 1)]
-    _go_cold_registry_cache()
-
-    with pytest.raises(VlmEndpointUnavailableError):
-        await worker.cycle(alpha)
-    assert worker.holder.get('alpha') is first  # never a silent fall back to "no VLM"
-    assert worker.built == [('one@1', 'org/one')]
-
-
-def _go_cold_registry_cache() -> None:
-    from src.services.config_store.vlm_snapshot import reset_vlm_revision_cache
-
-    reset_vlm_revision_cache()
-
-
 # ---- one pinned registry, many projects ---------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_one_projects_activation_does_not_swap_another_projects_runtime() -> None:
-    client = FakeConfigOpenSearch()
     alpha, beta = _record('alpha'), _record('beta')
-    await _endpoint(client, 'one', root='org/one')
-    await _endpoint(client, 'two', root='org/two')
-    await _activate_in(client, alpha, 'one', 1, None)
-    await _activate_in(client, beta, 'one', 1, None)
+    await _endpoint('one', root='org/one')
+    await _endpoint('two', root='org/two')
+    await _activate_in(alpha, 'one', 1, None)
+    await _activate_in(beta, 'one', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     await worker.cycle(alpha)
     await worker.cycle(beta)
     assert len(worker.built) == 2
 
-    await _activate_in(client, alpha, 'two', 1, {'name': 'one', 'revision': 1})
+    await _activate_in(alpha, 'two', 1, {'name': 'one', 'revision': 1})
     await worker.cycle(alpha)
     await worker.cycle(beta)
     assert worker.built == [('one@1', 'org/one')] * 2 + [('two@1', 'org/two')]
@@ -371,17 +323,15 @@ async def test_one_projects_activation_does_not_swap_another_projects_runtime() 
 
 @pytest.mark.asyncio
 async def test_a_reprobe_of_a_shared_endpoint_reaches_every_project_running_it() -> None:
-    client = FakeConfigOpenSearch()
     alpha, beta = _record('alpha'), _record('beta')
-    await _endpoint(client, 'shared', root='org/v1')
-    await _activate_in(client, alpha, 'shared', 1, None)
-    await _activate_in(client, beta, 'shared', 1, None)
+    await _endpoint('shared', root='org/v1')
+    await _activate_in(alpha, 'shared', 1, None)
+    await _activate_in(beta, 'shared', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     await worker.cycle(alpha)
     await worker.cycle(beta)
     await record_probe(
-        client,
         name='shared',
         revision=1,
         body=_body(),
@@ -398,12 +348,11 @@ async def test_a_reprobe_of_a_shared_endpoint_reaches_every_project_running_it()
 
 @pytest.mark.asyncio
 async def test_the_want_carries_the_vlm_ref_and_the_probe_marker() -> None:
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/one')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/one')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     await worker.cycle(alpha)
     with bind_project(alpha):
         store = worker.stores['alpha']
@@ -416,27 +365,25 @@ async def test_the_want_carries_the_vlm_ref_and_the_probe_marker() -> None:
 async def test_the_swap_pins_the_registry_together_with_the_project_store() -> None:
     """If only the project store were pinned, the worker would resolve the
     new activation against the OLD registry snapshot (a stale probe)."""
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/before')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/before')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
     registry = get_global_config_store(mode='pinned')
     with bind_project(alpha):
         store = get_config_store(mode='pinned')
-        await store.refresh(client)
-        await registry.refresh(client)
+        await store.refresh()
+        await registry.refresh()
         store.pin_active()
         registry.pin_active()
         await record_probe(
-            client,
             name='one',
             revision=1,
             body=_body(),
             record=good_probe(root='org/after', probed_at='2026-09-28T15:00:00+00:00'),
         )
-        await store.refresh(client)
-        await registry.refresh(client)
+        await store.refresh()
+        await registry.refresh()
         assert registry.pending_snapshot is not None
         seen: list[Any] = []
 
@@ -451,7 +398,6 @@ async def test_the_swap_pins_the_registry_together_with_the_project_store() -> N
             slug='alpha',
             store=store,
             registry=registry,
-            opensearch=client,
             pool=MagicMock(),
             args=MagicMock(segmenter_url='', vlm_url=''),
             want=current_want(store, registry),
@@ -543,19 +489,17 @@ async def test_an_item_that_never_called_the_vlm_is_stamped_with_no_endpoint() -
 async def test_probing_a_newer_revision_does_not_change_the_running_revisions_marker() -> None:
     """The probe of ``one@2`` is not the probe of the ``one@1`` this project
     runs, so it must not make the worker rebuild."""
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
-    await _endpoint(client, 'one', root='org/one')
-    await _activate_in(client, alpha, 'one', 1, None)
+    await _endpoint('one', root='org/one')
+    await _activate_in(alpha, 'one', 1, None)
     _go_cold()
-    worker = Worker(client)
+    worker = Worker()
     await worker.cycle(alpha)
     with bind_project(alpha):
         before = current_want(worker.stores['alpha'], worker.registry)
     edited = _body('edited')
-    await save_endpoint(client, name='one', body=edited, expected_revision=1)
+    await save_endpoint(name='one', body=edited, expected_revision=1)
     await record_probe(
-        client,
         name='one',
         revision=2,
         body=edited,

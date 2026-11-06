@@ -16,7 +16,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus
 from src.services.curation import open_vocab_vocabulary as vocab
 from src.services.curation.reprocess_models import ReprocessFilter
@@ -70,7 +69,9 @@ def client(monkeypatch: pytest.MonkeyPatch, segmenter: dict[str, Any]) -> TestCl
     monkeypatch.delenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', raising=False)
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    fake = FakeConfigOpenSearch()
+    from curation.query_fakes import QueryFakeOpenSearch
+
+    fake = QueryFakeOpenSearch({})
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 

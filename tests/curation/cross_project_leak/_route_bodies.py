@@ -199,7 +199,10 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         # an empty `defaults`, so the sweep actually exercises the
         # config-store write path (`activate` + `bump_config_revision`'s
         # painless script) instead of only the generic settings-doc merge.
-        ('PUT', '/settings'): {'json': {'defaults': {'prompt_pack': GENERIC_ITEM_PACK.name}}},
+        # PUT /ingest/policy sorts first and moves the settings revision to 1.
+        ('PUT', '/settings'): {
+            'json': {'expected_revision': 1, 'defaults': {'prompt_pack': GENERIC_ITEM_PACK.name}}
+        },
         ('PUT', '/keymap'): {
             'json': {'expected_revision': 0, 'overrides': {'cluster.ignore': ['k']}}
         },

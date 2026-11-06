@@ -480,7 +480,7 @@ async def _run_class_merge_case_with_os(
     import src.routers.curation.classes_merge as classes_mod
     from src.routers.curation._class_models import ClassMergeRequest
 
-    async def _merge_class(_client, source_id, target_id):
+    async def _merge_class(source_id, target_id):
         return {
             'source_id': source_id,
             'target_id': target_id,

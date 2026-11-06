@@ -69,9 +69,9 @@ class SourceImage:
         return self.split == 'test' or any(i.get('test_holdout') for i in self.items)
 
 
-async def class_names_by_id(client: Any, record: ProjectRecord) -> dict[int, str]:
+async def class_names_by_id(record: ProjectRecord) -> dict[int, str]:
     """The source registry's ``class_id -> name``."""
-    registry = await project_registry(client, record)
+    registry = await project_registry(record)
     return {c.class_id: c.class_name for c in registry.classes}
 
 
@@ -198,7 +198,7 @@ async def scan_project(
     """The whole source as a :class:`DatasetScan` (``format='project'``,
     ``root`` = the source slug): the import's mapping completeness reads its class
     box counts."""
-    names = await class_names_by_id(client, record)
+    names = await class_names_by_id(record)
     entries: list[ScanEntry] = []
     async for page in iter_source_pages(client, record, validated_only=validated_only):
         entries.extend(to_scan_entry(image, names) for image in page)

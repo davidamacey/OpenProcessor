@@ -30,7 +30,7 @@ def projects(tmp_path: Any) -> dict[str, ProjectRecord]:
 def _activate(monkeypatch: pytest.MonkeyPatch, active: set[str]) -> None:
     """Make the app's VLM facts say exactly ``active`` projects have a VLM."""
 
-    async def _refresh(_client: Any) -> None:
+    async def _refresh() -> None:
         return None
 
     def _configured() -> bool:

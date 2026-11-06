@@ -232,7 +232,7 @@ async def test_daily_budget_counts_todays_attempts_and_stops_at_the_cap() -> Non
 
 
 async def _stored(fake: QueryFakeOpenSearch, *, revision: int = 0, **kw: Any) -> None:
-    await put_vlm_policy(fake, VlmPolicyBody(**kw), expected_revision=revision)
+    await put_vlm_policy(VlmPolicyBody(**kw), expected_revision=revision)
 
 
 async def _resolve(fake: QueryFakeOpenSearch, **kw: Any) -> Any:

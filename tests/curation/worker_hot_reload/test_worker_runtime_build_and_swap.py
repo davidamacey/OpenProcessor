@@ -7,13 +7,11 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _registry_doc_fake import FakeDocOpenSearch
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.worker_hot_reload._helpers import _fake_args, _fake_ctors, _record, _swap_kw
 from src.config.project_context import bind_project
 from src.services.config_store import get_global_config_store
-from src.services.config_store.index import activate, save_config
+from src.services.config_store.documents import activate, save_config
 from src.services.config_store.store import get_config_store
 from src.services.detection import profile_registry
 
@@ -107,7 +105,6 @@ async def test_quiesce_and_swap_drains_queues_before_building() -> None:
 
         asyncio.get_event_loop().create_task(_drain_soon())
         rt = await quiesce_and_swap(
-            opensearch=FakeDocOpenSearch(),
             queues=[q],
             holder=holder,
             slug='alpha',
@@ -132,26 +129,24 @@ async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
     stale one from before this cycle's refresh."""
     from scripts.curation.worker.runtime import RuntimeHolder, current_want, quiesce_and_swap
 
-    client = FakeConfigOpenSearch()
     project = _record('alpha')
     profile = profile_registry.get_active_region_profile()
     assert profile is not None
 
     with bind_project(project):
         store = get_config_store(mode='pinned')
-        idx = store.index
-        doc = await save_config(
-            client, idx, kind='region_profile', name=profile.name, body={}, expected_revision=None
+        # a stored profile: its name is not one of the registered profiles' names
+        stored_name = f'stored_{profile.name}'
+        doc, _ = await save_config(
+            kind='region_profile', name=stored_name, body={}, expected_revision=None
         )
         await activate(
-            client,
-            idx,
             axis='detection_profile',
-            name=profile.name,
-            revision=doc['revision'],
+            name=stored_name,
+            revision=doc.revision,
             expected_active=None,
         )
-        await store.refresh(client)
+        await store.refresh()
         assert store.pending_snapshot is not None
         assert store.current.active_profile is None  # not pinned yet
 
@@ -163,7 +158,6 @@ async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
 
         holder = RuntimeHolder()
         await quiesce_and_swap(
-            opensearch=FakeDocOpenSearch(),
             queues=[],
             holder=holder,
             slug='alpha',
@@ -177,7 +171,7 @@ async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
         )
         # By the time get_active_profile() ran, the store had already
         # been pinned to the new activation.
-        assert seen_active_profile_at_call_time == [(profile.name, doc['revision'])]
+        assert seen_active_profile_at_call_time == [(stored_name, doc.revision)]
         assert store.pending_snapshot is None
 
 

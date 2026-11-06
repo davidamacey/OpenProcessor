@@ -121,11 +121,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
     patches: list[tuple[str, str, Any]] = [
         ('src.config.retired_env', 'reject_retired_env', _sync_step(w, 'retired_env')),
         (
-            'src.services.config_store.global_store',
-            'global_configs_index',
-            _sync_step(w, 'global_configs_index'),
-        ),
-        (
             'src.services.detection.profile_registry',
             'ensure_env_region_profile',
             _sync_step(w, 'region_profile'),
@@ -206,7 +201,6 @@ def _run_lifespan(body=None) -> FastAPI:
 
 EXPECTED_STARTUP = [
     'retired_env',
-    'global_configs_index',
     'region_profile',
     'pool_created:4x64',
     'pool_initialize',

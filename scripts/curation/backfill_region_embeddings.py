@@ -179,7 +179,7 @@ def main() -> int:
     p.add_argument('--max-docs', type=int, default=None, help='Cap the cohort (testing).')
     add_project_argument(p)
     args = p.parse_args()
-    bind_script_project(args.project, opensearch_url=args.opensearch_url)
+    bind_script_project(args.project)
     return asyncio.run(
         _run(args.opensearch_url, args.triton_url, apply=args.apply, max_docs=args.max_docs)
     )

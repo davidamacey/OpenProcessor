@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from curation.cross_project_leak import _env as _sweep
 from curation.cross_project_leak._seeders import _promoted_model
 from fastapi.testclient import TestClient
@@ -19,6 +20,9 @@ from fastapi.testclient import TestClient
 
 if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 leak_env = _sweep.leak_env

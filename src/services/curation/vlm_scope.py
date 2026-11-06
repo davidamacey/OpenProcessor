@@ -215,12 +215,12 @@ async def representative_ids(opensearch: Any, *, per_cluster: int) -> set[str]:
     and restarts; a concurrent writer is re-read, never overwritten."""
     ranked = await _ranked_by_cluster(opensearch, per_cluster)
     for _ in range(_CLAIM_WRITE_ATTEMPTS):
-        stored, resp = await read_rep_claims(opensearch)
+        stored, row_revision = await read_rep_claims()
         updated = await _reconcile_claims(opensearch, stored, ranked, per_cluster)
         if updated.claims != stored.claims:
             try:
                 await write_rep_claims(
-                    opensearch, updated.model_copy(update={'revision': stored.revision + 1}), resp
+                    updated.model_copy(update={'revision': stored.revision + 1}), row_revision
                 )
             except PolicyConflictError:
                 continue
@@ -243,7 +243,7 @@ class ScopeCache:
         hit = self._entries.get(slug)
         if hit is not None and self._clock() - hit[0] < self._ttl_s:
             return hit[1], hit[2]
-        policy = await get_vlm_policy(opensearch)
+        policy = await get_vlm_policy()
         reps = (
             await representative_ids(opensearch, per_cluster=policy.per_cluster)
             if policy.scope == 'representatives'

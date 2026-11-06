@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from src.clients.curation_opensearch import ClassRegistryFile
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.services.classes.registry import ClassRegistry
     from src.services.curation.dataset_import.options import DatasetPreviewRequest
     from src.services.curation.dataset_import.paths import PathGuard
     from src.services.curation.dataset_import.scan import DatasetScan
@@ -393,7 +393,6 @@ def _reuse_key(
 async def materialize_created_classes(
     resolved: ResolvedMapping,
     registry: ClassRegistry,
-    client: Any,
     *,
     new_groups: dict[str, str | None] | None = None,
 ) -> None:
@@ -411,7 +410,7 @@ async def materialize_created_classes(
             continue
         name = target.class_name or dataset_class
         new_id, _created = await registry.ensure_class(
-            client, name, group=groups.get(dataset_class) or 'unknown'
+            name, group=groups.get(dataset_class) or 'unknown'
         )
         resolved.targets[dataset_class] = dataclasses.replace(target, class_id=new_id)
         resolved.created_classes[dataset_class] = new_id

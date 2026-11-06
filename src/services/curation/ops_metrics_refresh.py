@@ -44,7 +44,7 @@ from src.services.curation.ops_metrics import (
     OTHER_PROJECT,
     allowed_project_slugs,
 )
-from src.services.projects.guard_policy import bind_registry_admin
+from src.services.projects.guard_policy import bind_index_inventory_read
 
 
 if TYPE_CHECKING:
@@ -157,7 +157,7 @@ async def _cat_index_rows(client: Any, names: list[str]) -> list[dict[str, Any]]
 
     rows: list[dict[str, Any]] = []
     read_any = False
-    with bind_registry_admin():
+    with bind_index_inventory_read():
         for i in range(0, len(names), _CAT_CHUNK):
             chunk = names[i : i + _CAT_CHUNK]
             try:
