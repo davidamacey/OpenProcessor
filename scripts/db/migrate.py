@@ -31,19 +31,22 @@ if TYPE_CHECKING:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATE_LOCK = (2, 0)
-# Roles are cluster-wide, so two runners must not create them at the same moment.
+# Roles are cluster-wide, so two runners must not write them at the same moment.
 ROLES_LOCK = (2, 1)
+MAINTENANCE_DATABASE = 'postgres'
 
 
 def alembic_config() -> Config:
     return Config(str(REPO_ROOT / 'alembic.ini'))
 
 
-def _conninfo(settings: DatabaseSettings, user: str, password: str) -> str:
+def _conninfo(
+    settings: DatabaseSettings, user: str, password: str, dbname: str | None = None
+) -> str:
     return psycopg.conninfo.make_conninfo(
         host=settings.direct_host,
         port=settings.port,
-        dbname=settings.name,
+        dbname=dbname or settings.name,
         user=user,
         password=password,
         sslmode=settings.sslmode,
@@ -65,15 +68,21 @@ def _owner_connection(settings: DatabaseSettings) -> Connection:
 
 
 def upgrade(settings: DatabaseSettings, *, super_user: str = SUPER_USER) -> None:
+    super_password = settings.password('super')
+    # Roles belong to the cluster, and an advisory lock belongs to one database, so they are
+    # created from the maintenance database every cluster has.
     with psycopg.connect(
-        _conninfo(settings, super_user, settings.password('super')), autocommit=True
+        _conninfo(settings, super_user, super_password, MAINTENANCE_DATABASE), autocommit=True
     ) as bootstrap:
         bootstrap.execute('SELECT pg_advisory_lock(%s, %s)', ROLES_LOCK)
         try:
             roles.ensure_roles(bootstrap, settings)
-            roles.prepare_database(bootstrap, settings)
         finally:
             bootstrap.execute('SELECT pg_advisory_unlock(%s, %s)', ROLES_LOCK)
+    with psycopg.connect(
+        _conninfo(settings, super_user, super_password), autocommit=True
+    ) as target:
+        roles.prepare_database(target, settings)
 
     with _owner_connection(settings) as conn:
         conn.execute(
