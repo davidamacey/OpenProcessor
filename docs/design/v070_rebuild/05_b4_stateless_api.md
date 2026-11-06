@@ -4,10 +4,11 @@
 |---|---|
 | Status | plan, not started |
 | Release | part of the single v0.7.0 release; B5 follows B4 and R-final (`07_release_acceptance.md`) runs last, after B5 (D-37 approved, [decision_register.md](reference/decision_register.md) section 6); the tag is the owner's word |
-| Depends on | B2 merged (`03_b2_overview.md`) and B3 merged (`04_b3_ultralytics_one_version.md`); the CC-10 evidence (4A-0) before 4A-3 |
+| Depends on | B2 merged (`03_b2_overview.md`) and B3 merged (`04_b3_ultralytics_one_version.md`) for the integration branch and the sweep; track 4A codes from `main` after B2 PR2, and 4D and the privacy lane from the frozen W2.4 head (D-84, master section 4.0b); the CC-10 evidence (4A-0) before 4A-3 |
 | Decisions applied | D-13 order (approved); owner rules: no asyncio fan-out in request handlers (bulk OCC instead; the ingest data plane is the documented `TaskGroup` exemption Q-J7), no in-process or file locks for cross-process state (the last `flock` goes here), the API ends stateless, the worker count is a tuning knob only |
-| Open decisions | D-29, D-29a, D-32, D-32a, D-33 (D-30 replaced by D-48 and D-31 approved, both delivered by B2): status in [decision_register.md](reference/decision_register.md) section 6; section 9 holds the detail |
+| Open decisions | D-29, D-32, D-32a, D-33 (D-30 replaced by D-48 and D-31 approved, both delivered by B2): status in [decision_register.md](reference/decision_register.md) section 6; section 9 holds the detail |
 | Source IDs | `task_queue_plan.md` section 4e, Phase 6, Phase 7, J7, J13, J14, E26, section 2e, 2f; audit CC-7, CC-10, BA-6 (deferred), BA-8 (documented in B1); Q-D14 (remaining part); former master plan rev 4 sections 3b (event-hub and `job_lock.py` rows), 3c D14, 7.4, 7.7 (BA-6), 12 (T2 B4, T5), 15 (M15, M16), 16 (B4 row), Appendix A (A.4 #23, A.5 #6, A.7 #10, M-4) |
+| No rework (D-84, 2026-11-05) | moved out of B4 so each file is written once: the `/health` probes (to B2 1D-1), semantic search's `_msearch` (to B2 ES-C4), the in-process text encoders (to B2 ES-C5), and, if the owner answers D-29a before W2.3a, 4A-0 and 4A-3 (to B2 4D-8); the API database pool rule is written by B2 1A-6 in `src/config/api_pools.py`, which 4B-2 extends. Track 4A codes from `main` after B2 PR2 (master section 4.0b) |
 | Branches | `int/b4-stateless` from main after B2 and B3 merged; tracks `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/project-create` (4D), each in `<repo>-wt-b4-<track>` |
 | Size | M-L (4A M, 4B M, 4D S-M); the former events track 4C is done by B2 stage 3 |
 
@@ -67,7 +68,7 @@ hard-coded worker counts. Then `API_WORKERS` is a pure tuning knob sized to the 
 
 Same branch model as B2: one agent per worktree, lanes run only targeted red/green tests and static
 checks on touched files, the coordinator merges `--no-ff` (one merge commit per track) and runs
-**one** full gate for B4 (section 7). Opus plans, Sonnet implements and reviews. Every brief
+**one** full gate for B4 (section 7). Opus plans and coordinates, Sonnet implements and reviews (D-85). Every brief
 forbids `pgrep -f`, `pkill -f` and sleep/until loops, and names its `-p`, GPU, worktree and
 deadline.
 
@@ -82,15 +83,15 @@ classified:
 |---|---|---|
 | `routers/curation/review_resolve.py` (`gather` + `Semaphore(16)`, one OCC write per crop) | `POST /curation/projects/{project}/review/new_class_proposals/resolve` | 4A-1: one `mget` + one bulk |
 | `routers/curation/edit_undo.py` (`gather` + `Semaphore(32)`, one undo per crop; "Edit history has no bulk merger yet") | `POST /curation/projects/{project}/crops/region/undo_batch` | 4A-2: bulk merger + one bulk |
-| `services/labeling/vlm_labeler_classify.py` (two `gather`s over chunks) | `POST /curation/projects/{project}/vlm/label_batch` | 4A-3 (after the 4A-0 evidence) |
-| `services/labeling/vlm_labeler_verify.py` (`gather` over chunks) | `POST /curation/projects/{project}/vlm/verify_region_batch` (**missing from the task plan's list**, K-18) | 4A-3 |
+| `services/labeling/vlm_labeler_classify.py` (two `gather`s over chunks) | `POST /curation/projects/{project}/vlm/label_batch` | 4A-3 (after the 4A-0 evidence; done by B2 4D-8 if D-29a is answered before W2.3a) |
+| `services/labeling/vlm_labeler_verify.py` (`gather` over chunks) | `POST /curation/projects/{project}/vlm/verify_region_batch` (**missing from the task plan's list**, K-18) | 4A-3 (as above) |
 | `services/curation/ingest_batch.py` (4 sites), `ingest_detect.py` (2), `ingest_index.py` `_cache_crops`, `visual_search/ingest_batch.py` (2) | `/ingest`, curation ingest, bulk ingest's loopback requests | 4A-4: J7 exemption as `TaskGroup` (CC-7) |
-| `services/curation/semantic_search.py` (kNN + count in parallel) | curation semantic search | 4A-5: one `_msearch` |
-| `routers/health.py` (two probes in parallel, plus B2's queue probe) | `/health` | 4A-5: sequential with the existing per-probe timeouts |
+| `services/curation/semantic_search.py` (kNN + count in parallel) | curation semantic search | done in B2 by ES-C4 (one `_msearch`, D-84) |
+| `routers/health.py` (two probes in parallel) | `/health` | done in B2 by 1D-1 (sequential, D-84) |
 | `services/resource_links.py` `refresh_reachability` (`gather` over service probes, in a request-spawned refresh) | curation health, global status, settings | 4A-5: a beat task writes the result to a Valkey key; the API reads it (one probe per deployment, the same answer in every worker) |
 | job and worker code (`reprocess_*`, `open_vocab_run`, `assist_loop/*`, `clustering/*`, `bulk_ingest/*`, `vlm_labeler_{combined,visibility,assist}`, `region_detector`) | Celery workers or the detection/VLM workers after B2 | not request path; CC-9 bounds landed in B2 where they mattered |
 
-### 4A-0 CC-10 evidence (first; no code change)
+### 4A-0 CC-10 evidence (done by B2 4D-8: D-29a approved 2026-11-05; not a B4 task)
 
 - With a stub VLM endpoint (the live harness's `fake-vlm`, or an offline `httpx` mock transport),
   send a maximum-size `label_batch` and a maximum-size `verify_region_batch`; record the peak
@@ -126,7 +127,7 @@ classified:
   outcomes match the per-crop version on a fixture with each outcome. **Control:** the single-crop
   undo route.
 
-### 4A-3 VLM batch routes (after 4A-0)
+### 4A-3 VLM batch routes (done by B2 lane 4D as 4D-8: D-29a approved 2026-11-05, D-84, because 4D already edits these files; otherwise here, moving only the chunk loop and keeping 4D's call lines)
 
 - **D-29a recommendation:** both routes return 202 with a Celery job (`op.jobs.vlm_label_batch`,
   `op.jobs.vlm_verify_region_batch`), and the chunk fan-out runs in the worker as
@@ -157,7 +158,9 @@ Why `TaskGroup` and why only here: the Python documentation says that when a tas
   `src/config/task_routes/near_dup_core.py` and `src/tasks/near_dup_core.py`, review RR-4):** while 4A-4 rewrites `visual_search/ingest_batch.py`,
   core ingest stops grouping in the request. ND-C1: it writes `near_dup_pending` rows (project NULL,
   level `core`) and the single-writer `near_dup_core_group` job (exclusive group `near_dup_core`)
-  groups them, so concurrent batches can no longer race. ND-C2: the ingest response lists
+  groups them, so concurrent batches can no longer race; the pending write is one function,
+  `enqueue_core_pending(session, image_ids, reason)` (signature fixed here), which B5d's `near_duplicates`
+  branch calls when it moves core ingest onto the plan executor (P3), so 5d rewrites none of it (D-84). ND-C2: the ingest response lists
   `near_duplicate_candidates` (id and cosine above the core cut); the group appears once the job has
   run; the `near_duplicate_threshold` form field on the three ingest routes goes. ND-C3: the literal
   thresholds, the stale comment about Immich's threshold and the swallowed exception in
@@ -174,18 +177,16 @@ Why `TaskGroup` and why only here: the Python documentation says that when a tas
 
 ### 4A-5 The small parallel sites
 
-- `semantic_search.py`: the kNN query and the unembedded count become one `_msearch` (one round
-  trip; OpenSearch multi-search API), with the vector field and state field of the bound project's
-  space (research embeddings 5.4, ES-C's `embedding_space()`). Red: one client call instead of two
-  concurrent ones.
-- `routers/health.py`: probes run sequentially with their existing timeouts (health is not
-  latency-critical). Red: no `create_task` or `gather` in the module (AST test; `routers/health.py` is not one of the four 4A-4 exempt ingest modules, and it is latency-insensitive, so it has no reason to fan out).
+- `semantic_search.py` and `routers/health.py`: done in B2 (ES-C4 and 1D-1, D-84), so this track does
+  not edit them; the no-`create_task`, no-`gather` AST test below still covers both modules.
 - `resource_links.py`: `op.periodic.resource_reachability` (beat, 30 s) probes the services and
   writes `op:resource_reachability` (Valkey, `SET ... EX 90`; a short-lived cache, the kind of value Valkey owns per [02](02_control_plane_database.md) section 3.1); the routes read it; a missing key
   reads "unknown", never "down". Delete the per-process `_cache.inflight` task. Red: two API
   processes (two app instances in a test) give the same answer from one fake Valkey. The beat entry
   goes into `src/tasks/beat_schedule.py` and `tests/periodic/test_beat_schedule.py` gains its name in
   the same commit (the B2 stage-6 test lists the stage-6 names).
+- Red (every module): the no-`create_task`, no-`gather` AST test over `src/routers` and the services
+  reached only from a handler, with the four 4A-4 ingest modules as the only exemption.
 
 ### 4A-6 Evaluator
 
@@ -205,7 +206,7 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
   if available, or 1" [U1]; FastAPI "Server Workers" and "FastAPI in Containers" (one process per
   container under an orchestrator; several in one container on a single Compose host) [F2][F3].
 - **Steps:** remove `--workers=32` and the stale "64 workers" and "benchmark" comments (the plan's number is 32: `docker-compose.yml` near line 260 says 64 in a comment) from the `api` command in
-  `docker-compose.yml`; add `WEB_CONCURRENCY=${API_WORKERS:-8}` to the `api` environment; remove
+  `docker-compose.yml`; change the `api` environment's `WEB_CONCURRENCY` (B2 1C-9 set it to 32) to `${API_WORKERS:-8}`; remove
   `"--workers", "16"` from the Dockerfile `CMD` (the image default becomes uvicorn's
   `WEB_CONCURRENCY`, else 1, which is what an orchestrator wants); keep
   `--limit-max-requests` and the jitter (D-26).
@@ -220,16 +221,18 @@ are green; contracts regenerated; `engineering_standards.md` names the one exemp
 ### 4B-2 Pools sized per process from totals (Q-D14 remaining part)
 
 - **Files:** `src/app/lifespan.py` `_start_pools` (today `ThreadPoolExecutor(max_workers=64)` and
-  `AsyncTritonPool(pool_size=4, max_concurrent=64)` per process), a new `src/config/api_pools.py`.
+  `AsyncTritonPool(pool_size=4, max_concurrent=64)` per process), `src/config/api_pools.py` (created by
+  B2 1A-6 with the database pool size; this track adds the thread and Triton totals beside it, D-84).
 - **Steps:** totals (`EXECUTOR_THREADS_TOTAL`, `TRITON_CHANNELS_TOTAL`,
   `TRITON_INFLIGHT_TOTAL`) as constants sized for today's 32 workers (64 x 32 threads,
   4 x 32 channels); per process = `max(min_floor, total // API_WORKERS)`; the config reads
   `WEB_CONCURRENCY` (the same value uvicorn uses) and fails closed when it is not a positive int.
   Record in INSTALLATION that `--limit-concurrency=512` stays per process (the benchmark shows
   whether it needs sizing too).
-- The database pool follows the same rule as a real deployment total (review fix R-6):
-  `floor(OP_DB_API_CONNECTIONS_TOTAL / (API_WORKERS * OP_API_REPLICAS))`, at least 1, no overflow
-  ([02b](02b_jobs_locking_events.md) section 8); the connection-budget test of B2 (1D-6, which takes
+- The database pool already follows the same rule as a real deployment total (review fix R-6), written
+  by B2 1A-6 in `api_pools.py::db_pool_size()`:
+  `floor(OP_DB_API_CONNECTIONS_TOTAL / (WEB_CONCURRENCY * OP_API_REPLICAS))`, at least 1, no overflow
+  ([02b](02b_jobs_locking_events.md) section 8); this track does not edit it; the connection-budget test of B2 (1D-6, which takes
   the scale factors) is re-run with the chosen default and with two replicas. Re-check RC-4: the
   replica count has one source, `.env` `OP_API_REPLICAS` read by compose as `deploy.replicas`
   (B2 1C-2); the pool timeout answer 503 `database_busy` and the separate poll engine come from
@@ -268,16 +271,10 @@ Red: `tests/clients/test_triton_router.py`: with two fake servers 100 concurrent
 10 %; a server whose report lacks the model gets no call; one image's follow-up calls stay on its
 server. Control: one server behaves as today.
 
-### 4B-7 The in-process text encoders are deleted (research embeddings ES-E; D-69 consequence; RD-31 answered as recommended (D-78))
+### 4B-7 The in-process text encoders (moved to B2 ES-C5, D-84)
 
-Under D-69 every API process requires Triton, so the in-process `torch` and `onnx` PE text backends
-are dead code. Delete them from `src/clients/pe_text_backends.py` (keep only Triton) and
-`src/clients/pe_encoder.py`; retire `OP_PE_TEXT_BACKEND` and `OP_PE_TEXT_ONNX_PATH` as `removed:`
-entries in `src/config/retired_env.py` and `env.template`; the 503 text at
-`src/routers/curation/search.py:116` names Triton's text model. Red:
-`tests/curation/test_search_requires_triton_text.py`: with the Triton text model not ready the
-search refuses with an error naming it and no `torch` import happens anywhere in the API image path;
-the retired variables fail at startup. Control: search with Triton ready is unchanged.
+Deleted in B2 lane ES-C (W2.4), which already rewrites `src/routers/curation/search.py`; dead code
+from W2.1 on under D-69, so it no longer waits for W4.
 
 ### 4B-5 Benchmarks (T5; run in GPU window 2, the B5 window)
 
@@ -467,10 +464,12 @@ are deleted there. B4 has no events track.
 
 ## 13. Deferred (after B4; not batched)
 
-- **BA-6** (71 operations without a response model; 62 under `/curation`): one router per PR after
-  B4, so the routers B2 and B4 rewrote are typed once (audit BA-6: model today's exact shape, set
-  `response_model=`, `make contracts` in the same commit; red: a per-router test that its operations
-  have non-empty schemas). Tracked by issue N15 in the index file's issue list.
+- **BA-6** (71 operations without a response model; 62 under `/curation`): typed once per router, after
+  (or by) the last wave that rewrites it (D-84): filler lanes take the routers no later wave rewrites, and
+  B4 4A types `review_resolve` and `edit_undo`, 4D the project routes, in the commit that rewrites them
+  (audit BA-6: model today's exact shape, set `response_model=`, `make contracts` in the same commit; red:
+  a per-router test that its operations have non-empty schemas). Tracked by #465
+  ([00_master_plan.md](00_master_plan.md) "Typed response models as filler lanes").
 
 ## 14. Corrections (B4-specific)
 
@@ -513,7 +512,9 @@ are deleted there. B4 has no events track.
 
 ## 17. Ready-to-paste lane briefs
 
-Common to every B4 brief: read `docs/design/v070_rebuild/05_b4_stateless_api.md` (your track's section
+Common to every B4 brief: model Sonnet, effort medium for every track (owner-approved 2026-11-05, D-85;
+[00_master_plan.md](00_master_plan.md) section 7 step 3a; Haiku, low, may re-run a track's targeted tests
+and summarize logs). Read `docs/design/v070_rebuild/05_b4_stateless_api.md` (your track's section
 and sections 1-3, 9), `docs/design/v070_rebuild/03_b2_overview.md` section 5, `02b_jobs_locking_events.md` sections 2 and 8, CLAUDE.md,
 CONTRIBUTING.md, `docs/design/engineering_standards.md`. Red test on the unchanged base first
 (record it), then the fix and the control; `make contracts` in the same commit as a wire change;
@@ -523,8 +524,9 @@ no `--all-files`; never `--no-verify`, push, merge or another checkout. Do NOT u
 compose project. Deadline: set by the coordinator at kick-off.
 
 ```
-Track 4A (b4/bulk-occ, <repo>-wt-b4-bulk-occ): do 4A-0 first (offline, no Docker, no GPU), then
-4A-1, 4A-2, 4A-4, 4A-5; 4A-3 only after the owner answered D-29a. The 202 paths use B2's
+Track 4A (b4/bulk-occ, <repo>-wt-b4-bulk-occ; cut from main after B2 PR2, master section 4.0b): do
+4A-0 first (offline, no Docker, no GPU) unless B2 4D-8 did it, then 4A-1, 4A-2, 4A-4, 4A-5 (resource
+links only); 4A-3 only if it did not move to B2 4D-8. The 202 paths use B2's
 `start_job` (kinds `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`,
 `vlm_verify_region_batch` in `src/config/job_kinds/b4_fanout.py`, with `task_routes/b4_fanout.py`
 and `src/tasks/b4_fanout.py`, all created empty by B2 lane 1B; 4D uses the `b4_project` modules, so

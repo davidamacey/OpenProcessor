@@ -67,7 +67,8 @@ named) or the issue comments.
 
 Branch model (owner decision 6): one integration branch per sub-batch, cut from main after the
 previous sub-batch merged; one PR and one T1 sweep per sub-batch, because each is gated on its own
-measurement. Tracks: one Sonnet agent per worktree `<repo>-wt-b5<x>-<track>`, branch
+measurement. Tracks: one Sonnet agent per worktree (effort high for the W5b decode-once GPU tracks
+`decode`, `prep` and `codec`, medium otherwise; D-85) `<repo>-wt-b5<x>-<track>`, branch
 `b5<x>/<track>`, merged `--no-ff` one merge commit per track.
 
 **Test cycle per sub-batch (once):** each task's red test and control in its lane (T0: targeted

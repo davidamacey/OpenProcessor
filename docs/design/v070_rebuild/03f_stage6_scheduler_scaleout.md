@@ -5,34 +5,36 @@
 | Status | plan, not started |
 | Depends on | stages 4 and 5 merged ([03d](03d_stage4_job_families.md), [03e](03e_stage5_gpu_queues.md)) |
 | Design | [02b](02b_jobs_locking_events.md) section 4.1 (advisory locks, single beat), [02c](02c_migration_ops_tests.md) section 4 (services) |
-| Lanes | 6A and 6B, each in two parts (below); ES-C in parallel with part 2; then `b2/frontend-spaces` (after ES-C); then 6C; then 6D |
-| Merge order | part 1: 6A, 6B (close W2.3a, PR2). Part 2: 6A, 6B, ES-C, `b2/frontend-spaces`, 6C, 6D (PR3) |
-| Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [owner_questions](reference/owner_questions.md)): 6A gains the serving inventory, the cluster-run refresh and the near-duplicate ticks and loses the IVF retrain check; 6B the per-card Triton shape and the DCGM profiling fields; 6D the research docs; new lanes ES-C (readers to the embedding registry) and `b2/frontend-spaces`; the five stale Cropwright screenshots are recaptured in the B2 sweep ([03](03_b2_overview.md) section 9, step 23) |
+| Lanes | 6A and 6B once each, closing W2.3a (PR2); then in W2.4 (PR3) ES-C and 6C in parallel, then 4E (Cropwright, [03d](03d_stage4_job_families.md); the former `b2/frontend-spaces` folded in), then 6D (owner rule D-84, 2026-11-05: no lane rewrites what an earlier one wrote) |
+| Merge order | W2.3a: 6A, 6B (after every family lane). W2.4: ES-C, 6C, 4E, 6D |
+| Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [owner_questions](reference/owner_questions.md)): 6A gains the serving inventory, the cluster-run refresh and the near-duplicate ticks and loses the IVF retrain check; 6B the per-card Triton shape and the DCGM profiling fields; 6D the research docs; new lanes ES-C (readers to the embedding registry) and `b2/frontend-spaces` (folded into 4E, D-84); the five stale Cropwright screenshots are recaptured in the B2 sweep ([03](03_b2_overview.md) section 9, step 23) |
 | Compose project | none in the lanes (offline renders); the B2 sweep follows this stage |
 | Decisions | D-19, D-20b, D-24, D-50, D-54, D-60, D-61; SEC-4, SEC-5 (neutral) |
 
 ---
 
-## Delivery in two parts (owner decision 2026-11-05: B2 ships as three PRs)
+## Delivery (owner decisions 2026-11-05: B2 ships as three PRs, D-76; no rework, D-84)
 
-Stage 6 is not one block at the end. `main` must boot after PR2, so the lanes that the ported families
-need run at the close of W2.3a, and the rest ride with PR3 ([00_master_plan.md](00_master_plan.md) section 4).
+Stage 6 is not one block at the end, and no stage-6 file is edited twice. Since every job family, the
+research families included, is written in W2.3a, the whole of 6A (every beat tick, the deletions, the
+metrics) and the whole of 6B (compose, scale, the arbiter worker, monitoring, the PgBouncer overlay, the
+per-card Triton shape, the DCGM fields) run once at the close of W2.3a and ship in PR2. W2.4 (PR3) holds
+only what reads PR2's final state: ES-C, 6C's private items, 4E (Cropwright, one lane) and 6D.
 
-| Part | When | 6A (`b2/beat-periodic`) | 6B (`b2/scale-out-compose`) | Why |
-|---|---|---|---|---|
-| 1 | after the eight W2.3a lanes merged; PR2 | every task of 6A-1 except `op.periodic.cluster_refresh`, `op.periodic.near_dup_rescore`, `op.periodic.near_dup_full_build` and `op.periodic.near_dup_prune`; 6A-2; 6A-3 (every deletion, the file-lock baseline becomes empty); 6A-4 | 6B-1 (without deleting `curation-cluster-refresh`), 6B-2, 6B-3, 6B-4, and the harness services in `docker/test/compose.yml` | the ported consumers need their services, the old job paths and locks have no callers left, and the PR2 live smoke (steps 3-7 and 12-18) runs on this compose |
-| 2 | after W2.3b merged; PR3 | the four deferred ticks (they start `cluster_run` and the near-duplicate tasks, which exist only after W2.3b); `cluster_refresh_daemon.py` deleted with its service; `tests/periodic/test_beat_schedule.py` gains the four names | 6B-5 (PgBouncer overlay), 6B-6 (monitoring), 6B-7 and 6B-8 (research), the `curation-cluster-refresh` service deleted | research-dependent or not needed to boot |
-
-Each part has its own branch from the integration head (`b2/beat-periodic`, `b2/beat-research-ticks`,
-`b2/scale-out-compose`, `b2/scale-out-monitoring`) and its own part check. ES-C, `b2/frontend-spaces`, 6C and 6D
-are PR3 only.
+| Lane | When | Why then |
+|---|---|---|
+| 6A `b2/beat-periodic` | W2.3a, cut after every family lane merged (order 3); PR2 | every tick's job kind exists (`cluster_run` and the near-duplicate tasks included); the old job paths and locks have no caller left |
+| 6B `b2/scale-out-compose` | W2.3a, cut with 6A; PR2 | the consumers need their services to boot, and the PR2 smoke runs on this compose |
+| ES-C `b2/embedding-readers` | W2.4, cut from the merged W2.3a head; PR3 | it converts the readers the W2.3a lanes left, once |
+| 6C `b2/hardening` | W2.4; PR3 | the private items only (the public lines were written with each service) |
+| 6D `b2/docs` | W2.4, last; PR3 | the docs describe the final B2 state once |
 
 ## Lane 6A `b2/beat-periodic`: periodic work to beat, and the old infrastructure deleted
 
 **Owns:** `src/tasks/periodic.py`, `src/tasks/beat_schedule.py`, `src/config/task_routes/periodic.py`;
 `src/services/curation/bulk_ingest/dispatcher.py` (the tick loop), `src/services/curation/open_vocab_sweeper.py`,
 `src/services/curation/source_image_cache.py`, `src/services/curation/ingest_index.py` (the inline
-prune call), `scripts/curation/cluster_refresh_daemon.py` (deleted), `src/services/curation/clustering/refresh_schedule.py`,
+prune call; ND-A's lines in that file are left as they are), `scripts/curation/cluster_refresh_daemon.py` (deleted), `src/services/curation/clustering/refresh_schedule.py`,
 `src/services/training/{gpu_arbiter_policy,pause_sentinel}.py`, `src/app/lifespan.py`,
 `src/app/resources.py`, `src/services/curation/{background_jobs,startup_reconcile,job_reconcile,file_job,lease_heartbeat,job_lock}.py`
 (deleted), `src/clients/job_lease.py` and `src/domain/job_lease.py` (deleted),
@@ -40,7 +42,8 @@ prune call), `scripts/curation/cluster_refresh_daemon.py` (deleted), `src/servic
 `src/services/curation/ops_metrics*.py` (OPS-2 act part only), tests under `tests/periodic/`,
 `tests/test_lifespan_has_no_side_effects.py`.
 
-Part 1 and part 2 are named in "Delivery in two parts" above.
+One lane, once, in W2.3a ("Delivery" above). The `op.periodic.ingest_dispatch` task calls 4C's
+`dispatch_once(session, project)` (4C-1a) and deletes only the old loop around it (D-84).
 
 ### 6A-1 The beat schedule
 
@@ -56,17 +59,18 @@ and the advisory lock of [02b](02b_jobs_locking_events.md) section 4.1.
 | Task | Every | Replaces (deleted in the same commit) | Lock |
 |---|---|---|---|
 | `op.periodic.reaper` | 30 s | (3A, already present) | `REAPER, 0` |
-| `op.periodic.ingest_dispatch` | `OP_INGEST_DISPATCH_S` (5 s) | `dispatcher.py` `_loop`, `start_ingest_dispatcher`, the `dispatch.lock` flock | `INGEST_DISPATCH, <project lock_key>`; busy -> skip the project |
+| `op.periodic.ingest_dispatch` | `OP_INGEST_DISPATCH_S` (5 s) | `dispatcher.py` `_loop`, `start_ingest_dispatcher`, the `dispatch.lock` flock; calls 4C's `dispatch_once` | `INGEST_DISPATCH, <project lock_key>`; busy -> skip the project |
 | `op.periodic.open_vocab_sweep` | `OP_OPEN_VOCAB_SWEEP_S` (120 s) | `open_vocab_sweeper.py` `_loop`, the `open_vocab_sweep.lock` flock | `OPEN_VOCAB_SWEEP, <project>`; starts `open_vocab_drain` (coalesced by the unique index) |
 | `op.periodic.cache_prune` | the cache's interval | the `.prune.lock` flock and the inline prune from ingest | `CACHE_PRUNE, 0` |
 | `op.periodic.gpu_arbiter` | 15 s, scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set (the overlay sets it; RC-3) | `lifespan._arbiter_reconcile_loop`, `_start_gpu_arbiter`; `training_gpus.lock` and `pause.sentinel` become `gpu_reservations` and `deployment_settings('vlm_paused_for_training')` | `GPU_ARBITER, 0`; intent and outcome in two transactions around the Docker calls; routed to the dedicated `arbiter` queue, consumed only by `gpu-arbiter-worker` (review fix R-20), so no other periodic task runs in a process that holds the Docker socket |
 | `op.periodic.reload_promoted` | 15 s | the reload in the arbiter loop and `lifespan._reload_promoted_models` (the on-demand route stays) | none (idempotent) |
 | `op.periodic.cluster_refresh` | `OP_CLUSTER_REFRESH_INTERVAL_S` | `cluster_refresh_daemon.py` and its service; the schedule logic stays in `refresh_schedule.py` over `project_state('cluster_refresh')` (the beat's clock) and the serving partition's `n_items` | `CLUSTER_REFRESH, <project>`; research clustering 5.2: starts `cluster_run` (not `autolabel`) through `start_job` when the profile's growth rule fires and ingest is quiet, only when a `cluster` consumer is live (a fresh `worker_capabilities` row naming the `cluster` queue, never a broadcast `inspect()`; review RR-21), else skips |
-| (deleted) `op.periodic.ivf_retrain_check` | - | the auto-label worker's `_next_retrain` and `last_check` are deleted with the worker in 4D; the IVF retrain is a `cluster_run` (research clustering 5.2), so this tick and the `IVF_RETRAIN` advisory lock do not exist | - |
+| (none) `op.periodic.ivf_retrain_check` | - | the auto-label worker's IVF check, `_next_retrain` and `last_check` are deleted with the worker in 4D and never ported (D-84); the IVF retrain is a `cluster_run` (research clustering 5.2), so this tick and the `IVF_RETRAIN` advisory lock do not exist | - |
 | `op.periodic.serving_inventory` (research GPU S-14) | 60 s | the hand-copied serving facts | none (idempotent upsert); reads each server of the active serving profile (`/v2/repository/index`, model readiness, metrics) and upserts `serving_reports`, and upserts a `gpu_devices` row with a fresh `seen_at` for every card the server's metrics name (`gpu_uuid` label; review RR-9) |
 | `op.periodic.near_dup_rescore` (research near-duplicates 5.2) | 30 s | the request-time grouping | `NEAR_DUP_RESCORE, <project lock_key>` (its own advisory-lock class, 02b; review RR-21); starts `near_dup_rescore` per (project, level) with pending rows, idempotency key `near_dup_rescore:<project>:<level>:<slot>` |
 | `op.periodic.near_dup_full_build` | weekly | - | per project; a full `image` build (cheap at image level) to bound incremental drift (risk R4) |
 | `op.periodic.near_dup_prune` | daily | - | deletes near-duplicate runs beyond the current and two superseded per project and level (02a section 9) |
+| `op.periodic.job_stats` (owner D-83) | 30 s | - | none (read-only); one grouped `SELECT` over `jobs` sets the gauges of 6A-4 |
 | `op.periodic.db_backup` | `OP_DB_BACKUP_INTERVAL_H` if set | - | `pg_try_advisory_xact_lock` on a backup class; off by default (D-61) |
 
 The two auto-label starters ran only with the `curation` profile up; the consumer gate keeps that
@@ -106,11 +110,20 @@ handler calls `mark_process_dead` for a child leaving under `--max-tasks-per-chi
 a dashboard reads is exposed with `start_http_server` from `worker_init` on an internal port, with a
 scrape target (6B).
 
+**Queue and job metrics (owner D-83: monitoring instead of a new UI).** From the database, which is
+the truth, not from the broker: `op.periodic.job_stats` sets `op_jobs{kind,status}` (queued, running,
+paused, interrupted), `op_jobs_oldest_queued_seconds{kind}` and `op_jobs_failed_24h{kind}`; the job
+wrapper (3A) observes `op_job_duration_seconds{kind,outcome}` (a histogram, outcome = completed,
+failed, cancelled) when a job ends. Red: `tests/periodic/test_job_stats.py` (`db`): two queued jobs,
+one 20 minutes old, give `op_jobs{status="queued"} 2` and an oldest age of at least 1,200 s.
+Control: an empty table gives zeros, not missing series. The existing per-endpoint
+`http_request_duration_seconds` and the per-stage `stage_timing` histograms stay as they are.
+
 ## Lane 6B `b2/scale-out-compose`
 
-**Owns (research additions: 6B-7, 6B-8 below):** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.gpu-arbiter.yml`, new
+**Owns (research additions: 6B-7, 6B-8 below; one lane, once, in W2.3a, D-84):** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.gpu-arbiter.yml`, new
 `docker-compose.pgbouncer.yml`, `docker/test/compose.yml`, `monitoring/prometheus.yml`,
-`monitoring/alloy-config.alloy`, `monitoring/dashboards/**` (review fix R-12), the shell
+`monitoring/alloy-config.alloy`, `monitoring/dashboards/**` (review fix R-12), new `monitoring/alerts/jobs-alerts.yml` (D-83), the shell
 helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|triton|trainer|vlm|opensearch)" scripts/lib openprocessor`),
 `src/services/labeling/vlm_url_policy.py` (own-container recognition), `tests/compose/**`
 (new tests), `tests/installer/test_container_lookup_by_label.py`.
@@ -122,51 +135,60 @@ helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|tr
 | 6B-3 | scale: `docker compose up --scale api=2 --scale jobs-worker=2` renders; `jobs-beat` stays one replica (`deploy.replicas: 1`); the live harness scales `jobs-worker` instead of declaring two services | `tests/compose/test_scale_render.py` (offline `docker compose config` with the scale flags) | - |
 | 6B-4 | the GPU-arbiter overlay adds the one-process `gpu-arbiter-worker` (queue `arbiter` only) and mounts the Docker socket into it alone; `periodic-worker` never gets the socket (review fix R-20); its header rewritten (the trade-off text stays, naming the worker) | `tests/compose/test_arbiter_overlay.py`: only `gpu-arbiter-worker` mounts the socket and it consumes only `arbiter` | - |
 | 6B-5 | `docker-compose.pgbouncer.yml` (D-50, opt-in): PgBouncer in transaction mode for the pooled DSN, `OP_DB_POOLER=pgbouncer`, `OP_DB_DIRECT_HOST=postgres` kept for the beat and migration locks; the header gives the formula of [02b](02b_jobs_locking_events.md) section 8.1 for when it becomes required (R-6) | `tests/compose/test_pgbouncer_overlay.py`: the API's pooled host is the pooler and its direct host is Postgres | - |
-| 6B-6 | monitoring for replicas and the new services (review fix R-12; the static `api:8000` target sees one replica per scrape and mixes their counters): Prometheus uses `dns_sd_configs` (type A) on each scaled service name, which Docker's embedded DNS answers with every replica, so each replica is its own `instance` (chosen over `docker_sd_configs`, which would need the Docker socket in Prometheus); Alloy keeps logs by the Compose `service` label for every Python service, `postgres` and `valkey`; the dashboards select and aggregate by `service` (or `job`), never by `container` or `instance`, because a `dns_sd` `instance` is a container IP that changes when the container is recreated (RC-8), and Prometheus joins the stack's Compose network so the names resolve; an alert on Valkey `used_memory` near `maxmemory` (R-19) | `tests/compose/test_monitoring_targets.py`: every service that consumes a queue of `TaskQueues.ALL`, plus `api`, has a scrape rule and a log rule; no dashboard query selects by `container` | render test |
+| 6B-6 | monitoring for replicas and the new services (review fix R-12; the static `api:8000` target sees one replica per scrape and mixes their counters): Prometheus uses `dns_sd_configs` (type A) on each scaled service name, which Docker's embedded DNS answers with every replica, so each replica is its own `instance` (chosen over `docker_sd_configs`, which would need the Docker socket in Prometheus); Alloy keeps logs by the Compose `service` label for every Python service, `postgres` and `valkey`; the dashboards select and aggregate by `service` (or `job`), never by `container` or `instance`, because a `dns_sd` `instance` is a container IP that changes when the container is recreated (RC-8), and Prometheus joins the stack's Compose network so the names resolve; an alert on Valkey `used_memory` near `maxmemory` (R-19); owner D-83: a `jobs-queue` dashboard (queued and running by kind, oldest queued age, failures per day, duration percentiles by kind) and alerts in new `monitoring/alerts/jobs-alerts.yml`: oldest queued job older than 15 min for 5 min (`OldestQueuedJob`), more than 5 failures of one kind in 1 h (`JobFailureBurst`), `op_disk_free_ratio` below 10 % (`DiskLow`) | `tests/compose/test_monitoring_targets.py`: every service that consumes a queue of `TaskQueues.ALL`, plus `api`, has a scrape rule and a log rule; no dashboard query selects by `container` | render test |
 | 6B-7 | research GPU S-16: the `triton-server` service reads its card and NUMA node from the env the installer generates from the active serving profile (`TRITON_GPU_ID` today); a second card is a second generated service `triton-server-<slot>`, never a hand edit; the `cluster-worker` consumer of 1C-8 joins the consumers test | `tests/compose/test_triton_service_shape.py`: no fixed `container_name`, the card from the generated env; `tests/compose/test_consumers_after_b2.py` lists `cluster` | the one-card render unchanged |
+| 6B-9 | public hardening of the services 6B changes or adds (moved from 6C, D-84, so each service block is written once): `security_opt: [no-new-privileges:true]` on every service of 6B-1, 6B-4 and 6B-5, `cap_drop: [ALL]` where the service starts without capabilities (the S0 and S1 records say which need some), no new published port; no blanket change to the GPU, Triton or OpenSearch services | `tests/compose/test_new_service_hardening.py` (1C created it for the stage-1 services; 6B adds its services to the list) | the overlay render test |
 | 6B-8 | research GPU S-22 (RD-18 answered as recommended (D-78)): the DCGM exporter field list in the `monitoring` profile adds `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY`, `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_PROF_PCIE_TX_BYTES`, `DCGM_FI_PROF_PCIE_RX_BYTES`; the Grafana GPU dashboard shows them beside utilization; off in the minimal install | `tests/compose/test_dcgm_profiling_fields.py` | the monitoring render test |
 
 ## Lane ES-C `b2/embedding-readers`: every reader resolves its vector field through the registry (research embeddings plan 5.4, 8.1; approved, RD-1)
 
-**Owns:** every file of `rg -l "pe_embedding|ITEM_EMBEDDING_FIELD|DEFAULT_KNN_FIELD" src scripts` that
-6A and 6B do not own, **run on the merged W2.3b head** (W2.3a and W2.3b delete or move
-`item_scores/near_dup.py` and `curation/clustering/*`; review 3.5) (about 40; the coordinator lists both lanes' files at the cut and moves any
-shared file's change into one of them); `src/config/project_context.py` (`embedding_space(target,
-key=None)`, refreshed on `config_epoch`); `src/domain/embedding_state.py`;
-`src/services/curation/wire.py` (`embedding_states: {space_key: state}`); the search `space` and
-`fuse` parameters on the three curation search routes; `contracts/`; new
-`tests/curation/test_no_embedding_field_literals.py`.
+**Owns (W2.4):** every file of `rg -l "pe_embedding|ITEM_EMBEDDING_FIELD|DEFAULT_KNN_FIELD" src scripts`
+that is left **on the merged W2.3a head** (the W2.3a lanes converted the readers in the files they own
+through ES-A's `embedding_space()`, D-84; review 3.5); the coordinator lists the remainder at the cut
+(today's candidates: `bodies_core.py`, `ensure_fields.py`, `occ.py`, `src/config/__init__.py`,
+`src/config/curation.py` (the constant), `item_doc.py`, `diverse_order.py`, `review_tab_clauses.py`,
+`semantic_search.py`, `src/schemas/curation/search_target.py`, `src/routers/curation/search.py` and the
+`scripts/` readers); `src/domain/embedding_state.py`; `src/services/curation/wire.py`
+(`embedding_states: {space_key: state}`); the search `space` and `fuse` parameters on the three curation
+search routes; for ES-C5 `src/clients/pe_text_backends.py`, `src/clients/pe_encoder.py`,
+`src/config/retired_env.py` and `env.template` (append rules); `contracts/`; new
+`tests/curation/test_no_embedding_field_literals.py`. (`embedding_space(target, key=None)` itself is
+ES-A4's, merged in W2.2.)
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
 | ES-C1 | `ITEM_EMBEDDING_FIELD` and `DEFAULT_KNN_FIELD` deleted; every reader takes the bound project's space; the read projection excludes every registry vector field | `tests/curation/test_no_embedding_field_literals.py` fails on today's constant (the `test_embedding_state_consumers.py` pattern) | the existing search tests |
 | ES-C2 | `build_knn_query` takes the space and the query vector's `space_key`; a mismatch raises `EmbeddingSpaceMismatch` | `tests/curation/test_space_mismatch_raises.py` | a matching query returns today's hits |
 | ES-C3 | search wire: `space` (default the target's primary, echoed), `fuse` (RRF over optional spaces), `score_space`; item wire `embedding_states`; `make contracts` | contract test of the three routes | default answers unchanged |
+| ES-C4 | semantic search as one `_msearch` (moved from B4 4A-5, D-84, so `semantic_search.py` is rewritten once): the kNN query and the unembedded count in one round trip with the vector field and state field of the bound project's space ([OpenSearch multi-search](https://docs.opensearch.org/latest/api-reference/multi-search/)) | `tests/curation/test_semantic_search_msearch.py`: one client call instead of two concurrent ones | today's hits and count |
+| ES-C5 | the in-process text encoders deleted (moved from B4 4B-7, D-84; dead code under D-69; RD-31 answered as recommended (D-78)): only Triton remains in `pe_text_backends.py` and `pe_encoder.py`; `OP_PE_TEXT_BACKEND` and `OP_PE_TEXT_ONNX_PATH` retired as `removed:` entries; the 503 text in `src/routers/curation/search.py` names Triton's text model | `tests/curation/test_search_requires_triton_text.py`: with the Triton text model not ready the search refuses naming it and no `torch` import happens in the API image path; the retired variables fail at startup | search with Triton ready unchanged |
 
-## Lane `b2/frontend-spaces` (after ES-C merged)
+## Lane `b2/frontend-spaces` (folded into lane 4E, D-84)
 
-Cropwright reads `embedding_states` instead of `embedding_state` and shows the space a search used;
-no other change. Lane checks `npm run check`, lint, the touched unit tests, `npm run build`; red: a
-unit test of the item badge reading `embedding_states` (fails on the old field).
+Cropwright is edited once in B2: 4E ([03d](03d_stage4_job_families.md) section 6, W2.4, after ES-C
+merged) also reads `embedding_states` and shows the space a search used.
 
-## Lane 6C `b2/hardening` (after 6B merged; it edits every service block)
+## Lane 6C `b2/hardening` (W2.4; the private items only)
 
 - **SEC-4:** reduce the privileges of an opt-in monitoring service. **SEC-5:** pin a build input and
   review per-service container hardening. The lane reads the maintainers' notes in the owner's
   gitignored evidence directory (`artifacts_local/audit/`) and applies the right-sized option
   recorded there; commit messages, PR text, CHANGELOG and docs use only these two neutral lines.
-- **Public scope:** `security_opt: [no-new-privileges:true]` on every service B2 added or changed,
-  `cap_drop: [ALL]` where the service starts without capabilities (the S0 and S1 records say which
-  need some), no new published port. No blanket change to the GPU, Triton or OpenSearch services in
-  this batch.
-- **Red tests:** `tests/compose/test_new_service_hardening.py`; the private-note fixes carry their own
-  neutral-named tests. **Control:** the overlay render test.
+- **Public scope moved (D-84):** `no-new-privileges` and `cap_drop` are written with each service, by 1C
+  for the stage-1 services and by 6B (6B-9) for the ones it changes or adds, so 6C does not edit those
+  lines again.
+- **Files:** the coordinator checks the private items' files at the cut against ES-C, 4E and 6D and
+  against the B3 lanes then coding from `main` (section 4.0b of the master); a shared file's item waits
+  until that lane merged.
+- **Red tests:** the private-note fixes carry their own neutral-named tests. **Control:** the overlay
+  render test.
 - The naming-leak scan and a manual read of the diff before every commit.
 
 ## Lane 6D `b2/docs` (last)
 
 **Owns:** `docs/ARCHITECTURE.md`, `INSTALLATION.md`, `docs/CURATION.md`, `SECURITY.md`, `CLAUDE.md`,
-`README.md`, root `CHANGELOG.md`, `ATTRIBUTION.md`, `docs-site/**`, `docs/opensearch_schema_design.md`,
+`README.md`, `ATTRIBUTION.md` (not the root `CHANGELOG.md`: the coordinator writes each PR's entries
+once in that PR, D-84), `docs-site/**`, `docs/opensearch_schema_design.md`,
 `docs/design/curation_api_contract.md`, `docs/design/curation_design_rationale.md` section 6, the
 doc-sync notes of stage 4 (`selectable_assist_plan.md`, `sam3_full_image_detection_plan.md`,
 `auto_label_loop_plan.md`), `docs/PERFORMANCE.md` (the table skeleton for the live-run numbers).
@@ -185,7 +207,8 @@ Content: the keep-list of [03_b2_overview.md](03_b2_overview.md) section 11; the
 the Celery conventions block in `CLAUDE.md` (routes in `src/config/task_routes/`, no decorator
 `queue=`, no I/O in `worker_process_init`, no call to `revoke` (cancel and pause are database writes), restart the worker after task edits,
 one Alembic head, `project_tx` for every project query); INSTALLATION (services, secrets and their
-ownership rule, `max_connections`, backup and restore, PgBouncer overlay, multi-host with a shared
+ownership rule, `max_connections` and the deployment connection total (not the API worker count or the
+per-process pool rule, which B4 4B documents once, D-84), backup and restore, PgBouncer overlay, multi-host with a shared
 volume, the 0.6.0 upgrade, the downgrade note; review fixes R-26 and R-36: upgrades are stop-the-world
 in 0.7.0 (old and new processes never run together), the GPU-arbiter overlay is single-host, from
 v0.8.0 migrations follow expand-then-contract; messages for a queue whose profile never started stay in Valkey after the reaper fails their job
@@ -198,20 +221,24 @@ database are internal-only with required passwords, JSON-only messages, whoever 
 can enqueue work); ATTRIBUTION rows (SQLAlchemy MIT, Alembic MIT, psycopg LGPL-3.0, Celery, kombu,
 billiard BSD-3, redis-py MIT, Flower BSD-3, testcontainers Apache-2.0 (test only), Valkey BSD-3,
 PostgreSQL licence; each confirmed from the installed wheel's metadata and Trivy's licence scanner
-at pin time, [environment_and_setup](reference/environment_and_setup.md) section 7.3); CHANGELOG `[Unreleased]`: Added
-(Postgres, Valkey, Celery workers, beat, job listing routes, `Idempotency-Key`), Changed (jobs
-survive API recycling; events over SSE with resumable ids), Removed (file protocols, the
-cluster-refresh service, four index roles, `op_projects`, `op_global_configs`, the registry
-migration CLI), Breaking (new core services and secrets, `queued` status, 202 for upload extraction,
-directory ingest and person grouping, settings writes need `expected_revision`, promote `wait=true`
-gone, label operations, their undo and the batch relabel and move routes answer 202 with a job id, removed error codes and the sync route, the GPU-arbiter overlay now mounts the Docker socket
-into the new `gpu-arbiter-worker` only (RC-6) and must be re-applied by users who enabled it, carried from the original 2D-3
-with a matching INSTALLATION note), Security (the two neutral lines).
+at pin time, [environment_and_setup](reference/environment_and_setup.md) section 7.3). The B2 CHANGELOG
+`[Unreleased]` entries are written once, by the coordinator, in the PR that ships them (D-84; Haiku drafts
+them from the commits, D-85): **PR1** Added (Postgres, Valkey, Celery workers, beat, job listing routes,
+`Idempotency-Key`), Changed (events over SSE with resumable ids), Removed (four index roles, `op_projects`,
+`op_global_configs`, the registry migration CLI), Breaking (new core services and secrets, settings writes
+need `expected_revision`, removed error codes); **PR2** Changed (jobs survive API recycling), Removed (file
+protocols, the cluster-refresh service, the sync route), Breaking (`queued` status, 202 for upload
+extraction, directory ingest and person grouping, promote `wait=true` gone, label operations, their undo
+and the batch relabel and move routes answer 202 with a job id, the GPU-arbiter overlay now mounts the
+Docker socket into the new `gpu-arbiter-worker` only (RC-6) and must be re-applied by users who enabled
+it, with the matching INSTALLATION note in 6D), Security (the public hardening line); **PR3** Changed (the
+search `space` parameter and `embedding_states`), Removed (the in-process text encoders), Security (the
+two neutral lines of 6C). 6D's docs match these entries; it does not rewrite them.
 
 Red test: `.venv/bin/python scripts/docs/check_docs_vs_code.py` over every touched doc;
 `tests/test_doc_links.py`.
 
-## Stage 6 exit criteria
+## Stage 6 exit criteria (6A and 6B at the W2.3a part check; ES-C, 6C, 6D at the PR3 sweep)
 
 - every lane's tests green on the merged branch; the done-when list of
   [03_b2_overview.md](03_b2_overview.md) section 1 holds by `rg`;
@@ -219,7 +246,7 @@ Red test: `.venv/bin/python scripts/docs/check_docs_vs_code.py` over every touch
 
 ## Lane briefs
 
-Use the common block of [03a](03a_stage1_foundation.md), with: "B2 stage-6 lane <6A..6D>", "cut
-from int/b2-control-plane after stages 4 and 5 merged" (6C after 6B, 6D after 6C), this file (your
-lane). 6C adds: "Read the private notes only for SEC-4 and SEC-5; never write a security detail
+Use the common block of [03a](03a_stage1_foundation.md), with: "B2 stage-6 lane <6A..6D, ES-C>", "cut
+from int/b2-control-plane after every W2.3a family lane merged" (6A, 6B), "cut from the merged W2.3a
+head" (ES-C, 6C), "after 4E merged" (6D), this file (your lane). 6C adds: "Read the private notes only for SEC-4 and SEC-5; never write a security detail
 into a tracked file, a commit message or PR text." Compose project: none. GPU: none.

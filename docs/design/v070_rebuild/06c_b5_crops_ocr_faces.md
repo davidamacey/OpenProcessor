@@ -221,7 +221,7 @@ With the cap off, outputs byte-identical to the 5a reference.
 
 Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
 `<repo>-wt-b5c-<track>`, branch `b5c/<track>`, file `docs/design/v070_rebuild/06c_b5_crops_ocr_faces.md`,
-plus: "Parity and benchmarks per `06_b5_overview.md` against `ref-b5a`. Stack `docker compose -p
+model and effort (D-85): Sonnet, medium for every track; plus: "Parity and benchmarks per `06_b5_overview.md` against `ref-b5a`. Stack `docker compose -p
 op-b5c-bench`. GPU 0; GPU 2 only if the coordinator says the peer agreed. Never read or print
 `.env`; pass it to compose. Project slugs start with `b5c-`."
 
