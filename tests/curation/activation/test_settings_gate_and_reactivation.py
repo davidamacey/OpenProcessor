@@ -151,7 +151,7 @@ def test_legacy_settings_doc_prompt_pack_does_not_override_activation(app_client
         )
     )
     shown = c.get(SETTINGS).json()['defaults'].get('prompt_pack')
-    name = asyncio.run(_default_pack_name(c.fake_os))
+    name = asyncio.run(_default_pack_name(object()))
     served = get_vlm_labeler(name)._pack.class_system
     print('GET /settings shows', shown, '| VLM routes default name', name, '| serves', served)
     assert served == 'GOOD'

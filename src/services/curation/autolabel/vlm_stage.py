@@ -40,7 +40,6 @@ logger = get_logger(__name__)
 
 
 async def _build_vlm_context(
-    run: Run,
     guard: ClassWriteGuard,
     *,
     prompt_pack: str | None,
@@ -63,7 +62,6 @@ async def _build_vlm_context(
     if attributes:
         require_item_attributes(pack)
     endpoint = await job_endpoint(
-        run.opensearch,
         vlm=vlm,
         acknowledge_external=acknowledge_external,
         pack=pack,
@@ -223,7 +221,7 @@ async def run_vlm_stage(
     context_args: dict[str, Any],
     attributes: bool = False,
 ) -> VlmStageResult:
-    ctx, meta = await _build_vlm_context(run, guard, attributes=attributes, **context_args)
+    ctx, meta = await _build_vlm_context(guard, attributes=attributes, **context_args)
     labeled = await _label_all(
         run, ctx, unvalidated_ids, batch_size=batch_size, concurrency=concurrency, meta=meta
     )

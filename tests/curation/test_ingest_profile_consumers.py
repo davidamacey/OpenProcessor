@@ -11,8 +11,7 @@ from _class_registry_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation._ingest_profile_world import Pool, WorldOpenSearch, body
-from src.config import get_curation_config
+from curation._ingest_profile_world import Pool, body
 from src.services.curation import index_bootstrap
 
 
@@ -40,7 +39,7 @@ def labels(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> str:
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any, labels: str) -> Any:
     del labels
-    fake = WorldOpenSearch()
+    fake = object()  # the OpenSearch client: the ingest-profile routes never read it
     registry = InMemoryRegistry()
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'env_model')
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
@@ -170,10 +169,10 @@ async def test_another_workers_activation_is_seen_by_a_fresh_store(world: Any) -
     from src.services.config_store.store import reset_config_stores
     from src.services.curation.ingest_detector import refreshed_ingest_profiles
 
-    client, fake, *_ = world
+    client, *_ = world
     _activate(client, 'mine', 'birds')
     reset_config_stores()
-    resolved = await refreshed_ingest_profiles(fake)
+    resolved = await refreshed_ingest_profiles()
     assert resolved.primary.detector_model == 'birds'
 
 
@@ -310,22 +309,18 @@ async def test_a_model_a_project_runs_as_its_ingest_detector_counts_as_in_use(
 ) -> None:
     from src.services.config_store import project_usage
 
-    client, fake, pool, _ = world
+    client, _, pool, _ = world
     pool.outputs['cls'] = ['output0']
     client.post(PROFILES, json={'name': 'dual', 'body': body('birds', secondary={'model': 'cls'})})
     client.post(PROFILES, json={'name': 'idle', 'body': body('unused')})
 
-    async def one_project(read: Any) -> dict[str, Any]:
-        return {'alpha': await read(get_curation_config().configs_index)}
-
-    monkeypatch.setattr(project_usage, 'read_each_project', one_project)
     # saved but never activated: not in use
-    assert await project_usage.ingest_detector_users(fake, 'birds') == []
+    assert await project_usage.ingest_detector_users('birds') == []
     client.post(f'{PROFILES}/dual/activate', json={})
-    assert await project_usage.ingest_detector_users(fake, 'birds') == ['alpha']
-    assert await project_usage.ingest_detector_users(fake, 'cls') == ['alpha']
-    assert await project_usage.ingest_detector_users(fake, 'unused') == []
-    assert ('alpha', 'ingest detector') in await project_usage.active_detector_users(fake, 'birds')
+    assert await project_usage.ingest_detector_users('birds') == ['default']
+    assert await project_usage.ingest_detector_users('cls') == ['default']
+    assert await project_usage.ingest_detector_users('unused') == []
+    assert ('default', 'ingest detector') in await project_usage.active_detector_users('birds')
 
 
 def test_deleting_the_model_the_active_profile_names_is_refused(

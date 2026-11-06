@@ -227,6 +227,12 @@ def _stored_profiles() -> dict[str, DetectionProfile]:
     return profiles
 
 
+def registered_profile_names() -> frozenset[str]:
+    """The names of the env/file-registered profiles (no stored profiles)."""
+    ensure_env_region_profile()
+    return frozenset(_REGISTRY)
+
+
 def get_profiles() -> dict[str, DetectionProfile]:
     """Every registered profile, keyed by ``name`` -- env/file-registered
     plus every stored profile in the bound project's config-store

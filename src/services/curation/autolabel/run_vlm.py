@@ -71,7 +71,6 @@ def _parse(requested: str) -> tuple[str, int | None]:
 
 
 async def resolve_run_vlm(
-    opensearch: Any,
     vlm: Any,
     *,
     pack: Any,
@@ -82,7 +81,7 @@ async def resolve_run_vlm(
     the bound project's active endpoint."""
     requested = vlm if isinstance(vlm, str) else None
     ack = acknowledge_external is True
-    await refresh_vlm_state(opensearch)
+    await refresh_vlm_state()
     if requested is None:
         try:
             endpoint = active_vlm_endpoint()
@@ -93,7 +92,7 @@ async def resolve_run_vlm(
     else:
         name, revision = _parse(requested)
         try:
-            endpoint = await resolve_vlm_source(opensearch, name, revision)
+            endpoint = await resolve_vlm_source(name, revision)
         except VlmRegistryUnavailableError as exc:
             raise _registry_unavailable(exc) from exc
         if endpoint is None:
@@ -106,7 +105,6 @@ async def resolve_run_vlm(
 
 
 async def resolve_test_vlm(
-    opensearch: Any,
     *,
     name: str | None,
     revision: int | None,
@@ -122,9 +120,9 @@ async def resolve_test_vlm(
     ``vlm_not_configured`` when none is given and the project's VLM is off."""
     if name is not None and draft is not None:
         raise rejection(422, 'validation_failed', 'give vlm_name or vlm_draft, not both')
-    await refresh_vlm_state(opensearch)
+    await refresh_vlm_state()
     try:
-        endpoint = await resolve_vlm_source(opensearch, name, revision, draft)
+        endpoint = await resolve_vlm_source(name, revision, draft)
     except VlmRegistryUnavailableError as exc:
         raise _registry_unavailable(exc) from exc
     except VlmEndpointUnavailableError as exc:
@@ -172,7 +170,6 @@ def require_run_vlm(run: RunVlm) -> None:
 
 
 async def job_endpoint(
-    opensearch: Any,
     *,
     vlm: Any,
     acknowledge_external: Any,
@@ -197,13 +194,13 @@ async def job_endpoint(
     if resolved:
         if pinned_name is None:
             return None
-        endpoint = await resolve_vlm_source(opensearch, pinned_name, pinned_revision)
+        endpoint = await resolve_vlm_source(pinned_name, pinned_revision)
         if endpoint is None:
             msg = f'the pinned VLM endpoint {pinned_name}@{pinned_revision} no longer exists'
             raise VlmEndpointUnavailableError(msg)
         return endpoint
     return (
-        await resolve_run_vlm(opensearch, vlm, pack=pack, acknowledge_external=acknowledge_external)
+        await resolve_run_vlm(vlm, pack=pack, acknowledge_external=acknowledge_external)
     ).endpoint
 
 

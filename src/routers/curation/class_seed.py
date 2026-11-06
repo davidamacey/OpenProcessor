@@ -10,7 +10,7 @@ from src.routers.curation._class_models import (
     SeedFromDetectorResponse,
     SeedSkipped,
 )
-from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
+from src.routers.curation._common import get_class_registry, logger, router
 from src.routers.curation._error_models import (
     DetectorUnavailableResponse,
     UnknownDetectorNamesResponse,
@@ -34,7 +34,7 @@ from src.utils.class_names import class_name_deprecation_index
     },
 )
 async def seed_from_detector(
-    payload: SeedFromDetectorRequest, opensearch: OpenSearchDep
+    payload: SeedFromDetectorRequest,
 ) -> SeedFromDetectorResponse:
     """Create registry classes from the ingest detector's labels, by name.
 
@@ -47,7 +47,7 @@ async def seed_from_detector(
     list) is configured.
     """
     try:
-        profile = (await refreshed_ingest_profiles(opensearch)).primary
+        profile = (await refreshed_ingest_profiles()).primary
         labels = detector_labels(profile) if profile.detector_model else []
     except (ValueError, OSError, IngestProfileUnresolvedError) as exc:
         raise api_error(503, 'detector_unavailable', f'ingest misconfigured: {exc}') from exc

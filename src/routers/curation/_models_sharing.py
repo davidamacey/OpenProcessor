@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from src.config.curation_accessors import get_curation_config
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, logger, router
+from src.routers.curation._common import logger, router
 from src.schemas.curation.config_common import ModelSharingUser
 from src.services.config_store.project_usage import active_detector_users
 from src.services.training.promote_json import SharingRevisionConflictError, update_sharing
@@ -80,7 +80,6 @@ class ModelSharingResponse(BaseModel):
 async def set_model_sharing(
     model_name: str,
     payload: ModelSharingRequest,
-    opensearch: OpenSearchDep,
     force: Annotated[
         bool,
         Query(description='Bypass the in-use refusal when unsharing (logged)'),
@@ -105,7 +104,7 @@ async def set_model_sharing(
     # Unsharing while another project's active detector profile still
     # names this model would silently break that project's pipeline.
     try:
-        users = await active_detector_users(opensearch, model_name)
+        users = await active_detector_users(model_name)
     except Exception as exc:
         if not payload.shared and not force:
             raise api_error(

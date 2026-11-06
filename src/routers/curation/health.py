@@ -84,7 +84,7 @@ async def vlm_status(client: Any = None, *, scoped: bool = True) -> dict[str, An
         )
 
         if scoped:
-            await refresh_vlm_state(client)
+            await refresh_vlm_state()
             endpoint = active_vlm_endpoint()
         else:
             from src.services.projects.guard import make_curation_opensearch

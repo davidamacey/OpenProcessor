@@ -181,10 +181,9 @@ async def test_load_preserves_ids_revisions_and_timestamps_then_reads_back(pg_en
         kind='region_profile',
         name='loaded',
         id=config_id,
-        description='from 0.6.0',
         revisions=[
-            repo.ConfigRevisionLoad(1, {'a': 1}, t1),
-            repo.ConfigRevisionLoad(2, {'a': 2}, t2),
+            repo.ConfigRevisionLoad(1, {'a': 1}, t1, description='first'),
+            repo.ConfigRevisionLoad(2, {'a': 2}, t2, description='from 0.6.0'),
         ],
     )
     async with async_session_factory()() as session, deployment_tx(session, 'load test'):
@@ -204,7 +203,7 @@ async def test_load_preserves_ids_revisions_and_timestamps_then_reads_back(pg_en
         {'a': 2},
         'from 0.6.0',
     )
-    assert first.body == {'a': 1}
+    assert (first.body, first.description) == ({'a': 1}, 'first')
     assert current.created_at == t1
     assert current.updated_at == t2
     async with async_session_factory()() as session, deployment_tx(session, 'load test'):
@@ -215,6 +214,134 @@ async def test_load_preserves_ids_revisions_and_timestamps_then_reads_back(pg_en
 def test_the_digest_is_over_canonical_json() -> None:
     assert repo.body_sha256({'b': 1, 'a': 2}) == repo.body_sha256({'a': 2, 'b': 1})
     assert repo.body_sha256({'a': 1}) != repo.body_sha256({'a': 2})
+
+
+@pytest.mark.asyncio
+async def test_each_revision_keeps_its_own_description_and_saved_by(pg_env, project) -> None:
+    async with async_session_factory()() as session, project_tx(session, project):
+        first = await repo.save_config(
+            session,
+            project_id=project,
+            kind='prompt_pack',
+            name='described',
+            body=BODY,
+            expected_revision=None,
+            description='one',
+        )
+        await repo.save_config(
+            session,
+            project_id=project,
+            kind='prompt_pack',
+            name='described',
+            body={'prompt': 'b'},
+            expected_revision=1,
+            description='two',
+            by='alice',
+        )
+        old = await repo.get_config(
+            session, project_id=project, kind='prompt_pack', name='described', revision=1
+        )
+        now = await repo.get_config(
+            session, project_id=project, kind='prompt_pack', name='described'
+        )
+        listed = await repo.list_revisions(session, first.id)
+    assert old is not None
+    assert now is not None
+    assert (old.description, now.description) == ('one', 'two')
+    assert [(r.revision, r.description, r.created_by) for r in listed] == [
+        (1, 'one', 'system'),
+        (2, 'two', 'alice'),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_clone_tag_is_derived_from_the_joined_source(pg_env, pg, project) -> None:
+    other = make_project(pg, f'cfg-clone-{uuid.uuid4().hex[:8]}')
+    async with async_session_factory()() as session, deployment_tx(session, 'clone tag test'):
+        source = await repo.save_config(
+            session,
+            project_id=project,
+            kind='region_profile',
+            name='src',
+            body=BODY,
+            expected_revision=None,
+        )
+        clone = await repo.save_config(
+            session,
+            project_id=other,
+            kind='region_profile',
+            name='copy',
+            body=BODY,
+            expected_revision=None,
+            cloned_from_id=source.id,
+            cloned_from_revision=1,
+        )
+        plain = await repo.get_config(session, project_id=other, kind='region_profile', name='copy')
+        endpoint = await repo.save_config(
+            session,
+            project_id=None,
+            kind='vlm_endpoint',
+            name=f'ep-{uuid.uuid4().hex[:6]}',
+            body={'u': 1},
+            expected_revision=None,
+        )
+        ep_clone = await repo.save_config(
+            session,
+            project_id=None,
+            kind='vlm_endpoint',
+            name=f'epc-{uuid.uuid4().hex[:6]}',
+            body={'u': 1},
+            expected_revision=None,
+            cloned_from_id=endpoint.id,
+            cloned_from_revision=1,
+        )
+    assert plain is not None
+    assert clone.cloned_from == plain.cloned_from == f'{pg_slug(project, pg)}:src@1'
+    assert ep_clone.cloned_from == f'{endpoint.name}@1'
+    assert source.cloned_from is None
+
+
+def pg_slug(project_id: uuid.UUID, pg) -> str:
+    with psycopg.connect(pg.conninfo('super')) as conn:
+        row = conn.execute('SELECT slug FROM projects WHERE id = %s', (project_id,)).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+@pytest.mark.asyncio
+async def test_ensure_config_materializes_once_and_versions_on_a_changed_body(
+    pg_env, project
+) -> None:
+    async with async_session_factory()() as session, project_tx(session, project):
+        a = await repo.ensure_config(
+            session,
+            project_id=project,
+            kind='prompt_pack',
+            name='builtin-x',
+            body=BODY,
+            description='Built-in example',
+        )
+        again = await repo.ensure_config(
+            session,
+            project_id=project,
+            kind='prompt_pack',
+            name='builtin-x',
+            body=BODY,
+            description='Built-in example',
+        )
+        changed = await repo.ensure_config(
+            session,
+            project_id=project,
+            kind='prompt_pack',
+            name='builtin-x',
+            body={'prompt': 'new'},
+            description='Built-in example',
+        )
+        revisions = await repo.list_revisions(session, a.id)
+    assert (a.revision, again.revision, changed.revision) == (1, 1, 2)
+    assert [(r.created_by, r.description) for r in revisions] == [
+        ('system', 'Built-in example')
+    ] * 2
 
 
 async def _unused(_: AsyncSession) -> None:  # keeps the import used for typing in editors

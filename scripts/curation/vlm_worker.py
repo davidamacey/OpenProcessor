@@ -307,7 +307,7 @@ class _StreamWorker:
                 await asyncio.sleep(0.05)
                 continue
             projects = rotated(
-                await projects_with_active_vlm(self.opensearch, self.registry, args.project),
+                await projects_with_active_vlm(self.registry, args.project),
                 self.rotation,
             )
             self.rotation += 1

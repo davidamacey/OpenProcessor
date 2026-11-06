@@ -10,7 +10,6 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
@@ -28,9 +27,10 @@ def _reset_caches():
 
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from curation.query_fakes import QueryFakeOpenSearch
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeConfigOpenSearch()
+    fake_os = QueryFakeOpenSearch({})
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -132,12 +132,11 @@ def test_from_project_clone_onto_name_unknown_to_cold_target_store_is_409(
     from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
-    from src.services.config_store.index import save_config
+    from src.services.config_store.documents import save_config
     from src.services.config_store.store import reset_config_stores
     from src.services.projects import lifecycle as lifecycle_mod
     from src.services.projects.registry import ProjectRegistry
 
-    fake_os = app_client.fake_os
     other = ProjectRecord(
         slug='other',
         display_name='Other',
@@ -151,23 +150,17 @@ def test_from_project_clone_onto_name_unknown_to_cold_target_store_is_409(
     )
 
     async def _seed() -> None:
-        from src.config import get_curation_config
-
         with bind_project(other):
-            idx = get_curation_config().configs_index
             await save_config(
-                fake_os,
-                idx,
                 kind='prompt_pack',
                 name='other_pack',
                 body={**GENERIC_ITEM_PACK.to_dict(), 'name': 'other_pack'},
                 expected_revision=None,
             )
-        # target ('default', bound by the test conftest) already has 'taken' in OpenSearch,
+        # target ('default', bound by the test conftest) already has 'taken' in the database,
         # written by another worker process -> this process's store never saw it
-        idx = get_curation_config().configs_index
         await save_config(
-            fake_os, idx, kind='prompt_pack', name='taken', body=pack_body(), expected_revision=None
+            kind='prompt_pack', name='taken', body=pack_body(), expected_revision=None
         )
 
     asyncio.run(_seed())

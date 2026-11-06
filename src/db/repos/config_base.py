@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -22,12 +21,12 @@ from src.db.models.projects import DeploymentCounter, Project
 
 if TYPE_CHECKING:
     import datetime as dt
+    import uuid
     from collections.abc import Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
 GLOBAL_EPOCH_COUNTER = 'global_config_epoch'
-OFF_CONFIG_ID = uuid.UUID(int=0)
 AXIS_KIND: dict[str, str] = dict(ACTIVATION_AXES)
 DEFAULT_ACTOR = 'system'
 
@@ -75,7 +74,12 @@ class ConfigDoc:
     updated_at: dt.datetime
     updated_by: str
     cloned_from_id: uuid.UUID | None
+    cloned_from_revision: int | None
     current_revision: int
+    # ``[<project>:]<name>@<revision>`` of the document this one was cloned from, derived from the
+    # joined source (no project part for a deployment-wide source); ``None`` when not a clone or the
+    # source was since deleted or lives in a project the transaction cannot see.
+    cloned_from: str | None
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,8 @@ class RevisionInfo:
     revision: int
     created_at: dt.datetime
     created_by: str
+    description: str
+    cloned_from: str | None
 
 
 @dataclass(frozen=True)
@@ -115,6 +121,9 @@ class ActivationEvent:
     reason: str
     at: dt.datetime
     by: str
+    # The name of the document the axis moved away from; ``None`` when it had none or the
+    # document was deleted since.
+    from_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -149,6 +158,7 @@ class ConfigRevisionLoad:
     body: dict[str, Any]
     created_at: dt.datetime
     created_by: str = 'upgrade'
+    description: str = ''
 
 
 @dataclass(frozen=True)
@@ -159,9 +169,9 @@ class ConfigDocumentLoad:
     kind: str
     name: str
     revisions: Sequence[ConfigRevisionLoad]
-    description: str = ''
     id: uuid.UUID | None = None
     cloned_from_id: uuid.UUID | None = None
+    cloned_from_revision: int | None = None
     created_at: dt.datetime | None = None
     updated_at: dt.datetime | None = None
     updated_by: str = 'upgrade'
@@ -170,8 +180,9 @@ class ConfigDocumentLoad:
 @dataclass(frozen=True)
 class ActivationEventLoad:
     axis: str
-    to_config_id: uuid.UUID
-    to_revision: int
+    # ``None`` for an event that turned the axis off.
+    to_config_id: uuid.UUID | None
+    to_revision: int | None
     at: dt.datetime
     from_config_id: uuid.UUID | None = None
     from_revision: int | None = None

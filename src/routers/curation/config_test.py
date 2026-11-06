@@ -94,7 +94,6 @@ def _active_profile_stamp() -> tuple[str | None, int | None]:
 
 
 async def _resolve_pack(
-    opensearch: Any,
     *,
     name: str | None,
     revision: int | None,
@@ -119,7 +118,7 @@ async def _resolve_pack(
         return pack, None, False
     record = pack_store.build_record(name, revision=revision)
     if record is None and revision is not None:
-        record = await pack_store.get_revision_record(opensearch, name, revision)
+        record = await pack_store.get_revision_record(name, revision)
     if record is not None and revision is not None and record.revision != revision:
         record = None  # a built-in or file pack has no numbered revisions
     if record is None:
@@ -216,19 +215,17 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
             f'{len(body.crop_ids)} crop ids; at most {MAX_TEST_CROP_IDS}',
             limit=MAX_TEST_CROP_IDS,
         )
-    await get_config_store().refresh(opensearch)
+    await get_config_store().refresh()
     profile = resolve_region_profile(body.profile_name)
     if body.profile_name is not None and profile is None:
         raise api_error(422, 'unknown_profile', f'{body.profile_name!r} is not a known profile')
     pack, revision, is_draft = await _resolve_pack(
-        opensearch,
         name=body.pack_name,
         revision=body.pack_revision,
         draft=body.draft,
         profile=profile,
     )
     endpoint = await resolve_test_vlm(
-        opensearch,
         name=body.vlm_name,
         revision=body.vlm_revision,
         draft=body.vlm_draft,
@@ -327,7 +324,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
 
 
 async def _resolve_profile(
-    opensearch: Any, body: RegionTestRequest
+    body: RegionTestRequest,
 ) -> tuple[DetectionProfile, int | None, str | None, ValidationReport]:
     """``(profile, revision, stamped name, validation)`` -- the stamp name is
     ``None`` for a draft (never saved). The segmenter-prompt override is
@@ -355,7 +352,7 @@ async def _resolve_profile(
         record = profile_store.build_record(body.profile_name, revision=body.profile_revision)
         if record is None and body.profile_revision is not None:
             record = await profile_store.get_revision_record(
-                opensearch, body.profile_name, body.profile_revision
+                body.profile_name, body.profile_revision
             )
         if record is None:
             raise api_error(422, 'unknown_profile', f'{body.profile_name!r} is not a known profile')
@@ -403,20 +400,18 @@ async def test_region_profile(
     ``test_busy``. Writes nothing. Not modeled: the worker's VLM
     ``region_visible`` pre-filter, which may mark a crop ``no_region_visible``
     before any detection runs; the preview always runs the legs."""
-    await get_config_store().refresh(opensearch)
-    profile, revision, stamp_name, report = await _resolve_profile(opensearch, body)
+    await get_config_store().refresh()
+    profile, revision, stamp_name, report = await _resolve_profile(body)
     verify: VerifyContext | None = None
     verify_ref: tuple[PackTestPackRef, PackTestVlmRef] | None = None
     if body.verify:
         pack, pack_revision, pack_draft = await _resolve_pack(
-            opensearch,
             name=body.prompt_pack_name,
             revision=body.prompt_pack_revision,
             draft=body.prompt_pack_draft,
             profile=profile,
         )
         endpoint = await resolve_test_vlm(
-            opensearch,
             name=body.vlm_name,
             revision=body.vlm_revision,
             draft=body.vlm_draft,

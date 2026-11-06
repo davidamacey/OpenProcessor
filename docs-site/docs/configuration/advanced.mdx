@@ -51,7 +51,6 @@ automatically; there is no manual migration step.
 | Variable | Default | Meaning |
 |---|---|---|
 | `OP_CONFIG_POLL_S` | `5` | Seconds between checks each uvicorn worker and the detection worker make for a config activation made by another process |
-| `OP_GLOBAL_CONFIGS_INDEX` | `op_global_configs` | The one config index scoped to no project. Holds the VLM endpoint registry |
 
 Per-project prompt packs, region profiles, activations and the keymap live
 in each project's own `configs` index, not in an environment variable. See

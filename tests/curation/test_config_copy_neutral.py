@@ -17,8 +17,6 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
-
 
 # \bplate\b (not bare 'plate'): 'template'/'templates' are core, generic
 # prompt-pack vocabulary here (str.format templates) and would otherwise
@@ -42,7 +40,7 @@ def _reset_caches():
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeConfigOpenSearch()
+    fake_os = object()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )

@@ -19,7 +19,7 @@ from src.services.model_unload_guard import (
 
 
 def _projects_using(monkeypatch: pytest.MonkeyPatch, usage: dict[str, set[str]]) -> None:
-    async def _scan(_client: object) -> dict[str, frozenset[str]]:
+    async def _scan() -> dict[str, frozenset[str]]:
         return {slug: frozenset(models) for slug, models in usage.items()}
 
     monkeypatch.setattr(model_unload_guard, 'ingest_models_by_project', _scan)
@@ -32,7 +32,7 @@ async def test_a_model_another_projects_ingest_profile_runs_is_refused(
 ) -> None:
     _projects_using(monkeypatch, {'alpha': {'birds'}, 'beta': set()})
     with pytest.raises(UnloadRefusedError) as info:
-        await check_unload('birds', force=force, client=object(), own_project='beta')
+        await check_unload('birds', force=force, own_project='beta')
     assert info.value.status_code == 403
     assert 'alpha' in info.value.detail
 
@@ -42,20 +42,20 @@ async def test_the_callers_own_ingest_model_is_left_to_the_routes_own_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _projects_using(monkeypatch, {'alpha': {'birds'}})
-    assert await check_unload('birds', force=False, client=object(), own_project='alpha') is False
+    assert await check_unload('birds', force=False, own_project='alpha') is False
 
 
 @pytest.mark.asyncio
 async def test_an_unreadable_project_refuses_instead_of_allowing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _boom(_client: object) -> dict[str, frozenset[str]]:
+    async def _boom() -> dict[str, frozenset[str]]:
         msg = 'configs unreadable'
         raise ConnectionError(msg)
 
     monkeypatch.setattr(model_unload_guard, 'ingest_models_by_project', _boom)
     with pytest.raises(UnloadRefusedError) as info:
-        await check_unload('birds', force=True, client=object())
+        await check_unload('birds', force=True)
     assert info.value.status_code == 503
 
 

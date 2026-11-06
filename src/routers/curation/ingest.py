@@ -324,7 +324,7 @@ def _detector_info(profile: DetectionProfile) -> IngestDetectorInfo | None:
 
 
 @router.get('/ingest/config', response_model=IngestConfigResponse)
-async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
+async def ingest_config() -> IngestConfigResponse:
     """Typed ingest capability + limits.
 
     ``upload``/``batch``/``region_drain`` are all real config, not
@@ -345,7 +345,7 @@ async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
     cfg = get_curation_config()
     policy = await get_ingest_policy()
     try:
-        detector = _detector_info((await refreshed_ingest_profiles(opensearch)).primary)
+        detector = _detector_info((await refreshed_ingest_profiles()).primary)
     except (ValueError, IngestProfileUnresolvedError) as exc:
         raise server_error(503, 'ingest misconfigured', exc) from exc
     return IngestConfigResponse(

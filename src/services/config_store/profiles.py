@@ -13,21 +13,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.services.config_store import get_config_store
-from src.services.config_store.index import (
+from src.services.config_store import documents, get_config_store
+from src.services.config_store.documents import (
     TEMPLATE_DESCRIPTION,
     ActiveConflictError,
+    CloneSource,
     RevisionConflictError,
-    config_doc_id,
-    delete_config as _delete_config,
-    get_config_revision,
-    save_config as _save_config,
 )
-from src.services.config_store.snapshot import StoredConfig
+from src.services.config_store.stored_ops import delete_and_apply, save_and_apply
 
 
 if TYPE_CHECKING:
     from src.config import DetectionProfile
+    from src.services.config_store.documents import Activated
 
 ProfileSource = Literal['env', 'registered', 'stored', 'template']
 
@@ -174,122 +172,76 @@ def build_record(name: str, *, revision: int | None = None) -> ProfileRecord | N
     return None
 
 
-async def get_revision_record(client: Any, name: str, revision: int) -> ProfileRecord | None:
-    from opensearchpy.exceptions import NotFoundError
-
-    store = get_config_store()
-    try:
-        doc = await client.get(
-            index=store.index, id=config_doc_id('region_profile', name, revision)
-        )
-    except NotFoundError:
+async def get_revision_record(name: str, revision: int) -> ProfileRecord | None:
+    stored = await documents.get_revision(kind='region_profile', name=name, revision=revision)
+    if stored is None:
         return None
-    src = doc['_source']
     active_name, active_revision = _active_ref()
     return ProfileRecord(
         name=name,
         source='stored',
         read_only=True,
-        revision=int(src['revision']),
-        etag=f'region_profile:{name}:{src["revision"]}',
-        description=src.get('description') or '',
-        body=src.get('body') or {},
-        created_at=src.get('created_at'),
-        updated_at=src.get('updated_at'),
-        cloned_from=src.get('cloned_from'),
-        active=(active_name == name and active_revision == int(src['revision'])),
+        revision=stored.revision,
+        etag=f'region_profile:{name}:{stored.revision}',
+        description=stored.description,
+        body=stored.body,
+        created_at=stored.created_at,
+        updated_at=stored.updated_at,
+        cloned_from=stored.cloned_from,
+        active=(active_name == name and active_revision == stored.revision),
         active_revision=active_revision if active_name == name else None,
     )
 
 
-async def list_revisions(client: Any, name: str) -> list[RevisionSummary] | None:
-    store = get_config_store()
-    if name not in store.current.profiles:
+async def list_revisions(name: str) -> list[RevisionSummary] | None:
+    if name not in get_config_store().current.profiles:
         return None
-    resp = await client.search(
-        index=store.index,
-        body={
-            'size': 1000,
-            'query': {
-                'bool': {
-                    'filter': [
-                        {'term': {'doc_type': 'revision'}},
-                        {'term': {'kind': 'region_profile'}},
-                        {'term': {'name': name}},
-                    ]
-                }
-            },
-            'sort': [{'revision': {'order': 'desc'}}],
-        },
-    )
+    infos = await documents.list_revisions(kind='region_profile', name=name)
     return [
         RevisionSummary(
-            revision=int(hit['_source']['revision']),
-            saved_at=hit['_source'].get('updated_at'),
-            cloned_from=hit['_source'].get('cloned_from'),
-            description=hit['_source'].get('description') or '',
+            revision=i.revision,
+            saved_at=i.created_at.isoformat(),
+            cloned_from=i.cloned_from,
+            description=i.description,
         )
-        for hit in resp['hits']['hits']
+        for i in infos or []
     ]
 
 
 async def save_profile(
-    client: Any,
     *,
     name: str,
     body: dict[str, Any],
     expected_revision: int | None,
     description: str = '',
-    cloned_from: str | None = None,
+    cloned_from: CloneSource | None = None,
 ) -> ProfileRecord:
-    store = get_config_store()
-    doc = await _save_config(
-        client,
-        store.index,
-        kind='region_profile',
+    await save_and_apply(
+        'region_profile',
         name=name,
         body=body,
         expected_revision=expected_revision,
         description=description,
         cloned_from=cloned_from,
     )
-    new_revision = await get_config_revision(client, store.index)
-    store.apply_local(
-        config_revision=new_revision,
-        profile=StoredConfig(
-            kind='region_profile',
-            name=name,
-            revision=doc['revision'],
-            body=doc['body'],
-            description=doc['description'],
-            created_at=doc['created_at'],
-            updated_at=doc['updated_at'],
-            cloned_from=doc.get('cloned_from'),
-        ),
-    )
     record = build_record(name)
     assert record is not None
     return record
 
 
-async def delete_profile(client: Any, *, name: str, expected_revision: int) -> None:
-    store = get_config_store()
-    await _delete_config(
-        client, store.index, kind='region_profile', name=name, expected_revision=expected_revision
-    )
-    new_revision = await get_config_revision(client, store.index)
-    store.apply_local(config_revision=new_revision, profile=None, name=name)
+async def delete_profile(*, name: str, expected_revision: int) -> None:
+    await delete_and_apply('region_profile', name=name, expected_revision=expected_revision)
 
 
 async def activate_profile(
-    client: Any, *, name: str | None, revision: int | None, expected_active: dict[str, Any] | None
-) -> dict[str, Any]:
+    *, name: str | None, revision: int | None, expected_active: dict[str, Any] | None
+) -> Activated:
+    """Activate a stored profile, or an env / registered profile by name (``revision`` ``None``):
+    the latter is stored as a system revision first."""
     from src.services.config_store.store import activate_axis
 
-    store = get_config_store()
     return await activate_axis(
-        store,
-        client,
+        get_config_store(),
         axis='detection_profile',
         name=name,
         revision=revision,
@@ -297,19 +249,11 @@ async def activate_profile(
     )
 
 
-async def rollback_profile(
-    client: Any, *, expected_active: dict[str, Any] | None
-) -> dict[str, Any]:
-    # `rollback_axis` resolves the pinned
-    # body BEFORE writing the new activation doc, so a transient error
-    # aborts cleanly instead of surfacing a 500 after the write already
-    # committed. Replaces the old write-then-resolve call into
-    # ``index.rollback``.
+async def rollback_profile(*, expected_active: dict[str, Any] | None) -> Activated:
     from src.services.config_store.activation_apply import rollback_axis
 
-    store = get_config_store()
     return await rollback_axis(
-        store, client, axis='detection_profile', expected_active=expected_active
+        get_config_store(), axis='detection_profile', expected_active=expected_active
     )
 
 

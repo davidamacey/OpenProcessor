@@ -140,9 +140,7 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
     promoted_models = owned_model_names(record.slug)
     referenced_by: list[dict[str, str]] = []
     try:
-        referenced_by = await model_dependents(
-            client, record.slug, await _shared_model_users(record)
-        )
+        referenced_by = await model_dependents(record.slug, await _shared_model_users(record))
     except Exception:
         blocking.append(
             {
@@ -203,7 +201,6 @@ async def _wait_for_drain(record: ProjectRecord) -> bool:
 
 
 async def delete_project(
-    client: Any,
     *,
     slug: str,
     confirm: str | None,
@@ -274,7 +271,7 @@ async def delete_project(
     shared_models = await _shared_model_users(record)
     if shared_models and not force:
         try:
-            dependents = await model_dependents(client, record.slug, shared_models)
+            dependents = await model_dependents(record.slug, shared_models)
         except Exception as exc:
             raise rejection(
                 503,

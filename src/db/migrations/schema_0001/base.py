@@ -513,7 +513,10 @@ def create() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            "key IN ('cluster_refresh', 'region_drain', 'region_dependency_health')",
+            (
+                "key IN ('cluster_refresh', 'region_drain', 'region_dependency_health', "
+                "'vlm_external_ack', 'open_vocab_gate')"
+            ),
             name=op.f('ck_project_state_key'),
         ),
         sa.ForeignKeyConstraint(

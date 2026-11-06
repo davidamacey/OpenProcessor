@@ -357,7 +357,6 @@ async def maybe_hot_reload(
     *,
     store: ConfigStore,
     registry: ConfigStore,
-    opensearch: Any,
     holder: RuntimeHolder,
     slug: str,
     pool: Any,
@@ -388,8 +387,8 @@ async def maybe_hot_reload(
     ``slug``, or ``None`` if none has ever been built and the store has
     no active profile either (nothing to run yet).
     """
-    await store.refresh(opensearch)
-    await registry.refresh(opensearch)
+    await store.refresh()
+    await registry.refresh()
     want = current_want(store, registry)
     last = holder.get_synced_refs(slug)
     if last is not None and want == last:
@@ -419,33 +418,9 @@ async def maybe_hot_reload(
     return new_runtime
 
 
-async def upsert_project_runtime_doc(
-    client: Any,
-    *,
-    index: str,
-    hostname: str,
-    project: str,
-    runtime: RegionRuntime,
-    config_revision: int,
-) -> None:
-    """Write ``runtime:detection_worker:<hostname>`` for ``project``'s
-    configs index -- ``GET /region_profiles/active`` lists these under
-    ``applied`` (sec 4.5)."""
-    from src.services.config_store.index import upsert_runtime_doc
+async def report_applied_config(*, hostname: str, config_revision: int) -> None:
+    """Record that this worker applied ``config_revision`` of the bound project in
+    ``config_runtime_reports``: ``GET /region_profiles/active`` lists these under ``applied``."""
+    from src.services.config_store.documents import report_runtime
 
-    await upsert_runtime_doc(
-        client,
-        index,
-        process='detection_worker',
-        hostname=hostname,
-        fields={
-            'project': project,
-            'applied_config_revision': config_revision,
-            'profile': runtime.profile_ref[0],
-            'profile_revision': runtime.profile_ref[1],
-            'pack': runtime.pack_ref[0],
-            'pack_revision': runtime.pack_ref[1],
-            'vlm': runtime.vlm_endpoint.name if runtime.vlm_endpoint else None,
-            'vlm_revision': runtime.vlm_endpoint.revision if runtime.vlm_endpoint else None,
-        },
-    )
+    await report_runtime(process='detection_worker', host=hostname, config_epoch=config_revision)

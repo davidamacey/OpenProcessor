@@ -8,14 +8,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 
-from src.config import get_curation_config
+from projects.clone_flow_fakes import activate_config, active_ref, save
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import CLONEABLE_AXES, ProjectRecord, resources_for_new
 from src.core.exceptions import RequestRejectedError
-from src.services.config_store.index import activate, get_activation, save_config
 from src.services.config_store.store import get_config_store, reset_config_stores
 from src.services.projects.clone import _apply_clone
 from src.services.projects.clone_named_axis import OPEN_VOCAB, validate_named_axis_clone
@@ -53,42 +51,12 @@ def _body(prompt: str) -> dict[str, Any]:
     return {'targets': [{'prompt': prompt, 'class_name': prompt}]}
 
 
-async def _seed_source(client: Any, source: ProjectRecord) -> None:
-    with bind_project(source):
-        idx = get_curation_config().configs_index
-        first = await save_config(
-            client,
-            idx,
-            kind='open_vocab_set',
-            name='cones',
-            body=_body('cone'),
-            expected_revision=None,
-        )
-        await activate(
-            client,
-            idx,
-            axis='open_vocab',
-            name='cones',
-            revision=first['revision'],
-            expected_active=None,
-        )
-        # Saved again after activation: current diverges from the activated revision.
-        await save_config(
-            client,
-            idx,
-            kind='open_vocab_set',
-            name='cones',
-            body=_body('cup'),
-            expected_revision=first['revision'],
-        )
-        await save_config(
-            client,
-            idx,
-            kind='open_vocab_set',
-            name='other',
-            body=_body('bin'),
-            expected_revision=None,
-        )
+async def _seed_source(source: ProjectRecord) -> None:
+    first = await save(None, source, 'open_vocab_set', 'cones', _body('cone'))
+    await activate_config(None, source, 'open_vocab', 'cones', first.revision)
+    # Saved again after activation: current diverges from the activated revision.
+    await save(None, source, 'open_vocab_set', 'cones', _body('cup'), expected=first.revision)
+    await save(None, source, 'open_vocab_set', 'other', _body('bin'))
 
 
 def test_open_vocab_is_a_cloneable_axis() -> None:
@@ -97,19 +65,17 @@ def test_open_vocab_is_a_cloneable_axis() -> None:
 
 @pytest.mark.asyncio
 async def test_clone_copies_sets_and_activates_the_activated_body() -> None:
-    client = FakeConfigOpenSearch()
     source, target = _record('alpha'), _record('beta')
-    await _seed_source(client, source)
+    await _seed_source(source)
 
     await _apply_clone(
-        client, target_record=target, source=source, axes=['open_vocab'], target_activations=None
+        target_record=target, source=source, axes=['open_vocab'], target_activations=None
     )
 
+    activation = await active_ref(target, 'open_vocab')
     with bind_project(target):
-        idx = get_curation_config().configs_index
-        activation = await get_activation(client, idx, 'open_vocab')
         store = get_config_store()
-        await store.refresh(client)
+        await store.refresh()
         sets = store.current.open_vocab_sets
         pinned = store.current.active_open_vocab_body
     assert sorted(sets) == ['cones', 'other']
@@ -123,10 +89,7 @@ async def test_clone_copies_sets_and_activates_the_activated_body() -> None:
     assert (sets['other'].cloned_from or '').startswith('alpha:other@')
 
     # The source is untouched.
-    with bind_project(source):
-        src_activation = await get_activation(
-            client, get_curation_config().configs_index, 'open_vocab'
-        )
+    src_activation = await active_ref(source, 'open_vocab')
     assert src_activation is not None
     assert src_activation['revision'] == 1
 
@@ -134,35 +97,13 @@ async def test_clone_copies_sets_and_activates_the_activated_body() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize('occupied', ['set', 'activation'])
 async def test_clone_refuses_an_occupied_target(occupied: str) -> None:
-    client = FakeConfigOpenSearch()
     target = _record('delta')
-    with bind_project(target):
-        idx = get_curation_config().configs_index
-        doc = await save_config(
-            client,
-            idx,
-            kind='open_vocab_set',
-            name='mine',
-            body=_body('x'),
-            expected_revision=None,
-        )
-        if occupied == 'activation':
-            await activate(
-                client,
-                idx,
-                axis='open_vocab',
-                name='mine',
-                revision=doc['revision'],
-                expected_active=None,
-            )
-            from src.services.config_store.index import delete_config
-
-            await delete_config(
-                client, idx, kind='open_vocab_set', name='mine', expected_revision=doc['revision']
-            )
+    doc = await save(None, target, 'open_vocab_set', 'mine', _body('x'))
+    if occupied == 'activation':
+        await activate_config(None, target, 'open_vocab', 'mine', doc.revision)
     reset_config_stores()
 
     with pytest.raises(RequestRejectedError) as exc:
-        await validate_named_axis_clone(client, axis=OPEN_VOCAB, target_record=target)
+        await validate_named_axis_clone(axis=OPEN_VOCAB, target_record=target)
     assert exc.value.status_code == 409
     assert exc.value.detail['error'] == 'target_not_empty'

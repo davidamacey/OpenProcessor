@@ -215,7 +215,7 @@ async def get_curation_opensearch() -> Any:
     # An activation made through another of the API's workers must reach this
     # one within a second, not only when a config route happens to land here.
     if try_current_project() is not None:
-        await get_config_store().ensure_fresh(client)
+        await get_config_store().ensure_fresh()
     return client
 
 

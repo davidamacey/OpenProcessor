@@ -47,7 +47,13 @@ ACTIVATION_AXES: tuple[tuple[str, str], ...] = (
 )
 ACTIVATION_REASONS = ('activate', 'rollback', 'clone', 'upgrade')
 LOCATION_POLICIES = ('drop', 'store_coarse', 'store')
-PROJECT_STATE_KEYS = ('cluster_refresh', 'region_drain', 'region_dependency_health')
+PROJECT_STATE_KEYS = (
+    'cluster_refresh',
+    'region_drain',
+    'region_dependency_health',
+    'vlm_external_ack',
+    'open_vocab_gate',
+)
 
 
 def _axis_kind_pairs() -> str:

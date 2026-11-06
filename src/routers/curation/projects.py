@@ -293,7 +293,7 @@ async def delete_project(
     if dry_run:
         report = await lifecycle.dry_run_delete(client, slug=project)
         return DeleteDryRunResponse(**report)
-    record = await lifecycle.delete_project(client, slug=project, confirm=confirm, force=force)
+    record = await lifecycle.delete_project(slug=project, confirm=confirm, force=force)
 
     async def _finish() -> None:
         try:

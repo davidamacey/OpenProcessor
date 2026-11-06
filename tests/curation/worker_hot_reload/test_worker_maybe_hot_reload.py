@@ -6,10 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.worker_hot_reload._helpers import _fake_args, _record, _swap_kw
 from src.config.project_context import bind_project
-from src.services.config_store.index import activate, save_config
+from src.services.config_store.documents import activate, save_config
 from src.services.config_store.store import get_config_store
 from src.services.detection import profile_registry
 
@@ -30,7 +29,6 @@ async def test_maybe_hot_reload_never_swaps_when_activation_is_unchanged() -> No
     runtime's own always-populated ``profile_ref``/``pack_ref``."""
     from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
 
-    client = FakeConfigOpenSearch()
     project = _record('steady-project')
     profile = profile_registry.get_active_region_profile()
     assert profile is not None
@@ -46,7 +44,6 @@ async def test_maybe_hot_reload_never_swaps_when_activation_is_unchanged() -> No
         for _ in range(3):
             await maybe_hot_reload(
                 store=store,
-                opensearch=client,
                 holder=holder,
                 slug='steady-project',
                 pool=MagicMock(),
@@ -74,7 +71,6 @@ async def test_maybe_hot_reload_swaps_exactly_once_on_a_real_pinned_activation()
     (unmoved) against the last-synced refs and never saw the change."""
     from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
 
-    client = FakeConfigOpenSearch()
     project = _record('pinned-project')
     profile = profile_registry.get_active_region_profile()
     assert profile is not None
@@ -90,7 +86,6 @@ async def test_maybe_hot_reload_swaps_exactly_once_on_a_real_pinned_activation()
         # Baseline cycle: nothing activated yet.
         await maybe_hot_reload(
             store=store,
-            opensearch=client,
             holder=holder,
             slug='pinned-project',
             pool=MagicMock(),
@@ -101,24 +96,19 @@ async def test_maybe_hot_reload_swaps_exactly_once_on_a_real_pinned_activation()
             **ctors,
         )
         assert ctors['region_detector_cls'].call_count == 1  # env default, first-ever build
-
-        idx = store.index
-        doc = await save_config(
-            client, idx, kind='region_profile', name='wheel', body={}, expected_revision=None
+        doc, _ = await save_config(
+            kind='region_profile', name='wheel', body={}, expected_revision=None
         )
         await activate(
-            client,
-            idx,
             axis='detection_profile',
             name='wheel',
-            revision=doc['revision'],
+            revision=doc.revision,
             expected_active=None,
         )
 
         for _ in range(3):
             await maybe_hot_reload(
                 store=store,
-                opensearch=client,
                 holder=holder,
                 slug='pinned-project',
                 pool=MagicMock(),
@@ -131,7 +121,7 @@ async def test_maybe_hot_reload_swaps_exactly_once_on_a_real_pinned_activation()
 
         # Exactly one more build across all 3 post-activation cycles.
         assert ctors['region_detector_cls'].call_count == 2
-        assert store.current.active_profile == ('wheel', doc['revision'])
+        assert store.current.active_profile == ('wheel', doc.revision)
 
 
 @pytest.mark.asyncio
@@ -144,7 +134,6 @@ async def test_build_uses_the_activated_pack_not_the_env_default() -> None:
     from scripts.curation.worker.runtime import RuntimeHolder, maybe_hot_reload
     from src.services.labeling.vlm_prompts import active_prompt_pack, resolve_prompt_pack
 
-    client = FakeConfigOpenSearch()
     project = _record('pack-project')
     profile = profile_registry.get_active_region_profile()
     assert profile is not None
@@ -153,29 +142,23 @@ async def test_build_uses_the_activated_pack_not_the_env_default() -> None:
 
     with bind_project(project):
         store = get_config_store(mode='pinned')
-        idx = store.index
         pack_body = {**env_pack.to_dict(), 'name': 'mypack'}
-        doc = await save_config(
-            client,
-            idx,
+        doc, _ = await save_config(
             kind='prompt_pack',
             name='mypack',
             body=pack_body,
             expected_revision=None,
         )
         await activate(
-            client,
-            idx,
             axis='prompt_pack',
             name='mypack',
-            revision=doc['revision'],
+            revision=doc.revision,
             expected_active=None,
         )
 
         holder = RuntimeHolder()
         new_rt = await maybe_hot_reload(
             store=store,
-            opensearch=client,
             holder=holder,
             slug='pack-project',
             pool=MagicMock(),
@@ -188,4 +171,4 @@ async def test_build_uses_the_activated_pack_not_the_env_default() -> None:
 
     assert new_rt is not None
     assert new_rt.pack.name == 'mypack'
-    assert new_rt.pack_ref == ('mypack', doc['revision'])
+    assert new_rt.pack_ref == ('mypack', doc.revision)

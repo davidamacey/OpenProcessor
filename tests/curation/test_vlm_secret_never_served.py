@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from config_store import memory_config
 
 from curation.conftest import ACTIVE, GLOBAL_VLM, SCOPED
 from src.services.labeling.vlm_endpoints import (
@@ -36,9 +37,15 @@ def secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def _serialised(api) -> str:
-    """Every doc the store holds, as text."""
-    return json.dumps(api.fake_os._docs, default=str)
+def _serialised(_api) -> str:
+    """Everything the config repository holds (revisions, probes, markers), as text."""
+    memory = memory_config.current()
+    held = {
+        'documents': {str(d.id): d.revisions for d in memory.docs.values()},
+        'probes': {str(k): v for k, v in memory.probes.items()},
+        'state': {str(k): v for k, v in memory.state.items()},
+    }
+    return json.dumps(held, default=str)
 
 
 # ---- resolving ---------------------------------------------------------------

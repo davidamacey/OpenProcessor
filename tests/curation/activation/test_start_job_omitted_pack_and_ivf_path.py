@@ -233,7 +233,7 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
     # `ensure_fresh` (prompt_pack_resolved=True) is a no-op here -- the
     # config-store snapshot was just written < 1s ago by the activate
     # calls above -- so this items-search-only client (distinct from
-    # `c.fake_os`, which only models the configs index) never needs to
+    # `object()`, which only models the configs index) never needs to
     # answer a config-store read.
     await run_auto_label(opensearch=_FakeOpenSearch({3: ['pallet-1']}), **args)
 
