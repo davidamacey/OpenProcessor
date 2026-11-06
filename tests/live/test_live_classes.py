@@ -156,9 +156,7 @@ def test_merge_is_refused_when_it_would_relabel_frozen_holdout_rows(
     assert _classes(api_client)[FROZEN_CLASS_ID]['deprecated'] is False
 
 
-def test_merge_success_relabels_items_and_confirmed_labels(
-    api_client: Any, opensearch: Any
-) -> None:
+def test_merge_success_relabels_items(api_client: Any, opensearch: Any) -> None:
     source_ids = crop_ids_in(opensearch, 'cls7', limit=40)
     assert source_ids, 'precondition: the mergeable cohort must exist'
 
@@ -175,7 +173,6 @@ def test_merge_success_relabels_items_and_confirmed_labels(
     assert classes[MERGE_SOURCE_CLASS_ID]['deprecated'] is True
 
     refresh(opensearch, INDEXES['items'])
-    refresh(opensearch, INDEXES['labels_confirmed'])
 
     still_source = opensearch.post(
         f'/{INDEXES["items"]}/_count',
@@ -190,10 +187,6 @@ def test_merge_success_relabels_items_and_confirmed_labels(
     assert sample['class_validated'] is False
     assert sample['cluster_id'] == MERGE_TARGET_CLASS_ID
     assert sample['class_id_history'][-1]['writer'] == 'class_merge'
-
-    confirmed = get_doc(opensearch, INDEXES['labels_confirmed'], f'lbl_{source_ids[0]}')['_source']
-    assert confirmed['class_id'] == MERGE_TARGET_CLASS_ID
-    assert confirmed['class_source'] == 'class_merge'
 
 
 def test_labeling_against_a_deprecated_class_is_refused(api_client: Any, opensearch: Any) -> None:

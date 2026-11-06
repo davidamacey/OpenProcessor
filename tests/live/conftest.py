@@ -46,19 +46,9 @@ API_PREFIX = os.environ.get('VERIFY_API_PREFIX', '/curation')
 PROJECT_PREFIX = f'{API_PREFIX}/projects/{os.environ.get("VERIFY_PROJECT", "default")}'
 # The only curation routes outside a project.
 _GLOBAL_PATHS = ('/projects', '/health', '/events')
-# `default`'s indexes: OP_PROJECT_INDEX_PREFIX=verify_prj_ in the compose file.
-INDEXES = {
-    role: f'verify_prj_default__{role}'
-    for role in ('images', 'items', 'labels_confirmed', 'classes', 'configs')
-}
-# Every project folds the settings role into its configs index (src/config/projects.py,
-# shard folding), so the registry and settings documents live there.
-INDEXES['settings'] = INDEXES['configs']
-# op_global_configs belongs to no project --
-# OP_GLOBAL_CONFIGS_INDEX=verify_global_configs in the compose file --
-# but still must carry the verify_ prefix, so it goes through the same
-# static prefix assertion below as every project-scoped index.
-INDEXES['global_configs'] = 'verify_global_configs'
+# `default`'s OpenSearch indexes: OP_PROJECT_INDEX_PREFIX=verify_prj_ in the compose file. The
+# classes, configs and settings live in PostgreSQL; the tests read them through the API.
+INDEXES = {role: f'verify_prj_default__{role}' for role in ('images', 'items', 'leases')}
 
 # Ports a real deployment on this host is known to use. Hitting any of
 # them means the harness is mis-wired and must not be written to.
