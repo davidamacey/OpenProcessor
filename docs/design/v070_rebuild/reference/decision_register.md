@@ -261,7 +261,7 @@ recommendation), **dropped**, **replaced**. "Q-" = task-queue plan, "U-" = model
 | D-27 | U-J1 staging + U-J5..J8 | open | one version; U-6.2 once for Stage A and B; J5 keep `conf=0.25`; J6 keep the Triton name; J7 export batch = `max_batch_size`; J8 trainer on the same release | B3 | [04](../04_b3_ultralytics_one_version.md) |
 | D-28 | B3 pin choice rule | answered 2026-11-05 by D-82 | the latest Ultralytics release on the B3 freeze date | B3 | [04](../04_b3_ultralytics_one_version.md) |
 | D-29 | Q-J7 request fan-out | open | bulk OCC; the ingest data plane a documented `TaskGroup` exemption | B4 | [05](../05_b4_stateless_api.md) |
-| D-29a | VLM batch routes (`label_batch`, `verify_region_batch`) (new) | open | 202 + a Celery job; the bounded `TaskGroup` runs in the worker | B4 | [05](../05_b4_stateless_api.md) |
+| D-29a | VLM batch routes (`label_batch`, `verify_region_batch`) (new) | approved 2026-11-05 (owner, as recommended) | 202 + a Celery job; the bounded `TaskGroup` runs in the worker; done once by lane 4D-8 in W2.3a (D-84) | W2.3a | [05](../05_b4_stateless_api.md) |
 | D-30 | Q-J13 event transport | replaced by D-48 (2026-11-04) | events in Postgres, built in B2 stage 3 | - | [02b](../02b_jobs_locking_events.md) section 6 |
 | D-31 | Q-J6 evaluator | approved 2026-11-04 (owner decision 4) | `-Q gpu_eval -c 1`, built in B2 stage 5 | B2 | [03e](../03e_stage5_gpu_queues.md) |
 | D-32 | #439 approach | open | measure first; then a `project_create` job (202) | B4 | [05](../05_b4_stateless_api.md) |

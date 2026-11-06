@@ -6,7 +6,7 @@
 | Release | part of the single v0.7.0 release; B5 follows B4 and R-final (`07_release_acceptance.md`) runs last, after B5 (D-37 approved, [decision_register.md](reference/decision_register.md) section 6); the tag is the owner's word |
 | Depends on | B2 merged (`03_b2_overview.md`) and B3 merged (`04_b3_ultralytics_one_version.md`) for the integration branch and the sweep; track 4A codes from `main` after B2 PR2, and 4D and the privacy lane from the frozen W2.4 head (D-84, master section 4.0b); the CC-10 evidence (4A-0) before 4A-3 |
 | Decisions applied | D-13 order (approved); owner rules: no asyncio fan-out in request handlers (bulk OCC instead; the ingest data plane is the documented `TaskGroup` exemption Q-J7), no in-process or file locks for cross-process state (the last `flock` goes here), the API ends stateless, the worker count is a tuning knob only |
-| Open decisions | D-29, D-29a, D-32, D-32a, D-33 (D-30 replaced by D-48 and D-31 approved, both delivered by B2): status in [decision_register.md](reference/decision_register.md) section 6; section 9 holds the detail |
+| Open decisions | D-29, D-32, D-32a, D-33 (D-30 replaced by D-48 and D-31 approved, both delivered by B2): status in [decision_register.md](reference/decision_register.md) section 6; section 9 holds the detail |
 | Source IDs | `task_queue_plan.md` section 4e, Phase 6, Phase 7, J7, J13, J14, E26, section 2e, 2f; audit CC-7, CC-10, BA-6 (deferred), BA-8 (documented in B1); Q-D14 (remaining part); former master plan rev 4 sections 3b (event-hub and `job_lock.py` rows), 3c D14, 7.4, 7.7 (BA-6), 12 (T2 B4, T5), 15 (M15, M16), 16 (B4 row), Appendix A (A.4 #23, A.5 #6, A.7 #10, M-4) |
 | No rework (D-84, 2026-11-05) | moved out of B4 so each file is written once: the `/health` probes (to B2 1D-1), semantic search's `_msearch` (to B2 ES-C4), the in-process text encoders (to B2 ES-C5), and, if the owner answers D-29a before W2.3a, 4A-0 and 4A-3 (to B2 4D-8); the API database pool rule is written by B2 1A-6 in `src/config/api_pools.py`, which 4B-2 extends. Track 4A codes from `main` after B2 PR2 (master section 4.0b) |
 | Branches | `int/b4-stateless` from main after B2 and B3 merged; tracks `b4/bulk-occ` (4A), `b4/worker-knob` (4B), `b4/project-create` (4D), each in `<repo>-wt-b4-<track>` |
@@ -91,7 +91,7 @@ classified:
 | `services/resource_links.py` `refresh_reachability` (`gather` over service probes, in a request-spawned refresh) | curation health, global status, settings | 4A-5: a beat task writes the result to a Valkey key; the API reads it (one probe per deployment, the same answer in every worker) |
 | job and worker code (`reprocess_*`, `open_vocab_run`, `assist_loop/*`, `clustering/*`, `bulk_ingest/*`, `vlm_labeler_{combined,visibility,assist}`, `region_detector`) | Celery workers or the detection/VLM workers after B2 | not request path; CC-9 bounds landed in B2 where they mattered |
 
-### 4A-0 CC-10 evidence (first; no code change; done by B2 4D-8 instead when D-29a is answered before W2.3a)
+### 4A-0 CC-10 evidence (done by B2 4D-8: D-29a approved 2026-11-05; not a B4 task)
 
 - With a stub VLM endpoint (the live harness's `fake-vlm`, or an offline `httpx` mock transport),
   send a maximum-size `label_batch` and a maximum-size `verify_region_batch`; record the peak
@@ -127,7 +127,7 @@ classified:
   outcomes match the per-crop version on a fixture with each outcome. **Control:** the single-crop
   undo route.
 
-### 4A-3 VLM batch routes (after 4A-0; moves to B2 lane 4D as 4D-8 if the owner answers D-29a as recommended before the W2.3a cut, D-84, because 4D already edits these files; otherwise here, moving only the chunk loop and keeping 4D's call lines)
+### 4A-3 VLM batch routes (done by B2 lane 4D as 4D-8: D-29a approved 2026-11-05, D-84, because 4D already edits these files; otherwise here, moving only the chunk loop and keeping 4D's call lines)
 
 - **D-29a recommendation:** both routes return 202 with a Celery job (`op.jobs.vlm_label_batch`,
   `op.jobs.vlm_verify_region_batch`), and the chunk fan-out runs in the worker as
