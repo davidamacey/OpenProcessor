@@ -153,16 +153,18 @@ def new_task_async_engine(application_name: str | None = None) -> AsyncEngine:
 
 
 @contextmanager
-def direct_connect(role: str = 'app', application_name: str | None = None) -> Iterator[Connection]:
-    """One connection straight to the database host, never through a pooler.
+def one_off_connection(
+    role: str = 'app', application_name: str | None = None, *, direct: bool = True
+) -> Iterator[Connection]:
+    """One unpooled connection, straight to the database host unless ``direct`` is false.
 
-    For session advisory locks (the single-beat lock) and one-off checks. The connection is
-    not pooled, so closing it ends the session and releases its locks.
+    For session advisory locks (the single-beat lock, which must never meet a pooler) and
+    startup checks. Closing it ends the session and releases its locks.
     """
     settings = DatabaseSettings.from_env()
     engine = create_engine(
         database_url(
-            settings, role, direct=True, application_name=application_name or f'op-{os.getpid()}'
+            settings, role, direct=direct, application_name=application_name or f'op-{os.getpid()}'
         ),
         poolclass=pool.NullPool,
     )
@@ -198,11 +200,11 @@ async def dispose_engines() -> None:
 
 
 __all__ = [
-    'direct_connect',
     'dispose_engines',
     'dispose_inherited_engines',
     'get_async_engine',
     'get_poll_engine',
     'get_sync_engine',
     'new_task_async_engine',
+    'one_off_connection',
 ]

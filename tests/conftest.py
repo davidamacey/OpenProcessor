@@ -66,6 +66,19 @@ DEFAULT_RECORD = _EnvDefaultProjectRecord()
 
 
 @pytest.fixture(autouse=True)
+def _control_plane_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The startup gate finds every dependency up and the schema current.
+
+    The lifespan refuses to start without PostgreSQL, the queue, OpenSearch and Triton, and the
+    Docker-free suite has none of them. A test about the gate itself replaces these two names
+    again with its own probes."""
+    from src.app import startup_gate
+
+    monkeypatch.setattr(startup_gate, 'startup_probes', lambda _settings: {})
+    monkeypatch.setattr(startup_gate, 'check_control_plane', lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def _projects_data_root(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

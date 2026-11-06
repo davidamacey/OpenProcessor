@@ -120,6 +120,6 @@ def test_a_pgbouncer_deployment_turns_prepared_statements_off(pg_env) -> None:
     assert db_engine._connect_args(pooled, job_limits=False) == {'prepare_threshold': None}
 
 
-def test_direct_connect_uses_the_direct_host_and_no_pool(pg_env) -> None:
-    with db_engine.direct_connect('app') as conn:
+def test_one_off_connection_uses_the_direct_host_and_no_pool(pg_env) -> None:
+    with db_engine.one_off_connection('app') as conn:
         assert conn.execute(text('SELECT current_user')).scalar_one() == 'op_app'

@@ -138,3 +138,19 @@ async def test_a_clean_exit_commits_and_an_error_rolls_back(pg_env) -> None:
         )
     assert 'kept' in names
     assert 'lost' not in names
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('module', 'filename'),
+    [
+        ('src.tasks.runtime.gpu_app', '/srv/app/src/tasks/runtime/gpu_app.py'),
+        ('src.tasks.runtime.job_task', '/srv/app/src/tasks/runtime/job_task.py'),
+        ('src.services.projects.delete', '/srv/app/src/services/projects/delete.py'),
+    ],
+)
+async def test_the_modules_the_plan_names_may_open_the_deployment_scope(
+    pg_env, module: str, filename: str
+) -> None:
+    async with async_session_factory()() as session, _call_from(module, filename, session):
+        await session.execute(text('SELECT 1'))

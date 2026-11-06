@@ -9,11 +9,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from src.app import startup_gate
 from src.app.resources import AppResources
 from src.clients.triton_pool_core import AsyncTritonPool
 from src.config import Settings, get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.logging import get_logger
+from src.db.engine import dispose_engines
 from src.utils.cpu_pool import shutdown_cpu_executor
 from src.utils.file_read import shutdown_read_executor
 
@@ -378,6 +380,7 @@ async def _run_shutdown() -> None:
         ('shared_executor', _shutdown_shared_executor),
         ('triton_clients', TritonClientFactory.close_all),
         ('opensearch_clients', OpenSearchClientFactory.close),
+        ('database', dispose_engines),
     ]
     for step, run in steps:
         await _shutdown_step(step, run)
@@ -392,6 +395,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app: FastAPI application instance (required by API contract, not used in implementation)
 
     Startup:
+    - Refuse to start unless the database, queue, OpenSearch and Triton answer and the
+      database is at this image's schema head
     - Create shared ThreadPoolExecutor for CPU-bound tasks
     - Create AsyncTritonPool for high-throughput inference
     - Shared Triton gRPC client auto-created on first use
@@ -404,6 +409,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     - Shutdown shared ThreadPoolExecutor
     - Close all Triton gRPC connections
     - Close OpenSearch connections
+    - Dispose the database pools
     """
     settings = get_settings()
 
@@ -413,6 +419,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info('startup_begin', phase='initialization')
 
     _preflight()
+    await startup_gate.require_control_plane(settings)
     await _start_pools(settings)
     await _start_background_tasks()
     await _start_event_bus_tail()
