@@ -27,6 +27,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import structlog
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -118,13 +119,14 @@ def _claim(job_id: uuid.UUID) -> _Claim | None:
             if isinstance(result, repo.Claimed):
                 job_events.emit_state(session, result.job)
         if isinstance(result, repo.Claimed):
-            _after_claim(result.job)
+            _after_claim(head, result.job)
             return _Claim(result.job, head)
         _refused(session, head, result)
         return None
 
 
-def _after_claim(job: repo.JobRow) -> None:
+def _after_claim(head: repo.JobHead, job: repo.JobRow) -> None:
+    structlog.contextvars.bind_contextvars(project=head.project_slug, attempt=job.attempt)
     queue = hooks.queue_hooks()
     if queue is not None:
         try:
