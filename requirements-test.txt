@@ -32,7 +32,7 @@ orjson
 pydantic-settings
 
 # tests/test_pe_rearrange_shim.py compares the shim with einops.rearrange (it skips without it)
-einops>=0.8
+einops==0.8.2
 
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
 torch
@@ -53,12 +53,12 @@ simplejpeg
 
 numpy
 scipy
-pyyaml
-requests
+pyyaml==6.0.3
+requests==2.34.2
 
 # src/core/logging.py (imported by src/main.py)
-cachetools>=7.2
-structlog>=24.1.0
+cachetools==7.3.0
+structlog==26.1.0
 
 # src/clients/opensearch/client.py (imported transitively via src/clients/__init__.py
 # and src/core/dependencies.py, both on the src.main import path)
@@ -70,12 +70,12 @@ opensearch-py[async]>=2.3.0
 tritonclient[grpc,http]
 
 # src/core/metrics.py / src/services/curation/metrics.py
-prometheus-client>=0.20
+prometheus-client==0.26.0
 
 # src/services/labeling/vlm_client.py -- reached via curation router imports
-tenacity>=8.2
-httpx
-httpcore
+tenacity==9.2.1
+httpx==0.28.1
+httpcore==1.0.9
 
 # src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
 boto3
@@ -114,8 +114,8 @@ onnxconverter-common==1.16.0
 faiss-cpu
 umap-learn
 hdbscan
-joblib
-imohash
+joblib==1.6.0
+imohash==1.1.0
 onnxruntime
 pycocotools==2.0.11
-docker
+docker==7.2.0

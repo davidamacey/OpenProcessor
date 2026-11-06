@@ -152,10 +152,6 @@ _NOT_YET_DECLARED = frozenset({'pillow'})
 # test stays green at every commit and this set is empty once part A is done.
 _UNPINNED_UNTIL_PART_A_COMMIT = frozenset(
     {
-        # commit 3: pure-Python leaf libraries
-        'cachetools', 'docker', 'einops', 'ftfy', 'httpcore', 'httpx', 'imohash', 'joblib',
-        'prometheus-client', 'psutil', 'pyyaml', 'regex', 'requests', 'structlog', 'tabulate',
-        'tenacity', 'tqdm',
         # commit 4: web layer
         'fastapi', 'orjson', 'pydantic-settings', 'python-multipart', 'uvicorn',
         # commit 5: cloud and search clients
