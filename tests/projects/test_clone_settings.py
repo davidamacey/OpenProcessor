@@ -61,9 +61,9 @@ def test_clone_settings_copies_defaults() -> None:
     from src.config.project_context import bind_project
 
     with bind_project(source):
-        from src.clients.curation_opensearch.settings_doc import update_curation_settings
+        from src.services.curation.settings_store import update_curation_settings
 
-        asyncio.run(update_curation_settings(client, {'axis_x': 'value_x'}))
+        asyncio.run(update_curation_settings({'axis_x': 'value_x'}, expected_revision=0))
 
     asyncio.run(
         lifecycle.clone_settings(
@@ -72,9 +72,9 @@ def test_clone_settings_copies_defaults() -> None:
     )
 
     with bind_project(target):
-        from src.clients.curation_opensearch.settings_doc import get_curation_settings
+        from src.services.curation.settings_store import get_curation_settings
 
-        cloned = asyncio.run(get_curation_settings(client))
+        cloned = asyncio.run(get_curation_settings(fresh=True))
     assert cloned['defaults'].get('axis_x') == 'value_x'
 
 
@@ -373,18 +373,18 @@ def test_clone_settings_copies_the_ingest_policy_and_leaves_the_source_alone() -
     assert source is not None
     assert target is not None
 
-    client = SettingsFakeOpenSearch()  # index-aware, unlike the lifecycle fake
+    SettingsFakeOpenSearch()  # index-aware, unlike the lifecycle fake
     body = IngestPolicyBody(embedding=EmbeddingPolicy(mode='selected', classes=['car']))
     with bind_project(source):
-        asyncio.run(put_ingest_policy(client, body, expected_revision=0))
+        asyncio.run(put_ingest_policy(body, expected_revision=0))
 
-    asyncio.run(clone_settings_document(client, source=source, target_record=target))
+    asyncio.run(clone_settings_document(source=source, target_record=target))
 
     with bind_project(target):
-        cloned = asyncio.run(get_ingest_policy(client))
+        cloned = asyncio.run(get_ingest_policy())
     assert (cloned.embedding.mode, cloned.embedding.classes) == ('selected', ['car'])
     with bind_project(source, read_only=True):
-        assert asyncio.run(get_ingest_policy(client)).revision == 1
+        assert asyncio.run(get_ingest_policy()).revision == 1
 
 
 def test_clone_settings_copies_the_vlm_policy_and_leaves_the_source_alone() -> None:
@@ -405,19 +405,19 @@ def test_clone_settings_copies_the_vlm_policy_and_leaves_the_source_alone() -> N
     assert source is not None
     assert target is not None
 
-    client = SettingsFakeOpenSearch()
+    SettingsFakeOpenSearch()
     body = VlmPolicyBody(scope='representatives', per_cluster=2, max_crops_per_day=100)
     with bind_project(source):
-        asyncio.run(put_vlm_policy(client, body, expected_revision=0))
+        asyncio.run(put_vlm_policy(body, expected_revision=0))
 
-    asyncio.run(clone_settings_document(client, source=source, target_record=target))
+    asyncio.run(clone_settings_document(source=source, target_record=target))
 
     with bind_project(target):
-        cloned = asyncio.run(get_vlm_policy(client))
+        cloned = asyncio.run(get_vlm_policy())
     assert (cloned.scope, cloned.per_cluster, cloned.max_crops_per_day) == (
         'representatives',
         2,
         100,
     )
     with bind_project(source, read_only=True):
-        assert asyncio.run(get_vlm_policy(client)).revision == 1
+        assert asyncio.run(get_vlm_policy()).revision == 1

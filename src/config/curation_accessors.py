@@ -28,8 +28,6 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
         'labels_confirmed_index',
         'classes_index',
         'settings_index',
-        'umap_state_index',
-        'umap_viz_state_index',
         'configs_index',
         'class_registry_path',
         'export_root',
@@ -160,11 +158,3 @@ def labels_confirmed_index() -> str:
 
 def classes_index() -> str:
     return idx(IndexRole.CLASSES)
-
-
-def umap_state_index() -> str:
-    return idx(IndexRole.UMAP_STATE)
-
-
-def umap_viz_state_index() -> str:
-    return idx(IndexRole.UMAP_VIZ_STATE)

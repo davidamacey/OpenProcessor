@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from opensearchpy.exceptions import OpenSearchException
+from sqlalchemy.exc import SQLAlchemyError
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -298,17 +298,17 @@ async def _release_inactive(
             book.forget(slug)
 
 
-async def _restore_state(opensearch: Any, sched: ProjectSchedule) -> None:
+async def _restore_state(sched: ProjectSchedule) -> None:
     """Load the bound project's persisted growth state on the first poll. A project
     whose state cannot be read is not polled: acting on a guess could retrain twice."""
-    stored = await load_refresh_state(opensearch)
+    stored = await load_refresh_state()
     sched.restore(
         stored.revision,
         (stored.last_trained_count, stored.trained_before, stored.prev_count, stored.job_id),
     )
 
 
-async def _persist_state(opensearch: Any, record: Any, sched: ProjectSchedule) -> None:
+async def _persist_state(record: Any, sched: ProjectSchedule) -> None:
     """Write the schedule's persistent fields when they changed. A failed write is
     retried by the next poll (``sched.stored`` still differs)."""
     current = sched.persistent()
@@ -324,15 +324,15 @@ async def _persist_state(opensearch: Any, record: Any, sched: ProjectSchedule) -
     )
     try:
         with bind_project(record):
-            saved = await save_refresh_state(opensearch, state)
+            saved = await save_refresh_state(state)
     except PolicyConflictError:
         with bind_project(record, read_only=True):
-            sched.stored_revision = (await load_refresh_state(opensearch)).revision
+            sched.stored_revision = (await load_refresh_state()).revision
         print(
             f'[cluster-refresh] project={record.slug} state save conflicted; retrying', flush=True
         )
         return
-    except OpenSearchException as exc:
+    except SQLAlchemyError as exc:
         print(f'[cluster-refresh] project={record.slug} state save failed: {exc}', flush=True)
         return
     sched.stored_revision = saved.revision
@@ -356,11 +356,11 @@ async def _iteration(
     slug = record.slug
     try:
         with bind_project(record):
-            if not (await get_ingest_policy(opensearch)).clustering.automatic:
+            if not (await get_ingest_policy()).clustering.automatic:
                 print(f'[cluster-refresh] project={slug} automatic clustering is off', flush=True)
                 return
             if not sched.restored:
-                await _restore_state(opensearch, sched)
+                await _restore_state(sched)
             count = await _crop_count(opensearch)
             unfinished = await _unfinished_region_count(opensearch)
             recent_ingest = await _ingested_recently(opensearch, settle_s)
@@ -391,7 +391,7 @@ async def _iteration(
         now,
         policy,
     )
-    await _persist_state(opensearch, record, sched)
+    await _persist_state(record, sched)
     print(
         f'[cluster-refresh] project={slug} crops={count} unfinished_regions={unfinished} '
         f'recent_ingest={recent_ingest} '
@@ -410,7 +410,7 @@ async def _iteration(
     previous = sched.last_trained_count
     if not auto_label:
         sched.on_started(count, None, previous_trained=previous)
-        await _persist_state(opensearch, record, sched)
+        await _persist_state(record, sched)
         return
     try:
         job_id = await _start_auto_label_job(client, api, api_prefix, slug)
@@ -423,7 +423,7 @@ async def _iteration(
         )
         return
     sched.on_started(count, job_id, previous_trained=previous)
-    await _persist_state(opensearch, record, sched)
+    await _persist_state(record, sched)
     print(f'[cluster-refresh] project={slug} auto_label job {job_id} queued', flush=True)
 
 

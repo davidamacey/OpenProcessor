@@ -6,11 +6,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from opensearchpy.exceptions import NotFoundError
+from sqlalchemy.exc import SQLAlchemyError
 
-from src.config.curation_accessors import items_index, umap_viz_state_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
+from src.db.repos import settings as settings_repo
+from src.db.session import async_session_factory, project_tx
 from src.domain.embedding_state import embedded_clause
+from src.services.config_store.bound_project import bound_project_id
 from src.services.curation.embedding_viz import EMBEDDING_FIELD
 
 
@@ -30,26 +33,31 @@ class ProjectionUnavailableError(Exception):
     """The projection state could not be read (OpenSearch failure); it may exist."""
 
 
-async def _load_run_metadata(opensearch: AsyncOpenSearch) -> dict[str, Any]:
-    """The latest fit's state document.
+async def _load_run_metadata() -> dict[str, Any]:
+    """The latest fit's view state.
 
-    Raises :class:`ProjectionNotBuiltError` only when the document is
-    genuinely absent; any other read failure is
-    :class:`ProjectionUnavailableError`, so "never built" and "read failed"
-    stay distinguishable.
+    Raises :class:`ProjectionNotBuiltError` only when the project has no state row; any other
+    read failure is :class:`ProjectionUnavailableError`, so "never built" and "read failed" stay
+    distinguishable.
     """
     try:
-        resp = await opensearch.get(index=umap_viz_state_index(), id='current')
-    except NotFoundError as exc:
-        raise ProjectionNotBuiltError from exc
-    except Exception as exc:
+        project_id = await bound_project_id()
+        async with async_session_factory()() as session, project_tx(session, project_id):
+            row = await settings_repo.get_projection_state(session, project_id)
+    except SQLAlchemyError as exc:
         logger.warning('curation_umap_viz_state_read_failed', error=str(exc))
         raise ProjectionUnavailableError(str(exc)) from exc
-    meta = resp.get('_source')
-    if not meta:
+    if row is None:
         raise ProjectionNotBuiltError
-    typed: dict[str, Any] = meta
-    return typed
+    return {
+        'projection_version': f'umap_viz_v{row.projection_version}',
+        'scope': row.scope,
+        'cluster_id': row.cluster_id,
+        'n_points': row.n_points,
+        'fitted_at': row.fitted_at.isoformat(),
+        'n_components': row.n_components,
+        'metric': row.metric,
+    }
 
 
 def _point_from_hit(h: dict[str, Any]) -> dict[str, Any]:
@@ -85,7 +93,7 @@ async def get_cached_projection(
     i.e. some in-scope crops are missing/outdated coordinates, the same
     "partial coverage is visible" philosophy ``/curation/scores/coverage`` uses.
     """
-    meta = await _load_run_metadata(opensearch)
+    meta = await _load_run_metadata()
 
     scope_must: list[dict[str, Any]] = [embedded_clause(EMBEDDING_FIELD)]
     scope_must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]

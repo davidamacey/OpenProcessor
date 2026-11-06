@@ -7543,6 +7543,12 @@
             "title": "Resource Links",
             "type": "array"
           },
+          "revision": {
+            "default": 0,
+            "description": "Send it back as `expected_revision` on the next PUT; 0 while never written.",
+            "title": "Revision",
+            "type": "integer"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -7570,7 +7576,7 @@
         "type": "object"
       },
       "CurationSettingsUpdateRequest": {
-        "description": "``PUT /curation/settings`` body -- partial by design. Only the axes\npresent here are validated + merged into the stored document; axes\nalready set are left untouched (see\n``src.clients.curation_opensearch.update_curation_settings``).\n\nA value of ``null`` for an axis clears that axis's shared override\n(falls back to that endpoint's own hardcoded default / each /review\ntab's own tuned sort) -- otherwise a pinned override was permanently\nunreachable once set, since every id must be currently-advertised and\nthere was no way to express \"go back to no override\" (raised by the\nCropwright settings-UI integration pass).",
+        "description": "``PUT /curation/settings`` body -- partial by design. Only the axes\npresent here are validated + merged into the stored document; axes\nalready set are left untouched (see\n``src.services.curation.settings_store.update_curation_settings``).\n\nA value of ``null`` for an axis clears that axis's shared override\n(falls back to that endpoint's own hardcoded default / each /review\ntab's own tuned sort) -- otherwise a pinned override was permanently\nunreachable once set, since every id must be currently-advertised and\nthere was no way to express \"go back to no override\" (raised by the\nCropwright settings-UI integration pass).",
         "properties": {
           "defaults": {
             "additionalProperties": {
@@ -7585,8 +7591,17 @@
             },
             "title": "Defaults",
             "type": "object"
+          },
+          "expected_revision": {
+            "description": "The `revision` of the settings this edit was made against (GET /settings); a stale one is a 409 `revision_conflict`.",
+            "minimum": 0.0,
+            "title": "Expected Revision",
+            "type": "integer"
           }
         },
+        "required": [
+          "expected_revision"
+        ],
         "title": "CurationSettingsUpdateRequest",
         "type": "object"
       },

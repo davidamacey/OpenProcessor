@@ -23,7 +23,7 @@ async def get_policy(opensearch: OpenSearchDep) -> VlmPolicy:
     """The project's VLM scope policy; scope ``all`` (every eligible crop) when
     none was ever written."""
     await ensure_indexes(opensearch)
-    return await get_vlm_policy(opensearch)
+    return await get_vlm_policy()
 
 
 @router.put('/vlm/policy', response_model=VlmPolicy, responses={409: {'model': ApiErrorResponse}})
@@ -34,8 +34,6 @@ async def put_policy(body: VlmPolicyUpdate, opensearch: OpenSearchDep) -> VlmPol
     await ensure_indexes(opensearch)
     policy_body = VlmPolicyBody(**body.model_dump(exclude={'expected_revision'}))
     try:
-        return await put_vlm_policy(
-            opensearch, policy_body, expected_revision=body.expected_revision
-        )
+        return await put_vlm_policy(policy_body, expected_revision=body.expected_revision)
     except PolicyConflictError as exc:
         raise api_error(409, 'revision_conflict', f'vlm policy changed: {exc}') from exc

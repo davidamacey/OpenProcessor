@@ -76,7 +76,6 @@ def test_a_project_with_automatic_clustering_off_is_not_refreshed() -> None:
         record = _record('alpha')
         with bind_project(record):
             await put_ingest_policy(
-                fake,
                 IngestPolicyBody(clustering={'automatic': False}),  # type: ignore[arg-type]
                 expected_revision=0,
             )
@@ -118,7 +117,6 @@ def test_the_idle_retrain_follows_the_projects_clustering_switch(
     async def go() -> Any:
         with bind_project(_record('alpha')):
             await put_ingest_policy(
-                fake,
                 IngestPolicyBody(clustering={'automatic': automatic}),  # type: ignore[arg-type]
                 expected_revision=0,
             )

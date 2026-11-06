@@ -146,3 +146,18 @@ _.basic_auth  # scripts/flower/flowerconfig.py, an option Flower reads by name f
 _.EngineOutputContract  # src/schemas/models.py, validated by the engine export (stage 5)
 _.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
 _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)
+
+# Landed ahead of their consumers (B2 stage 2, lane 2C): the upgrade load (lane 2E) and the readers of
+# the poll and the runtime reports. Delete each entry with its caller.
+_.get_epoch  # src/db/repos/config_base.py, read by the epoch poll (2C-4)
+_.list_configs  # src/db/repos/config.py, read by the config store snapshot load (2C-1)
+_.list_probes  # src/db/repos/config.py, read by the global snapshot load (2C-3)
+_.list_runtime_reports  # src/db/repos/config.py, read by the applied-config view (2C-4)
+_.upsert_runtime_report  # src/db/repos/config.py, written by the worker runtime report (2C-4)
+_.put_deployment_setting  # src/db/repos/config.py, written by the local-VLM request and the serving activation (2C-3, 2C-7)
+_.load_activation_events  # src/db/repos/config_activations.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_vlm_endpoint  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_config_document  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_setting  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_keymap  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
+_.put_keymap  # src/db/repos/settings.py, written by the keymap service (2C-5)

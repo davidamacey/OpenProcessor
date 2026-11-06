@@ -167,11 +167,11 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
     store's activation, not this settings document -- see
     :func:`_config_store_axis_defaults`.
     """
-    from src.clients.curation_opensearch.settings_doc import get_curation_settings
+    from src.services.curation.settings_store import get_curation_settings
 
     schedule_reachability_refresh()
     await ensure_indexes(opensearch)
-    doc = await get_curation_settings(opensearch)
+    doc = await get_curation_settings(fresh=True)
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
         await _config_store_axis_defaults(opensearch)
     )
@@ -201,9 +201,24 @@ async def update_curation_settings_route(
     leaves the earlier axes applied, and two concurrent single-axis
     activations each validate against the other's old state.
     """
-    from src.clients.curation_opensearch.settings_doc import update_curation_settings
+    from src.routers.curation._api_error import api_error
+    from src.services.curation.settings_store import (
+        RevisionConflictError,
+        get_curation_settings,
+        update_curation_settings,
+    )
 
     await ensure_indexes(opensearch)
+    # Refuse a stale revision before any axis is activated: the writes below are sequential, so
+    # a conflict found only at the end would leave the earlier axes applied.
+    stored_revision = (await get_curation_settings(fresh=True))['revision']
+    if body.expected_revision != stored_revision:
+        raise api_error(
+            409,
+            'revision_conflict',
+            f'settings changed: stored revision is {stored_revision}, '
+            f'expected {body.expected_revision}',
+        )
     config_store_defaults = {k: v for k, v in body.defaults.items() if k in _CONFIG_STORE_AXES}
     settings_doc_defaults = {
         k: v for k, v in body.defaults.items() if k not in _CONFIG_STORE_AXES and k != 'vlm'
@@ -263,7 +278,12 @@ async def update_curation_settings_route(
     if vlm_plan is not None:
         await _apply_vlm(vlm_plan, opensearch)
 
-    doc = await update_curation_settings(opensearch, settings_doc_defaults)
+    try:
+        doc = await update_curation_settings(
+            settings_doc_defaults, expected_revision=body.expected_revision
+        )
+    except RevisionConflictError as exc:
+        raise api_error(409, 'revision_conflict', f'settings changed: {exc}') from exc
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
         await _config_store_axis_defaults(opensearch)
     )

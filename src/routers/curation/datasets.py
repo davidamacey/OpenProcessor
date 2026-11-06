@@ -184,7 +184,7 @@ async def _context(
         opensearch,
         registry,
         need_detector=need_detector,
-        policy=await get_ingest_policy(opensearch),
+        policy=await get_ingest_policy(),
     )
     return ImportContext(
         import_id=store.import_id,

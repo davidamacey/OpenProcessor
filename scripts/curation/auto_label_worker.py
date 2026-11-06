@@ -381,7 +381,7 @@ async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
         if loop_live():
             logger.debug('ivf auto-retrain skipped: an auto-label loop is running')
             return None
-        if not (await get_ingest_policy(opensearch)).clustering.automatic:
+        if not (await get_ingest_policy()).clustering.automatic:
             logger.debug('ivf auto-retrain skipped: automatic clustering is off')
             return None
         decision = await should_retrain_centroids(opensearch)

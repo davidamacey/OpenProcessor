@@ -13,7 +13,6 @@ Modules:
 - ``lifecycle``: ``INDEX_BODIES`` and idempotent index creation.
 - ``ensure_fields`` / ``ensure_overlay_fields`` / ``items_extra``: additive
   ``PUT _mapping`` migrations for indexes created before a field existed.
-- ``settings_doc``: the shared curation-settings document.
 - ``crops``: batched ``_mget`` for the items index.
 - ``registry``: ``ClassRegistry`` and its on-disk file models.
 

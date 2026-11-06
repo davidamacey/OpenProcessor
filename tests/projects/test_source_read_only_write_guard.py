@@ -105,12 +105,12 @@ def test_settings_defaults_source_bind_blocks_planted_write(monkeypatch) -> None
     client = FakeLifecycleOpenSearch()
     _source, target = asyncio.run(_seed(client))
 
-    async def _probing_get_settings(_client: Any) -> dict[str, Any]:
+    async def _probing_get_settings(*, fresh: bool = False) -> dict[str, Any]:
         _plant_write_probe()
         return {'defaults': {}}
 
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.settings_doc.get_curation_settings', _probing_get_settings
+        'src.services.curation.settings_store.get_curation_settings', _probing_get_settings
     )
     with pytest.raises(ProjectReadOnly):
         asyncio.run(

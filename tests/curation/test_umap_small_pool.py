@@ -68,12 +68,7 @@ def test_rebuild_fits_above_floor(monkeypatch):
         return [str(i) for i in range(n)], x
 
     monkeypatch.setattr(er, 'fetch_residual_embeddings', _fetch)
-    monkeypatch.setattr(er, '_save_umap_state_to_disk', lambda _reducer, _path: None)
-
-    async def _no_os(_client, _reducer, *, state_id):
-        return None
-
-    monkeypatch.setattr(er, '_save_umap_state_to_opensearch', _no_os)
+    monkeypatch.setattr(er, 'save_reducer', lambda _reducer, *, state_id: state_id)
     out = asyncio.run(er.umap_rebuild(object()))
     assert out['status'] == 'success'
     assert out['n_residuals'] == n

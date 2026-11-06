@@ -50,7 +50,7 @@ async def _apply_clone(
     if 'settings_defaults' in axes:
         from src.services.projects.clone_settings import clone_settings_document
 
-        await clone_settings_document(client, source=source, target_record=target_record)
+        await clone_settings_document(source=source, target_record=target_record)
 
     if 'classes' in axes:
         from src.clients.curation_opensearch.registry import get_class_registry

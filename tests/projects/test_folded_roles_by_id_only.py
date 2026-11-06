@@ -49,9 +49,6 @@ def test_settings_and_umap_viz_state_never_searched() -> None:
 
 
 def test_folded_doc_ids_never_collide_with_config_store_ids() -> None:
-    from src.clients.curation_opensearch.settings_doc import CURATION_SETTINGS_DOC_ID
-
-    assert ':' not in CURATION_SETTINGS_DOC_ID
     # The visualization-only umap-viz-state doc id ("current") is a
     # module-level literal in embedding_viz.py, checked the same way.
     umap_viz_doc_id = 'current'
@@ -68,7 +65,7 @@ def test_folded_doc_ids_never_collide_with_config_store_ids() -> None:
     ]
     for doc_id in config_store_ids:
         assert ':' in doc_id
-        assert doc_id not in (CURATION_SETTINGS_DOC_ID, umap_viz_doc_id)
+        assert doc_id != umap_viz_doc_id
 
 
 def test_lease_and_class_registry_ids_never_collide_with_config_store_ids() -> None:
