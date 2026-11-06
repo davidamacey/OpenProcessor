@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Settings save (`PUT /settings`): sends the `revision` read from `GET /settings` as `expected_revision`, adopts the new revision from the response, and on a 409 `revision_conflict` re-reads the record before reporting that nothing was saved.
 - The label-operation dialog no longer shows the "members not recorded" notice: every operation records its members, so `members_known` is gone from the wire and the UI. Label operations may have the kinds `assist_loop_propagate` and `assist_loop_review`, and their ids are UUIDs.
 - Dev dependency bumps within their ranges (the closed Dependabot group #474, regenerated with `npm update`): vite 8.3.6, vitest 5.1.0, eslint 10.14.0, eslint-plugin-svelte 3.24.0, globals 17.14.0, knip 6.44.1, svelte-check 4.7.8, tailwindcss and `@tailwindcss/vite` 4.3.4. TypeScript stays on 6.0 and jsdom on 30.x.
 - Dev dependency bumps (dependabot #433, re-applied by hand): `@sveltejs/adapter-static` 4.0.1, `@sveltejs/kit` 3.1.1, `@types/node` 26.6.6, `knip` 6.44.0; the `node` and `nginx-unprivileged` image digests (#423).

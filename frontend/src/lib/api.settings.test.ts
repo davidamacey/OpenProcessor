@@ -12,7 +12,12 @@ import {
   getScoresCoverage,
   getScoresStatus,
 } from '$lib/api_scores';
-import { getCurationSettings, getMethods, putCurationDefaults } from '$lib/api_settings';
+import {
+  getCurationSettings,
+  getMethods,
+  isSettingsRevisionConflict,
+  putCurationDefaults,
+} from '$lib/api_settings';
 
 /**
  * getMethods() rejects on failure like every other read — there is no
@@ -168,6 +173,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         defaults: { cluster: 'ivf' },
+        revision: 6,
         updated_at: '2026-09-20T23:04:39+00:00',
         updated_by: null,
         resource_links: [],
@@ -182,6 +188,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
     expect(calledUrl).toContain(`${API_PREFIX}/settings`);
     expect(result).toEqual({
       defaults: { cluster: 'ivf' },
+      revision: 6,
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
       resource_links: [],
@@ -198,14 +205,14 @@ describe('getCurationSettings / putCurationDefaults', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await putCurationDefaults({ sort: 'uncertainty_entropy' });
+    const result = await putCurationDefaults({ sort: 'uncertainty_entropy' }, 5);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(calledUrl).toContain(`${API_PREFIX}/settings`);
     expect(calledInit.method).toBe('PUT');
     expect(calledInit.body).toBe(
-      JSON.stringify({ defaults: { sort: 'uncertainty_entropy' } }),
+      JSON.stringify({ defaults: { sort: 'uncertainty_entropy' }, expected_revision: 5 }),
     );
     expect(result.defaults).toEqual({ sort: 'uncertainty_entropy' });
   });
@@ -220,11 +227,30 @@ describe('getCurationSettings / putCurationDefaults', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await putCurationDefaults({ sort: null });
+    const result = await putCurationDefaults({ sort: null }, 2);
 
     const [, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(calledInit.body).toBe(JSON.stringify({ defaults: { sort: null } }));
+    expect(calledInit.body).toBe(
+      JSON.stringify({ defaults: { sort: null }, expected_revision: 2 }),
+    );
     expect(result.defaults).toEqual({});
+  });
+
+  it('a stale expected_revision is recognised as the 409 revision_conflict', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ detail: { error: 'revision_conflict', message: 'm' } }),
+            { status: 409 },
+          ),
+        ),
+    );
+    const err = await putCurationDefaults({ sort: null }, 1).catch((e: unknown) => e);
+    expect(isSettingsRevisionConflict(err)).toBe(true);
+    expect(isSettingsRevisionConflict(new Error('x'))).toBe(false);
   });
 
   it('getCurationSettings throws on 404', async () => {

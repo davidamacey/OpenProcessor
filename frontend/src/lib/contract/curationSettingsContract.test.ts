@@ -40,6 +40,7 @@ describe('curation settings contract', () => {
   it('CurationSettingsResponse serves resource_links and no monitoring_links', () => {
     const ours = keys({
       defaults: true,
+      revision: true,
       updated_at: true,
       updated_by: true,
       resource_links: true,

@@ -81,7 +81,12 @@ beforeEach(() => {
   puts = [];
   registryServed = true;
   putResponse = () =>
-    json({ defaults: { vlm: 'cloud_ack' }, updated_at: null, updated_by: null });
+    json({
+      defaults: { vlm: 'cloud_ack' },
+      revision: 4,
+      updated_at: null,
+      updated_by: null,
+    });
   for (const s of [vlmAvailability, packsAvailability, profilesAvailability]) s.reset();
   curationSettingsStore.reset();
   strategiesStore.reset();
@@ -96,7 +101,7 @@ beforeEach(() => {
         return putResponse();
       }
       if (u.endsWith('/settings')) {
-        return json({ defaults: {}, updated_at: null, updated_by: null });
+        return json({ defaults: {}, revision: 3, updated_at: null, updated_by: null });
       }
       if (u.endsWith('/vlm/endpoints')) {
         return registryServed ? json(listFixture()) : json({ detail: 'Not Found' }, 404);
@@ -192,7 +197,10 @@ describe('/settings VLM dropdown', () => {
       .find((b) => b.textContent?.trim() === 'Confirm')!
       .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await vi.waitFor(() => expect(q('settings-save-error')).not.toBeNull());
-    expect(puts[0]!.body).toEqual({ defaults: { vlm: 'cloud_ack' } });
+    expect(puts[0]!.body).toEqual({
+      defaults: { vlm: 'cloud_ack' },
+      expected_revision: 3,
+    });
     expect(q('settings-save-error')?.textContent).toContain(
       'cloud_ack must be acknowledged on Settings → Models.',
     );

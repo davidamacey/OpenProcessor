@@ -37,12 +37,14 @@ describe('parseCurationSettings', () => {
     const docs = { ...LINK, id: 'swagger', url: '/docs', kind: 'docs', reachable: null };
     const raw = {
       defaults: { cluster: 'ivf' },
+      revision: 4,
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
       resource_links: [docs, LINK],
     };
     expect(parseCurationSettings(raw)).toEqual({
       defaults: { cluster: 'ivf' },
+      revision: 4,
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
       resource_links: [docs, LINK],
@@ -60,7 +62,13 @@ describe('parseCurationSettings', () => {
   });
 
   it('treats the first-run body as normal, not an error', () => {
-    const raw = { defaults: {}, updated_at: null, updated_by: null, resource_links: [] };
+    const raw = {
+      defaults: {},
+      revision: 0,
+      updated_at: null,
+      updated_by: null,
+      resource_links: [],
+    };
     expect(parseCurationSettings(raw)).toEqual(EMPTY_CURATION_SETTINGS);
   });
 

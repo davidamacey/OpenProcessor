@@ -289,8 +289,11 @@ describe('RegionProfileSchema', () => {
 });
 
 describe('PUT /settings for the activation-backed axes', () => {
-  it('the body is {defaults} and a null clears an axis (prompt_pack/detection_profile/vlm)', () => {
-    expect(declared('CurationSettingsUpdateRequest')).toEqual(['defaults']);
+  it('the body is {defaults, expected_revision} and a null clears an axis (prompt_pack/detection_profile/vlm)', () => {
+    expect(declared('CurationSettingsUpdateRequest')).toEqual([
+      'defaults',
+      'expected_revision',
+    ]);
     const defaults = schemas['CurationSettingsUpdateRequest']!.properties![
       'defaults'
     ] as {

@@ -36,6 +36,9 @@ export interface CurationSettings {
    * `SETTINGS_AXES`'s note on why partial PUT is what protects it).
    */
   defaults: Record<string, string>;
+  /** The record's revision: sent back as `expected_revision` on the next PUT
+   *  (0 while never written). */
+  revision: number;
   /** ISO-8601, or null when no document has ever been written. */
   updated_at: string | null;
   /**
@@ -71,6 +74,7 @@ export interface ResourceLink {
  *  is the normal first-run response, NOT an error. */
 export const EMPTY_CURATION_SETTINGS: CurationSettings = {
   defaults: {},
+  revision: 0,
   updated_at: null,
   updated_by: null,
   resource_links: [],
@@ -276,6 +280,7 @@ export function parseCurationSettings(raw: unknown): CurationSettings {
   }
   return {
     defaults,
+    revision: typeof raw.revision === 'number' ? raw.revision : 0,
     updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null,
     updated_by: typeof raw.updated_by === 'string' ? raw.updated_by : null,
     resource_links: Array.isArray(raw.resource_links)
