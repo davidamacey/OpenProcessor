@@ -5,8 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -22,18 +25,10 @@ from src.routers.curation._common_models import (
     CropMoveRequest,
 )
 from src.routers.curation._selection import selected_crop_ids
-from src.routers.curation._selection_write_models import (
-    BatchRelabelResponse,
-    SelectionDryRunResponse,
-)
-from src.services.curation.class_label import (
-    ItemLabel,
-    candidate_move_update,
-    class_label_update,
-    human_move_class_update,
-)
+from src.routers.curation._selection_write_models import LabelOpAccepted, SelectionDryRunResponse
+from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.cluster_ids import cluster_kind
-from src.services.curation.label_ops.record import recorded_relabel
+from src.services.curation.label_ops.record import start as start_relabel
 from src.services.curation.label_ops.store import NewLabelOp
 from src.utils.timeutil import now_iso
 
@@ -78,15 +73,28 @@ async def label_crop(
     return {'crop_id': crop_id, 'class_id': payload.class_id, 'class_name': class_name}
 
 
+async def _queue_relabel(
+    session: Any, ids: list[str], *, op: NewLabelOp, spec: dict[str, Any]
+) -> dict[str, Any] | JSONResponse:
+    """Queue the recorded relabel job: 202 with the job id and the ``op_id``."""
+    op_id, job = await start_relabel(session, current_project_id(), op=op, spec=spec, ids=ids)
+    return JSONResponse(
+        status_code=202,
+        content={'op_id': str(op_id), 'job_id': str(job.id), 'status': 'queued'},
+    )
+
+
 @router.put(
     '/crops/batch_label',
     response_model=None,
-    responses={200: {'model': BatchRelabelResponse | SelectionDryRunResponse}},
+    responses={
+        200: {'model': SelectionDryRunResponse},
+        202: {'model': LabelOpAccepted},
+    },
 )
 async def batch_label_crops(
-    payload: CropBatchLabelRequest,
-    opensearch: OpenSearchDep,
-) -> dict[str, Any]:
+    payload: CropBatchLabelRequest, opensearch: OpenSearchDep, session: DbSessionDep
+) -> Any:
     """Bulk label many crops with a single class_id.
 
     Each crop is updated via ``occ_update_one`` so a concurrent worker
@@ -105,27 +113,10 @@ async def batch_label_crops(
     if payload.dry_run:
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
-        return {'updated': 0, 'updated_ids': [], 'conflicts': [], 'op_id': None}
+        return {'op_id': None, 'job_id': None, 'status': None}
 
-    def _merger_for(op_id: str) -> Any:
-        def _merge(current: dict[str, Any]) -> dict[str, Any]:
-            return class_label_update(
-                current,
-                ItemLabel.human(
-                    class_id=payload.class_id,
-                    class_name=class_name,
-                    label_source=payload.label_source,
-                    writer='human:batch_label_crops',
-                    op_id=op_id,
-                ),
-            )
-
-        return _merge
-
-    # One mget page + one bulk call per page of ids, recorded as an operation
-    # so it can be undone by id.
-    return await recorded_relabel(
-        opensearch,
+    return await _queue_relabel(
+        session,
         ids,
         op=NewLabelOp(
             kind='label',
@@ -136,19 +127,27 @@ async def batch_label_crops(
             target='crop_ids' if payload.crop_ids is not None else 'selection',
             selected=len(ids),
         ),
-        merger_for=_merger_for,
+        spec={
+            'kind': 'label',
+            'class_id': payload.class_id,
+            'class_name': class_name,
+            'label_source': payload.label_source,
+            'writer': 'human:batch_label_crops',
+        },
     )
 
 
 @router.post(
     '/crops/move',
     response_model=None,
-    responses={200: {'model': BatchRelabelResponse | SelectionDryRunResponse}},
+    responses={
+        200: {'model': SelectionDryRunResponse},
+        202: {'model': LabelOpAccepted},
+    },
 )
 async def move_crops(
-    payload: CropMoveRequest,
-    opensearch: OpenSearchDep,
-) -> dict[str, Any]:
+    payload: CropMoveRequest, opensearch: OpenSearchDep, session: DbSessionDep
+) -> Any:
     """Move crops to a different cluster.
 
     * Class cluster (``cluster_id == class_id``): also a relabel — the
@@ -186,27 +185,12 @@ async def move_crops(
     if payload.dry_run:
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
-        return {'updated': 0, 'updated_ids': [], 'conflicts': [], 'op_id': None}
+        return {'op_id': None, 'job_id': None, 'status': None}
 
     target_name = target.class_name if target is not None else ''
 
-    def _merger_for(op_id: str) -> Any:
-        def _merge(current: dict[str, Any]) -> dict[str, Any]:
-            if kind == 'candidate':
-                return candidate_move_update(
-                    current, cluster_id=target_id, now=now_iso(), op_id=op_id
-                )
-            # Move-from-cluster is a class gesture ("move this to the X
-            # cluster" means "this is an X") — routed through class_label.py,
-            # the single class-label writer (tests/test_class_label_single_writer.py).
-            return human_move_class_update(
-                current, class_id=target_id, class_name=target_name, now=now_iso(), op_id=op_id
-            )
-
-        return _merge
-
-    return await recorded_relabel(
-        opensearch,
+    return await _queue_relabel(
+        session,
         ids,
         op=NewLabelOp(
             kind='move',
@@ -218,7 +202,12 @@ async def move_crops(
             target='crop_ids' if payload.crop_ids is not None else 'selection',
             selected=len(ids),
         ),
-        merger_for=_merger_for,
+        spec={
+            'kind': 'move',
+            'target_kind': 'class' if kind == 'class' else 'candidate',
+            'target_id': target_id,
+            'target_name': target_name,
+        },
     )
 
 

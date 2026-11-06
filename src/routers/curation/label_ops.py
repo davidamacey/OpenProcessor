@@ -5,10 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import Query
+from fastapi.responses import JSONResponse
 
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
+from src.routers.curation._selection_write_models import LabelOpAccepted
 from src.schemas.curation.label_ops import LabelOpList, LabelOpUndoRequest, LabelOpUndoResponse
-from src.services.curation.label_ops.undo import undo_label_op
+from src.services.curation.label_ops.undo import start as undo_start, undo_dry_run
 from src.services.curation.label_ops.views import list_label_ops
 
 
@@ -32,11 +36,13 @@ async def get_label_ops(
 
 @router.post(
     '/label_ops/{op_id}/undo',
-    response_model=LabelOpUndoResponse,
+    response_model=None,
     responses={
+        200: {'model': LabelOpUndoResponse, 'description': 'A dry run: counts, nothing written.'},
+        202: {'model': LabelOpAccepted, 'description': 'The undo pass is queued as a job.'},
         404: {'description': 'label_op_not_found: unknown, malformed or pruned operation.'},
         409: {
-            'description': 'already_undone, label_op_busy (another undo is running) or '
+            'description': 'already_undone, job_busy (another undo is running) or '
             'label_op_in_progress (the operation is still being written).'
         },
     },
@@ -46,15 +52,21 @@ async def undo_op(
     payload: LabelOpUndoRequest,
     opensearch: OpenSearchDep,
     registry: RegistryDep,
-) -> dict[str, Any]:
+    session: DbSessionDep,
+) -> Any:
     """Undo a bulk label or move, item by item, from the stored operation.
 
     An item is restored only while it still carries the operation's label and
     nothing changed it since: a later edit, an exclusion, a class merge or the
     test holdout keeps the item as it is, and a restore target whose class was
     renamed is refused (``kept_stale_class``). ``dry_run`` (the default) counts
-    what would happen and writes nothing; send ``{"dry_run": false}`` to write.
-    The whole pass runs inside this request, one paged bulk at a time.
+    what would happen and writes nothing; send ``{"dry_run": false}`` to queue
+    the pass as a ``label_undo`` job (202 with the job id and the ``op_id``).
     """
-    names = {c.class_id: c.class_name for c in (await registry.snapshot()).classes}
-    return await undo_label_op(opensearch, op_id, dry_run=payload.dry_run, registry_name=names.get)
+    if payload.dry_run:
+        names = {c.class_id: c.class_name for c in (await registry.snapshot()).classes}
+        return await undo_dry_run(opensearch, op_id, registry_name=names.get)
+    job = await undo_start(session, current_project_id(), op_id, opensearch)
+    return JSONResponse(
+        status_code=202, content=LabelOpAccepted(op_id=op_id, job_id=str(job.id)).model_dump()
+    )

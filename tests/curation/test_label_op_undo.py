@@ -9,7 +9,6 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from _lease_hold import held
 
 from curation.label_ops_env import build_env, proposal
 from src.clients.occ import OCC_BULK_PAGE_SIZE
@@ -22,7 +21,7 @@ if TYPE_CHECKING:
 
     from curation.label_ops_env import OpsEnv
 
-pytest_plugins = ['_records_world']
+pytest_plugins = ['_records_world', 'curation.jobs_a.autoqueue']
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world')]
 
 COUNT_KEYS = (
@@ -286,25 +285,29 @@ def test_a_second_undo_in_the_project_is_409_busy(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
     op = env.label('widget', crop_ids=_ids(0, 1))
+    other = env.label('gadget', crop_ids=_ids(2, 3))
     writes = env.fake.write_calls
-    with held('label_undo'):
-        resp = env.undo(op['op_id'], dry_run=False)
-        assert resp.status_code == 409
-        assert resp.json()['detail']['error'] == 'label_op_busy'
-        assert env.undo(op['op_id'], dry_run=True).status_code == 200, 'a dry run takes no lease'
+    first = env.client.post(f'{env.prefix}/label_ops/{op["op_id"]}/undo', json={'dry_run': False})
+    assert first.status_code == 202  # queued, not yet run
+    resp = env.undo(other['op_id'], dry_run=False)
+    assert resp.status_code == 409
+    assert resp.json()['detail']['error'] == 'job_busy'
+    assert env.undo(other['op_id'], dry_run=True).status_code == 200, 'a dry run takes no job'
     assert env.fake.write_calls == writes
-    assert env.undo(op['op_id'], dry_run=False).status_code == 200
+    env.end_job(first.json()['job_id'])
+    assert env.undo(other['op_id'], dry_run=False).status_code == 200
 
 
 def test_undo_while_writing_is_409_and_an_interrupted_op_is_undoable(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     env = _env(monkeypatch, tmp_path)
-    op = env.label('widget', crop_ids=_ids(0, 1))
-    with held('label_op', op['op_id']):
-        resp = env.undo(op['op_id'], dry_run=False)
-        assert resp.status_code == 409
-        assert resp.json()['detail']['error'] == 'label_op_in_progress'
+    env.label('widget', crop_ids=_ids(0, 1))
+    pending = env.queue_label('gadget', crop_ids=_ids(2, 3)).json()  # writer queued, not run
+    resp = env.undo(pending['op_id'], dry_run=False)
+    assert resp.status_code == 409
+    assert resp.json()['detail']['error'] == 'label_op_in_progress'
+    env.end_job(pending['job_id'])
 
     # A writer that dies after its first page: the record exists, half the items are tagged.
     n = 1_200
@@ -313,13 +316,14 @@ def test_undo_while_writing_is_409_and_an_interrupted_op_is_undoable(
         monkeypatch, tmp_path / 'big', {f'c{i:05d}': proposal(f'c{i:05d}') for i in range(n)}
     )
     big.fake.fail_mget_on_call = 3  # page one reads in two chunks of 256
-    resp = big.client.put(
-        f'{big.prefix}/crops/batch_label',
-        json={'class_id': big.class_ids['widget'], 'crop_ids': _ids(*range(n))},
-    )
-    assert resp.status_code == 500
+    resp = big.queue_label('widget', crop_ids=_ids(*range(n)))
+    assert resp.status_code == 202
+    with pytest.raises(RuntimeError, match='simulated crash'):
+        big._written(resp.json())
     big.fake.fail_mget_on_call = None
-    (listed,) = [o for o in big.list_ops().json()['items'] if o['count'] is None]
+    (listed,) = [
+        o for o in big.list_ops().json()['items'] if o['count'] is None and o['selected'] == n
+    ]
     assert listed['status'] == 'interrupted'
     assert listed['count'] is None
     assert listed['current'] == OCC_BULK_PAGE_SIZE

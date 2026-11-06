@@ -65,9 +65,27 @@ async def embedding_viz(ctx: JobContext) -> JobResult:
         return JobResult(await run_projection_job(ctx, await ctx.client('opensearch')))
 
 
+async def label_op(ctx: JobContext) -> JobResult:
+    from src.services.curation.label_ops.record import run_relabel
+
+    async with support.bound_project(ctx):
+        return JobResult(await run_relabel(ctx, await ctx.client('opensearch')))
+
+
+async def label_undo(ctx: JobContext) -> JobResult:
+    from src.services.classes.registry import get_class_registry
+    from src.services.curation.label_ops.undo import run_undo
+
+    async with support.bound_project(ctx):
+        names = {c.class_id: c.class_name for c in (await get_class_registry().snapshot()).classes}
+        return JobResult(await run_undo(ctx, await ctx.client('opensearch'), names.get))
+
+
 register_job('reprocess', reprocess, client_factories=FACTORIES)
 OPENSEARCH_ONLY = {'opensearch': _opensearch}
 register_job('probe', probe, client_factories=OPENSEARCH_ONLY)
 register_job('item_scores', item_scores, client_factories=OPENSEARCH_ONLY)
 register_job('selection', selection, client_factories=OPENSEARCH_ONLY)
 register_job('embedding_viz', embedding_viz, client_factories=OPENSEARCH_ONLY)
+register_job('label_op', label_op, client_factories=OPENSEARCH_ONLY)
+register_job('label_undo', label_undo, client_factories=OPENSEARCH_ONLY)

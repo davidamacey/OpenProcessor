@@ -86,7 +86,7 @@ async def list_label_ops(
         page = window[:limit]
         counts = await current_counts(opensearch, page)
         return _list_body(
-            [label_op_wire(r, counts[r.op_id], await served_status(opensearch, r)) for r in page],
+            [label_op_wire(r, counts[r.op_id], await served_status(r)) for r in page],
             limit,
             page[-1].op_id if len(window) > limit else None,
         )
@@ -99,9 +99,7 @@ async def list_label_ops(
         cursor = chunk[-1].op_id
         counts = await current_counts(opensearch, chunk)
         for record in chunk:
-            wire = label_op_wire(
-                record, counts[record.op_id], await served_status(opensearch, record)
-            )
+            wire = label_op_wire(record, counts[record.op_id], await served_status(record))
             if wire['undoable'] and len(served) <= limit:
                 served.append(wire)
     page_items = served[:limit]

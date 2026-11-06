@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
-from src.clients.job_lease import is_live
 from src.config.project_context import current_project, current_project_id
 from src.core.logging import get_logger
+from src.db.repos import jobs as jobs_repo
 from src.db.repos.records import (
     MEMBER_BATCH,
     LabelOperationMemberLoad,
@@ -27,12 +27,11 @@ from src.db.repos.records import (
     get_label_operation,
     label_operation_members,
     list_label_operations,
-    new_label_operation_id,
     prune_label_operations,
     save_label_operation,
 )
 from src.db.session import async_session_factory, project_tx
-from src.domain.job_lease import LeaseKind
+from src.domain import job_states as js
 from src.domain.label_ops import (
     LABEL_OP_ID_RE,
     LabelOpKind,
@@ -125,38 +124,39 @@ def _record(row: LabelOperationRow) -> LabelOpRecord | None:
         return None
 
 
-async def create_op(new: NewLabelOp) -> LabelOpRecord:
-    """Write the record (status ``writing``) before any item is written, and prune
-    the oldest operations beyond :data:`LABEL_OPS_KEEP`."""
+async def create_op_in(
+    session: Any, new: NewLabelOp, op_id: uuid.UUID, job_id: uuid.UUID
+) -> LabelOpRecord:
+    """Write the record (status ``writing``, owned by ``job_id``) in the caller's transaction,
+    before any item is written, and prune the oldest operations beyond :data:`LABEL_OPS_KEEP`."""
     if current_project().read_only:
         raise rejection(409, 'project_read_only', 'the project is read-only; nothing was written')
     project_id = current_project_id()
-    async with async_session_factory()() as session, project_tx(session, project_id):
-        op_id = await new_label_operation_id(session)
-        at = now_iso()
-        if new.kind == 'label':
-            assert new.class_name is not None
-            fingerprint = label_fingerprint(
-                op_id=str(op_id), writer=new.writer, at=at, class_name=new.class_name
-            )
-        else:
-            fingerprint = move_fingerprint(
-                op_id=str(op_id),
-                writer=new.writer,
-                at=at,
-                class_name=new.class_name if new.target_kind == 'class' else None,
-                cluster_id=new.target_cluster_id,
-            )
-        record = LabelOpRecord(op_id=str(op_id), at=at, fingerprint=fingerprint, **new.model_dump())
-        await create_label_operation(
-            session,
-            project_id,
-            kind=record.kind,
-            created_by=record.writer,
-            params=_params(record),
-            op_id=op_id,
+    at = now_iso()
+    if new.kind == 'label':
+        assert new.class_name is not None
+        fingerprint = label_fingerprint(
+            op_id=str(op_id), writer=new.writer, at=at, class_name=new.class_name
         )
-        await prune_label_operations(session, project_id, keep=LABEL_OPS_KEEP)
+    else:
+        fingerprint = move_fingerprint(
+            op_id=str(op_id),
+            writer=new.writer,
+            at=at,
+            class_name=new.class_name if new.target_kind == 'class' else None,
+            cluster_id=new.target_cluster_id,
+        )
+    record = LabelOpRecord(op_id=str(op_id), at=at, fingerprint=fingerprint, **new.model_dump())
+    await create_label_operation(
+        session,
+        project_id,
+        kind=record.kind,
+        created_by=record.writer,
+        params=_params(record),
+        op_id=op_id,
+        job_id=job_id,
+    )
+    await prune_label_operations(session, project_id, keep=LABEL_OPS_KEEP)
     logger.info('label_op_created', op_id=record.op_id, kind=record.kind, selected=record.selected)
     return record
 
@@ -220,17 +220,28 @@ async def member_pages(record: LabelOpRecord) -> AsyncIterator[list[LabelOperati
         after = page[-1].item_id
 
 
-async def served_status(opensearch: Any, record: LabelOpRecord) -> ServedStatus:
+async def served_status(record: LabelOpRecord) -> ServedStatus:
     """The stored status, with a dead writer or undoer shown as ``interrupted`` /
-    ``undo_interrupted``: the record still says it is working but the lease that guards the
-    work is gone (a dead holder shows up once its lease expires, up to the lease TTL)."""
-    if record.status == 'writing' and not await is_live(
-        opensearch, LeaseKind.LABEL_OP, record.op_id
-    ):
-        return 'interrupted'
-    if record.status == 'undoing' and not await is_live(opensearch, LeaseKind.LABEL_UNDO):
-        return 'undo_interrupted'
-    return record.status
+    ``undo_interrupted``: the record still says it is working but no active job owns the work."""
+    if record.status not in ('writing', 'undoing'):
+        return record.status
+    project_id = current_project_id()
+    key = parse_op_id(record.op_id)
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        if record.status == 'writing':
+            row = await get_label_operation(session, project_id, key)
+            job_id = None if row is None else row.job_id
+            job = (
+                None
+                if job_id is None
+                else await session.run_sync(lambda sync: jobs_repo.get(sync, job_id))
+            )
+            alive = job is not None and job.status in js.ACTIVE
+            return 'writing' if alive else 'interrupted'
+        undoer = await session.run_sync(
+            lambda sync: jobs_repo.active_job_id(sync, project_id, 'label_undo', '')
+        )
+    return 'undoing' if undoer is not None else 'undo_interrupted'
 
 
 __all__ = [
@@ -240,7 +251,7 @@ __all__ = [
     'NewLabelOp',
     'ServedStatus',
     'StoredStatus',
-    'create_op',
+    'create_op_in',
     'list_ops',
     'member_pages',
     'parse_op_id',

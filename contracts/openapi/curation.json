@@ -2946,32 +2946,6 @@
         "title": "BatchBoxStateTarget",
         "type": "object"
       },
-      "BatchConflict": {
-        "properties": {
-          "crop_id": {
-            "title": "Crop Id",
-            "type": "string"
-          },
-          "current_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The class_source that won the race.",
-            "title": "Current Source"
-          }
-        },
-        "required": [
-          "crop_id",
-          "current_source"
-        ],
-        "title": "BatchConflict",
-        "type": "object"
-      },
       "BatchExcludeResponse": {
         "description": "``POST /crops/batch_exclude``.",
         "properties": {
@@ -3049,50 +3023,6 @@
           }
         },
         "title": "BatchIngestSummaryResponse",
-        "type": "object"
-      },
-      "BatchRelabelResponse": {
-        "description": "``PUT /crops/batch_label`` and ``POST /crops/move``.",
-        "properties": {
-          "conflicts": {
-            "items": {
-              "$ref": "#/components/schemas/BatchConflict"
-            },
-            "title": "Conflicts",
-            "type": "array"
-          },
-          "op_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The recorded operation (undo it by id); null when nothing was selected.",
-            "title": "Op Id"
-          },
-          "updated": {
-            "title": "Updated",
-            "type": "integer"
-          },
-          "updated_ids": {
-            "description": "The items actually written (the undo target).",
-            "items": {
-              "type": "string"
-            },
-            "title": "Updated Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "updated",
-          "updated_ids",
-          "conflicts",
-          "op_id"
-        ],
-        "title": "BatchRelabelResponse",
         "type": "object"
       },
       "BatchUnexcludeResponse": {
@@ -15775,6 +15705,33 @@
           "last_undo"
         ],
         "title": "LabelOp",
+        "type": "object"
+      },
+      "LabelOpAccepted": {
+        "description": "``PUT /crops/batch_label``, ``POST /crops/move`` and a real undo: the job is queued (202).",
+        "properties": {
+          "job_id": {
+            "description": "The queued job; poll GET /jobs/{job_id}.",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "op_id": {
+            "description": "The recorded operation (undo it by id).",
+            "title": "Op Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "queued",
+            "default": "queued",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op_id",
+          "job_id"
+        ],
+        "title": "LabelOpAccepted",
         "type": "object"
       },
       "LabelOpList": {
@@ -41769,19 +41726,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BatchRelabelResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SelectionDryRunResponse"
-                    }
-                  ],
-                  "title": "Response 200 Batch Label Crops Curation Projects  Project  Crops Batch Label Put"
+                  "$ref": "#/components/schemas/SelectionDryRunResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelOpAccepted"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {
@@ -42117,19 +42076,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BatchRelabelResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SelectionDryRunResponse"
-                    }
-                  ],
-                  "title": "Response 200 Move Crops Curation Projects  Project  Crops Move Post"
+                  "$ref": "#/components/schemas/SelectionDryRunResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelOpAccepted"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {
@@ -47905,7 +47866,7 @@
     },
     "/curation/projects/{project}/label_ops/{op_id}/undo": {
       "post": {
-        "description": "Undo a bulk label or move, item by item, from the stored operation.\n\nAn item is restored only while it still carries the operation's label and\nnothing changed it since: a later edit, an exclusion, a class merge or the\ntest holdout keeps the item as it is, and a restore target whose class was\nrenamed is refused (``kept_stale_class``). ``dry_run`` (the default) counts\nwhat would happen and writes nothing; send ``{\"dry_run\": false}`` to write.\nThe whole pass runs inside this request, one paged bulk at a time.",
+        "description": "Undo a bulk label or move, item by item, from the stored operation.\n\nAn item is restored only while it still carries the operation's label and\nnothing changed it since: a later edit, an exclusion, a class merge or the\ntest holdout keeps the item as it is, and a restore target whose class was\nrenamed is refused (``kept_stale_class``). ``dry_run`` (the default) counts\nwhat would happen and writes nothing; send ``{\"dry_run\": false}`` to queue\nthe pass as a ``label_undo`` job (202 with the job id and the ``op_id``).",
         "operationId": "undo_op_curation_projects__project__label_ops__op_id__undo_post",
         "parameters": [
           {
@@ -47946,13 +47907,23 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "A dry run: counts, nothing written."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelOpAccepted"
+                }
+              }
+            },
+            "description": "The undo pass is queued as a job."
           },
           "404": {
             "description": "label_op_not_found: unknown, malformed or pruned operation."
           },
           "409": {
-            "description": "already_undone, label_op_busy (another undo is running) or label_op_in_progress (the operation is still being written)."
+            "description": "already_undone, job_busy (another undo is running) or label_op_in_progress (the operation is still being written)."
           },
           "422": {
             "content": {

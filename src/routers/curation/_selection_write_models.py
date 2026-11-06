@@ -16,20 +16,12 @@ class SelectionDryRunResponse(BaseModel):
     selected: int
 
 
-class BatchConflict(BaseModel):
-    crop_id: str
-    current_source: str | None = Field(description='The class_source that won the race.')
+class LabelOpAccepted(BaseModel):
+    """``PUT /crops/batch_label``, ``POST /crops/move`` and a real undo: the job is queued (202)."""
 
-
-class BatchRelabelResponse(BaseModel):
-    """``PUT /crops/batch_label`` and ``POST /crops/move``."""
-
-    updated: int
-    updated_ids: list[str] = Field(description='The items actually written (the undo target).')
-    conflicts: list[BatchConflict]
-    op_id: str | None = Field(
-        description='The recorded operation (undo it by id); null when nothing was selected.'
-    )
+    op_id: str = Field(description='The recorded operation (undo it by id).')
+    job_id: str = Field(description='The queued job; poll GET /jobs/{job_id}.')
+    status: Literal['queued'] = 'queued'
 
 
 class BatchExcludeResponse(BaseModel):
@@ -49,9 +41,8 @@ class BatchUnexcludeResponse(BaseModel):
 
 
 __all__ = [
-    'BatchConflict',
     'BatchExcludeResponse',
-    'BatchRelabelResponse',
     'BatchUnexcludeResponse',
+    'LabelOpAccepted',
     'SelectionDryRunResponse',
 ]
