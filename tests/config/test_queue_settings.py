@@ -8,7 +8,13 @@ import pytest
 
 from src.config.env import EnvError
 from src.config.job_kinds import KINDS
-from src.config.queue import QUEUE_PROFILE, QueueSettings, TaskQueues, broker_transport_options
+from src.config.queue import (
+    QUEUE_PROFILE,
+    QueueSettings,
+    TaskQueues,
+    broker_transport_options,
+    declared_queues,
+)
 from src.config.task_routes import ROUTES
 
 
@@ -109,3 +115,13 @@ def test_transport_options_are_a_fresh_equal_dict_each_call() -> None:
     assert first is not second
     assert first['visibility_timeout'] == 21600
     assert first['retry_on_timeout'] is False
+
+
+def test_each_queue_has_its_own_exchange_and_routing_key() -> None:
+    """A bare ``Queue('jobs')`` binds to exchange ``celery`` / key ``celery``: every queue would
+    receive a copy of every message (found by spike S1 on the Redis transport)."""
+    queues = declared_queues()
+    assert [queue.name for queue in queues] == list(TaskQueues.ALL)
+    for queue in queues:
+        assert queue.exchange.name == queue.name
+        assert queue.routing_key == queue.name

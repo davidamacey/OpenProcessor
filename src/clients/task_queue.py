@@ -18,10 +18,9 @@ from typing import TYPE_CHECKING
 
 import redis
 from celery import Celery
-from kombu import Queue
 from kombu.exceptions import KombuError
 
-from src.config.queue import QueueSettings, TaskQueues, broker_transport_options
+from src.config.queue import QueueSettings, broker_transport_options, declared_queues
 from src.config.task_routes import ROUTES, celery_task_routes
 from src.tasks.log_context import install_log_context
 
@@ -62,7 +61,7 @@ def _build_producer(broker_url: str | None) -> Celery:
     app = Celery('openprocessor-producer', set_as_current=False)
     app.config_from_object(
         {
-            'task_queues': [Queue(name) for name in TaskQueues.ALL],
+            'task_queues': declared_queues(),
             'task_create_missing_queues': False,
             'task_routes': celery_task_routes(),
             'task_serializer': 'json',

@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlsplit
 
+from kombu import Exchange, Queue
+
 from src.config.env import EnvError, env_str
 
 
@@ -105,6 +107,15 @@ class QueueSettings:
     @property
     def uses_tls(self) -> bool:
         return urlsplit(self.url).scheme == 'rediss'
+
+
+def declared_queues() -> list[Queue]:
+    """One kombu queue per name, each on its own direct exchange with its own routing key.
+
+    ``Queue('jobs')`` alone binds to the default exchange ``celery`` with key ``celery``, so a
+    message routed to one queue would be copied to every queue bound with that key.
+    """
+    return [Queue(name, Exchange(name, type='direct'), routing_key=name) for name in TaskQueues.ALL]
 
 
 def _read_secret_file(name: str, path: str) -> str:

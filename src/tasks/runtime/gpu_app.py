@@ -17,10 +17,14 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from celery import Celery
 from celery.signals import worker_process_init, worker_ready
-from kombu import Queue
 
 from src.config.job_kinds import KIND_BY_TASK
-from src.config.queue import NON_JOB_QUEUES, QueueSettings, TaskQueues, broker_transport_options
+from src.config.queue import (
+    NON_JOB_QUEUES,
+    QueueSettings,
+    broker_transport_options,
+    declared_queues,
+)
 from src.config.task_routes import ROUTES, celery_task_routes
 
 
@@ -37,7 +41,7 @@ def static_config(include: Sequence[str]) -> dict[str, Any]:
     """Every setting that does not need the environment."""
     return {
         'include': list(include),
-        'task_queues': [Queue(name) for name in TaskQueues.ALL],
+        'task_queues': declared_queues(),
         'task_create_missing_queues': False,
         'task_routes': celery_task_routes(),
         'task_serializer': 'json',
