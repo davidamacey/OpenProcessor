@@ -8,7 +8,8 @@ losing it. ``set_config(..., true)`` is transaction-local, so a pooled connectio
 a binding to the next request. A session that opens a transaction outside any helper has no
 scope and PostgreSQL raises ``scope_not_set`` on the first protected statement.
 
-``deployment_tx`` sees every project and is restricted to the modules in
+``deployment_tx`` sees every project and ``core_tx`` sees the rows that belong to no project
+(core faces, core near-duplicates, core jobs); both are restricted to the modules in
 ``src.db.scope_allowlist``.
 """
 
@@ -34,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.db.engine import get_async_engine, get_sync_engine
-from src.db.scope_allowlist import DEPLOYMENT_TX_MODULES
+from src.db.scope_allowlist import CORE_TX_MODULES, DEPLOYMENT_TX_MODULES
 
 
 if TYPE_CHECKING:
@@ -176,6 +177,21 @@ def sync_deployment_tx(session: Session, reason: str) -> AbstractContextManager[
     return _scoped_sync(session, Scope('deployment'))
 
 
+def core_tx(session: AsyncSession, reason: str) -> AbstractAsyncContextManager[AsyncSession]:
+    """A transaction over the rows that belong to no project. Allowed only to listed modules."""
+    _require(CORE_TX_MODULES, 'core_tx')
+    if not reason.strip():
+        raise ScopeError('core_tx needs a reason')
+    return _scoped(session, Scope('core'))
+
+
+def sync_core_tx(session: Session, reason: str) -> AbstractContextManager[Session]:
+    _require(CORE_TX_MODULES, 'sync_core_tx')
+    if not reason.strip():
+        raise ScopeError('core_tx needs a reason')
+    return _scoped_sync(session, Scope('core'))
+
+
 def async_session_factory() -> async_sessionmaker[AsyncSession]:
     """Sessions over the process's API engine. ``expire_on_commit=False`` so an attribute read
     after commit never does implicit I/O."""
@@ -192,8 +208,10 @@ __all__ = [
     'ScopeError',
     'ScopeNotAllowedError',
     'async_session_factory',
+    'core_tx',
     'deployment_tx',
     'project_tx',
+    'sync_core_tx',
     'sync_deployment_tx',
     'sync_project_tx',
     'sync_session_factory',

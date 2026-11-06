@@ -54,10 +54,15 @@ CHILD_POLICY_TABLES: dict[str, tuple[str, str, str, str]] = {
     'vlm_endpoint_probes': ('config_id', 'config_documents', 'id', 'project_id'),
 }
 
+# Rows with no project (core faces, core jobs and their events) belong to the core scope.
+NULLABLE_PROJECT_TABLES = frozenset({'jobs', 'events', 'config_documents', 'models'})
+
 SCOPE_FUNCTIONS = (
     'op_scope_project()',
     'op_scope_is_deployment()',
+    'op_scope_is_core()',
     'op_scope_allows(uuid)',
+    'op_project_delete_allows(uuid)',
     'op_model_project(uuid)',
 )
 
@@ -71,6 +76,7 @@ _SCOPE_FUNCTIONS_SQL = (
         CASE current_setting('op.scope', true)
           WHEN 'project'    THEN RETURN nullif(current_setting('op.project_id', true), '')::uuid;
           WHEN 'deployment' THEN RETURN NULL;
+          WHEN 'core'       THEN RETURN NULL;
           ELSE RAISE EXCEPTION 'scope_not_set' USING ERRCODE = 'insufficient_privilege';
         END CASE;
       END $$
@@ -81,9 +87,24 @@ _SCOPE_FUNCTIONS_SQL = (
       SELECT coalesce(current_setting('op.scope', true) = 'deployment', false) $$
     """,
     """
+    CREATE FUNCTION op_scope_is_core() RETURNS boolean
+      LANGUAGE sql STABLE AS $$
+      SELECT coalesce(current_setting('op.scope', true) = 'core', false) $$
+    """,
+    """
     CREATE FUNCTION op_scope_allows(pid uuid) RETURNS boolean
       LANGUAGE sql STABLE AS $$
-      SELECT op_scope_is_deployment() OR pid = op_scope_project() $$
+      SELECT op_scope_is_deployment() OR pid = op_scope_project()
+             OR (pid IS NULL AND op_scope_is_core()) $$
+    """,
+    # True only inside the project_delete job's own transaction for a project already marked
+    # deleting. The status is what a forged setting cannot fake: every app process is one role.
+    """
+    CREATE FUNCTION op_project_delete_allows(pid uuid) RETURNS boolean
+      LANGUAGE sql STABLE AS $$
+      SELECT pid IS NOT NULL
+        AND coalesce(current_setting('op.project_delete', true), '') = pid::text
+        AND EXISTS (SELECT 1 FROM projects p WHERE p.id = pid AND p.status = 'deleting') $$
     """,
     # Reads models past row-level security, so the policies of model_shares and model_engines can
     # name a model's owner without a policy cycle (models' shared-read policy reads model_shares).
@@ -95,8 +116,11 @@ _SCOPE_FUNCTIONS_SQL = (
 )
 
 
-def _project_expr(column: str) -> str:
-    return f'(SELECT op_scope_is_deployment()) OR {column} = (SELECT op_scope_project())'
+def _project_expr(column: str, *, nullable: bool = False) -> str:
+    expression = f'(SELECT op_scope_is_deployment()) OR {column} = (SELECT op_scope_project())'
+    if nullable:
+        expression += f' OR ({column} IS NULL AND (SELECT op_scope_is_core()))'
+    return expression
 
 
 def _enable(table: str) -> None:
@@ -112,7 +136,11 @@ def _policy(table: str, name: str, expression: str, *, command: str = 'ALL') -> 
 def _create_policies() -> None:
     for table, column in DIRECT_POLICY_TABLES.items():
         _enable(table)
-        _policy(table, f'p_{table}_project', _project_expr(column))
+        _policy(
+            table,
+            f'p_{table}_project',
+            _project_expr(column, nullable=table in NULLABLE_PROJECT_TABLES),
+        )
     for table, (column, parent, key, parent_project) in CHILD_POLICY_TABLES.items():
         _enable(table)
         _policy(
@@ -168,8 +196,13 @@ _REVISIONS_IMMUTABLE_SQL = """
     CREATE FUNCTION config_revisions_immutable() RETURNS trigger
       LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
       BEGIN
-        IF TG_OP = 'DELETE' AND NOT EXISTS (SELECT 1 FROM config_documents d WHERE d.id = OLD.config_id) THEN
-          RETURN OLD;
+        IF TG_OP = 'DELETE' THEN
+          -- a cascade from the document, or the project_delete job removing a deleting project
+          IF NOT EXISTS (SELECT 1 FROM config_documents d WHERE d.id = OLD.config_id)
+             OR op_project_delete_allows(
+                  (SELECT d.project_id FROM config_documents d WHERE d.id = OLD.config_id)) THEN
+            RETURN OLD;
+          END IF;
         END IF;
         RAISE EXCEPTION 'config_revision_immutable: revisions are never changed or deleted'
           USING ERRCODE = 'integrity_constraint_violation';

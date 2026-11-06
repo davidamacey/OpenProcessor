@@ -66,7 +66,8 @@ NAMED_CHECKS = {
 }  # fmt: skip
 
 FUNCTIONS = {
-    'op_scope_project', 'op_scope_is_deployment', 'op_scope_allows', 'op_model_project',
+    'op_scope_project', 'op_scope_is_deployment', 'op_scope_is_core', 'op_scope_allows',
+    'op_project_delete_allows', 'op_model_project',
     'jobs_status_transition_guard', 'config_revisions_immutable',
 }  # fmt: skip
 

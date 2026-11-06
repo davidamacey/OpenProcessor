@@ -1,7 +1,8 @@
-"""Which modules may open a deployment-wide transaction.
+"""Which modules may open a deployment-wide or a core transaction.
 
 ``project_tx`` needs no permission: it narrows access. ``deployment_tx`` sees every project's
-rows, so only modules that must are listed. Entries are ``fnmatch`` patterns on the importing
+rows and ``core_tx`` sees the rows that belong to no project, so only modules that must are
+listed. Entries are ``fnmatch`` patterns on the importing
 module's name. A module that needs a new entry adds one line here with its reason; a test module under ``tests/`` is always
 allowed because it is never imported by production code.
 """
@@ -19,4 +20,15 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.services.upgrade',  # the 0.6.0 control-data step
     'scripts.db',  # migration runner and db verify
     'scripts.admin',  # admin command-line tools
+)
+
+CORE_TX_MODULES: tuple[str, ...] = (
+    'src.routers.persons',  # core face identities
+    'src.routers.query_duplicates',
+    'src.services.face_identity*',
+    'src.services.duplicate_detection*',
+    'src.services.core_ingest*',  # the core ingest services and routers
+    'src.routers.ingest',
+    'src.tasks.near_dup_core',  # the core near-duplicate and person-grouping handlers
+    'src.tasks.clustering',
 )

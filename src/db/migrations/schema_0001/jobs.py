@@ -189,7 +189,7 @@ def create() -> None:
         sa.Column('error_code', sa.Text(), nullable=True),
         sa.Column('error_message', sa.Text(), nullable=True),
         sa.CheckConstraint(
-            "outcome IN ('completed', 'completed_with_errors', 'failed', 'cancelled', 'paused', 'interrupted', 'lost', 'time_limit')",
+            "outcome IN ('completed', 'completed_with_errors', 'failed', 'cancelled', 'paused', 'interrupted', 'lost', 'time_limit', 'yielded')",
             name=op.f('ck_job_attempts_outcome'),
         ),
         sa.ForeignKeyConstraint(

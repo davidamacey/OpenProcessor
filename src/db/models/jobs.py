@@ -33,6 +33,7 @@ ATTEMPT_OUTCOMES = (
     'interrupted',
     'lost',
     'time_limit',
+    'yielded',
 )
 WORKER_KINDS = ('detection', 'vlm')
 EVENT_PAYLOAD_MAX_BYTES = 7000
