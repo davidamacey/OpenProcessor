@@ -16,4 +16,13 @@ KINDS: tuple[JobKind, ...] = (
         hard_limit_s=90,
         max_queue_wait_s=3600,
     ),
+    JobKind(
+        name='sleep_noop',
+        task_name='op.infra.sleep_noop',
+        queue=TaskQueues.JOBS,
+        project_scope='deployment',
+        soft_limit_s=660,
+        hard_limit_s=720,
+        max_queue_wait_s=3600,
+    ),
 )
