@@ -84,7 +84,7 @@ RD-70 answered as recommended (D-78)): "stop for now" is pause.
 | `persons_cluster` (keeps its name in 0.7.0; see the note below the table) | NULL | `jobs` | `persons_cluster`, '' | no | 3 h / 3 h 15 m | 24 h |
 | `label_op`, `label_undo` (owner decision 2026-11-05: Celery jobs like every other long job; they leave the request) | yes | `jobs` | `label_op`, op id; `label_undo`, '' | no | 1 h / 1 h 5 m | 1 h |
 | `project_create` (B4 4D, R-21) | NULL, scope slug | `jobs` | `project_create`, slug | yes (idempotent: each step checks what exists) | 1 h / 1 h 5 m | 1 h |
-| `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`, `vlm_verify_region_batch` (B4 4A) | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 1 h |
+| `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`, `vlm_verify_region_batch` (B4 4A; the two VLM kinds move to B2 4D-8 if D-29a is answered before W2.3a, D-84) | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 1 h |
 | `gpu_arbiter` tick (R-20) | NULL | `arbiter` (periodic task, not a `jobs` row); scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set, which the overlay sets (RC-3) | advisory lock | - | 120 s / 150 s | - |
 
 Note on `persons_cluster`: it keeps its name in 0.7.0 and records its result as a
@@ -671,8 +671,9 @@ and **the scale factors** (`deploy.replicas` per service, `${OP_API_REPLICAS:-1}
 single source; review fix R-6 and RC-4) and fails when the sum exceeds `OP_PG_MAX_CONNECTIONS - 13` (387 by default; the 229 above passes, and a second API replica at the same total does not change it because the total is divided),
 including when `workers x replicas` exceeds the total so the per-process floor of 1 takes over.
 `OP_DB_API_CONNECTIONS_TOTAL` is a real deployment total: every API process takes
-`floor(total / (API_WORKERS * OP_API_REPLICAS))`, at least 1, no overflow (B4-4B folds it into its
-"pools sized from totals" rule; `OP_API_REPLICAS` lives in `.env`, default 1, and compose reads it as
+`floor(total / (API_WORKERS * OP_API_REPLICAS))`, at least 1, no overflow (the worker count is read as
+`WEB_CONCURRENCY`, the variable uvicorn uses and `API_WORKERS` feeds from B4 on; B2 lane 1A-6 writes this rule
+once in `src/config/api_pools.py` and B4-4B adds its thread and Triton totals beside it, D-84; `OP_API_REPLICAS` lives in `.env`, default 1, and compose reads it as
 the `api` service's `deploy.replicas`, so there is no second place to scale; no `openprocessor scale`
 command, RC-4). The 4B-5 benchmark records the pool wait time.
 

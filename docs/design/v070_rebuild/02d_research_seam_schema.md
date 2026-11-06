@@ -25,7 +25,7 @@ with `--rev-id`, so two lanes never guess the chain:
 |---|---|---|---|
 | `0001_control_plane` | 1A `b2/db-core`, W2.1 | every table of 02a, **including the in-place research changes listed in section 1** (columns and `CHECK` values on 02a tables, the `gpu_devices` table) | a change to a table 0001 creates is made in 0001 |
 | `0002_research_seams` | 1F `b2/db-research-seams`, W2.1 (cut after 1A merged; [03a](03a_stage1_foundation.md) lane 1F) | section 2: serving reports, clustering S-core, the embedding registry, the auto-label loop record | only new tables; `down_revision = '0001_control_plane'` |
-| `0003_near_duplicates` | ND-A `b2/near-duplicates`, W2.3b ([03d](03d_stage4_job_families.md) lane ND-A) | section 3: the near-duplicate tables, three `holdout_freezes` columns, the `near_dup_profile` kind and `near_dup` axis, the `near_dup_run` projection kind | the only revision-writing lane of W2.3b (W2.3a writes none) |
+| `0003_near_duplicates` | ND-A `b2/near-duplicates`, W2.3a ([03d](03d_stage4_job_families.md) lane ND-A) | section 3: the near-duplicate tables, three `holdout_freezes` columns, the `near_dup_profile` kind and `near_dup` axis, the `near_dup_run` projection kind | the only revision-writing lane of W2.3a (W2.3a writes none) |
 | `0004_region_text` | `w5e/region-text-store`, W5e ([06e](06e_w5e_plate_text.md)) | section 4: the registration-plate text tables and the `region_text_consensus_marker` state key | approved (RD-4) |
 
 A wave that needs a schema change has exactly one revision-writing lane. Downgrade is tested to base
@@ -41,21 +41,21 @@ asserts that every table created by revisions 0002-0004 has an entry in `src/db/
 | Table | 0.7.0 writer | 0.7.0 reader | Wave |
 |---|---|---|---|
 | `serving_reports` | `op.periodic.serving_inventory` | the Triton router of B4 4B (a server whose report lacks the model gets no call) | W2.1 |
-| `cluster_calibrations` | `cluster_run` and `persons_cluster` through 4F (kind `assign_bands`) | `assign.place_new` of 4F-5 (incremental bands) | W2.3b |
-| `cluster_partitions`, `partition_clusters`, `cluster_memberships` | `cluster_run` and `persons_cluster` (`record_partition`, 4F) | the cluster routes, the activation transaction, `cluster_projection_sync`, the assist loop (`pinned.partition`) | W2.3b |
-| `cluster_identities` | 4F (a new identity per new cluster, a name on human or import anchoring) | the cluster routes and promotion to a class | W2.3b |
-| `cluster_activations`, `cluster_activation_events` | 4F's activation transaction | the cluster serving routes, `cluster_projection_sync`, the assist loop | W2.3b |
-| `cluster_backend_validations` | the GPU agreement validation tool (a research script; a row is the owner's gate) | the `cluster_run` start: `backend = 'gpu'` is refused without a passing row | W2.3b (reader), research wave RW-3 (first row) |
+| `cluster_calibrations` | `cluster_run` and `persons_cluster` through 4F (kind `assign_bands`) | `assign.place_new` of 4F-5 (incremental bands) | W2.3a |
+| `cluster_partitions`, `partition_clusters`, `cluster_memberships` | `cluster_run` and `persons_cluster` (`record_partition`, 4F) | the cluster routes, the activation transaction, `cluster_projection_sync`, the assist loop (`pinned.partition`) | W2.3a |
+| `cluster_identities` | 4F (a new identity per new cluster, a name on human or import anchoring) | the cluster routes and promotion to a class | W2.3a |
+| `cluster_activations`, `cluster_activation_events` | 4F's activation transaction | the cluster serving routes, `cluster_projection_sync`, the assist loop | W2.3a |
+| `cluster_backend_validations` | the GPU agreement validation tool (a research script; a row is the owner's gate) | the `cluster_run` start: `backend = 'gpu'` is refused without a passing row | W2.3a (reader), research wave RW-3 (first row) |
 | `embedding_model_versions` | the catalog sync in `db-migrate`; the W3 gate G7 writes `engine_parity_min_cos` once | `embedding_space()` and the search builder (ES-A, ES-C) | W2.2 |
 | `embedding_spaces` | project create (three default spaces) and the 0.6.0 upgrade | the search builder (ES-C), `embedding_reindex` | W2.2 |
-| `embedding_reindex_runs` | the `embedding_reindex` job (ES-B) | the job status route | W2.3b |
+| `embedding_reindex_runs` | the `embedding_reindex` job (ES-B) | the job status route | W2.3a |
 | `embedding_evaluation_runs` | none in 0.7.0 (the evaluation job is a later lane) | **schema-test assertion only**: `tests/db/test_embedding_registry_schema.py` inserts a row, and the equal-baseline-and-candidate `CHECK` refuses | W2.1 (schema) |
 | `assist_loop_runs`, `assist_loop_iterations`, `assist_loop_nodes`, `assist_loop_selections`, `assist_loop_proposals`, `assist_loop_budgets`, `assist_loop_budget_ledger` | the `assist_loop` job (lane 4D) | the loop routes (status, metrics), the budget gate | W2.3a |
 | `assist_loop_reviews` | none in 0.7.0 (v0.8.0 routes) | **schema-test assertion only**: the blind-audit `CHECK` test and the metrics function of lane 4D | W2.1 (schema) |
 | `vlm_usage_hourly` | every VLM caller | the assist loop's budget gate (4D) and the VLM usage figures | W2.3a |
-| `image_contents` | the content-key step of `source_backfill` and ingest | the ingest duplicate check (replaces the `imohash` lookup) | W2.3b |
-| `near_dup_runs`, `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending` | ND-A scorer, grouper and rescore | the duplicate routes, the holdout guard (ND-B) | W2.3b |
-| `holdout_near_dup_moves` | the holdout near-duplicate move path of ND-B, the only writer path for near-dup holdout moves; it goes through the lock rule (`src/clients/occ_locks.py`) | the holdout report and the undo of a move | W2.3b |
+| `image_contents` | the content-key step of `source_backfill` and ingest | the ingest duplicate check (replaces the `imohash` lookup) | W2.3a |
+| `near_dup_runs`, `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending` | ND-A scorer, grouper and rescore | the duplicate routes, the holdout guard (ND-B) | W2.3a |
+| `holdout_near_dup_moves` | the holdout near-duplicate move path of ND-B, the only writer path for near-dup holdout moves; it goes through the lock rule (`src/clients/occ_locks.py`) | the holdout report and the undo of a move | W2.3a |
 | `region_text_runs`, `region_text_consensus_groups`, `region_text_consensus_members` | the W5e reader and consensus jobs | plate search and the consensus review | W5e |
 
 ## 1. In-place changes to 02a tables (made in 0001 by lane 1A; the DDL is edited in 02a itself)
@@ -398,7 +398,7 @@ the per-row `EXISTS` is acceptable; contrast X-1's rule for unbounded membership
 `pinned.partition` value names a `cluster_partitions` row (X-1: the loop reads
 `(partition_id, cluster_uid)`, never an integer `cluster_id`).
 
-## 3. Revision `0003_near_duplicates` (lane ND-A, W2.3b)
+## 3. Revision `0003_near_duplicates` (lane ND-A, W2.3a)
 
 The DDL is the near-duplicate plan's section 5.1, with three changes (X-1, X-5):
 

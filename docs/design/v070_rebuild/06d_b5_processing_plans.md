@@ -64,9 +64,14 @@ Integration branch `int/b5d-processing-plans` from main after 5c merged. Tracks 
 | 4 | `gpu` | P5 | L | based on the integration head after `analyze` merged |
 | 5 | `docs` | P6 | S | last |
 
-Typed responses (#465, owner decision 2026-11-04): the `analyze` and `curation` tracks give every
-operation of the routers they rewrite a `response_model=` (audit BA-6), so #465 closes with the 5d
-PR; the other routers are typed by the W5a-W5c lanes of [00_master_plan.md](00_master_plan.md).
+Typed responses (#465, owner decision 2026-11-04, amended by D-84 on 2026-11-05): the `analyze` and
+`curation` tracks give every operation of the routers they rewrite a `response_model=` (audit BA-6) in
+the commit that rewrites them; the other routers are typed by the filler lanes of
+[00_master_plan.md](00_master_plan.md) ("Typed response models as filler lanes"), which never take a
+router this sub-batch rewrites; #465 closes with the 5d PR at the latest.
+
+No rework (D-84): the `analyze` track's P3 calls B4's `enqueue_core_pending(...)` (05 4A-4b) from its
+`near_duplicates` branch instead of rewriting the core pending write.
 
 Wire changes (`make contracts` in the same commit): `PlanReport` in route responses, the removed
 legacy flags, `faces_enabled` removed from the analyze responses (#379), curation request narrowing.
@@ -191,7 +196,8 @@ name (source plan 9.7), GPU 0 (GPU 2 when agreed).
 
 ## 11. Lane briefs (ready to paste)
 
-Common block: as in `04_b3_ultralytics_one_version.md` section 17, with worktree
+Common block: as in `04_b3_ultralytics_one_version.md` section 17 (model and effort, D-85: Sonnet,
+medium for every track; `p0` is run by the coordinator, Opus, medium, or a Sonnet gate agent), with worktree
 `<repo>-wt-b5d-<track>`, branch `b5d/<track>`, file `docs/design/v070_rebuild/06d_b5_processing_plans.md`
 and `docs/design/processing_plans_plan.md` (read sections 3-10 first), plus: "Benchmarks and parity
 per `06_b5_overview.md` against `ref-b5a`. Stack `docker compose -p op-b5d-bench`, GPU 0 only

@@ -48,7 +48,7 @@ own, so the program writes every prototype with its topic first (resolution X-12
 |---|---|---|---|---|---|
 | CPU slots | any time from W2.0 | none | a sweep's T1 run on the same host (nice 19, at most 8 threads) | `clu:CL-0`, `emb:EP-0`, `nd:P0` (its CPU part only), `pt:P0`, `sp:P-0`, `sp:P-1` | 0 (the 0.2 GPU hours of `nd:P0` are its parity run, counted in PW-1) |
 | **PW-1** | during W2.1 and W2.2 (the rebuild uses no GPU) | GPU 0; GPU 2 when agreed | the W2.1 and W2.2 part-check bring-ups (CPU, but they run the stack) | `gpu:PR-0`, `gpu:PR-1`, `gpu:PR-2`, `nd:P0`, `nd:P1`, `nd:P2` (SSCD arm cut) | about 3.4 |
-| **PW-2** | during W2.3a, W2.3b and W2.4, outside live harness run 2 | GPU 0; GPU 2 when agreed | live run 2 (W2.4) | `pt:P1` (PP-OCRv6, D-82), `pt:P2`, `pt:P3`, `pt:P4`, `pt:P5` | about 2.9 |
+| **PW-2** | during W2.3a and W2.4, outside live harness run 2 | GPU 0; GPU 2 when agreed | live run 2 (W2.4) | `pt:P1` (PP-OCRv6, D-82), `pt:P2`, `pt:P3`, `pt:P4`, `pt:P5` | about 2.9 |
 | (W3) | GPU window 1 holds GPU 0 for about 1.5 days | none | GPU window 1 on GPU 0 | nothing | 0 |
 | **PW-3** | during W4, outside live harness run 3 | GPU 0; GPU 2 when agreed | live run 3 (W4), the 4B-5 benchmark (first job of GPU window 2) | `gpu:PR-5`, `gpu:PR-6`, `al:AL0` (shortened) | about 1.5 |
 | reserve | any PW window | as the window | as the window | tier-2 confirmations only | about 2.2 |
@@ -114,8 +114,8 @@ Every "Data" entry is a row of the dataset register (section 4.1).
 | text encode on the GPU and a shared cache (`emb:EP-6`) | D1 captions; set P query log | (in RG-4's 6) | - | EP-1 | RG-4 | RD-21 | RW-2 |
 | the dual-field swap rehearsal (`emb:EP-7`) | D6 subset, `-p op-rs-emb-swap` | 1 | CPU | the v0.7.0 seams shipped | RG-6 | v0.8.0 F9 readiness | v0.8.0 F9 |
 | harness and parity (`nd:P0`) | 200 public images | 0.2 (parity run, in PW-1) | 2 CPU h (CPU slot, any time) | none | PW-1 for the GPU part | trust in every nd row | - |
-| copy-level cuts per level and space (`nd:P1`) | 2,000 constructed copies of COCO and Open Images, Copydays | 0.5 | 2 CPU h | P0 | PW-1 | `near_dup_profile` seed defaults (RD-47): read before the W2.3b cut, ND-A seeds them; else today's 0.98 | W2.3b |
-| exact and perceptual tiers (`nd:P2`; the SSCD copy-model arm cut) | as P1 | 0.2 | 1 CPU h | P1 | PW-1 | SHA-256 cost (RD-43); PDQ (RD-46) | W2.3b (RD-43), RW-4 (PDQ) |
+| copy-level cuts per level and space (`nd:P1`) | 2,000 constructed copies of COCO and Open Images, Copydays | 0.5 | 2 CPU h | P0 | PW-1 | `near_dup_profile` seed defaults (RD-47): read before the W2.3a cut, ND-A seeds them; else today's 0.98 | W2.3a |
+| exact and perceptual tiers (`nd:P2`; the SSCD copy-model arm cut) | as P1 | 0.2 | 1 CPU h | P1 | PW-1 | SHA-256 cost (RD-43); PDQ (RD-46) | W2.3a (RD-43), RW-4 (PDQ) |
 | bursts and sequences (`nd:P3`) | California-ND, Holidays, set P | 0.3 | 1 person h | P1 | RG-5 | burst grouping | RW-4 |
 | crop level (`nd:P4`) | constructed copies, set P | 0.5 | - | P1 | RG-5 | a second item-level candidate source | RW-4 |
 | holdout leakage (`nd:P5`) | constructed copies, California-ND, set P | 0 | 1 CPU h | P1, P4 | CPU slot | the `leak` cut (RD-40) | RW-4 |

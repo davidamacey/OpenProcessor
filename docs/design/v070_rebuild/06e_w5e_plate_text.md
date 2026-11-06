@@ -11,6 +11,8 @@
 | Merge order | `w5e/region-text-store`, `w5e/region-text-fields`, `w5e/region-text-jobs`, `w5e/region-text-reader` (conditional), `w5e/frontend-text` (conditional) |
 | GPU | one short gate at the end of GPU window 2 (about 2 h, GPU 0, `-p op-b5e-gpu`): the chosen reader on Triton and a public-sample read |
 | Issues | #401 (closes with the W5e PR on the owner's go; milestone v0.7.0 per 00b section 4.5) |
+| Model and effort (D-85) | every lane a Sonnet agent, effort medium, with the common block of [04](04_b3_ultralytics_one_version.md) section 17; the GPU gate by the coordinator (Opus, medium) or a Sonnet gate agent; Haiku (low) may re-run targeted tests and summarize logs ([00_master_plan.md](00_master_plan.md) section 7 step 3a) |
+| Typed responses (D-84) | the lanes that add or rewrite a route set its `response_model=` in the same commit (#465) |
 
 Real plate readings never appear in tracked text: fixtures use synthetic strings built by the
 test that fail every plate format, never a real reading (review 3.7); search fixtures that must
