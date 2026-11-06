@@ -13,6 +13,8 @@ from src.tasks.runtime.register import register_job
 
 
 if TYPE_CHECKING:
+    from contextlib import AbstractContextManager
+
     from src.tasks.runtime.context import JobContext
 
 OPENSEARCH_TIMEOUT_S = 60
@@ -24,6 +26,19 @@ async def _opensearch() -> Any:
     from src.services.projects.guard import make_script_opensearch
 
     return make_script_opensearch([get_settings().opensearch_url], timeout=OPENSEARCH_TIMEOUT_S)
+
+
+async def bound_project(ctx: JobContext) -> AbstractContextManager[Any]:
+    """Bind the job's project for the handler (a worker has no request to bind it)."""
+    from src.config.project_context import bind_project
+    from src.services.projects.registry import ProjectRegistry
+
+    registry = ProjectRegistry()
+    await registry.ensure_fresh()
+    record = registry.get(str(ctx.project_slug))
+    if record is None:
+        raise LookupError(f'no project {ctx.project_slug!r} for job {ctx.job_id}')
+    return bind_project(record)
 
 
 async def project_delete(ctx: JobContext) -> dict[str, Any]:
@@ -51,4 +66,24 @@ async def project_delete(ctx: JobContext) -> dict[str, Any]:
     return {'project': slug, 'mlflow_cleanup': cleanup}
 
 
+async def open_vocab_drain(ctx: JobContext) -> dict[str, Any]:
+    """Run the active open-vocabulary set over every ``pending`` image of the project."""
+    from src.services.classes.registry import get_class_registry
+    from src.services.curation.ingest_service_factory import get_ingest_service
+    from src.services.curation.open_vocab_ingest import drain_pending
+    from src.services.detection.segmenter_http import segment_image_http
+
+    with await bound_project(ctx):
+        opensearch = await ctx.client('opensearch')
+        service = await get_ingest_service(opensearch, get_class_registry())
+
+        async def batch_done(tried: int) -> None:
+            await ctx.progress(tried, None, 'drain')
+
+        return await drain_pending(
+            opensearch, service, segment_image_http, should_stop=ctx.cancelled, on_batch=batch_done
+        )
+
+
 register_job('project_delete', project_delete, client_factories={'opensearch': _opensearch})
+register_job('open_vocab_drain', open_vocab_drain, client_factories={'opensearch': _opensearch})

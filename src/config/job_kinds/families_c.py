@@ -21,4 +21,14 @@ KINDS: tuple[JobKind, ...] = (
         exclusive_scope='slug',
         auto_resume=True,
     ),
+    JobKind(
+        name='open_vocab_drain',
+        task_name='op.families_c.open_vocab_drain',
+        queue=TaskQueues.OPEN_VOCAB,
+        project_scope='project',
+        soft_limit_s=3 * HOUR,
+        hard_limit_s=3 * HOUR + 900,
+        max_queue_wait_s=HOUR,
+        exclusive_group='open_vocab_drain',
+    ),
 )

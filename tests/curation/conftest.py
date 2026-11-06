@@ -10,6 +10,7 @@ import pytest
 from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from fixtures.job_fixtures import kinds, producer  # noqa: F401  # fixture registration: a start queues its job on a fake producer
 
 import src.services.labeling.vlm_url_policy as policy
 from src.services.labeling.vlm_endpoint_body import VlmProbeRecord
