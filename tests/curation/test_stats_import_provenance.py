@@ -24,6 +24,9 @@ ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 
+pytest_plugins = ['_records_world']
+
+
 def _box(detector: str) -> dict[str, Any]:
     return {
         'box_id': 'b1',
@@ -76,6 +79,8 @@ def stats(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return r.json()
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_class_labels_an_import_validated_have_their_own_count(stats: dict[str, Any]) -> None:
     assert stats['validated'] == 3  # the legacy total still counts all validated
     assert stats['validated_by_import'] == 1
@@ -84,6 +89,8 @@ def test_class_labels_an_import_validated_have_their_own_count(stats: dict[str, 
     assert stats['labeled']['other'] == 0  # an import is not "unknown provenance"
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_human_counts_exclude_imports(stats: dict[str, Any]) -> None:
     regions = stats['regions']
     assert regions['validated_by_human'] == 2
@@ -91,6 +98,8 @@ def test_human_counts_exclude_imports(stats: dict[str, Any]) -> None:
     assert regions['by_human_drew'] == 2
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_import_region_counts(stats: dict[str, Any]) -> None:
     regions = stats['regions']
     assert regions['validated_by_import'] == 1
@@ -98,6 +107,8 @@ def test_import_region_counts(stats: dict[str, Any]) -> None:
     assert regions['by_import'] == 1
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_an_import_is_not_counted_as_the_vlm(stats: dict[str, Any]) -> None:
     # two human + one import + one VLM verifier: only the last is the VLM's.
     assert stats['regions']['verified_by_vlm'] == 1

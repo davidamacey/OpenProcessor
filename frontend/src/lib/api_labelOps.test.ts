@@ -39,9 +39,9 @@ describe('label ops wrappers', () => {
   it('pages with the previous next_after as after', async () => {
     setScopedPrefix(PROJECT);
     const last = capture({ items: [], limit: 20, retention: 200, next_after: null });
-    await getLabelOps({ limit: 20, after: 'lop_20261031T000000000000_00000a' });
+    await getLabelOps({ limit: 20, after: '01a1b00f-8d37-77d2-a545-50e87fe15f52' });
     expect(last()).toMatchObject({
-      url: `${PROJECT}/label_ops?limit=20&after=lop_20261031T000000000000_00000a`,
+      url: `${PROJECT}/label_ops?limit=20&after=01a1b00f-8d37-77d2-a545-50e87fe15f52`,
       method: 'GET',
     });
   });

@@ -26,7 +26,7 @@ export interface LabelOpUndoPass {
 /** `LabelOp`: one recorded bulk label or move. Class identity is the name. */
 export interface LabelOp {
   op_id: string;
-  kind: 'label' | 'move';
+  kind: 'label' | 'move' | 'assist_loop_propagate' | 'assist_loop_review';
   at: string;
   finished_at: string | null;
   class_name: string | null;
@@ -62,7 +62,6 @@ export interface LabelOpUndoResponse {
   op_id: string;
   dry_run: boolean;
   status: string;
-  members_known: boolean;
   matched: number;
   restored: number;
   already_undone: number;

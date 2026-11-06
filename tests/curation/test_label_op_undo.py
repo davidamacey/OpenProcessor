@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
-import json
 import math
-from pathlib import Path
+import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -18,7 +18,12 @@ from src.services.curation.label_ops import store
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from curation.label_ops_env import OpsEnv
+
+pytest_plugins = ['_records_world']
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world')]
 
 COUNT_KEYS = (
     'restored',
@@ -78,7 +83,6 @@ def test_exact_restore_of_a_12000_item_selection_op(
     body = _undo_ok(env, op['op_id'])
     assert body['restored'] == 12_000
     assert body['kept_changed'] == body['conflicts'] == 0
-    assert body['members_known'] is True
     after = {k: _state(v) for k, v in env.docs().items()}
     assert after == before, 'every item is back exactly, audit verdict included'
 
@@ -245,7 +249,7 @@ def test_dry_run_writes_nothing_and_predicts_the_real_run(
     )
     writes = env.fake.write_calls
     snapshot = copy.deepcopy(env.docs())
-    state_before = (env.state() / op['op_id'] / 'state.json').read_text()
+    state_before = env.record(op['op_id'])
 
     default = env.undo(op['op_id'], dry_run=None)  # the default is a dry run
     assert default.status_code == 200
@@ -253,7 +257,7 @@ def test_dry_run_writes_nothing_and_predicts_the_real_run(
     dry = _undo_ok(env, op['op_id'], dry_run=True)
     assert env.fake.write_calls == writes
     assert env.docs() == snapshot
-    assert (env.state() / op['op_id'] / 'state.json').read_text() == state_before
+    assert env.record(op['op_id']) == state_before
 
     real = _undo_ok(env, op['op_id'])
     assert real['dry_run'] is False
@@ -315,15 +319,13 @@ def test_undo_while_writing_is_409_and_an_interrupted_op_is_undoable(
     )
     assert resp.status_code == 500
     big.fake.fail_mget_on_call = None
-    (listed,) = big.list_ops().json()['items']
+    (listed,) = [o for o in big.list_ops().json()['items'] if o['count'] is None]
     assert listed['status'] == 'interrupted'
     assert listed['count'] is None
     assert listed['current'] == OCC_BULK_PAGE_SIZE
     assert listed['undoable'] is True
-    assert not (big.state() / listed['op_id'] / 'members.json').exists()
 
     body = _undo_ok(big, listed['op_id'])
-    assert body['members_known'] is False
     assert body['restored'] == OCC_BULK_PAGE_SIZE
     assert all(not d.get('class_validated') for d in big.docs().values())
 
@@ -333,26 +335,13 @@ def test_unknown_malformed_or_pruned_op_id_is_404(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
     env.label('widget', crop_ids=_ids(0))
-    # A real record where a joined, unchecked id would land.
-    decoy = env.state().parent / 'decoy'
-    decoy.mkdir()
-    op_id = env.list_ops().json()['items'][0]['op_id']
-    (decoy / 'state.json').write_text((env.state() / op_id / 'state.json').read_text())
-
-    opened: list[Path] = []
-    real_read = Path.read_text
-
-    def spy(self: Path, *a: Any, **kw: Any) -> str:
-        opened.append(self)
-        return real_read(self, *a, **kw)
-
-    monkeypatch.setattr(Path, 'read_text', spy)
     for bad in (
         'lop_20260101T000000000000_abcdef',
         'nope',
         '..%2Fdecoy',
         '..',
-        'lop_20260101T000000000000_ABCDEF',
+        str(uuid.uuid4()).upper(),
+        str(uuid.uuid4()),  # well formed, but no such operation
     ):
         for dry_run in (True, False):
             resp = env.undo(bad, dry_run=dry_run)
@@ -360,11 +349,8 @@ def test_unknown_malformed_or_pruned_op_id_is_404(
     assert (
         env.client.post(f'{env.prefix}/label_ops/%2E%2E%2Fdecoy/undo', json={}).status_code == 404
     )
-    root = env.state().resolve()
-    outside = [p for p in opened if root not in p.resolve().parents]
-    assert not outside, f'read outside the project label_ops dir: {outside}'
     with pytest.raises(Exception, match='no label operation'):
-        store.read_op('../decoy')
+        asyncio.run(store.read_op('../decoy'))
 
 
 def test_move_ops_undo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -399,9 +385,45 @@ def test_the_op_record_survives_and_holds_the_passes(
     env = _env(monkeypatch, tmp_path)
     op = env.label('widget', crop_ids=_ids(0, 1))
     _undo_ok(env, op['op_id'])
-    record = json.loads((env.state() / op['op_id'] / 'state.json').read_text())
+    record = env.record(op['op_id'])
     assert record['status'] == 'undone'
     assert len(record['undo_passes']) == 1
     assert record['undo_passes'][0]['restored'] == 2
     (listed,) = env.list_ops().json()['items']
     assert listed['status'] == 'undone'
+
+
+def test_undo_restores_from_the_members_table_not_the_item_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The state each item had before the operation is recorded with its member row, so an
+    item whose own history was lost (a cleared or capped stack) is still put back."""
+    env = _env(monkeypatch, tmp_path)
+    before = {k: _state(v) for k, v in env.docs().items()}
+    op = env.label('widget', crop_ids=_ids(0, 1, 2))
+    for crop_id in _ids(0, 1, 2):
+        env.docs()[crop_id]['class_id_history'] = []
+
+    body = _undo_ok(env, op['op_id'])
+
+    assert (body['restored'], body['kept_changed']) == (3, 0)
+    for crop_id in _ids(0, 1, 2):
+        assert _state(env.docs()[crop_id]) == before[crop_id]
+
+
+def test_undo_still_keeps_an_item_a_person_labelled_after_the_op_even_with_no_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path)
+    op = env.label('widget', crop_ids=_ids(0, 1))
+    edit = env.client.put(
+        f'{env.prefix}/crops/{_ids(0)[0]}/label', json={'class_id': env.class_ids['gizmo']}
+    )
+    assert edit.status_code == 200
+    for crop_id in _ids(0, 1):
+        env.docs()[crop_id]['class_id_history'] = []
+
+    body = _undo_ok(env, op['op_id'])
+
+    assert (body['restored'], body['kept_changed']) == (1, 1)
+    assert env.docs()[_ids(0)[0]]['class_name'] == 'gizmo'

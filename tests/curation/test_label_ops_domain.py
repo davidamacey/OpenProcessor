@@ -4,7 +4,6 @@ history stack, and the shared restore. No route, no index."""
 from __future__ import annotations
 
 import copy
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -26,18 +25,22 @@ from src.domain.label_ops import (
     current_query,
     label_fingerprint,
     move_fingerprint,
-    new_label_op_id,
     undo_outcome,
 )
 
 
-OP = 'lop_20260301T120000000000_abc123'
-OTHER = 'lop_20260301T130000000000_def456'
+OP = '01a1b00f-8d37-77d2-a545-50e87fe15f52'
+OTHER = '01a1b00f-8d37-77d2-a545-50e87fe15f53'
 AT = '2026-03-01T12:00:00.000000+00:00'
 BEFORE = '2026-03-01T11:00:00.000000+00:00'
 AFTER = '2026-03-01T13:00:00.000000+00:00'
 WRITER = 'human:batch_label_crops'
 NAMES = {1: 'widget', 2: 'gadget', 3: 'gizmo'}
+
+
+def _prior(doc: dict[str, Any]) -> dict[str, Any] | None:
+    """The state the operation replaced, as the members table records it."""
+    return find_undo_snapshot(doc['class_id_history'])
 
 
 def _registry_name(class_id: int) -> str | None:
@@ -66,22 +69,27 @@ def _written(prior: dict[str, Any] | None = None, op_id: str = OP) -> dict[str, 
     }
 
 
-def test_op_id_format_and_regex() -> None:
-    now = datetime(2026, 3, 1, 12, 0, 0, 123456, tzinfo=UTC)
-    op_id = new_label_op_id(now)
-    assert op_id.startswith('lop_20260301T120000123456_')
-    assert LABEL_OP_ID_RE.fullmatch(op_id)
-    later = new_label_op_id(datetime(2026, 3, 1, 12, 0, 1, tzinfo=UTC))
-    assert later > op_id, 'lexicographic order is creation order'
+def test_op_id_is_a_lowercase_uuid() -> None:
+    assert LABEL_OP_ID_RE.fullmatch(OP)
     for bad in (
         '',
         '../x',
-        'lop_20260301T120000123456_ABCDEF',
-        f'{op_id}/..',
-        f'{op_id}\n',
-        'x' + op_id,
+        'lop_20260301T120000123456_abc123',
+        OP.upper(),
+        f'{OP}/..',
+        f'{OP}\n',
+        'x' + OP,
     ):
         assert LABEL_OP_ID_RE.fullmatch(bad) is None, bad
+
+
+def test_the_loop_kinds_are_label_operation_kinds() -> None:
+    from typing import get_args
+
+    from src.db.repos.records import LABEL_OPERATION_KINDS
+    from src.domain.label_ops import LabelOpKind
+
+    assert set(get_args(LabelOpKind)) == set(LABEL_OPERATION_KINDS)
 
 
 # (name, mutate(doc, fp-kwargs) -> doc, expected). One row per rule of the decision, in order.
@@ -101,19 +109,12 @@ def _rows() -> list[tuple[str, Any, UndoOutcome]]:
         )
         return {**d, 'label_op_id': None}
 
-    def later_op_on_top(d: dict[str, Any]) -> dict[str, Any]:
-        d['class_id_history'] = record_class_snapshot(
-            d, writer=WRITER, restorable=True, op_id=OTHER, now=AFTER
-        )
-        return {**d, 'label_op_id': OP}  # tag forced equal: only the stack can tell
-
     return [
         ('deleted', lambda _d: None, UndoOutcome.KEPT_CHANGED),
         ('other_tag', lambda d: {**d, 'label_op_id': OTHER}, UndoOutcome.KEPT_CHANGED),
         ('untagged_after_undo', undone_one_by_one, UndoOutcome.ALREADY_UNDONE),
         ('untagged_by_person', relabelled_by_person, UndoOutcome.KEPT_CHANGED),
         ('holdout', holdout, UndoOutcome.KEPT_HOLDOUT),
-        ('later_op_on_top', later_op_on_top, UndoOutcome.KEPT_CHANGED),
         (
             'excluded_after',
             lambda d: {**d, 'class_excluded': True, 'excluded_at': AFTER},
@@ -135,32 +136,44 @@ def _rows() -> list[tuple[str, Any, UndoOutcome]]:
 
 @pytest.mark.parametrize(('name', 'mutate', 'expected'), _rows(), ids=[r[0] for r in _rows()])
 def test_undo_outcome_decision_table(name: str, mutate: Any, expected: UndoOutcome) -> None:
-    doc = mutate(_written())
+    written = _written()
+    prior = _prior(written)
+    doc = mutate(written)
     registry = _registry_name
     if doc is not None and doc.pop('_rename', False):
         registry = lambda cid: 'renamed' if cid == 2 else _registry_name(cid)  # noqa: E731
-    assert undo_outcome(doc, _fp(), registry_name=registry) is expected
+    assert undo_outcome(doc, _fp(), prior=prior, registry_name=registry) is expected
 
 
 def test_undo_outcome_rule_order() -> None:
     # A holdout item carrying another op's tag is kept_changed (rule 2 before rule 3);
     # an excluded-after holdout item is kept_holdout (rule 3 before rule 5).
-    doc = {**_written(), 'test_holdout': True}
-    assert undo_outcome({**doc, 'label_op_id': OTHER}, _fp(), registry_name=_registry_name) is (
-        UndoOutcome.KEPT_CHANGED
-    )
+    written = _written()
+    prior = _prior(written)
+    doc = {**written, 'test_holdout': True}
+    assert undo_outcome(
+        {**doc, 'label_op_id': OTHER}, _fp(), prior=prior, registry_name=_registry_name
+    ) is (UndoOutcome.KEPT_CHANGED)
     both = {**doc, 'class_excluded': True, 'excluded_at': AFTER}
-    assert undo_outcome(both, _fp(), registry_name=_registry_name) is UndoOutcome.KEPT_HOLDOUT
-    # A merged class on a stale restore target is kept_changed (rule 6 before rule 7).
-    stale = {**_written(), 'class_name': 'gadget'}
     assert (
-        undo_outcome(stale, _fp(), registry_name=lambda _cid: 'renamed') is UndoOutcome.KEPT_CHANGED
+        undo_outcome(both, _fp(), prior=prior, registry_name=_registry_name)
+        is UndoOutcome.KEPT_HOLDOUT
+    )
+    # A merged class on a stale restore target is kept_changed (rule 6 before rule 7).
+    stale = {**written, 'class_name': 'gadget'}
+    assert (
+        undo_outcome(stale, _fp(), prior=prior, registry_name=lambda _cid: 'renamed')
+        is UndoOutcome.KEPT_CHANGED
     )
 
 
 def test_undo_outcome_class_names_compare_normalized() -> None:
-    doc = {**_written(), 'class_name': 'Widget '}
-    assert undo_outcome(doc, _fp(), registry_name=_registry_name) is UndoOutcome.RESTORE
+    written = _written()
+    doc = {**written, 'class_name': 'Widget '}
+    assert (
+        undo_outcome(doc, _fp(), prior=_prior(written), registry_name=_registry_name)
+        is UndoOutcome.RESTORE
+    )
 
 
 def test_a_candidate_move_fingerprint_compares_the_cluster_not_the_class() -> None:
@@ -178,13 +191,14 @@ def test_a_candidate_move_fingerprint_compares_the_cluster_not_the_class() -> No
         'label_op_id': OP,
         'class_id_history': history,
     }
-    assert undo_outcome(doc, fp, registry_name=_registry_name) is UndoOutcome.RESTORE
-    assert undo_outcome({**doc, 'cluster_id': 10_006}, fp, registry_name=_registry_name) is (
-        UndoOutcome.KEPT_CHANGED
-    )
-    assert undo_outcome({**doc, 'class_validated': True}, fp, registry_name=_registry_name) is (
-        UndoOutcome.KEPT_CHANGED
-    )
+    prior = _prior(doc)
+
+    def outcome(d: dict[str, Any]) -> UndoOutcome:
+        return undo_outcome(d, fp, prior=prior, registry_name=_registry_name)
+
+    assert outcome(doc) is UndoOutcome.RESTORE
+    assert outcome({**doc, 'cluster_id': 10_006}) is UndoOutcome.KEPT_CHANGED
+    assert outcome({**doc, 'class_validated': True}) is UndoOutcome.KEPT_CHANGED
 
 
 def test_op_write_undone_follows_the_stack() -> None:
@@ -277,7 +291,7 @@ def test_current_query_matches_undo_outcome_restore() -> None:
     expected = {
         i
         for i, d in docs.items()
-        if undo_outcome(d, fp, registry_name=_registry_name) is UndoOutcome.RESTORE
+        if undo_outcome(d, fp, prior=_prior(d), registry_name=_registry_name) is UndoOutcome.RESTORE
     }
     assert expected == {'ok1', 'ok2', 'excl_before'}
     selected = {i for i, d in docs.items() if matches(d, current_query(fp))}

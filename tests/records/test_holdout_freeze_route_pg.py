@@ -46,6 +46,10 @@ from src.services.curation import holdout as test_holdout_module
 from src.services.curation.holdout import compute_holdout_sha, select_test_holdout
 
 
+pytest_plugins = ['_records_world']
+pytestmark = pytest.mark.db
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -68,20 +72,9 @@ def fake_opensearch() -> AsyncMock:
 
 
 @pytest.fixture
-def app_client(fake_opensearch: AsyncMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    from src.config.curation import CurationConfig
+def app_client(fake_opensearch: AsyncMock, world):
     from src.core.dependencies import get_opensearch
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
-
-    # Every successful freeze persists a record under the configured
-    # curation state dir — point it at a per-test tmp dir so tests never
-    # touch the real default state dir (which isn't writable on a bare
-    # host anyway). test_freeze_persists_record overrides this itself to
-    # make the location explicit in that test.
-    monkeypatch.setattr(
-        'src.services.curation.holdout.get_curation_config',
-        lambda: CurationConfig(state_dir=tmp_path),
-    )
 
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -93,6 +86,27 @@ def app_client(fake_opensearch: AsyncMock, tmp_path: Path, monkeypatch: pytest.M
     with TestClient(app) as client:
         client.fake_os = fake_opensearch  # type: ignore[attr-defined]
         yield client
+
+
+def _freezes(project_id: Any) -> list[Any]:
+    import asyncio
+
+    from src.db.repos.records import list_holdout_freezes
+    from src.db.session import async_session_factory, project_tx
+
+    async def read() -> list[Any]:
+        async with async_session_factory()() as session, project_tx(session, project_id):
+            return await list_holdout_freezes(session, project_id)
+
+    return asyncio.run(read())
+
+
+def _snapshot(key: str) -> dict[str, Any]:
+    from src.clients.storage.roots import build_rooted_store
+    from src.config.storage import storage_root_paths
+
+    with build_rooted_store(storage_root_paths()).open_read(key) as handle:
+        return json.load(handle)
 
 
 def _strata_response(
@@ -304,19 +318,10 @@ def test_freeze_zero_rows_raises(app_client: Any, fake_opensearch: AsyncMock) ->
 # =============================================================================
 
 
-def test_freeze_persists_record(
-    app_client: Any, fake_opensearch: AsyncMock, tmp_path: Path
-) -> None:
-    """A successful freeze must write a durable artifact under the
-    configured curation state dir's ``test_holdout/`` subdirectory (the
-    ``app_client`` fixture already points that at ``tmp_path``) -- a
-    timestamped snapshot plus ``current.json`` -- whose sha matches the
-    response's ``test_holdout_sha``. Mirrors the ``class_registry.<ISO>.json``
-    snapshot convention.
-
-    Before: ``test_holdout_sha`` is computed and returned but nothing is
-    ever written to disk -- no directory, no files.
-    """
+@pytest.mark.db
+def test_freeze_persists_record(app_client: Any, fake_opensearch: AsyncMock, world: Any) -> None:
+    """A successful freeze writes a ``holdout_freezes`` row (current) and a snapshot blob under
+    the project's holdout area whose sha matches the response's ``test_holdout_sha``."""
     buckets = [_bucket(3, 'hdd:demo_hdd01', 6)]
     fake_opensearch.search = AsyncMock(
         side_effect=_make_search_dispatcher(
@@ -328,18 +333,12 @@ def test_freeze_persists_record(
     assert r.status_code == 200, r.text
     body = r.json()
 
-    state_dir = tmp_path / 'test_holdout'
-    current_path = state_dir / 'current.json'
-    assert current_path.exists(), f'no persisted freeze record under {state_dir}'
-    record = json.loads(current_path.read_text())
+    [row] = _freezes(world)
+    assert (row.is_current, row.item_count, row.source) == (True, body['n_frozen'], 'manual')
+    record = _snapshot(row.snapshot_storage_key)
     assert record['test_holdout_sha'] == body['test_holdout_sha']
     assert record['n_frozen'] == body['n_frozen']
     assert sorted(record['crop_ids']) == record['crop_ids']
-
-    # A timestamped snapshot must exist alongside current.json.
-    snapshots = [p for p in state_dir.iterdir() if p.name != 'current.json']
-    assert len(snapshots) == 1, f'expected exactly one snapshot, found {snapshots}'
-    assert json.loads(snapshots[0].read_text())['test_holdout_sha'] == body['test_holdout_sha']
 
 
 # =============================================================================
@@ -582,10 +581,11 @@ def _freeze_with_bulk(
     return app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
 
 
+@pytest.mark.db
 def test_freeze_bulk_item_error_persists_no_record(
-    app_client: Any, fake_opensearch: AsyncMock, tmp_path: Path
+    app_client: Any, fake_opensearch: AsyncMock, world: Any
 ) -> None:
-    """A bulk 200 with ``errors: true`` (item 404) must not persist a record."""
+    """A bulk 200 with ``errors: true`` (item 404) rolls the freeze row back."""
     resp = {
         'errors': True,
         'items': [
@@ -595,14 +595,34 @@ def test_freeze_bulk_item_error_persists_no_record(
     }
     r = _freeze_with_bulk(app_client, fake_opensearch, resp)
     assert r.status_code >= 500, r.text
-    assert not (tmp_path / 'test_holdout').exists()
+    assert _freezes(world) == []
 
 
+@pytest.mark.db
 def test_freeze_bulk_all_items_ok_persists_record(
-    app_client: Any, fake_opensearch: AsyncMock, tmp_path: Path
+    app_client: Any, fake_opensearch: AsyncMock, world: Any
 ) -> None:
-    """Control: every item 200 persists the record."""
+    """Control: every item 200 leaves one current freeze."""
     resp = {'errors': False, 'items': [{'update': {'_id': 'a_000', 'status': 200}}]}
     r = _freeze_with_bulk(app_client, fake_opensearch, resp)
     assert r.status_code == 200, r.text
-    assert (tmp_path / 'test_holdout' / 'current.json').exists()
+    [row] = _freezes(world)
+    assert row.is_current
+
+
+@pytest.mark.db
+def test_freeze_fails_closed_on_a_database_error_before_any_item_changes(
+    app_client: Any, fake_opensearch: AsyncMock, world: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A database error refuses the freeze: no item is flagged and nothing is recorded."""
+
+    async def boom(*_a: Any, **_k: Any) -> None:
+        msg = 'database down'
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr('src.services.curation.holdout.freeze_holdout', boom)
+    resp = {'errors': False, 'items': [{'update': {'_id': 'a_000', 'status': 200}}]}
+    with pytest.raises(RuntimeError, match='database down'):
+        _freeze_with_bulk(app_client, fake_opensearch, resp)
+    fake_opensearch.bulk.assert_not_called()
+    assert _freezes(world) == []

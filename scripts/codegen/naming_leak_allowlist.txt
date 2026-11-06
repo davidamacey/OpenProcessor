@@ -78,7 +78,7 @@ tests/curation/test_gpu_arbiter.py:(?i)gemma # historical: documents the removed
 tests/curation/test_crop_cache_dir_consistency.py:GEMMA_CROP_CACHE_DIR # historical: documents the pre-fix env-var mismatch this test guards against
 tests/curation/test_crops_browse_params.py:hdd_source # negative test: asserts the retired hdd_source query param is gone
 tests/curation/test_router_wireup.py:plate_meta # historical: names the reference test file's pre-port route name
-tests/curation/test_test_holdout_freeze.py:v6_original_label|hdd_user_label # historical: documents the retired label_source filter this fix removed
+tests/records/test_holdout_freeze_route_pg.py:v6_original_label|hdd_user_label # historical: documents the retired label_source filter this fix removed
 tests/curation/test_vlm_combined.py:plate # historical: contrasts current region_* reply fields with the reference's retired plate_* keys
 tests/curation/test_training_class_subset_presets.py:plates_only|all_vehicles|vehicles_and_plates # historical: names the hardcoded presets this test's subject replaces
 tests/curation/test_region_vocabulary.py:lpr_nanov11_640|sam3|gemma # historical: names the vendor ids a frontend used to hardcode, motivating this endpoint

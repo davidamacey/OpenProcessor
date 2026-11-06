@@ -11,12 +11,14 @@ router files under the 700 LOC pre-commit ceiling. Two endpoints:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
+from src.db.session import async_session_factory
 from src.domain.ingest_class_sources import (
     CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
     CLUSTER_MAJORITY_CLASS_SOURCE,
@@ -37,6 +39,10 @@ from src.services.curation.stats_dataset_query import build_dataset_query_body
 from src.services.curation.stats_embedding import embedding_summary
 from src.services.detection.profile_registry import region_profile_or_neutral
 from src.utils.timeutil import now_iso
+
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @router.get('/stats/classes')
@@ -262,19 +268,22 @@ def _read_last_clustering_meta(
 
 async def stats_dataset(opensearch: Any) -> dict[str, Any]:
     """Unfiltered dataset stats (what the live stats stream serves)."""
-    return await dataset_stats(opensearch, ItemFilter())
+    async with async_session_factory()() as session:
+        return await dataset_stats(opensearch, ItemFilter(), session)
 
 
 @router.get('/stats/dataset', response_model=None, responses={200: {'model': DatasetStatsResponse}})
 async def stats_dataset_route(
-    opensearch: OpenSearchDep, item_filter: ItemFilterQuery
+    opensearch: OpenSearchDep, item_filter: ItemFilterQuery, session: DbSessionDep
 ) -> dict[str, Any]:
     """``GET /stats/dataset`` over the items the shared item filter selects (every
     item when no filter parameter is set); see :func:`dataset_stats`."""
-    return await dataset_stats(opensearch, item_filter)
+    return await dataset_stats(opensearch, item_filter, session)
 
 
-async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, Any]:
+async def dataset_stats(
+    opensearch: Any, item_filter: ItemFilter, session: AsyncSession
+) -> dict[str, Any]:
     """Overall dataset balance + label-source + pipeline breakdown.
 
     Single ``_search?size=0`` with composite aggregations. ``total_crops``,
@@ -397,7 +406,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
     from src.services.triton_control import TritonControlService
 
     region_deps = await check_region_dependencies(
-        TritonControlService().get_repository_index, profile
+        session, TritonControlService().get_repository_index, profile
     )
     region_stall_reason = _region_stall_reason(region_deps, pending_detection=pending_detection)
 
