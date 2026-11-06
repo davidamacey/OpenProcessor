@@ -3,6 +3,7 @@ fragments the items body and its ``ensure_*`` migrations share."""
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from src.clients.curation_opensearch.assist_fields import ASSIST_ITEM_MAPPING
@@ -20,6 +21,7 @@ from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
 )
+from src.clients.curation_opensearch.text_analysis import ITEMS_ANALYSIS
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
@@ -238,9 +240,16 @@ ITEMS_VIZ_MAPPING: dict[str, Any] = {
 }
 
 
+def _items_settings() -> dict[str, Any]:
+    """The kNN settings plus the compact text normalizer (fixed at index creation)."""
+    settings = _knn_settings()
+    settings['index']['analysis'] = copy.deepcopy(ITEMS_ANALYSIS)
+    return settings
+
+
 def _items_body() -> dict[str, Any]:
     return {
-        'settings': _knn_settings(),
+        'settings': _items_settings(),
         'mappings': {
             'properties': {
                 'crop_id': {'type': 'keyword'},

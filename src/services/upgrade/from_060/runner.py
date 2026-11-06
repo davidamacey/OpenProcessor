@@ -1,6 +1,7 @@
 """The four steps of the 0.6.0 upgrade in order, with the gate and the ``upgrade_runs`` record.
 
-``export_bundle`` -> ``load`` (and the step registry) -> ``verify`` -> ``delete_sources``. Each
+``export_bundle`` -> ``load`` (and the step registry) -> ``verify`` -> step 3a (the analysis
+settings of the items indexes, ``analysis_settings.py``) -> ``delete_sources``. Each
 step is recorded in ``upgrade_runs`` when it completes, so a run that stopped resumes at the
 first step not completed; a verify that failed leaves every source in place (trap T-25) and the
 gate closed (``upgrade_state`` stays ``in_progress``), and the operator either fixes the cause
@@ -20,9 +21,10 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select, text
 
 from src.db.models import UpgradeRun
+from src.db.repos import projects as projects_repo
 from src.db.session import deployment_tx
 from src.services.upgrade import gate
-from src.services.upgrade.from_060 import direct_rows, steps
+from src.services.upgrade.from_060 import analysis_settings, direct_rows, steps
 from src.services.upgrade.from_060.bundle import BundleError, check_bundle
 from src.services.upgrade.from_060.delete_sources import delete_sources
 from src.services.upgrade.from_060.export import export_bundle
@@ -70,6 +72,7 @@ class UpgradeResult:
     load_counts: dict[str, int] = field(default_factory=dict)
     verify: VerifyReport | None = None
     report_path: Path | None = None
+    analysis_lines: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -80,6 +83,8 @@ class UpgradeRunner:
     layout: Layout
     store: BlobStore
     install_dir: Path
+    # The OpenSearch client the analysis settings step closes, updates and reopens indexes with.
+    analysis_client: Any
     now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC)
 
     async def run(self) -> UpgradeResult:
@@ -88,6 +93,7 @@ class UpgradeRunner:
         result = UpgradeResult(bundle=bundle)
         await self._load(result)
         await self._verify(result)
+        await self._analysis(result)
         await self._delete(result)
         return result
 
@@ -214,6 +220,24 @@ class UpgradeRunner:
         )
         if not report.ok:
             raise VerifyFailedError(result.report_path, report.problems)
+
+    # ---------------------------------------------------------------- 3a analysis settings
+
+    async def _analysis(self, result: UpgradeResult) -> None:
+        """Add the compact text normalizer to every upgraded items index (review RN-3).
+
+        Not recorded in ``upgrade_runs``: an index that already has the normalizer is skipped, so
+        a re-run after a stop is safe. A failure raises ``AnalysisSettingsError`` naming the index
+        and nothing is deleted.
+        """
+        async with self.sessions() as session, deployment_tx(session, '0.6.0 upgrade: analysis'):
+            rows = await session.run_sync(projects_repo.list_projects_sync)
+        names = [r.indexes['items'] for r in rows if 'items' in r.indexes]
+        present = [n for n in names if await self.reader.index_exists(n)]
+        lines = result.analysis_lines
+        plan = await analysis_settings.dry_run(self.analysis_client, present, say=lines.append)
+        if plan.changed:
+            await analysis_settings.apply(self.analysis_client, present, say=lines.append)
 
     # ---------------------------------------------------------------- 4 delete_sources
 

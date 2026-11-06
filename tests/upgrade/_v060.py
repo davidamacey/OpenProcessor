@@ -12,11 +12,12 @@ import base64
 import copy
 import json
 import os
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from opensearchpy.exceptions import NotFoundError
+from opensearchpy.exceptions import NotFoundError, RequestError
 
 from src.clients.storage.roots import RootedStore
 from src.services.upgrade.from_060.admin_client import ControlReader, ControlWriter
@@ -96,6 +97,47 @@ class _Indices:
     async def refresh(self, index: str) -> None:  # noqa: ARG002  # mirrors the client signature
         self._fake.calls.append('indices.refresh')
 
+    async def stats(self, index: str, metric: str) -> dict[str, Any]:  # noqa: ARG002
+        self._fake.calls.append('indices.stats')
+        docs = len(self._fake.index(index)['docs'])
+        primaries = {'docs': {'count': docs}, 'store': {'size_in_bytes': docs * 1024}}
+        return {'_all': {'primaries': primaries}}
+
+    async def close(self, index: str) -> None:
+        self._fake.calls.append('indices.close')
+        self._fake.index(index)
+        self._fake.closed.add(index)
+
+    async def open(self, index: str) -> None:
+        self._fake.calls.append('indices.open')
+        self._fake.closed.discard(index)
+
+    async def put_settings(self, index: str, body: dict[str, Any]) -> None:
+        self._fake.calls.append('indices.put_settings')
+        if self._fake.refuse_settings:
+            raise RequestError(400, 'illegal_argument_exception', 'settings refused')
+        if index not in self._fake.closed:
+            raise RequestError(400, 'illegal_argument_exception', 'the index must be closed')
+        self._fake.index(index)['settings'].setdefault('index', {}).update(body['index'])
+
+    async def analyze(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        self._fake.calls.append('indices.analyze')
+        analysis = self._fake.index(index)['settings'].get('index', {}).get('analysis', {})
+        if body['normalizer'] not in analysis.get('normalizer', {}):
+            raise ValueError('no such normalizer')
+        folded = unicodedata.normalize('NFKD', body['text']).encode('ascii', 'ignore').decode()
+        token = ''.join(c for c in folded if c.isalnum()).upper()
+        return {'tokens': [{'token': token}]}
+
+
+class _Cluster:
+    def __init__(self, fake: FakeOpenSearch) -> None:
+        self._fake = fake
+
+    async def health(self, index: str, wait_for_status: str, timeout: str) -> dict[str, Any]:  # noqa: ARG002
+        self._fake.calls.append('cluster.health')
+        return {'status': 'green', 'timed_out': False}
+
 
 class _Tasks:
     def __init__(self, fake: FakeOpenSearch) -> None:
@@ -111,9 +153,12 @@ class FakeOpenSearch:
     indexes: dict[str, dict[str, Any]]
     calls: list[str] = field(default_factory=list)
     last_updated: int = 0
+    closed: set[str] = field(default_factory=set)
+    refuse_settings: bool = False
 
     def __post_init__(self) -> None:
         self.indices = _Indices(self)
+        self.cluster = _Cluster(self)
         self.tasks = _Tasks(self)
 
     def index(self, name: str) -> dict[str, Any]:
