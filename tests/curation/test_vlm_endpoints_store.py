@@ -20,7 +20,6 @@ from src.services.config_store.vlm_endpoints import (
     set_local_desired,
 )
 from src.services.config_store.vlm_snapshot import fetch_revision
-from src.services.curation import event_hub
 from src.services.labeling.vlm_catalog import load_catalog
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 
@@ -39,18 +38,8 @@ def client() -> FakeConfigOpenSearch:
 
 
 @pytest.fixture
-def events(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
-    seen: list[dict] = []
-    monkeypatch.setattr(event_hub, '_HUB', None)
-    hub = event_hub.get_event_hub()
-    real = hub._dispatch
-
-    def spy(event: dict) -> None:
-        seen.append(dict(event))
-        real(event)
-
-    monkeypatch.setattr(hub, '_dispatch', spy)
-    return seen
+def events(captured_events: list[dict]) -> list[dict]:
+    return captured_events
 
 
 @pytest.mark.asyncio

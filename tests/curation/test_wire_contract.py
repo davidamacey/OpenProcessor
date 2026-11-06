@@ -393,30 +393,20 @@ def test_server_built_urls_follow_the_configured_prefix(monkeypatch: pytest.Monk
 # ---------------------------------------------------------------------------
 
 
-class _RecordingHub:
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-
-    def publish(self, event: dict[str, Any]) -> None:
-        self.events.append(event)
-
-
 def _event_data_keys(event: dict[str, Any]) -> set[str]:
     return set(event) - {'type', 'topic', 'ts', 'project'}
 
 
-def test_publish_endpoint_carries_region_status(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.routers.curation import events
-
-    hub = _RecordingHub()
-    monkeypatch.setattr(events, 'get_event_hub', lambda: hub)
+def test_publish_endpoint_carries_region_status(
+    monkeypatch: pytest.MonkeyPatch, captured_events: list[dict[str, Any]]
+) -> None:
     with _client(monkeypatch, _OVERRIDE_STORAGE) as client:
         r = client.post(
             f'{_common.config.api_prefix}/projects/default/events/publish',
             json=wire.region_event_payload('crop-1', region_status='detected', region_count=2),
         )
     assert r.status_code == 200, r.text
-    (event,) = hub.events
+    (event,) = captured_events
     assert event['type'] == 'crop.region_verified'
     assert event['region_status'] == 'detected'
     assert event['region_count'] == 2
@@ -442,16 +432,13 @@ def test_region_event_payload_uses_wire_keys(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_worker_region_events_reach_subscribers_with_status(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, captured_events: list[dict[str, Any]]
 ) -> None:
     """End to end: the SAM worker reads the status under the storage name,
     POSTs it, and the published event still carries ``region_status``."""
     from scripts.curation.worker import bulk_writer
     from scripts.curation.worker.state import _ItemTask
-    from src.routers.curation import events
 
-    hub = _RecordingHub()
-    monkeypatch.setattr(events, 'get_event_hub', lambda: hub)
     monkeypatch.setattr(region_fields_mod, '_default_region_fields', _OVERRIDE_STORAGE)
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import router as curation_router
@@ -473,7 +460,7 @@ async def test_worker_region_events_reach_subscribers_with_status(
     task.update_doc = {_OVERRIDE_STORAGE.status: 'detected', _OVERRIDE_STORAGE.count: 2}
     await bulk_writer._publish_region_events([task])
 
-    (event,) = hub.events
+    (event,) = captured_events
     assert event['type'] == 'crop.region_verified'
     assert event['region_status'] == 'detected'
     assert event['region_count'] == 2

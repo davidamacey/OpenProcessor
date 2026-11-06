@@ -91,7 +91,7 @@ async def write_vlm_activation(
     expected_active: dict[str, Any] | None,
     ack_now: bool,
 ) -> dict[str, Any]:
-    from src.services.curation.event_hub import get_event_hub
+    from src.services.events.publish import apublish
 
     store = get_config_store()
     name = endpoint.name if endpoint is not None else None
@@ -116,14 +116,14 @@ async def write_vlm_activation(
         active_vlm_ack_at=result.get('external_ack_at'),
         acked_refs=frozenset(result.get('acked_refs') or ()),
     )
-    get_event_hub().publish(
+    await apublish(
+        'config.changed',
         {
-            'type': 'config.changed',
             'topic': 'config',
             'axis': 'vlm',
             'name': name,
             'config_revision': result['config_revision'],
-        }
+        },
     )
     return result
 

@@ -210,5 +210,5 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
 
 
 # Long-lived SSE streams: the per-project delivery they serve is proven by
-# the event checks below and tests/projects/test_event_hub_project_filter.py.
+# the event checks below and tests/events/test_listener_fanout.py.
 STREAMING_ROUTES: frozenset[str] = frozenset({f'{SCOPED}/events', f'{SCOPED}/pipeline/events'})

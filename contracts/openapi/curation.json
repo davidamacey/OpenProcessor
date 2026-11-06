@@ -35535,7 +35535,7 @@
   "paths": {
     "/curation/events": {
       "get": {
-        "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``) and ``combine.*`` (``GLOBAL_EVENT_PREFIXES``).\nA ``combine.*`` event names the project it builds in ``target``. No\nproject's own events are ever delivered here; a project's config\nchanges (``config.changed``) ride that project's own stream.",
+        "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``) and ``combine.*`` (``GLOBAL_EVENT_PREFIXES``).\nA ``combine.*`` event names the project it builds in ``target``. No\nproject's own events are ever delivered here; a project's config\nchanges (``config.changed``) ride that project's own stream. Frames carry\n``id`` and resume through ``Last-Event-ID`` like the project stream.",
         "operationId": "global_events_curation_events_get",
         "parameters": [
           {
@@ -35555,20 +35555,55 @@
               "description": "Optional topic filter.",
               "title": "Topic"
             }
+          },
+          {
+            "description": "Resume point: the `id` of the last event the client received.",
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Resume point: the `id` of the last event the client received.",
+              "title": "Last-Event-Id"
+            }
           }
         ],
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
           },
           "404": {
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
@@ -35578,7 +35613,7 @@
           },
           "409": {
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
@@ -43269,7 +43304,7 @@
     },
     "/curation/projects/{project}/events": {
       "get": {
-        "description": "SSE stream of advisory crop-state events for the bound project\nonly (global ``project: null`` events go to ``{api}/events``).\n\nThe connection stays open until the client disconnects. A heartbeat\ncomment line is sent every 15s so reverse-proxies don't kill the\nsocket. Subscribers each get their own bounded queue (capped at\n1000 events; oldest drops on overflow — events are advisory).",
+        "description": "SSE stream of the bound project's events (global ``project: null`` events go to\n``{api}/events``).\n\nEvery frame carries ``id: <xid>-<id>``; a reconnect with ``Last-Event-ID`` replays what was\nmissed. A cursor the server cannot honour (older than the 24 h retention, or from before a\nrestore) gets one ``reset`` event first: reload state. A client that falls behind is dropped\nwith a final ``reconnect`` event.",
         "operationId": "curation_events_curation_projects__project__events_get",
         "parameters": [
           {
@@ -43316,13 +43351,48 @@
               "description": "Optional class_id filter — only emit crop.classified events whose class matches.",
               "title": "Class Id"
             }
+          },
+          {
+            "description": "Resume point: the `id` of the last event the client received.",
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Resume point: the `id` of the last event the client received.",
+              "title": "Last-Event-Id"
+            }
           }
         ],
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -43346,7 +43416,7 @@
     },
     "/curation/projects/{project}/events/publish": {
       "post": {
-        "description": "Publish one event into the in-process hub.\n\nUsed by external publishers like ``scripts/curation/worker/``\nthat don't share the API process. Events from in-process callers\n(ingest, VLM label_batch) skip this endpoint and call the hub directly.",
+        "description": "Publish one event for the bound project.\n\nUsed by external publishers like ``scripts/curation/worker/`` that have no database\nsession of their own.",
         "operationId": "curation_events_publish_curation_projects__project__events_publish_post",
         "parameters": [
           {
@@ -43401,7 +43471,7 @@
     },
     "/curation/projects/{project}/events/stats": {
       "get": {
-        "description": "Ops counters for the bound project's stream: its subscribers and\npublishes, plus the hub's ``events_dropped``, active ``bus``\n(``file``/``process``) and ``log_path``.",
+        "description": "Ops counters for the bound project's stream: its local subscribers, the clients this\nprocess dropped for falling behind, and whether the listener and its Valkey subscription run.",
         "operationId": "curation_events_stats_curation_projects__project__events_stats_get",
         "parameters": [
           {
@@ -48971,7 +49041,7 @@
     },
     "/curation/projects/{project}/pipeline/events": {
       "get": {
-        "description": "Server-sent events stream for the curation dashboard.\n\nReplaces a ``GET /curation/stats/dataset`` polling loop. One open\nHTTP connection per dashboard tab; the server pushes:\n\n* ``snapshot`` (on connect) — current ``state.json`` plus a one-shot\n  dataset aggregation, so the client renders without any additional\n  REST call.\n* ``state`` — whenever ``auto_label`` state changes (stage\n  transitions, progress advances, terminal status), noticed by a 1 s\n  poll of the bound project's ``state.json`` mtime.\n* ``stats`` — refreshed dataset aggregation. Emitted at auto_label\n  stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)\n  so the dashboard counts (unlabeled / pending_detection /\n  pending_verification) keep ticking while the detection worker\n  drains the queue independent of auto_label. Frontends that only\n  care about pipeline status can ignore these.\n* heartbeat comment frame every 15 s so reverse proxies don't reap\n  the connection. This is the only fixed-rate traffic on the\n  channel.\n\nThe dashboard consumes this with ``new EventSource(url)`` and\nswitches on ``ev.type`` (snapshot | state | stats).",
+        "description": "Server-sent events stream for the curation dashboard.\n\nReplaces a ``GET /curation/stats/dataset`` polling loop. One open\nHTTP connection per dashboard tab; the server pushes:\n\n* ``snapshot`` (on connect) — current ``state.json`` plus a one-shot\n  dataset aggregation, so the client renders without any additional\n  REST call.\n* ``state`` — whenever ``auto_label`` state changes (stage\n  transitions, progress advances, terminal status), noticed by a 1 s\n  poll of the bound project's ``state.json`` mtime.\n* ``stats`` — refreshed dataset aggregation. Emitted at auto_label\n  stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)\n  so the dashboard counts (unlabeled / pending_detection /\n  pending_verification) keep ticking while the detection worker\n  drains the queue independent of auto_label. Frontends that only\n  care about pipeline status can ignore these.\n* a keep-alive comment every 15 s, sent by FastAPI's SSE response so\n  reverse proxies don't reap the connection.\n\nThe dashboard consumes this with ``new EventSource(url)`` and\nswitches on ``ev.type`` (snapshot | state | stats).",
         "operationId": "pipeline_events_curation_projects__project__pipeline_events_get",
         "parameters": [
           {
@@ -48987,8 +49057,25 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"

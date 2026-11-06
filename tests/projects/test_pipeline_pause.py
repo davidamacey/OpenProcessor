@@ -112,14 +112,14 @@ def test_pause_publishes_a_global_event(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import src.config.curation_accessors as curation_config_mod
-    from src.services.curation import event_hub
+    from src.services.events import publish as event_publish
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
 
     published: list[tuple[str, dict]] = []
     monkeypatch.setattr(
-        event_hub,
+        event_publish,
         'publish_global_event',
         lambda event_type, **fields: published.append((event_type, fields)),
     )

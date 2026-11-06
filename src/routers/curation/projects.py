@@ -76,7 +76,7 @@ def _publish_lifecycle_event(event_type: str, record: Any, **extra: Any) -> None
     (never scoped -- these routes act *on* a project, not *within* one),
     so any open Cropwright tab (not just the one that made the request)
     learns about create/patch/archive/unarchive/delete."""
-    from src.services.curation.event_hub import publish_global_event
+    from src.services.events.publish import publish_global_event
 
     publish_global_event(
         event_type,

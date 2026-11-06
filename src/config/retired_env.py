@@ -59,6 +59,9 @@ RETIRED_ENV: dict[str, str] = {
     # Profiles lost the single target class.
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_ID': _BAKEOFF_TARGET_REMOVED,
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME': _BAKEOFF_TARGET_REMOVED,
+    # Events moved from a JSONL file bus to the PostgreSQL events table with a Valkey wake-up.
+    'OP_EVENT_BUS': f'{_REMOVED} events are rows in PostgreSQL; there is no file bus',
+    'OP_EVENT_LOG_MAX_BYTES': f'{_REMOVED} events are rows in PostgreSQL, trimmed after 24 hours',
 }
 
 

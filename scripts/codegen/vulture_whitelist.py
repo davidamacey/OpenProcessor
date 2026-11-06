@@ -146,3 +146,9 @@ _.basic_auth  # scripts/flower/flowerconfig.py, an option Flower reads by name f
 _.EngineOutputContract  # src/schemas/models.py, validated by the engine export (stage 5)
 _.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
 _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)
+
+# Event publish and retention (B2 stage 3, lane 3B).
+_.delete_older_than  # src/db/repos/events.py, called by reaper rule f (lane 3A)
+_._send_wakes  # src/services/events/publish.py, a SQLAlchemy after_commit listener registered by decorator
+_._drop_wakes  # src/services/events/publish.py, a SQLAlchemy after_rollback listener registered by decorator
+_.StreamingResponse  # src/app/factory.py, named only in a string cast

@@ -251,9 +251,9 @@ async def _restore_classes(opensearch: Any, cleared: dict[int, str | None]) -> N
 
 async def _publish_classes_changed() -> None:
     try:
-        from src.services.curation.event_hub import get_event_hub
+        from src.services.events.publish import apublish
 
-        get_event_hub().publish({'type': 'classes.changed', 'topic': 'classes'})
+        await apublish('classes.changed', {'topic': 'classes'})
     except Exception as exc:  # pragma: no cover - advisory only
         logger.warning('classes_changed_publish_failed', error=str(exc))
 

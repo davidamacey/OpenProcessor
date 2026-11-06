@@ -268,23 +268,9 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
 
 
 @pytest.fixture
-def events(monkeypatch):
-    """Captures every event published through the real EventHub for this
-    test, global and scoped alike."""
-    from src.services.curation import event_hub
-
-    monkeypatch.setenv('OP_EVENT_BUS', 'process')
-    monkeypatch.setattr(event_hub, '_HUB', None)
-    hub = event_hub.get_event_hub()
-    captured: list[dict] = []
-    real_dispatch = hub._dispatch
-
-    def _recording_dispatch(event):
-        captured.append(dict(event))
-        real_dispatch(event)
-
-    monkeypatch.setattr(hub, '_dispatch', _recording_dispatch)
-    return captured
+def events(captured_events):
+    """Every event published during the test, global and scoped alike."""
+    return captured_events
 
 
 def test_create_publishes_project_created(events) -> None:

@@ -470,11 +470,14 @@ time. Single-target forms:
   keep serving the others.
 - **Events.** `GET /curation/events` (global) and
   `GET /curation/projects/{project}/events` are Server-Sent Events. Producers
-  append to a shared JSONL log in the state dir and every uvicorn worker tails
-  it, so a client on one worker sees events published by another
-  (`OP_EVENT_BUS=process` restores in-process fan-out for single-worker
-  setups). Events are advisory, not a durable feed. Examples: project lifecycle,
-  `combine.progress`, `config.changed`, `vlm.changed`.
+  insert a row in the PostgreSQL `events` table inside their own transaction and,
+  after it commits, send a Valkey wake-up (`op:events:<project id | global>`).
+  Each API process holds one Valkey subscription, reads new rows from its
+  `(xid, id)` cursor on a wake-up or every 2 seconds, and fans them out to its
+  clients. Every frame carries `id: <xid>-<id>`, so a reconnect with
+  `Last-Event-ID` replays what was missed; a cursor older than the 24-hour
+  retention (or from before a restore) gets a `reset` event first. Examples:
+  project lifecycle, `combine.progress`, `config.changed`, `vlm.changed`.
 - **GPU sharing during training.** The optional GPU arbiter
   (`docker-compose.gpu-arbiter.yml`, `OP_GPU_ARBITER_CONTAINERS`) stops
   configured sibling containers around a training run and restarts them after.

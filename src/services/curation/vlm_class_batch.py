@@ -19,7 +19,7 @@ from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
-from src.services.curation.event_hub import publish_crop_classified
+from src.services.events.publish import publish_crop_classified
 from src.services.labeling.run_labeler import vlm_stamp
 
 

@@ -60,7 +60,10 @@ class _LeakPEEncoder(FakePEEncoder):
 
 @pytest.fixture
 def leak_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reference_region_profile: None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reference_region_profile: None,
+    captured_events: list[dict[str, Any]],
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
@@ -72,7 +75,7 @@ def leak_env(
     from src.config.curation_roles import IndexRole
     from src.config.projects import new_project_record, resources_for_new
     from src.core.dependencies import app_state, get_async_triton
-    from src.services.curation import event_hub, index_bootstrap
+    from src.services.curation import index_bootstrap
     from src.services.projects import guard, registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
@@ -95,7 +98,6 @@ def leak_env(
     }.items():
         monkeypatch.setenv(f'OP_{name}', str(tmp_path / sub))
     monkeypatch.setenv('OP_S3_ALLOWED', 'sweep-allowed-bucket')
-    monkeypatch.setenv('OP_EVENT_BUS', 'process')
     # `ensure_fresh` skips the config read while the snapshot is under a
     # second old, so how many `configs` operations a route issues would
     # depend on how fast the previous route ran, and the sweep compares
@@ -251,15 +253,7 @@ def leak_env(
     )
     for slug in records:
         _seed_vlm(env, slug)
-    monkeypatch.setattr(event_hub, '_HUB', None)
-    hub = event_hub.get_event_hub()
-    real_dispatch = hub._dispatch
-
-    def _recording_dispatch(event: dict[str, Any]) -> None:
-        env.events.append(dict(event))
-        real_dispatch(event)
-
-    monkeypatch.setattr(hub, '_dispatch', _recording_dispatch)
+    env.events = captured_events
 
     def _no_network(*_a: Any, **_k: Any) -> Any:
         raise httpx.ConnectError('network disabled in the leak test')

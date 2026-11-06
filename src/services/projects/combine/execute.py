@@ -161,7 +161,7 @@ def _sum_reports(done: dict[int, dict[str, Any]]) -> Counter[str]:
 
 
 def _publish(job_id: str, target: str, state: dict[str, Any]) -> None:
-    from src.services.curation.event_hub import publish_global_event
+    from src.services.events.publish import publish_global_event
 
     with contextlib.suppress(Exception):
         publish_global_event(

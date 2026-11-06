@@ -14,17 +14,16 @@ dashboard.
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
     from opensearchpy import AsyncOpenSearch
 
-from fastapi.responses import StreamingResponse
+from collections.abc import AsyncIterator  # noqa: TC003  # FastAPI reads the return annotation
+
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from src.routers.curation._common import OpenSearchDep, router
 
@@ -77,8 +76,8 @@ async def _cached_stats_payload(opensearch: AsyncOpenSearch) -> dict[str, Any]:
     return await asyncio.shield(task)
 
 
-@router.get('/pipeline/events')
-async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
+@router.get('/pipeline/events', response_class=EventSourceResponse)
+async def pipeline_events(opensearch: OpenSearchDep) -> AsyncIterator[ServerSentEvent]:
     """Server-sent events stream for the curation dashboard.
 
     Replaces a ``GET /curation/stats/dataset`` polling loop. One open
@@ -96,16 +95,14 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
       pending_verification) keep ticking while the detection worker
       drains the queue independent of auto_label. Frontends that only
       care about pipeline status can ignore these.
-    * heartbeat comment frame every 15 s so reverse proxies don't reap
-      the connection. This is the only fixed-rate traffic on the
-      channel.
+    * a keep-alive comment every 15 s, sent by FastAPI's SSE response so
+      reverse proxies don't reap the connection.
 
     The dashboard consumes this with ``new EventSource(url)`` and
     switches on ``ev.type`` (snapshot | state | stats).
     """
     from src.services.curation.autolabel import job as auto_label_job
 
-    HEARTBEAT_SECONDS = 15.0
     # Periodic stats refresh — the detection worker writes back to the
     # items index continuously as it drains, but those writes don't touch
     # auto_label state.json so the state poll never sees them. Without a fallback timer the dashboard would only see updated
@@ -121,66 +118,44 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
         separate query."""
         return await _cached_stats_payload(opensearch)
 
-    def _sse(event: str, data: Any) -> str:
-        body = json.dumps(data, default=str)
-        return f'event: {event}\ndata: {body}\n\n'
-
     STATE_POLL_SECONDS = 1.0
 
-    async def _gen() -> AsyncIterator[str]:
-        import time as _time
+    # Bootstrap. Send the current state + stats so the client renders
+    # without any parallel REST call.
+    last_mtime = auto_label_job.state_mtime()
+    state = auto_label_job.get_state()
+    stats = await _build_stats_payload()
+    yield ServerSentEvent(event='snapshot', data={'state': state, 'stats': stats})
 
-        # Bootstrap. Send the current state + stats so the client renders
-        # without any parallel REST call.
-        last_mtime = auto_label_job.state_mtime()
-        state = auto_label_job.get_state()
-        stats = await _build_stats_payload()
-        yield _sse('snapshot', {'state': state, 'stats': stats})
-
-        last_stage = state.get('stage')
-        last_status = state.get('status')
-        last_stats_at = last_frame_at = _time.monotonic()
-        while True:
-            await asyncio.sleep(STATE_POLL_SECONDS)
-            now = _time.monotonic()
-            mtime = auto_label_job.state_mtime()
-            if mtime != last_mtime:
-                last_mtime = mtime
-                state = auto_label_job.get_state()
-                last_frame_at = now
-                yield _sse('state', state)
-                stage = state.get('stage')
-                status = state.get('status')
-                # Only re-query stats when something the dashboard's
-                # dataset rollup would care about flipped (stage
-                # transition or terminal status). Skips repeated stats
-                # frames during a single stage's progress ticks.
-                if stage != last_stage or status != last_status:
-                    last_stage = stage
-                    last_status = status
-                    stats = await _build_stats_payload()
-                    last_stats_at = now
-                    yield _sse('stats', stats)
-            # Periodic stats refresh regardless of auto_label activity.
-            # The detection worker keeps writing back to the items index
-            # as it drains the queue; this lets the dashboard reflect
-            # those counts in near-real-time without coupling to
-            # auto_label.
-            if (now - last_stats_at) >= STATS_REFRESH_SECONDS:
+    last_stage = state.get('stage')
+    last_status = state.get('status')
+    last_stats_at = time.monotonic()
+    while True:
+        await asyncio.sleep(STATE_POLL_SECONDS)
+        now = time.monotonic()
+        mtime = auto_label_job.state_mtime()
+        if mtime != last_mtime:
+            last_mtime = mtime
+            state = auto_label_job.get_state()
+            yield ServerSentEvent(event='state', data=state)
+            stage = state.get('stage')
+            status = state.get('status')
+            # Only re-query stats when something the dashboard's
+            # dataset rollup would care about flipped (stage
+            # transition or terminal status). Skips repeated stats
+            # frames during a single stage's progress ticks.
+            if stage != last_stage or status != last_status:
+                last_stage = stage
+                last_status = status
                 stats = await _build_stats_payload()
-                last_stats_at = last_frame_at = now
-                yield _sse('stats', stats)
-            if (now - last_frame_at) >= HEARTBEAT_SECONDS:
-                last_frame_at = now
-                yield ': keepalive\n\n'
-
-    return StreamingResponse(
-        _gen(),
-        media_type='text/event-stream',
-        headers={
-            # Disable nginx/proxy buffering. Without this, events sit in
-            # the proxy buffer until enough have accumulated to flush.
-            'X-Accel-Buffering': 'no',
-            'Cache-Control': 'no-cache, no-transform',
-        },
-    )
+                last_stats_at = now
+                yield ServerSentEvent(event='stats', data=stats)
+        # Periodic stats refresh regardless of auto_label activity.
+        # The detection worker keeps writing back to the items index
+        # as it drains the queue; this lets the dashboard reflect
+        # those counts in near-real-time without coupling to
+        # auto_label.
+        if (now - last_stats_at) >= STATS_REFRESH_SECONDS:
+            stats = await _build_stats_payload()
+            last_stats_at = now
+            yield ServerSentEvent(event='stats', data=stats)

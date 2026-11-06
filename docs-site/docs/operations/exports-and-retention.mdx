@@ -82,7 +82,7 @@ Exports, training runs and caches would otherwise grow without bound.
 | Export backlog | Same planner, by hand | `prune_exports.py [--keep-last N] [--apply]` |
 | Finished training runs and bake-off output | Keep-last, by hand | `prune_training_runs.py [--keep-last N] [--bakeoff-out-keep-last N] [--apply]` |
 | Crop cache | Pruned back toward 90% of the cap once exceeded (checked every ~256 ingest writes) | `OP_CROP_CACHE_MAX_BYTES` |
-| Event log | Rotates to a single `.1` backup | `OP_EVENT_LOG_MAX_BYTES` |
+| Events | Rows older than 24 hours are deleted by the reaper | none (fixed) |
 
 Both scripts live in `scripts/curation/` and ship in the `api` image. Run them there:
 

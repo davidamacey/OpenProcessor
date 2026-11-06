@@ -234,18 +234,18 @@ async def publish_keymap_changed(doc: KeymapDoc, configs_index: str, client: Any
     keymap doc's own revision and the deployment-wide ``config_revision`` the
     write bumped (CW-K section 4.4)."""
     from src.services.config_store.index import get_config_revision
-    from src.services.curation.event_hub import get_event_hub
+    from src.services.events.publish import apublish
 
     config_revision = await get_config_revision(client, configs_index)
-    get_event_hub().publish(
+    await apublish(
+        'config.changed',
         {
-            'type': 'config.changed',
             'topic': 'config',
             'axis': 'keymap',
             'name': None,
             'config_revision': config_revision,
             'keymap_revision': doc.revision,
-        }
+        },
     )
 
 

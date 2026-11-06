@@ -76,7 +76,7 @@ def _state(*, project_paused: bool) -> PipelinePauseState:
 def _publish_pause_event(*, event_type: str, cfg: Any) -> None:
     """BA-P2-5: same envelope style as the M5-step-9 project.* events
     (``target`` names the affected slug)."""
-    from src.services.curation.event_hub import publish_global_event
+    from src.services.events.publish import publish_global_event
 
     publish_global_event(event_type, target=cfg.project_slug)
 

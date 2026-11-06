@@ -415,16 +415,16 @@ async def activate_axis(
         store, client, axis=axis, name=name, revision=revision, expected_active=expected_active
     )
     if publish_event:
-        from src.services.curation.event_hub import get_event_hub
+        from src.services.events.publish import apublish
 
-        get_event_hub().publish(
+        await apublish(
+            'config.changed',
             {
-                'type': 'config.changed',
                 'topic': 'config',
                 'axis': axis,
                 'name': name,
                 'config_revision': result['config_revision'],
-            }
+            },
         )
     return result
 

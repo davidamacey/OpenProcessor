@@ -169,13 +169,13 @@ async def test_deleting_the_target_leaves_the_sources_whole(world: World) -> Non
 async def test_progress_events_name_the_target_and_busy_lists_the_job(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.curation import event_hub
+    from src.services.events import publish as event_publish
     from src.services.projects.busy import _combine_jobs
 
     build(world)
     events: list[tuple[str, dict[str, Any]]] = []
     monkeypatch.setattr(
-        event_hub,
+        event_publish,
         'publish_global_event',
         lambda event_type, **fields: events.append((event_type, fields)),
     )
