@@ -9,12 +9,18 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+import test_cli_project
 from installer_harness import PROJECT
+from test_cli_project import cli
 from test_ownership_and_rerun import install
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from installer_harness import Shimmed
+
+inst = test_cli_project.inst
 
 UPGRADE = 'scripts.db.upgrade_from_060'
 ROLLBACK = 'scripts.db.rollback_to_060'
@@ -165,3 +171,10 @@ def test_a_rollback_with_no_bundle_has_no_control_data_step(shimmed: Shimmed) ->
     result = shimmed.run(['--rollback', '--unattended', '--dir', 'inst'])
     assert result.returncode == 0, result.stderr[-2000:]
     assert not [ln for ln in _calls(shimmed) if ROLLBACK in ln]
+
+
+def test_db_verify_runs_the_report_in_the_api_image(shimmed: Shimmed, inst: Path) -> None:
+    shimmed.flag('allow_mutations')
+    done = cli(shimmed, inst, 'db', 'verify')
+    assert done.returncode == 0, done.stderr + done.stdout
+    assert [ln for ln in _calls(shimmed) if ' run ' in ln and 'scripts.db.verify' in ln]

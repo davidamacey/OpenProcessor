@@ -98,12 +98,19 @@ _db_restore() {
     log_success "restored from ${file}"
 }
 
+# db verify: the database against OpenSearch and storage (class reconciliation, project indexes,
+# storage keys). Report only; it changes nothing.
+_db_verify() {
+    dc run --rm --no-deps -T -w /app api python -m scripts.db.verify
+}
+
 cmd_db() {
     local sub="${1:-}"
     shift || true
     case "$sub" in
         backup) _db_backup "$@" ;;
         restore) _db_restore "$@" ;;
-        *) log_error "usage: openprocessor db backup [--out DIR] | db restore <file> [--yes]"; return 1 ;;
+        verify) _db_verify "$@" ;;
+        *) log_error "usage: openprocessor db backup [--out DIR] | db restore <file> [--yes] | db verify"; return 1 ;;
     esac
 }
