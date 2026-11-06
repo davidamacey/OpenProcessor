@@ -2219,9 +2219,9 @@ do_rollback() {
     # Load this installer's library before the restore swaps scripts/lib/ for the older release's; never re-source after it.
     # shellcheck source=scripts/lib/image_keys.sh
     source "${OP_DIR}/scripts/lib/image_keys.sh"
-    # shellcheck source=scripts/lib/registry_migration.sh
-    source "${OP_DIR}/scripts/lib/registry_migration.sh"
-    registry_migration_reverse || die "could not write the class registry back to class_registry.json; nothing was restored"
+    # shellcheck source=scripts/lib/upgrade_060.sh
+    source "${OP_DIR}/scripts/lib/upgrade_060.sh"
+    upgrade_060_rollback || die "could not restore the 0.6.0 control data; nothing was restored"
     mkdir -p "$undo"
     chmod 700 "${OP_DIR}/.install/rollback-undo" "$undo"
     while IFS= read -r -d '' rel; do
@@ -2636,8 +2636,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/cropwright_auth.sh"
     # shellcheck source=scripts/lib/install_summary.sh
     source "${OP_DIR}/scripts/lib/install_summary.sh"
-    # shellcheck source=scripts/lib/registry_migration.sh
-    source "${OP_DIR}/scripts/lib/registry_migration.sh"
+    # shellcheck source=scripts/lib/upgrade_060.sh
+    source "${OP_DIR}/scripts/lib/upgrade_060.sh"
     refuse_retired_env "$ENV_FILE"
 
     _env_msg="$(env_generate "${OP_DIR}/env.template" "$ENV_FILE")" || die "could not create ${ENV_FILE}"
@@ -2889,6 +2889,7 @@ YAML
     log_step "Images"
     pull_images
     verify_image_digests
+    if (( existing )) && upgrade_060_applies "$prev"; then upgrade_060_step || exit "$EXIT_HEALTH"; fi
     state_write
     if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         local ids=()
@@ -2951,9 +2952,6 @@ YAML
     fi
     local health_rc=0
     run_health || health_rc=1
-    if (( health_rc == 0 && existing )) && [[ "$OP_DRY_RUN" != 1 && "$OP_NO_START" != 1 ]]; then
-        registry_migration_run || exit "$EXIT_HEALTH"
-    fi
     if [[ "$OP_SAMPLE_DATA" == 1 ]]; then
         log_step "Sample data (public COCO subset)"
         if [[ "$OP_DRY_RUN" == 1 || "$health_rc" == 0 ]]; then

@@ -32,7 +32,7 @@ scripts/lib/opensearch_heap.sh
 scripts/lib/retired_env.sh
 scripts/lib/cropwright_auth.sh
 scripts/lib/install_summary.sh
-scripts/lib/registry_migration.sh
+scripts/lib/upgrade_060.sh
 examples/vlm/catalog.tsv
 export/build_pe_trt.sh	exec
 monitoring/**	optional
