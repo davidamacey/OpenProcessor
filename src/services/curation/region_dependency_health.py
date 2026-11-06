@@ -18,61 +18,57 @@ This checks the active profile's Triton model(s) directly from the API
 process (which can always reach Triton over the network, unlike probing
 the detection worker container, whose own heartbeat is written to a
 container-local path the API can't see) and persists a per-model
-"first seen unavailable" timestamp to the same shared `/jobs` volume
-`region_drain.py`'s streak state uses, so repeated polls report a
-stable `unavailable_since`, not "just now" every time.
+"first seen unavailable" timestamp in the project's `region_dependency_health` marker
+(`project_state`), so repeated polls report a stable `unavailable_since`, not "just now"
+every time.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.env import env_path, env_str
-from src.utils.atomic_write import atomic_write_json
+from src.config.env import env_str
+from src.config.project_context import current_project_id
+from src.db.repos.records import get_project_state, modify_project_state
+from src.db.session import project_tx
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-    from pathlib import Path
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.config import DetectionProfile
 
-
-def _state_dir() -> Path:
-    """Resolved fresh each call (same convention as region_drain.py's
-    _state_dir) so tests can override via monkeypatch/env."""
-    from src.config.project_context import project_jobs_dir
-
-    # Per project: the streak/stall state describes one project's queue.
-    return project_jobs_dir(env_path('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain'))
+_KEY = 'region_dependency_health'
 
 
-def _state_file() -> Path:
-    return _state_dir() / 'dependency_health.json'
-
-
-def _read_state() -> dict[str, float]:
-    try:
-        raw = json.loads(_state_file().read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
+async def _read_state(session: AsyncSession) -> dict[str, float]:
+    project_id = current_project_id()
+    async with project_tx(session, project_id):
+        row = await get_project_state(session, project_id, _KEY)
+    raw = {} if row is None else row.value
     return {k: float(v) for k, v in raw.items() if isinstance(v, (int, float))}
 
 
-def _atomic_write(state: dict[str, float]) -> None:
-    """Best-effort persist. A write failure (state dir not writable,
-    volume not mounted) must never turn "what's the region-drain stall
-    reason" into a 500 on /stats/dataset or /ingest/region_drain --
-    the caller just re-derives "since" as "now" on the next successful
-    poll instead of losing the whole response."""
-    try:
-        _state_dir().mkdir(parents=True, exist_ok=True)
-        atomic_write_json(_state_file(), state, default=None)
-    except OSError:
-        pass
+async def _write_state(
+    session: AsyncSession, read: dict[str, float], tracked: dict[str, float]
+) -> None:
+    """Persist only a change, merged into the stored row so a concurrent poll's entries survive."""
+    if tracked == read:
+        return
+    recovered = set(read) - set(tracked)
+    added = {m: v for m, v in tracked.items() if m not in read}
+
+    def merge(current: dict[str, Any] | None) -> dict[str, Any]:
+        stored = {k: v for k, v in (current or {}).items() if k not in recovered}
+        return {**added, **stored}
+
+    project_id = current_project_id()
+    async with project_tx(session, project_id):
+        await modify_project_state(session, project_id, _KEY, merge)
 
 
 @dataclass(frozen=True)
@@ -121,6 +117,7 @@ async def _default_check_segmenter_health() -> tuple[bool, str]:
 
 
 async def check_region_dependencies(
+    session: AsyncSession,
     get_repository_index: Callable[[], Awaitable[list[dict[str, Any]]]],
     profile: DetectionProfile,
     *,
@@ -150,7 +147,8 @@ async def check_region_dependencies(
 
     ts = now or datetime.now(UTC)
     epoch = ts.timestamp()
-    tracked = _read_state()
+    read = await _read_state(session)
+    tracked = dict(read)
     results: list[RegionDependencyStatus] = []
 
     # ---- detector: Triton repository index ----
@@ -234,7 +232,7 @@ async def check_region_dependencies(
                 )
             )
 
-    _atomic_write(tracked)
+    await _write_state(session, read, tracked)
     return results
 
 
@@ -257,13 +255,6 @@ def stall_reason(
         return None
     parts = [f'{d.role} ({d.model}) unavailable since {d.unavailable_since}' for d in unavailable]
     return f'{pending_detection} item(s) awaiting region detection; ' + '; '.join(parts)
-
-
-def _reset_for_tests() -> None:
-    import contextlib
-
-    with contextlib.suppress(FileNotFoundError):
-        _state_file().unlink()
 
 
 __all__ = [

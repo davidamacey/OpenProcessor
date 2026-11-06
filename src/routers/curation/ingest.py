@@ -26,6 +26,7 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
 from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.curation._common import (
@@ -368,7 +369,9 @@ async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
 
 
 @router.get('/ingest/region_drain', response_model=IngestRegionDrainResponse)
-async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainResponse:
+async def ingest_region_drain(
+    opensearch: OpenSearchDep, session: DbSessionDep
+) -> IngestRegionDrainResponse:
     """Region-detection worklog: how many items are still waiting for the
     detection worker.
 
@@ -432,11 +435,11 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
     pending_detection = raw.get(RegionStatus.PENDING_DETECTION, 0)
     pending_verification = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
     total_unfinished = pending_detection + pending_verification
-    verdict = observe_drain(total_unfinished)
+    verdict = await observe_drain(session, total_unfinished)
 
     control = TritonControlService()
     dependencies = await check_region_dependencies(
-        control.get_repository_index, region_profile_or_neutral()
+        session, control.get_repository_index, region_profile_or_neutral()
     )
     dependency_responses = [
         RegionDependencyStatusResponse(

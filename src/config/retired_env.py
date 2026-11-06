@@ -59,6 +59,7 @@ RETIRED_ENV: dict[str, str] = {
     # Profiles lost the single target class.
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_ID': _BAKEOFF_TARGET_REMOVED,
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME': _BAKEOFF_TARGET_REMOVED,
+    'OP_REGION_DRAIN_STATE_DIR': f'{_REMOVED} the drain streak is the region_drain row of project_state',
 }
 
 
