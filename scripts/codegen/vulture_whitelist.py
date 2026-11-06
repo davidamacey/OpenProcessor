@@ -217,3 +217,8 @@ _.insert_event_async  # src/db/repos/events.py (3B), called by src/services/even
 _.oldest_cursor  # src/db/repos/events.py (3B), called by src/services/events/sse.py
 _.project_id_for_slug  # src/db/repos/events.py (3B), called by src/services/events/sse.py
 _.delete_older_than  # src/db/repos/events.py (3B), called by reaper rule f (src/services/jobs/reaper.py, lane 3A)
+
+# src/tasks/runtime (lane 3A): wired by the task wrapper and register_job in the next commit.
+_.JobHeartbeat  # src/tasks/runtime/heartbeat.py, started by src/tasks/runtime/job_task.py
+_.DbInventoryWriter  # src/tasks/runtime/inventory.py, registered by register_job
+_.head_transaction  # src/tasks/runtime/scoped.py, the wrapper's first read
