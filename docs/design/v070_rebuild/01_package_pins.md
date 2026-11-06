@@ -323,6 +323,7 @@ supplies versions and licenses. All resolve together with the runtime set on Pyt
 | psycopg-pool | 3.3.3 | **not added** | LGPL-3.0-only | removed from the plan 2026-11-05: [02b](02b_jobs_locking_events.md) section 8 pools through SQLAlchemy (`QueuePool` in the API, `NullPool` for the async engine in a Celery child), and nothing in 02, 02a-02d uses `psycopg_pool`. Add it only if a later plan uses it, with its LGPL note in ATTRIBUTION.md |
 | testcontainers | 4.15.0 | `testcontainers[postgres,redis]==4.15.0` in the test set only | Apache-2.0 | has `postgres`, `redis` and `valkey` extras; the `redis` module starts any image, so a Valkey image works. Needs Docker at test time, so it belongs to the live or integration marker, not the offline suite |
 | flower | 2.2.0 | `==2.2.0`, only if Flower runs | BSD | needs `tornado<7,>=6.5.7`; optional (ENV-14) |
+| asgi-correlation-id | 5.0.1 | `==5.0.1` | MIT | needs `starlette>=0.18` (FastAPI's); the request id in every log line and carried into Celery tasks (owner D-83, lane 1B-9, [README](https://github.com/snok/asgi-correlation-id)) |
 
 Replaces the sketch in section 7.1 of `reference/environment_and_setup.md`, which now names Valkey; the server is Valkey (below). A Redis 8 server is available under RSALv2/SSPL/AGPLv3 terms; Valkey is BSD-3-Clause
 and avoids the question.

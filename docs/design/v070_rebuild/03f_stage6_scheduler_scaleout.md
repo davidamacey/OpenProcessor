@@ -67,6 +67,7 @@ and the advisory lock of [02b](02b_jobs_locking_events.md) section 4.1.
 | `op.periodic.near_dup_rescore` (research near-duplicates 5.2) | 30 s | the request-time grouping | `NEAR_DUP_RESCORE, <project lock_key>` (its own advisory-lock class, 02b; review RR-21); starts `near_dup_rescore` per (project, level) with pending rows, idempotency key `near_dup_rescore:<project>:<level>:<slot>` |
 | `op.periodic.near_dup_full_build` | weekly | - | per project; a full `image` build (cheap at image level) to bound incremental drift (risk R4) |
 | `op.periodic.near_dup_prune` | daily | - | deletes near-duplicate runs beyond the current and two superseded per project and level (02a section 9) |
+| `op.periodic.job_stats` (owner D-83) | 30 s | - | none (read-only); one grouped `SELECT` over `jobs` sets the gauges of 6A-4 |
 | `op.periodic.db_backup` | `OP_DB_BACKUP_INTERVAL_H` if set | - | `pg_try_advisory_xact_lock` on a backup class; off by default (D-61) |
 
 The two auto-label starters ran only with the `curation` profile up; the consumer gate keeps that
@@ -106,11 +107,20 @@ handler calls `mark_process_dead` for a child leaving under `--max-tasks-per-chi
 a dashboard reads is exposed with `start_http_server` from `worker_init` on an internal port, with a
 scrape target (6B).
 
+**Queue and job metrics (owner D-83: monitoring instead of a new UI).** From the database, which is
+the truth, not from the broker: `op.periodic.job_stats` sets `op_jobs{kind,status}` (queued, running,
+paused, interrupted), `op_jobs_oldest_queued_seconds{kind}` and `op_jobs_failed_24h{kind}`; the job
+wrapper (3A) observes `op_job_duration_seconds{kind,outcome}` (a histogram, outcome = completed,
+failed, cancelled) when a job ends. Red: `tests/periodic/test_job_stats.py` (`db`): two queued jobs,
+one 20 minutes old, give `op_jobs{status="queued"} 2` and an oldest age of at least 1,200 s.
+Control: an empty table gives zeros, not missing series. The existing per-endpoint
+`http_request_duration_seconds` and the per-stage `stage_timing` histograms stay as they are.
+
 ## Lane 6B `b2/scale-out-compose`
 
 **Owns (research additions: 6B-7, 6B-8 below):** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.gpu-arbiter.yml`, new
 `docker-compose.pgbouncer.yml`, `docker/test/compose.yml`, `monitoring/prometheus.yml`,
-`monitoring/alloy-config.alloy`, `monitoring/dashboards/**` (review fix R-12), the shell
+`monitoring/alloy-config.alloy`, `monitoring/dashboards/**` (review fix R-12), new `monitoring/alerts/jobs-alerts.yml` (D-83), the shell
 helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|triton|trainer|vlm|opensearch)" scripts/lib openprocessor`),
 `src/services/labeling/vlm_url_policy.py` (own-container recognition), `tests/compose/**`
 (new tests), `tests/installer/test_container_lookup_by_label.py`.
@@ -122,7 +132,7 @@ helpers that address containers by name (`rg -ln "COMPOSE_PROJECT_NAME.*-(api|tr
 | 6B-3 | scale: `docker compose up --scale api=2 --scale jobs-worker=2` renders; `jobs-beat` stays one replica (`deploy.replicas: 1`); the live harness scales `jobs-worker` instead of declaring two services | `tests/compose/test_scale_render.py` (offline `docker compose config` with the scale flags) | - |
 | 6B-4 | the GPU-arbiter overlay adds the one-process `gpu-arbiter-worker` (queue `arbiter` only) and mounts the Docker socket into it alone; `periodic-worker` never gets the socket (review fix R-20); its header rewritten (the trade-off text stays, naming the worker) | `tests/compose/test_arbiter_overlay.py`: only `gpu-arbiter-worker` mounts the socket and it consumes only `arbiter` | - |
 | 6B-5 | `docker-compose.pgbouncer.yml` (D-50, opt-in): PgBouncer in transaction mode for the pooled DSN, `OP_DB_POOLER=pgbouncer`, `OP_DB_DIRECT_HOST=postgres` kept for the beat and migration locks; the header gives the formula of [02b](02b_jobs_locking_events.md) section 8.1 for when it becomes required (R-6) | `tests/compose/test_pgbouncer_overlay.py`: the API's pooled host is the pooler and its direct host is Postgres | - |
-| 6B-6 | monitoring for replicas and the new services (review fix R-12; the static `api:8000` target sees one replica per scrape and mixes their counters): Prometheus uses `dns_sd_configs` (type A) on each scaled service name, which Docker's embedded DNS answers with every replica, so each replica is its own `instance` (chosen over `docker_sd_configs`, which would need the Docker socket in Prometheus); Alloy keeps logs by the Compose `service` label for every Python service, `postgres` and `valkey`; the dashboards select and aggregate by `service` (or `job`), never by `container` or `instance`, because a `dns_sd` `instance` is a container IP that changes when the container is recreated (RC-8), and Prometheus joins the stack's Compose network so the names resolve; an alert on Valkey `used_memory` near `maxmemory` (R-19) | `tests/compose/test_monitoring_targets.py`: every service that consumes a queue of `TaskQueues.ALL`, plus `api`, has a scrape rule and a log rule; no dashboard query selects by `container` | render test |
+| 6B-6 | monitoring for replicas and the new services (review fix R-12; the static `api:8000` target sees one replica per scrape and mixes their counters): Prometheus uses `dns_sd_configs` (type A) on each scaled service name, which Docker's embedded DNS answers with every replica, so each replica is its own `instance` (chosen over `docker_sd_configs`, which would need the Docker socket in Prometheus); Alloy keeps logs by the Compose `service` label for every Python service, `postgres` and `valkey`; the dashboards select and aggregate by `service` (or `job`), never by `container` or `instance`, because a `dns_sd` `instance` is a container IP that changes when the container is recreated (RC-8), and Prometheus joins the stack's Compose network so the names resolve; an alert on Valkey `used_memory` near `maxmemory` (R-19); owner D-83: a `jobs-queue` dashboard (queued and running by kind, oldest queued age, failures per day, duration percentiles by kind) and alerts in new `monitoring/alerts/jobs-alerts.yml`: oldest queued job older than 15 min for 5 min (`OldestQueuedJob`), more than 5 failures of one kind in 1 h (`JobFailureBurst`), `op_disk_free_ratio` below 10 % (`DiskLow`) | `tests/compose/test_monitoring_targets.py`: every service that consumes a queue of `TaskQueues.ALL`, plus `api`, has a scrape rule and a log rule; no dashboard query selects by `container` | render test |
 | 6B-7 | research GPU S-16: the `triton-server` service reads its card and NUMA node from the env the installer generates from the active serving profile (`TRITON_GPU_ID` today); a second card is a second generated service `triton-server-<slot>`, never a hand edit; the `cluster-worker` consumer of 1C-8 joins the consumers test | `tests/compose/test_triton_service_shape.py`: no fixed `container_name`, the card from the generated env; `tests/compose/test_consumers_after_b2.py` lists `cluster` | the one-card render unchanged |
 | 6B-8 | research GPU S-22 (RD-18 answered as recommended (D-78)): the DCGM exporter field list in the `monitoring` profile adds `DCGM_FI_PROF_SM_ACTIVE`, `DCGM_FI_PROF_SM_OCCUPANCY`, `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE`, `DCGM_FI_PROF_DRAM_ACTIVE`, `DCGM_FI_PROF_PCIE_TX_BYTES`, `DCGM_FI_PROF_PCIE_RX_BYTES`; the Grafana GPU dashboard shows them beside utilization; off in the minimal install | `tests/compose/test_dcgm_profiling_fields.py` | the monitoring render test |
 

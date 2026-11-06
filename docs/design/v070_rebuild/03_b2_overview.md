@@ -198,7 +198,7 @@ container per xdist worker); `make contracts-check`; `.venv/bin/python scripts/d
 the frontend full set (4E changed `frontend/`): `npm ci`, `npm run check`, lint, knip, `npm run test`,
 `npm run build`, `npm run test:e2e`.
 
-**T2 live harness, `-p op-b2-live`, budget 5 h 50 min = 350 minutes, the sum of the step budgets below (steps 1-18: 265 minutes, 4 h 25 min; the research-seam steps 19-23, approved by the owner 2026-11-04, RD-1: 85 minutes), the one run that covers B1 and B2 (live run 2 of 3).** The harness gains
+**T2 live harness, `-p op-b2-live`, budget 6 h 10 min = 370 minutes, the sum of the step budgets below (step 24, the load check, 20 minutes, owner D-83; steps 1-18: 265 minutes, 4 h 25 min; the research-seam steps 19-23, approved by the owner 2026-11-04, RD-1: 85 minutes), the one run that covers B1 and B2 (live run 2 of 3).** The harness gains
 `postgres`, `valkey`, `db-migrate`, `jobs-worker` (scaled to 2), `periodic-worker`,
 `open-vocab-worker`, `jobs-beat`, the two curation consumers and a fake GPU consumer per GPU queue
 (no GPU: the fake handlers sleep and write progress). Wait with healthchecks or the Monitor tool; no
@@ -229,6 +229,7 @@ sleep loops.
 | 21 | near-duplicates and the holdout (research near-duplicates 5.4): a full `image` and `item` build on a constructed public copy set; freeze a holdout | every leak-group member of a held-out item is held out and counted; a freeze with pending rows answers 409 `near_dup_stale` | 15 min |
 | 22 | the embedding re-index rehearsal in small (research embeddings 5.5): register a second public encoder as a candidate `item` space on 2,000 items, kill a worker mid-build, resume, promote, retire | resume re-encodes nothing finished; served search answers during the build; the flip is visible to every worker within one config poll | 15 min |
 | 23 | the five stale Cropwright screenshots (owner-approved gap, 2026-11-04; [traceability](reference/traceability.md) section 1.8): with the docs overlay of `docs-site/docs/developer-guide/screenshots.mdx` on public data, capture only `projects-1600.png` (phone layout), `ingest-policy-1600.png`, `ingest-policy-preview-1600.png`, `dashboard-1600.png` (button label) and `clusters-1600.png` (filter bar and loop panel) with `frontend/scripts/capture_docs_screenshots.py` | each viewed full-page at desktop and 430 px before commit; the five files replace the stale ones under `docs-site/static/img/screenshots/cropwright/` in the B2 closing commit; `tests/test_docs_screenshot_seed.py` green | 20 min |
+| 24 | load check (owner D-83): `tests/live/test_job_load.py` queues 1,000 short `op.infra.noop`-style jobs spread over 10 projects with 4 `jobs-worker` processes (2 replicas, concurrency 2) | all 1,000 end `completed`; no deadlock or `claim` error in the logs; every project's first job starts within 60 s (fair claiming); the peak of `pg_stat_activity` stays within the connection budget of [02b](02b_jobs_locking_events.md) section 8; median claim-to-start and heartbeat lag recorded in the PR | 20 min |
 
 A step that overruns stops the run; the coordinator reports instead of extending the budget.
 
@@ -256,7 +257,7 @@ Then PR3 from `int/b2-control-plane` against `main`, local CI parity first, the 
 | R2-8 | Cropwright misses `queued` or the SSE id format | contracts per family; 4E; the browser check |
 | R2-9 | a secret file unreadable by a container user | spikes S0 and S1 record the ownership rule; installer tests |
 | R2-10 | Celery and kombu versions drift | exact pins, `pip check`, spike S1 on the pins (trap T-17) |
-| R2-11 | the live run overruns its 5 h 50 min budget (the PR1 and PR2 smokes: 55 min and 3 h 15 min) | stop and report |
+| R2-11 | the live run overruns its 6 h 10 min budget (the PR1 and PR2 smokes: 55 min and 3 h 15 min) | stop and report |
 | R2-12 | projects starve each other on the `jobs` queue (carried from the original E13) | FIFO with `OP_JOBS_CONCURRENCY` (4) plus the per-project exclusive kinds; per-project routing is added only if the live run or a user report measures starvation |
 
 ## 11. What to keep after merge

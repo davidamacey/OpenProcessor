@@ -219,6 +219,8 @@ call it) and refuse to start, naming the missing one, or on a schema at the wron
 `/ready` names any dependency that is down; tests get a real database, and the default
 offline command deselects the database tests (R-4). No job family moves yet.
 
+**Operations additions (owner D-83).** 1B-9 request and job ids in every log line (`asgi-correlation-id` plus structlog contextvars); 1D-7 low-disk reporting in `/ready` and a 507 refusal at critical. Their metrics, dashboard and alerts land in W2.4 (6A-4, 6B-6) and the load check in the PR3 sweep (step 24).
+
 **Preconditions.** W2.0 merged; `int/b2-control-plane` cut from `main`. The CI shards (PR #477, merged 2026-11-04) and this plan set are already on `main`.
 
 | Order | Lane (plain name) | Branch | Owns | Brief | Issues |
@@ -620,6 +622,29 @@ Research GPU total before the tag: **about 10 hours**, the owner's cap (was 31 b
 A failed window step is re-run only after its fix is merged to the integration branch, never per
 attempt. A lane that needs a GPU number waits for its window.
 
+## 5a. Rough size per wave (owner D-83; a guide, not a promise)
+
+Estimates for planning around the shared host and peer sessions. "Coding" is wall-clock with the
+wave's lanes running in parallel (one Sonnet agent per lane; a lane is typically 1-4 agent hours);
+"checks" is the part check, smoke or sweep after the merges. Re-estimate after W2.1 from its measured
+lane times and record the actuals in the ledger.
+
+| Wave | Lanes | Coding (wall-clock) | Checks | Ends with |
+|---|---|---|---|---|
+| W2.0 pins part A + `make gate` | 2 | half a day | about 1 h (CPU sweep) | its own PR |
+| W2.1 foundation | 7 | 1-2 days (1D after 1A and 1B) | about 1 h part check | - |
+| W2.2 control data + job runtime | 9 | 2-3 days (3A after 2A; 2F last) | about 1 h part check + 55 min smoke | **B2 PR1** |
+| W2.3a every job onto the queue | 9 (+ stage-6 part 1) | 2-3 days | about 1 h part check + 3 h 15 min smoke | **B2 PR2** |
+| W2.3b research families | 5 | 1-2 days | about 1 h part check | - |
+| W2.4 stage-6 part 2, docs, sweep | 6 | 1-2 days | about 40 min T1 + 6 h 10 min live run | **B2 PR3** |
+| W3 Ultralytics + pins part B | 7 | 2 days | sweep + GPU window 1 (about 1.5 GPU days) | B3 PR |
+| W4 stateless API | 5 | 1-2 days | sweep + live run 3 (2 h) | B4 PR |
+| W5a-W5e speed and plate text | 3-6 each | 1-2 days each | sweep + GPU window 2 gates | one PR each |
+| W6 release | prep lanes | 1 day | R-final, GPU window 3 (1-2 days) | the tag |
+
+Total, roughly 4-6 weeks of calendar time at one wave in flight with the next coding in parallel,
+dominated by the B2 waves and the GPU windows.
+
 ## 6. Test budget per wave
 
 | Tier | Where it runs |
@@ -628,7 +653,7 @@ attempt. A lane that needs a GPU number waits for its window.
 | Part check (D-63) | W2.1, W2.2, W2.3a, W2.3b: `-m db`, contracts, the merged lanes' tests, a short CPU bring-up |
 | Short live smoke | PR1 (W2.2 close: steps 1, 8, 9, 11, 55 min) and PR2 (W2.3a close: steps 3-7 and 12-18, 3 h 15 min); subsets of the run-2 steps, not numbered runs |
 | T1 full offline sweep | once per wave on the merged head: W2.0 (CPU only), W2.4 (PR3), W3, W4, W5a-W5d, the release-prep gate (PR1 and PR2 run the part check and the CI jobs only) |
-| Live harness | run 2 in W2.4 (PR3), 5 h 50 min = 350 minutes, the sum of steps 1-23 ([03](03_b2_overview.md) section 9: steps 1-18 4 h 25 min, the research steps 19-23 1 h 25 min); run 3 in W4 (2 h); run 1 was B1's smoke (done) |
+| Live harness | run 2 in W2.4 (PR3), 6 h 10 min = 370 minutes, the sum of steps 1-24 (step 24 the load check, D-83) ([03](03_b2_overview.md) section 9: steps 1-18 4 h 25 min, the research steps 19-23 1 h 25 min); run 3 in W4 (2 h); run 1 was B1's smoke (done) |
 | GPU | section 5 |
 
 Lanes never run a full suite, `--all-files`, the live harness or a GPU.
