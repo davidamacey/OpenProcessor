@@ -146,3 +146,18 @@ _.basic_auth  # scripts/flower/flowerconfig.py, an option Flower reads by name f
 _.EngineOutputContract  # src/schemas/models.py, validated by the engine export (stage 5)
 _.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
 _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)
+
+# Landed ahead of their callers (B2 stage 2, lane 2A): the repository is wired by the registry,
+# guard and lifecycle commits of the same lane. Delete each entry with its caller.
+_.claim_delete  # src/db/repos/projects.py, called by the project delete finish
+_.finish_delete  # src/db/repos/projects.py, called by the project delete finish
+_.get_by_slug  # src/db/repos/projects.py, called by the lifecycle service
+_.list_projects  # src/db/repos/projects.py, called by the registry snapshot
+_.load_project  # src/db/repos/projects.py, called by the 0.6.0 upgrade step (lane 2E)
+_.mark_deleting  # src/db/repos/projects.py, called by the project delete
+_.ownership_map  # src/db/repos/projects.py, called by the guard
+_.read_projects_revision  # src/db/repos/projects.py, called by the registry poll
+_.retired_slugs  # src/db/repos/projects.py, called by the registry snapshot
+_.rollback_delete  # src/db/repos/projects.py, called by the project delete
+_.set_paused  # src/db/repos/projects.py, called by the pause routes
+_.set_status  # src/db/repos/projects.py, called by archive, unarchive and the create ends
