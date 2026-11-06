@@ -255,7 +255,7 @@ two classes one id. `ensure_class` is idempotent by name for the automated write
 `class_registry.json` is moved by `openprocessor curation migrate-registry` (run by
 `upgrade` and `repair`); until then the class routes answer 409 `registry_not_migrated`.
 The file is now only an export snapshot, the training pin and what a rollback writes back.
-See [opensearch_schema_design.md](opensearch_schema_design.md#the-class-registry-document).
+See [opensearch_schema_design.md](opensearch_schema_design.md#the-class-registry).
 
 **Class identity is the name.** The class registry assigns indexes, but every boundary maps by
 name: dataset import and export, combine, training, promotion and sharing a

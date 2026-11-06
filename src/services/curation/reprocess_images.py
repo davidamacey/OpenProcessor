@@ -114,7 +114,7 @@ async def embed_image_chunk(
     try:
         if isinstance(targets, BaseException):
             raise targets
-        policy = await get_ingest_policy(opensearch)
+        policy = await get_ingest_policy()
         counts = await reembed_items(
             opensearch,
             pe,

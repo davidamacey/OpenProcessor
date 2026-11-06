@@ -14,16 +14,23 @@ status it never validated. Two independent probes from the review:
 from __future__ import annotations
 
 import asyncio
-import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from src.core.exceptions import RequestRejectedError
 from src.services.projects import busy, delete as delete_mod, lifecycle
-from src.services.projects.registry import ProjectRegistry, doc_to_record, set_project_registry
+from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
+from .conftest import (
+    FakeLifecycleOpenSearch,
+    amutate_project,
+    fake_ensure_indexes,
+    seed_default_project,
+)
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +50,7 @@ def _env(tmp_path, monkeypatch):
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 
@@ -84,15 +91,15 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
         # to treat it as stale (the create is NOT actually dead -- it's
         # blocked above, about to resume -- this is exactly the "slow,
         # not dead" scenario the review's probe describes).
-        stale_updated_at = (
-            datetime.now(UTC) - timedelta(seconds=delete_mod._BUILDING_STALE_SECONDS + 1)
-        ).isoformat()
-        client.docs['project:gamma']['updated_at'] = stale_updated_at
+        stale_updated_at = datetime.now(UTC) - timedelta(
+            seconds=delete_mod._BUILDING_STALE_SECONDS + 1
+        )
+        await amutate_project('gamma', updated_at=stale_updated_at)
         # delete_project's own precondition checks (_last_active_check,
         # any registry-snapshot-based read) must also see the doc as
         # stale, not just a raw client.get() -- keep the in-process
         # registry snapshot in sync with the direct mutation above.
-        registry._by_slug['gamma'] = doc_to_record(client.docs['project:gamma'])
+        await registry.refresh_strict()
 
         deleting = await lifecycle.delete_project(client, slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
@@ -102,13 +109,13 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
         release_create.set()
         with pytest.raises(RequestRejectedError) as exc_info:
             await create_task
-        assert exc_info.value.detail['error'] == 'invalid_transition'
+        assert exc_info.value.detail['error'] == 'project_not_found'
 
-        final_doc = client.docs.get('project:gamma')
-        assert final_doc is not None
-        assert final_doc['status'] == 'deleted', (
+        await registry.refresh_strict()
+        assert registry.get('gamma') is None, (
             'MA1: a slow create must never resurrect a tombstoned slug'
         )
+        assert 'gamma' in registry.retired_slugs()
 
     asyncio.run(_run())
 
@@ -132,7 +139,7 @@ def test_second_finish_cannot_delete_a_project_the_first_finish_rolled_back(monk
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
-    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.2)
+    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.6)
     monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_POLL_SECONDS', 0.02)
     monkeypatch.setattr(
         busy,
@@ -146,7 +153,8 @@ def test_second_finish_cannot_delete_a_project_the_first_finish_rolled_back(monk
         assert exc_info.value.detail['error'] == 'project_busy'
 
     async def _finish_b_mid_drain():
-        await asyncio.sleep(0.1)  # after A started draining, before A's 0.2s timeout
+        while 'alpha' not in delete_mod._FINISH_IN_PROGRESS:  # A is draining
+            await asyncio.sleep(0.005)
         with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'finish_in_progress'
@@ -198,20 +206,41 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
-    monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.2)
+    # The first finish to start draining is A: it times out (and rolls back); B's drain outlasts
+    # it, so the order does not depend on how fast either one reaches the drain.
+    drains: list[int] = []
+    real_drain = delete_mod._wait_for_drain
+
+    async def _drain(record):
+        monkeypatch.setattr(
+            delete_mod, '_DELETE_DRAIN_TIMEOUT_SECONDS', 0.4 if not drains else 10.0
+        )
+        drains.append(1)
+        return await real_drain(record)
+
+    monkeypatch.setattr(delete_mod, '_wait_for_drain', _drain)
     monkeypatch.setattr(delete_mod, '_DELETE_DRAIN_POLL_SECONDS', 0.02)
 
-    t0 = time.monotonic()
+    from src.db.repos import projects as repo
+
+    rolled_back_by_a = {'done': False}
+    real_rollback = repo.rollback_delete
+
+    async def _rollback(session, slug):
+        row = await real_rollback(session, slug)
+        rolled_back_by_a['done'] = True
+        return row
+
+    monkeypatch.setattr(repo, 'rollback_delete', _rollback)
 
     def _inflight(record):
-        # Busy until just after A's 0.2s drain deadline, then clears --
-        # this is what lets A time out and roll back, and lets B's own
-        # (later-starting) drain clear shortly after, reaching the real
-        # destructive interleaving the review's probe found.
+        # Busy until A has timed out and rolled the project back, then clear -- this lets B's own
+        # later drain clear, reaching the real destructive interleaving the review's probe found.
+        # Driven by the rollback itself, not the clock, so a slow database cannot reorder it.
         return (
-            [busy.JobRef(kind='detection_worker', job_id='still-busy')]
-            if time.monotonic() - t0 < 0.24
-            else []
+            []
+            if rolled_back_by_a['done']
+            else [busy.JobRef(kind='detection_worker', job_id='still-busy')]
         )
 
     monkeypatch.setattr(busy, '_detection_worker_inflight', _inflight)
@@ -222,7 +251,8 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
         assert exc_info.value.detail['error'] == 'project_busy'
 
     async def _finish_b_cross_worker() -> None:
-        await asyncio.sleep(0.1)  # after A started draining, before A's 0.2s deadline
+        while not drains:  # A is draining
+            await asyncio.sleep(0.005)
         # Simulate finish B running on a DIFFERENT worker process: strip
         # A's entry from the (per-process, real) guard so B's check sees
         # an empty state for this slug, exactly like a second worker's
@@ -299,11 +329,11 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
         )
         await entered_ensure_indexes.wait()
 
-        stale_updated_at = (
-            datetime.now(UTC) - timedelta(seconds=delete_mod._BUILDING_STALE_SECONDS + 1)
-        ).isoformat()
-        client.docs['project:gamma']['updated_at'] = stale_updated_at
-        registry._by_slug['gamma'] = doc_to_record(client.docs['project:gamma'])
+        stale_updated_at = datetime.now(UTC) - timedelta(
+            seconds=delete_mod._BUILDING_STALE_SECONDS + 1
+        )
+        await amutate_project('gamma', updated_at=stale_updated_at)
+        await registry.refresh_strict()
 
         deleting = await lifecycle.delete_project(client, slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
@@ -313,7 +343,7 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
         release_create.set()
         with pytest.raises(RequestRejectedError) as exc_info:
             await create_task
-        assert exc_info.value.detail['error'] == 'invalid_transition'
+        assert exc_info.value.detail['error'] == 'project_not_found'
 
     asyncio.run(_run())
 

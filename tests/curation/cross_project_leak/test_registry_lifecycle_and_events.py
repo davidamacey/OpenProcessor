@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytestmark = pytest.mark.db
+
+
 def test_lifecycle_mutations_really_write_the_seeded_registry(leak_env: LeakEnv) -> None:
     """M6: with op_projects seeded, PATCH/archive/unarchive/clone_settings
     reach a real write behind the real guard (previously 404
@@ -74,20 +77,14 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
     resp = client.post(f'{API}/projects', json={'slug': 'gamma', 'display_name': 'Gamma'})
     assert resp.status_code in (200, 201), resp.text
 
-    # leak_env freezes ProjectRegistry.ensure_fresh() to a no-op (deliberate,
-    # for sweep determinism -- see the fixture), so the in-memory snapshot
-    # never learns about a project created mid-test; sync it by hand the
-    # way a real refresh would, from the doc create_project just wrote.
     from src.services.projects import registry as registry_mod
 
     registry = registry_mod.get_project_registry()
-    gamma_doc = leak_env.transport.store[registry_mod.projects_index()]['project:gamma']
-    registry._by_slug['gamma'] = registry_mod.doc_to_record(gamma_doc)
+    asyncio.run(registry.refresh_strict())
 
     resp = client.delete(f'{API}/projects/gamma', params={'confirm': 'gamma'})
     assert resp.status_code == 202, resp.text
-    deleting_doc = leak_env.transport.store[registry_mod.projects_index()]['project:gamma']
-    registry._by_slug['gamma'] = registry_mod.doc_to_record(deleting_doc)
+    asyncio.run(registry.refresh_strict())
 
     from src.core.dependencies import app_state
     from src.services.projects import lifecycle

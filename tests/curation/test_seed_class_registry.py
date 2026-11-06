@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import onnx
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 from onnx import TensorProto, helper
 
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
@@ -48,17 +48,11 @@ def _ids_names(reg: InMemoryRegistry) -> list[tuple[int, str]]:
     return [(c.class_id, c.class_name) for c in reg.load().classes]
 
 
-class _Closable:
-    async def close(self) -> None:
-        return None
-
-
 def _main(
     mod: ModuleType, monkeypatch: pytest.MonkeyPatch, reg: InMemoryRegistry, *argv: str
 ) -> int:
-    """Run the script's CLI against ``reg`` (its document store stands in for OpenSearch)."""
+    """Run the script's CLI against ``reg`` (an in-memory registry stands in for PostgreSQL)."""
     monkeypatch.setattr(mod, 'get_class_registry', lambda: reg)
-    monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_k: _Closable())
     return mod.main(list(argv))
 
 

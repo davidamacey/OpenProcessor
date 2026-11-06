@@ -86,10 +86,10 @@ def patch_lifecycle(monkeypatch, source, target):
     from src.services.projects import lifecycle as lifecycle_mod, registry as registry_mod
 
     monkeypatch.setattr(lifecycle_mod, '_resolve_existing', AsyncMock(return_value=source))
-    monkeypatch.setattr(
-        lifecycle_mod, '_get_mutable_record', AsyncMock(return_value=(target, 1, 1))
-    )
-    monkeypatch.setattr(lifecycle_mod, 'write_record', AsyncMock(return_value=None))
+    monkeypatch.setattr(lifecycle_mod, '_get_mutable_record', AsyncMock(return_value=target))
+    # the revision bump after a clone writes the row; here it hands back the record unchanged
+    monkeypatch.setattr('src.services.projects.store.run_repo', AsyncMock(return_value=target))
+    monkeypatch.setattr('src.services.projects.records.record_from_row', lambda row: row)
     reg = MagicMock()
     reg.ensure_fresh = AsyncMock(return_value=None)
     monkeypatch.setattr(registry_mod, 'get_project_registry', lambda: reg)

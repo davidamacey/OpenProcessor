@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config

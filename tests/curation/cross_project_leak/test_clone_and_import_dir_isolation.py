@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytestmark = pytest.mark.db
+
+
 def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     leak_env: LeakEnv,
 ) -> None:

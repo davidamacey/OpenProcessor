@@ -19,7 +19,7 @@ Usage
     .venv/bin/python scripts/curation/vlm_worker.py --until-empty   # one drain pass
 
 Projects: each producer cycle discovers the active projects, skips
-paused ones (``<project_state_dir>/pipeline_paused.flag``) and gives
+paused ones (``projects.paused_at``) and gives
 each a fair share of the fetch, rotating which project goes first. A
 project's crops are read from its own items index (through the guarded
 OpenSearch client, bound to that project) and sent to its own
@@ -125,7 +125,7 @@ class _StreamWorker:
         self.args = args
         self.api_prefix = curation_api_prefix()
         self.opensearch = make_script_opensearch([args.opensearch], timeout=30)
-        self.registry = script_project_registry(client=self.opensearch)
+        self.registry = script_project_registry()
         self.scope_cache = ScopeCache()
         self.rotation = 0
         self.stop_event = asyncio.Event()
@@ -253,7 +253,7 @@ class _StreamWorker:
         fetched, so its crops are never claimed in flight and cannot starve the rest."""
         labelable = []
         for record in projects:
-            if await project_has_item_classes(self.opensearch, record):
+            if await project_has_item_classes(record):
                 if record.slug in self.classless:
                     self.classless.discard(record.slug)
                     print(f'[vlm-worker] project={record.slug} has classes now; labeling it')
@@ -507,7 +507,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.project:
         # Fails fast on an unknown/unbindable slug.
-        bind_script_project(args.project, opensearch_url=args.opensearch)
+        bind_script_project(args.project)
     start_worker_metrics_server(os.environ.get('OP_VLM_WORKER_METRICS_PORT', '4610'))
     try:
         return asyncio.run(run(args))

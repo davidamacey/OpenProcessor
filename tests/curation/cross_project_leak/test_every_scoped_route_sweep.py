@@ -55,6 +55,7 @@ from curation.cross_project_leak._route_tables import (
     CROSS_PROJECT_CONFIG_READS,
     EXPECTED_5XX,
     NO_WRITE,
+    POSTGRES_BACKED_PREFIXES,
     STREAMING_ROUTES,
     UNBOUND_BY_DESIGN,
     UNSEEDED_WRITES,
@@ -64,6 +65,9 @@ from curation.cross_project_leak._seeders import NAME_FOR, PREPARE
 
 if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
+
+
+pytestmark = pytest.mark.db
 
 
 def _served_urls(value: Any) -> list[str]:
@@ -82,7 +86,7 @@ def _scoped_routes(app: Any) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for route in api_routes(app):
         path = route.path
-        if not path.startswith(SCOPED):
+        if not path.startswith(SCOPED) or path[len(SCOPED) :].startswith(POSTGRES_BACKED_PREFIXES):
             continue
         out.extend((method, path) for method in sorted(route.methods or ()) if method != 'HEAD')
     return out

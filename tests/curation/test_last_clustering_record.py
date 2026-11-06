@@ -82,7 +82,7 @@ async def test_cluster_residuals_records_the_run(
         ]
     ).astype(np.float32)
 
-    async def _passthrough(client: Any, embeddings: np.ndarray, *, mode: str) -> Any:
+    async def _passthrough(embeddings: np.ndarray, *, mode: str) -> Any:
         return MagicMock(), embeddings.astype(np.float32), True
 
     monkeypatch.setattr(embedding_reduce, 'get_or_fit_reducer', _passthrough)

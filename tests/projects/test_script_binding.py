@@ -13,8 +13,7 @@ import pytest
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import ProjectNotBound, bind_process_project, current_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.projects import guard, guard_errors, script_binding
-from src.services.projects.registry import record_to_doc
+from src.services.projects import guard, guard_errors, registry as registry_mod, script_binding
 
 
 # Binding is what is under test here.
@@ -36,21 +35,32 @@ def _record(slug: str, status: str = 'active') -> ProjectRecord:
     )
 
 
-class _FakeInnerTransport:
-    """Answers the registry reads (``op_projects``) and records every
-    other call that got past the guard."""
+class _StaticSource:
+    """A registry source over a fixed list of records, or one that is down."""
 
-    def __init__(self, records: list[ProjectRecord]) -> None:
-        self.docs = {f'project:{r.slug}': record_to_doc(r) for r in records}
+    def __init__(self, records: list[ProjectRecord], *, down: bool = False) -> None:
+        self.records = records
+        self.down = down
+
+    def read_revision(self) -> int:
+        if self.down:
+            raise ConnectionError('database down')
+        return 1
+
+    def read_all(self) -> tuple[list[ProjectRecord], frozenset[str]]:
+        return list(self.records), frozenset()
+
+    def read_one(self, slug: str) -> ProjectRecord | None:
+        return next((r for r in self.records if r.slug == slug), None)
+
+
+class _FakeInnerTransport:
+    """Records every call that got past the guard."""
+
+    def __init__(self) -> None:
         self.passed: list[str] = []
 
     async def perform_request(self, method: str, url: str, **_kwargs: Any) -> Any:
-        if url.startswith('/op_projects/_doc/'):
-            if url.endswith('meta%3Aprojects_revision'):
-                return {'_source': {'revision': 1}}
-            raise KeyError(url)
-        if url == '/op_projects/_search':
-            return {'hits': {'hits': [{'_source': d} for d in self.docs.values()]}}
         self.passed.append(f'{method} {url}')
         return {'hits': {'hits': []}}
 
@@ -59,6 +69,19 @@ class _FakeInnerTransport:
 
 
 _REAL_LOAD_REGISTRY = script_binding.load_registry
+_REAL_REGISTRY = registry_mod.ProjectRegistry
+
+
+def _serve(
+    monkeypatch: pytest.MonkeyPatch, records: list[ProjectRecord], *, down: bool = False
+) -> None:
+    """Every registry a script builds reads ``records`` instead of the database."""
+
+    def build(source: Any = None) -> Any:
+        return _REAL_REGISTRY(source or _StaticSource(records, down=down))
+
+    monkeypatch.setattr(registry_mod, 'ProjectRegistry', build)
+    monkeypatch.setattr(script_binding, 'ProjectRegistry', build)
 
 
 @pytest.fixture(autouse=True)
@@ -67,18 +90,6 @@ def _clear_process_binding(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(script_binding, 'load_registry', _REAL_LOAD_REGISTRY)
     yield
     bind_process_project(None)
-
-
-_REAL_FACTORY = guard.make_script_opensearch
-
-
-def _guarded_client(records: list[ProjectRecord]) -> Any:
-    inner = _FakeInnerTransport(records)
-    client = _REAL_FACTORY(['http://127.0.0.1:9'])
-    # Swap the real transport under the guard for the fake one.
-    client.transport._inner = inner
-    client.transport._registry._client_factory = lambda: guard._RegistryReader(inner)
-    return client, inner
 
 
 def test_project_argument_defaults_to_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,11 +101,7 @@ def test_project_argument_defaults_to_env(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_default_binds_the_whole_process_from_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _factory(_hosts: list[str], **_kw: Any) -> Any:
-        client, _inner = _guarded_client([_record('default')])
-        return client
-
-    monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
+    _serve(monkeypatch, [_record('default')])
     with pytest.raises(ProjectNotBound):
         current_project()
     record = script_binding.bind_script_project('default')
@@ -106,45 +113,25 @@ def test_default_binds_the_whole_process_from_the_registry(monkeypatch: pytest.M
 def test_archived_default_binds_read_only(monkeypatch: pytest.MonkeyPatch) -> None:
     """The stored status applies to ``default`` too: an archived default
     is never writable from a script."""
-    import dataclasses
-
-    from src.config.curation_accessors import base_curation_config as _base
-    from src.config.projects import new_project_record
-
-    archived = dataclasses.replace(new_project_record('default', _base()), status='archived')
-
-    def _factory(_hosts: list[str], **_kw: Any) -> Any:
-        client, _inner = _guarded_client([archived])
-        return client
-
-    monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
+    _serve(monkeypatch, [_record('default', status='archived')])
     script_binding.bind_script_project('default')
     assert current_project().read_only
 
 
 def test_unreadable_registry_refuses_to_bind(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _Down:
-        async def perform_request(self, *_a: Any, **_k: Any) -> Any:
-            raise ConnectionError('opensearch down')
-
-        async def close(self) -> None:
-            return None
-
-    def _factory(_hosts: list[str], **_kw: Any) -> Any:
-        client = _REAL_FACTORY(['http://127.0.0.1:9'])
-        client.transport._inner = _Down()
-        return client
-
-    monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
+    _serve(monkeypatch, [], down=True)
     with pytest.raises(SystemExit, match='cannot read the project registry'):
         script_binding.bind_script_project('default')
     with pytest.raises(ProjectNotBound):
         current_project()
 
 
-def test_script_client_is_guarded() -> None:
+def test_script_client_is_guarded(monkeypatch: pytest.MonkeyPatch) -> None:
     alpha, beta = _record('alpha'), _record('beta')
-    client, inner = _guarded_client([alpha, beta])
+    _serve(monkeypatch, [alpha, beta])
+    inner = _FakeInnerTransport()
+    client = guard.make_script_opensearch(['http://127.0.0.1:9'])
+    client.transport._inner = inner
     bind_process_project(beta)
 
     async def _run() -> None:
@@ -157,27 +144,8 @@ def test_script_client_is_guarded() -> None:
 
 
 def test_unknown_or_building_project_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
-    building = _record('newbie', status='building')
-
-    def _factory(_hosts: list[str], **_kw: Any) -> Any:
-        client, _inner = _guarded_client([building])
-        return client
-
-    monkeypatch.setattr(guard, 'make_script_opensearch', _factory)
+    _serve(monkeypatch, [_record('newbie', status='building')])
     with pytest.raises(SystemExit, match="no project named 'ghost'"):
         script_binding.bind_script_project('ghost')
     with pytest.raises(SystemExit, match='is building'):
         script_binding.bind_script_project('newbie')
-
-
-def test_script_project_registry_reads_through_the_callers_client() -> None:
-    """A worker hands its own client to the registry so closing that one
-    client at shutdown leaves no unclosed aiohttp session behind."""
-    sentinel = object()
-    registry = script_binding.script_project_registry(client=sentinel)
-    assert asyncio.run(_resolve(registry._client_factory)) is sentinel
-
-
-async def _resolve(factory: Any) -> Any:
-    result = factory()
-    return await result if asyncio.iscoroutine(result) else result

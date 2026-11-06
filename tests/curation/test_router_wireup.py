@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 from opensearchpy.exceptions import NotFoundError
 
 from src.services.labeling.vlm_client import VlmIdentity
@@ -141,7 +141,7 @@ def test_test_holdout_freeze_zero_cohort_raises_422_even_with_force(
 
 def test_classes_post_appends(app_client: Any, tmp_path: Path) -> None:
     """POST /curation/classes assigns a new class_id via the registry."""
-    from _registry_doc_fake import InMemoryRegistry
+    from _class_registry_fake import InMemoryRegistry
 
     tmp_path / 'class_registry.json'
     reg = InMemoryRegistry()
@@ -161,7 +161,7 @@ def test_classes_merge_deprecates_source(
     app_client: Any, tmp_path: Path, fake_opensearch: AsyncMock
 ) -> None:
     """POST /curation/classes/merge marks source deprecated."""
-    from _registry_doc_fake import InMemoryRegistry
+    from _class_registry_fake import InMemoryRegistry
 
     tmp_path / 'class_registry.json'
     reg = InMemoryRegistry()
@@ -192,7 +192,7 @@ def test_classes_merge_refuses_when_source_has_frozen_holdout_crops(
 ) -> None:
     """Refuse with 409 rather than silently relabeling a frozen
     test_holdout crop and leaving its holdout identity stale."""
-    from _registry_doc_fake import InMemoryRegistry
+    from _class_registry_fake import InMemoryRegistry
 
     tmp_path / 'class_registry.json'
     reg = InMemoryRegistry()
@@ -237,7 +237,7 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     plain update_by_query. This test verifies both legs against their
     actual mechanisms rather than asserting two update_by_query calls.
     """
-    from _registry_doc_fake import InMemoryRegistry
+    from _class_registry_fake import InMemoryRegistry
 
     tmp_path / 'class_registry.json'
     reg = InMemoryRegistry()

@@ -37,7 +37,7 @@ def fake_os() -> SettingsFakeOpenSearch:
 def client(
     fake_os: SettingsFakeOpenSearch, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
-    from _registry_doc_fake import InMemoryRegistry
+    from _class_registry_fake import InMemoryRegistry
 
     monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
     registry = InMemoryRegistry()

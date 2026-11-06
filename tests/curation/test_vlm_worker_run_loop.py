@@ -89,7 +89,7 @@ class Fakes:
             return {'predicted': len(crop_ids), 'updated': len(crop_ids) - 1}
         return self.label_script(slug, crop_ids)
 
-    async def _has_classes(self, _opensearch: Any, record: Any) -> bool:
+    async def _has_classes(self, record: Any) -> bool:
         return record.slug not in self.classless
 
     async def _heartbeat(self, name: str, status: Any, _stop: Any, **_kw: Any) -> None:

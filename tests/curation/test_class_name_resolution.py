@@ -7,10 +7,10 @@ from __future__ import annotations
 from itertools import permutations
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
-from src.clients.curation_opensearch.registry import ClassRegistryError
-from src.services.curation.class_ensure import ensure_class_by_name
+from src.services.classes.registry import ClassRegistryError
+from src.services.classes.resolve import ensure_class_by_name
 from src.services.curation.dataset_import.mapping import RegistryClassView, suggest_mapping
 from src.services.curation.detector_vocabulary import DetectorLabel, plan_seed
 from src.utils.class_names import class_name_deprecation_index, resolve_class_by_name
@@ -72,13 +72,13 @@ def _row(class_id: int, name: str, deprecated: bool = False) -> dict:
 @pytest.mark.asyncio
 async def test_ensure_resolves_the_active_class_and_never_the_retired_one() -> None:
     reg = _registry([_row(0, 'wheel', True), _row(5, 'wheel')])
-    assert (await ensure_class_by_name(reg, None, 'Wheel', group='g')).class_id == 5
+    assert (await ensure_class_by_name(reg, 'Wheel', group='g')).class_id == 5
 
 
 @pytest.mark.asyncio
 async def test_ensure_does_not_reuse_a_deprecated_only_class() -> None:
     reg = _registry([_row(0, 'wheel', True)])
-    resolved = await ensure_class_by_name(reg, None, 'wheel', group='g')
+    resolved = await ensure_class_by_name(reg, 'wheel', group='g')
     assert resolved.class_id == 1
 
 

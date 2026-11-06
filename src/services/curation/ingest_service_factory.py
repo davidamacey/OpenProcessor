@@ -29,7 +29,7 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
     except (ValueError, IngestProfileUnresolvedError) as exc:
         raise RequestRejectedError(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
     profile, secondary = profiles.primary, profiles.secondary
-    policy = await get_ingest_policy(opensearch)
+    policy = await get_ingest_policy()
     if not profile.detector_model:
         raise RequestRejectedError(
             status_code=503,
@@ -43,7 +43,7 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
     return CurationIngestService(
         opensearch=opensearch,
         triton_pool=get_async_triton_pool(),
-        registry=await registry.snapshot(opensearch),
+        registry=await registry.snapshot(),
         profile=profile,
         secondary_profile=secondary,
         pe_encoder=pe_encoder,

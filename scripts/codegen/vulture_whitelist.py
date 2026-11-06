@@ -146,3 +146,41 @@ _.basic_auth  # scripts/flower/flowerconfig.py, an option Flower reads by name f
 _.EngineOutputContract  # src/schemas/models.py, validated by the engine export (stage 5)
 _.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
 _.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)
+
+# Landed ahead of their callers (B2 stage 2, lane 2A): the repository is wired by the registry,
+# guard and lifecycle commits of the same lane. Delete each entry with its caller.
+_.load_project  # src/db/repos/projects.py, called by the 0.6.0 upgrade step (lane 2E)
+_.current_storage_prefix  # src/config/project_context.py, the bound project's storage key prefix; called by the storage users of lanes 2B-2D and stage 3
+_.current_project_id  # src/config/project_context.py, the bound project's database id; called by the repositories of lanes 2B-2D
+# Landed ahead of their consumers (B2 stage 2, lane 2C): the upgrade load (lane 2E) and the readers of
+# the poll and the runtime reports. Delete each entry with its caller.
+_.list_probes  # src/db/repos/config.py, read by the global snapshot load (2C-3)
+_.list_runtime_reports  # src/db/repos/config.py, read by the applied-config view (2C-4)
+_.upsert_runtime_report  # src/db/repos/config.py, written by the worker runtime report (2C-4)
+_.load_activation_events  # src/db/repos/config_activations.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_vlm_endpoint  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_config_document  # src/db/repos/config.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_setting  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
+_.load_keymap  # src/db/repos/settings.py, called by the 0.6.0 upgrade (lane 2E)
+
+# Embedding registry: public functions whose production callers land with the projects, config,
+# upgrade and re-index work. Delete each entry with its first production caller.
+_.sync_catalog  # src/services/embedding_spaces/catalog.py, called by scripts/db/migrate.py after Alembic
+_.embedding_space  # src/services/embedding_spaces/resolve.py, called by every vector reader
+_.note_config_epoch  # src/services/embedding_spaces/resolve.py, called by the config_epoch poll
+_.default_space_rows  # src/services/embedding_spaces/spaces.py, called by the upgrade (the project create calls it already)
+_.add_spaces  # src/db/repos/embedding_spaces.py, called with default_space_rows by the upgrade (the project create calls it already)
+_.default_space_rows  # src/services/embedding_spaces/spaces.py, called by the project create and the upgrade
+_.add_spaces  # src/db/repos/embedding_spaces.py, called with default_space_rows by the project create and the upgrade
+_.register_space  # src/services/embedding_spaces/spaces.py, called by the space routes
+_.begin_build  # src/services/embedding_spaces/spaces.py, called by the re-index job
+_.mark_ready  # src/services/embedding_spaces/spaces.py, called by the re-index job
+_.retire_space  # src/services/embedding_spaces/spaces.py, called by the space routes
+_.finish_retire  # src/services/embedding_spaces/spaces.py, called by the re-index job in clear mode
+_.list_project_spaces  # src/services/embedding_spaces/spaces.py, called by the space routes
+
+# Route handlers registered by decorator inside a factory (one set per config kind).
+_.list_all  # src/routers/curation/research_configs.py, GET /{kind}
+_.get_one  # src/routers/curation/research_configs.py, GET /{kind}/{name}
+_.put_one  # src/routers/curation/research_configs.py, PUT /{kind}/{name}
+_.delete_one  # src/routers/curation/research_configs.py, DELETE /{kind}/{name}

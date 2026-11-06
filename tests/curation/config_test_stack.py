@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from _registry_doc_fake import InMemoryRegistry, use_registry
+from _class_registry_fake import InMemoryRegistry, use_registry
 from PIL import Image
 
 from curation.conftest import SCOPED, HybridOpenSearch, VlmApi, good_probe

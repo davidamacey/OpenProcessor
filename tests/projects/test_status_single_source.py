@@ -8,20 +8,16 @@ at every instant of the flip window the guard and the GET must agree.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 
 import pytest
 from fastapi import HTTPException
 
-from src.services.projects.registry import (
-    ProjectRegistry,
-    doc_to_record,
-    record_to_doc,
-    set_project_registry,
-)
+from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeRegistryOpenSearch, seed_default_project
-from .test_registry_pagination import _env, _seed_record  # noqa: F401
+from .conftest import aseed_project, seed_default_project
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 async def _guard(slug: str) -> str:
@@ -52,24 +48,15 @@ def test_guard_and_get_agree_in_the_flip_window(monkeypatch) -> None:
     monkeypatch.setattr(routes, 'make_curation_opensearch', _no_os)
 
     async def _run() -> list[tuple[str, str]]:
-        client = FakeRegistryOpenSearch()
-        await seed_default_project(client)
-        _seed_record(client, 'combo')
-        client.docs['project:combo'] = record_to_doc(
-            replace(doc_to_record(client.docs['project:combo']), status='building')
-        )
-        client.docs['meta:projects_revision'] = {'revision': 7}
-        client.seq['meta:projects_revision'] = 0
-        client._refresh_all()
-        registry = ProjectRegistry(lambda: client)
+        await seed_default_project()
+        await aseed_project('combo', status='building')
+        registry = ProjectRegistry()
         set_project_registry(registry)
         await registry.ensure_fresh()
         seen = [(await _guard('combo'), await _get_route('combo'))]
         assert seen[0] == ('project_building', 'building')
-        # The flip: doc is active, revision counter not bumped yet.
-        client.docs['project:combo'] = record_to_doc(
-            replace(doc_to_record(client.docs['project:combo']), status='active')
-        )
+        # The flip: the row is active, the revision counter not bumped yet.
+        await _set_status_without_bump('combo', 'active')
         for _ in range(3):
             seen += [(await _guard('combo'), await _get_route('combo'))]
         return seen
@@ -79,24 +66,29 @@ def test_guard_and_get_agree_in_the_flip_window(monkeypatch) -> None:
         assert (guard, get) == ('active', 'active')
 
 
-def test_unreachable_doc_keeps_snapshot() -> None:
+async def _set_status_without_bump(slug: str, status: str) -> None:
+    from sqlalchemy import update
+
+    from src.db.models.projects import Project
+    from src.services.projects.store import run_repo
+
+    async def _set(session):
+        await session.execute(update(Project).where(Project.slug == slug).values(status=status))
+
+    await run_repo('flip a status without the counter', _set)
+
+
+def test_unreachable_row_keeps_snapshot(monkeypatch) -> None:
     async def _run() -> str:
-        client = FakeRegistryOpenSearch()
-        await seed_default_project(client)
-        _seed_record(client, 'combo')
-        client.docs['project:combo'] = record_to_doc(
-            replace(doc_to_record(client.docs['project:combo']), status='building')
-        )
-        client.docs['meta:projects_revision'] = {'revision': 7}
-        client.seq['meta:projects_revision'] = 0
-        client._refresh_all()
-        registry = ProjectRegistry(lambda: client)
+        await seed_default_project()
+        await aseed_project('combo', status='building')
+        registry = ProjectRegistry()
         await registry.ensure_fresh()
 
-        async def _boom(**_kw):
+        def _boom(_slug):
             raise ConnectionError('down')
 
-        client.get = _boom  # type: ignore[method-assign]
+        monkeypatch.setattr(registry._source, 'read_one', _boom)
         record = await registry.lookup('combo')
         assert record is not None
         return record.status
@@ -107,9 +99,8 @@ def test_unreachable_doc_keeps_snapshot() -> None:
 @pytest.mark.parametrize('slug', ['nope'])
 def test_unknown_slug_404s_in_both(slug) -> None:
     async def _run() -> tuple[str, str]:
-        client = FakeRegistryOpenSearch()
-        await seed_default_project(client)
-        set_project_registry(ProjectRegistry(lambda: client))
+        await seed_default_project()
+        set_project_registry(ProjectRegistry())
         return await _guard(slug), await _get_route(slug)
 
     assert asyncio.run(_run()) == ('project_not_found', 'project_not_found')

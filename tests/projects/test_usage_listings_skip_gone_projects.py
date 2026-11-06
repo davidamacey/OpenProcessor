@@ -16,11 +16,16 @@ from fastapi.testclient import TestClient
 
 from projects.test_model_sharing_used_by import MODEL, _activate_profile, _put
 from src.config.curation_roles import IndexRole
-from src.services.projects.registry import projects_index
+from src.db.repos import projects as repo
+from src.services.projects.registry import get_project_registry
+from src.services.projects.store import run_repo
 
 
 if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 leak_env = _sweep.leak_env
@@ -33,7 +38,14 @@ def _remove(env: LeakEnv, slug: str, status: str) -> None:
     its registry record carries the new status."""
     for index in set(env.records[slug].resources.indexes.values()):
         env.transport.store.pop(index, None)
-    env.transport.store[projects_index()][f'project:{slug}']['status'] = status
+
+    async def _flip() -> None:
+        await run_repo('test', repo.mark_deleting, slug, from_states=('active',))
+        if status == 'deleted':
+            await run_repo('test', repo.finish_delete, slug)
+        await get_project_registry().refresh_strict()
+
+    asyncio.run(_flip())
 
 
 def _vlm_runners(name: str) -> list[str]:

@@ -54,10 +54,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.clients.curation_opensearch.registry import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.services.classes.registry import ClassRegistry, get_class_registry
 from src.services.curation.export_models import (
     DATA_YAML_FILENAME,
     MANIFEST_FILENAME,
@@ -184,7 +184,7 @@ class SingleClassExportService:
         started = datetime.now(UTC)
 
         generation = await items_index_generation(self.opensearch, self.config.items_index)
-        registry_doc = await self.registry.snapshot(self.opensearch)
+        registry_doc = await self.registry.snapshot()
         names = self._resolve_class_names(registry_doc)
         self.collector.class_names = frozenset(names)
         rows = await self.collector.collect(image_mode=image_mode, empty_bg_ratio=empty_bg_ratio)

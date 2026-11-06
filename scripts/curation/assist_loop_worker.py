@@ -119,7 +119,7 @@ async def _main_loop(stop: asyncio.Event, only_slug: str | None) -> None:
     opensearch = make_script_opensearch(
         [settings.opensearch_url], timeout=settings.opensearch_timeout
     )
-    registry = script_project_registry(client=opensearch)
+    registry = script_project_registry()
     ticker = asyncio.create_task(heartbeat_loop(WORKER_NAME, lambda: {'poll': True}, stop))
     logger.info('worker ready project=%s', only_slug or '*')
     repaired = False

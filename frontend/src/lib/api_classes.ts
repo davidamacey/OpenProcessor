@@ -316,13 +316,3 @@ export async function getClassSources(signal?: AbortSignal): Promise<ClassSource
     (c) => typeof c?.id === 'string' && c.id.length > 0 && typeof c.label === 'string',
   );
 }
-
-export function syncClassesToOpensearch(
-  signal?: AbortSignal,
-): Promise<{ upserted: number; n_classes: number }> {
-  return apiFetch<{ upserted: number; n_classes: number }>(
-    `${scoped()}/classes/sync_to_opensearch`,
-    { method: 'POST' },
-    signal,
-  );
-}

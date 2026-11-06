@@ -137,7 +137,7 @@ async def resolve_vlm_selection(
             item_filter=item_filter,
         )
         return VlmSelection(query, cap)
-    policy = await get_vlm_policy(opensearch)
+    policy = await get_vlm_policy()
     if scope_override is not None:
         policy = policy.model_copy(update={'scope': scope_override})
     reps = (

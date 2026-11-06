@@ -53,45 +53,42 @@ is for provenance only, not a functional requirement.
 from __future__ import annotations
 
 import asyncio
-import io
 import time
 import uuid
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_curation_config
-from src.config.curation_accessors import items_index, umap_viz_state_index
+from src.config.curation_accessors import items_index
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
+from src.db.repos import settings as settings_repo
+from src.db.session import async_session_factory, project_tx
 from src.domain.embedding_state import embedded_clause
 from src.domain.job_lease import LeaseKind
+from src.services.config_store.bound_project import bound_project_id
+from src.services.curation.clustering.umap_state import reducer_stored, save_reducer
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
 from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from opensearchpy import AsyncOpenSearch
 
 
 logger = get_logger(__name__)
 
 
-# Run metadata goes to its own index, ``umap_viz_state_index()`` --
-# deliberately NOT the retired clustering reducer's index
-# (umap_state.py) -- routed through CurationConfig like every other
-# index name so a deployment renaming its indexes via env vars doesn't
-# leave this one behind.
-
-
-def viz_state_joblib_path() -> str:
-    """The bound project's state dir (same one umap_state.py
-    reads), but a distinct filename -- never umap_state.joblib /
-    umap_state_cuml.joblib."""
-    return str(Path(get_curation_config().project_state_dir) / 'umap_viz_state.joblib')
+# Run metadata is the project's ``projection_states`` row; the fitted reducer is a blob behind the
+# storage seam under its own slot, never one of the clustering reducer's (umap_state.py).
+VIZ_REDUCER_STATE_ID = 'viz'
 
 
 # Viz-only UMAP hyperparameters. min_dist is higher than the clustering
@@ -108,6 +105,8 @@ VIZ_RANDOM_STATE = 42
 # so a served point's provenance is unambiguous -- mirrors item_scores'
 # per-scorer ``version`` stamp.
 VIZ_PROJECTION_VERSION = 'umap_viz_v1'
+# The integer the projection_states row stores; the items keep the string stamp above.
+VIZ_PROJECTION_NUMBER = int(VIZ_PROJECTION_VERSION.rsplit('v', 1)[1])
 
 EMBEDDING_FIELD = 'pe_embedding'
 
@@ -339,52 +338,37 @@ def _build_reducer() -> Any:
     )
 
 
-def _serialize_reducer(reducer: Any) -> bytes:
-    import joblib
-
-    buf = io.BytesIO()
-    joblib.dump(reducer, buf)
-    return buf.getvalue()
-
-
-def _save_reducer_to_disk(reducer: Any) -> None:
+def _save_reducer(reducer: Any) -> None:
     """Provenance-only persist -- see module docstring: nothing ever
     reloads this to `.transform()` new points, so a save failure must
     never fail the job (logged, not raised)."""
     try:
-        p = Path(viz_state_joblib_path())
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(_serialize_reducer(reducer))
-    except Exception as exc:
-        logger.warning('curation_umap_viz_state_disk_save_failed', error=str(exc))
+        save_reducer(reducer, state_id=VIZ_REDUCER_STATE_ID)
+    except OSError as exc:
+        logger.warning('curation_umap_viz_state_save_failed', error=str(exc))
 
 
 async def _save_run_metadata(
-    opensearch: AsyncOpenSearch,
-    *,
-    scope: str,
-    cluster_id: int | None,
-    n_points: int,
-    fitted_at: str,
+    *, scope: str, cluster_id: int | None, n_points: int, fitted_at: str
 ) -> None:
-    """Own metadata slot (a dedicated viz-state index, state_id='current') --
-    distinct from the retired clustering reducer's own umap-state index.
-    Metadata only (no pickled reducer blob) so this never risks the 100 MB
-    OpenSearch request-body ceiling the reference embedding_reduce module had to work
-    around for the (much larger, per-crop) clustering reducer blob."""
-    body = {
-        'state_id': 'current',
-        'projection_version': VIZ_PROJECTION_VERSION,
-        'scope': scope,
-        'cluster_id': cluster_id,
-        'n_points': n_points,
-        'fitted_at': fitted_at,
-        'n_components': VIZ_N_COMPONENTS,
-        'metric': VIZ_METRIC,
-    }
+    """The project's current view state (one ``projection_states`` row): metadata only, the
+    reducer blob is behind the storage seam and the row names its key."""
+    project_id = await bound_project_id()
     try:
-        await opensearch.index(index=umap_viz_state_index(), id='current', body=body, refresh=False)
-    except Exception as exc:
+        async with async_session_factory()() as session, project_tx(session, project_id):
+            await settings_repo.put_projection_state(
+                session,
+                project_id,
+                projection_version=VIZ_PROJECTION_NUMBER,
+                scope=scope,
+                cluster_id=cluster_id,
+                n_points=n_points,
+                n_components=VIZ_N_COMPONENTS,
+                metric=VIZ_METRIC,
+                fitted_at=datetime.fromisoformat(fitted_at),
+                reducer_storage_key=reducer_stored(state_id=VIZ_REDUCER_STATE_ID),
+            )
+    except SQLAlchemyError as exc:
         logger.warning('curation_umap_viz_state_metadata_save_failed', error=str(exc))
 
 
@@ -433,12 +417,12 @@ async def fit_projection(embeddings: np.ndarray) -> tuple[np.ndarray, str]:
     not itself touch OpenSearch; :func:`_bulk_write_coordinates` does that
     separately). Only ever called from :func:`run_projection_job` (module
     docstring point 2) -- never from the reference embedding-viz router's GET handler."""
-    from datetime import UTC, datetime
+    from datetime import UTC
 
     reducer = _build_reducer()
     xy_raw = await asyncio.to_thread(reducer.fit_transform, _l2_normalize(embeddings))
     xy = np.asarray(xy_raw, dtype=np.float32)
-    _save_reducer_to_disk(reducer)
+    _save_reducer(reducer)
     fitted_at = datetime.now(UTC).isoformat()
     return xy, fitted_at
 
@@ -490,7 +474,6 @@ async def run_projection_job(
 
         n_written = await _bulk_write_coordinates(opensearch, ids, xy)
         await _save_run_metadata(
-            opensearch,
             scope=scope,
             cluster_id=cluster_id,
             n_points=n_written,
@@ -530,5 +513,4 @@ __all__ = [
     'reconcile_orphaned_jobs',
     'run_projection_job',
     'start_job',
-    'viz_state_joblib_path',
 ]

@@ -16,6 +16,9 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -42,7 +45,7 @@ def _noop_ensure_indexes():
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 
@@ -61,9 +64,9 @@ def test_clone_settings_copies_defaults() -> None:
     from src.config.project_context import bind_project
 
     with bind_project(source):
-        from src.clients.curation_opensearch.settings_doc import update_curation_settings
+        from src.services.curation.settings_store import update_curation_settings
 
-        asyncio.run(update_curation_settings(client, {'axis_x': 'value_x'}))
+        asyncio.run(update_curation_settings({'axis_x': 'value_x'}, expected_revision=0))
 
     asyncio.run(
         lifecycle.clone_settings(
@@ -72,9 +75,9 @@ def test_clone_settings_copies_defaults() -> None:
     )
 
     with bind_project(target):
-        from src.clients.curation_opensearch.settings_doc import get_curation_settings
+        from src.services.curation.settings_store import get_curation_settings
 
-        cloned = asyncio.run(get_curation_settings(client))
+        cloned = asyncio.run(get_curation_settings(fresh=True))
     assert cloned['defaults'].get('axis_x') == 'value_x'
 
 
@@ -178,13 +181,11 @@ def test_clone_keymap_axis_all_or_nothing_reports_class_conflicts(
     target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
     saved: dict[str, dict[str, list[str]]] = {}
 
-    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else target_doc
 
-    async def _fake_save(
-        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
-    ) -> KeymapDoc:
+    async def _fake_save(*, overrides: dict[str, list[str]], expected_revision: int) -> KeymapDoc:
         current = try_current_project()
         saved[current.record.slug if current else '?'] = overrides
         return KeymapDoc(
@@ -248,13 +249,11 @@ def test_clone_keymap_axis_copies_overrides_when_no_conflicts(
     target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
     saved: dict[str, dict[str, list[str]]] = {}
 
-    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else target_doc
 
-    async def _fake_save(
-        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
-    ) -> KeymapDoc:
+    async def _fake_save(*, overrides: dict[str, list[str]], expected_revision: int) -> KeymapDoc:
         current = try_current_project()
         saved[current.record.slug if current else '?'] = overrides
         return KeymapDoc(
@@ -295,7 +294,7 @@ def _clone_keymap(
     target = registry.get('target')
     assert target is not None
 
-    async def _fake_get(_client: Any, _index: str) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         if current and current.record.slug == 'source':
             return KeymapDoc(
@@ -305,9 +304,7 @@ def _clone_keymap(
 
     saves: list[dict[str, list[str]]] = []
 
-    async def _fake_save(
-        _client: Any, _index: str, *, overrides: dict[str, list[str]], expected_revision: int
-    ) -> KeymapDoc:
+    async def _fake_save(*, overrides: dict[str, list[str]], expected_revision: int) -> KeymapDoc:
         saves.append(overrides)
         return KeymapDoc(
             overrides=overrides, revision=expected_revision + 1, updated_at=None, is_default=False
@@ -373,18 +370,18 @@ def test_clone_settings_copies_the_ingest_policy_and_leaves_the_source_alone() -
     assert source is not None
     assert target is not None
 
-    client = SettingsFakeOpenSearch()  # index-aware, unlike the lifecycle fake
+    SettingsFakeOpenSearch()  # index-aware, unlike the lifecycle fake
     body = IngestPolicyBody(embedding=EmbeddingPolicy(mode='selected', classes=['car']))
     with bind_project(source):
-        asyncio.run(put_ingest_policy(client, body, expected_revision=0))
+        asyncio.run(put_ingest_policy(body, expected_revision=0))
 
-    asyncio.run(clone_settings_document(client, source=source, target_record=target))
+    asyncio.run(clone_settings_document(source=source, target_record=target))
 
     with bind_project(target):
-        cloned = asyncio.run(get_ingest_policy(client))
+        cloned = asyncio.run(get_ingest_policy())
     assert (cloned.embedding.mode, cloned.embedding.classes) == ('selected', ['car'])
     with bind_project(source, read_only=True):
-        assert asyncio.run(get_ingest_policy(client)).revision == 1
+        assert asyncio.run(get_ingest_policy()).revision == 1
 
 
 def test_clone_settings_copies_the_vlm_policy_and_leaves_the_source_alone() -> None:
@@ -405,19 +402,19 @@ def test_clone_settings_copies_the_vlm_policy_and_leaves_the_source_alone() -> N
     assert source is not None
     assert target is not None
 
-    client = SettingsFakeOpenSearch()
+    SettingsFakeOpenSearch()
     body = VlmPolicyBody(scope='representatives', per_cluster=2, max_crops_per_day=100)
     with bind_project(source):
-        asyncio.run(put_vlm_policy(client, body, expected_revision=0))
+        asyncio.run(put_vlm_policy(body, expected_revision=0))
 
-    asyncio.run(clone_settings_document(client, source=source, target_record=target))
+    asyncio.run(clone_settings_document(source=source, target_record=target))
 
     with bind_project(target):
-        cloned = asyncio.run(get_vlm_policy(client))
+        cloned = asyncio.run(get_vlm_policy())
     assert (cloned.scope, cloned.per_cluster, cloned.max_crops_per_day) == (
         'representatives',
         2,
         100,
     )
     with bind_project(source, read_only=True):
-        assert asyncio.run(get_vlm_policy(client)).revision == 1
+        assert asyncio.run(get_vlm_policy()).revision == 1

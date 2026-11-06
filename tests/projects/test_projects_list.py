@@ -16,6 +16,9 @@ from src.schemas.curation.config_common import ConfigErrorDetail
 from src.services.projects.registry import ProjectRegistry
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 def _record(
     slug: str,
     status: Literal['building', 'active', 'archived', 'deleting', 'deleted', 'failed'] = 'active',
@@ -53,8 +56,9 @@ class _FakeClient:
 
 
 def _registry_with(*records: ProjectRecord) -> ProjectRegistry:
-    reg = ProjectRegistry(lambda: None)
-    reg._by_slug = {r.slug: r for r in records}
+    reg = ProjectRegistry()
+    reg._by_slug = {r.slug: r for r in records if r.status != 'deleted'}
+    reg._retired = frozenset(r.slug for r in records if r.status == 'deleted')
     reg._revision = 1
     return reg
 

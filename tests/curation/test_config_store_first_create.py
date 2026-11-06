@@ -20,10 +20,6 @@ from src.services.config_store.index import (
     activate,
     save_config,
 )
-from src.services.curation.keymap import (
-    RevisionConflictError as KeymapConflictError,
-    save_keymap_doc,
-)
 
 
 pytestmark = pytest.mark.unbound
@@ -85,16 +81,6 @@ async def test_two_first_activate_one_conflicts() -> None:
     )
     assert sum(isinstance(r, dict) for r in results) == 1, results
     assert sum(isinstance(r, ActiveConflictError) for r in results) == 1, results
-
-
-@pytest.mark.asyncio
-async def test_two_first_keymap_save_one_conflicts() -> None:
-    client = RacingClient('keymap:default')
-    results = await _outcomes(
-        *[save_keymap_doc(client, INDEX, overrides={}, expected_revision=0) for _ in range(2)]
-    )
-    assert sum(isinstance(r, KeymapConflictError) for r in results) == 1, results
-    assert sum(not isinstance(r, Exception) for r in results) == 1, results
 
 
 @pytest.mark.asyncio

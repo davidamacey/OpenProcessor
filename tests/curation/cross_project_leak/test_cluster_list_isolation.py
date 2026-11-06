@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytestmark = pytest.mark.db
+
+
 @pytest.fixture(autouse=True)
 def _script_twins(monkeypatch: pytest.MonkeyPatch) -> None:
     # The fake cannot run painless: without a Python twin the whole aggregation is dropped.

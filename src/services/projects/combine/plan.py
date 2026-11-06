@@ -129,7 +129,7 @@ async def resolve_sources(
             )
             continue
         record = registry.get(slug)
-        if record is None or record.status == 'deleted':
+        if record is None:
             errors.append(
                 CombineIssue(
                     code='source_not_found',
@@ -177,9 +177,8 @@ async def check_target(
         return errors, warnings
     registry = get_project_registry()
     await registry.ensure_fresh()
-    existing = registry.get(slug)
-    if existing is not None:
-        code = 'slug_retired' if existing.status == 'deleted' else 'slug_taken'
+    if registry.get(slug) is not None or slug in registry.retired_slugs():
+        code = 'slug_retired' if slug in registry.retired_slugs() else 'slug_taken'
         errors.append(CombineIssue(code=code, message=f"'{slug}' cannot be used"))
         return errors, warnings
     try:
@@ -241,7 +240,7 @@ async def _source_pass(
     prints: list[Fingerprint] = []
     holdout: set[tuple[int, str]] = set()
     for index, (source, record) in enumerate(zip(request.sources, records, strict=False)):
-        names = await class_names_by_id(client, record)
+        names = await class_names_by_id(record)
         st = SourceStats(project=record.slug)
         async for page in iter_source_pages(
             client, record, validated_only=source.include.label_states == 'validated_only'
@@ -272,7 +271,7 @@ async def _dedup_stats(
     decided by the same rules the executor applies."""
     merged = conflicts = 0
     samples: list[dict[str, Any]] = []
-    names = [await class_names_by_id(client, r) for r in records]
+    names = [await class_names_by_id(r) for r in records]
     validated = [s.include.label_states == 'validated_only' for s in request.sources]
     for (src_i, image_id), (pri_i, pri_id) in sorted(duplicates.items()):
         mine = (await fetch_items(client, records[src_i], [image_id], validated[src_i])).get(
@@ -346,7 +345,7 @@ async def analyze(
 
     stats, prints, class_counts, holdout = await _source_pass(client, request, records)
     registry_names = {
-        r.slug: {c.class_name for c in await class_names_registry(client, r)} for r in records
+        r.slug: {c.class_name for c in await class_names_registry(r)} for r in records
     }
     mapping = resolve_combine_mapping(request, class_counts, registry_names)
     duplicates = (
@@ -406,10 +405,10 @@ async def analyze(
     )
 
 
-async def class_names_registry(client: Any, record: ProjectRecord) -> list[Any]:
+async def class_names_registry(record: ProjectRecord) -> list[Any]:
     from src.services.curation.registry_access import project_registry
 
-    return (await project_registry(client, record)).classes
+    return (await project_registry(record)).classes
 
 
 # -------------------------------------------------------------- preview wire

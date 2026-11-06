@@ -18,11 +18,9 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from scripts.curation._project_worker_utils import (
-    PIPELINE_PAUSED_FLAG_NAME,
-    REGION_STAGE_PAUSED_FLAG_NAME,
-)
+from scripts.curation._project_worker_utils import REGION_STAGE_PAUSED_FLAG_NAME
 from src.config import RegionStatus, get_curation_config
+from src.config.project_context import current_project
 from src.config.region_fields import get_region_fields
 from src.services.curation.reprocess_models import (
     ReprocessFilter,
@@ -100,7 +98,7 @@ async def region_stage_state(opensearch: AsyncOpenSearch) -> RegionStageState:
         project=cfg.project_slug,
         paused=since is not None,
         paused_since=since,
-        pipeline_paused=_flag(PIPELINE_PAUSED_FLAG_NAME).exists(),
+        pipeline_paused=current_project().record.paused_at is not None,
         counts=RegionStageCounts(
             pending_detection=await count(
                 {'term': {F.status: RegionStatus.PENDING_DETECTION.value}}

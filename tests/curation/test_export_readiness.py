@@ -20,7 +20,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

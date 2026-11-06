@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 
 _SCRIPT_PATH = (
@@ -42,10 +42,10 @@ def registry(tmp_path: Any) -> InMemoryRegistry:
 
 
 def _run(repair: Any, registry: InMemoryRegistry, **kw: Any) -> int:
-    # run() takes the process-wide store; the in-memory registry stands in for it and for the client.
+    # run() takes the process-wide store; the in-memory registry stands in for it.
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(repair, 'get_class_registry', lambda: registry)
-        return asyncio.run(repair.run(registry, **kw))
+        return asyncio.run(repair.run(**kw))
 
 
 def _entry(registry: InMemoryRegistry, class_id: int) -> Any:

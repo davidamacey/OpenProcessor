@@ -74,7 +74,7 @@ def residuals(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> np.ndarray:
         AsyncMock(return_value=(ids, emb)),
     )
 
-    async def _identity_reducer(_client: Any, x: np.ndarray, *, mode: str) -> Any:
+    async def _identity_reducer(x: np.ndarray, *, mode: str) -> Any:
         return MagicMock(), x.astype(np.float32), True
 
     monkeypatch.setattr(embedding_reduce, 'get_or_fit_reducer', _identity_reducer)

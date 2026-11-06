@@ -23,6 +23,9 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -51,7 +54,7 @@ def _noop_ensure_indexes():
 @pytest.fixture(autouse=True)
 def _patch_client(monkeypatch):
     client = FakeLifecycleOpenSearch()
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
 
     async def _fake_make_client():
@@ -138,11 +141,11 @@ def test_clone_settings_route_serves_keymap_conflicts_structured(
     )
     target_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
 
-    async def _fake_get(_client, _index) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else target_doc
 
-    async def _fake_save(_client, _index, *, overrides, expected_revision) -> KeymapDoc:
+    async def _fake_save(*, overrides, expected_revision) -> KeymapDoc:
         return KeymapDoc(
             overrides=overrides,
             revision=expected_revision + 1,
@@ -220,11 +223,11 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
     )
     default_doc = KeymapDoc(overrides={}, revision=0, updated_at=None, is_default=True)
 
-    async def _fake_get(_client, _index) -> KeymapDoc:
+    async def _fake_get() -> KeymapDoc:
         current = try_current_project()
         return source_doc if current and current.record.slug == 'source' else default_doc
 
-    async def _fake_save(_client, _index, *, overrides, expected_revision) -> KeymapDoc:
+    async def _fake_save(*, overrides, expected_revision) -> KeymapDoc:
         return KeymapDoc(
             overrides=overrides,
             revision=expected_revision + 1,

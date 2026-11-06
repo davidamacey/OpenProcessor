@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry, use_registry
+from _class_registry_fake import InMemoryRegistry, use_registry
 
 from src.config import GpuArbiterConfig
 from src.services.training import job_manifest, jobs as train_jobs

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import subprocess  # nosec B404 - only patched to refuse, never called
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import httpx
 import numpy as np
 import pytest
-from _registry_doc_fake import registry_doc_source
+from _class_registry_fake import registry_of
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from opensearchpy import AsyncOpenSearch
 
@@ -29,20 +28,16 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _record(slug: str, resources: Any) -> Any:
-    from src.config.projects import ProjectRecord
+async def _create_active(slug: str) -> None:
+    """One project row, ``active`` the way a finished create leaves it (no indexes to build)."""
+    from src.db.repos import projects as repo
+    from src.services.projects.records import new_project_for
+    from src.services.projects.store import run_repo
 
-    now = datetime.now(UTC).isoformat()
-    return ProjectRecord(
-        slug=slug,
-        display_name=slug.title(),
-        description='',
-        status='active',
-        revision=1,
-        created_at=now,
-        updated_at=now,
-        origin=None,
-        resources=resources,
+    await run_repo(
+        'seed the leak environment',
+        repo.create_project,
+        new_project_for(slug, display_name=slug.title(), status='active'),
     )
 
 
@@ -60,19 +55,19 @@ class _LeakPEEncoder(FakePEEncoder):
 
 @pytest.fixture
 def leak_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reference_region_profile: None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reference_region_profile: None,
+    pg_registry: Any,
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
     from cachetools import TTLCache
 
     import src.config.curation_accessors as curation_config_mod
-    from src.clients.curation_opensearch import registry as curation_registry, settings_doc
-    from src.config.curation_accessors import base_curation_config
     from src.config.curation_roles import IndexRole
-    from src.config.projects import new_project_record, resources_for_new
     from src.core.dependencies import app_state, get_async_triton
-    from src.services.curation import event_hub, index_bootstrap
+    from src.services.curation import event_hub, index_bootstrap, settings_store
     from src.services.projects import guard, registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
@@ -130,14 +125,11 @@ def leak_env(
     # those routes' bodies exercise (force=true on activate bypasses it).
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter-disabled-in-leak-test:8000')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
-    monkeypatch.setattr(curation_registry, '_registries', {})
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', set())
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
     # change which index roles a route reaches between the two passes: a frozen
     # clock keeps every entry fresh.
-    monkeypatch.setattr(
-        settings_doc, '_settings_cache', TTLCache(maxsize=64, ttl=5.0, timer=lambda: 0.0)
-    )
+    monkeypatch.setattr(settings_store, '_cache', TTLCache(maxsize=64, ttl=5.0, timer=lambda: 0.0))
     # A UMAP fit the fixture's small pool supports (the defaults need
     # more points than the fixture seeds).
     from src.services.curation.clustering import pool_size
@@ -161,72 +153,36 @@ def leak_env(
     # kept inside tmp_path.
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'jobs' / 'auto_label'))
 
-    base = base_curation_config()
-    records = {'default': new_project_record('default', base)}
-    for slug in ('alpha', 'beta'):
-        records[slug] = _record(slug, resources_for_new(slug, base))
+    import asyncio
+
+    from src.services.projects.bootstrap import bootstrap_default_project
+
+    registry = ProjectRegistry()
+
+    async def _seed_projects() -> None:
+        await bootstrap_default_project()
+        for slug in ('alpha', 'beta'):
+            await _create_active(slug)
+        await registry.refresh_strict()
+
+    records = {}
+    asyncio.run(_seed_projects())
+    records = dict(registry.snapshot())
 
     store: dict[str, dict[str, dict[str, Any]]] = {}
     for slug, record in records.items():
         for role_value, docs in _docs(slug).items():
             store[record.resources.indexes[IndexRole(role_value)]] = docs
     for slug, record in records.items():
-        store.setdefault(record.resources.indexes[IndexRole.SETTINGS], {})['class_registry'] = (
-            registry_doc_source([CLASS_NAMES[slug], f'{slug}_second'], ids=[1, 2])
+        registry_of(record).seed_rows(
+            [
+                {'class_id': 1, 'class_name': CLASS_NAMES[slug]},
+                {'class_id': 2, 'class_name': f'{slug}_second'},
+            ]
         )
     own_dirs = {slug: _seed_files(record, tmp_path) for slug, record in records.items()}
 
-    # M6: seed the shared op_projects registry doc for every project, so
-    # the lifecycle mutations below (PATCH/archive/unarchive/clone_settings)
-    # really reach a write instead of 404ing project_not_found before ever
-    # touching the guard -- which is why B1 (every lifecycle write refused
-    # 500 by the real guard) slipped through a sweep that runs behind the
-    # real guard. ``get_record_with_seq``'s doc id is 'project:<slug>'
-    # (registry.py's ``_project_doc_id``); revision starts at 1, matching
-    # ``registry._revision`` below.
-    from src.services.projects.registry import projects_index, record_to_doc
-
-    store[projects_index()] = {
-        f'project:{slug}': record_to_doc(record) for slug, record in records.items()
-    }
-
-    registry = ProjectRegistry(lambda: None)
-    registry._by_slug = dict(records)
-    registry._revision = 1
-
-    async def _fresh(self: Any) -> None:
-        """A real (if simplified) refresh instead of a hard no-op: syncs
-        ``_by_slug`` from the seeded ``op_projects`` store so a project
-        created mid-sweep (e.g. B2's create-then-write-own-indexes path)
-        is visible to the guard on its very next check, the way a real
-        ``ensure_fresh`` would pick it up after B2's ``refresh='wait_for'``.
-        Frozen otherwise: no revision-counter churn, so the sweep's own
-        three seeded projects never move under it."""
-        from src.services.projects.registry import doc_to_record
-
-        docs = fake.store.get(registry_mod.projects_index(), {})
-        for doc_id, doc in docs.items():
-            if doc_id.startswith('project:'):
-                self._by_slug[doc['slug']] = doc_to_record(doc)
-
-    monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', _fresh)
-    # P3F item 3 (B2(a) residual): create_project now also calls
-    # refresh_strict() (raises instead of swallowing). This registry's
-    # client_factory is `lambda: None` -- fine for the patched
-    # ensure_fresh above (never touches it), but the real
-    # refresh_strict would call client.get(...) on that None and blow up
-    # with an AttributeError. Give it the same sync-from-store behavior.
-    monkeypatch.setattr(ProjectRegistry, 'refresh_strict', _fresh)
     registry_mod.set_project_registry(registry)
-
-    # The sweep drives the real registry store through the fake transport (not the in-memory
-    # stand-in every other test gets), so the document's reads and writes are recorded and
-    # checked against the bound project like any other index access.
-    from src.services.curation import registry_access
-    from src.services.projects.guard import make_curation_opensearch
-
-    monkeypatch.setattr(curation_registry, '_registries', {})
-    monkeypatch.setattr(registry_access, 'make_curation_opensearch', make_curation_opensearch)
 
     accesses: list[tuple[str | None, str, str, str]] = []
     fake = _FakeTransport(store)

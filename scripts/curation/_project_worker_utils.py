@@ -18,16 +18,14 @@ from src.services.projects.script_binding import only_project
 if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
 
-PIPELINE_PAUSED_FLAG_NAME = 'pipeline_paused.flag'
 REGION_STAGE_PAUSED_FLAG_NAME = 'region_stage_paused.flag'
 
 
 def is_project_paused(record: ProjectRecord) -> bool:
-    """A project's pipeline is paused while
-    ``<project_state_dir>/pipeline_paused.flag`` exists. Workers skip a
-    paused project's fetches and keep serving the others; the global GPU
-    pause sentinel still pauses everything."""
-    return (Path(record.resources.project_state_dir) / PIPELINE_PAUSED_FLAG_NAME).exists()
+    """A project's pipeline is paused while ``projects.paused_at`` is set. Workers skip a paused
+    project's fetches and keep serving the others; the global GPU pause sentinel still pauses
+    everything."""
+    return record.paused_at is not None
 
 
 def is_region_stage_paused(record: ProjectRecord) -> bool:

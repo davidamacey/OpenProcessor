@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+import pytest
 from fastapi.testclient import TestClient
 
 from curation.cross_project_leak._constants import SCOPED
@@ -12,6 +13,9 @@ from curation.cross_project_leak._constants import SCOPED
 
 if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
+
+
+pytestmark = pytest.mark.db
 
 
 def _label(client: TestClient, slug: str) -> str:

@@ -10,7 +10,6 @@ import pytest
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch, TwoProjectOpenSearch
 from src.config.project_context import bind_project
-from src.config.projects import ProjectRecord
 from src.services.config_store import get_global_config_store
 from src.services.config_store.index import activate, save_config
 from src.services.config_store.store import get_config_store
@@ -105,40 +104,17 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
     ``ProjectRegistry`` build. Activating a profile in alpha's config
     store mid-run must rebuild alpha's runtime (its own detector
     construction count increases) while beta's stays untouched."""
+    from _fake_project_registry import StaticProjectRegistry
+
     from src.config.curation_accessors import base_curation_config
-    from src.config.projects import resources_for_new
-    from src.services.projects.registry import record_to_doc
+    from src.config.projects import new_project_record, resources_for_new
 
     client = TwoProjectOpenSearch()
     client.close = AsyncMock()
 
-    def _project_doc(slug: str) -> dict[str, Any]:
-        from datetime import UTC, datetime
-
-        now = datetime.now(UTC).isoformat()
-        record = ProjectRecord(
-            slug=slug,
-            display_name=slug,
-            description='',
-            status='active',
-            revision=1,
-            created_at=now,
-            updated_at=now,
-            origin=None,
-            resources=resources_for_new(slug, base_curation_config()),
-        )
-        return record_to_doc(record)
-
-    projects_index = 'op_projects'
-    client._docs.setdefault(projects_index, {})
-    client._docs[projects_index]['project:alpha'] = {
-        '_source': _project_doc('alpha'),
-        '_seq_no': 0,
-    }
-    client._docs[projects_index]['project:beta'] = {
-        '_source': _project_doc('beta'),
-        '_seq_no': 0,
-    }
+    static_registry = StaticProjectRegistry(
+        [new_project_record(slug, base_curation_config()) for slug in ('alpha', 'beta')]
+    )
 
     detector_calls: dict[str, int] = {'alpha': 0, 'beta': 0}
     segmenter_calls: dict[str, int] = {'alpha': 0, 'beta': 0}
@@ -175,6 +151,9 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
 
     _patch(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
     _patch(runner_mod, 'make_script_opensearch', MagicMock(return_value=client))
+    import src.services.projects.registry as registry_mod
+
+    _patch(registry_mod, 'ProjectRegistry', lambda *_a, **_k: static_registry)
 
     _patch(runner_mod, 'RegionDetector', _counting_detector)
     _patch(runner_mod, 'SegmenterClient', _counting_segmenter)

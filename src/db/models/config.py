@@ -86,6 +86,7 @@ class ConfigDocument(Base):
     cloned_from_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('config_documents.id', ondelete='SET NULL')
     )
+    cloned_from_revision: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     updated_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     updated_by: Mapped[str]
@@ -106,6 +107,7 @@ class ConfigRevision(Base):
     revision: Mapped[int] = mapped_column(Integer, primary_key=True)
     body: Mapped[Any] = mapped_column(JSONB)
     body_sha256: Mapped[str]
+    description: Mapped[str] = mapped_column(server_default='')
     created_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     created_by: Mapped[str]
 
@@ -143,6 +145,8 @@ class ConfigActivationEvent(Base):
     __tablename__ = 'config_activation_events'
     __table_args__ = (
         check('reason', in_list('reason', ACTIVATION_REASONS)),
+        # An axis turned off is an event with no target: both NULL, never one of the two.
+        check('to_pair', '(to_config_id IS NULL) = (to_revision IS NULL)'),
         Index('ix_config_activation_events_axis', 'project_id', 'axis', text('id DESC')),
     )
 
@@ -151,8 +155,8 @@ class ConfigActivationEvent(Base):
     axis: Mapped[str]
     from_config_id: Mapped[uuid.UUID | None]
     from_revision: Mapped[int | None] = mapped_column(Integer)
-    to_config_id: Mapped[uuid.UUID]
-    to_revision: Mapped[int] = mapped_column(Integer)
+    to_config_id: Mapped[uuid.UUID | None]
+    to_revision: Mapped[int | None] = mapped_column(Integer)
     reason: Mapped[str]
     at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     by: Mapped[str]

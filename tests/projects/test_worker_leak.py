@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
-from _registry_doc_fake import registry_of
+from _class_registry_fake import registry_of
 from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 from opensearchpy.serializer import JSONSerializer
@@ -298,7 +298,7 @@ async def test_detection_worker_keeps_every_read_and_write_in_its_project(
         # the combined class+region call on it (box-list path).
         bind_task_project(task)
         task.crop_jpeg = b'jpeg'
-        class_names, name_to_id = await bound_class_catalog(None)
+        class_names, name_to_id = await bound_class_catalog()
         reply = await vlm.label_combined(
             img_id=task.crop_id,
             jpeg_bytes=task.crop_jpeg,

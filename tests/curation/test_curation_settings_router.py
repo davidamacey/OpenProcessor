@@ -13,35 +13,22 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store.memory_settings import install, revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
-from curation.test_curation_settings_client import FakeSettingsOpenSearch
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-@pytest.fixture(autouse=True)
-def _reset_settings_cache() -> Iterator[None]:
-    """The settings-doc cache is module-level and keyed by index name
-    -- every test in this file shares the default index, and a fresh
-    ``FakeSettingsOpenSearch`` per test must never see a prior test's
-    cached value."""
-    from src.clients.curation_opensearch import settings_doc
-
-    settings_doc._settings_cache.clear()
-    yield
-    settings_doc._settings_cache.clear()
-
-
 @pytest.fixture
-def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeSettingsOpenSearch()
+    fake_os = object()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -50,7 +37,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
+    client = revision_aware(TestClient(app))
     client.fake_os = fake_os  # type: ignore[attr-defined]
     return client
 
@@ -61,7 +48,7 @@ def test_get_with_no_doc_yet_returns_empty_defaults(app_client: TestClient) -> N
     body = r.json()
     links = body.pop('resource_links')
     assert [lk['id'] for lk in links][:3] == ['swagger', 'redoc', 'openapi_json']
-    assert body == {'defaults': {}, 'updated_at': None, 'updated_by': None}
+    assert body == {'defaults': {}, 'updated_at': None, 'updated_by': None, 'revision': 0}
 
 
 def test_put_creates_the_document(app_client: TestClient) -> None:
@@ -70,7 +57,8 @@ def test_put_creates_the_document(app_client: TestClient) -> None:
     body = r.json()
     assert body['defaults'] == {'cluster': 'ahc'}
     assert body['updated_at'] is not None
-    assert body['updated_by'] is None
+    assert body['updated_by'] == 'system'
+    assert body['revision'] == 1
 
     r2 = app_client.get('/curation/projects/default/settings')
     assert r2.json()['defaults'] == {'cluster': 'ahc'}
@@ -192,7 +180,8 @@ def app_client_config_store(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
+    install(monkeypatch)
+    client = revision_aware(TestClient(app))
     client.fake_os = fake_os  # type: ignore[attr-defined]
     return client
 

@@ -38,6 +38,9 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
     import src.config.curation_accessors as curation_mod
@@ -64,7 +67,7 @@ def _noop_ensure_indexes():
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 
@@ -105,12 +108,12 @@ def test_settings_defaults_source_bind_blocks_planted_write(monkeypatch) -> None
     client = FakeLifecycleOpenSearch()
     _source, target = asyncio.run(_seed(client))
 
-    async def _probing_get_settings(_client: Any) -> dict[str, Any]:
+    async def _probing_get_settings(*, fresh: bool = False) -> dict[str, Any]:
         _plant_write_probe()
         return {'defaults': {}}
 
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.settings_doc.get_curation_settings', _probing_get_settings
+        'src.services.curation.settings_store.get_curation_settings', _probing_get_settings
     )
     with pytest.raises(ProjectReadOnly):
         asyncio.run(
@@ -126,7 +129,7 @@ def test_keymap_source_bind_blocks_planted_write(monkeypatch) -> None:
     client = FakeLifecycleOpenSearch()
     _source, target = asyncio.run(_seed(client))
 
-    async def _probing_get_keymap_doc(_client: Any, _index: str) -> Any:
+    async def _probing_get_keymap_doc() -> Any:
         _plant_write_probe()
         from src.services.curation.keymap import KeymapDoc
 

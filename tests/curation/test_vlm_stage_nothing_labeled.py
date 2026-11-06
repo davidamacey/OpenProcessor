@@ -13,7 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry, use_registry
+from _class_registry_fake import InMemoryRegistry, use_registry
 
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_vlm_empty_class_answer import ITEMS, _item

@@ -6,7 +6,13 @@ from __future__ import annotations
 from typing import Any
 
 from src.clients.curation_opensearch.assist_fields import ASSIST_ITEM_MAPPING
-from src.clients.curation_opensearch.base import F, _knn_field, _knn_settings, config
+from src.clients.curation_opensearch.base import (
+    F,
+    _knn_settings,
+    config,
+    default_knn_spec,
+    knn_field_body,
+)
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
 from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
@@ -94,7 +100,7 @@ def _images_body() -> dict[str, Any]:
                 'original_resolution': {'type': 'keyword'},
                 'non_jpeg_format_skipped': {'type': 'boolean'},
                 'error_kind': {'type': 'keyword'},
-                'embedding': _knn_field(),
+                'embedding': knn_field_body(default_knn_spec(), config.embedding_dim),
                 # Whole-frame secondary embedding, kNN-queryable for
                 # whole-image near-duplicate detection and frame-level
                 # similarity search. Distinct from the primary
@@ -102,7 +108,7 @@ def _images_body() -> dict[str, Any]:
                 # _knn_settings); index.knn is a *final* setting in
                 # OpenSearch, so enabling it on a pre-existing index
                 # needs a reindex.
-                'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
+                'pe_embedding': knn_field_body(default_knn_spec(), config.encoder_embedding_dim),
                 **_IMAGES_IMPORT_MAPPING,
                 **OPEN_VOCAB_IMAGE_MAPPING,
             }
@@ -220,7 +226,7 @@ def _region_boxes_mapping() -> dict[str, Any]:
                 # The geometry the vector was computed from: a box
                 # moved since then has a stale vector.
                 'bbox_norm': {'type': 'float', 'index': False},
-                'embedding': _knn_field(dim=config.encoder_embedding_dim),
+                'embedding': knn_field_body(default_knn_spec(), config.encoder_embedding_dim),
             },
         },
         F.count: {'type': 'integer'},
@@ -415,7 +421,7 @@ def _items_body() -> dict[str, Any]:
                 'updated_at': {'type': 'date'},
                 # Secondary image-encoder embedding for semantic search
                 # (e.g. "white RV", "ford f150").
-                'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
+                'pe_embedding': knn_field_body(default_knn_spec(), config.encoder_embedding_dim),
                 **_region_boxes_mapping(),
                 # History: nested array recording every class write so
                 # operators can answer "who labeled this and when" after a

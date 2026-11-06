@@ -92,9 +92,9 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     settings_doc: dict[str, Any] | None = None
     if opensearch is not None:
         try:
-            from src.clients.curation_opensearch.settings_doc import get_curation_settings
+            from src.services.curation.settings_store import get_curation_settings
 
-            settings_doc = await get_curation_settings(opensearch)
+            settings_doc = await get_curation_settings()
         except Exception as exc:
             logger.warning('curation_methods_settings_lookup_failed', error=str(exc))
             settings_doc = None
