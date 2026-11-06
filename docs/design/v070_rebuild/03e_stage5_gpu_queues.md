@@ -7,8 +7,8 @@
 | Design | [02b](02b_jobs_locking_events.md) sections 2.1, 3 and 7.3; [02a](02a_postgres_schema.md) section 7 |
 | Decisions | D-41 (owner decision 4: training and model export run on Celery; the file protocols are deleted), D-31 (the evaluator on `gpu_eval`, approved), D-22b (promote `wait=true` deleted) |
 | Lanes | 5A, 5B, 5C, 5D in parallel; then 5E (job-directory cleanup) |
-| Merge order | 5D, 5A, 5B, 5C, then 5E last in W2.3a |
-| Runs alongside | stage 4 part W2.3a, disjoint files (merge order 5D first, then 4D, 4A, 4B, 4C, then 5A, 5B, 5C) |
+| Merge order | 5D, 5A, 5B, 5C, then 5E after every order-1 lane of W2.3a |
+| Runs alongside | stage 4 in W2.3a, disjoint files (merge order 5D first, then 4F, 4D, ND-A, 4A, 4B, 4C, then 5A, 5B, 5C, ES-B; then ND-B and 5E; then 6A and 6B) |
 | Compose project | none in the lanes; no GPU in any lane (handlers are tested with fakes; the GPU smoke runs in a budgeted GPU window, below) |
 | Research seams | folded 2026-11-04, approved by the owner 2026-11-04 (RD-1; [owner_questions](reference/owner_questions.md)): 5A-6 (reservations by card UUID), 5B-4 (the export writes the engine contracts and refuses a mismatch, GPU S-13), 5D-5 (registry rows carry the contracts); the GPU worker shape is 1B-8's `make_app(include, device_uuid=None)` |
 
@@ -55,7 +55,10 @@ tests under `tests/training/` and `tests/trainer/`.
 `export/celery_tasks.py`; the root `Dockerfile` (the `export` and `evaluator` targets: Celery and the
 runtime package; the `api` target already has them from stage 1); the model routers, named one by one: `src/routers/models_export.py` (`POST /models/upload`,
 `POST /models/{model_name}/export` and the export status routes) and `src/routers/models_lifecycle.py`
-(it reads the export task state);
+(it reads the export task state). 5B calls `build_command`, `EXPORT_SCRIPT`, `EXPORT_SCRIPT_Y26` and
+`engines_to_load` in `export/export_worker.py` but does not edit them: B3-E2 rewrites them (D-84, so no
+line 5B writes is rewritten); 5B-4's contract write lives in the handler in `export/celery_tasks.py`,
+after the build call, so B3-E1's new export module feeds it unchanged;
 `src/schemas/models.py` (the export status); `src/config/settings.py` (the `/jobs/model_export`
 setting removed); `src/config/job_kinds/gpu_export.py`, `src/config/task_routes/gpu_export.py`; tests
 under `tests/models/`.
@@ -73,7 +76,7 @@ under `tests/models/`.
 new `scripts/curation/bakeoff/celery_tasks.py`; `src/routers/curation/bakeoff.py` and the start service `src/services/curation/bakeoff_jobs.py`;
 `src/config/gpu_arbiter.py` (its bake-off fields); the call of
 `active_bakeoffs()` in `src/services/training/gpu_arbiter.py` (its bake-off scan lines only; 6A deletes the loop that
-calls it in W2.4); `src/config/job_kinds/gpu_eval.py`, `src/config/task_routes/gpu_eval.py`; tests under `tests/bakeoff/`.
+calls it in the same wave, W2.3a); `src/config/job_kinds/gpu_eval.py`, `src/config/task_routes/gpu_eval.py`; tests under `tests/bakeoff/`.
 
 | ID | Task | Red test | Control |
 |---|---|---|---|
@@ -90,8 +93,8 @@ their deletion at project delete and the "busy" scan are shared by all of them. 
 removed once, in one reviewable change, after every caller is gone. No other lane edits these
 files; each lane lists in its report the directory fields and helpers it stopped using.
 
-**Cut and merge.** Cut from the W2.3a integration head after 5D, 4D, 4A, 4B, 4C, 5A, 5B and 5C
-merged; merges last in W2.3a.
+**Cut and merge.** Cut from the W2.3a integration head after every order-1 lane merged (5D, 4F, 4D,
+ND-A, 4A, 4B, 4C, 5A, 5B, 5C, ES-B); merges beside ND-B, before 6A and 6B.
 
 **Owns:** `src/config/curation.py`, `src/config/projects.py`, `src/config/curation_accessors.py`,
 `src/services/projects/registry.py`, `src/services/projects/delete_paths.py`,
@@ -128,7 +131,8 @@ lanes' "orphaned field" notes are all resolved.
 
 The stage's real-GPU smoke (one short training run on COCO-sized public data, one export of a small
 model with its contract columns recorded, one bake-off on a 20-image set) runs inside **GPU window 1** (the B3 gate,
-[decision_register.md](reference/decision_register.md) section 8.1) on the merged B2 + B3 stack, not as an extra window: B3's
+[decision_register.md](reference/decision_register.md) section 8.1) on the B3 integration head, which carries B2 PR2
+(this stage), not as an extra window (D-84: B3 no longer waits for PR3): B3's
 engine export already exercises the export worker, and the training smoke takes about 30 minutes.
 
 ## Stage 5 exit criteria

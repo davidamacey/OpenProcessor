@@ -35,7 +35,7 @@ then speed (no throughput loss; B5 then measures on this engine once).
 
 | # | Check | How |
 |---|---|---|
-| P1 | B2 merged into main (all three B2 PRs) | `git log --oneline main`; the B2 PR3 merge commit is present (B3 lanes may code from the frozen integration head before that) |
+| P1 | B2 PR2 merged into main (owner-approved reorder of 2026-11-05, D-84: the GPU-relevant B2 work, training, model export and the evaluator on Celery, is in PR2; PR3 holds the embedding readers, Cropwright, private hardening and docs, none of them a B3 file) | `git log --oneline main`; the B2 PR2 merge commit is present. Every track is cut from `main` after it. The B3 PR may merge before or after PR3: whichever merges second first merges `main` into its integration branch (a merge commit; the overlap is the shared docs: `docs/ARCHITECTURE.md`, `INSTALLATION.md`, `docs/PERFORMANCE.md`, `CHANGELOG.md`) and re-runs `check_docs_vs_code.py` and `make contracts-check`. GPU window 1 never overlaps PR3's live run 2 |
 | P2 | B1-1E merged: `nms=False` in `export_yolo26.export_fused_onnx`, `inspect_fused_output` refuses non-`[300,6]`, `head_kind` recorded by `validate_pytorch_model`, the export worker routes on `head_kind`, class by name on the secondary, YOLOv5 probe input read from the ONNX, CI job `families` exists | `rg -n "nms=False" export/export_yolo26.py`; `rg -n "head_kind" src/services/model_export.py export/export_worker.py`; `rg -n "families" .github/workflows/` |
 | P3 | B0 exact pin: every requirements file carries the same exact `ultralytics==<pin>`, equal to the current pin in `requirements.txt` (`8.4.197` when the plan was written); `tests/test_requirements_contract.py::test_ultralytics_is_one_exact_version_everywhere` exists | `rg -n "ultralytics" requirements*.txt pyproject.toml`; `rg -n "exact_version" tests/test_requirements_contract.py` |
 | P4 | D-27 and D-28 answered by the owner; freeze date written into the B3 PR description | owner message |
@@ -77,13 +77,14 @@ B3 does not touch the base images.
 
 ## 4. Branches, worktrees, tracks and merge order
 
-- Integration branch: `int/b3-ultralytics`, cut from main **after B2 merged** (owner decision 6).
-  Lane coding may start earlier only on the coordinator's say-so; such lanes rebase onto
-  main-after-B2 before their merge. Review fix R-18: B3 **does** touch B2 files: B3-E2 edits
-  `export/export_worker.py`, which B2 lane 5B rewrites, and Stage A edits `docker/trainer/Dockerfile`
-  and the root `Dockerfile`, which 5A and 5B edit. So every B3 track re-verifies each file and symbol
-  it names on the post-B2 head before coding (this file's "verified against" note predates B2), and
-  only `frame` (adapters and `affine.py`, no B2 file) may code before B2 merges.
+- Integration branch: `int/b3-ultralytics`, cut from main **after B2 PR2 merged** (owner decision 6 as
+  amended by D-84 on 2026-11-05). Review fix R-18: B3 **does** touch B2 files: B3-E2 edits
+  `export/export_worker.py`, which B2 lane 5B rewrites (5B leaves `build_command`, `EXPORT_SCRIPT*` and
+  `engines_to_load` to B3-E2, D-84), and Stage A edits `docker/trainer/Dockerfile` and the root
+  `Dockerfile`, which 5A and 5B edit. All of those are in PR2, so every track re-verifies each file and
+  symbol it names on the post-PR2 head before coding (this file's "verified against" note predates B2),
+  and every track may code once PR2 merged; the coordinator checks the Owns lists against the B2 W2.4
+  lanes (ES-C, 6C, 4E, 6D) at the cut.
 - Each track: branch `b3/<track>`, worktree `<repo>-wt-b3-<track>`, one Sonnet agent.
 - Tracks merge into `int/b3-ultralytics` with `git merge --no-ff`, one merge commit per track, in
   this order. A failed stage reverts as a group (`git revert -m 1 <merge>` per track).
@@ -375,7 +376,8 @@ in the same commit as any wire change; lane checks only (section 9).
 
 ## 6. The B3 GPU gate (U-6.2 once, for Stage A and Stage B)
 
-Run by the coordinator (or one gate agent) after merges 1-5, on the integration head.
+Run by the coordinator (or one gate agent) after merges 1-5, on the integration head, which carries B2
+PR2 (D-84); it may run while B2's W2.4 lanes code, never during PR3's live run 2.
 
 | Setting | Value |
 |---|---|
@@ -404,7 +406,7 @@ Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
 | G9 | image audit: export image size before/after (expect about -0.9 GB), `pip check` in each image, `importlib.metadata.version('ultralytics') == X` in API, export and trainer images, Trivy, image-vs-git audit | all pass |
 | G10 | **B0 OCR before/after comparison** (moved out of B0; procedure and pass rule owned by `b0_close_out_done.md` B0-3, run unchanged). "Before" = the pre-B0 tree (`5b95591f`, API and Triton images plus its `models/ocr_pipeline/1/*.py`); "after" = the merged tree at the integration head. Needs: both image sets under local-only tags, the OCR engines built once and shared (B0 changes no engine), compose project `op-ocr-b0` (own ports), GPU 0 (GPU 2 per the host rules), the public image set of B0-3 step 4 (COCO-Text ids, EXIF 6 and 8 copies, RGBA PNGs). Compare boxes, text and `image_size` per image | B0-3's pass rule (boxes overlay the text on 10 opened images, rotated copies match `image_size`, no new errors), about 2 h. Result goes to `docs/PERFORMANCE.md`; a rejected OCR change is reverted by the OCR-only path in `b0_close_out_done.md` |
 | G11 | **pins part B GPU smokes** ([01](01_package_pins.md) section 6; review fix R-17: the parts that need no GPU, `pip check` in each built image, the plain imports, the segmenter's weight download and the PE weight download script, run earlier in the W3 sweep on CPU image builds): the API image lists the CUDA execution provider; the export image imports `tensorrt` and both CuPy wheels on the GPU and runs one ModelOpt AutoCast export; the Triton image runs the GPU decode tests on CuPy 14; the segmenter starts on the GPU; MLflow client and server on one minor (checked inside G6's training run); the OpenCV 5 parity set includes `cv2.dnn.blobFromImage` in `src/utils/scrfd_decode.py` (reworked in OpenCV 5) through the face gate of G7 | every check passes; a failure names the bump and its fallback from 13 section 8 |
-| G12 | **B2 stage-5 real-GPU smoke** ([03e](03e_stage5_gpu_queues.md) "GPU check"): one short training run through `gpu_train`, one export of a small model through `gpu_export`, one 20-image bake-off through `gpu_eval` | each job ends `completed`, its progress reached the SSE stream, its artifacts are under its storage prefix |
+| G12 | **B2 stage-5 real-GPU smoke** ([03e](03e_stage5_gpu_queues.md) "GPU check", shipped in B2 PR2): one short training run through `gpu_train`, one export of a small model through `gpu_export`, one 20-image bake-off through `gpu_eval` | each job ends `completed`, its progress reached the SSE stream, its artifacts are under its storage prefix |
 
 **Verdict.**
 - All pass: ship Stage B.
@@ -538,7 +540,7 @@ v0.7.0 release.
 
 1. Former master plan 7.3 and 9.1 put B3 in v0.9.0; obsolete. B3 ships in v0.7.0 (owner decision 2).
 2. Former master plan 7.3 cuts `int/b3-ultralytics` from main after B1 and runs it beside B2; owner
-   decision 6 cuts it after B2 merged (early lane coding only on the coordinator's say-so).
+   decision 6 cut it after B2 merged; D-84 (2026-11-05) cuts it after B2 PR2 merged.
 3. `END2END_OUTPUTS` is also imported by `src/services/config_store/ingest_profile_validation.py`
    (not in the U-Step 5 file list). B3-D1 covers it.
 4. U-Step 4's file list misses `export/yolo_export_cli.py`, `yolo_export_settings.py` (`HALF`),
@@ -585,7 +587,7 @@ in tracked files. Deadline: <set by coordinator>. Final report: commits (SHA + s
 output and green output, files touched, anything you could not do and why.
 ```
 
-**`deps`** (worktree `<repo>-wt-b3-deps`, branch `deps/pins-part-b` from `int/b3-ultralytics`):
+**`deps`** (worktree `<repo>-wt-b3-deps`, branch `deps/pins-part-b` from `int/b3-ultralytics`, which is cut from `main` after B2 PR2):
 "Do the part B commits of `docs/design/v070_rebuild/01_package_pins.md` section 7, in that order, one
 commit each, with the targeted check of section 6 after each (CPU resolver runs; no image build,
 no GPU). Leave `requirements-export-y11.txt` alone (B3-A2 deletes it) and the Ultralytics pin to

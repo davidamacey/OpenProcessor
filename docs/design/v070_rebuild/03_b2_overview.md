@@ -43,7 +43,7 @@ section 1).
   plan files and their rows in `decision_register.md` and `docs/design/README.md` ([decision_register.md](reference/decision_register.md)
   section 8.2); merged with a merge commit; no tag.
 
-**Delivery: three PRs to `main` (owner decision 2026-11-05, D-76).** One integration branch, `int/b2-control-plane`, three PRs from its head, each leaving `main` bootable, no tag between them. After a merge the branch is an ancestor of `main`, so the next lanes merge without a rebase. PR1 = stages 1 and 2 and the job runtime of stage 3 (W2.1 + W2.2: database, control data, job runtime; job execution unchanged): part check plus a short live smoke (steps 1, 8, 9, 11). PR2 = stages 4 and 5 as ports (W2.3a) plus the stage-6 lanes they make possible, 6A and 6B part 1 ([03f](03f_stage6_scheduler_scaleout.md) "Delivery in two parts"): part check plus a live smoke (steps 3-7 and 12-18). PR3 = W2.3b, ES-C, the frontend lanes, 6A and 6B part 2, 6C, docs, then the full sweep of section 9 with live run 2. Each PR: local CI parity first, the owner's yes before the push, merge commit.
+**Delivery: three PRs to `main` (owner decision 2026-11-05, D-76, as amended by the no-rework rule D-84 the same day).** One integration branch, `int/b2-control-plane`, three PRs from its head, each leaving `main` bootable, no tag between them. After a merge the branch is an ancestor of `main`, so the next lanes merge without a rebase. PR1 = stages 1 and 2 and the job runtime of stage 3 (W2.1 + W2.2: database, control data, job runtime; job execution unchanged): part check plus a short live smoke (steps 1, 8, 9, 11). PR2 = W2.3a: stages 4 and 5 with every family written once in its final form, the research families included (4F, ND-A, ES-B, ND-B), and stage 6's 6A and 6B whole ([03f](03f_stage6_scheduler_scaleout.md) "Delivery"): part check plus the job-queue live smoke (steps 3-7 and 12). PR3 = W2.4: ES-C, Cropwright (4E, one lane), 6C's private items, docs, then the full sweep of section 9 with live run 2. Each PR: local CI parity first, the owner's yes before the push, merge commit.
 
 ## 2. Preconditions
 
@@ -64,9 +64,9 @@ If a symbol moved, re-find it by concept and record the new name in the lane's P
 | 1 | Foundation: Postgres, Valkey, the Celery app, the schema, the storage seam, the test database | [03a_stage1_foundation.md](03a_stage1_foundation.md) | 1-0 (deps, coordinator), 1A, 1B, 1C, 1D, 1E, 1F (research-seam tables) | - | - |
 | 2 | Control data moves to Postgres, and the 0.6.0 upgrade step | [03b_stage2_control_data.md](03b_stage2_control_data.md) | 2A, 2B, 2C, 2D, 2E, ES-A (embedding registry), then 2F | stage 3 | stage 1 |
 | 3 | Job runtime, the reaper and the event feed | [03c_stage3_job_runtime.md](03c_stage3_job_runtime.md) | 3A, 3B | stage 2 (codes from the stage-1 head) | stage 2 |
-| 4 | The API-hosted job families move to Celery, in two parts | [03d_stage4_job_families.md](03d_stage4_job_families.md) | W2.3a: 4A, 4B, 4C, 4D. W2.3b (after the W2.3a part check): 4F (clustering), ES-B (re-index), ND-A (near-duplicates), then ND-B (holdout guard), then 4E (frontend) | stage 5 (W2.3a only) | stage 3 |
-| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03e_stage5_gpu_queues.md](03e_stage5_gpu_queues.md) | 5A, 5B, 5C, 5D, then 5E (W2.3a) | stage 4 W2.3a | stage 3 |
-| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md) | 6A and 6B part 1 (close W2.3a, PR2); then 6A and 6B part 2 and ES-C (embedding readers), then `b2/frontend-spaces`, then 6C, then 6D (docs) (PR3) | - | stages 4 and 5 |
+| 4 | The API-hosted job families move to Celery, each in its final form (D-84) | [03d_stage4_job_families.md](03d_stage4_job_families.md) | W2.3a: 4A, 4B, 4C, 4D, 4F (clustering), ND-A (near-duplicates), ES-B (re-index), then ND-B (holdout guard). W2.4: 4E (frontend, after ES-C) | stage 5 | stage 3 |
+| 5 | GPU queues: training, model export, the evaluator, promotion and the model registry | [03e_stage5_gpu_queues.md](03e_stage5_gpu_queues.md) | 5A, 5B, 5C, 5D, then 5E (W2.3a) | stage 4 | stage 3 |
+| 6 | Beat and the periodic tasks, the deletions, scale-out compose, hardening, the docs | [03f_stage6_scheduler_scaleout.md](03f_stage6_scheduler_scaleout.md) | 6A and 6B, once each (close W2.3a, PR2); then ES-C (embedding readers) and 6C (private items), then 4E, then 6D (docs) (W2.4, PR3) | - | stages 4 and 5 |
 
 (Stage n is the file with the n-th letter: stage 1 = 03a ... stage 6 = 03f. Older text elsewhere may
 still use the earlier letters, see the "Old short names" note in [00_master_plan.md](00_master_plan.md).)
@@ -90,7 +90,7 @@ still use the earlier letters, see the "Old short names" note in [00_master_plan
 - **One Alembic head, four fixed revision ids.** The base schema, research seams included, lands in
   `0001_control_plane` (lane 1A). Each wave has at most one revision-writing lane, with a fixed id
   ([02d](02d_research_seam_schema.md) section 0): `0002_research_seams` (lane 1F, W2.1), `0003_near_duplicates`
-  (lane ND-A, W2.3b), `0004_region_text` (W5e, after B2). Every other lane adds no revision; any other
+  (lane ND-A, W2.3a), `0004_region_text` (W5e, after B2). Every other lane adds no revision; any other
   schema change is a coordinator commit on the integration branch before the lanes that need it start.
   `tests/db/test_migrations.py` asserts a single head.
 - **Append-only shared files.** `env.template`, `src/config/retired_env.py`, the baselines in
@@ -99,7 +99,7 @@ still use the earlier letters, see the "Old short names" note in [00_master_plan
   require the change in the same commit. Each lane adds or removes only its own lines; the
   coordinator resolves a textual conflict at merge by keeping both sides.
 - **Compose after stage 1.** Every `docker-compose*.yml` and `docker/test/compose.yml` change of
-  stages 4 and 5 is made by lane 6B (stage 6, part 1 at the close of W2.3a), from the facts the stage-4 and stage-5 lanes write in
+  stages 4 and 5 is made by lane 6B (stage 6, at the close of W2.3a), from the facts the stage-4 and stage-5 lanes write in
   their PR notes; no stage-4 or stage-5 lane edits a compose file.
 - **The one allowed overlap** is generated output: `contracts/`. A lane that changes a wire model
   runs `make contracts` in the same commit; if two merged lanes both regenerated it, the coordinator
@@ -108,7 +108,9 @@ still use the earlier letters, see the "Old short names" note in [00_master_plan
 - **Shared docs** (`docs/ARCHITECTURE.md`, `INSTALLATION.md`, `docs/CURATION.md`, `SECURITY.md`,
   `CLAUDE.md`, root `CHANGELOG.md`, `ATTRIBUTION.md`, `docs-site/`, `docs/opensearch_schema_design.md`,
   `docs/design/curation_api_contract.md`, `README.md`) are written only by lane 6D. Other lanes write
-  their facts in their PR notes for 6D. `frontend/CHANGELOG.md` belongs to 4E.
+  their facts in their PR notes for 6D. `frontend/CHANGELOG.md` belongs to 4E. The root `CHANGELOG.md`
+  is the coordinator's: each PR's closing commit writes that PR's entries once (D-84; master section 7
+  step 8).
 - Lanes run only their targeted red/green tests and static checks on touched files
   (`.venv/bin/python -m pytest <files> -q --no-cov`, `.venv/bin/pre-commit run --files <touched>`);
   `db`-marked tests run against the lane's own testcontainers database. **No full suite, no
@@ -184,9 +186,9 @@ time; never overlapping B3's GPU window or a research prototype window. Budget r
 smoke, `-p op-b2-smoke1`: steps 1, 8, 9 and 11 of the T2 table below, using the no-op job and the
 sleeping no-op of `tests/live/` (no family has moved yet); budget 55 minutes (15 + 10 + 15 + 15).
 
-**PR2 check (W2.3a and stage-6 part 1).** The W2.3a part check and a live smoke, `-p op-b2-smoke2`: steps 3-7
-(80 minutes) and 12-18 (115 minutes) of the T2 table, on the kinds, queues and phases that exist at PR2
-(the research kinds of step 14 and the `cluster` phase of step 16 run as today's ports); budget 3 h 15 min.
+**PR2 check (W2.3a).** The W2.3a part check and a live smoke of the job-queue steps only (owner
+2026-11-05), `-p op-b2-smoke2`: steps 3-7 (80 minutes) and 12 (20 minutes) of the T2 table; budget
+1 h 40 min. Steps 13-18 and the research steps run first in PR3's full run, which covers every step.
 
 **PR3 sweep (the full B2 sweep, after every lane merged).** T1 and T2 below, with the image and browser
 checks; PR1 and PR2 smokes are not counted as numbered live runs and every step runs again here.
@@ -253,11 +255,11 @@ Then PR3 from `int/b2-control-plane` against `main`, local CI parity first, the 
 | R2-4 | connection exhaustion with 32 API processes | the budget table and its test; `OP_PG_MAX_CONNECTIONS`; PgBouncer overlay for scale-out |
 | R2-5 | a redelivery or duplicate runs a job twice | the claim statement; race tests; live steps 3-5 |
 | R2-6 | the event feed stalls behind a long write transaction | rule 4; batching; trap T-13, T-14 |
-| R2-7 | B3 edits `docker/trainer/` while 5A rewrites its entry point | 5A owns the job protocol and entry files; B3 owns the training code and the Ultralytics pin; the shared `docker/trainer/Dockerfile` is edited by 5A first, B3 rebases after B2 merges (as planned) |
+| R2-7 | B3 edits `docker/trainer/` while 5A rewrites its entry point | 5A owns the job protocol and entry files; B3 owns the training code and the Ultralytics pin; the shared `docker/trainer/Dockerfile` is edited by 5A first (PR2), and B3's lanes are cut from `main` after PR2 (D-84) |
 | R2-8 | Cropwright misses `queued` or the SSE id format | contracts per family; 4E; the browser check |
 | R2-9 | a secret file unreadable by a container user | spikes S0 and S1 record the ownership rule; installer tests |
 | R2-10 | Celery and kombu versions drift | exact pins, `pip check`, spike S1 on the pins (trap T-17) |
-| R2-11 | the live run overruns its 6 h 10 min budget (the PR1 and PR2 smokes: 55 min and 3 h 15 min) | stop and report |
+| R2-11 | the live run overruns its 6 h 10 min budget (the PR1 and PR2 smokes: 55 min and 1 h 40 min) | stop and report |
 | R2-12 | projects starve each other on the `jobs` queue (carried from the original E13) | FIFO with `OP_JOBS_CONCURRENCY` (4) plus the per-project exclusive kinds; per-project routing is added only if the live run or a user report measures starvation |
 
 ## 11. What to keep after merge
