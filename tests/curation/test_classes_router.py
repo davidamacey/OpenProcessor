@@ -12,6 +12,7 @@ exercise the real load -> mutate -> atomic-write path rather than a mock.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -131,17 +132,15 @@ def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
 
 
 def test_list_classes_exposes_merged_into_for_a_merged_class(
-    app_client: TestClient,
+    app_client: TestClient, registry: InMemoryRegistry
 ) -> None:
     listed = app_client.get('/curation/projects/default/classes').json()['classes']
     by_id = {c['class_id']: c for c in listed}
     source_id, target_id = min(by_id), max(by_id)
 
-    r = app_client.post(
-        '/curation/projects/default/classes/merge',
-        json={'source_id': source_id, 'target_id': target_id},
-    )
-    assert r.status_code == 200, r.text
+    # The merge is a queued job (tests/families_b/test_class_merge_job.py); the job's registry
+    # half is what the class list serves.
+    asyncio.run(registry.merge_class(source_id, target_id))
 
     listed_after = app_client.get('/curation/projects/default/classes').json()['classes']
     by_id_after = {c['class_id']: c for c in listed_after}

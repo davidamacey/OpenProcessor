@@ -5,19 +5,15 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
-from opensearchpy.exceptions import OpenSearchException
+from fastapi.responses import JSONResponse
 
-from src.clients.opensearch.scroll import scroll_ids
+from src.config.project_context import current_project_id
+from src.db.session import async_session_factory
 from src.routers.curation._class_models import ClassMergeRequest  # noqa: TC001 - FastAPI
-from src.routers.curation._common import (
-    OpenSearchDep,
-    get_class_registry,
-    items_index,
-    logger,
-    router,
-)
-from src.services.classes.registry import ClassRegistryError
-from src.utils.timeutil import now_iso
+from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.services.classes import projection_sync
+from src.services.jobs import service as jobs
+from src.services.jobs.status import get_job
 
 
 async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[str, Any]:
@@ -27,26 +23,26 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
             raise HTTPException(status_code=400, detail=f'class_id {cid} not found')
     if payload.source_id == payload.target_id:
         raise HTTPException(status_code=400, detail='cannot merge a class into itself')
-    of_source = {'term': {'class_id': payload.source_id}}
-    not_holdout = {'term': {'test_holdout': True}}
-
-    async def _count(query: dict[str, Any]) -> int:
-        resp = await opensearch.count(index=items_index(), body={'query': query})
-        return int(resp.get('count', 0))
-
-    holdout = await _count({'bool': {'filter': [of_source, not_holdout]}})
-    relabel = await _count({'bool': {'filter': [of_source], 'must_not': [not_holdout]}})
-    # a merge no longer clears class_validated — a
-    # human-validated crop of the source class stays validated under the
-    # target. This count is who that carry-over applies to, not
-    # (as the old 'would_unvalidate' name implied) who loses validation.
-    validated = await _count(
+    index = items_index()
+    holdout = await projection_sync.count_items(
+        opensearch, index, projection_sync.holdout_of_class_query(payload.source_id)
+    )
+    relabel = await projection_sync.count_items(
+        opensearch, index, projection_sync.merge_source_query([payload.source_id])
+    )
+    # A merge keeps class_validated: this counts the crops the carry-over applies to.
+    validated = await projection_sync.count_items(
+        opensearch,
+        index,
         {
             'bool': {
-                'filter': [of_source, {'term': {'class_validated': True}}],
-                'must_not': [not_holdout],
+                'filter': [
+                    {'term': {'class_id': payload.source_id}},
+                    {'term': {'class_validated': True}},
+                ],
+                'must_not': [projection_sync.HOLDOUT],
             }
-        }
+        },
     )
     return {
         'dry_run': True,
@@ -59,117 +55,43 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
     }
 
 
-@router.post('/classes/merge')
+@router.post('/classes/merge', response_model=None)
 async def merge_class(
     payload: ClassMergeRequest,
     opensearch: OpenSearchDep,
     dry_run: Annotated[bool, Query(description='Report counts; change nothing.')] = False,
-) -> dict[str, Any]:
-    """Mark source deprecated; bulk-relabel matching crops + labels.
+) -> dict[str, Any] | JSONResponse:
+    """Queue the merge of ``source_id`` into ``target_id``: 202 with the ``class_merge`` job.
 
-    ``dry_run=true`` returns ``{dry_run, source_id, target_id,
-    would_relabel, validations_carried_over, holdout_blocking, blocked}``
-    and writes nothing (a real merge 409s when ``holdout_blocking > 0``).
-    A human-validated crop of the source class stays validated under the
-    target — ``validations_carried_over`` counts how many crops keep their
-    validation this way, not (unlike the retired ``would_unvalidate``
-    field) how many lose it.
+    The job deprecates the source in the registry, then bulk-relabels its crops and labels; a
+    merge whose source holds frozen ``test_holdout`` crops is refused with 409 here and again by
+    the job. ``dry_run=true`` returns ``{dry_run, source_id, target_id, would_relabel,
+    validations_carried_over, holdout_blocking, blocked}`` and writes nothing. A human-validated
+    crop of the source class stays validated under the target.
     """
+    counts = await _merge_dry_run(payload, opensearch)
     if dry_run:
-        return await _merge_dry_run(payload, opensearch)
-    # A merge that touches frozen test_holdout crops would relabel their
-    # class_id and leave their recorded holdout identity (SHA1-of-crop_id-
-    # per-class_id) stale. Refuse with 409 naming the affected count rather
-    # than silently remapping. Checked before any registry mutation below.
-    holdout_count_resp = await opensearch.count(
-        index=items_index(),
-        body={
-            'query': {
-                'bool': {
-                    'filter': [
-                        {'term': {'class_id': payload.source_id}},
-                        {'term': {'test_holdout': True}},
-                    ],
-                },
-            },
-        },
-    )
-    holdout_count = int(holdout_count_resp.get('count', 0))
-    if holdout_count:
+        return counts
+    if counts['holdout_blocking']:
         raise HTTPException(
             status_code=409,
             detail=(
-                f'cannot merge class {payload.source_id}: {holdout_count} '
+                f'cannot merge class {payload.source_id}: {counts["holdout_blocking"]} '
                 'frozen test_holdout crop(s) would be relabeled'
             ),
         )
-    reg = get_class_registry()
-    try:
-        result = await reg.merge_class(payload.source_id, payload.target_id)
-    except ClassRegistryError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    target_name = result['target_name']
-    now = now_iso()
-    relabel_doc = {
-        'class_id': payload.target_id,
-        'class_name': target_name,
-        'class_source': 'class_merge',
-        'updated_at': now,
-    }
-    merge_query = {
-        'bool': {
-            'filter': [{'term': {'class_id': payload.source_id}}],
-            'must_not': [{'term': {'test_holdout': True}}],
-        },
-    }
-    # Items index: a per-doc OCC bulk pass (rather than a bare
-    # update_by_query painless script) so class_id_history gets appended
-    # (dedupe/cap both live in record_class_history, reused here rather
-    # than reimplemented in painless). A merged crop must not keep a stale
-    # class_validated=true/label_source='human' once class_source now says
-    # 'class_merge'.
-    from src.clients.occ import occ_skip_on_conflict_bulk
-    from src.domain.history import record_class_history
-
-    def _merge_crop(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-        update = dict(relabel_doc)
-        update['cluster_id'] = payload.target_id
-        update['cluster_subid'] = None
-        update['label_source'] = 'class_merge'
-        # a human-validated crop of the source class stays
-        # validated under the target — only the class assignment changes,
-        # not the fact a human already confirmed it. class_id_history
-        # (record_class_history below) separately snapshots the pre-merge
-        # class_validated state, so the prior class's validation is on
-        # record either way.
-        update['class_validated'] = bool(current.get('class_validated', False))
-        update['class_id_history'] = record_class_history(current, writer='class_merge')
-        return update
-
-    try:
-        crop_ids = await scroll_ids(opensearch, index=items_index(), query=merge_query)
-        if crop_ids:
-            # Refresh once after every page instead of forcing a
-            # refresh=True on each of occ_skip_on_conflict_bulk's
-            # per-500-id pages.
-            bulk_result = await occ_skip_on_conflict_bulk(
-                opensearch,
-                doc_ids=crop_ids,
-                merger=_merge_crop,
-                index=items_index(),
-                refresh=False,
-                writer_id='class_merge',
-            )
-            if bulk_result.get('errors'):
-                logger.warning(
-                    'merge_relabel_partial_errors',
-                    index=items_index(),
-                    errors=len(bulk_result['errors']),
-                )
-            try:
-                await opensearch.indices.refresh(index=items_index())
-            except OpenSearchException as exc:
-                logger.debug('merge_relabel_final_refresh_failed', error=str(exc))
-    except Exception as exc:
-        logger.warning('merge_relabel_failed', index=items_index(), error=str(exc))
-    return result
+    target = (await get_class_registry().snapshot()).get(payload.target_id)
+    if target is not None and target.deprecated:
+        raise HTTPException(
+            status_code=400,
+            detail=f'target class_id {payload.target_id} is deprecated; cannot merge into it',
+        )
+    async with async_session_factory()() as session:
+        started = await jobs.start_job(
+            session,
+            'class_merge',
+            current_project_id(),
+            params={'source_id': payload.source_id, 'target_id': payload.target_id},
+        )
+        job = await get_job(session, started.job.id, project=current_project_id())
+    return JSONResponse(job.model_dump(mode='json'), status_code=202)
