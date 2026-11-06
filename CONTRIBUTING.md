@@ -80,6 +80,18 @@ docker compose -p openprocessor exec api pip install -r /tmp/requirements-test.t
 docker compose -p openprocessor exec api python -m pytest tests/ -q --ignore=tests/live
 ```
 
+## The local gate
+
+`make gate` (or `scripts/dev/gate.sh [py|fe|all]`) runs the checks CI runs, in one command. It
+installs first and alone (`pip install -r requirements-test.txt`, `pip check`, `npm ci` in
+`frontend/` and `docs-site/`), then runs the Python track (pre-commit on all files, the offline
+suite with xdist using the `-m` expression from `pyproject.toml`, contracts, docs check) and the
+frontend track (check, lint, knip, unit tests, build, e2e, docs-site build) in parallel. Each step
+logs to `artifacts_local/gate/<utc>/<step>.log` and one line to `summary_<track>.txt`; a failed
+step is recorded and its track goes on, and the exit code is non-zero if any step failed. On a
+shared host, steps run under `nice`/`ionice` and wait while the 1-minute load is above
+`GATE_MAX_LOAD` (default 35); set `GATE_NICE=0` on a quiet machine, `GATE_XDIST` for the worker count.
+
 ## Running the live write-path verification harness
 
 Roughly half the curation subsystem's write endpoints are only
