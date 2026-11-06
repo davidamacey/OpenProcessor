@@ -13,6 +13,7 @@ statistics.
 import asyncio
 import logging
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from typing import Any
 
@@ -68,25 +69,37 @@ async def _probe_http(url: str) -> tuple[bool, str]:
     return True, f'HTTP {response.status_code}'
 
 
-async def _probe_dependency(name: str) -> tuple[bool, str]:
-    """Run the startup probe of ``name`` (database, queue) off the event loop, bounded.
+async def _bounded_probe(name: str, check: Callable[[], Awaitable[str]]) -> tuple[bool, str]:
+    """The one readiness boundary: run ``check`` and turn any failure into a not-ready entry.
 
-    The same probes the startup wait uses, so readiness and start agree on what "up" means.
+    ``ProbeFailed`` and a timeout carry their own detail. Any other exception means the probe
+    could not run (an unreadable secret, bad settings, a client error): the dependency is down
+    for readiness, so ``/ready`` answers 503 naming it, never 500. The body gets only the
+    exception class (the message may hold a path); the log line gets the message.
     """
-    probe = startup_probes(get_settings())[name]
     try:
-        await asyncio.wait_for(asyncio.to_thread(probe), timeout=_READY_PROBE_TIMEOUT_S)
+        return True, await check()
     except ProbeFailed as exc:
         return False, str(exc)
     except TimeoutError:
         return False, f'timeout after {_READY_PROBE_TIMEOUT_S}s'
     except Exception as exc:
-        # A probe that cannot run (unreadable secret, bad settings) means the dependency is
-        # down for readiness; the class name goes in the body, the message (may hold a path)
-        # only in the log.
         logger.warning('readiness probe %s could not run: %s', name, exc)
         return False, type(exc).__name__
-    return True, 'ok'
+
+
+async def _probe_dependency(name: str) -> tuple[bool, str]:
+    """Run the startup probe of ``name`` (database, queue) off the event loop, bounded.
+
+    The same probes the startup wait uses, so readiness and start agree on what "up" means.
+    """
+
+    async def check() -> str:
+        probe = startup_probes(get_settings())[name]
+        await asyncio.wait_for(asyncio.to_thread(probe), timeout=_READY_PROBE_TIMEOUT_S)
+        return 'ok'
+
+    return await _bounded_probe(name, check)
 
 
 async def _probe_triton() -> tuple[bool, str]:
@@ -107,23 +120,17 @@ async def _probe_triton() -> tuple[bool, str]:
     so a degraded Triton can't stall the probe past the k8s readiness
     window.
     """
-    settings = get_settings()
-    try:
+
+    async def check() -> str:
         client = await asyncio.wait_for(
-            get_async_triton_client(settings.triton_url),
+            get_async_triton_client(get_settings().triton_url),
             timeout=_READY_PROBE_TIMEOUT_S,
         )
-        live = await asyncio.wait_for(
-            client.is_server_live(),
-            timeout=_READY_PROBE_TIMEOUT_S,
-        )
-    except TimeoutError:
-        return False, f'is_server_live timeout after {_READY_PROBE_TIMEOUT_S}s'
-    except Exception as exc:
-        return False, f'{type(exc).__name__}: {exc}'
-    if not live:
-        return False, 'is_server_live returned False'
-    return True, 'is_server_live OK'
+        if not await asyncio.wait_for(client.is_server_live(), timeout=_READY_PROBE_TIMEOUT_S):
+            raise ProbeFailed('is_server_live returned False')
+        return 'is_server_live OK'
+
+    return await _bounded_probe('triton', check)
 
 
 async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
