@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import pytest
 import structlog
+from celery import Celery
 from fixtures.job_rows import make_project, start
 
 from src.db.engine import get_sync_engine
+from src.tasks.runtime import register
 from src.tasks.runtime.register import register_job
 
 
@@ -34,7 +36,7 @@ def worker_app(monkeypatch, tmp_path):
 
 
 def test_a_handlers_log_line_carries_job_id_kind_project_and_attempt(
-    pg, job_env, wakes, kinds, worker_app
+    pg, job_env, wakes, kinds, worker_app, monkeypatch
 ) -> None:
     project = make_project(pg, 'logproj')
     job = start(get_sync_engine(), project, 't_plain')
@@ -43,8 +45,13 @@ def test_a_handlers_log_line_carries_job_id_kind_project_and_attempt(
     async def handler(ctx):
         seen.update(structlog.contextvars.get_contextvars())
 
-    register_job('t_plain', handler)
-    worker_app.tasks['op.test.plain'].apply(args=[str(job.id)], task_id=str(job.id))
+    # a probe app of its own: a shared task would register on every app built later in the process
+    probe = Celery('log-context-probe', set_as_current=False)
+    monkeypatch.setattr(
+        register, 'shared_task', lambda **options: probe.task(shared=False, **options)
+    )
+    task = register_job('t_plain', handler)
+    task.apply(args=[str(job.id)], task_id=str(job.id))
     assert seen['job_id'] == str(job.id)
     assert seen['kind'] == 'op.test.plain'
     assert seen['project'] == 'logproj'
@@ -55,7 +62,9 @@ def test_a_handlers_log_line_carries_job_id_kind_project_and_attempt(
 def test_a_periodic_task_with_no_job_row_logs_without_a_project(worker_app) -> None:
     seen: dict = {}
 
-    @worker_app.task(name='op.test.periodic_probe', shared=False)
+    probe = Celery('log-context-periodic-probe', set_as_current=False)
+
+    @probe.task(name='op.test.periodic_probe', shared=False)
     def tick(job_id: str) -> None:
         seen.update(structlog.contextvars.get_contextvars())
 
