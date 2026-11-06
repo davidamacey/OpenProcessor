@@ -276,3 +276,36 @@ Requested by the coordinator after the tier-1 note: confirm the tier-1 cuts on a
 - Verdict rule: cuts fixed from tier 1, nothing re-chosen. PE single linkage 0.925 and core (MobileCLIP) single linkage 0.965 are each **confirmed** when, on the tier-2 sample, they meet the four registered bars of section 1.8 against the control cosine 0.98 on the same vectors (false-group-rate point estimate <= 0.5 %; recall >= 0.90 on `T-q60` and `T-half`; >= 0.80 on `T-crop90`; no transform below the control). A cut that meets the point estimates but whose false-group Wilson upper bound exceeds 0.5 % is "confirmed on the point estimate, interval open".
 - Gap explanation: cosine of each live vector to the harness vector of the same file (median, minimum, per transform), then exact grouping on the live vectors at cosine 0.98 against the route's stored groups. Equal vectors with different groups point at the route (assignment, approximate search, refresh); different vectors point at decode, resize or the embedding.
 - Public data only; no set P.
+
+## 8. Tier 2 results (2026-11-06)
+
+Run as registered in section 7, with these deviations, all forced and stated:
+
+- **Sample size.** Only 1,493 originals could be drawn disjoint from tier 1 (1,000 COCO + 493 Open Images: the local Open Images pool had no more), 20,902 items; manifest SHA-256 in `artifacts_local/near_dup/t2/near_dup_2000_t2.json.sha256`.
+- **Live ingest stopped at the time cap, not at the sample.** The core route took 352 s for 4,200 items (about 12 images per second with 2 API workers and detection on every image), so the verdict set is the first **298 complete families, 4,172 items** (families ingested in order; a stop at the budget leaves complete families). Intervals are wider than tier 1 because of it.
+- **Stack.** Project `op-nd-t2`, local images `openprocessor-local/openprocessor{,-triton}:main-5a155215`, OpenSearch `opensearchproject/opensearch:3.4.0` (the only OpenSearch image present locally; 3.6.0 would have needed a pull), Triton + API (2 workers) + OpenSearch only, `TRITON_GPU_ID=API_GPU_ID=0`, ports 146xx, models copied to scratch, existing engines (none built). Up to healthy in 87 s. Torn down with `docker compose -p op-nd-t2 down -v --remove-orphans` (project and volumes gone; `docker compose ls` no longer lists it).
+- **PE through the live GPU-decode model was not run.** My `live_ingest.py pe` passed a positionally named gRPC stream callback and the first response raised; I stopped the process at the budget instead of restarting the stack. The PE tier-2 vectors are therefore the **harness vectors** (the product's CPU preprocessing and plan, parity 0.9999 in P0) of the same 298 families. For PNG copies the live route would take that CPU path anyway (`gpu_image_prep` takes JPEG), but the JPEG items' live GPU-decode path remains unmeasured.
+- **GPU time with the lock held:** 653 s (stack up to down) + 79 s (harness vectors of the 4,176 ingested files, both spaces) = **732 s, 12.2 minutes** of the 15. Wall clock about 1 h 15 m including the build of the sample.
+
+### 8.1 Verdict per cut (single linkage, nothing re-chosen)
+
+| Cut | Vectors | Pooled copy recall: cut vs control 0.98 | T-q60 (95 % Wilson) | T-half | T-crop90 | Mixed groups / groups (Wilson upper) | Bars | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| Core, MobileCLIP 0.965 (score 0.9825) | **live**, stored `global_embedding` | 0.905 vs 0.563 | 0.953 (0.923-0.972) | 0.909 (0.871-0.937) | 0.953 (0.923-0.972) | 0 / 357 (1.06 %) | all four met | **confirmed on the point estimate; interval open** (298 families: the false-group upper bound is above 0.5 %) |
+| PE 0.925 | harness (= product CPU path) | 0.906 vs 0.226 | **0.896 (0.856-0.926)** | 1.000 (0.987-1.000) | 1.000 (0.987-1.000) | 1 / 340 (0.29 %; 0.05-1.65 %) | bar 2 missed: T-q60 0.896 < 0.90 | **not confirmed** (misses the q60 bar by 0.4 points; the interval spans it; every other transform is far above the control) |
+
+PE at 0.925 on this sample: `T-q30` 0.883, `C-social` 0.634, `CB-half` 0.812; control 0.98 recovers 0 of the q60 re-encodes. So the direction of tier 1 holds (0.98 recovers almost no recompressed copies in PE) but the exact cut 0.925 sits on the q60 bar and does not clear it twice. A cut of 0.92 would be the next grid value to register and test (tier-1 calibration put it at q60 0.95 with mixed groups 2 to 3 of about 1,060). Not re-chosen here.
+
+Same families, MobileCLIP **harness** vectors: pooled 0.904 vs 0.564, q60 0.953, mixed groups 0 / 358: the live and harness verdicts agree.
+
+### 8.2 The harness-versus-live gap (finding 4)
+
+- **The vectors are the same.** Live stored `global_embedding` against the harness MobileCLIP vector of the same file, 4,176 files: cosine median 0.999989, minimum 0.99865, and every transform's median is 0.99998 or higher. So decode, resize and the embedding are not the cause for the core route (and the P0 plan parity already showed the harness equals the engine).
+- **The gap is the route's grouping.** On the same live vectors, exact grouping at cosine 0.98 (score 0.99, the route's default) recovers the original for T-q60 61 %, T-half 38 %, T-crop90 76 %, T-bright 99 %. The route's own stored `duplicate_group_id` ties the copy to its original for only T-q60 3.3 % (10 of 299), T-half 9.1 %, T-crop90 9.4 %, T-bright 31 %, T-rot 18 %, and 0 % for T-quarter and `C-social`. `dedupe_r1.json` measured 24 %, 9 %, 21 % and 87 % on its sample, so this run is of the same order or lower: the route, not the vectors, loses most pairs. The assignment is an approximate k-nearest-neighbour search (`max_results` 10, matches are hits with score at least the threshold in reply order, `queries.py`) over a batch indexed with `refresh=False`, with each family contributing up to 13 near-identical items; this run cannot separate approximate search, refresh timing and the join rule from each other (that needs the stack with per-step probes). The expected consequence: the stored groups of the core route under-group relative to what the vectors support, and a regroup job over the stored vectors (the plan's design, 09d section 5) recovers the difference.
+- Raw outputs: `artifacts_local/near_dup/t2/`; backing JSON: `docs/benchmarks/near_duplicate_detection/tier2_*.json`.
+
+### 8.3 What this changes in section 4
+
+- Core path seed 0.965: **tier 2 confirms on the point estimate** (live vectors, 298 families); the interval is open (upper bound 1.06 %) and the family count is below the registered size, so ND-A may seed it as a hypothesis in a revisioned profile, labelled "tier 2: point estimate only".
+- PE `image.dedup_cosine` 0.925: **not confirmed**; keep 0.98 as the shipped seed, or register 0.92 and run it. The gap between 0.98 and a recompression-robust cut in PE is real in both samples.
+- The live GPU-decode PE path and the full-size tier-2 sample remain open (restart the stack with the corrected callback: about 5 minutes of lock time for the JPEG items).
