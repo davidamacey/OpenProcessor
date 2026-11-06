@@ -672,6 +672,62 @@ services:
     networks:
       - triton_net
 
+  # Research clustering (profile curation): CPU only in 0.7.0; a fresh child per run releases memory.
+  cluster-worker:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    mem_reservation: 1g
+    profiles:
+      - curation
+    command: celery -A src.tasks.app worker -Q cluster -c 1 --max-tasks-per-child=1 --hostname cluster@%h -E
+    stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+      - OPENSEARCH_URL=http://opensearch:9200
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - openprocessor-state:/var/lib/openprocessor
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
+    networks:
+      - triton_net
+
   jobs-beat:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging

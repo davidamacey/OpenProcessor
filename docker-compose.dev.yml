@@ -86,6 +86,12 @@ services:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
 
+  cluster-worker:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+
   jobs-beat:
     build: *root-build
     volumes:

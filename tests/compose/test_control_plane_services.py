@@ -21,16 +21,18 @@ NEW = (
     'jobs-worker',
     'periodic-worker',
     'open-vocab-worker',
+    'cluster-worker',
     'jobs-beat',
     'flower',
 )
-CELERY_WORKERS = ('jobs-worker', 'periodic-worker', 'open-vocab-worker')
+CELERY_WORKERS = ('jobs-worker', 'periodic-worker', 'open-vocab-worker', 'cluster-worker')
 # Python services that run the application image (db-migrate is the one that migrates).
 PYTHON_SERVICES = (
     'api',
     'jobs-worker',
     'periodic-worker',
     'open-vocab-worker',
+    'cluster-worker',
     'jobs-beat',
     'flower',
     'curation-detection-worker',
@@ -224,6 +226,7 @@ def _overlay(path: str) -> dict[str, Any]:
 
 
 DEV_PYTHON = (
+    'cluster-worker',
     'db-migrate',
     'jobs-worker',
     'periodic-worker',
@@ -280,3 +283,18 @@ def test_api_sets_web_concurrency_equal_to_its_workers_flag() -> None:
     assert len(workers) == 1
     count = workers[0].split('=', 1)[1].split('#')[0].strip()
     assert env['WEB_CONCURRENCY'] == count
+
+
+def test_cluster_worker_consumes_only_cluster_and_recycles_every_task() -> None:
+    cmd = _command('cluster-worker')
+    assert '-Q cluster ' in cmd
+    assert '-c 1' in cmd
+    assert '--max-tasks-per-child=1' in cmd
+    assert _svc('cluster-worker')['profiles'] == ['curation']
+
+
+def test_cluster_worker_is_cpu_only() -> None:
+    svc = _svc('cluster-worker')
+    assert 'devices' not in str(svc.get('deploy', {}))
+    assert not any('GPU' in e or 'CUDA' in e for e in _env('cluster-worker'))
+    assert 'runtime' not in svc

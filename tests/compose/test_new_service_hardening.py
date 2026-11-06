@@ -21,6 +21,7 @@ PYTHON_SERVICES = (
     'open-vocab-worker',
     'jobs-beat',
     'flower',
+    'cluster-worker',
 )
 # Spike S0: the postgres entrypoint starts as root, chowns PGDATA, reads the mode-600 secret
 # (DAC_OVERRIDE) and drops to postgres (SETUID, SETGID). Without CHOWN or DAC_OVERRIDE it does not start.
