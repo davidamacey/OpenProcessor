@@ -351,3 +351,36 @@ async def test_copy_registry_replaces_the_target_with_the_source(pg, pg_env) -> 
     rows = await _in_tx(dst, lambda s: repo.read_registry(s, dst))
     assert [c.name for c in rows.classes] == ['car']
     assert rows.next_class_id == 1
+
+
+@pytest.mark.asyncio
+async def test_load_registry_fills_the_empty_row_that_project_create_wrote(project) -> None:
+    t0 = dt.datetime(2026, 1, 2, 3, 4, 5, tzinfo=dt.UTC)
+
+    async def run(s):
+        await repo.ensure_registry(s, project)
+        await repo.load_registry(
+            s,
+            project,
+            [ClassLoad(class_id=4, name='Car', added_at=t0)],
+            revision=9,
+            next_class_id=12,
+            migrated_from='class_registry_file',
+            migrated_at=t0,
+        )
+        return await repo.read_registry(s, project)
+
+    rows = await _in_tx(project, run)
+    assert (rows.revision, rows.next_class_id) == (9, 12)
+    assert [(c.class_id, c.name) for c in rows.classes] == [(4, 'Car')]
+
+
+@pytest.mark.asyncio
+async def test_load_registry_refuses_an_empty_row_that_has_been_written_to(project) -> None:
+    async def run(s):
+        await repo.add_class(s, project, 'a')
+        await repo.set_deprecated(s, project, 0, True)  # revision moved; still one class
+        with pytest.raises(ClassRegistryError, match='already has'):
+            await repo.load_registry(s, project, [ClassLoad(class_id=0, name='b')], revision=1)
+
+    await _in_tx(project, run)

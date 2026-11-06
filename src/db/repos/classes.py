@@ -539,19 +539,42 @@ async def load_registry(
     """The 0.6.0 upgrade's write: the registry row and its classes with their ids and
     timestamps preserved, names through the same ``name_key`` path as a normal add. The id
     counter is ``next_class_id`` (the document's, which never goes back) or one past the highest
-    id. Raises when the project already has a registry row or any unique rule is violated;
-    nothing is committed here."""
+    id. The empty registry row project create writes (no classes, revision 0) is filled in;
+    a registry that holds classes or has been written to raises, as does any unique rule
+    violation. Nothing is committed here."""
     highest = max((c.class_id for c in classes), default=-1) + 1
     counter = highest if next_class_id is None else max(next_class_id, highest)
-    if await current_revision(session, project_id) is not None:
-        raise ClassRegistryError(f'project {project_id} already has a class registry')
-    await session.execute(
-        insert(ClassRegistry).values(
-            project_id=project_id,
-            next_class_id=counter,
-            revision=revision,
-            migrated_from=migrated_from,
-            migrated_at=migrated_at,
+    existing = (
+        await session.execute(
+            select(ClassRegistry).where(ClassRegistry.project_id == project_id).with_for_update()
         )
-    )
+    ).scalar_one_or_none()
+    if existing is None:
+        await session.execute(
+            insert(ClassRegistry).values(
+                project_id=project_id,
+                next_class_id=counter,
+                revision=revision,
+                migrated_from=migrated_from,
+                migrated_at=migrated_at,
+            )
+        )
+    else:
+        held = (
+            await session.execute(select(func.count()).where(ProjectClass.project_id == project_id))
+        ).scalar_one()
+        if held or existing.revision != 0:
+            raise ClassRegistryError(f'project {project_id} already has a class registry')
+        # the empty row project create writes: fill it in
+        await session.execute(
+            update(ClassRegistry)
+            .where(ClassRegistry.project_id == project_id)
+            .values(
+                next_class_id=counter,
+                revision=revision,
+                migrated_from=migrated_from,
+                migrated_at=migrated_at,
+                updated_at=func.now(),
+            )
+        )
     await _insert_many(session, project_id, classes)
