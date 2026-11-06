@@ -19,6 +19,7 @@ from scripts.curation.worker.state import _ItemTask, _wait_for_sentinel_clear
 from src.core.logging import get_logger
 from src.services.curation.crop_bytes import cache_stats as crop_cache_stats
 from src.services.curation.ops_metrics import OP_DETECTION_WORKER_ITEMS_TOTAL
+from src.services.jobs.stream_claims import ProjectClaims
 
 
 if TYPE_CHECKING:
@@ -35,8 +36,33 @@ logger = get_logger('curation_worker')
 _RELEASED_AT_TTL_S = 300.0
 
 
+class _ClaimedProjects:
+    """The registry as this replica sees it: only the projects it holds the claim for
+    (02b section 5), so replicas split the projects instead of all polling every one."""
+
+    def __init__(self, claimed: list[Any]) -> None:
+        self._claimed = claimed
+
+    def active_projects(self) -> list[Any]:
+        return list(self._claimed)
+
+
 async def producer(
     ctx: PipelineContext, sync_project_runtime: Callable[[Any], Awaitable[None]]
+) -> None:
+    """Claim projects for this replica and feed their pending crops (see :func:`_produce`);
+    the claims go back when the producer ends, so another replica takes them at once."""
+    claims = ProjectClaims('detection')
+    try:
+        await _produce(ctx, sync_project_runtime, claims)
+    finally:
+        await claims.arelease_all()
+
+
+async def _produce(
+    ctx: PipelineContext,
+    sync_project_runtime: Callable[[Any], Awaitable[None]],
+    claims: ProjectClaims,
 ) -> None:
     """Fetch eligible crops and queue task DESCRIPTORS only.
 
@@ -86,6 +112,10 @@ async def producer(
             inflight_counts = collections.Counter(in_flight_owner.values())
         fairness_scheduler.set_in_flight(dict(inflight_counts))
         await project_registry.ensure_fresh()
+        working = {slug for slug, n in inflight_counts.items() if n}
+        mine = _ClaimedProjects(
+            await claims.select(project_registry.active_projects(), busy=working)
+        )
 
         # One hot-reload check per active project,
         # each bound in turn -- never a single process-wide runtime.
@@ -93,13 +123,13 @@ async def producer(
         # first runtime here too; a project whose sync fails this
         # cycle just keeps its last-known runtime (or none) and is
         # retried next cycle.
-        for _record in project_registry.active_projects():
+        for _record in mine.active_projects():
             await sync_project_runtime(_record)
 
         try:
             tasks = await fetch_pending_multi_project(
                 opensearch,
-                registry=project_registry,
+                registry=mine,
                 scheduler=fairness_scheduler,
                 fetch_n=fetch_n,
                 queue_max=pipeline_capacity,
