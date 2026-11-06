@@ -172,12 +172,3 @@ def active_run() -> BulkStore | None:
         if store.job.is_live(ACTIVE_STATUSES):
             return store
     return None
-
-
-def running_run_ids() -> list[tuple[str, str | None]]:
-    """``[(run_id, started_at)]`` of live runs in the bound project."""
-    return [
-        (store.run_id, store.job.read().get('started_at'))
-        for store in list_stores()
-        if store.job.is_live(ACTIVE_STATUSES)
-    ]
