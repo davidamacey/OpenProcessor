@@ -1151,14 +1151,6 @@ env_set_default() {
     env_set "$key" "$value"
 }
 
-# env_create_or_merge -- create .env from env.template (600 before any
-# value is written) or add keys that are new in env.template
-env_create_or_merge() {
-    local out
-    out="$(env_generate "${OP_DIR}/env.template" "$ENV_FILE")" || return 1
-    [[ -z "$out" ]] || log_info "$out"
-}
-
 # -----------------------------------------------------------------------------
 # 4.4 HuggingFace token: never in argv, logs or xtrace. The token lives in
 # the global _OP_HF_TOKEN and is only ever handed around by variable name.
@@ -2635,6 +2627,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
     # shellcheck source=scripts/lib/env_generator.sh
     source "${OP_DIR}/scripts/lib/env_generator.sh"
+    # shellcheck source=scripts/lib/secrets_control_plane.sh
+    source "${OP_DIR}/scripts/lib/secrets_control_plane.sh"
     # shellcheck source=scripts/lib/retired_env.sh
     source "${OP_DIR}/scripts/lib/retired_env.sh"
     # shellcheck source=scripts/lib/cropwright_auth.sh
@@ -2645,7 +2639,9 @@ do_install() {
     source "${OP_DIR}/scripts/lib/registry_migration.sh"
     refuse_retired_env "$ENV_FILE"
 
-    env_create_or_merge
+    # .env: created at mode 600 from env.template, or only the keys new in the template are added
+    _env_msg="$(env_generate "${OP_DIR}/env.template" "$ENV_FILE")" || die "could not create ${ENV_FILE}"
+    [[ -z "$_env_msg" ]] || log_info "$_env_msg"
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
     if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         # Without a primary ingest detector /ingest answers 503 on a fresh install.
@@ -2849,6 +2845,7 @@ YAML
 
     local d
     ( umask 077; mkdir -p "${OP_DIR}/secrets/vlm" )  # else Docker creates it root-owned
+    ensure_control_plane_secrets "$OP_DIR" || die "could not create the control-plane secrets under ${OP_DIR}/secrets"
     for d in models pytorch_models data data/samples data/source cache cache/huggingface cache/vllm; do
         mkdir -p "${OP_DIR}/${d}"
     done

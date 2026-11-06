@@ -98,9 +98,9 @@ def test_upsert_replaces_one_key_and_never_puts_the_value_in_argv(tmp_path: Path
 def test_the_installer_and_setup_share_the_one_library() -> None:
     installer = (REPO_ROOT / 'setup-openprocessor.sh').read_text()
     assert 'scripts/lib/env_generator.sh' in installer
-    body = installer.split('env_create_or_merge() {', 1)[1].split('\n}\n', 1)[0]
-    assert 'env_generate "${OP_DIR}/env.template"' in body
-    assert 'install -m 600' not in body
+    assert 'env_generate "${OP_DIR}/env.template" "$ENV_FILE"' in installer
+    assert 'env_create_or_merge' not in installer
+    assert 'install -m 600 "${OP_DIR}/env.template"' not in installer
     assert 'env_generator.sh' in (LIB / 'config.sh').read_text()
     assert 'cat > "$env_file"' not in (LIB / 'config.sh').read_text()
     manifest = (REPO_ROOT / 'release-manifest.txt').read_text().split()

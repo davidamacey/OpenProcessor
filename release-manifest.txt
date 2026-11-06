@@ -9,6 +9,7 @@ openprocessor	exec
 scripts/lib/colors.sh
 scripts/lib/ports.sh
 scripts/lib/bind_dirs.sh
+scripts/lib/secrets_control_plane.sh
 scripts/lib/gpu.sh
 scripts/lib/config.sh
 scripts/lib/env_generator.sh
