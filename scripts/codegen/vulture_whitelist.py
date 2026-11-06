@@ -107,3 +107,4 @@ _.to_request  # ProcessingPlan.to_request, called by the route that parses the p
 # job lanes of stage 2 onward. Delete these entries when the first production caller lands.
 _.build_rooted_store  # src/clients/storage/roots.py, the BlobStore every storage consumer builds
 _.storage_root_paths  # src/config/storage.py, the physical roots build_rooted_store maps
+_.crop_key  # src/clients/storage/keys.py, the crop-cache key; its first caller is the crop sizing work
