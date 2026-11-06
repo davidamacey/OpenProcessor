@@ -31,4 +31,14 @@ KINDS: tuple[JobKind, ...] = (
         max_queue_wait_s=HOUR,
         exclusive_group='open_vocab_drain',
     ),
+    JobKind(
+        name='directory_ingest',
+        task_name='op.families_c.directory_ingest',
+        queue=TaskQueues.JOBS,
+        project_scope='deployment',
+        soft_limit_s=24 * HOUR,
+        hard_limit_s=24 * HOUR + 900,
+        max_queue_wait_s=24 * HOUR,
+        gpu_affinity='any_card',
+    ),
 )

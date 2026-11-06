@@ -142,7 +142,7 @@ def test_endpoint(name: str, method: str, url: str, **kwargs) -> dict[str, Any] 
             print_test(name, 'FAIL', f'Unknown method: {method}')
             return None
 
-        if response.status_code in [200, 201]:  # Accept 200 OK and 201 Created
+        if response.status_code in [200, 201, 202]:  # Accept 200 OK, 201 Created, 202 Accepted
             # Some endpoints return empty body (e.g. Triton health)
             if response.text:
                 try:
@@ -429,16 +429,27 @@ def test_ingest_directory(skip: bool = False) -> bool:
     print(f'  Ingesting {num_images} images from {INGEST_DIR}...')
 
     start_time = time.time()
-    data = test_endpoint(
+    queued = test_endpoint(
         'Directory Ingest',
         'POST',
         f'{API_BASE}/ingest/directory?directory=/app/{INGEST_DIR}&batch_size=32',
-        timeout=120,  # Allow 2 minutes for batch processing
     )
+    if not queued or 'job_id' not in queued:
+        return False
 
-    if data and 'total_processed' in data:
+    # The ingest is a job: poll it until it finishes (2 minutes allowed for batch processing).
+    finished = {'completed', 'completed_with_errors', 'failed', 'cancelled'}
+    deadline = start_time + 120
+    state: dict[str, Any] = {}
+    while time.time() < deadline:
+        state = requests.get(f'{API_BASE}{queued["status_url"]}', timeout=30).json()
+        if state['job']['status'] in finished:
+            break
+        time.sleep(1)
+    result = state.get('result') or {}
+    if 'processed' in result:
         elapsed = time.time() - start_time
-        processed = data['total_processed']
+        processed = result['processed']
         rate = processed / elapsed if elapsed > 0 else 0
         print_test(
             'Ingest Result',

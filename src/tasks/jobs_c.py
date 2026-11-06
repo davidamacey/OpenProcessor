@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.tasks.runtime.context import JobResult
 from src.tasks.runtime.register import register_job
 
 
@@ -85,5 +86,41 @@ async def open_vocab_drain(ctx: JobContext) -> dict[str, Any]:
         )
 
 
+async def _search_service() -> Any:
+    """The visual-search service over a client of this task's own (closed with it)."""
+    from src.clients.opensearch.client import OpenSearchClient
+
+    return OpenSearchClient()
+
+
+async def directory_ingest(ctx: JobContext) -> JobResult | dict[str, Any]:
+    """Ingest the directory in ``params``; a manual resume skips the batches already finished."""
+    from src.services.visual_search import VisualSearchService
+    from src.services.visual_search.directory_ingest import (
+        DirectoryIngestOptions,
+        run_directory_ingest,
+    )
+
+    resume = (ctx.resume_from or {}).get('batch', 0)
+
+    async def batch_done(batch: int, done: int, total: int) -> None:
+        await ctx.checkpoint({'batch': batch})
+        await ctx.progress(done, total, 'ingest')
+
+    service = VisualSearchService(await ctx.client('opensearch_client'))
+    result = await run_directory_ingest(
+        service,
+        DirectoryIngestOptions.from_params(ctx.params),
+        resume_batch=resume,
+        should_stop=ctx.cancelled,
+        on_batch=batch_done,
+        servers=[ctx.server] if ctx.server else None,
+    )
+    return JobResult(result, with_errors=result['status'] != 'success')
+
+
 register_job('project_delete', project_delete, client_factories={'opensearch': _opensearch})
 register_job('open_vocab_drain', open_vocab_drain, client_factories={'opensearch': _opensearch})
+register_job(
+    'directory_ingest', directory_ingest, client_factories={'opensearch_client': _search_service}
+)
