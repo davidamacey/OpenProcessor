@@ -227,6 +227,10 @@ load_cli_gpu_lib() {
     source "${SCRIPT_DIR}/lib/cli_gpu.sh"
 }
 
+load_cli_db_lib() {
+    source "${SCRIPT_DIR}/lib/cli_db.sh"
+}
+
 # =============================================================================
 # Service Management
 # =============================================================================
@@ -305,6 +309,32 @@ status_probe() {
     fi
 }
 
+# status_control_plane ACTIVE_SERVICES -- one line per control-plane service, from compose's own
+# state and health (db-migrate is a one-shot: exit code 0 is its healthy end state).
+status_control_plane() {
+    local active="$1" ps svc line state health code
+    ps="$(dc ps --all --format '{{.Service}}|{{.State}}|{{.Health}}|{{.ExitCode}}' 2>/dev/null || true)"
+    for svc in postgres valkey db-migrate jobs-worker periodic-worker open-vocab-worker jobs-beat flower; do
+        if [[ -n "$active" ]] && ! grep -qx -- "$svc" <<<"$active"; then
+            printf '  %-20snot part of this install\n' "${svc}:"
+            continue
+        fi
+        line="$(awk -F'|' -v s="$svc" '$1 == s { print; exit }' <<<"$ps")"
+        IFS='|' read -r _ state health code <<<"$line"
+        if [[ -z "$line" ]]; then
+            printf '  %-20s%bnot created%b\n' "${svc}:" "$YELLOW" "$NC"
+        elif [[ "$svc" == db-migrate && "$state" == exited && "$code" == 0 ]]; then
+            printf '  %-20s%bcompleted%b\n' "${svc}:" "$GREEN" "$NC"
+        elif [[ "$health" == healthy || ( -z "$health" && "$state" == running ) ]]; then
+            printf '  %-20s%b%s%b\n' "${svc}:" "$GREEN" "${health:-running}" "$NC"
+        elif [[ "$health" == starting ]]; then
+            printf '  %-20s%bstarting%b\n' "${svc}:" "$YELLOW" "$NC"
+        else
+            printf '  %-20s%b%s%b\n' "${svc}:" "$RED" "${health:-$state}" "$NC"
+        fi
+    done
+}
+
 cmd_status() {
     print_header "OpenProcessor Status"
 
@@ -331,6 +361,7 @@ cmd_status() {
         "localhost:${TRITON_HTTP_PORT}/v2/health/ready" "$RED"
     status_probe "OpenSearch (${OPENSEARCH_PORT}): " "$active" opensearch "localhost:${OPENSEARCH_PORT}" "$RED"
     status_probe "Grafana (${GRAFANA_PORT}):   " "$active" grafana "localhost:${GRAFANA_PORT}/api/health" "$YELLOW"
+    status_control_plane "$active"
 
     echo ""
 
@@ -416,6 +447,10 @@ main() {
         faces)
             load_cli_core_lib
             cmd_faces "$@"
+            ;;
+        db)
+            load_cli_db_lib
+            cmd_db "$@"
             ;;
         clean)
             load_cli_dev_lib

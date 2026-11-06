@@ -152,6 +152,8 @@ services:
       - path: ./.env
         required: false
     volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       - ./models:/app/models
       - ./pytorch_models:/app/pytorch_models
       - ./data:/app/data
@@ -188,11 +190,23 @@ services:
       # deploy-safe base file; docker-compose.dev.yml overrides it with a
       # writable-checkout mount for hot-reload editing.
     environment:
+      # Control plane (Postgres + Valkey): host and names default to the in-network services;
+      # the passwords are files, never values (secrets/ is created by the installer).
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       # Every --workers process writes its op_* / request metrics into this
       # directory and /metrics aggregates them, so one scrape shows the whole
       # API, not whichever worker answered. The directory is a tmpfs (see
       # `tmpfs:` below), so it is empty on every container start.
       - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-multiproc
+      # uvicorn reads WEB_CONCURRENCY for its worker count (https://www.uvicorn.org/settings/);
+      # it equals --workers below, and the database pool size is derived from it.
+      - WEB_CONCURRENCY=32
       # glibc malloc: keep freed memory instead of returning it to the kernel and faulting it
       # back in. Ingest allocates and frees tens of megabytes of pixel data per image (a
       # 1.35 MB PE crop, a 52 MB decoded photo, 14 MB of Triton tensors), and with the pixel
@@ -295,6 +309,7 @@ services:
       start_period: 60s
       retries: 5
     deploy:
+      replicas: ${OP_API_REPLICAS:-1}
       resources:
         reservations:
           memory: 2g
@@ -304,13 +319,18 @@ services:
               capabilities:
                 - gpu
     depends_on:
-      triton-server:
-        condition: service_started
-      # Not just started: the API creates the core visual_search_* indexes
-      # once at boot, and when OpenSearch is not up yet it skips that for
-      # good, so the first /ingest would auto-create them with dynamic
-      # (non-kNN) mappings.
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      # opensearch must be healthy, not just started: the API creates the core
+      # visual_search_* indexes once at boot, and when OpenSearch is not up yet it skips that
+      # for good, so the first /ingest would auto-create them with dynamic (non-kNN) mappings.
       opensearch:
+        condition: service_healthy
+      triton-server:
         condition: service_healthy
     networks:
       # G-28: Cropwright's default API_UPSTREAM is http://op-api:8000. The
@@ -321,6 +341,475 @@ services:
       triton_net:
         aliases:
           - op-api
+
+  # ===================================================================
+  # Control plane (B2): Postgres (all relational state), Valkey (the Celery broker) and the
+  # Celery services. Passwords are files under ./secrets (mode 600, created by the installer
+  # before compose runs, never rotated); a service mounts only the files it needs.
+  # Health: nothing acts on `unhealthy`; `restart:` fires only when the main process exits.
+  # ===================================================================
+  postgres:
+    image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    restart: unless-stopped
+    # postgres:18 moved PGDATA to /var/lib/postgresql/18/docker and the volume to /var/lib/postgresql.
+    command:
+      - postgres
+      - -c
+      - max_connections=${OP_PG_MAX_CONNECTIONS:-400}
+      - -c
+      - shared_buffers=${OP_PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - password_encryption=scram-sha-256
+    environment:
+      - POSTGRES_USER=op_super
+      - POSTGRES_DB=openprocessor
+      - POSTGRES_PASSWORD_FILE=/run/secrets/op_pg/super_password
+    volumes:
+      - openprocessor-pg:/var/lib/postgresql
+      - ./secrets/postgres/super_password:/run/secrets/op_pg/super_password:ro
+    shm_size: 256m
+    stop_grace_period: 60s
+    healthcheck:
+      # TCP on purpose: the server the entrypoint runs during first init listens on the socket only.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U op_super -d openprocessor"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          memory: ${OP_PG_MEM_LIMIT:-4g}
+        reservations:
+          memory: 1g
+    networks:
+      - triton_net
+
+  valkey:
+    image: valkey/valkey:9.1.3-alpine3.24@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    # Runs as the installing user (OP_UID/OP_GID, written to .env by the installer): the image
+    # otherwise drops to uid 999, which cannot read the mode-600 conf and password of that user
+    # (spikes S0 and S1). The conf holds only requirepass. noeviction: a full broker refuses new
+    # messages instead of dropping queued jobs.
+    user: "${OP_UID:-1000}:${OP_GID:-1000}"
+    command:
+      - valkey-server
+      - /run/secrets/op_valkey/valkey.conf
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - ${OP_VALKEY_MAXMEMORY:-1gb}
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - openprocessor-queue:/data
+      - ./secrets/valkey:/run/secrets/op_valkey:ro
+    healthcheck:
+      # The password goes through the environment, never argv.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/op_valkey/password)\" valkey-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      start_period: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: ${OP_VALKEY_MEM_LIMIT:-2g}
+        reservations:
+          memory: 256m
+    networks:
+      - triton_net
+
+  # One-shot: Alembic, then the OpenSearch step. Every other Python service waits on it (completed).
+  db-migrate:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    mem_reservation: 256m
+    command: python -m scripts.db.migrate upgrade
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_DB_OWNER_USER=${OP_DB_OWNER_USER:-op_owner}
+      - OP_DB_OWNER_PASSWORD_FILE=/run/secrets/op_pg/owner_password
+      - OP_DB_SUPER_PASSWORD_FILE=/run/secrets/op_pg/super_password
+      - OPENSEARCH_URL=http://opensearch:9200
+    volumes:
+      - ./secrets/postgres:/run/secrets/op_pg:ro
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    networks:
+      - triton_net
+
+  # REMAP_SIGTERM=SIGQUIT: Docker's SIGTERM becomes Celery's soft-shutdown path; the grace period
+  # outlasts the 30 s soft shutdown.
+  jobs-worker:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    command: celery -A src.tasks.app worker -Q jobs --concurrency=${OP_JOBS_CONCURRENCY:-4} --max-tasks-per-child=50 --max-memory-per-child=${OP_JOBS_MAX_MEMORY_PER_CHILD_KB:-8000000} --hostname jobs@%h -E
+    stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+      - OPENSEARCH_URL=http://opensearch:9200
+      - TRITON_URL=triton-server:8001
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - openprocessor-state:/var/lib/openprocessor
+      - openprocessor-crop-cache:/var/cache/openprocessor/crops
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+      - ./secrets/vlm:/run/secrets/op_vlm:ro
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${OP_JOBS_MEM_LIMIT:-24g}
+        reservations:
+          memory: 1g
+          devices:
+            - driver: nvidia
+              device_ids: [ '${API_GPU_ID:-0}' ]
+              capabilities:
+                - gpu
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
+    networks:
+      - triton_net
+
+  periodic-worker:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    # Periodic housekeeping; it never mounts the Docker socket.
+    command: celery -A src.tasks.app worker -Q periodic -c 2 --max-tasks-per-child=200 --hostname periodic@%h -E
+    stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+      - OPENSEARCH_URL=http://opensearch:9200
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - openprocessor-state:/var/lib/openprocessor
+      - openprocessor-crop-cache:/var/cache/openprocessor/crops
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${OP_PERIODIC_MEM_LIMIT:-2g}
+        reservations:
+          memory: 512m
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
+    networks:
+      - triton_net
+
+  open-vocab-worker:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    mem_reservation: 512m
+    command: celery -A src.tasks.app worker -Q open_vocab -c 1 --max-tasks-per-child=50 --hostname open_vocab@%h -E
+    stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+      - OPENSEARCH_URL=http://opensearch:9200
+      - TRITON_URL=triton-server:8001
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - openprocessor-state:/var/lib/openprocessor
+      - openprocessor-crop-cache:/var/cache/openprocessor/crops
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
+    networks:
+      - triton_net
+
+  # Research clustering (profile curation): CPU only in 0.7.0; a fresh child per run releases memory.
+  cluster-worker:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    mem_reservation: 1g
+    profiles:
+      - curation
+    command: celery -A src.tasks.app worker -Q cluster -c 1 --max-tasks-per-child=1 --hostname cluster@%h -E
+    stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+      - OPENSEARCH_URL=http://opensearch:9200
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - openprocessor-state:/var/lib/openprocessor
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
+    networks:
+      - triton_net
+
+  jobs-beat:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    command: celery -A src.tasks.app beat -s /run/beat/celerybeat-schedule
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+      - OPENSEARCH_URL=http://opensearch:9200
+    tmpfs:
+      - /run/beat:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+    healthcheck:
+      # A fresh schedule file; an empty glob fails (a beat that never wrote one is not healthy).
+      test: ["CMD", "python", "-c", "import glob,os,sys,time; f=glob.glob('/run/beat/celerybeat-schedule*'); sys.exit(0 if f and time.time()-max(map(os.path.getmtime,f))<300 else 1)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: ${OP_BEAT_MEM_LIMIT:-512m}
+        reservations:
+          memory: 128m
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
+    networks:
+      - triton_net
+
+  flower:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    mem_reservation: 256m
+    profiles:
+      - monitoring
+    # The config file reads the basic-auth value from /run/secrets/op_flower/auth at start.
+    command: celery -A src.tasks.app flower --conf=/app/scripts/flower/flowerconfig.py
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+    volumes:
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - ./secrets/flower:/run/secrets/op_flower:ro
+    ports:
+      - "${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}:4613:5555"  # Flower
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5555/healthcheck')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
+    networks:
+      - triton_net
 
   # ===================================================================
   # model-export: the engine-build toolchain (TensorRT, ModelOpt, the YOLO11 venv, the
@@ -503,6 +992,8 @@ services:
       - path: ./.env
         required: false
     volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       - openprocessor-state:/var/lib/openprocessor
       # ST-1: shared with api -- see that service's mount comment.
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
@@ -516,6 +1007,15 @@ services:
       # into the image (see Dockerfile); docker-compose.dev.yml overrides
       # with a writable-checkout mount.
     environment:
+      # Control plane (Postgres + Valkey): host and names default to the in-network services;
+      # the passwords are files, never values (secrets/ is created by the installer).
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - TRITON_URL=triton-server:8001
       - OPENSEARCH_URL=http://opensearch:9200
       - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
@@ -552,8 +1052,16 @@ services:
       start_period: 60s
       retries: 3
     depends_on:
-      - triton-server
-      - opensearch
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -569,8 +1077,19 @@ services:
       - path: ./.env
         required: false
     volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       - openprocessor-state:/var/lib/openprocessor
     environment:
+      # Control plane (Postgres + Valkey): host and names default to the in-network services;
+      # the passwords are files, never values (secrets/ is created by the installer).
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OP_API=http://api:8000
       - OPENSEARCH_URL=http://opensearch:9200
     # G-10: matches api's extra_hosts -- lets OP_VLM_URL point at
@@ -591,8 +1110,16 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
       opensearch:
-        condition: service_started
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -613,6 +1140,8 @@ services:
       - path: ./.env
         required: false
     volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       # Shared with api: this is the trigger/state/heartbeat file
       # protocol POST /curation/pipeline/auto_label writes into (see
       # OP_AUTO_LABEL_STATE_DIR, default /jobs/auto_label).
@@ -641,6 +1170,15 @@ services:
       # image (see Dockerfile); docker-compose.dev.yml overrides with a
       # writable-checkout mount.
     environment:
+      # Control plane (Postgres + Valkey): host and names default to the in-network services;
+      # the passwords are files, never values (secrets/ is created by the installer).
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OPENSEARCH_URL=http://opensearch:9200
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
       - OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
@@ -661,7 +1199,16 @@ services:
       start_period: 60s
       retries: 3
     depends_on:
-      - opensearch
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -678,6 +1225,8 @@ services:
       - path: ./.env
         required: false
     volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       # Shared with api: the trigger/state/heartbeat/event-log files POST .../assist/loops
       # writes into (OP_ASSIST_LOOP_JOBS_DIR, default /jobs/assist_loop).
       - openprocessor-jobs:/jobs
@@ -689,6 +1238,15 @@ services:
       # VLM API keys by reference (see api's mount): the loop builds its VLM labelers here.
       - ./secrets/vlm:/run/secrets/op_vlm:ro
     environment:
+      # Control plane (Postgres + Valkey): host and names default to the in-network services;
+      # the passwords are files, never values (secrets/ is created by the installer).
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OPENSEARCH_URL=http://opensearch:9200
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
     # Lets OP_VLM_URL point at http://host.docker.internal:PORT/v1 for a VLM on the host.
@@ -709,7 +1267,18 @@ services:
       start_period: 60s
       retries: 3
     depends_on:
-      - opensearch
+      api:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -724,6 +1293,19 @@ services:
     env_file:
       - path: ./.env
         required: false
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+    environment:
+      # Control plane (Postgres + Valkey): host and names default to the in-network services;
+      # the passwords are files, never values (secrets/ is created by the installer).
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
     command:
       - python
       - scripts/curation/cluster_refresh_daemon.py
@@ -742,8 +1324,16 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
       opensearch:
-        condition: service_started
+        condition: service_healthy
+      triton-server:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -1304,6 +1894,8 @@ volumes:
   opensearch_dashboards_data:
   openprocessor-state:
   openprocessor-jobs:
+  openprocessor-pg:
+  openprocessor-queue:
   mlflow_data:
   # ST-1: shared tmpfs item-crop cache (api + curation-detection-worker).
   # Size is the OS-level ceiling; OP_CROP_CACHE_MAX_BYTES (default 3 GiB,

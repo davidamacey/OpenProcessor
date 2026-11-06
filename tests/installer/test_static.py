@@ -177,6 +177,8 @@ def test_installer_sources_only_verified_install_files() -> None:
         'source "${OP_DIR}/scripts/lib/model_setup.sh"',
         'source "${OP_DIR}/scripts/lib/image_keys.sh"',
         'source "${OP_DIR}/scripts/lib/opensearch_heap.sh"',
+        'source "${OP_DIR}/scripts/lib/env_generator.sh"',
+        'source "${OP_DIR}/scripts/lib/secrets_control_plane.sh"',
         'source "${OP_DIR}/scripts/lib/retired_env.sh"',
         'source "${OP_DIR}/scripts/lib/cropwright_auth.sh"',
         'source "${OP_DIR}/scripts/lib/install_summary.sh"',

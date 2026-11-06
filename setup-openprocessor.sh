@@ -560,6 +560,7 @@ _place_file() { cp -p "$1" "$2.op-new" && mv -f "$2.op-new" "$2"; }
 # backups/<UTC timestamp>/ and prints that directory
 backup_install() {
     local ts dest rel
+    [[ "${OP_DRY_RUN:-0}" == 1 || -z "$(dc ps -q postgres 2>/dev/null)" ]] || "${OP_DIR}/openprocessor" db backup >&2 || return 1
     ts="$(date -u +%Y%m%dT%H%M%SZ)"
     dest="${OP_DIR}/backups/${ts}"
     mkdir -p "$dest"
@@ -1149,30 +1150,6 @@ env_set_default() {
         return 0
     fi
     env_set "$key" "$value"
-}
-
-# env_create_or_merge -- create .env from env.template (600 before any
-# value is written) or add keys that are new in env.template
-env_create_or_merge() {
-    local key line added=()
-    if [[ ! -f "$ENV_FILE" ]]; then
-        ( umask 077; install -m 600 "${OP_DIR}/env.template" "$ENV_FILE" )
-        chmod 600 "$ENV_FILE"
-        log_info "created ${ENV_FILE} (mode 600)"
-        return 0
-    fi
-    chmod 600 "$ENV_FILE"
-    while IFS= read -r line; do
-        [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)= ]] || continue
-        key="${BASH_REMATCH[1]}"
-        if ! read_env_var "$ENV_FILE" "$key" >/dev/null; then
-            upsert_env_var "$ENV_FILE" "$key" "${line#*=}"
-            added+=("$key")
-        fi
-    done < "${OP_DIR}/env.template"
-    if (( ${#added[@]} > 0 )); then
-        log_info "added new .env keys from env.template: ${added[*]}"
-    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -2649,6 +2626,10 @@ do_install() {
     source "${OP_DIR}/scripts/lib/image_keys.sh"
     # shellcheck source=scripts/lib/opensearch_heap.sh
     source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
+    # shellcheck source=scripts/lib/env_generator.sh
+    source "${OP_DIR}/scripts/lib/env_generator.sh"
+    # shellcheck source=scripts/lib/secrets_control_plane.sh
+    source "${OP_DIR}/scripts/lib/secrets_control_plane.sh"
     # shellcheck source=scripts/lib/retired_env.sh
     source "${OP_DIR}/scripts/lib/retired_env.sh"
     # shellcheck source=scripts/lib/cropwright_auth.sh
@@ -2659,7 +2640,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/registry_migration.sh"
     refuse_retired_env "$ENV_FILE"
 
-    env_create_or_merge
+    _env_msg="$(env_generate "${OP_DIR}/env.template" "$ENV_FILE")" || die "could not create ${ENV_FILE}"
+    [[ -z "$_env_msg" ]] || log_info "$_env_msg"
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
     if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         # Without a primary ingest detector /ingest answers 503 on a fresh install.
@@ -2862,7 +2844,7 @@ YAML
     fi
 
     local d
-    ( umask 077; mkdir -p "${OP_DIR}/secrets/vlm" )  # else Docker creates it root-owned
+    ensure_control_plane_secrets "$OP_DIR" || die "could not create the control-plane secrets under ${OP_DIR}/secrets"
     for d in models pytorch_models data data/samples data/source cache cache/huggingface cache/vllm; do
         mkdir -p "${OP_DIR}/${d}"
     done

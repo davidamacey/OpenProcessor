@@ -118,6 +118,24 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     # `openprocessor vlm use` waits for the VLM; read by scripts/lib/vlm_switch.sh (bash).
     'OP_VLM_WAIT_S',
     'OP_VLM_POLL_S',
+    # Control plane: read by docker-compose.yml's own ${VAR:-default} interpolation (the Postgres,
+    # Valkey and Celery services) and by the shell CLI (`openprocessor db backup`).
+    'OP_PG_MAX_CONNECTIONS',
+    'OP_PG_SHARED_BUFFERS',
+    'OP_PG_MEM_LIMIT',
+    'OP_VALKEY_MAXMEMORY',
+    'OP_VALKEY_MEM_LIMIT',
+    'OP_UID',
+    'OP_GID',
+    'OP_JOBS_CONCURRENCY',
+    'OP_JOBS_MAX_MEMORY_PER_CHILD_KB',
+    'OP_JOBS_MEM_LIMIT',
+    'OP_STOP_GRACE_JOBS',
+    'OP_PERIODIC_MEM_LIMIT',
+    'OP_BEAT_MEM_LIMIT',
+    'OP_DB_BACKUP_KEEP',
+    'OP_DB_BACKUP_DIR',
+    'OP_DB_BACKUP_INTERVAL_H',
 }
 
 

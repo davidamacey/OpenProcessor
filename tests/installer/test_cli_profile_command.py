@@ -83,6 +83,7 @@ def test_profile_restart_hint_names_the_real_command(tmp_path: Path) -> None:
 def test_generated_env_and_template_carry_no_dead_profile_keys(tmp_path: Path) -> None:
     proj = tmp_path / 'p'
     shutil.copytree(REPO_ROOT / 'config_templates', proj / 'config_templates')
+    shutil.copy(REPO_ROOT / 'env.template', proj / 'env.template')
     script = (
         f'PROJECT_DIR="{proj}"; source "{REPO_ROOT}/scripts/lib/config.sh"; '
         'generate_env_file standard 0'

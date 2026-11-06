@@ -384,6 +384,13 @@ Face data (OP_FACES_ENABLED):
                       Report (default, or --dry-run) or delete (--yes) every stored face
                       record, person id and name; --yes needs OP_FACES_ENABLED=false first
 
+Database (Postgres):
+  db backup [--out DIR]
+                      pg_dump to OP_DB_BACKUP_DIR (default backups/postgres); keeps the newest
+                      OP_DB_BACKUP_KEEP dumps (default 7)
+  db restore <file> [--yes]
+                      Stop the apps, replace the database with the dump, migrate, start again
+
 Curation (experimental, opt-in compose profile):
   curation [action]   Manage the curation worker services
                       Options: up [service...], down, logs, status (default), seed

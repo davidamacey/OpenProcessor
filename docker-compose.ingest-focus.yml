@@ -56,3 +56,5 @@ services:
   curation-detection-worker: *profile_env
   curation-auto-label-worker: *profile_env
   curation-evaluator: *profile_env
+  jobs-worker: *profile_env
+  open-vocab-worker: *profile_env

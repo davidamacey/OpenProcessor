@@ -90,6 +90,7 @@ def _generate_env(tmp_path: Path, name: str, existing: str | None = None) -> str
     shutil_root = tmp_path / 'proj'
     shutil_root.mkdir()
     (shutil_root / 'config_templates').symlink_to(REPO_ROOT / 'config_templates')
+    (shutil_root / 'env.template').symlink_to(REPO_ROOT / 'env.template')
     if existing is not None:
         (shutil_root / '.env').write_text(existing)
     done = _shell(
@@ -110,7 +111,8 @@ def test_setup_writes_the_flag_for_the_profile(name: str, tmp_path: Path) -> Non
 
 def test_a_forced_regeneration_keeps_an_explicit_choice(tmp_path: Path) -> None:
     text = _generate_env(tmp_path, 'minimal', existing='OP_INGEST_GPU_DECODE=1\n')
-    assert '\nOP_INGEST_GPU_DECODE=1\n' in text
+    assert text.splitlines().count('OP_INGEST_GPU_DECODE=1') == 1
+    assert 'OP_INGEST_GPU_DECODE=0' not in text
 
 
 @pytest.mark.parametrize(

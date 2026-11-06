@@ -35,10 +35,89 @@ services:
       dockerfile: Dockerfile
       target: api
     user: root
-    entrypoint: ["sh", "-c", "mkdir -p /verify-data/jobs /verify-data/state /verify-data/source && chown -R 1000:1000 /verify-data"]
+    # The secrets are fixed throwaway values for this disposable stack, never a deployment's.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /verify-data/jobs /verify-data/state /verify-data/source /verify-data/secrets/postgres /verify-data/secrets/valkey
+        for n in super owner app; do printf 'verify-%s-password' "$$n" > /verify-data/secrets/postgres/$${n}_password; done
+        printf 'verify-queue-password' > /verify-data/secrets/valkey/password
+        printf 'requirepass verify-queue-password\n' > /verify-data/secrets/valkey/valkey.conf
+        chmod 600 /verify-data/secrets/postgres/* /verify-data/secrets/valkey/*
+        chown -R 1000:1000 /verify-data
     volumes:
       - ./verify-data:/verify-data
     restart: "no"
+    networks:
+      - verify_net
+
+  postgres:
+    image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+    command: ["postgres", "-c", "max_connections=100", "-c", "password_encryption=scram-sha-256"]
+    environment:
+      - POSTGRES_USER=op_super
+      - POSTGRES_DB=openprocessor
+      - POSTGRES_PASSWORD_FILE=/run/secrets/op_pg/super_password
+    volumes:
+      - ./verify-data/secrets/postgres/super_password:/run/secrets/op_pg/super_password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U op_super -d openprocessor"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+    depends_on:
+      verify-data-init:
+        condition: service_completed_successfully
+    networks:
+      - verify_net
+
+  valkey:
+    image: valkey/valkey:9.1.3-alpine3.24@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
+    # The files are owned by uid 1000 (the init service), so run as that user; see docker-compose.yml.
+    user: "1000:1000"
+    command: ["valkey-server", "/run/secrets/op_valkey/valkey.conf", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - ./verify-data/secrets/valkey:/run/secrets/op_valkey:ro
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/op_valkey/password)\" valkey-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      verify-data-init:
+        condition: service_completed_successfully
+    networks:
+      - verify_net
+
+  db-migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: api
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    restart: "no"
+    command: python -m scripts.db.migrate upgrade
+    volumes:
+      - ../../src:/app/src:ro
+      - ../../scripts:/app/scripts:ro
+      - ./verify-data/secrets/postgres:/run/secrets/op_pg:ro
+    environment:
+      - OP_DB_HOST=postgres
+      - OP_DB_NAME=openprocessor
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_DB_OWNER_PASSWORD_FILE=/run/secrets/op_pg/owner_password
+      - OP_DB_SUPER_PASSWORD_FILE=/run/secrets/op_pg/super_password
+      - OPENSEARCH_URL=http://opensearch:9200
+      # Every project index carries the verify_ prefix, as for api.
+      - OP_PROJECT_INDEX_PREFIX=verify_prj_
+      - OP_PROJECTS_INDEX=verify_projects
+      - OP_GLOBAL_CONFIGS_INDEX=verify_global_configs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
     networks:
       - verify_net
 
@@ -115,7 +194,14 @@ services:
       # write / export vanished into the container layer.
       - ./verify-data:/verify-data
       - ./verify-data/jobs:/jobs
+      - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
     environment: &api-env
+      - OP_DB_HOST=postgres
+      - OP_DB_NAME=openprocessor
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=redis://valkey:6379/0
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       # The app reads `opensearch_url` (src/config/settings.py, env_prefix
       # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
       - OPENSEARCH_URL=http://opensearch:9200
@@ -193,6 +279,43 @@ services:
         condition: service_healthy
       verify-data-init:
         condition: service_completed_successfully
+      db-migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    networks:
+      - verify_net
+
+  # Celery workers and beat run the api image with the api's mounts and environment. Scale the
+  # worker with `--scale jobs-worker=2`: no service here has a container_name.
+  jobs-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *api-volumes
+    environment: *api-env
+    command: celery -A src.tasks.app worker -Q jobs --concurrency=2 --hostname jobs@%h -E
+    depends_on: &worker-deps
+      api:
+        condition: service_healthy
+    networks:
+      - verify_net
+
+  periodic-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *api-volumes
+    environment: *api-env
+    command: celery -A src.tasks.app worker -Q periodic -c 1 --hostname periodic@%h -E
+    depends_on: *worker-deps
+    networks:
+      - verify_net
+
+  jobs-beat:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *api-volumes
+    environment: *api-env
+    command: celery -A src.tasks.app beat -s /tmp/celerybeat-schedule
+    deploy:
+      replicas: 1
+    depends_on: *worker-deps
     networks:
       - verify_net
 

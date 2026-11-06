@@ -90,6 +90,7 @@ help: ## Show this help message
 ensure-host-bind-mount-dirs: ## Pre-create bind-mount source dirs as the invoking (host) user, before compose ever runs. Docker auto-creates a missing bind-mount source root-owned on first 'up', which then blocks any host-user write into it (e.g. 'make download-test-images') -- and, if a tracked placeholder file is ever shipped inside one of these, blocks 'git pull' too. Run before every 'up' target instead of shipping a tracked file inside them.
 	@mkdir -p test_images data/source cache/huggingface cache/vllm
 	@(umask 077; mkdir -p secrets/vlm)
+	@bash -c 'source scripts/lib/secrets_control_plane.sh && ensure_control_plane_secrets .'
 	@for d in test_images data/source cache/huggingface cache/vllm secrets/vlm; do \
 		owner="$$(stat -c '%U' "$$d" 2>/dev/null || echo unknown)"; \
 		if [ "$$owner" != "$$(id -un)" ] && [ "$$(stat -c '%u' "$$d" 2>/dev/null)" = "0" ]; then \
