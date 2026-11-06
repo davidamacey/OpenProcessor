@@ -7,7 +7,8 @@ a pooler: the lock below is a session lock), it takes ``pg_advisory_lock(2, 0)``
 run, upgrades to head on that same connection, re-applies the application role's grants and
 unlocks. Two runners started together serialize and the second finds the schema at head.
 
-After the schema is at head the same step syncs the embedding model catalog, creates the
+After the schema is at head the same step syncs the embedding model catalog, seeds the shipped
+models' engine rows, creates the
 ``default`` project of a fresh install and runs the one OpenSearch migration
 (``scripts/opensearch/migrate.py``), so no API worker creates or migrates an index.
 """
@@ -33,7 +34,9 @@ from src.config.advisory_locks import MIGRATE
 from src.config.database import SUPER_USER, DatabaseSettings
 from src.db import roles
 from src.db.engine import one_off_connection
+from src.db.session import sync_deployment_tx
 from src.services.embedding_spaces.catalog import sync_catalog
+from src.services.training.builtin_engines import seed_builtin_engines
 
 
 if TYPE_CHECKING:
@@ -127,9 +130,21 @@ def sync_embedding_catalog() -> None:
         sync_catalog(session)
 
 
+def seed_builtin_models() -> None:
+    """Insert the engine rows (with their contracts) of the models the repository ships."""
+    with (
+        one_off_connection('app', application_name='op-migrate-engines') as conn,
+        Session(bind=conn) as session,
+        sync_deployment_tx(session, 'builtin engine seed'),
+    ):
+        seed_builtin_engines(session)
+
+
 def post_upgrade() -> None:
-    """After the schema is at head: the embedding catalog, then the OpenSearch migration."""
+    """After the schema is at head: the embedding catalog, the shipped models' engine rows, then
+    the OpenSearch migration."""
     sync_embedding_catalog()
+    seed_builtin_models()
     asyncio.run(opensearch_run())
 
 

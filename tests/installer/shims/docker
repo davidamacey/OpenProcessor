@@ -19,6 +19,7 @@
 #   <service>_container present -> `compose ps -q <service>` prints a container id
 #                       (vlm_container: its `docker top` pids come from own_pids;
 #                       api_container: the running API container)
+#   device_mib          the number `compose exec ... psql` answers for a device_mib_measured query
 #   pg_dump / pg_restore / psql: `compose exec ... pg_dump` prints a fake custom-format header;
 #                       pg_restore and psql read stdin and need allow_mutations (they change data)
 #   compose_ps          the answer to `compose ps --format ...` (one line per service)
@@ -248,6 +249,11 @@ JSON
                     ;;
                 *" pg_dump "*)
                     printf 'PGDMP-shim-%s\n' "$(date -u +%s%N)"
+                    ;;
+                *" psql "*"device_mib_measured"*)
+                    # the registry's measured MiB of one model: present -> that number
+                    [[ -e "${state}/device_mib" ]] && cat "${state}/device_mib"
+                    exit 0
                     ;;
                 *" pg_restore "*|*" psql "*)
                     refuse compose exec "${args[@]}"
