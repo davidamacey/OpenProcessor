@@ -80,6 +80,12 @@ async def _probe_dependency(name: str) -> tuple[bool, str]:
         return False, str(exc)
     except TimeoutError:
         return False, f'timeout after {_READY_PROBE_TIMEOUT_S}s'
+    except Exception as exc:
+        # A probe that cannot run (unreadable secret, bad settings) means the dependency is
+        # down for readiness; the class name goes in the body, the message (may hold a path)
+        # only in the log.
+        logger.warning('readiness probe %s could not run: %s', name, exc)
+        return False, type(exc).__name__
     return True, 'ok'
 
 

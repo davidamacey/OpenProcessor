@@ -9,6 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.config.database import DatabaseConfigError
 from src.db.schema_check import ProbeFailed
 
 
@@ -87,3 +88,30 @@ def test_every_down_dependency_is_named(
     assert body['services']['database']['ok'] is False
     assert body['services']['queue']['ok'] is False
     assert body['services']['queue']['detail'] == 'broker did not answer'
+
+
+def _raises(exc: Exception) -> Callable[[], None]:
+    def probe() -> None:
+        raise exc
+
+    return probe
+
+
+@pytest.mark.parametrize(
+    'error',
+    [
+        DatabaseConfigError('OP_DB_APP_PASSWORD_FILE', 'the password file /secret/x is unreadable'),
+        RuntimeError('boom /secret/path'),
+    ],
+)
+@pytest.mark.parametrize('name', ['database', 'queue'])
+def test_a_probe_that_cannot_run_is_503_naming_the_dependency(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, name: str, error: Exception
+) -> None:
+    _probes(monkeypatch, **{name: _raises(error)})
+    response = client.get('/ready')
+    assert response.status_code == 503
+    entry = response.json()['services'][name]
+    assert entry['ok'] is False
+    assert entry['detail'] == type(error).__name__
+    assert '/secret' not in response.text
