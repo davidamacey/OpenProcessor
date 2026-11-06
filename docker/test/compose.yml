@@ -33,10 +33,10 @@ x-process-env: &process-env
   # The app reads `opensearch_url` (src/config/settings.py, env_prefix
   # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
   OPENSEARCH_URL: http://opensearch:9200
-  # AsyncTritonPool.initialize() only constructs gRPC client objects;
-  # it never dials. A deliberately unresolvable host proves no code
-  # path on the verified surface needs Triton.
-  TRITON_URL: triton-unavailable:8001
+  # The API refuses to start without a live Triton (no degraded mode), so
+  # fake-triton answers liveness and readiness only: every inference call
+  # stays unimplemented, which still proves no verified path needs Triton.
+  TRITON_URL: fake-triton:8001
   # Serve byte-identical paths to what an existing labeler frontend
   # already calls, so it can be pointed at the harness without a
   # rebuild. Every curation router builds its prefix at module
@@ -204,6 +204,23 @@ services:
     networks:
       - verify_net
 
+  fake-triton:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    command: ["python", "-u", "/fake/fake_triton.py"]
+    volumes:
+      - ./fake_triton.py:/fake/fake_triton.py:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import tritonclient.grpc as g; assert g.InferenceServerClient('localhost:8001').is_server_live()"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - verify_net
+
   fake-vlm:
     build:
       context: .
@@ -276,6 +293,8 @@ services:
       opensearch:
         condition: service_healthy
       fake-vlm:
+        condition: service_healthy
+      fake-triton:
         condition: service_healthy
       verify-data-init:
         condition: service_completed_successfully

@@ -195,3 +195,5 @@ _.resume_job  # src/services/jobs/service.py, called by the pausable families' r
 _.resume_from  # src/tasks/runtime/context.py, read by the resumable handlers
 _.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist loop, re-index, backfill)
 _.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands
+_.ServerLive  # docker/test/fake_triton.py, called by gRPC by Triton's method name
+_.ServerReady  # docker/test/fake_triton.py, called by gRPC by Triton's method name

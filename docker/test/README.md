@@ -3,7 +3,7 @@
 An isolated, disposable Compose stack whose only job is to let the
 `tests/live/` suite exercise the curation **write** endpoints against a real
 OpenSearch, a real file protocol, and a real OpenAI-compatible chat endpoint —
-without a GPU, without Triton, and without being able to touch a production
+without a GPU, without a real Triton, and without being able to touch a production
 deployment.
 
 Until this existed, none of the curation write endpoints had ever been run
@@ -35,6 +35,7 @@ ordinary `pytest tests/` never touches any of this.
 | `op-verify-opensearch` | 14702 | OpenSearch 3.6, single node, 512 MB heap |
 | `op-verify-api` | 14701 | this repo's API image, `--workers=1` |
 | `op-verify-fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
+| `fake-triton` | — | answers Triton's gRPC liveness and readiness only (the API refuses to start without a live Triton); every inference call is unimplemented (`docker/test/fake_triton.py`) |
 | `op-verify-assist-loop-worker` | — | the auto-label loop worker (same image, mounts and environment as the API) |
 | `op-verify-trainer` | — | shell loop implementing the trainer half of the job-file protocol |
 
