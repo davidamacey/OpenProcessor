@@ -134,15 +134,19 @@ def test_the_lifespan_refuses_before_any_other_startup_step(
         asyncio.run(run())
 
 
-def test_the_queue_probe_names_the_missing_client_instead_of_passing(
+def test_the_queue_probe_fails_when_the_broker_does_not_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Fail closed: a probe that cannot run is not a probe that passed."""
-    import importlib
+    """Fail closed: ``task_queue.ping()`` reports a dead broker as False, never by raising."""
+    from src.clients import task_queue
 
-    def no_module(name: str):
-        raise ModuleNotFoundError(name)
-
-    monkeypatch.setattr(importlib, 'import_module', no_module)
-    with pytest.raises(ModuleNotFoundError):
+    monkeypatch.setattr(task_queue, 'ping', lambda: False)
+    with pytest.raises(ProbeFailed):
         startup_gate._queue_probe()  # the probe is private to the gate
+
+
+def test_the_queue_probe_passes_when_the_broker_answers(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.clients import task_queue
+
+    monkeypatch.setattr(task_queue, 'ping', lambda: True)
+    startup_gate._queue_probe()

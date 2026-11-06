@@ -8,11 +8,11 @@ are shared with the workers (``src.db.schema_check``).
 from __future__ import annotations
 
 import asyncio
-import importlib
 from typing import TYPE_CHECKING
 
 import httpx
 
+from src.clients import task_queue
 from src.db.schema_check import (
     Clock,
     ProbeFailed,
@@ -31,12 +31,9 @@ PROBE_TIMEOUT_S = 2.0
 
 
 def _queue_probe() -> None:
-    """The task queue answers. The producer client belongs to the queue module."""
-    client = importlib.import_module('src.clients.task_queue')
-    try:
-        client.ping()
-    except client.QueueUnavailable as exc:
-        raise ProbeFailed(type(exc).__name__) from exc
+    """The task queue answers. ``ping()`` reports a dead broker as False and never raises."""
+    if not task_queue.ping():
+        raise ProbeFailed('broker did not answer')
 
 
 def _opensearch_probe(url: str) -> Callable[[], None]:
