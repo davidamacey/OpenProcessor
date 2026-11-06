@@ -74,8 +74,8 @@ def _resolve_expected_revision(body_revision: int | None, if_match: str | None) 
     return resolved
 
 
-async def _classes_payload(opensearch: Any) -> list[dict[str, Any]]:
-    reg = await get_class_registry().snapshot(opensearch)
+async def _classes_payload() -> list[dict[str, Any]]:
+    reg = await get_class_registry().snapshot()
     return [
         {
             'class_id': c.class_id,
@@ -164,9 +164,7 @@ async def get_keymap(opensearch: OpenSearchDep) -> KeymapGetResponse:
 
     cfg = get_curation_config()
     doc = await get_keymap_doc(opensearch, cfg.configs_index)
-    return _build_response(
-        doc, project=cfg.project_slug, classes=await _classes_payload(opensearch)
-    )
+    return _build_response(doc, project=cfg.project_slug, classes=await _classes_payload())
 
 
 @router.post('/keymap/validate', response_model=KeymapValidateResponse)
@@ -182,7 +180,7 @@ async def validate_keymap_route(
     cfg = get_curation_config()
     current = await get_keymap_doc(opensearch, cfg.configs_index)
     proposed = dict(body.overrides)
-    classes = await _classes_payload(opensearch)
+    classes = await _classes_payload()
     from src.services.curation.keymap_validator import validate_keymap
 
     report, class_conflicts, resolved, class_conflict_issues = validate_keymap(
@@ -211,7 +209,7 @@ async def validate_keymap_route(
 
 
 async def _unbind_classes(
-    opensearch: Any, class_conflicts: list[Any]
+    class_conflicts: list[Any],
 ) -> tuple[list[dict[str, Any]], dict[int, str | None]]:
     """Clear each conflicting class's ``hotkey_letter`` in one versioned write (CW-K §3.2).
     Returns ``(unbound, cleared)`` where ``cleared`` maps class id to the letter it had, for
@@ -219,7 +217,7 @@ async def _unbind_classes(
     if not class_conflicts:
         return [], {}
     registry = get_class_registry()
-    current = await registry.snapshot(opensearch)
+    current = await registry.snapshot()
     was_by_id = {c.class_id: c.hotkey_letter for c in current.classes}
     unbound: list[dict[str, Any]] = []
     seen_ids: set[int] = set()
@@ -235,17 +233,17 @@ async def _unbind_classes(
                 'was': was_by_id[conflict.class_id],
             }
         )
-    await registry.set_hotkeys(opensearch, dict.fromkeys(seen_ids))
+    await registry.set_hotkeys(dict.fromkeys(seen_ids))
     return unbound, {u['class_id']: u['was'] for u in unbound}
 
 
-async def _restore_classes(opensearch: Any, cleared: dict[int, str | None]) -> None:
+async def _restore_classes(cleared: dict[int, str | None]) -> None:
     """B1 rollback: give back only the letters :func:`_unbind_classes` cleared, and only where
     the class still has none, because the keymap save that was supposed to follow failed. A
     class added or re-bound in between is left alone."""
     if not cleared:
         return
-    await get_class_registry().set_hotkeys(opensearch, cleared, only_if_unset=True)
+    await get_class_registry().set_hotkeys(cleared, only_if_unset=True)
     logger.warning('keymap_unbind_rolled_back', class_ids=sorted(cleared))
 
 
@@ -305,7 +303,7 @@ async def _write_keymap(
     class registry is rolled back to its pre-unbind state before the
     error propagates, so an operator never loses a class hotkey to a
     keymap write that didn't actually happen."""
-    classes = await _classes_payload(opensearch)
+    classes = await _classes_payload()
     from src.services.curation.keymap_validator import validate_keymap
 
     report, class_conflicts, _resolved, class_conflict_issues = validate_keymap(
@@ -325,7 +323,7 @@ async def _write_keymap(
     unbound: list[dict[str, Any]] = []
     cleared: dict[int, str | None] = {}
     if unbind_conflicting_class_hotkeys and class_conflicts:
-        unbound, cleared = await _unbind_classes(opensearch, class_conflicts)
+        unbound, cleared = await _unbind_classes(class_conflicts)
 
     try:
         new_doc = await save_keymap_doc(
@@ -335,7 +333,7 @@ async def _write_keymap(
             expected_revision=expected_revision,
         )
     except RevisionConflictError as exc:
-        await _restore_classes(opensearch, cleared)
+        await _restore_classes(cleared)
         raise api_error(
             409,
             'revision_conflict',
@@ -343,16 +341,14 @@ async def _write_keymap(
             current_revision=exc.current_revision,
         ) from exc
     except Exception:
-        await _restore_classes(opensearch, cleared)
+        await _restore_classes(cleared)
         raise
 
     if unbound:
         await _publish_classes_changed()
     await publish_keymap_changed(new_doc, cfg.configs_index, opensearch)
     logger.info(event, project=cfg.project_slug, revision=new_doc.revision)
-    response = _build_response(
-        new_doc, project=cfg.project_slug, classes=await _classes_payload(opensearch)
-    )
+    response = _build_response(new_doc, project=cfg.project_slug, classes=await _classes_payload())
     return KeymapPutResponse(**response.model_dump(), unbound_class_hotkeys=unbound)
 
 

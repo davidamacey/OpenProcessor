@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry, use_registry
+from _class_registry_fake import InMemoryRegistry, use_registry
 from PIL import Image
 
 

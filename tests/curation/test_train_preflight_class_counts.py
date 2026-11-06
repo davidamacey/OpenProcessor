@@ -112,10 +112,10 @@ async def test_default_target_classes_leave_out_the_region_class(
     assert profile is not None
     region_name = profile.region_class_name
 
-    async def snapshot(_client: Any) -> Any:
+    async def snapshot() -> Any:
         return SimpleNamespace(classes=[entry(0, region_name), entry(1, 'car')])
 
     registry = SimpleNamespace(snapshot=snapshot)
     monkeypatch.setattr(preflight_checks, 'get_class_registry', lambda: registry)
     spec: Any = SimpleNamespace(include_classes=None)
-    assert await preflight_checks.resolve_target_classes(spec, None) == [1]
+    assert await preflight_checks.resolve_target_classes(spec) == [1]

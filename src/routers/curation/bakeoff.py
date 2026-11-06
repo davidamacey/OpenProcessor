@@ -46,13 +46,12 @@ from pathlib import Path
 from typing import Any, Literal, NoReturn
 
 from fastapi import HTTPException
-from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
-from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._common import router
 from src.schemas.bakeoff.datasets import EvalDataset, EvalDatasetList
 from src.schemas.bakeoff.models import (
     BakeoffProfileList,
@@ -69,6 +68,7 @@ from src.schemas.bakeoff.run import (
     BakeoffStatus,
     JobProgress,
 )
+from src.services.classes.registry import ClassRegistryError, get_class_registry
 from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
 from src.services.training.run_retention import bakeoff_out_dir
 from src.utils.atomic_write import atomic_write_json
@@ -127,7 +127,6 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 @router.get('/bakeoff/eval_datasets', response_model=EvalDatasetList)
 async def bakeoff_eval_datasets(
-    opensearch: OpenSearchDep,
     source: Literal['export', 'external'] | None = None,
 ) -> EvalDatasetList:
     """Eval datasets: every export with a labelled test split, plus frozen external sets.
@@ -135,7 +134,7 @@ async def bakeoff_eval_datasets(
     Class counts and test-split hashes are computed from the files; see
     ``src/services/curation/eval_datasets.py``.
     """
-    names = await _registry_names_by_id(opensearch)
+    names = await _registry_names_by_id()
     rows = [EvalDataset(**r.to_wire(names)) for r in eval_datasets.list_eval_datasets(source)]
     return EvalDatasetList(datasets=rows, count=len(rows))
 
@@ -157,13 +156,13 @@ async def bakeoff_trained_models(
     return TrainedModelList(models=models, count=len(models))
 
 
-async def _registry_names_by_id(opensearch: Any) -> dict[int, str]:
-    """Live registry id -> name. An OpenSearch failure is a 503, never an empty map."""
+async def _registry_names_by_id() -> dict[int, str]:
+    """Live registry id -> name. A database failure is a 503, never an empty map."""
     try:
-        snapshot = await get_class_registry().snapshot(opensearch)
-    except OpenSearchException as exc:
+        snapshot = await get_class_registry().snapshot()
+    except (ClassRegistryError, SQLAlchemyError) as exc:
         logger.warning('bakeoff_registry_unavailable', error=str(exc))
-        raise UpstreamError('opensearch', 'registry_unavailable') from exc
+        raise UpstreamError('postgres', 'registry_unavailable') from exc
     return {c.class_id: c.class_name for c in snapshot.classes}
 
 
@@ -186,7 +185,7 @@ def _profile_row(
 
 
 @router.get('/bakeoff/profiles', response_model=BakeoffProfileList)
-async def bakeoff_profiles(opensearch: OpenSearchDep) -> BakeoffProfileList:
+async def bakeoff_profiles() -> BakeoffProfileList:
     """Registered profiles, flagging the default a job gets when it names none.
 
     ``kind``: ``registered`` (in code) or ``configured`` (the default,
@@ -198,7 +197,7 @@ async def bakeoff_profiles(opensearch: OpenSearchDep) -> BakeoffProfileList:
     """
     from scripts.curation.bakeoff.profile import registered_profiles, resolve_profile
 
-    names_by_id = await _registry_names_by_id(opensearch)
+    names_by_id = await _registry_names_by_id()
     rows = [
         _profile_row(p, 'registered', default=False, names_by_id=names_by_id)
         for p in registered_profiles().values()

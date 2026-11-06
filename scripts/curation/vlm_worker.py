@@ -253,7 +253,7 @@ class _StreamWorker:
         fetched, so its crops are never claimed in flight and cannot starve the rest."""
         labelable = []
         for record in projects:
-            if await project_has_item_classes(self.opensearch, record):
+            if await project_has_item_classes(record):
                 if record.slug in self.classless:
                     self.classless.discard(record.slug)
                     print(f'[vlm-worker] project={record.slug} has classes now; labeling it')

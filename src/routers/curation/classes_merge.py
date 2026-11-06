@@ -7,7 +7,6 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.clients.opensearch.scroll import scroll_ids
 from src.routers.curation._class_models import ClassMergeRequest  # noqa: TC001 - FastAPI
 from src.routers.curation._common import (
@@ -18,11 +17,12 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.classes.registry import ClassRegistryError
 from src.utils.timeutil import now_iso
 
 
 async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[str, Any]:
-    reg = await get_class_registry().snapshot(opensearch)
+    reg = await get_class_registry().snapshot()
     for cid in (payload.source_id, payload.target_id):
         if reg.get(cid) is None:
             raise HTTPException(status_code=400, detail=f'class_id {cid} not found')
@@ -106,7 +106,7 @@ async def merge_class(
         )
     reg = get_class_registry()
     try:
-        result = await reg.merge_class(opensearch, payload.source_id, payload.target_id)
+        result = await reg.merge_class(payload.source_id, payload.target_id)
     except ClassRegistryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     target_name = result['target_name']

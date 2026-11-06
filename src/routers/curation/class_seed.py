@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.routers.curation._api_error import api_error
 from src.routers.curation._class_models import (
     SeedConflict,
@@ -17,6 +16,7 @@ from src.routers.curation._error_models import (
     UnknownDetectorNamesResponse,
 )
 from src.routers.curation.classes_write import create_registry_class
+from src.services.classes.registry import ClassRegistryError
 from src.services.curation.detector_vocabulary import detector_labels, plan_seed
 from src.services.curation.ingest_detector import (
     IngestProfileUnresolvedError,
@@ -58,7 +58,7 @@ async def seed_from_detector(
             'no ingest detector labels available; activate an ingest profile or set OP_INGEST_PRIMARY_DETECTOR_MODEL',
         )
     reg = get_class_registry()
-    existing = class_name_deprecation_index((await reg.snapshot(opensearch)).classes)
+    existing = class_name_deprecation_index((await reg.snapshot()).classes)
     plan = plan_seed(labels, existing, payload.names)
     if plan.unknown:
         raise api_error(
@@ -78,7 +78,6 @@ async def seed_from_detector(
             try:
                 created_class = await create_registry_class(
                     reg,
-                    opensearch,
                     name=label.slug,
                     group=payload.group,
                     notes=f'detector label: {label.name}',

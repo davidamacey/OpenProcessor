@@ -40,8 +40,8 @@ from src.services.curation.item_delete import delete_items
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config.region_fields import RegionFields
+    from src.services.classes.registry import ClassRegistry
     from src.services.curation.dataset_import.store import ImportStore
 
 _IMPORT_STAMP_FIELDS = (
@@ -475,13 +475,13 @@ async def _deprecate_classes(
         } - deleting
         if users:
             continue
-        registry_doc = await ctx.registry.snapshot(ctx.opensearch)
+        registry_doc = await ctx.registry.snapshot()
         entry = registry_doc.get(class_id)
         if entry is None or entry.deprecated:
             continue
         report.classes_deprecated.append(entry.class_name)
         if not dry_run:
-            await ctx.registry.set_deprecated(ctx.opensearch, class_id, True)
+            await ctx.registry.set_deprecated(class_id, True)
 
 
 __all__ = [

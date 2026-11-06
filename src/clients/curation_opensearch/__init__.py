@@ -1,9 +1,8 @@
 """Generic curation OpenSearch client.
 
 Defines the OpenSearch indexes used by the generic curation / labeling
-subsystem plus the ``ClassRegistry`` helper backed by an on-disk
-``class_registry.json``. This package has no public re-exports: import each
-name from the module that holds it.
+subsystem. This package has no public re-exports: import each name from the
+module that holds it.
 
 Modules:
 
@@ -15,7 +14,6 @@ Modules:
   ``PUT _mapping`` migrations for indexes created before a field existed.
 - ``settings_doc``: the shared curation-settings document.
 - ``crops``: batched ``_mget`` for the items index.
-- ``registry``: ``ClassRegistry`` and its on-disk file models.
 
 Indexes (logical roles resolved via :func:`src.config.index_name`
 against a :class:`~src.config.CurationConfig` instance; the actual
@@ -32,10 +30,8 @@ index *names* are deployment data, not hardcoded here):
   training select ``class_validated=true`` items from ``items``, which
   every labeling path (human label/move, auto-promote, label import)
   sets; see ``tests/curation/test_labels_export_roundtrip.py``.
-- ``classes`` (``op_prj_<project>__classes``): read-projection of
-  ``class_registry.json`` for fast term filters / dashboards. The JSON
-  file is the canonical source; this index is rebuilt from it via
-  :py:meth:`ClassRegistry.sync_to_opensearch`.
+- ``classes`` (``op_prj_<project>__classes``): no longer written; the class registry is in
+  PostgreSQL (``src/db/repos/classes.py``, ``src/services/classes/``).
 
 Every OpenSearch field reference for the per-item "region of interest"
 sub-annotation (e.g. a defect region on an item crop) is routed
@@ -45,7 +41,7 @@ for the full design rationale. Everything else in the item schema
 (``crop_id``, ``class_id``, clustering/scoring/probe fields, ...) is
 already deployment-agnostic and is not indirected.
 
-The two ``class_registry.json`` file models live here, not in ``registry.py``:
+The registry's two wire models live here, not with the PostgreSQL service:
 FastAPI derives their OpenAPI schema names from the defining module, so moving
 them would rename schemas in the generated contracts.
 """
@@ -58,10 +54,10 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class RegistryClassEntry(BaseModel):
-    """Single class entry in ``class_registry.json``.
+    """Single class entry of the registry.
 
-    The on-disk file uses ``id`` / ``name`` keys for backward
-    compatibility with older label-file schemas. Internally we expose
+    ``id`` / ``name`` are accepted as aliases (the export snapshot's
+    older label-file schema). Internally we expose
     ``class_id`` / ``class_name`` to avoid shadowing Python builtins.
     Pydantic ``AliasChoices`` handles the bridge in both directions.
 
@@ -75,8 +71,6 @@ class RegistryClassEntry(BaseModel):
     class_id: int = Field(validation_alias=AliasChoices('class_id', 'id'))
     class_name: str = Field(validation_alias=AliasChoices('class_name', 'name'))
     group: str = 'unknown'
-    sample_count: int = 0
-    validated_count: int = 0
     added_at: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat(),
         validation_alias=AliasChoices('added_at', 'added'),
@@ -85,12 +79,12 @@ class RegistryClassEntry(BaseModel):
     notes: str = ''
     merged_into: int | None = None  # populated when this class is merged into another
     # Optional single-character keyboard shortcut for fast assignment in the
-    # labeler. Persisted in class_registry.json across sessions and devices.
+    # labeler. Persisted with the class across sessions and devices.
     hotkey_letter: str | None = None
 
 
 class ClassRegistryFile(BaseModel):
-    """On-disk schema for ``class_registry.json``."""
+    """The registry as the export snapshot (``class_registry.json``) holds it."""
 
     version: int = 1
     updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
@@ -102,8 +96,3 @@ class ClassRegistryFile(BaseModel):
     def validate_id(self, class_id: int) -> bool:
         """True iff a non-deprecated class with this id exists."""
         return any(c.class_id == class_id and not c.deprecated for c in self.classes)
-
-
-# =============================================================================
-# ClassRegistry — append-only registry with snapshots + atomic writes
-# =============================================================================

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from _registry_doc_fake import make_registry
+from _class_registry_fake import make_registry
 
 from src.config import CurationConfig
 from src.config.region_fields import RegionFields

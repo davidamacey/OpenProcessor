@@ -205,15 +205,16 @@ async def create_project(
                             ),
                         }
                     )
-        # Idempotent: a clone that copied 'classes' may already have seeded it, but every new
-        # project gets one guaranteed call under its own binding.
-        from src.clients.curation_opensearch.registry import get_class_registry
+        # Idempotent: a clone that copied 'classes' (or _apply_clone's own
+        # no-classes-copied branch) may already have seeded it, but every
+        # new project gets one guaranteed call under its own binding.
+        from src.services.classes.registry import get_class_registry
         from src.services.curation.region_class import ensure_region_class
 
         with bind_project(record):
             # The registry document exists from the first moment (new project, empty).
-            await get_class_registry().snapshot(client)
-            await ensure_region_class(client)
+            await get_class_registry().snapshot()
+            await ensure_region_class()
 
         # ensure_indexes is itself fail-open (every create/migration failure inside it is logged
         # and swallowed): verify every index this record claims to own exists before ever calling

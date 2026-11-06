@@ -125,7 +125,7 @@ async def stats_classes(opensearch: OpenSearchDep, item_filter: ItemFilterQuery)
 
     classes: list[dict[str, Any]] = []
     try:
-        reg = await get_class_registry().snapshot(opensearch)
+        reg = await get_class_registry().snapshot()
         for c in reg.classes:
             if getattr(c, 'deprecated', False):
                 continue

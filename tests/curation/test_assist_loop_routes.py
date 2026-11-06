@@ -153,7 +153,7 @@ def test_no_cluster_big_enough_is_no_roots(stack: Any) -> None:
 def test_a_project_without_item_classes_is_refused(
     stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from _registry_doc_fake import InMemoryRegistry, use_registry
+    from _class_registry_fake import InMemoryRegistry, use_registry
 
     _seed(stack)
     empty = InMemoryRegistry()

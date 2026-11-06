@@ -56,8 +56,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
+from src.services.classes.registry import get_class_registry
 from src.services.curation.registry_reclassify import (
     UnmatchedLabelSource,
     active_name_to_id,
@@ -83,7 +83,7 @@ async def _async_main(args: argparse.Namespace) -> int:
     start_after = [args.start_after] if args.start_after else None
     client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
     try:
-        registry = await get_class_registry().snapshot(client)
+        registry = await get_class_registry().snapshot()
         if not active_name_to_id(registry):
             logger.error('the class registry has no active classes — nothing to match')
             return 2

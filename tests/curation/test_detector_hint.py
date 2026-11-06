@@ -160,7 +160,7 @@ def _wire_label_batch(
     import io
     from types import SimpleNamespace
 
-    from _registry_doc_fake import InMemoryRegistry
+    from _class_registry_fake import InMemoryRegistry
     from PIL import Image
 
     import src.routers.curation.vlm as vlm_mod

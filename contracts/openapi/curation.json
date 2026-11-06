@@ -6361,9 +6361,6 @@
               "class_hotkey_conflict",
               "hotkey_reserved",
               "hotkey_taken",
-              "registry_not_migrated",
-              "registry_full",
-              "registry_conflict",
               "path_escape",
               "label_op_not_found",
               "already_undone",
@@ -35188,7 +35185,7 @@
         "type": "object"
       },
       "src__clients__curation_opensearch__RegistryClassEntry": {
-        "description": "Single class entry in ``class_registry.json``.\n\nThe on-disk file uses ``id`` / ``name`` keys for backward\ncompatibility with older label-file schemas. Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
         "properties": {
           "added_at": {
             "title": "Added At",
@@ -35238,16 +35235,6 @@
             "default": "",
             "title": "Notes",
             "type": "string"
-          },
-          "sample_count": {
-            "default": 0,
-            "title": "Sample Count",
-            "type": "integer"
-          },
-          "validated_count": {
-            "default": 0,
-            "title": "Validated Count",
-            "type": "integer"
           }
         },
         "required": [
@@ -38228,51 +38215,6 @@
           }
         },
         "summary": "Seed From Detector",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/classes/sync_to_opensearch": {
-      "post": {
-        "description": "Rebuild the classes index from the registry document.",
-        "operationId": "sync_classes_curation_projects__project__classes_sync_to_opensearch_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Sync Classes Curation Projects  Project  Classes Sync To Opensearch Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Sync Classes",
         "tags": [
           "Curation"
         ]

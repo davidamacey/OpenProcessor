@@ -7,7 +7,6 @@
     restoreClass,
     classMergedDetail,
     classMergedRestoreText,
-    syncClassesToOpensearch,
   } from '$lib/api_classes';
   import { getTestHoldoutStats } from '$lib/api_export';
   import AddClassModal from '$components/AddClassModal.svelte';
@@ -221,19 +220,6 @@
     addOpen = true;
   }
 
-  async function syncToOpensearch(): Promise<void> {
-    busy = true;
-    try {
-      const res = await syncClassesToOpensearch();
-      const upserted = res.upserted ?? 0;
-      toastStore.success(`Synced ${upserted} classes to OpenSearch.`);
-    } catch (e) {
-      toastStore.error(`Sync failed: ${apiErrorText(e)}`);
-    } finally {
-      busy = false;
-    }
-  }
-
   onMount(() => void proposals.loadProposals());
 
   // L5 (visual audit 2026-09-24): `validated_count` includes the frozen
@@ -268,14 +254,6 @@
     <button class="btn" type="button" onclick={merge.openMerge} disabled={busy}
       >Merge classes</button
     >
-    <button
-      class="btn"
-      type="button"
-      onclick={() => void syncToOpensearch()}
-      disabled={busy}
-    >
-      Sync to OpenSearch
-    </button>
     <button class="btn btn-primary" type="button" onclick={openAdd} disabled={busy}>
       + Add Class
     </button>

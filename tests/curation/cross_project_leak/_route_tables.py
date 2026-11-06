@@ -182,9 +182,20 @@ UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
 # "wrote nothing" check; every isolation check (foreign indexes, foreign
 # markers in the response, events, 5xx, cache parity, foreign files)
 # still applies to them.
+_CLASS_REGISTRY_IN_POSTGRES = (
+    'the class registry is rows in PostgreSQL keyed by project_id, not an OpenSearch index; '
+    'its per-project isolation is proven by tests/db/test_class_registry.py and the row-level '
+    'security tests'
+)
 UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('POST', '/pause'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
     ('POST', '/resume'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
+    ('POST', '/classes'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('PUT', '/classes/{class_id}'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/{class_id}/restore'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/{class_id}/deprecate'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/merge'): _CLASS_REGISTRY_IN_POSTGRES,
+    ('POST', '/classes/seed_from_detector'): _CLASS_REGISTRY_IN_POSTGRES,
     ('POST', '/bakeoff/run'): 'needs a resolvable contender model list, not seeded',
     ('POST', '/train/promote/{job_id}'): 'needs an exported best.onnx, not seeded',
     ('DELETE', '/models/{model_name}'): 'see EXPECTED_5XX: no live Triton to confirm the unload',

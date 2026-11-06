@@ -91,7 +91,7 @@ _BOX_KEYS = frozenset({'region_bbox_correct', 'region_text', 'region_confidence'
 def class_group_answer(group: str | None = None) -> Any:
     """An async stand-in for the worker's ``_class_group`` answering ``group`` for every class."""
 
-    async def _answer(_opensearch: Any, _class_name: str) -> str | None:
+    async def _answer(_class_name: str) -> str | None:
         return group
 
     return _answer

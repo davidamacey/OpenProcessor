@@ -72,8 +72,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
-from src.clients.curation_opensearch.registry import get_class_registry
-from src.services.projects.guard import make_script_opensearch
+from src.services.classes.registry import get_class_registry
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
@@ -308,16 +307,12 @@ async def run(args: argparse.Namespace) -> int:
         return 2
     logger.info('read %d class names from %s', len(model_names), args.model)
 
-    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=60)
-    try:
-        return await _run(args, client, model_names)
-    finally:
-        await client.close()
+    return await _run(args, model_names)
 
 
-async def _run(args: argparse.Namespace, client: Any, model_names: list[str]) -> int:
+async def _run(args: argparse.Namespace, model_names: list[str]) -> int:
     store = get_class_registry()
-    existing = await store.snapshot(client)
+    existing = await store.snapshot()
     result = reconcile(
         model_names,
         existing,
@@ -356,7 +351,7 @@ async def _run(args: argparse.Namespace, client: Any, model_names: list[str]) ->
     for e in result.appended:
         # ensure_class is idempotent by name, so a rerun or a concurrent seed adds nothing twice;
         # the id it hands out must be the one the model expects.
-        class_id, _created = await store.ensure_class(client, e.class_name, group=e.group)
+        class_id, _created = await store.ensure_class(e.class_name, group=e.group)
         if class_id != e.class_id:
             logger.error(
                 'class %r got id %d, the model expects %d: the registry changed during the seed',

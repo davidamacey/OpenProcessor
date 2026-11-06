@@ -160,10 +160,9 @@ async def test_a_later_process_reads_the_marker_and_runs_no_migration(
 
     assert await index_bootstrap.ensure_indexes(cluster) is True
 
-    # One read of every index's marker and settings, and the classes self-heal count.
-    assert [m for m, _ in cluster.calls] == ['GET', 'GET']
+    # One read of every index's marker and settings.
+    assert [m for m, _ in cluster.calls] == ['GET']
     assert cluster.calls[0][1] == '/' + ','.join(curation_index_names())
-    assert cluster.calls[1][1].endswith('/_count')
     assert cold >= 30, f'the full bootstrap made {cold} calls'
     assert _slug() in index_bootstrap._INDEXES_BOOTSTRAPPED
     items = get_curation_config().items_index

@@ -83,7 +83,7 @@ async def sweep_pending_open_vocab(
 
 
 async def default_service(opensearch: AsyncOpenSearch) -> CurationIngestService:
-    from src.clients.curation_opensearch.registry import get_class_registry
+    from src.services.classes.registry import get_class_registry
     from src.services.curation.ingest_service_factory import get_ingest_service
 
     return await get_ingest_service(opensearch, get_class_registry())

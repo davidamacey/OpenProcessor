@@ -328,9 +328,9 @@ async def test_secondary_shape_routing_follows_env_groups(
         class_name='audi',
     )
     monkeypatch.setattr(worker_state, '_class_group', class_group_answer('tall_things'))
-    assert await _is_secondary_shape(task, None)
+    assert await _is_secondary_shape(task)
     monkeypatch.setattr(worker_state, '_class_group', class_group_answer('unrelated_group'))
-    assert not await _is_secondary_shape(task, None)
+    assert not await _is_secondary_shape(task)
 
 
 @pytest.mark.asyncio
@@ -348,7 +348,7 @@ async def test_no_secondary_shape_routing_when_profile_has_no_groups(
         class_name='class_b',
     )
     monkeypatch.setattr(worker_state, '_class_group', class_group_answer(None))
-    assert not await _is_secondary_shape(task, None)
+    assert not await _is_secondary_shape(task)
 
 
 def test_retired_empty_class_ids_is_dropped_on_read() -> None:

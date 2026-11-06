@@ -19,11 +19,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from opensearchpy.exceptions import OpenSearchException
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_curation_config
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
-from src.core.exceptions import RequestRejectedError
 from src.routers.curation._common import (
     OpenSearchDep,
     classes_index,
@@ -34,24 +33,22 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._common_models import HealthResponse
+from src.services.classes.registry import ClassRegistryError
 from src.services.labeling.run_labeler import get_vlm_labeler
 from src.services.resource_links import service_url
 
 
-async def _registry_status(raw_os: Any) -> dict[str, Any]:
-    """The class registry document's state: ``exists`` is true once it is readable."""
+async def _registry_status() -> dict[str, Any]:
+    """The class registry's state: ``exists`` is true once it is readable."""
     try:
-        doc = await get_class_registry().snapshot(raw_os)
-    except RequestRejectedError as exc:
-        return {'exists': False, 'detail': exc.detail.get('error', str(exc.detail))}
-    except OpenSearchException as exc:
+        doc = await get_class_registry().snapshot()
+    except (ClassRegistryError, SQLAlchemyError) as exc:
         return {'exists': False, 'detail': str(exc)}
     return {
         'exists': True,
         'classes': len(doc.classes),
         'registry_revision': doc.registry_revision,
         'updated_at': doc.updated_at,
-        'migrated_from_file_at': doc.migrated_from_file_at,
     }
 
 
@@ -149,7 +146,7 @@ async def curation_health(
 
     vlm = await vlm_status(raw_os)
 
-    registry_status = await _registry_status(raw_os)
+    registry_status = await _registry_status()
 
     overall: Literal['ok', 'degraded', 'down']
     if triton['reachable'] and os_status['reachable'] and registry_status.get('exists'):

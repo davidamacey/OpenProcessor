@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
@@ -158,7 +158,7 @@ class _Env:
     async def close(self) -> None:
         return None
 
-    async def _has_classes(self, _os: Any, _record: Any) -> bool:
+    async def _has_classes(self, _record: Any) -> bool:
         return True
 
     async def _projects(self, *_a: Any) -> list[Any]:
