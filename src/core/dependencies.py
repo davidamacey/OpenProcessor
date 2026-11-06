@@ -6,7 +6,7 @@ Resources are created once and reused across requests.
 """
 
 import logging
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 import tritonclient.grpc as grpcclient
 import tritonclient.grpc.aio as grpcclient_aio
@@ -16,9 +16,6 @@ from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_client_manager import TritonClientManager
 from src.config.settings import get_settings
 
-
-if TYPE_CHECKING:
-    import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +117,7 @@ class OpenSearchClientFactory:
             logger.info('OpenSearch client closed')
 
 
-async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
+async def bootstrap_opensearch_indexes() -> None:
     """Refuse to start unless every active project's indexes carry the current schema stamp.
 
     Index creation, the mapping migrations and the kNN warm-up run once in the ``db-migrate``
@@ -130,9 +127,6 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
     (``opensearch_mapping_not_current``, naming the index) when one is wrong or missing.
     A project the registry has not yet read cannot be checked here; the registry bootstrap
     that runs first retries until it can.
-
-    Returns ``None`` always: the lifespan, which this lane does not own, still stores a returned
-    warm-up task and the warm-up now belongs to ``db-migrate``.
     """
     from src.clients.curation_opensearch.lifecycle import curation_index_names
     from src.services.curation.index_bootstrap import check_mappings_current
@@ -144,7 +138,6 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
             os_client = await OpenSearchClientFactory.get_client()
         await check_mappings_current(os_client.client, curation_index_names())
         logger.info(f'curation_index_mappings_current project={slug}')
-    return None
 
 
 # =============================================================================

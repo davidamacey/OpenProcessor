@@ -153,6 +153,61 @@ async def _reseed_config_async(record: Any, kind: str, axis: str, body: dict[str
     reset_config_stores()
 
 
+def _clear_activations(env: Any, slug: str, *axes: str) -> None:
+    """``slug`` has never activated ``axes`` (no service un-activates to "never", so the
+    rows are deleted, as :func:`_reseed_config_async` does)."""
+    import asyncio
+
+    asyncio.run(_clear_activations_async(env.records[slug], axes))
+
+
+async def _clear_activations_async(record: Any, axes: tuple[str, ...]) -> None:
+    from sqlalchemy import delete
+
+    from src.config.project_context import bind_project
+    from src.db.models.config import ConfigActivation, ConfigActivationEvent
+    from src.services.config_store import documents
+    from src.services.config_store.bound_project import bound_project_id
+    from src.services.config_store.store import reset_config_stores
+
+    with bind_project(record):
+        project_id = await bound_project_id()
+        async with documents.tx('clear activations in the leak environment') as session:
+            # "Never activated" is no activation row and no activation event (list_axis_state).
+            for table in (ConfigActivation, ConfigActivationEvent):
+                await session.execute(
+                    delete(table).where(table.project_id == project_id, table.axis.in_(axes))
+                )
+    reset_config_stores()
+
+
+def _activate_detection_profile(env: Any, slug: str, *, detector: str, name: str = 'det') -> None:
+    """``slug``'s active detection profile pins revision 1 of ``name``, which names
+    ``detector``; saved and activated through the config store services the routes use."""
+    import asyncio
+
+    asyncio.run(_activate_detection_profile_async(env.records[slug], detector, name))
+
+
+async def _activate_detection_profile_async(record: Any, detector: str, name: str) -> None:
+    from src.config.project_context import bind_project
+    from src.services.config_store import documents
+    from src.services.config_store.store import reset_config_stores
+
+    await _clear_activations_async(record, ('detection_profile',))
+    with bind_project(record):
+        await documents.save_config(
+            kind='region_profile',
+            name=name,
+            body={'detector_model': detector},
+            expected_revision=None,
+        )
+        await documents.activate(
+            axis='detection_profile', name=name, revision=1, expected_active=None
+        )
+    reset_config_stores()
+
+
 def _stored_prompt_pack(env: Any, slug: str) -> None:
     """(Re-)seed the ``{slug}-model`` prompt_pack at revision 1 with no activation, through
     the config store; run before each mutating route so it is independent of what an

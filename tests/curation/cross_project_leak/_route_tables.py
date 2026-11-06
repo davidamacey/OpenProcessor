@@ -164,21 +164,6 @@ EXPECTED_5XX: dict[tuple[str, str], str] = {
 # ``bind_path_project``, so their OpenSearch calls (all against the shared
 # ``op_projects`` registry doc) are correctly unbound (``try_current_project()
 # is None``) rather than bound to the slug in the URL.
-# Routes that GET documents from OTHER projects' ``configs`` index by design,
-# each read inside a read-only bind of the project it reads: the model-sharing
-# route names which projects run a detector profile on the model, and the model
-# unload / delete guard and the models list read each project's active ingest
-# profile (a model is deployment-wide). Nothing
-# else of another project (items, images, labels) may be reached, and no
-# write.
-CROSS_PROJECT_CONFIG_READS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ('PUT', '/models/{model_name}/sharing'),
-        ('DELETE', '/models/{model_name}'),
-        ('GET', '/models/status'),
-    }
-)
-
 UNBOUND_BY_DESIGN: frozenset[tuple[str, str]] = frozenset(
     {
         ('DELETE', ''),

@@ -67,7 +67,7 @@ def test_no_curation_router_bootstraps_an_index() -> None:
 
 
 @pytest.mark.asyncio
-async def test_it_returns_no_warmup_task(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_it_returns_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     class Client:
         client = object()
 
