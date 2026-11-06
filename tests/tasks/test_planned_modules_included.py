@@ -60,5 +60,3 @@ def test_every_research_config_module_is_in_both_aggregators(name: str) -> None:
     routes_module = importlib.import_module(f'src.config.task_routes.{name}')
     assert kinds_module in job_kinds._MODULES
     assert routes_module in task_routes._MODULES
-    assert kinds_module.KINDS == ()
-    assert routes_module.ROUTES == {}

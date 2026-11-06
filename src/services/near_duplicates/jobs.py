@@ -12,12 +12,11 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
-from src.config.project_context import bind_project
+from src.services.jobs.bound import bound_job_project
 from src.services.near_duplicates import build, projection, rescore
 from src.services.near_duplicates.plan import level_plan
 from src.services.near_duplicates.profiles import active_profile
 from src.services.near_duplicates.runs import Env
-from src.services.projects.registry import get_project_registry
 
 
 if TYPE_CHECKING:
@@ -26,31 +25,18 @@ if TYPE_CHECKING:
     from src.tasks.runtime.context import JobContext
 
 
-class JobProjectError(RuntimeError):
-    """The job names a project the registry does not know."""
-
-
 @asynccontextmanager
 async def job_env(ctx: JobContext, level: str) -> AsyncIterator[Env]:
     """The run environment of ``level`` for the job's project, with that project bound."""
-    if ctx.project_id is None or ctx.project_slug is None:
-        msg = f'job {ctx.job_id} has no project'
-        raise JobProjectError(msg)
-    registry = get_project_registry()
-    await registry.ensure_fresh()
-    record = registry.get(ctx.project_slug)
-    if record is None:
-        msg = f'project {ctx.project_slug!r} is not in the registry'
-        raise JobProjectError(msg)
-    with bind_project(record):
+    async with bound_job_project(ctx) as project_id:
         async with ctx.session() as session:
-            profile = await active_profile(session, ctx.project_id)
+            profile = await active_profile(session, project_id)
         plan = await level_plan(profile, level)
         client = await ctx.client('opensearch')
         yield Env(
             scope=ctx.session,
             client=client,
-            project_id=ctx.project_id,
+            project_id=project_id,
             profile=profile,
             plan=plan,
             job_id=ctx.job_id,

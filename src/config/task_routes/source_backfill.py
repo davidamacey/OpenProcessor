@@ -1,6 +1,8 @@
-"""Task routes of the `source_backfill` research family; filled by the lane that owns it."""
+"""Task routes of the source backfill."""
 
 from __future__ import annotations
 
+from src.config.queue import TaskQueues
 
-ROUTES: dict[str, str] = {}
+
+ROUTES: dict[str, str] = {'op.source_backfill.run': TaskQueues.JOBS}
