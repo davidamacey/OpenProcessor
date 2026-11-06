@@ -165,7 +165,7 @@ async def _clear_activations_async(record: Any, axes: tuple[str, ...]) -> None:
     from sqlalchemy import delete
 
     from src.config.project_context import bind_project
-    from src.db.models.config import ConfigActivation
+    from src.db.models.config import ConfigActivation, ConfigActivationEvent
     from src.services.config_store import documents
     from src.services.config_store.bound_project import bound_project_id
     from src.services.config_store.store import reset_config_stores
@@ -173,11 +173,11 @@ async def _clear_activations_async(record: Any, axes: tuple[str, ...]) -> None:
     with bind_project(record):
         project_id = await bound_project_id()
         async with documents.tx('clear activations in the leak environment') as session:
-            await session.execute(
-                delete(ConfigActivation).where(
-                    ConfigActivation.project_id == project_id, ConfigActivation.axis.in_(axes)
+            # "Never activated" is no activation row and no activation event (list_axis_state).
+            for table in (ConfigActivation, ConfigActivationEvent):
+                await session.execute(
+                    delete(table).where(table.project_id == project_id, table.axis.in_(axes))
                 )
-            )
     reset_config_stores()
 
 
