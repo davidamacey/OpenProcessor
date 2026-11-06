@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from compose._helpers import _services
 
 
@@ -40,7 +42,9 @@ def test_uvicorn_floor_supports_the_jitter_flag() -> None:
         lines = (REPO_ROOT / name).read_text().splitlines()
         spec = [ln for ln in lines if 'uvicorn[standard]' in ln]
         assert spec, name
-        assert '>=0.41.0' in spec[0], f'{name}: {spec[0]!r}'
+        match = re.search(r'(?:==|>=)(\d+)\.(\d+)\.(\d+)', spec[0])
+        assert match, f'{name}: {spec[0]!r}'
+        assert tuple(map(int, match.groups())) >= (0, 41, 0), f'{name}: {spec[0]!r}'
 
 
 def test_control_flag_parser_tells_present_from_absent() -> None:
