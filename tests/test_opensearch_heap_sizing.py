@@ -115,6 +115,7 @@ def test_gpu_profiles_no_longer_carry_a_heap() -> None:
 def _project(tmp_path: Path) -> Path:
     proj = tmp_path / 'proj'
     shutil.copytree(REPO_ROOT / 'config_templates', proj / 'config_templates')
+    shutil.copy(REPO_ROOT / 'env.template', proj / 'env.template')
     return proj
 
 

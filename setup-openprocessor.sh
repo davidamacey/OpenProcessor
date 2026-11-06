@@ -1154,25 +1154,9 @@ env_set_default() {
 # env_create_or_merge -- create .env from env.template (600 before any
 # value is written) or add keys that are new in env.template
 env_create_or_merge() {
-    local key line added=()
-    if [[ ! -f "$ENV_FILE" ]]; then
-        ( umask 077; install -m 600 "${OP_DIR}/env.template" "$ENV_FILE" )
-        chmod 600 "$ENV_FILE"
-        log_info "created ${ENV_FILE} (mode 600)"
-        return 0
-    fi
-    chmod 600 "$ENV_FILE"
-    while IFS= read -r line; do
-        [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)= ]] || continue
-        key="${BASH_REMATCH[1]}"
-        if ! read_env_var "$ENV_FILE" "$key" >/dev/null; then
-            upsert_env_var "$ENV_FILE" "$key" "${line#*=}"
-            added+=("$key")
-        fi
-    done < "${OP_DIR}/env.template"
-    if (( ${#added[@]} > 0 )); then
-        log_info "added new .env keys from env.template: ${added[*]}"
-    fi
+    local out
+    out="$(env_generate "${OP_DIR}/env.template" "$ENV_FILE")" || return 1
+    [[ -z "$out" ]] || log_info "$out"
 }
 
 # -----------------------------------------------------------------------------
@@ -2649,6 +2633,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/image_keys.sh"
     # shellcheck source=scripts/lib/opensearch_heap.sh
     source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
+    # shellcheck source=scripts/lib/env_generator.sh
+    source "${OP_DIR}/scripts/lib/env_generator.sh"
     # shellcheck source=scripts/lib/retired_env.sh
     source "${OP_DIR}/scripts/lib/retired_env.sh"
     # shellcheck source=scripts/lib/cropwright_auth.sh

@@ -147,7 +147,7 @@ Options:
   --skip-export       Skip TensorRT export (use existing models)
   --skip-download     Skip model download (use existing)
   --skip-start        Don't start services after setup
-  --force             Overwrite an existing .env (default: never touch one)
+  --force             Re-apply profile and GPU to an existing .env, keeping its other values (default: never touch one)
   --curation          Print the curation/labeling subsystem next steps at the end
   --help, -h          Show this help
 
