@@ -291,9 +291,20 @@ SCENARIOS = {
 }
 
 
+pytest_plugins = ['_records_world']
+
+FREEZING = {'freeze_test_split', 'freeze_updated_item'}
+"""Scenarios that record a holdout freeze, which is a database row."""
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize('name', sorted(SCENARIOS))
-async def test_import_matches_golden(name: str, tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize(
+    'name',
+    [pytest.param(n, marks=pytest.mark.db) if n in FREEZING else n for n in sorted(SCENARIOS)],
+)
+async def test_import_matches_golden(name: str, tmp_path: Path, monkeypatch, request) -> None:
+    if name in FREEZING:
+        request.getfixturevalue('world')
     h = Harness(tmp_path, monkeypatch)
     got = await SCENARIOS[name](h, tmp_path)
     assert got == json.loads(GOLDEN.read_text())[name]

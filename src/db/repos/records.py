@@ -180,6 +180,20 @@ async def list_holdout_freezes(
     return [_freeze_row(r) for r in rows]
 
 
+async def forget_holdout_freeze(
+    session: AsyncSession, project_id: uuid.UUID, freeze_id: uuid.UUID
+) -> bool:
+    """Delete a freeze that is not current (an undone import's); the current one is refused."""
+    result = await session.execute(
+        delete(HoldoutFreeze).where(
+            HoldoutFreeze.project_id == project_id,
+            HoldoutFreeze.id == freeze_id,
+            HoldoutFreeze.is_current.is_(False),
+        )
+    )
+    return bool(result.rowcount)  # type: ignore[attr-defined]
+
+
 async def load_holdout_freezes(
     session: AsyncSession, project_id: uuid.UUID, rows: Sequence[HoldoutFreezeLoad]
 ) -> None:
@@ -597,6 +611,7 @@ __all__ = [
     'add_label_operation_members',
     'create_label_operation',
     'current_holdout_freeze',
+    'forget_holdout_freeze',
     'freeze_holdout',
     'get_label_operation',
     'get_project_state',

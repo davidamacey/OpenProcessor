@@ -30,6 +30,9 @@ from opensearchpy.exceptions import NotFoundError
 from src.services.labeling.vlm_client import VlmIdentity
 
 
+pytest_plugins = ['_records_world']
+
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -99,6 +102,8 @@ def app_client(fake_opensearch: AsyncMock, fake_triton_pool: AsyncMock):
 # =============================================================================
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_test_holdout_freeze_rejects_re_run_without_force(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:
@@ -109,6 +114,8 @@ def test_test_holdout_freeze_rejects_re_run_without_force(
     assert 'force' in r.text.lower()
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_test_holdout_freeze_zero_cohort_raises_422_even_with_force(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:

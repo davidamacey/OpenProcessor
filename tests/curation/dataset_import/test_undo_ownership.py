@@ -29,6 +29,9 @@ F = get_region_fields()
 HUMAN = {'class_source': 'human', 'label_source': 'human', 'class_validated': True}
 
 
+pytest_plugins = ['_records_world']
+
+
 @pytest.mark.asyncio
 async def test_a_human_verdict_on_an_untouched_import_box_keeps_the_box(
     tmp_path: Path, monkeypatch: Any
@@ -54,6 +57,8 @@ async def test_a_human_verdict_on_an_untouched_import_box_keeps_the_box(
     assert [b.box_id for b in read_boxes(h.items[cid], F)] == [imported['box_id']]
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_undo_clears_the_holdout_it_set_and_keeps_one_a_curator_set(
     tmp_path: Path, monkeypatch: Any
@@ -144,6 +149,8 @@ async def test_a_curator_holdout_freeze_survives_undo_of_an_import_that_did_not_
     assert (report.items_deleted, report.items_kept_human_edited) == (0, 1)
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_an_item_the_import_froze_into_the_holdout_is_still_deleted_by_undo(
     tmp_path: Path, monkeypatch: Any
