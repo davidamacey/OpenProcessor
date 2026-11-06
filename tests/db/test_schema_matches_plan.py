@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import _research_plan as research
 import psycopg
 import pytest
 
@@ -160,6 +161,20 @@ FOREIGN_KEYS = {
     ('vlm_endpoint_probes', 'config_id', 'config_documents', 'c'),
     ('vlm_endpoint_probes', 'config_id', 'config_revisions', 'c'),
 }  # fmt: skip
+
+
+# The two plan files are one contract: 02d's objects (revision 0002) join 02a's here.
+TABLES |= research.TABLES
+UNIQUE_CONSTRAINTS |= research.UNIQUE_CONSTRAINTS
+PARTIAL_INDEXES |= research.PARTIAL_INDEXES
+PLAIN_INDEXES |= research.PLAIN_INDEXES
+NULLS_NOT_DISTINCT |= research.NULLS_NOT_DISTINCT
+NAMED_CHECKS |= research.NAMED_CHECKS
+FUNCTIONS |= research.FUNCTIONS
+TRIGGERS |= research.TRIGGERS
+POLICIES |= research.POLICIES
+UNPROTECTED |= research.UNPROTECTED
+FOREIGN_KEYS |= research.FOREIGN_KEYS
 
 
 @pytest.fixture(scope='module')

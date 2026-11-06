@@ -4,7 +4,28 @@ Importing this package registers all tables on ``Base.metadata`` and imports not
 SQLAlchemy and ``src.domain``.
 """
 
+from src.db.models.assist_loop import (
+    AssistLoopBudget,
+    AssistLoopBudgetLedger,
+    AssistLoopIteration,
+    AssistLoopNode,
+    AssistLoopProposal,
+    AssistLoopReview,
+    AssistLoopRun,
+    AssistLoopSelection,
+    VlmUsageHourly,
+)
 from src.db.models.classes import ClassRegistry, ProjectClass, SearchProjectionTask
+from src.db.models.clustering import (
+    ClusterActivation,
+    ClusterActivationEvent,
+    ClusterBackendValidation,
+    ClusterCalibration,
+    ClusterIdentity,
+    ClusterMembership,
+    ClusterPartition,
+    PartitionCluster,
+)
 from src.db.models.config import (
     ConfigActivation,
     ConfigActivationEvent,
@@ -29,6 +50,12 @@ from src.db.models.datasets import (
     LabelOperation,
     LabelOperationMember,
 )
+from src.db.models.embeddings import (
+    EmbeddingEvaluationRun,
+    EmbeddingModelVersion,
+    EmbeddingReindexRun,
+    EmbeddingSpace,
+)
 from src.db.models.jobs import (
     Event,
     GpuDevice,
@@ -47,6 +74,7 @@ from src.db.models.projects import (
     ProjectIndex,
     ProjectSlug,
 )
+from src.db.models.serving import ServingReport
 from src.db.models.training import (
     BakeoffRun,
     DatasetExport,
@@ -59,8 +87,23 @@ from src.db.models.training import (
 
 
 __all__ = [
+    'AssistLoopBudget',
+    'AssistLoopBudgetLedger',
+    'AssistLoopIteration',
+    'AssistLoopNode',
+    'AssistLoopProposal',
+    'AssistLoopReview',
+    'AssistLoopRun',
+    'AssistLoopSelection',
     'BakeoffRun',
     'ClassRegistry',
+    'ClusterActivation',
+    'ClusterActivationEvent',
+    'ClusterBackendValidation',
+    'ClusterCalibration',
+    'ClusterIdentity',
+    'ClusterMembership',
+    'ClusterPartition',
     'CombineRun',
     'CombineSource',
     'ConfigActivation',
@@ -74,6 +117,10 @@ __all__ = [
     'DatasetUpload',
     'DeploymentCounter',
     'DeploymentSetting',
+    'EmbeddingEvaluationRun',
+    'EmbeddingModelVersion',
+    'EmbeddingReindexRun',
+    'EmbeddingSpace',
     'Event',
     'GpuDevice',
     'GpuReservation',
@@ -88,6 +135,7 @@ __all__ = [
     'Model',
     'ModelEngine',
     'ModelShare',
+    'PartitionCluster',
     'Project',
     'ProjectClass',
     'ProjectIndex',
@@ -98,9 +146,11 @@ __all__ = [
     'ProjectionState',
     'Promotion',
     'SearchProjectionTask',
+    'ServingReport',
     'StreamWorkerClaim',
     'TrainingRun',
     'UpgradeRun',
     'VlmEndpointProbe',
+    'VlmUsageHourly',
     'WorkerCapability',
 ]
