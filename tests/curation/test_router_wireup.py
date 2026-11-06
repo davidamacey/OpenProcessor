@@ -397,7 +397,7 @@ def test_human_class_writers_replace_detector_provenance(
             'docs': [
                 {
                     '_id': d['_id'],
-                    '_source': dict(source),
+                    '_source': {**source, 'crop_id': d['_id']},
                     '_seq_no': 5,
                     '_primary_term': 1,
                     'found': True,
