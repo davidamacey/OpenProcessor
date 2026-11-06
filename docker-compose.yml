@@ -378,6 +378,8 @@ services:
       resources:
         limits:
           memory: ${OP_PG_MEM_LIMIT:-4g}
+        reservations:
+          memory: 1g
     networks:
       - triton_net
 
@@ -425,6 +427,8 @@ services:
       resources:
         limits:
           memory: ${OP_VALKEY_MEM_LIMIT:-2g}
+        reservations:
+          memory: 256m
     networks:
       - triton_net
 
@@ -433,6 +437,7 @@ services:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
     restart: "no"
+    mem_reservation: 256m
     command: python -m scripts.db.migrate upgrade
     env_file:
       - path: ./.env
@@ -582,6 +587,7 @@ services:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
     restart: unless-stopped
+    mem_reservation: 512m
     command: celery -A src.tasks.app worker -Q open_vocab -c 1 --max-tasks-per-child=50 --hostname open_vocab@%h -E
     stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
     env_file:
@@ -662,6 +668,8 @@ services:
       resources:
         limits:
           memory: ${OP_BEAT_MEM_LIMIT:-512m}
+        reservations:
+          memory: 128m
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -680,6 +688,7 @@ services:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
     restart: unless-stopped
+    mem_reservation: 256m
     profiles:
       - monitoring
     # The config file reads the basic-auth value from /run/secrets/op_flower/auth at start.
