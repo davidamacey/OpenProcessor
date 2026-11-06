@@ -32,4 +32,14 @@ KINDS: tuple[JobKind, ...] = (
         exclusive_scope='scope_key',
         auto_resume=True,
     ),
+    JobKind(
+        name='persons_cluster',
+        task_name='op.clustering.persons_cluster',
+        queue=TaskQueues.JOBS,
+        project_scope='deployment',
+        soft_limit_s=3 * _HOUR,
+        hard_limit_s=3 * _HOUR + 15 * 60,
+        max_queue_wait_s=24 * _HOUR,
+        exclusive_group='persons_cluster',
+    ),
 )
