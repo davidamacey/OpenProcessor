@@ -1,4 +1,13 @@
-"""HTTP face of the database layer: how a database failure reaches the client.
+"""HTTP face of the database layer: the request session and how a database failure reaches the client.
+
+``DbSessionDep`` opens one session per request and closes it. It is declared with
+``scope="function"``: FastAPI otherwise runs a ``yield`` dependency's exit code after the
+response has been sent, when a failure can no longer change the status
+(https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/#early-exit-and-scope).
+The dependency never commits. Every write commits inside ``project_tx`` or ``deployment_tx``
+in the service, before the handler returns, so a failed commit is a 5xx and never a 2xx. SSE and
+other streaming routes never declare it: a session held for the life of a stream would pin a
+pooled connection.
 
 A request that cannot get a connection in time is told to retry (503 ``database_busy`` with
 ``Retry-After``); a request that cannot reach the database at all gets 503
@@ -7,19 +16,32 @@ A request that cannot get a connection in time is told to retry (503 ``database_
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 import psycopg
+from fastapi import Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, TimeoutError as PoolTimeoutError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.logging import get_logger, get_request_id
+from src.db.session import async_session_factory
 
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from fastapi import FastAPI, Request
 
 logger = get_logger(__name__)
+
+
+async def get_db() -> AsyncIterator[AsyncSession]:
+    async with async_session_factory()() as session:
+        yield session
+
+
+DbSessionDep = Annotated[AsyncSession, Depends(get_db, scope='function')]
 
 DATABASE_BUSY_RETRY_AFTER_SECONDS = 2
 DATABASE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5
@@ -63,3 +85,6 @@ async def database_unavailable_response(request: Request, exc: OperationalError)
 def install_database_error_handlers(application: FastAPI) -> None:
     application.exception_handler(PoolTimeoutError)(database_busy_response)
     application.exception_handler(OperationalError)(database_unavailable_response)
+
+
+__all__ = ['DbSessionDep', 'get_db', 'install_database_error_handlers']
