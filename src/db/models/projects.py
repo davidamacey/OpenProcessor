@@ -26,7 +26,12 @@ RESERVED_SLUGS = (
     'health',
 )
 PROJECT_INDEX_ROLES = ('images', 'items')
-DEPLOYMENT_SETTING_KEYS = ('local_vlm_desired', 'vlm_paused_for_training', 'active_serving_profile')
+DEPLOYMENT_SETTING_KEYS = (
+    'local_vlm_desired',
+    'vlm_paused_for_training',
+    'active_serving_profile',
+    'upgrade_state',
+)
 
 
 class ProjectSlug(Base):

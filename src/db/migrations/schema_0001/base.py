@@ -139,7 +139,8 @@ def create() -> None:
         ),
         sa.Column('updated_by', sa.Text(), nullable=False),
         sa.CheckConstraint(
-            "key IN ('local_vlm_desired', 'vlm_paused_for_training', 'active_serving_profile')",
+            "key IN ('local_vlm_desired', 'vlm_paused_for_training', "
+            "'active_serving_profile', 'upgrade_state')",
             name=op.f('ck_deployment_settings_key'),
         ),
         sa.PrimaryKeyConstraint('key', name=op.f('pk_deployment_settings')),
