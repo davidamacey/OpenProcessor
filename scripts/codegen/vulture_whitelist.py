@@ -190,3 +190,14 @@ _.LEASE_TTL_S  # src/domain/job_timing.py, read by the claim and the heartbeat t
 _.HEARTBEAT_TICK_S  # src/domain/job_timing.py, read by the heartbeat thread
 _.FENCE_MARGIN_S  # src/domain/job_timing.py, read by the heartbeat thread's may_write
 _.PROGRESS_MIN_INTERVAL_S  # src/domain/job_timing.py, read by the progress throttle
+
+# src/db/repos/jobs.py (lane 3A): called by the job service and the task wrapper, which land in
+# the next commits of the lane; each line goes with its first production caller.
+_.insert_queued  # src/services/jobs/service.py, start_job
+_.mark_dispatched  # src/services/jobs/service.py, after the enqueue
+_.fail_queued  # src/services/jobs/service.py (broker down) and the task wrapper
+_.heartbeat  # src/tasks/runtime/heartbeat.py
+_.interrupt  # src/tasks/runtime/job_task.py, worker shutdown
+_.pause_running  # src/tasks/runtime/job_task.py
+_.queue_yield  # src/tasks/runtime/job_task.py
+_.request_pause  # src/tasks/runtime/context.py, ctx.request_pause
