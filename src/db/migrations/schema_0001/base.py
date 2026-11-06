@@ -246,6 +246,7 @@ def create() -> None:
         sa.Column('current_revision', sa.Integer(), nullable=False),
         sa.Column('description', sa.Text(), server_default='', nullable=False),
         sa.Column('cloned_from_id', sa.Uuid(), nullable=True),
+        sa.Column('cloned_from_revision', sa.Integer(), nullable=True),
         sa.Column(
             'created_at',
             sa.DateTime(timezone=True),
@@ -302,6 +303,7 @@ def create() -> None:
         sa.Column('revision', sa.Integer(), nullable=False),
         sa.Column('body', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column('body_sha256', sa.Text(), nullable=False),
+        sa.Column('description', sa.Text(), server_default='', nullable=False),
         sa.Column(
             'created_at',
             sa.DateTime(timezone=True),
@@ -365,8 +367,8 @@ def create() -> None:
         sa.Column('axis', sa.Text(), nullable=False),
         sa.Column('from_config_id', sa.Uuid(), nullable=True),
         sa.Column('from_revision', sa.Integer(), nullable=True),
-        sa.Column('to_config_id', sa.Uuid(), nullable=False),
-        sa.Column('to_revision', sa.Integer(), nullable=False),
+        sa.Column('to_config_id', sa.Uuid(), nullable=True),
+        sa.Column('to_revision', sa.Integer(), nullable=True),
         sa.Column('reason', sa.Text(), nullable=False),
         sa.Column(
             'at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False
@@ -375,6 +377,10 @@ def create() -> None:
         sa.CheckConstraint(
             "reason IN ('activate', 'rollback', 'clone', 'upgrade')",
             name=op.f('ck_config_activation_events_reason'),
+        ),
+        sa.CheckConstraint(
+            '(to_config_id IS NULL) = (to_revision IS NULL)',
+            name=op.f('ck_config_activation_events_to_pair'),
         ),
         sa.ForeignKeyConstraint(
             ['project_id'],
