@@ -221,8 +221,10 @@ class PgDatabase:
 
 
 def _settings_for(server: PgServer, dbname: str, secrets: Path) -> DatabaseSettings:
+    # The superuser password is the server's own: a server named by OP_TEST_DATABASE_URL has its own.
+    passwords = {**_PASSWORDS, 'super': server.super_password}
     files = {}
-    for role, password in _PASSWORDS.items():
+    for role, password in passwords.items():
         path = secrets / f'{role}_password'
         path.write_text(password)
         files[role] = path
