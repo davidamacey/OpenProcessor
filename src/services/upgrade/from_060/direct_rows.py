@@ -31,7 +31,6 @@ from src.db.models import (
     ProjectSlug,
     Promotion,
     TrainingRun,
-    VlmEndpointProbe,
 )
 
 
@@ -298,30 +297,6 @@ async def combines(
     return len(rows)
 
 
-async def probes(
-    session: AsyncSession, global_data: GlobalData, config_ids: Mapping[tuple[str, str], uuid.UUID]
-) -> int:
-    n = 0
-    for endpoint in global_data.endpoints:
-        config_id = config_ids.get(('vlm_endpoint', endpoint.doc.name))
-        known = {r.revision for r in endpoint.doc.revisions}
-        for probe in endpoint.probes:
-            if config_id is None or probe.revision not in known:
-                continue
-            session.add(
-                VlmEndpointProbe(
-                    config_id=config_id,
-                    revision=probe.revision,
-                    probed_at=probe.probed_at,
-                    ok=probe.ok,
-                    result=probe.result,
-                )
-            )
-            n += 1
-    await session.flush()
-    return n
-
-
 async def local_vlm_desired(session: AsyncSession, global_data: GlobalData) -> bool:
     if not global_data.local_vlm_desired:
         return False
@@ -358,7 +333,7 @@ async def id_maps(
 ) -> tuple[dict[str, uuid.UUID], dict[tuple[str | None, str, str], uuid.UUID]]:
     """``(slug -> project id, (slug or None, kind, name) -> config id)`` read back from the
     database, for the steps that run after the load committed (verify, a resumed run)."""
-    projects = dict((await session.execute(select(Project.slug, Project.id))).tuples().all())
+    projects = dict((await session.execute(select(Project.slug, Project.id))).all())
     owner = {pid: slug for slug, pid in projects.items()}
     rows = await session.execute(
         select(

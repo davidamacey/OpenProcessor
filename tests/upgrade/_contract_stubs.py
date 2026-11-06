@@ -39,6 +39,7 @@ from src.db.models import (
     ProjectSettings,
     ProjectSlug,
     ProjectState,
+    VlmEndpointProbe,
 )
 from src.utils.class_names import normalize_class_name
 
@@ -60,48 +61,45 @@ def _module(name: str, **members: Any) -> types.ModuleType:
 def install() -> None:
     @dataclass(frozen=True)
     class ProjectLoad:
-        id: uuid.UUID
         slug: str
         display_name: str
         description: str
         status: str
-        pre_delete_status: str | None
         revision: int
-        paused_at: datetime | None
-        origin: Any
+        created_at: datetime
+        updated_at: datetime
         index_prefix: str
         storage_prefix: str
         model_prefix: str
         mlflow_experiment: str
-        created_at: datetime
-        updated_at: datetime
-        archived_at: datetime | None
-        created_by: str
         indexes: dict[str, str]
+        created_by: str
+        pre_delete_status: str | None = None
+        config_epoch: int = 0
+        paused_at: datetime | None = None
+        paused_by: str | None = None
+        origin: Any = None
+        created_by_user_id: uuid.UUID | None = None
 
     async def load_project(session: Any, row: ProjectLoad) -> uuid.UUID:
         session.add(ProjectSlug(slug=row.slug, created_at=row.created_at))
         await session.flush()
-        session.add(
-            Project(
-                id=row.id, slug=row.slug, display_name=row.display_name, description=row.description,
-                status=row.status, pre_delete_status=row.pre_delete_status, revision=row.revision,
-                paused_at=row.paused_at, origin=row.origin, index_prefix=row.index_prefix,
-                storage_prefix=row.storage_prefix, model_prefix=row.model_prefix,
-                mlflow_experiment=row.mlflow_experiment, created_at=row.created_at,
-                updated_at=row.updated_at, created_by=row.created_by,
-            )
+        project = Project(
+            slug=row.slug, display_name=row.display_name, description=row.description,
+            status=row.status, pre_delete_status=row.pre_delete_status, revision=row.revision,
+            paused_at=row.paused_at, origin=row.origin, index_prefix=row.index_prefix,
+            storage_prefix=row.storage_prefix, model_prefix=row.model_prefix,
+            mlflow_experiment=row.mlflow_experiment, created_at=row.created_at,
+            updated_at=row.updated_at, created_by=row.created_by,
         )  # fmt: skip
+        session.add(project)
         await session.flush()
+        project_id = project.id
         for role, name in row.indexes.items():
-            session.add(
-                ProjectIndex(
-                    project_id=row.id, role=role, index_name=name, created_at=row.created_at
-                )
-            )
-        session.add(ClassRegistry(project_id=row.id))
-        session.add(ProjectSettings(project_id=row.id, updated_by=row.created_by))
-        session.add(ProjectKeymap(project_id=row.id, updated_by=row.created_by))
+            session.add(ProjectIndex(project_id=project_id, role=role, index_name=name))
+        session.add(ClassRegistry(project_id=project_id))  # the create path's empty registry row
+        session.add(ProjectSettings(project_id=project_id, updated_by=row.created_by))
+        session.add(ProjectKeymap(project_id=project_id, updated_by=row.created_by))
         stmt = insert(DeploymentCounter).values(name='projects_revision', value=1)
         await session.execute(
             stmt.on_conflict_do_update(
@@ -109,7 +107,7 @@ def install() -> None:
             )
         )
         await session.flush()
-        return row.id
+        return project_id
 
     importlib.import_module('src.db.repos')  # the package exists (lane ES-A's repository is in it)
     _module('src.db.repos.projects', ProjectLoad=ProjectLoad, load_project=load_project)
@@ -142,16 +140,21 @@ def install() -> None:
             if next_class_id is not None
             else max((c.class_id for c in rows), default=-1) + 1
         )
-        await session.execute(
-            update(ClassRegistry)
-            .where(ClassRegistry.project_id == project_id)
-            .values(
+        found = await session.execute(
+            select(ClassRegistry).where(ClassRegistry.project_id == project_id)
+        )
+        if found.first() is not None:
+            raise RuntimeError(f'project {project_id} already has a class registry')
+        session.add(
+            ClassRegistry(
+                project_id=project_id,
                 next_class_id=top,
                 revision=revision,
                 migrated_from=migrated_from,
                 migrated_at=migrated_at,
             )
         )
+        await session.flush()
         for c in rows:
             session.add(
                 ProjectClass(
@@ -213,12 +216,14 @@ def install() -> None:
         ensure_class=ensure_class,
     )
 
+    off_config_id = uuid.UUID(int=0)
+
     @dataclass(frozen=True)
     class ConfigRevisionLoad:
         revision: int
         body: Any
         created_at: datetime
-        cloned_from: str | None
+        created_by: str = 'upgrade'
 
     @dataclass(frozen=True)
     class ConfigDocumentLoad:
@@ -226,30 +231,49 @@ def install() -> None:
         kind: str
         name: str
         revisions: list[ConfigRevisionLoad] = field(default_factory=list)
+        description: str = ''
+        id: uuid.UUID | None = None
+        cloned_from_id: uuid.UUID | None = None
+        created_at: datetime | None = None
+        updated_at: datetime | None = None
+        updated_by: str = 'upgrade'
 
     @dataclass(frozen=True)
     class ActivationEventLoad:
         axis: str
-        from_config_id: uuid.UUID | None
-        from_revision: int | None
         to_config_id: uuid.UUID
         to_revision: int
-        reason: str
         at: datetime
-        by: str
+        from_config_id: uuid.UUID | None = None
+        from_revision: int | None = None
+        reason: str = 'upgrade'
+        by: str = 'upgrade'
+
+    @dataclass(frozen=True)
+    class ProbeLoad:
+        revision: int
+        probed_at: datetime
+        ok: bool
+        result: Any
+
+    @dataclass(frozen=True)
+    class VlmEndpointLoad:
+        document: ConfigDocumentLoad
+        probes: list[ProbeLoad] = field(default_factory=list)
 
     async def load_config_document(session: Any, doc: ConfigDocumentLoad) -> uuid.UUID:
-        config_id = uuid.uuid5(uuid.NAMESPACE_URL, f'{doc.project_id}/{doc.kind}/{doc.name}')
-        last = doc.revisions[-1]
+        revisions = sorted(doc.revisions, key=lambda r: r.revision)
+        config_id = doc.id or uuid.uuid4()
         session.add(
             ConfigDocument(
                 id=config_id, project_id=doc.project_id, kind=doc.kind, name=doc.name,
-                current_revision=last.revision, created_at=doc.revisions[0].created_at,
-                updated_at=last.created_at, updated_by='stub',
+                current_revision=revisions[-1].revision, description=doc.description,
+                created_at=doc.created_at or revisions[0].created_at,
+                updated_at=doc.updated_at or revisions[-1].created_at, updated_by=doc.updated_by,
             )
         )  # fmt: skip
         await session.flush()
-        for r in doc.revisions:
+        for r in revisions:
             digest = hashlib.sha256(json.dumps(r.body, sort_keys=True).encode()).hexdigest()
             session.add(
                 ConfigRevision(
@@ -258,13 +282,29 @@ def install() -> None:
                     body=r.body,
                     body_sha256=digest,
                     created_at=r.created_at,
-                    created_by='stub',
+                    created_by=r.created_by,
                 )
             )
         await session.flush()
         return config_id
 
-    async def load_activation_events(session: Any, project_id: uuid.UUID, events: Any) -> None:
+    async def load_vlm_endpoint(session: Any, row: VlmEndpointLoad) -> None:
+        config_id = await load_config_document(session, row.document)
+        for p in row.probes:
+            session.add(
+                VlmEndpointProbe(
+                    config_id=config_id,
+                    revision=p.revision,
+                    probed_at=p.probed_at,
+                    ok=p.ok,
+                    result=p.result,
+                )
+            )
+        await session.flush()
+
+    async def load_activation_events(
+        session: Any, project_id: uuid.UUID | None, events: Any
+    ) -> None:
         last: dict[str, Any] = {}
         for e in events:
             session.add(
@@ -276,14 +316,14 @@ def install() -> None:
             )  # fmt: skip
             last[e.axis] = e
         await session.flush()
-        kinds = {}
         for axis, e in last.items():
+            if e.to_config_id == off_config_id:
+                continue
             kind = (
                 await session.execute(
                     select(ConfigDocument.kind).where(ConfigDocument.id == e.to_config_id)
                 )
             ).scalar_one()
-            kinds[axis] = kind
             session.add(
                 ConfigActivation(
                     project_id=project_id,
@@ -300,8 +340,9 @@ def install() -> None:
     _module(
         'src.db.repos.config',
         ConfigRevisionLoad=ConfigRevisionLoad, ConfigDocumentLoad=ConfigDocumentLoad,
-        ActivationEventLoad=ActivationEventLoad, load_config_document=load_config_document,
-        load_activation_events=load_activation_events,
+        ActivationEventLoad=ActivationEventLoad, ProbeLoad=ProbeLoad, VlmEndpointLoad=VlmEndpointLoad,
+        OFF_CONFIG_ID=off_config_id, load_config_document=load_config_document,
+        load_vlm_endpoint=load_vlm_endpoint, load_activation_events=load_activation_events,
     )  # fmt: skip
 
     async def load_setting(

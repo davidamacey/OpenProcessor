@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.db.models.config import ACTIVATION_AXES
 from src.services.upgrade.from_060 import sources as legacy
-from src.services.upgrade.from_060.ids import stable_id
 from src.services.upgrade.from_060.model import (
     ActivationSrc,
     ClassSrc,
@@ -85,7 +84,6 @@ def _project(
     flag = snap.file(f'state:{slug}', legacy.PAUSE_FLAG)
     status = str(doc['status'])
     return ProjectSrc(
-        id=stable_id('project', slug),
         slug=slug,
         display_name=str(doc.get('display_name') or slug),
         description=str(doc.get('description') or ''),
@@ -175,7 +173,8 @@ def _revisions_of(
 def _referenced(activations: list[ActivationSrc]) -> set[tuple[str, str]]:
     refs: set[tuple[str, str]] = set()
     for event in activations:
-        refs.add((event.kind, event.to_name))
+        if event.to_name:
+            refs.add((event.kind, event.to_name))
         if event.from_name:
             refs.add((event.kind, event.from_name))
     return refs
@@ -228,58 +227,53 @@ def parse_activations(
 ) -> list[ActivationSrc]:
     """Activation events per axis in time order, ending in the axis's current activation.
 
-    An axis whose current activation is "off" (a null name) or the ``env`` built-in (no
-    revision) has nothing 0.7.0 can point at, so it contributes no events.
+    An axis turned off ends in an event to ``None`` (0.7.0 records "off" as an event, so "never
+    activated" stays distinct). The ``env`` built-in (an activation with no revision) names no
+    document 0.7.0 can point at; such events are skipped and the axis ends where the last
+    pointable event left it.
     """
     events: dict[str, list[ActivationSrc]] = {}
     currents: dict[str, Mapping[str, Any]] = {}
     for doc_id, doc in sorted(docs.items()):
         if doc_id.startswith(legacy.ACTIVATION_DOC_PREFIX):
             currents[str(doc.get('axis'))] = doc
-        elif doc_id.startswith(legacy.ACTIVATION_EVENT_DOC_PREFIX) and doc.get('name') is not None:
-            axis = str(doc['axis'])
-            if axis not in _AXIS_KIND or doc.get('revision') is None:
-                continue
-            previous = doc.get('previous') or {}
-            events.setdefault(axis, []).append(
-                ActivationSrc(
-                    axis=axis,
-                    from_name=previous.get('name'),
-                    from_revision=previous.get('revision'),
-                    to_name=str(doc['name']),
-                    to_revision=int(doc['revision']),
-                    kind=_AXIS_KIND[axis],
-                    at=parse_ts(doc.get('activated_at'), now),
-                )
-            )
+        elif doc_id.startswith(legacy.ACTIVATION_EVENT_DOC_PREFIX):
+            event = _activation(doc, now)
+            if event is not None:
+                events.setdefault(event.axis, []).append(event)
     out: list[ActivationSrc] = []
     for axis in sorted(set(events) | set(currents)):
         if axis not in _AXIS_KIND:
             continue
-        current = currents.get(axis)
         history = sorted(events.get(axis, []), key=lambda e: e.at)
-        if current is not None and (current.get('name') is None or current.get('revision') is None):
-            continue
-        if current is not None:
-            last = history[-1] if history else None
-            if last is None or (last.to_name, last.to_revision) != (
-                current['name'],
-                int(current['revision']),
-            ):
-                previous = current.get('previous') or {}
-                history.append(
-                    ActivationSrc(
-                        axis,
-                        previous.get('name'),
-                        previous.get('revision'),
-                        str(current['name']),
-                        int(current['revision']),
-                        _AXIS_KIND[axis],
-                        parse_ts(current.get('activated_at'), now),
-                    )
-                )
+        current = currents.get(axis)
+        last = _activation(current, now) if current is not None else None
+        if last is not None and (
+            not history
+            or (history[-1].to_name, history[-1].to_revision) != (last.to_name, last.to_revision)
+        ):
+            history.append(
+                last
+            )  # the current document is newer than the event log, or the log is empty
         out.extend(history)
     return out
+
+
+def _activation(doc: Mapping[str, Any], now: dt.datetime) -> ActivationSrc | None:
+    axis = str(doc.get('axis'))
+    name = doc.get('name')
+    if axis not in _AXIS_KIND or (name is not None and doc.get('revision') is None):
+        return None
+    previous = doc.get('previous') or {}
+    return ActivationSrc(
+        axis=axis,
+        from_name=previous.get('name'),
+        from_revision=previous.get('revision'),
+        to_name=None if name is None else str(name),
+        to_revision=0 if name is None else int(doc['revision']),
+        kind=_AXIS_KIND[axis],
+        at=parse_ts(doc.get('activated_at'), now),
+    )
 
 
 # --- settings, keymap, view state -------------------------------------------------------------

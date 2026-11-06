@@ -161,7 +161,7 @@ def revision_copy(
 
 
 def activation(
-    axis: str, name: str, revision: int, previous: dict[str, Any] | None, at: str
+    axis: str, name: str | None, revision: int | None, previous: dict[str, Any] | None, at: str
 ) -> dict[str, Any]:
     return {
         f'activation:{axis}': {
@@ -176,7 +176,12 @@ def activation(
 
 
 def event(
-    n: int, axis: str, name: str, revision: int, previous: dict[str, Any] | None, at: str
+    n: int,
+    axis: str,
+    name: str | None,
+    revision: int | None,
+    previous: dict[str, Any] | None,
+    at: str,
 ) -> dict[str, Any]:
     return {
         f'activation_event:00000000-0000-4000-8000-{n:012d}': {
@@ -215,6 +220,10 @@ def configs_docs() -> dict[str, Any]:
     docs.update(event(2, 'prompt_pack', 'signs', 2, {'name': 'signs', 'revision': 1}, T2))
     docs.update(event(3, 'detection_profile', 'cars', 1, None, T1))
     docs.update(event(4, 'vlm', 'local-vlm', 1, None, T1))
+    # an axis that was activated and then turned off: the event log ends in "off"
+    docs.update(event(5, 'ingest_profile', 'fast', 1, None, T1))
+    docs.update(event(6, 'ingest_profile', None, None, {'name': 'fast', 'revision': 1}, T2))
+    docs.update(activation('ingest_profile', None, None, {'name': 'fast', 'revision': 1}, T2))
     docs['meta:config_revision'] = {'doc_type': 'meta', 'config_revision': 9}
     docs['keymap:default'] = {
         'doc_type': 'keymap',

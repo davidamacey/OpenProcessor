@@ -138,7 +138,9 @@ async def test_reset_after_a_failed_verify_gives_the_same_rows_on_the_rerun(
     with clean_db.engine('super').connect() as conn:
         before = conn.execute(text('SELECT slug, display_name FROM projects ORDER BY 1')).all()
         classes = conn.execute(
-            text('SELECT project_id, class_id, name FROM project_classes ORDER BY 1, 2')
+            text(
+                'SELECT p.slug, c.class_id, c.name FROM project_classes c JOIN projects p ON p.id = c.project_id ORDER BY 1, 2'
+            )
         ).all()
     with clean_db.engine('super').begin() as conn:
         conn.execute(text("DELETE FROM project_classes WHERE name = 'Person'"))
@@ -166,7 +168,9 @@ async def test_reset_after_a_failed_verify_gives_the_same_rows_on_the_rerun(
         )
         assert (
             conn.execute(
-                text('SELECT project_id, class_id, name FROM project_classes ORDER BY 1, 2')
+                text(
+                    'SELECT p.slug, c.class_id, c.name FROM project_classes c JOIN projects p ON p.id = c.project_id ORDER BY 1, 2'
+                )
             ).all()
             == classes
         )

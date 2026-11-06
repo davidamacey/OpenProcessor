@@ -93,7 +93,9 @@ def expected_counts(parsed: Parsed, bulk: dict[str, int]) -> dict[str, int]:
     scoped_events = 0
     for pd in projects:
         known = {(k, n) for (owner, k, n) in config_ids if owner in (pd.project.slug, None)}
-        scoped_events += sum(1 for e in pd.activations if (e.kind, e.to_name) in known)
+        scoped_events += sum(
+            1 for e in pd.activations if e.to_name is None or (e.kind, e.to_name) in known
+        )
     jobs = (
         len(parsed.alive) + sum(1 for i in parsed.imports) + len(parsed.runs) + len(parsed.combines)
     )

@@ -184,6 +184,17 @@
     "previous": null,
     "revision": 1
    },
+   "activation:ingest_profile": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "ingest_profile",
+    "doc_type": "activation",
+    "name": null,
+    "previous": {
+     "name": "fast",
+     "revision": 1
+    },
+    "revision": null
+   },
    "activation:prompt_pack": {
     "activated_at": "2026-01-03T00:00:00+00:00",
     "axis": "prompt_pack",
@@ -237,6 +248,25 @@
     "name": "local-vlm",
     "previous": null,
     "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000005": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "ingest_profile",
+    "doc_type": "activation_event",
+    "name": "fast",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000006": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "ingest_profile",
+    "doc_type": "activation_event",
+    "name": null,
+    "previous": {
+     "name": "fast",
+     "revision": 1
+    },
+    "revision": null
    },
    "ingest:fast": {
     "body": {
@@ -872,6 +902,17 @@
     "previous": null,
     "revision": 1
    },
+   "activation:ingest_profile": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "ingest_profile",
+    "doc_type": "activation",
+    "name": null,
+    "previous": {
+     "name": "fast",
+     "revision": 1
+    },
+    "revision": null
+   },
    "activation:prompt_pack": {
     "activated_at": "2026-01-03T00:00:00+00:00",
     "axis": "prompt_pack",
@@ -925,6 +966,25 @@
     "name": "local-vlm",
     "previous": null,
     "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000005": {
+    "activated_at": "2026-01-02T00:00:00+00:00",
+    "axis": "ingest_profile",
+    "doc_type": "activation_event",
+    "name": "fast",
+    "previous": null,
+    "revision": 1
+   },
+   "activation_event:00000000-0000-4000-8000-000000000006": {
+    "activated_at": "2026-01-03T00:00:00+00:00",
+    "axis": "ingest_profile",
+    "doc_type": "activation_event",
+    "name": null,
+    "previous": {
+     "name": "fast",
+     "revision": 1
+    },
+    "revision": null
    },
    "class_registry": {
     "class_registry": {

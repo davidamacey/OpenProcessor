@@ -20,6 +20,11 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import delete
+
+from src.db.models import ClassRegistry
+from src.services.upgrade.from_060.ids import stable_id
+
 
 if TYPE_CHECKING:
     import uuid
@@ -36,6 +41,7 @@ if TYPE_CHECKING:
         ProjectSrc,
         RegistrySrc,
         SettingsSrc,
+        VlmEndpointSrc,
     )
 
 CREATED_BY = 'upgrade_from_060'
@@ -50,24 +56,22 @@ def _repo(name: str) -> Any:
 async def load_project(session: AsyncSession, p: ProjectSrc) -> uuid.UUID:
     projects = _repo('projects')
     row = projects.ProjectLoad(
-        id=p.id,
         slug=p.slug,
         display_name=p.display_name,
         description=p.description,
         status=p.status,
-        pre_delete_status=p.pre_delete_status,
         revision=p.revision,
-        paused_at=p.paused_at,
-        origin=p.origin,
+        created_at=p.created_at,
+        updated_at=p.updated_at,
         index_prefix=p.index_prefix,
         storage_prefix=p.storage_prefix,
         model_prefix=p.model_prefix,
         mlflow_experiment=p.mlflow_experiment,
-        created_at=p.created_at,
-        updated_at=p.updated_at,
-        archived_at=p.updated_at if p.status == 'archived' else None,
-        created_by=CREATED_BY,
         indexes=dict(p.indexes),
+        created_by=CREATED_BY,
+        pre_delete_status=p.pre_delete_status,
+        paused_at=p.paused_at,
+        origin=p.origin,
     )
     result: uuid.UUID = await projects.load_project(session, row)
     return result
@@ -89,6 +93,9 @@ async def load_registry(session: AsyncSession, project_id: uuid.UUID, reg: Regis
         )
         for c in reg.classes
     ]
+    # load_project writes the empty registry row a project create writes, and load_registry writes
+    # the registry row itself and refuses to find one: the empty row goes first (it has no classes).
+    await session.execute(delete(ClassRegistry).where(ClassRegistry.project_id == project_id))
     await classes.load_registry(
         session,
         project_id,
@@ -100,21 +107,49 @@ async def load_registry(session: AsyncSession, project_id: uuid.UUID, reg: Regis
     )
 
 
+def config_id(owner: str | None, kind: str, name: str) -> uuid.UUID:
+    """The id a document gets: derived from what identifies it, so a re-upgrade repeats it."""
+    return stable_id('config', owner or '', kind, name)
+
+
+def _document(doc: ConfigDocSrc, project_id: uuid.UUID | None) -> Any:
+    config = _repo('config')
+    return config.ConfigDocumentLoad(
+        project_id=project_id,
+        kind=doc.kind,
+        name=doc.name,
+        revisions=[
+            config.ConfigRevisionLoad(revision=r.revision, body=r.body, created_at=r.created_at)
+            for r in doc.revisions
+        ],
+        description=doc.description,
+        id=config_id(doc.project_slug, doc.kind, doc.name),
+        created_at=doc.created_at,
+        updated_at=doc.updated_at,
+    )
+
+
 async def load_config(
     session: AsyncSession, project_id: uuid.UUID | None, doc: ConfigDocSrc
 ) -> uuid.UUID:
-    config = _repo('config')
-    revisions = [
-        config.ConfigRevisionLoad(
-            revision=r.revision, body=r.body, created_at=r.created_at, cloned_from=r.cloned_from
-        )
-        for r in doc.revisions
-    ]
-    row = config.ConfigDocumentLoad(
-        project_id=project_id, kind=doc.kind, name=doc.name, revisions=revisions
+    result: uuid.UUID = await _repo('config').load_config_document(
+        session, _document(doc, project_id)
     )
-    result: uuid.UUID = await config.load_config_document(session, row)
     return result
+
+
+async def load_vlm_endpoint(session: AsyncSession, endpoint: VlmEndpointSrc) -> uuid.UUID:
+    """A deployment-wide endpoint: its document, revisions and probes."""
+    config = _repo('config')
+    known = {r.revision for r in endpoint.doc.revisions}
+    probes = [
+        config.ProbeLoad(revision=p.revision, probed_at=p.probed_at, ok=p.ok, result=p.result)
+        for p in endpoint.probes
+        if p.revision in known
+    ]
+    row = config.VlmEndpointLoad(document=_document(endpoint.doc, None), probes=probes)
+    await config.load_vlm_endpoint(session, row)
+    return config_id(None, endpoint.doc.kind, endpoint.doc.name)
 
 
 async def load_activations(
@@ -123,21 +158,22 @@ async def load_activations(
     events: Sequence[ActivationSrc],
     config_ids: Mapping[tuple[str, str], uuid.UUID],
 ) -> None:
-    """The current activation of each axis is its last event."""
+    """The current activation of each axis is its last event; an event to ``None`` is "off"."""
     config = _repo('config')
+    off = config.OFF_CONFIG_ID
     rows = [
         config.ActivationEventLoad(
             axis=e.axis,
+            to_config_id=off if e.to_name is None else config_ids[(e.kind, e.to_name)],
+            to_revision=e.to_revision,
+            at=e.at,
             from_config_id=config_ids.get((e.kind, e.from_name)) if e.from_name else None,
             from_revision=e.from_revision if e.from_name else None,
-            to_config_id=config_ids[(e.kind, e.to_name)],
-            to_revision=e.to_revision,
             reason='upgrade',
-            at=e.at,
             by=CREATED_BY,
         )
         for e in events
-        if (e.kind, e.to_name) in config_ids
+        if e.to_name is None or (e.kind, e.to_name) in config_ids
     ]
     await config.load_activation_events(session, project_id, rows)
 

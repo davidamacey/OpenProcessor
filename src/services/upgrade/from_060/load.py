@@ -117,9 +117,11 @@ async def _load_configs(
     ids: dict[tuple[str | None, str, str], uuid.UUID] = {}
     for endpoint in parsed.global_data.endpoints:
         doc = endpoint.doc
-        ids[(None, doc.kind, doc.name)] = await control_rows.load_config(session, None, doc)
+        ids[(None, doc.kind, doc.name)] = await control_rows.load_vlm_endpoint(session, endpoint)
         report.add('config_documents')
         report.add('config_revisions', len(doc.revisions))
+        known = {r.revision for r in doc.revisions}
+        report.add('vlm_endpoint_probes', sum(1 for p in endpoint.probes if p.revision in known))
     for pd in parsed.projects:
         for doc in pd.configs:
             pid = project_ids[pd.project.slug]
@@ -268,12 +270,6 @@ async def run_load(
         project_ids[pd.project.slug] = await control_rows.load_project(session, pd.project)
         report.add('projects')
     config_ids = await _load_configs(session, parsed, project_ids, report)
-    flat_ids = {
-        (kind, name): cid for (owner, kind, name), cid in config_ids.items() if owner is None
-    }
-    report.add(
-        'vlm_endpoint_probes', await direct_rows.probes(session, parsed.global_data, flat_ids)
-    )
     if await direct_rows.local_vlm_desired(session, parsed.global_data):
         report.add('deployment_settings')
     await _load_project_rows(session, parsed, project_ids, config_ids, reducers, report)

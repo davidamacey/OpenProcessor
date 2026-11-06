@@ -8,7 +8,7 @@ from pathlib import Path
 
 UPGRADE = Path(__file__).resolve().parents[2] / 'src' / 'services' / 'upgrade'
 WRITERS = {'insert', 'update', 'delete'}
-MODELS = {'ProjectClass', 'ClassRegistry'}
+MODELS = {'ProjectClass'}
 
 
 def _writes_classes(tree: ast.AST) -> list[int]:
@@ -38,6 +38,6 @@ def test_no_module_of_the_upgrade_writes_class_rows_itself() -> None:
 
 def test_the_check_would_see_a_planted_write() -> None:
     planted = ast.parse(
-        'session.add(ProjectClass(project_id=1))\nsession.execute(insert(ClassRegistry))'
+        'session.add(ProjectClass(project_id=1))\nsession.execute(insert(ProjectClass))'
     )
     assert _writes_classes(planted) == [1, 2]

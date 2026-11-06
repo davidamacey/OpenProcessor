@@ -65,7 +65,7 @@ async def verify_database(
 ) -> DbVerifyReport:
     report = DbVerifyReport()
     projects: dict[uuid.UUID, str] = dict(
-        (await session.execute(select(Project.id, Project.slug))).tuples().all()
+        (await session.execute(select(Project.id, Project.slug))).all()
     )
     indexes: dict[str, dict[str, str]] = {}
     for pid, role, name in await session.execute(

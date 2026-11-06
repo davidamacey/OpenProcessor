@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ProjectSrc:
-    id: uuid.UUID
     slug: str
     display_name: str
     description: str
@@ -86,12 +85,13 @@ class ConfigDocSrc:
 
 @dataclass(frozen=True)
 class ActivationSrc:
-    """One activation event of an axis; the last event of an axis is the current activation."""
+    """One activation event of an axis; the last event of an axis is the current activation
+    (an event to ``None`` leaves the axis off)."""
 
     axis: str
     from_name: str | None
     from_revision: int | None
-    to_name: str
+    to_name: str | None  # ``None``: the axis was turned off
     to_revision: int
     kind: str
     at: dt.datetime
