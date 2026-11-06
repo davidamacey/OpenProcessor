@@ -67,6 +67,8 @@ RETIRED_ENV: dict[str, str] = {
     'OP_GLOBAL_CONFIGS_INDEX': f'{_REMOVED} the endpoint registry is stored in PostgreSQL',
     # The project records are PostgreSQL rows, not an OpenSearch index.
     'OP_PROJECTS_INDEX': f'{_REMOVED} projects are rows in PostgreSQL; there is no projects index',
+    # A model export is a jobs row on the gpu_export queue, not a task file.
+    'EXPORT_TASK_DIR': f'{_REMOVED} model-export tasks are job rows; read them at GET /models/export/{{task_id}}',
 }
 
 

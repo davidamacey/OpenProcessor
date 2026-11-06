@@ -11,3 +11,4 @@ onnx-graphsurgeon  # Required for End2End TensorRT NMS graph manipulation
 onnxsim>=0.4.33
 onnxslim>=0.1.71
 onnxscript
+nvidia-ml-py==13.615.71  # NVML card inventory of the GPU worker (src/tasks/runtime/gpu_app.py imports it as pynvml) and the engine build architecture

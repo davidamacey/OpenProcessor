@@ -33,6 +33,7 @@ class ExportStatus(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and for
     LOADING = 'loading'
     COMPLETED = 'completed'
     FAILED = 'failed'
+    CANCELLED = 'cancelled'
 
 
 class ExportTaskResponse(BaseModel):

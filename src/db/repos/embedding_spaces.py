@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import distinct_on
 
 from src.db.models.embeddings import EmbeddingEvaluationRun, EmbeddingModelVersion, EmbeddingSpace
 from src.db.models.projects import Project
@@ -383,10 +384,21 @@ async def add_spaces(session: AsyncSession, rows: Sequence[NewSpace]) -> list[Sp
 
 
 def ready_engine_contracts(session: Session) -> dict[str, dict[str, Any]]:
-    """``triton_model_name -> input_contract`` of every ready engine (the installed inventory)."""
+    """``triton_model_name -> input_contract`` of every ready engine (the installed inventory).
+
+    A name can have several ready rows (a rebuild on another TensorRT version, architecture or
+    profile, or the seeded shipped row next to a real build): the newest by ``built_at`` wins,
+    a row with no ``built_at`` loses to any that has one, and the row id (a UUIDv7, so time
+    ordered) breaks a tie. This is the one place engines are read by name.
+    """
     rows = session.execute(
-        select(ModelEngine.triton_model_name, ModelEngine.input_contract).where(
-            ModelEngine.status == 'ready'
+        select(ModelEngine.triton_model_name, ModelEngine.input_contract)
+        .ext(distinct_on(ModelEngine.triton_model_name))
+        .where(ModelEngine.status == 'ready')
+        .order_by(
+            ModelEngine.triton_model_name,
+            ModelEngine.built_at.desc().nulls_last(),
+            ModelEngine.id.desc(),
         )
     )
-    return dict(rows.tuples())
+    return {row[0]: row[1] for row in rows}
