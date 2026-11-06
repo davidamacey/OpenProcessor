@@ -160,3 +160,16 @@ def test_entity_keys_default_to_uuidv7(catalog) -> None:
         'embedding_model_versions', 'embedding_spaces', 'embedding_reindex_runs',
         'embedding_evaluation_runs', 'cluster_backend_validations', 'assist_loop_reviews',
     } <= keyed  # fmt: skip
+
+
+def test_every_table_of_a_research_revision_has_a_stated_writer_and_reader(catalog) -> None:
+    from src.db.table_use import TABLE_USE
+
+    created = plan.TABLES  # revision 0002; 0003 and 0004 add their own entries with their tables
+    assert created - set(TABLE_USE) == set(), 'tables without a TABLE_USE entry'
+    assert set(TABLE_USE) - created == set() or set(TABLE_USE) <= _all_tables(catalog)
+    assert all(len(use) == 3 and all(use) for use in TABLE_USE.values())
+
+
+def _all_tables(catalog) -> set:
+    return _set(catalog, "SELECT tablename FROM pg_tables WHERE schemaname = 'public'")

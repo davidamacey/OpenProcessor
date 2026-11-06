@@ -145,3 +145,4 @@ _.basic_auth  # scripts/flower/flowerconfig.py, an option Flower reads by name f
 # engine export (5B) and the embedding catalog sync (ES-A). Delete each entry with its caller.
 _.EngineOutputContract  # src/schemas/models.py, validated by the engine export (stage 5)
 _.EncoderInputSpec  # src/schemas/models.py, validated by the embedding catalog sync (stage 2)
+_.TABLE_USE  # src/db/table_use.py, pure data read only by tests/db/test_research_schema_matches_plan.py (a new table must state its writer and reader)
