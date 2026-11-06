@@ -58,6 +58,11 @@ _IMPORT_TO_DIST = {
 # Third-party top-level imports under src/ that are intentionally *not*
 # required to appear in either manifest, with the reason each is safe.
 _ALLOWLIST = {
+    # src/tasks/runtime/gpu_app.py imports it lazily in start_inventory(), which only runs for an
+    # app built by make_app() (a GPU worker image, package nvidia-ml-py, 01_package_pins.md 3.9).
+    # The api image's src/tasks/app.py uses build_app(), never make_app(), so its jobs, periodic,
+    # open-vocab and cluster workers never reach the import.
+    'pynvml': 'nvidia-ml-py in the GPU worker images only; the api image never calls make_app()',
     'starlette': 'transitive dependency of fastapi (ASGI types in src/core/request_origin.py)',
     # Pillow is a transitive dependency of ultralytics; requirements.txt
     # documents this in a comment rather than pinning it directly.

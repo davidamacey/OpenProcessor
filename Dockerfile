@@ -203,7 +203,8 @@ COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser export/ ./export/
 COPY --chown=appuser:appuser scripts/datasets/ ./scripts/datasets/
 COPY --chown=appuser:appuser scripts/lib/colors.sh scripts/lib/config.sh scripts/lib/config_models.sh \
-     scripts/lib/download.sh scripts/lib/gpu.sh scripts/lib/opensearch_heap.sh ./scripts/lib/
+     scripts/lib/download.sh scripts/lib/env_generator.sh scripts/lib/gpu.sh \
+     scripts/lib/opensearch_heap.sh ./scripts/lib/
 COPY --chown=appuser:appuser VERSION ./VERSION
 COPY --chown=appuser:appuser config_templates/ ./config_templates/
 # Model-repo seed: Triton needs config.pbtxt/labels.txt/OCR dicts/ocr_pipeline's model.py
@@ -286,9 +287,17 @@ COPY --chown=appuser:appuser src/ ./src/
 # the shell libraries the API container sources (config.sh and what it sources, download.sh).
 # tests/test_dockerfile_hygiene.py checks this set against the imports.
 COPY --chown=appuser:appuser scripts/curation/ ./scripts/curation/
+# Run by compose services of this image: db-migrate (scripts.db.migrate reads alembic.ini),
+# the Celery pool healthcheck and the Flower config. tests/test_dockerfile_hygiene.py derives
+# this set from docker-compose.yml.
+COPY --chown=appuser:appuser scripts/db/ ./scripts/db/
+COPY --chown=appuser:appuser scripts/healthcheck/ ./scripts/healthcheck/
+COPY --chown=appuser:appuser scripts/flower/ ./scripts/flower/
+COPY --chown=appuser:appuser alembic.ini ./alembic.ini
 COPY --chown=appuser:appuser scripts/datasets/ ./scripts/datasets/
 COPY --chown=appuser:appuser scripts/lib/colors.sh scripts/lib/config.sh scripts/lib/config_models.sh \
-     scripts/lib/download.sh scripts/lib/gpu.sh scripts/lib/opensearch_heap.sh ./scripts/lib/
+     scripts/lib/download.sh scripts/lib/env_generator.sh scripts/lib/gpu.sh \
+     scripts/lib/opensearch_heap.sh ./scripts/lib/
 COPY --chown=appuser:appuser VERSION ./VERSION
 COPY --chown=appuser:appuser config_templates/ ./config_templates/
 # docker-compose.yml is deploy-safe (no bind mount of ./examples), so the examples are baked in
