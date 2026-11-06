@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.core.logging import get_logger
 from src.services.curation.source_image_cache import crop_cache_file
-from src.services.near_duplicates import pending as near_dup_pending
+from src.services.near_duplicates import content_key, pending as near_dup_pending
 
 
 if TYPE_CHECKING:
@@ -123,24 +123,27 @@ async def _delete_round(
     if not body:
         return deleted, gone, []
     try:
-        await near_dup_pending.enqueue_pending_bound(
-            near_dup_pending.level_of_index(index), targets, 'deleted'
-        )
+        level = near_dup_pending.level_of_index(index)
+        await near_dup_pending.enqueue_pending_bound(level, targets, 'deleted')
         resp = await opensearch.bulk(body=body, refresh=False)
     except Exception as exc:
         errors.extend({'crop_id': cid, 'error': str(exc)} for cid in targets)
         return deleted, gone, []
     conflicted: list[str] = []
+    removed: list[str] = []
     for cid, item in zip(targets, resp.get('items') or [], strict=False):
         result = item.get('delete') or {}
         status = int(result.get('status', 0))
         if status in (200, 404):
             deleted += 1
+            removed.append(cid)
             _drop_cached_crop(crop_cache_dir, cid)
         elif status == 409:
             conflicted.append(cid)
         else:
             errors.append({'crop_id': cid, 'error': str(result.get('error') or status)})
+    if level == 'image':
+        await content_key.release_bound(removed)
     return deleted, gone, conflicted
 
 

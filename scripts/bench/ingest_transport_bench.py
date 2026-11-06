@@ -2,7 +2,7 @@
 docs/PERFORMANCE.md, "Ingest transports").
 
 No pipeline, no GPU, no OpenSearch. A server process reads the bytes of each image, computes the
-imohash the real route computes first, and returns a fixed-shape result like a
+SHA-256 the real route computes first, and returns a fixed-shape result like a
 ``BatchIngestResponse``. A client in a separate process sends the real bytes of an image
 directory at a fixed client concurrency. Contenders:
 
@@ -87,14 +87,14 @@ def _result_payload(count: int) -> bytes:
 def serve_http(port: int) -> None:
     import uvicorn
 
-    from src.services.curation.ingest_helpers import _imohash_bytes
+    from src.services.near_duplicates.content_key import content_sha256
 
     app = FastAPI()
 
     @app.post('/ingest')
     async def ingest(images: list[UploadFile] = File(...)) -> Response:  # noqa: B008  # FastAPI File() default
         for upload in images:
-            _imohash_bytes(await upload.read())
+            content_sha256(await upload.read())
         return Response(_result_payload(len(images)), media_type='application/json')
 
     uvicorn.run(
@@ -112,7 +112,7 @@ def serve_http(port: int) -> None:
 def serve_grpc(port: int) -> None:
     import grpc
 
-    from src.services.curation.ingest_helpers import _imohash_bytes
+    from src.services.near_duplicates.content_key import content_sha256
 
     async def stream(request_iterator: Any, _context: Any) -> bytes:
         count = 0
@@ -125,7 +125,7 @@ def serve_grpc(port: int) -> None:
             else:
                 buf += msg[1:]
             if len(buf) == total:
-                _imohash_bytes(bytes(buf))
+                content_sha256(bytes(buf))
                 count += 1
         return _result_payload(count)
 
@@ -134,7 +134,7 @@ def serve_grpc(port: int) -> None:
         offset = 0
         while offset < len(request):
             size = int.from_bytes(request[offset : offset + 4], 'big')
-            _imohash_bytes(request[offset + 4 : offset + 4 + size])
+            content_sha256(request[offset + 4 : offset + 4 + size])
             offset += 4 + size
             count += 1
         return _result_payload(count)

@@ -151,9 +151,7 @@ class FakeIngestOpenSearch:
     for the images doc.
 
     Backed by two plain dicts (``images``, ``items``) rather than
-    real OpenSearch query evaluation — ``search``/``msearch`` only
-    understand the ``term: {imohash: ...}`` query ingest issues for
-    dedup, which is all this double needs to support.
+    real OpenSearch query evaluation — ``search`` returns every document of the index.
     """
 
     def __init__(
@@ -176,26 +174,11 @@ class FakeIngestOpenSearch:
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         from src.config import get_curation_config
 
-        term = ((body.get('query') or {}).get('term') or {}).get('imohash')
         store = self.items if index == get_curation_config().items_index else self.images
         hits = [
-            {'_id': doc.get('image_id', doc_id), '_source': doc}
-            for doc_id, doc in store.items()
-            if term is None or doc.get('imohash') == term
+            {'_id': doc.get('image_id', doc_id), '_source': doc} for doc_id, doc in store.items()
         ]
         return {'hits': {'hits': hits[: body.get('size', len(hits))]}}
-
-    async def msearch(self, *, body: list[dict[str, Any]]) -> dict[str, Any]:
-        responses = []
-        for line in body[1::2]:
-            term = ((line.get('query') or {}).get('term') or {}).get('imohash')
-            hits = [
-                {'_id': doc.get('image_id', doc_id), '_source': doc}
-                for doc_id, doc in self.images.items()
-                if doc.get('imohash') == term
-            ]
-            responses.append({'hits': {'hits': hits[:1]}})
-        return {'responses': responses}
 
     async def mget(
         self,

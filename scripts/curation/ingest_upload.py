@@ -29,7 +29,7 @@ Resume: re-run the same command. Two mechanisms, cheapest first:
 1. ``/ingest/path_lookup`` drops identifiers the images index already
    has before a single byte is read (skip with ``--force-rehash`` when
    files may have changed in place).
-2. The server fingerprints every uploaded image (imohash) and returns
+2. The server fingerprints every uploaded image (SHA-256) and returns
    ``duplicate`` without inference for content it has already ingested —
    so even with a different identifier, or after a crash mid-batch,
    nothing is ingested twice.

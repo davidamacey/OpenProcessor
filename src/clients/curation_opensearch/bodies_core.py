@@ -98,7 +98,7 @@ def _images_body() -> dict[str, Any]:
                 'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},
                 'height': {'type': 'integer'},
-                'imohash': {'type': 'keyword'},
+                'content_sha256': {'type': 'keyword'},
                 'phash': {'type': 'keyword'},
                 'indexed_at': {'type': 'date'},
                 'original_resolution': {'type': 'keyword'},

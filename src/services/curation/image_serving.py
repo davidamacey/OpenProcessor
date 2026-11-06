@@ -150,14 +150,14 @@ UNSERVABLE_PATH_ERROR = (
 def persist_uploaded_bytes(
     payload: bytes,
     *,
-    imohash: str,
+    content_sha256: str,
     extension: str,
     config: CurationConfig | None = None,
 ) -> Path:
     """Persist uploaded image bytes under ``CurationConfig.upload_root``,
     content-addressed.
 
-    Path shape: ``<upload_root>/<imohash[:2]>/<imohash><extension>`` —
+    Path shape: ``<upload_root>/<content_sha256[:2]>/<content_sha256><extension>`` —
     the same bytes always resolve to the same path, so re-uploading the
     same image is a no-op write (dedup by content hash) and the file is
     written atomically (temp file + ``os.replace``) so a concurrent
@@ -168,13 +168,13 @@ def persist_uploaded_bytes(
     """
     cfg = config or get_curation_config()
     root = cfg.upload_root
-    shard = imohash[:2] if len(imohash) >= 2 else '00'
+    shard = content_sha256[:2]
     dest_dir = root / shard
-    dest = dest_dir / f'{imohash}{extension}'
+    dest = dest_dir / f'{content_sha256}{extension}'
     if dest.exists():
         return dest
     dest_dir.mkdir(parents=True, exist_ok=True)
-    tmp = dest_dir / f'.{imohash}{extension}.{os.getpid()}.tmp'
+    tmp = dest_dir / f'.{content_sha256}{extension}.{os.getpid()}.tmp'
     tmp.write_bytes(payload)
     tmp.replace(dest)
     return dest

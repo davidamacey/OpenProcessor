@@ -120,7 +120,7 @@ class FakeOpenSearch:
     """Just enough of AsyncOpenSearch for ingest + /crops + /ingest/status.
 
     ``near_real_time=True`` models OpenSearch's refresh semantics: a
-    document written by ``bulk`` is invisible to ``search``/``msearch``
+    document written by ``bulk`` is invisible to ``search``
     until ``indices.refresh`` runs (``get``/``mget`` stay real-time, as in
     OpenSearch). The default keeps every write immediately searchable.
     """
@@ -162,15 +162,6 @@ class FakeOpenSearch:
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         query = body.get('query') or {}
-        term = (query.get('term') or {}).get('imohash')
-        if term is not None:
-            store = self._view('images')
-            hits = [
-                {'_id': d.get('image_id', k), '_source': d}
-                for k, d in store.items()
-                if d.get('imohash') == term
-            ]
-            return {'hits': {'hits': hits[:1]}}
         # label_import's images-index lookup by exact source path.
         # /ingest/path_lookup's bulk existence check.
         path_terms = (query.get('terms') or {}).get('image_path')
@@ -237,29 +228,27 @@ class FakeOpenSearch:
         # /curation/ingest/status style aggregation query over images.
         return {'hits': {'hits': [], 'total': {'value': len(self.images)}}, 'aggregations': {}}
 
-    async def msearch(self, *, body: list[dict[str, Any]]) -> dict[str, Any]:
-        responses = []
-        for line in body[1::2]:
-            term = ((line.get('query') or {}).get('term') or {}).get('imohash')
-            hits = [
-                {'_id': d.get('image_id', k), '_source': d}
-                for k, d in self._view('images').items()
-                if d.get('imohash') == term
-            ]
-            responses.append({'hits': {'hits': hits[:1]}})
-        return {'responses': responses}
-
     async def mget(
         self,
         *,
         body: dict[str, Any],
-        index: str | None = None,  # noqa: ARG002
+        index: str | None = None,
         _source_excludes: list[str] | None = None,
     ) -> dict[str, Any]:
         # Two shapes land here: the {'ids': [...]} shape used directly by
         # this module's own callers, and mget_crops' {'docs': [{'_id':...,
-        # '_index':...}, ...]} shape (used by occ_update_bulk).
+        # '_index':...}, ...]} shape (used by occ_update_bulk). An ``index`` other than
+        # the items index reads the images docs, by id and so without a refresh.
         ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
+        if index is not None and index != self._items_index():
+            return {
+                'docs': [
+                    {'_id': i, 'found': True, '_source': self.images[i]}
+                    if i in self.images
+                    else {'_id': i, 'found': False}
+                    for i in ids
+                ]
+            }
         docs = []
         for doc_id in ids:
             if doc_id in self.items:

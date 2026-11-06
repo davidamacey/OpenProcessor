@@ -254,7 +254,7 @@ async def _import_one(
             outcome.result.error or '',
             report,
         )
-    ctx.seen_images[img.imohash] = {'image_id': img.image_id, 'image_path': img.image_path}
+    ctx.seen_images[img.content_sha256] = {'image_id': img.image_id, 'image_path': img.image_path}
     if not img.created:
         await _stamp_existing_image(ctx, img.image_id, entry, state)
     await stamp_matched_noops(ctx, plans)
@@ -315,14 +315,14 @@ async def _import_onto_stored(
     if stored is None:
         message = f'images doc {img.image_id} was refused as existing but cannot be read'
         return _failed(store, chunk, base, 'bulk_index', message, ImportReport())
-    ctx.seen_images[img.imohash] = stored
+    ctx.seen_images[img.content_sha256] = stored
     return await _import_one(ctx, store, chunk, entry, prior)
 
 
 def _hash_of(data: bytes) -> str:
-    from src.services.curation.ingest_helpers import _imohash_bytes
+    from src.services.near_duplicates.content_key import content_sha256
 
-    return _imohash_bytes(data)
+    return content_sha256(data)
 
 
 def _count_plans(

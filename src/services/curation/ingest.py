@@ -11,7 +11,7 @@ that needs it builds its own overlay on top of
 
 Pipeline, per image:
 
-1. Decode (EXIF-transposed) + imohash dedup against the images index.
+1. Decode (EXIF-transposed) + exact-content dedup (SHA-256 against ``image_contents``).
 2. Run the primary detector (:class:`~src.config.DetectionProfile`,
    an end2end model whose Triton response is already NMS'd) over the
    full image.
@@ -46,7 +46,7 @@ Pipeline, per image:
 
 Sibling modules, split out of this one to keep each to one concern:
 
-* :mod:`src.services.curation.ingest_helpers` — the imohash fingerprint, the
+* :mod:`src.services.curation.ingest_helpers` — the
   upright decode and ``MAX_INGEST_CONCURRENCY``.
 * :mod:`src.services.curation.ingest_dedup` — the dedup lookups
   (:class:`IngestDedupMixin`).
@@ -77,7 +77,7 @@ from src.services.curation.ingest_detect import (
     SecondaryOutput,
     WholeImageDetector,
 )
-from src.services.curation.ingest_helpers import _decode_image, _imohash_bytes
+from src.services.curation.ingest_helpers import _decode_image
 from src.services.curation.ingest_index import (
     PARKED_CLUSTER_ID,
     ImageContext,
@@ -98,6 +98,7 @@ from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.curation.ops_metrics import record_ingest_result
 from src.services.events.publish import apublish_crops_created
+from src.services.near_duplicates.content_key import content_sha256
 from src.utils.cpu_pool import encoded_nbytes, run_cpu
 
 
@@ -215,7 +216,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             assert prefilled_frame is not None
             width, height = prefilled_frame.width, prefilled_frame.height
 
-        image_hash = _imohash_bytes(image_bytes)
+        image_hash = content_sha256(image_bytes)
         existing = known_existing or await self._lookup_image(image_hash)
         if existing is not None and not adopt_existing:
             return IngestResult(
@@ -223,7 +224,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                 image_id=existing['image_id'],
                 image_path=image_path,
                 source_identifier=source_identifier,
-                imohash=image_hash,
+                content_sha256=image_hash,
             )
         if existing is None:
             image_id = content_image_id(image_hash)
@@ -241,7 +242,8 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             gpu_frame=prefilled_frame,
             width=width,
             height=height,
-            imohash=image_hash,
+            content_sha256=image_hash,
+            content_bytes=len(image_bytes),
             source=source,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
@@ -275,7 +277,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
 
         Args:
             image_bytes: Raw JPEG/PNG bytes. Required even when
-                ``prefilled_image`` is supplied — it is what the imohash
+                ``prefilled_image`` is supplied — it is what the content
                 dedup fingerprint is computed from.
             image_path: Source path, persisted verbatim on the images doc.
             source: Free-form provenance tag.

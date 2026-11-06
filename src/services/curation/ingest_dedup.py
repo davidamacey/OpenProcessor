@@ -1,8 +1,9 @@
-"""Ingest dedup: the imohash lookups against the images index.
+"""Ingest dedup: the exact-content lookups against ``image_contents``.
 
 :class:`IngestDedupMixin` is mixed into
 :class:`~src.services.curation.ingest.CurationIngestService`, which provides
-``opensearch`` and ``config``.
+``opensearch`` and ``config``. A content row without its images document (a crash between the
+row and the document) is released and the content treated as new, so it can be ingested again.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.optional_doc import get_doc_or_none
 from src.core.logging import get_logger
+from src.services.near_duplicates import content_key
 
 
 if TYPE_CHECKING:
@@ -26,24 +28,10 @@ class IngestDedupMixin:
     opensearch: Any
     config: CurationConfig
 
-    async def _lookup_image(self, image_hash: str) -> dict[str, Any] | None:
-        """Term-query the images index on imohash. Returns the existing
-        doc's ``image_id`` / ``image_path`` or None."""
-        body = {
-            'size': 1,
-            'query': {'term': {'imohash': image_hash}},
-            '_source': ['image_id', 'image_path', 'dataset_split'],
-        }
-        try:
-            resp = await self.opensearch.search(index=self.config.images_index, body=body)
-        except Exception as exc:
-            logger.warning('ingest_dedup_query_failed', error=str(exc))
-            return None
-        hits = (resp.get('hits') or {}).get('hits') or []
-        if not hits:
-            return None
-        source = hits[0].get('_source') or {}
-        return source if source.get('image_id') else None
+    async def _lookup_image(self, content_sha256: str) -> dict[str, Any] | None:
+        """The stored image (``image_id``, ``image_path``, ``dataset_split``) that holds this
+        content, or None."""
+        return (await self._stored_holders([content_sha256]))[content_sha256]
 
     async def stored_image(self, image_id: str) -> dict[str, Any] | None:
         """The images doc ``image_id`` (``image_id``, ``image_path``, ``dataset_split``)
@@ -51,40 +39,38 @@ class IngestDedupMixin:
         resp = await get_doc_or_none(self.opensearch, self.config.images_index, image_id)
         if resp is None:
             return None
-        source = resp['_source']
-        kept = {k: source[k] for k in ('image_path', 'dataset_split') if k in source}
-        return {'image_id': image_id, **kept}
+        return _stored_view(image_id, resp['_source'])
 
-    async def _check_duplicate(self, image_hash: str) -> str | None:
-        """Existing image_id for ``image_hash``, or None."""
-        existing = await self._lookup_image(image_hash)
-        return existing['image_id'] if existing is not None else None
+    async def _check_duplicates(self, content_sha256s: list[str]) -> dict[str, str | None]:
+        """Maps each content hash to the image id that holds it (or None)."""
+        held = await self._stored_holders(content_sha256s)
+        return {h: (doc['image_id'] if doc is not None else None) for h, doc in held.items()}
 
-    async def _check_duplicates_msearch(
-        self,
-        image_hashes: list[str],
-    ) -> dict[str, str | None]:
-        """Batch dedup via msearch. Maps imohash -> existing image_id (or None).
+    async def _stored_holders(self, content_sha256s: list[str]) -> dict[str, dict[str, Any] | None]:
+        """Maps each content hash to the images doc that holds it (or None).
 
-        Falls back to per-image lookup on an msearch failure so dedup is
-        never silently skipped.
+        One query for the rows and one ``mget`` to confirm their documents exist; a row whose
+        document is gone is released and answers None.
         """
-        if not image_hashes:
+        if not content_sha256s:
             return {}
-        body_lines: list[dict[str, Any]] = []
-        for image_hash in image_hashes:
-            body_lines.append({'index': self.config.images_index})
-            body_lines.append(
-                {'size': 1, 'query': {'term': {'imohash': image_hash}}, '_source': ['image_id']}
-            )
-        try:
-            resp = await self.opensearch.msearch(body=body_lines)
-        except Exception as exc:
-            logger.warning('ingest_msearch_failed', error=str(exc), n=len(image_hashes))
-            return {h: await self._check_duplicate(h) for h in image_hashes}
-        out: dict[str, str | None] = {}
-        responses = resp.get('responses', [])
-        for image_hash, sub in zip(image_hashes, responses, strict=False):
-            hits = ((sub or {}).get('hits') or {}).get('hits') or []
-            out[image_hash] = (hits[0].get('_source') or {}).get('image_id') if hits else None
-        return out
+        holders = await content_key.find_bound(content_sha256s)
+        if not holders:
+            return dict.fromkeys(content_sha256s)
+        ids = sorted(set(holders.values()))
+        resp = await self.opensearch.mget(index=self.config.images_index, body={'ids': ids})
+        docs = {d['_id']: d.get('_source') or {} for d in resp.get('docs') or [] if d.get('found')}
+        orphans = [i for i in ids if i not in docs]
+        if orphans:
+            logger.warning('ingest_content_row_without_image', n=len(orphans))
+            await content_key.release_bound(orphans)
+        return {
+            h: _stored_view(holders[h], docs[holders[h]]) if holders.get(h) in docs else None
+            for h in content_sha256s
+        }
+
+
+def _stored_view(image_id: str, source: dict[str, Any]) -> dict[str, Any]:
+    view: dict[str, Any] = {'image_id': image_id}
+    view.update({k: source[k] for k in ('image_path', 'dataset_split') if k in source})
+    return view

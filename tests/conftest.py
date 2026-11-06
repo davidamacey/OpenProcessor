@@ -157,6 +157,21 @@ def pending_calls(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.fixture(autouse=True)
+def content_rows(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> object:
+    """The exact-content rows (``image_contents``) are PostgreSQL rows; the offline tier keeps
+    them in memory (``.rows``: sha256 to image id), and a ``db`` test uses the real table."""
+    from _content_fake import ContentRows
+
+    from src.services.near_duplicates import content_key
+
+    fake = ContentRows()
+    if request.node.get_closest_marker('db') is None:
+        for name in ('find_bound', 'claim_bound', 'release_bound'):
+            monkeypatch.setattr(content_key, name, getattr(fake, name))
+    return fake
+
+
+@pytest.fixture(autouse=True)
 def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
     """Bind the ``default`` project for every test (projects_plan.md §3.3).
 

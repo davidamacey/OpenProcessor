@@ -8,6 +8,7 @@ import pytest
 
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
+from src.services.near_duplicates.content_key import content_sha256
 
 
 class TestBatchedTritonInference:
@@ -49,15 +50,12 @@ class TestBatchedTritonInference:
         assert triton.batch_sizes == [2, 2, 1]
 
     @pytest.mark.asyncio
-    async def test_batch_skips_duplicates_before_inference(self) -> None:
+    async def test_batch_skips_duplicates_before_inference(self, content_rows: Any) -> None:
         """Duplicates never reach the GPU — the batched call carries only
         the non-duplicate images."""
-        from src.services.curation.ingest_helpers import _imohash_bytes
-
         dup = _jpeg_bytes(seed=200)
-        os_fake = FakeIngestOpenSearch(
-            images={'existing': {'image_id': 'existing', 'imohash': _imohash_bytes(dup)}}
-        )
+        os_fake = FakeIngestOpenSearch(images={'existing': {'image_id': 'existing'}})
+        content_rows.rows[content_sha256(dup)] = 'existing'
         svc, _, triton = _make_service(opensearch=os_fake, batch_limit=8)
         images = [dup, _jpeg_bytes(seed=201), _jpeg_bytes(seed=202)]
         paths = ['/tmp/dup.jpg', '/tmp/d1.jpg', '/tmp/d2.jpg']

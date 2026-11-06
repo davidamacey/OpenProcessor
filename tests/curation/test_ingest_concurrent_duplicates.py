@@ -1,11 +1,11 @@
 """Identical content ingested concurrently is stored once (#358).
 
-The imohash dedup lookup runs before the write, and a search does not see a
-write until the index refreshes, so two requests carrying the same bytes can
-both miss it. These tests hold every write until each copy's lookup has run,
-which is the race the live campaign hit, and check that the write itself
-refuses the second copy: one images doc, its items only, its crops only, and
-the losing copy reported ``duplicate`` with the stored image's id.
+The content lookup runs before the write, so two requests carrying the same
+bytes can both miss it. These tests hold every write until each copy's lookup
+has run, which is the race the live campaign hit, and check that the write
+itself refuses the second copy (the ``image_contents`` claim, then the images
+doc ``create``): one images doc, its items only, its crops only, and the losing
+copy reported ``duplicate`` with the stored image's id.
 """
 
 from __future__ import annotations
@@ -19,9 +19,10 @@ import pytest
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.config import get_curation_config
-from src.services.curation.ingest_helpers import _imohash_bytes
 from src.services.curation.ingest_index import content_image_id
 from src.services.curation.ingest_writer import IngestWriter
+from src.services.near_duplicates import content_key
+from src.services.near_duplicates.content_key import content_sha256
 
 
 if TYPE_CHECKING:
@@ -30,26 +31,28 @@ if TYPE_CHECKING:
     from src.services.curation.ingest import CurationIngestService
 
 
-def _hold_writes_until_lookups(os_fake: FakeIngestOpenSearch, n_lookups: int) -> None:
-    """Every bulk waits until ``n_lookups`` imohash lookups have run: no copy can
-    see another copy's write, as when the writes are not yet refreshed."""
+def _hold_writes_until_lookups(
+    os_fake: FakeIngestOpenSearch, n_lookups: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every bulk waits until ``n_lookups`` content lookups have run: no copy can
+    see another copy's claim or write, as when they land after the lookups."""
     looked_up = asyncio.Event()
     count = 0
-    real_search, real_bulk = os_fake.search, os_fake.bulk
+    real_find, real_bulk = content_key.find_bound, os_fake.bulk
 
-    async def search(**kw: Any) -> Any:
+    async def find_bound(sha256s: Any) -> Any:
         nonlocal count
-        if 'imohash' in ((kw['body'].get('query') or {}).get('term') or {}):
-            count += 1
-            if count >= n_lookups:
-                looked_up.set()
-        return await real_search(**kw)
+        found = await real_find(sha256s)
+        count += 1
+        if count >= n_lookups:
+            looked_up.set()
+        return found
 
     async def bulk(**kw: Any) -> Any:
         await asyncio.wait_for(looked_up.wait(), timeout=10)
         return await real_bulk(**kw)
 
-    os_fake.search = search  # type: ignore[method-assign]
+    monkeypatch.setattr(content_key, 'find_bound', find_bound)
     os_fake.bulk = bulk  # type: ignore[method-assign]
 
 
@@ -60,18 +63,20 @@ def _cache_in(svc: CurationIngestService, tmp_path: Path) -> Path:
 
 
 def _assert_stored_once(os_fake: FakeIngestOpenSearch, cache: Path) -> None:
-    hashes = [d['imohash'] for d in os_fake.images.values()]
+    hashes = [d['content_sha256'] for d in os_fake.images.values()]
     assert len(hashes) == len(set(hashes)), 'the same content is stored as two images'
     assert {d['image_id'] for d in os_fake.items.values()} <= set(os_fake.images)
     assert {p.stem for p in (cache / 'default').glob('*.jpg')} == set(os_fake.items)
 
 
 @pytest.mark.asyncio
-async def test_same_content_in_two_concurrent_batches_is_stored_once(tmp_path: Path) -> None:
+async def test_same_content_in_two_concurrent_batches_is_stored_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     svc, os_fake, _ = _make_service()
     cache = _cache_in(svc, tmp_path)
     shared, only_a, only_b = (_jpeg_bytes(seed=s) for s in (1, 2, 3))
-    _hold_writes_until_lookups(os_fake, n_lookups=4)
+    _hold_writes_until_lookups(os_fake, 6, monkeypatch)  # 2 batch lookups, 4 images
 
     batch_a, batch_b = await asyncio.gather(
         svc.ingest_batch([shared, only_a], ['/a/copy.jpg', '/a/two.jpg']),
@@ -87,14 +92,18 @@ async def test_same_content_in_two_concurrent_batches_is_stored_once(tmp_path: P
     assert batch_a.summary.crops_indexed + batch_b.summary.crops_indexed == 3
     assert {batch_a.status, batch_b.status} == {'success'}
     (dup,) = [r for r in results if r.status == 'duplicate']
-    (kept,) = [r for r in results if r.status == 'success' and r.imohash == dup.imohash]
+    (kept,) = [
+        r for r in results if r.status == 'success' and r.content_sha256 == dup.content_sha256
+    ]
     assert dup.image_id == kept.image_id
     assert dup.image_id in os_fake.images
     assert (dup.n_crops, dup.crops_created) == (0, 0)
 
 
 @pytest.mark.asyncio
-async def test_a_losing_copy_with_other_boxes_leaves_no_items_or_crops(tmp_path: Path) -> None:
+async def test_a_losing_copy_with_other_boxes_leaves_no_items_or_crops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Inference on the same bytes need not give the same boxes (another batch
     shape, another kernel): the losing copy's own items and crops must not stay."""
     svc, os_fake, triton = _make_service()
@@ -107,7 +116,7 @@ async def test_a_losing_copy_with_other_boxes_leaves_no_items_or_crops(tmp_path:
         return await real_infer(model_name, inputs, outputs)
 
     triton.infer = infer  # type: ignore[method-assign]
-    _hold_writes_until_lookups(os_fake, n_lookups=2)
+    _hold_writes_until_lookups(os_fake, 2, monkeypatch)
     data = _jpeg_bytes(seed=7)
 
     first, second = await asyncio.gather(
@@ -124,22 +133,13 @@ async def test_a_losing_copy_with_other_boxes_leaves_no_items_or_crops(tmp_path:
 
 @pytest.mark.asyncio
 async def test_an_in_batch_copy_follows_a_representative_that_lost() -> None:
-    """Another process stored the content and the index has not refreshed: the
+    """Another process stored the images doc and no content row names it yet: the
     batch's representative loses the create, and its in-batch copy is answered
     from it instead of being decoded and detected again."""
     svc, os_fake, triton = _make_service()
     data = _jpeg_bytes(seed=11)
-    image_id = content_image_id(_imohash_bytes(data))
+    image_id = content_image_id(content_sha256(data))
     os_fake.images[image_id] = {'image_id': image_id, 'image_path': '/elsewhere/x.jpg'}
-
-    async def unrefreshed_search(**_kw: Any) -> Any:
-        return {'hits': {'hits': []}}
-
-    async def unrefreshed_msearch(*, body: list[Any]) -> Any:
-        return {'responses': [{'hits': {'hits': []}}] * (len(body) // 2)}
-
-    os_fake.search = unrefreshed_search  # type: ignore[method-assign]
-    os_fake.msearch = unrefreshed_msearch  # type: ignore[method-assign]
 
     batch = await svc.ingest_batch([data, data], ['/b/x.jpg', '/b/x-copy.jpg'])
 
