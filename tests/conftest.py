@@ -498,3 +498,25 @@ def pg_registry(pg: Any, pg_env: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     with Session(pg.engine('app')) as session:
         sync_catalog(session)
     return pg_env
+
+
+@pytest.fixture(autouse=True)
+def _stream_claims_without_database(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stream workers claim their projects in the database; a test with no database serves them all.
+
+    A test marked ``db`` (``tests/workers/test_stream_claims.py``) gets the real claims.
+    """
+    if request.node.get_closest_marker('db') is not None:
+        return
+    from src.services.jobs import stream_claims
+
+    async def select(_self: object, records: Any, *, busy: Any = ()) -> list[Any]:
+        return list(records)
+
+    async def arelease_all(_self: object) -> int:
+        return 0
+
+    monkeypatch.setattr(stream_claims.ProjectClaims, 'select', select)
+    monkeypatch.setattr(stream_claims.ProjectClaims, 'arelease_all', arelease_all)

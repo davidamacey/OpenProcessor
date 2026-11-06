@@ -189,3 +189,12 @@ _.list_all  # src/routers/curation/research_configs.py, GET /{kind}
 _.get_one  # src/routers/curation/research_configs.py, GET /{kind}/{name}
 _.put_one  # src/routers/curation/research_configs.py, PUT /{kind}/{name}
 _.delete_one  # src/routers/curation/research_configs.py, DELETE /{kind}/{name}
+
+
+# The job runtime's entry points that the family lanes (stages 4 and 5) call (lane 3A).
+_.__getattr__  # type: ignore[attr-defined]  # src/clients/__init__.py, PEP 562 module attribute hook
+_.pause_job  # src/services/jobs/service.py, called by the pausable families' pause routes
+_.resume_job  # src/services/jobs/service.py, called by the pausable families' resume routes
+_.resume_from  # src/tasks/runtime/context.py, read by the resumable handlers
+_.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist loop, re-index, backfill)
+_.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands

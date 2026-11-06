@@ -170,7 +170,6 @@ async def test_progress_events_name_the_target_and_busy_lists_the_job(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from src.services.events import publish as event_publish
-    from src.services.projects.busy import _combine_jobs
 
     build(world)
     events: list[tuple[str, dict[str, Any]]] = []
@@ -188,8 +187,3 @@ async def test_progress_events_name_the_target_and_busy_lists_the_job(
     assert {t for t, _ in events} == {'combine.progress'}
     assert all(f['target'] == 'combined' and f['job_id'] == store.import_id for _, f in events)
     assert events[-1][1]['status'] == 'completed'
-
-    store.job.update(status='running')
-    store.job.touch_heartbeat()
-    busy = _combine_jobs(world.records['cars-a'])
-    assert [(j.kind, j.job_id) for j in busy] == [('combine', store.import_id)]

@@ -417,3 +417,18 @@ def stored_status(slug: str) -> str | None:
         return row.status if row is not None else None
 
     return asyncio.run(run_repo('read a stored status', _read))
+
+
+@pytest.fixture(autouse=True)
+def _no_job_inventory_database(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The jobs side of the busy check is a database query: tests with no database see no jobs.
+
+    A test that marks itself ``db`` (``test_busy_from_jobs.py``) gets the real query.
+    """
+    if request.node.get_closest_marker('db') is not None:
+        return
+    from src.services.projects import busy
+
+    monkeypatch.setattr(busy, '_active_job_rows', lambda _record: [])

@@ -4,7 +4,6 @@ nothing."""
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -169,12 +168,13 @@ async def test_environment_errors(world: World) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_busy_source_is_refused(world: World) -> None:
+async def test_a_busy_source_is_refused(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services.projects import busy
+
     _two_sources(world)
-    job = combine_base_dir() / 'cmb_20261001T000000_aaaaaaaa'
-    job.mkdir(parents=True)
-    (job / 'state.json').write_text(
-        json.dumps({'status': 'running', 'target': 'other', 'sources': ['cars-a']})
+    running = busy.JobRef(kind='combine', job_id='cmb_20261001T000000_aaaaaaaa')
+    monkeypatch.setattr(
+        busy, '_active_job_rows', lambda record: [running] if record.slug == 'cars-a' else []
     )
     result = await _preview(world, world.request(['cars-a', 'cars-b'], FULL_MAPPING))
     err = next(e for e in result.errors if e.code == 'source_busy')

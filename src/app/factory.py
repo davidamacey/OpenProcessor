@@ -48,6 +48,7 @@ from src.routers import (
 )
 from src.routers.api_docs import install_api_docs
 from src.routers.curation._mounting import mount_all_curation_routers
+from src.routers.jobs import router as jobs_router
 from src.utils.retry import RetryExhaustedError, TritonDeadlineError
 from src.utils.upstream_errors import UpstreamError
 
@@ -284,6 +285,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
+    application.include_router(jobs_router)  # /jobs - Deployment-level jobs (read only)
     mount_all_curation_routers(application)  # /curation: global routes + /projects/{project}/...
 
     # Versioned API - All endpoints also available under /v1

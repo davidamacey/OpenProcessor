@@ -11,6 +11,8 @@ from typing import Any
 from celery.signals import beat_init, worker_init
 
 from src.config.retired_env import reject_retired_env
+from src.tasks import queue_hooks
+from src.tasks.beat_schedule import apply_schedule
 from src.tasks.runtime.gpu_app import build_app, install_worker_signals
 from src.tasks.runtime.log_context import install_log_context
 
@@ -38,6 +40,8 @@ TASK_MODULES = (
 app = build_app(TASK_MODULES)
 install_worker_signals()
 install_log_context()
+queue_hooks.install()
+app.on_after_configure.connect(apply_schedule, sender=app, weak=False)
 
 
 def _require_current_schema() -> None:

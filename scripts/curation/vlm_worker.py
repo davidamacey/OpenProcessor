@@ -58,6 +58,7 @@ from src.config.project_context import bind_project
 from src.services.curation.ops_metrics import start_worker_metrics_server
 from src.services.curation.vlm_scope import ScopeCache
 from src.services.curation.worker_liveness import heartbeat_loop
+from src.services.jobs.stream_claims import ProjectClaims
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import bind_script_project, script_project_registry
 
@@ -126,6 +127,8 @@ class _StreamWorker:
         self.api_prefix = curation_api_prefix()
         self.opensearch = make_script_opensearch([args.opensearch], timeout=30)
         self.registry = script_project_registry()
+        # The projects this replica serves: its fair share of the live replicas (02b section 5).
+        self.claims = ProjectClaims('vlm')
         self.scope_cache = ScopeCache()
         self.rotation = 0
         self.stop_event = asyncio.Event()
@@ -290,6 +293,12 @@ class _StreamWorker:
         await asyncio.sleep(self.outage_backoff_s)
         self.backing_off = False
 
+    async def _claimed(self, projects: list[Any]) -> list[Any]:
+        """The projects this replica holds the claim for; one it gives up has no chunk in flight."""
+        async with self.in_flight_lock:
+            busy = {slug for slug, _ in self.in_flight}
+        return await self.claims.select(projects, busy=busy)
+
     async def producer(self) -> None:
         """Continuously fetch eligible crops, project by project, and chunk
         them into the queue."""
@@ -306,10 +315,10 @@ class _StreamWorker:
             if self.queue.full():
                 await asyncio.sleep(0.05)
                 continue
-            projects = rotated(
-                await projects_with_active_vlm(self.registry, args.project),
-                self.rotation,
+            projects = await self._claimed(
+                await projects_with_active_vlm(self.registry, args.project)
             )
+            projects = rotated(projects, self.rotation)
             self.rotation += 1
             # In-flight ids are excluded server-side (must_not ids), so a
             # fetch only needs to refill the queue.
@@ -461,6 +470,7 @@ class _StreamWorker:
             heartbeat_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task
+        await self.claims.arelease_all()
         await self.opensearch.close()
 
         elapsed_total = time.monotonic() - self.started_at

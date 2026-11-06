@@ -5,6 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from fixtures.job_fixtures import (
+    FakeProducer,
+    FakeQueueHooks,
+    job_env,
+    kinds,
+    producer,
+    queue_hooks,
+    wakes,
+)
 
 
 if TYPE_CHECKING:
@@ -26,3 +35,15 @@ def _no_gpu_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.tasks.runtime import gpu_app
 
     monkeypatch.setattr(gpu_app, '_gpu_worker_device', None)
+
+
+__all__ = [
+    'FakeProducer',
+    'FakeQueueHooks',
+    'job_env',
+    'kinds',
+    'producer',
+    'queue_env',
+    'queue_hooks',
+    'wakes',
+]
