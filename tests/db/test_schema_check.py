@@ -32,7 +32,7 @@ def test_a_database_at_head_passes(pg_env) -> None:
 
 
 def test_the_code_head_is_the_single_bundled_revision() -> None:
-    assert schema_check.code_head() == '0001_control_plane'
+    assert schema_check.code_head() == '0002_research_seams'
 
 
 def test_a_database_at_an_older_revision_refuses_naming_both(pg_env) -> None:
@@ -42,9 +42,9 @@ def test_a_database_at_an_older_revision_refuses_naming_both(pg_env) -> None:
             with pytest.raises(SchemaNotCurrentError) as caught:
                 check_control_plane()
         finally:
-            conn.execute("UPDATE alembic_version SET version_num = '0001_control_plane'")
+            conn.execute("UPDATE alembic_version SET version_num = '0002_research_seams'")
     assert '0000_older' in str(caught.value)
-    assert '0001_control_plane' in str(caught.value)
+    assert '0002_research_seams' in str(caught.value)
     assert str(caught.value).startswith('schema_not_current')
 
 
