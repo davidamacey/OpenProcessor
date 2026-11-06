@@ -64,10 +64,10 @@ structlog==26.1.0
 # and src/core/dependencies.py, both on the src.main import path)
 # [async] pulls aiohttp: without it opensearch-py does not export
 # AsyncOpenSearch and `import src.main` fails with an ImportError.
-opensearch-py[async]>=2.3.0
+opensearch-py[async]==3.2.0
 
 # src/clients/triton_client.py (gRPC) -- on the src.main import path
-tritonclient[grpc,http]
+tritonclient[grpc,http]==2.74.0
 
 # src/core/metrics.py / src/services/curation/metrics.py
 prometheus-client==0.26.0
@@ -78,8 +78,8 @@ httpx==0.28.1
 httpcore==1.0.9
 
 # src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
-boto3
-botocore
+boto3==1.43.125
+botocore==1.43.125
 
 # tests/curation/test_mistakenness.py imports sklearn.metrics directly (not
 # marked live) -- this is the one non-lazy scikit-learn use in the base suite

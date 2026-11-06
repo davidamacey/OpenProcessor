@@ -148,15 +148,6 @@ _UNPINNED_UNTIL_PART_B = frozenset(
 )
 _NOT_YET_DECLARED = frozenset({'pillow'})
 
-# Part A packages the series pins one commit at a time; each commit deletes its names, so the
-# test stays green at every commit and this set is empty once part A is done.
-_UNPINNED_UNTIL_PART_A_COMMIT = frozenset(
-    {
-        # commit 5: cloud and search clients
-        'aiohttp', 'boto3', 'botocore', 'opensearch-py', 'tritonclient',
-    }
-)  # fmt: skip
-
 # One distribution family, one version: the extra or build differs, the release must not.
 _VERSION_FAMILIES = {
     'onnxruntime-gpu': 'onnxruntime',
@@ -237,14 +228,12 @@ def _loose_runtime_lines() -> set[str]:
 
 
 def test_no_floor_and_no_unpinned_runtime_line_outside_part_b() -> None:
-    allowed = _UNPINNED_UNTIL_PART_B | _UNPINNED_UNTIL_PART_A_COMMIT
-    unexpected = sorted(_loose_runtime_lines() - allowed)
+    unexpected = sorted(_loose_runtime_lines() - _UNPINNED_UNTIL_PART_B)
     assert not unexpected, f'pin these with == (owner rule, 01_package_pins.md): {unexpected}'
 
 
 def test_the_part_b_allowlist_only_shrinks() -> None:
-    listed = _UNPINNED_UNTIL_PART_B | _UNPINNED_UNTIL_PART_A_COMMIT
-    stale = sorted(listed - _loose_runtime_lines() - _NOT_YET_DECLARED)
+    stale = sorted(_UNPINNED_UNTIL_PART_B - _loose_runtime_lines() - _NOT_YET_DECLARED)
     assert not stale, f'already pinned everywhere, delete from the allowlist: {stale}'
 
 
