@@ -512,7 +512,7 @@ services:
       - ./data:/app/data
       - ./secrets/vlm:/run/secrets/op_vlm:ro
     healthcheck:
-      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "jobs"]
       interval: 30s
       timeout: 15s
       start_period: 60s
@@ -577,7 +577,7 @@ services:
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "periodic"]
       interval: 30s
       timeout: 15s
       start_period: 60s
@@ -638,7 +638,7 @@ services:
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "open_vocab"]
       interval: 30s
       timeout: 15s
       start_period: 60s
@@ -694,7 +694,7 @@ services:
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py"]
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "cluster"]
       interval: 30s
       timeout: 15s
       start_period: 60s
