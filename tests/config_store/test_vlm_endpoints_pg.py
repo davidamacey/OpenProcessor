@@ -31,7 +31,7 @@ from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRec
 from src.services.labeling.vlm_endpoints import env_builtin, probe_fingerprint
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture(scope='module', autouse=True)

@@ -21,7 +21,7 @@ from src.core.db_session import install_database_error_handlers
 from src.routers.curation._project_deps import install_project_exception_handlers
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine', 'api_async_engine')]
 
 CONTRACT = Path(__file__).resolve().parents[2] / 'contracts' / 'openapi' / 'curation.json'
 

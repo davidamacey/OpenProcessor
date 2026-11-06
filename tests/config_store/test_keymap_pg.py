@@ -10,7 +10,7 @@ from _config_fixtures import make_project
 from src.services.curation import keymap
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture(scope='module', autouse=True)

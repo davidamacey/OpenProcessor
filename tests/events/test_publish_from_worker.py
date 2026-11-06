@@ -11,7 +11,7 @@ from _listener_support import running_listener, take
 from src.services.events.publish import publish
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.mark.asyncio

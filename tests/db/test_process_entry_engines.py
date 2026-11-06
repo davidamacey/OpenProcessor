@@ -29,8 +29,7 @@ ENTRY_KINDS = ['migrate_step', 'verify', 'detection_worker', 'vlm_worker', 'assi
 
 
 @pytest.fixture
-def probe(pg_env, monkeypatch: pytest.MonkeyPatch) -> Callable[..., Any]:
-    monkeypatch.delenv('WEB_CONCURRENCY', raising=False)  # only the api container sets it
+def probe(pg_env) -> Callable[..., Any]:
     seen: dict[str, Any] = {}
 
     async def probe(*_args: Any, **_kwargs: Any) -> int:

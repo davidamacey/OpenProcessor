@@ -19,7 +19,7 @@ from src.db.session import async_session_factory, deployment_tx
 if TYPE_CHECKING:
     from fixtures.postgres import PgDatabase
 
-pytestmark = [pytest.mark.db, pytest.mark.asyncio]
+pytestmark = [pytest.mark.db, pytest.mark.asyncio, pytest.mark.usefixtures('bound_async_engine')]
 
 
 def new(slug: str, **kw: Any) -> repo.NewProject:

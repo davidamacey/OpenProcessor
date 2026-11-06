@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from src.db.repos import jobs as repo
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 async def start(project, kind='t_plain', **kwargs):

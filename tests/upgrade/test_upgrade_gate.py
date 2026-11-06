@@ -18,7 +18,7 @@ from src.services.upgrade.from_060.reset import reset
 from src.services.upgrade.from_060.runner import UpgradeResult, VerifyFailedError
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture(autouse=True)

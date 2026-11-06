@@ -490,18 +490,16 @@ def no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def pg_registry(pg: Any, pg_env: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+def pg_registry(pg: Any, pg_env: Any, bound_async_engine: Any, api_async_engine: Any) -> Any:
     """The real project registry on a migrated PostgreSQL, empty at the start of each test.
 
-    The async engine is replaced by a ``NullPool`` one so the tests that call ``asyncio.run``
-    several times never reuse a connection from a closed loop. Test modules that use it carry
-    ``pytest.mark.db``.
+    Services called from the test use the ``NullPool`` engine of ``bound_async_engine`` and the
+    app driven through ``TestClient`` uses the ``api_async_engine`` double, so the tests that call
+    ``asyncio.run`` several times never reuse a connection from a closed loop. Test modules that
+    use it carry ``pytest.mark.db``.
     """
     import psycopg
 
-    from src.db.engine import new_task_async_engine
-
-    monkeypatch.setattr('src.db.session.get_async_engine', new_task_async_engine)
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         conn.execute('TRUNCATE project_slugs, projects CASCADE')
     # the slug -> id cache would otherwise hand a config write the id of a truncated row

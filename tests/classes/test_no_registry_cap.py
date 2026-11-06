@@ -22,7 +22,9 @@ def test_the_retired_registry_error_codes_are_gone() -> None:
 
 @pytest.mark.db
 @pytest.mark.asyncio
-async def test_ten_thousand_and_one_classes_are_accepted(pg, pg_env, monkeypatch) -> None:
+async def test_ten_thousand_and_one_classes_are_accepted(
+    pg, bound_async_engine, monkeypatch
+) -> None:
     slug = f'p{uuid.uuid4().hex[:8]}'
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         make_project(conn, slug)

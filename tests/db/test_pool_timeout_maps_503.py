@@ -62,7 +62,7 @@ async def test_an_exhausted_pool_answers_503_database_busy_within_the_timeout(
 
 @pytest.mark.asyncio
 async def test_an_unreachable_database_answers_503_database_unavailable(
-    pg_env, monkeypatch: pytest.MonkeyPatch
+    api_worker_env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_DB_HOST', '127.0.0.1')
     monkeypatch.setenv('OP_DB_DIRECT_HOST', '127.0.0.1')
@@ -76,7 +76,7 @@ async def test_an_unreachable_database_answers_503_database_unavailable(
 
 
 @pytest.mark.asyncio
-async def test_a_cancelled_statement_is_not_reported_as_an_outage(pg_env) -> None:
+async def test_a_cancelled_statement_is_not_reported_as_an_outage(api_worker_env) -> None:
     app = _app()
     factory = async_session_factory()
 

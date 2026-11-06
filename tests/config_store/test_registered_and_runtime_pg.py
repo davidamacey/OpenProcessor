@@ -13,7 +13,7 @@ from src.services.config_store.store import reset_config_stores
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture(scope='module', autouse=True)

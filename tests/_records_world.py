@@ -35,8 +35,14 @@ def make_project_row(pg, slug: str) -> uuid.UUID:
 
 
 @pytest.fixture
-def world(pg_env, monkeypatch: pytest.MonkeyPatch) -> uuid.UUID:
-    """The bound project's id, with its row in the database."""
+def world(
+    pg_env, bound_async_engine, api_async_engine, monkeypatch: pytest.MonkeyPatch
+) -> uuid.UUID:
+    """The bound project's id, with its row in the database.
+
+    Services called from the test use the bound engine, the app driven through ``TestClient`` the
+    API engine double.
+    """
     from src.config.project_context import current_project
 
     project = make_project_row(pg_env, f'default-{uuid.uuid4().hex[:8]}')

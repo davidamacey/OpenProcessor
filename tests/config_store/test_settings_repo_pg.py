@@ -13,7 +13,7 @@ from src.db.repos import config as config_repo, settings as repo
 from src.db.session import async_session_factory, deployment_tx, project_tx
 
 
-pytestmark = pytest.mark.db
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
 
 
 @pytest.fixture

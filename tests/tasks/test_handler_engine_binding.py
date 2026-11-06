@@ -21,8 +21,7 @@ pytestmark = pytest.mark.db
 
 
 @pytest.fixture
-def engine(job_env, wakes, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv('WEB_CONCURRENCY', raising=False)  # a Celery child is not the API
+def engine(job_env, wakes):
     return db_engine.get_sync_engine()
 
 
