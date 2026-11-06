@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from _events_support import count_events, count_global_events, seed_project
 
@@ -94,3 +96,14 @@ def test_insert_event_accepts_a_slug_or_an_id(pg_env) -> None:
         by_id = insert_event(session, project, 'b', {})
     assert by_slug.project_id == by_id.project_id == project
     assert count_events(pg_env, project) == 2
+
+
+def test_a_publish_for_the_bound_project_uses_its_id_not_a_slug_lookup(
+    pg_env, broker, monkeypatch
+) -> None:
+    project = seed_project(pg_env, 'bound-by-id')
+    # The bound record carries the project's id; its slug names no row, so a slug lookup would fail.
+    bound = SimpleNamespace(record=SimpleNamespace(slug='no-such-slug', id=project))
+    monkeypatch.setattr(publish_module, 'current_project', lambda: bound)
+    publish('crop.created', {})
+    assert count_events(pg_env, project) == 1
