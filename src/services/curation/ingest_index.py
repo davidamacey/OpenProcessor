@@ -45,6 +45,7 @@ from src.services.detection.geometry import (
     crop_id as _crop_id,
     crop_rect,
 )
+from src.services.near_duplicates import pending as near_dup_pending
 from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
@@ -239,6 +240,14 @@ async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext)
         return None
 
 
+async def _mark_added(ctx: ImageContext, crop_ids: list[str], *, new_image: bool) -> None:
+    """Pending near-duplicate rows, written before the documents they describe (an extra row
+    costs one idempotent rescore; a missing one would be a silent stale group)."""
+    await near_dup_pending.enqueue_pending_bound('item', crop_ids, 'added')
+    if new_image:
+        await near_dup_pending.enqueue_pending_bound('image', [ctx.image_id], 'added')
+
+
 async def index_items(
     service: CurationIngestService,
     ctx: ImageContext,
@@ -365,6 +374,7 @@ async def index_items(
 
     created_ids: list[str] = []
     try:
+        await _mark_added(ctx, cids, new_image=image_doc is not None)
         bulk_result = await service._bulk_index(
             image_doc, crop_docs, created_ids, seed_region=seed_region
         )

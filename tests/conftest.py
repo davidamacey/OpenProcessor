@@ -143,6 +143,20 @@ def _in_memory_class_registries(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def pending_calls(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> object:
+    """Near-duplicate pending rows are PostgreSQL rows; the offline tier records the calls
+    instead (``.calls``), and a ``db`` test writes the real rows."""
+    from _pending_fake import PendingCalls
+
+    from src.services.near_duplicates import pending
+
+    fake = PendingCalls()
+    if request.node.get_closest_marker('db') is None:
+        monkeypatch.setattr(pending, 'enqueue_pending_bound', fake.enqueue_pending_bound)
+    return fake
+
+
+@pytest.fixture(autouse=True)
 def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
     """Bind the ``default`` project for every test (projects_plan.md §3.3).
 

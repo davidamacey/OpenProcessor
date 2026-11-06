@@ -41,6 +41,7 @@ from src.services.curation.region_box_embeddings import (
     write_box_embeddings,
 )
 from src.services.curation.reprocess_gpu_embed import embed_on_gpu
+from src.services.near_duplicates import pending as near_dup_pending
 from src.utils.cpu_pool import offload_always, run_cpu
 from src.utils.vectors import float_list
 
@@ -348,6 +349,10 @@ async def reembed_items(
         if isinstance(outcome, BaseException):
             raise outcome
 
+    await near_dup_pending.enqueue_pending_bound('item', writes.items, 'vector_changed')
+    await near_dup_pending.enqueue_pending_bound(
+        'image', [doc_id for doc_id, _ in writes.images], 'vector_changed'
+    )
     await _bulk_update(opensearch, cfg.items_index, list(writes.items.items()))
     await _bulk_update(opensearch, cfg.images_index, writes.images)
     if writes.boxes:
