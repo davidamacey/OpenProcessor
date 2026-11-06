@@ -14,7 +14,15 @@ from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default_project
+from .conftest import (
+    FakeLifecycleOpenSearch,
+    amutate_project,
+    fake_ensure_indexes,
+    seed_default_project,
+)
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +51,7 @@ def _noop_ensure_indexes():
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
-    registry = ProjectRegistry(lambda: client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     return registry
 
@@ -148,16 +156,8 @@ def test_delete_refuses_from_building_or_deleting(monkeypatch) -> None:
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
 
-    from dataclasses import replace
-
-    from src.services.projects.registry import record_to_doc
-
-    alpha_record = registry.get('alpha')
-    assert alpha_record is not None
-    building = replace(alpha_record, status='building')
-    client.docs['project:alpha'] = record_to_doc(building)
-    client._seq['project:alpha'] = client._seq.get('project:alpha', 0) + 1
-    registry._by_slug['alpha'] = building  # _resolve_existing reads the in-memory snapshot
+    asyncio.run(amutate_project('alpha', status='building'))
+    asyncio.run(registry.ensure_fresh())
 
     with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))

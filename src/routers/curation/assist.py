@@ -50,9 +50,9 @@ async def _with_scope(
     state.scope_now = await scope_now(opensearch, state.run_id, state.request, members=members)
     result = state.result
     if result is not None and result.proposal is not None and result.proposal.class_name:
-        from src.clients.curation_opensearch.registry import get_class_registry
+        from src.services.classes.registry import get_class_registry
 
-        names = {c.class_name for c in (await get_class_registry().snapshot(opensearch)).classes}
+        names = {c.class_name for c in (await get_class_registry().snapshot()).classes}
         fresh = result.proposal.model_copy(
             update={'in_registry': result.proposal.class_name in names}
         )

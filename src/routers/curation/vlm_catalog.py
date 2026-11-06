@@ -11,11 +11,8 @@ after the host command ran and a probe recorded the new model root.
 
 from __future__ import annotations
 
-from typing import Any
-
 from src.config.env import env_optional_str, env_str
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - FastAPI resolves it
 from src.routers.curation._vlm_endpoint_models import (
     CATALOG_STATUS_LABELS,
     Choice,
@@ -43,9 +40,9 @@ def _local_endpoint_name() -> str:
     return env_str('OP_LOCAL_VLM_ENDPOINT')
 
 
-async def _local_status(client: Any) -> VlmLocalStatus:
+async def _local_status() -> VlmLocalStatus:
     store = get_global_config_store()
-    await store.refresh(client)
+    await store.refresh()
     name = _local_endpoint_name()
     endpoint = get_vlm_endpoint(name) if name else None
     probe = endpoint.last_probe if endpoint else None
@@ -88,9 +85,9 @@ def _entry_wire(entry: CatalogEntry, local: VlmLocalStatus) -> VlmCatalogEntry:
 
 
 @global_router.get('/vlm/catalog', response_model=VlmCatalogResponse, tags=['VLM'])
-async def get_vlm_catalog(client: OpenSearchDep) -> VlmCatalogResponse:
+async def get_vlm_catalog() -> VlmCatalogResponse:
     """The local catalog with ``fits`` / ``serving`` / ``desired`` per entry."""
-    local = await _local_status(client)
+    local = await _local_status()
     return VlmCatalogResponse(
         entries=[_entry_wire(e, local) for e in load_catalog()],
         local=local,
@@ -99,17 +96,17 @@ async def get_vlm_catalog(client: OpenSearchDep) -> VlmCatalogResponse:
 
 
 @global_router.get('/vlm/local', response_model=VlmLocalStatus, tags=['VLM'])
-async def get_local_vlm(client: OpenSearchDep) -> VlmLocalStatus:
-    return await _local_status(client)
+async def get_local_vlm() -> VlmLocalStatus:
+    return await _local_status()
 
 
 @global_router.post(
     '/vlm/local/select', response_model=VlmLocalStatus, status_code=202, tags=['VLM']
 )
-async def select_local_vlm(payload: VlmLocalSelectRequest, client: OpenSearchDep) -> VlmLocalStatus:
+async def select_local_vlm(payload: VlmLocalSelectRequest) -> VlmLocalStatus:
     """Record the desired local model (202): the host applies it with
     ``openprocessor vlm use <id>`` (``restart_required`` says so)."""
-    local = await _local_status(client)
+    local = await _local_status()
     if not local.configured:
         raise api_error(409, 'no_local_vlm', 'this deployment has no in-compose VLM to switch')
     entry = catalog_entry(payload.catalog_id)
@@ -126,12 +123,12 @@ async def select_local_vlm(payload: VlmLocalSelectRequest, client: OpenSearchDep
             'vlm_catalog_does_not_fit',
             f'{entry.id} needs about {entry.vram_gb:g} GB; the card has {local.gpu_total_gb:g} GB',
         )
-    await set_local_desired(client, catalog_id=entry.id)
-    return await _local_status(client)
+    await set_local_desired(catalog_id=entry.id)
+    return await _local_status()
 
 
 @global_router.delete('/vlm/local/select', response_model=VlmLocalStatus, tags=['VLM'])
-async def clear_local_vlm_selection(client: OpenSearchDep) -> VlmLocalStatus:
+async def clear_local_vlm_selection() -> VlmLocalStatus:
     """Clear the desired local model."""
-    await clear_local_desired(client)
-    return await _local_status(client)
+    await clear_local_desired()
+    return await _local_status()

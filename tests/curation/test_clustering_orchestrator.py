@@ -86,7 +86,6 @@ def _patch_umap_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.services.curation.clustering import embedding_reduce
 
     async def _fake_get_or_fit(
-        client: Any,
         embeddings: np.ndarray,
         *,
         mode: str,

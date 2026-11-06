@@ -26,11 +26,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE, OPEN_VOCAB_TARGET_CLASS_SOURCE
-from src.services.curation.class_ensure import ResolvedClass, ensure_class_by_name
+from src.services.classes.registry import get_class_registry
+from src.services.classes.resolve import ResolvedClass, ensure_class_by_name
 from src.services.curation.ingest_index import index_items
 from src.services.curation.item_delete import delete_items
 from src.services.curation.item_doc import DetectedItem
@@ -417,7 +417,6 @@ async def run_open_vocab_image(
     for name in {h.class_name for h in kept if h.class_name}:
         resolved[name] = await ensure_class_by_name(
             registry,
-            opensearch,
             normalize_class_name(name),
             group=OPEN_VOCAB_CLASS_GROUP,
             notes='created by an open-vocabulary pass',

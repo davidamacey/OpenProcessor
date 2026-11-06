@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 from curation.test_region_profiles_router import PREFIX, _body, _reset_caches, app_client  # noqa: F401
 

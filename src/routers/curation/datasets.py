@@ -69,7 +69,7 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.services.classes.registry import ClassRegistry
     from src.services.curation.dataset_import.store import ImportStore
     from src.services.curation.ingest_policy import IngestPolicy
 
@@ -89,10 +89,8 @@ def _open(import_id: str) -> ImportStore:
     return store
 
 
-async def _prepare(
-    request: DatasetPreviewRequest, registry: ClassRegistry, opensearch: Any
-) -> PreparedImport:
-    view = pin_project_view(await registry.snapshot(opensearch))
+async def _prepare(request: DatasetPreviewRequest, registry: ClassRegistry) -> PreparedImport:
+    view = pin_project_view(await registry.snapshot())
     try:
         return await asyncio.to_thread(prepare_import, request, view, path_guard=_guard())
     except DatasetPathNotAllowedError as exc:
@@ -150,7 +148,7 @@ async def _import_service(
     if pe_encoder is None:
         raise api_error(503, 'config_store_unavailable', 'PE encoder not initialized')
     try:
-        profile = (await refreshed_ingest_profiles(opensearch)).primary
+        profile = (await refreshed_ingest_profiles()).primary
     except (ValueError, IngestProfileUnresolvedError) as exc:
         raise api_error(503, 'config_store_unavailable', f'ingest misconfigured: {exc}') from exc
     if need_detector and not profile.detector_model:
@@ -160,7 +158,7 @@ async def _import_service(
     return CurationIngestService(
         opensearch=opensearch,
         triton_pool=get_async_triton_pool() if need_detector else None,
-        registry=await registry.snapshot(opensearch),
+        registry=await registry.snapshot(),
         profile=profile,
         pe_encoder=pe_encoder,
         policy=policy,
@@ -184,7 +182,7 @@ async def _context(
         opensearch,
         registry,
         need_detector=need_detector,
-        policy=await get_ingest_policy(opensearch),
+        policy=await get_ingest_policy(),
     )
     return ImportContext(
         import_id=store.import_id,
@@ -245,7 +243,7 @@ async def upload_dataset(file: Annotated[UploadFile, File()]) -> DatasetUploadRe
 async def preview_dataset(
     body: DatasetPreviewRequest, opensearch: OpenSearchDep, registry: RegistryDep
 ) -> DatasetPreview:
-    prepared = await _prepare(body, registry, opensearch)
+    prepared = await _prepare(body, registry)
     return preview_wire(prepared, already_indexed=await _already_indexed(opensearch, prepared))
 
 
@@ -262,7 +260,7 @@ async def start_dataset_import(
     registry: RegistryDep,
 ) -> DatasetImportJob:
     await ensure_indexes(opensearch)
-    prepared = await _prepare(body, registry, opensearch)
+    prepared = await _prepare(body, registry)
     if body.expected_import_key and body.expected_import_key != prepared.import_key:
         raise api_error(
             409,
@@ -303,9 +301,7 @@ async def start_dataset_import(
 
     new_groups = {m.dataset_class: m.new_class_group for m in body.mapping}
     try:
-        await materialize_created_classes(
-            prepared.resolved, registry, opensearch, new_groups=new_groups
-        )
+        await materialize_created_classes(prepared.resolved, registry, new_groups=new_groups)
     except Exception as exc:
         store.job.update(status='failed', error=str(exc)[:300], finished_at=now_iso())
         await runner.abandon_claim(opensearch, store)
@@ -484,7 +480,7 @@ async def resume_dataset_import(
             ) from None
         except (DatasetPathNotAllowedError, FormatUndetectedError) as exc:
             raise api_error(422, 'dataset_path_not_allowed', str(exc), project=_slug()) from None
-        await runner.prepare_resume(store, registry, opensearch)
+        await runner.prepare_resume(store, registry)
         ctx = await _context(store, request, runner.load_pinned(store), opensearch, registry)
     except BaseException:
         await runner.release_resume(opensearch, store, prior)

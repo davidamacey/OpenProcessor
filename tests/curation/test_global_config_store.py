@@ -1,13 +1,6 @@
-"""``op_global_configs`` -- the one ``ConfigStore`` that
-is NOT scoped to any project (sibling to ``op_projects``), built as the
-foundation for the VLM endpoint registry / any future
-``local_vlm:desired``-style global config axis.
-
-No CRUD routes live here; this covers the storage primitive
-only: isolation from every per-project store, no project binding
-required, and the guard's recognition of ``op_global_configs`` as a
-legitimate global-scope index.
-"""
+"""The deployment-wide ``ConfigStore``: the one store that is NOT scoped to any project, the
+foundation of the VLM endpoint registry. Isolation from every per-project store, no project
+binding required, and the compare-and-set rule for "nothing active"."""
 
 from __future__ import annotations
 
@@ -16,17 +9,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
+from src.services.config_store import documents
 from src.services.config_store.global_store import (
-    ensure_global_configs_index,
     get_global_config_store,
-    global_configs_index,
     reset_global_config_store,
 )
-from src.services.config_store.index import activate, get_activation, save_config
 from src.services.config_store.store import ConfigStore, get_config_store, reset_config_stores
 
 
@@ -66,7 +56,7 @@ def test_get_global_config_store_requires_no_bind_project() -> None:
     unbound -- the global store needs no project context at all."""
     store = get_global_config_store()
     assert isinstance(store, ConfigStore)
-    assert store.index == global_configs_index()
+    assert store.is_global
 
 
 def test_get_global_config_store_is_a_process_singleton_regardless_of_binding() -> None:
@@ -86,78 +76,34 @@ def test_global_store_is_not_conflated_with_any_project_store() -> None:
     with bind_project(_record('alpha')):
         project_store = get_config_store()
     assert global_store is not project_store
-    assert global_store.index != project_store.index
+    assert global_store.label != project_store.label
 
 
 @pytest.mark.asyncio
 async def test_global_store_write_is_invisible_to_a_project_store_and_vice_versa() -> None:
-    """A doc written to the global store never shows up through any
-    project's own ``ConfigStore``, and a project's own doc never shows up
-    in the global store -- both share one fake OpenSearch client."""
-    client = FakeConfigOpenSearch()
-    g_index = global_configs_index()
-    project = _record('alpha')
-
-    await save_config(
-        client, g_index, kind='prompt_pack', name='global_vlm', body={}, expected_revision=None
-    )
-    await activate(
-        client, g_index, axis='prompt_pack', name='global_vlm', revision=1, expected_active=None
-    )
-
-    with bind_project(project):
-        from src.config import get_curation_config
-
-        project_index = get_curation_config().configs_index
-        await save_config(
-            client,
-            project_index,
-            kind='prompt_pack',
-            name='alpha_only',
-            body={},
-            expected_revision=None,
+    """An endpoint written to the deployment never shows up through a project's own store, and
+    a project's own pack never shows up in the registry."""
+    await documents.save_config(
+        kind='vlm_endpoint', name='global_vlm', body={'base_url': 'http://v/v1', 'model': 'm'},
+        expected_revision=None,
+    )  # fmt: skip
+    with bind_project(_record('alpha')):
+        await documents.save_config(
+            kind='prompt_pack', name='alpha_only', body={}, expected_revision=None
         )
+        project_store = get_config_store()
+        await project_store.refresh()
+        detail = await documents.get_activation_detail('prompt_pack')
 
-    global_store = ConfigStore(index=g_index, mode='live', label='__global__')
-    project_store = ConfigStore(index=project_index, mode='live', label='alpha')
-    await global_store.refresh(client)
-    await project_store.refresh(client)
+    global_store = get_global_config_store()
+    await global_store.refresh()
 
-    assert 'global_vlm' in global_store.current.packs
-    assert 'alpha_only' not in global_store.current.packs
+    assert 'global_vlm' in global_store.current.vlm_endpoints
+    assert not global_store.current.packs
     assert 'alpha_only' in project_store.current.packs
-    assert 'global_vlm' not in project_store.current.packs
-
-    # The project's own store never sees the global axis's activation.
-    with bind_project(project):
-        project_pack_activation = await get_activation(client, project_index, 'prompt_pack')
-    assert project_pack_activation is None
-
-
-@pytest.mark.asyncio
-async def test_ensure_global_configs_index_is_idempotent() -> None:
-    client = FakeConfigOpenSearch()
-    assert not await client.indices.exists(index=global_configs_index())
-    await ensure_global_configs_index(client)
-    assert await client.indices.exists(index=global_configs_index())
-    # A second call (every process restart) must not raise or re-create.
-    await ensure_global_configs_index(client)
-    assert await client.indices.exists(index=global_configs_index())
-
-
-def test_global_index_name_inside_the_project_namespace_is_refused(monkeypatch) -> None:
-    from src.config.projects import project_index_prefix
-
-    monkeypatch.setenv('OP_GLOBAL_CONFIGS_INDEX', f'{project_index_prefix()}shared__configs')
-    with pytest.raises(ValueError, match='project index prefix'):
-        global_configs_index()
-
-
-def test_global_index_name_equal_to_the_registry_is_refused(monkeypatch) -> None:
-    monkeypatch.setenv('OP_PROJECTS_INDEX', 'op_registry')
-    monkeypatch.setenv('OP_GLOBAL_CONFIGS_INDEX', 'op_registry')
-    with pytest.raises(ValueError, match='project registry'):
-        global_configs_index()
+    assert not project_store.current.vlm_endpoints
+    # the project's own store never sees an activation it did not make
+    assert detail is None
 
 
 @pytest.mark.asyncio
@@ -165,27 +111,25 @@ async def test_activate_treats_nothing_active_as_one_state_for_compare_and_set()
     """Never activated and explicitly off both mean "nothing active": a missing
     or null-ref ``expected_active`` is accepted for either; it still conflicts
     when something IS active."""
-    from src.services.config_store.index import ActiveConflictError
-
-    client = FakeConfigOpenSearch()
-    index = global_configs_index()
     off = {'name': None, 'revision': None}
+    with bind_project(_record('alpha')):
+        await documents.save_config(
+            kind='open_vocab_set', name='a', body={}, expected_revision=None
+        )
 
-    # never activated: both spellings of "nothing" pass
-    await activate(client, index, axis='open_vocab', name='a', revision=1, expected_active=off)
-    await activate(
-        client,
-        index,
-        axis='open_vocab',
-        name=None,
-        revision=None,
-        expected_active={'name': 'a', 'revision': 1},
-    )
-    # explicitly off now: a missing expected_active is still "nothing"
-    await activate(client, index, axis='open_vocab', name='a', revision=1, expected_active=None)
-    # something active: a missing or different expected_active conflicts
-    for stale in (None, off, {'name': 'b', 'revision': 1}):
-        with pytest.raises(ActiveConflictError):
-            await activate(
-                client, index, axis='open_vocab', name='a', revision=1, expected_active=stale
-            )
+        # never activated: both spellings of "nothing" pass
+        await documents.activate(axis='open_vocab', name='a', revision=1, expected_active=off)
+        await documents.activate(
+            axis='open_vocab',
+            name=None,
+            revision=None,
+            expected_active={'name': 'a', 'revision': 1},
+        )
+        # explicitly off now: a missing expected_active is still "nothing"
+        await documents.activate(axis='open_vocab', name='a', revision=1, expected_active=None)
+        # something active: a missing or different expected_active conflicts
+        for stale in (None, off, {'name': 'b', 'revision': 1}):
+            with pytest.raises(documents.ActiveConflictError):
+                await documents.activate(
+                    axis='open_vocab', name='a', revision=1, expected_active=stale
+                )

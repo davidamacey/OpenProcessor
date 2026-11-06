@@ -9,7 +9,6 @@ without an active VLM costs no search and no route call.
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING, Any
 
 from scripts.curation._project_worker_utils import unpaused_projects
@@ -26,20 +25,6 @@ if TYPE_CHECKING:
 # search and a route call per project every few seconds.
 IDLE_BACKOFF_MAX_S = 60.0
 
-# A project whose class registry is not migrated is skipped and said so at most once a minute.
-_NOT_MIGRATED_LOG_EVERY_S = 60.0
-_last_not_migrated_log: dict[str, float] = {}
-
-
-def _warn_not_migrated_once(slug: str, exc: Any) -> None:
-    now = time.monotonic()
-    if (
-        now - _last_not_migrated_log.get(slug, -_NOT_MIGRATED_LOG_EVERY_S)
-        >= _NOT_MIGRATED_LOG_EVERY_S
-    ):
-        _last_not_migrated_log[slug] = now
-        print(f'[vlm-worker] project={slug} skipped: {exc.detail}')
-
 
 def idle_backoff_s(poll_interval: float, idle_cycles: int) -> float:
     """Sleep after ``idle_cycles`` (>= 1) consecutive cycles with no active
@@ -51,9 +36,7 @@ def idle_backoff_s(poll_interval: float, idle_cycles: int) -> float:
     return result
 
 
-async def projects_with_active_vlm(
-    opensearch: Any, registry: Any, only_slug: str | None
-) -> list[ProjectRecord]:
+async def projects_with_active_vlm(registry: Any, only_slug: str | None) -> list[ProjectRecord]:
     """The unpaused projects (see ``unpaused_projects``) whose VLM is active.
 
     The registry is refreshed once, then each project's activation is read
@@ -65,7 +48,7 @@ async def projects_with_active_vlm(
     for record in await unpaused_projects(registry, only_slug):
         try:
             with bind_project(record):
-                await vlm_endpoints.refresh_vlm_state(opensearch)
+                await vlm_endpoints.refresh_vlm_state()
                 if vlm_endpoints.vlm_configured():
                     active.append(record)
         except Exception as exc:
@@ -73,26 +56,23 @@ async def projects_with_active_vlm(
     return active
 
 
-async def project_has_item_classes(opensearch: Any, record: ProjectRecord) -> bool:
+async def project_has_item_classes(record: ProjectRecord) -> bool:
     """Whether the project's class registry has a class an item can be labeled as.
 
     A project without one cannot be labeled (the route answers 409 ``no_classes``),
     so the producer must not claim its crops. The registry snapshot is one version check
     when unchanged, so asking once per project per cycle is cheap and a new class is seen
-    at once. A project whose registry is not migrated has none to offer: it is skipped."""
-    from opensearchpy.exceptions import OpenSearchException
+    at once. A project whose registry cannot be read has none to offer: it is skipped."""
+    from sqlalchemy.exc import SQLAlchemyError
 
-    from src.clients.curation_opensearch.registry import get_class_registry
-    from src.core.exceptions import RequestRejectedError
+    from src.db.repos.classes import ClassRegistryError
+    from src.services.classes.registry import get_class_registry
     from src.services.curation.region_class import item_classes
 
     with bind_project(record):
         try:
-            registry = await get_class_registry().snapshot(opensearch)
-        except RequestRejectedError as exc:
-            _warn_not_migrated_once(record.slug, exc)
-            return False
-        except OpenSearchException as exc:
+            registry = await get_class_registry().snapshot()
+        except (ClassRegistryError, SQLAlchemyError) as exc:
             print(f'[vlm-worker] project={record.slug} class registry unreadable: {exc}')
             return False
         return bool(item_classes(registry.classes))

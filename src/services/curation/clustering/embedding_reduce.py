@@ -48,13 +48,7 @@ from src.services.curation.clustering.pool_size import (
     umap_shape,
 )
 from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings
-from src.services.curation.clustering.umap_state import (
-    _load_umap_state_from_disk,
-    _load_umap_state_from_opensearch,
-    _save_umap_state_to_disk,
-    _save_umap_state_to_opensearch,
-    _state_paths_for,
-)
+from src.services.curation.clustering.umap_state import load_reducer, save_reducer, state_id_for
 
 
 if TYPE_CHECKING:
@@ -120,7 +114,6 @@ def _to_numpy_float32(arr: Any) -> np.ndarray:
 
 
 async def get_or_fit_reducer(
-    client: AsyncOpenSearch,
     embeddings: np.ndarray,
     *,
     mode: UMapMode,
@@ -128,8 +121,8 @@ async def get_or_fit_reducer(
 ) -> tuple[Any, np.ndarray, bool, BackendInfo]:
     """Return ``(reducer, reduced_embeddings, refit_happened, backend)``.
 
-    ``mode='transform'``: load cached reducer from joblib first, then
-    OpenSearch; refit only if nothing is cached.
+    ``mode='transform'``: load the cached reducer from storage; refit
+    only if nothing is cached.
     ``mode='refit'``: always re-fit on the current pool and overwrite
     both persisted copies.
 
@@ -146,15 +139,13 @@ async def get_or_fit_reducer(
     # heartbeat coroutine and trigger a false "worker heartbeat stale"
     # job failure. Off the event loop, the wait is harmless.
     backend = await asyncio.to_thread(detect_cluster_backend)
-    joblib_path, os_state_id = _state_paths_for(backend.name)
+    state_id = state_id_for(backend.name)
 
     refit_happened = False
     reducer: Any | None = None
 
     if mode == 'transform':
-        reducer = _load_umap_state_from_disk(joblib_path)
-        if reducer is None:
-            reducer = await _load_umap_state_from_opensearch(client, state_id=os_state_id)
+        reducer = load_reducer(state_id=state_id)
 
     # Sample VRAM before the heavy work so the dashboard's peak counter
     # reflects the run's hot loop, not just the post-fit residual.
@@ -183,10 +174,9 @@ async def get_or_fit_reducer(
                 if progress is not None:
                     progress.record_peak_vram(gpu_used_vram_mb())
         reduced = _to_numpy_float32(reduced_raw)
-        _save_umap_state_to_disk(reducer, joblib_path)
         try:
-            await _save_umap_state_to_opensearch(client, reducer, state_id=os_state_id)
-        except Exception as exc:
+            save_reducer(reducer, state_id=state_id)
+        except OSError as exc:
             logger.warning('curation_umap_state_persist_failed', error=str(exc))
         refit_happened = True
     else:
@@ -220,9 +210,7 @@ async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
             'refit': False,
         }
     require_min_items(len(ids))
-    _, _reduced, refit_happened, backend = await get_or_fit_reducer(
-        client, embeddings, mode='refit'
-    )
+    _, _reduced, refit_happened, backend = await get_or_fit_reducer(embeddings, mode='refit')
     return {
         'status': 'success',
         'n_residuals': len(ids),

@@ -1,36 +1,26 @@
-"""The config store: OpenSearch-backed prompt packs and region
-profiles with a global revision counter, per-process snapshot and hot
-reload -- no CRUD routes live here yet.
-"""
+"""The config store: prompt packs, region profiles, open-vocabulary sets, ingest profiles and VLM
+endpoints as versioned documents in PostgreSQL, with the activations per project, a config epoch
+every write bumps, a per-process snapshot and hot reload."""
 
 from __future__ import annotations
 
-from src.services.config_store.global_store import (
-    ensure_global_configs_index,
-    get_global_config_store,
-    global_configs_index,
-    reset_global_config_store,
-)
-from src.services.config_store.index import (
+from src.services.config_store.documents import (
     ActiveConflictError,
     RevisionConflictError,
     activate,
-    activation_doc_id,
-    bump_config_revision,
-    config_doc_id,
     delete_config,
-    get_activation,
-    get_config_revision,
-    get_runtime_docs,
-    rollback,
     save_config,
-    upsert_runtime_doc,
+)
+from src.services.config_store.global_store import (
+    get_global_config_store,
+    reset_global_config_store,
 )
 from src.services.config_store.snapshot import AxisRef, ConfigSnapshot, StoredConfig
 from src.services.config_store.store import (
     ConfigStore,
     ConfigStoreUnavailableError,
     activate_axis,
+    config_store_for,
     get_config_store,
     reset_config_stores,
 )
@@ -50,22 +40,13 @@ __all__ = [
     'StoredConfig',
     'activate',
     'activate_axis',
-    'activation_doc_id',
-    'bump_config_revision',
-    'config_doc_id',
+    'config_store_for',
     'delete_config',
-    'ensure_global_configs_index',
-    'get_activation',
-    'get_config_revision',
     'get_config_store',
     'get_global_config_store',
-    'get_runtime_docs',
-    'global_configs_index',
     'reset_config_stores',
     'reset_global_config_store',
-    'rollback',
     'save_config',
     'shutdown_config_store_poll',
     'startup_bootstrap_config_store_safe',
-    'upsert_runtime_doc',
 ]

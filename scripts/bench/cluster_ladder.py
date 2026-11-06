@@ -169,7 +169,7 @@ async def one_rep(
     out: dict[str, Any] = {'project': slug}
     try:
         await ensure_project(client, slug)
-        await abind_script_project(slug, opensearch_url=args.opensearch_url)
+        await abind_script_project(slug)
         bound = True
         out['load_s'] = round(await load_concurrent(client, vectors, classes), 1)
         out['index_before'] = index_bytes(args.opensearch_url)

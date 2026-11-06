@@ -76,7 +76,7 @@ def _profile_key(name: str, body: Any) -> dict[str, str | None]:
 
 
 async def region_profiles_differ(
-    client: Any, request: CombineRequest, records: list[ProjectRecord]
+    request: CombineRequest, records: list[ProjectRecord]
 ) -> list[CombineIssue]:
     """A warning when the sources' active region profiles differ by name or
     content. The target gets the ``settings_from`` source's activations, or
@@ -85,7 +85,7 @@ async def region_profiles_differ(
 
     profiles: list[dict[str, Any]] = []
     for record in records:
-        active = await read_activated_config(client, record, 'detection_profile', 'region_profile')
+        active = await read_activated_config(record, 'detection_profile')
         key = _profile_key(active.name, active.body) if active else {'name': None, 'hash': None}
         profiles.append({'project': record.slug, **key})
     if len({(p['name'], p['hash']) for p in profiles}) < 2:

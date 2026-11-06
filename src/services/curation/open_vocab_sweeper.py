@@ -60,7 +60,7 @@ async def sweep_pending_open_vocab(
     """Drain the bound project's stale ``pending`` images. Returns how many it
     took on; ``0`` (and ``pending`` is left alone) when no set is active, the
     active set does not opt in with ``run_on_ingest``, or nothing is stale."""
-    active = await current_active_set(opensearch)
+    active = await current_active_set()
     if active is None or not active[0].run_on_ingest:
         return 0
     cutoff = (now or datetime.now(UTC)) - timedelta(seconds=open_vocab_stale_after_s())
@@ -83,7 +83,7 @@ async def sweep_pending_open_vocab(
 
 
 async def default_service(opensearch: AsyncOpenSearch) -> CurationIngestService:
-    from src.clients.curation_opensearch.registry import get_class_registry
+    from src.services.classes.registry import get_class_registry
     from src.services.curation.ingest_service_factory import get_ingest_service
 
     return await get_ingest_service(opensearch, get_class_registry())

@@ -17,7 +17,7 @@ from curation.open_vocab_fixtures import (
     make_set,
 )
 from curation.reprocess_fixtures import docs
-from src.services.curation.open_vocab_gate import load_tracker, save_tracker
+from src.services.curation.open_vocab_gate import save_tracker
 from src.services.curation.open_vocab_run import GateContext, run_open_vocab_image
 from src.services.curation.reprocess_models import ReprocessScopeResult
 from src.services.curation.reprocess_open_vocab import OpenVocabPass
@@ -213,10 +213,10 @@ async def test_tier3_learns_from_the_pass_and_samples_a_missing_target(
     fake, service, ids = await ingested_world(tmp_path, monkeypatch, n=6)
     saved: list[HitRateTracker] = []
 
-    async def load(_client: Any) -> HitRateTracker:
+    async def load() -> HitRateTracker:
         return HitRateTracker()
 
-    async def save(_client: Any, tracker: HitRateTracker) -> None:
+    async def save(tracker: HitRateTracker) -> None:
         saved.append(tracker)
 
     monkeypatch.setattr('src.services.curation.reprocess_open_vocab.load_tracker', load)
@@ -233,10 +233,10 @@ async def test_tier3_learns_from_the_pass_and_samples_a_missing_target(
         },
     )
     seg = FakeSegmenter()  # never finds anything
-    run = await OpenVocabPass.start(fake, ov, 1, seg, ReprocessScopeResult(scope='open_vocab'))
+    run = await OpenVocabPass.start(ov, 1, seg, ReprocessScopeResult(scope='open_vocab'))
     for image_id in ids:
         await run.run_image(fake, service, image_id, image_doc(fake, image_id))
-    await run.finish(fake)
+    await run.finish()
 
     # Three misses in a row trip the gate; with a zero floor nothing more runs.
     assert len(seg.calls) == 3
@@ -258,35 +258,21 @@ async def test_a_pass_without_tier3_loads_and_saves_nothing(
 
     monkeypatch.setattr('src.services.curation.reprocess_open_vocab.load_tracker', boom)
     monkeypatch.setattr('src.services.curation.reprocess_open_vocab.save_tracker', boom)
-    run = await OpenVocabPass.start(
-        fake, make_set(), 1, _seg(), ReprocessScopeResult(scope='open_vocab')
-    )
+    run = await OpenVocabPass.start(make_set(), 1, _seg(), ReprocessScopeResult(scope='open_vocab'))
     await run.run_image(fake, service, image_id, image_doc(fake, image_id))
-    await run.finish(fake)
+    await run.finish()
     assert touched == []
 
 
 @pytest.mark.asyncio
-async def test_the_hit_rate_windows_persist_across_passes() -> None:
-    from curation._fake_config_opensearch import FakeConfigOpenSearch
+async def test_a_failed_stats_write_never_fails_the_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sqlalchemy.exc import OperationalError
 
-    client = FakeConfigOpenSearch()
-    assert (await load_tracker(client)).dump() == {}
-    tracker = HitRateTracker()
-    for hit in (False, False, True):
-        tracker.record('cone|cone', hit=hit, window=5)
-    await save_tracker(client, tracker)
+    async def down() -> None:
+        raise OperationalError('select', {}, Exception('database down'))
 
-    assert (await load_tracker(client)).dump() == {'cone|cone': [False, False, True]}
-
-
-@pytest.mark.asyncio
-async def test_a_failed_stats_write_never_fails_the_pass() -> None:
-    class Broken:
-        async def index(self, **_kw: Any) -> None:
-            raise RuntimeError('opensearch down')
-
-    await save_tracker(Broken(), HitRateTracker())  # logged, not raised
+    monkeypatch.setattr('src.services.curation.open_vocab_gate.bound_project_id', down)
+    await save_tracker(HitRateTracker())  # logged, not raised
 
 
 def _sample(counter_or_hist: Any, **labels: str) -> float:

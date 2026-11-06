@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config, get_region_fields
 from src.config.curation_accessors import items_index
 from src.config.env import env_str
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.classes.registry import get_class_registry
 from src.services.curation.dataset_thresholds import (
     HARD_MIN_CROPS_PER_CLASS,
     MIN_TEST_CROPS_PER_CLASS,
@@ -186,7 +186,7 @@ def ingest_idle_check(pending: int | None, stopped: Sequence[str]) -> PreflightC
     )
 
 
-async def resolve_target_classes(spec: TrainJobSpec, opensearch: Any) -> list[int]:
+async def resolve_target_classes(spec: TrainJobSpec) -> list[int]:
     """Resolve the effective class list for a spec.
 
     ``include_classes=None`` → every non-deprecated item class in the registry
@@ -197,7 +197,7 @@ async def resolve_target_classes(spec: TrainJobSpec, opensearch: Any) -> list[in
         return list(spec.include_classes)
     from src.services.curation.region_class import item_classes
 
-    registry = await get_class_registry().snapshot(opensearch)
+    registry = await get_class_registry().snapshot()
     return [c.class_id for c in item_classes(registry.classes)]
 
 

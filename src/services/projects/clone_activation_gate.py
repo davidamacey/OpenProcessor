@@ -24,11 +24,10 @@ from src.services.rejections import rejection
 
 if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
-    from src.services.config_store.index import ConfigAxis
+    from src.services.config_store.documents import ConfigAxis
 
 
 async def check_activation_pair_in_target_context(
-    client: Any,
     *,
     source: ProjectRecord,
     target_record: ProjectRecord,
@@ -66,7 +65,7 @@ async def check_activation_pair_in_target_context(
         src_record: Any = None
         with bind_project(source, read_only=True):
             src_store = get_config_store()
-            await src_store.ensure_fresh(client)
+            await src_store.ensure_fresh()
             if axis == 'prompt_pack':
                 from src.services.config_store.packs import (
                     build_record as build_src_pack_record,
@@ -75,7 +74,7 @@ async def check_activation_pair_in_target_context(
 
                 src_record = build_src_pack_record(s_name, revision=s_rev)
                 if src_record is None and s_rev is not None:
-                    src_record = await get_src_pack_revision(client, s_name, s_rev)
+                    src_record = await get_src_pack_revision(s_name, s_rev)
             else:
                 from src.services.config_store.profiles import (
                     build_record as build_src_profile_record,
@@ -84,7 +83,7 @@ async def check_activation_pair_in_target_context(
 
                 src_record = build_src_profile_record(s_name, revision=s_rev)
                 if src_record is None and s_rev is not None:
-                    src_record = await get_src_profile_revision(client, s_name, s_rev)
+                    src_record = await get_src_profile_revision(s_name, s_rev)
         source_bodies[axis] = src_record.body if src_record is not None else None
 
     profile_ref = source_active_refs.get('detection_profile')
@@ -146,7 +145,6 @@ async def check_activation_pair_in_target_context(
                 'detection_profile',
                 p_name,
                 p_rev,
-                client=client,
                 body=profile_body,
                 **pending_kwargs,
             )

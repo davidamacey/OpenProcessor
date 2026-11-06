@@ -32,22 +32,13 @@ def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
     ready_state,  # noqa: F811 - pytest fixture param shadows the import
     multi_default_registry,  # noqa: F811 - pytest fixture param shadows the import
 ):
-    from curation._fake_config_opensearch import FakeConfigOpenSearch
-
     import src.config.curation_accessors as curation_mod
+    from projects.clone_flow_fakes import Fake, activate_config, save
     from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.config_store import get_config_store
-    from src.services.config_store.index import activate, save_config
     from src.services.config_store.store import reset_config_stores
-
-    class _Fake(FakeConfigOpenSearch):
-        async def count(self, index, body=None):  # noqa: ARG002
-            return {'count': 0}
-
-        async def bulk(self, body, refresh=False):  # noqa: ARG002
-            return {'errors': False, 'items': []}
 
     def _rec(slug):
         now = datetime.now(UTC).isoformat()
@@ -87,65 +78,54 @@ def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
             from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
             assert resolve_prompt_pack().name == 'envsingle'
-            client = _Fake()
+            client = Fake()
             source, target = _rec('alpha'), _rec('beta')
+            asyncio.run(
+                save(
+                    client,
+                    source,
+                    'region_profile',
+                    'mp',
+                    {
+                        'detector_model': 'wheel_detector',
+                        'text_reader': 'none',
+                        'max_regions_per_item': 3,
+                    },
+                )
+            )
+            # Source's pack is the env/file default (filegood): a built-in or file pack has no
+            # revision on the wire, so this axis will NOT be cloned (`pack_will_be_cloned` is
+            # False).
+            asyncio.run(activate_config(client, source, 'prompt_pack', 'filegood', None))
+            # The profile IS a real stored activation, so it WILL be cloned.
+            asyncio.run(activate_config(client, source, 'detection_profile', 'mp', 1))
             with bind_project(source):
-                from src.config import get_curation_config
-
-                idx = get_curation_config().configs_index
-                asyncio.run(
-                    save_config(
-                        client,
-                        idx,
-                        kind='region_profile',
-                        name='mp',
-                        body={
-                            'detector_model': 'wheel_detector',
-                            'text_reader': 'none',
-                            'max_regions_per_item': 3,
-                        },
-                        expected_revision=None,
-                    )
-                )
-                # Source's pack is the env/file default (filegood): `revision=None` is
-                # `activate()`'s own invariant for "never written to the store", so this
-                # axis will NOT be cloned (`pack_will_be_cloned` is False).
-                asyncio.run(
-                    activate(
-                        client,
-                        idx,
-                        axis='prompt_pack',
-                        name='filegood',
-                        revision=None,
-                        expected_active=None,
-                    )
-                )
-                # The profile IS a real stored activation, so it WILL be cloned.
-                asyncio.run(
-                    activate(
-                        client,
-                        idx,
-                        axis='detection_profile',
-                        name='mp',
-                        revision=1,
-                        expected_active=None,
-                    )
-                )
-                asyncio.run(get_config_store().refresh(client))
+                asyncio.run(get_config_store().refresh())
                 sp, sprof = live_pair()
                 assert sp.name == 'filegood'
                 assert sp.class_system != 'STRIPPED'
                 assert sprof is not None
                 assert sprof.max_regions_per_item == 3
 
-            from src.services.projects import lifecycle as lm, registry as rm
+            from src.services.projects import (
+                lifecycle as lm,
+                records as records_mod,
+                registry as rm,
+                store as store_mod,
+            )
             from src.services.projects.clone import clone_settings_into
 
-            saved = (lm._resolve_existing, lm._get_mutable_record, lm.write_record)
+            saved = (
+                lm._resolve_existing,
+                lm._get_mutable_record,
+                store_mod.run_repo,
+                records_mod.record_from_row,
+            )
             saved_reg = rm.get_project_registry
             lm._resolve_existing = AsyncMock(return_value=source)
-            lm._get_mutable_record = AsyncMock(return_value=(target, 1, 1))
-            lm.write_record = AsyncMock(return_value=None)
+            lm._get_mutable_record = AsyncMock(return_value=target)
+            store_mod.run_repo = AsyncMock(return_value=target)
+            records_mod.record_from_row = lambda row: row
             reg = MagicMock()
             reg.ensure_fresh = AsyncMock(return_value=None)
             rm.get_project_registry = lambda: reg
@@ -163,7 +143,12 @@ def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
             except Exception as exc:
                 outcome = repr(exc)[:400]
             finally:
-                lm._resolve_existing, lm._get_mutable_record, lm.write_record = saved
+                (
+                    lm._resolve_existing,
+                    lm._get_mutable_record,
+                    store_mod.run_repo,
+                    records_mod.record_from_row,
+                ) = saved
                 rm.get_project_registry = saved_reg
 
             # The gate must reject this clone: pairing 'mp' (3 regions) with the TARGET's
@@ -177,7 +162,7 @@ def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
             # And the store itself was never mutated -- no partial write
             # landed the profile axis before the rejection.
             with bind_project(target):
-                asyncio.run(get_config_store().refresh(client))
+                asyncio.run(get_config_store().refresh())
                 assert get_config_store().current.active_profile is None
         finally:
             for k, v in old.items():

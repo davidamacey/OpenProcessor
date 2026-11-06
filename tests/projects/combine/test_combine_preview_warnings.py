@@ -7,9 +7,8 @@ from typing import Any
 
 import pytest
 
-from src.config import get_curation_config
 from src.config.project_context import bind_project
-from src.services.config_store.index import activation_doc_id, config_doc_id
+from src.services.config_store.documents import activate, save_config
 from src.services.projects.combine import service
 
 from .test_combine_preview import BOX
@@ -58,19 +57,22 @@ async def test_matching_vector_dimensions_do_not_warn(world: World) -> None:
     assert not [c for c in await _warnings(world) if c.startswith('embedding_model_mismatch')]
 
 
-def _activate_profile(world: World, slug: str, name: str, body: dict[str, Any]) -> None:
-    """Seed the stored revision copy and the activation doc, as ``activate`` leaves them."""
+async def _activate_profile(world: World, slug: str, name: str, body: dict[str, Any]) -> None:
+    """Store the profile and activate its revision, as the activate route leaves them."""
     with bind_project(world.records[slug]):
-        docs = world.fake.docs(get_curation_config().configs_index)
-    docs[config_doc_id('region_profile', name, 1)] = {'name': name, 'revision': 1, 'body': body}
-    docs[activation_doc_id('detection_profile')] = {'name': name, 'revision': 1}
+        saved, _ = await save_config(
+            kind='region_profile', name=name, body=body, expected_revision=None
+        )
+        await activate(
+            axis='detection_profile', name=name, revision=saved.revision, expected_active=None
+        )
 
 
 @pytest.mark.asyncio
 async def test_different_region_profiles_warn_and_name_the_target_profile(world: World) -> None:
     _two_projects(world)
-    _activate_profile(world, 'a', 'wheels', {'max_regions_per_item': 3})
-    _activate_profile(world, 'b', 'wheels', {'max_regions_per_item': 5})
+    await _activate_profile(world, 'a', 'wheels', {'max_regions_per_item': 3})
+    await _activate_profile(world, 'b', 'wheels', {'max_regions_per_item': 5})
     warning = (await _warnings(world, settings_from='b'))['region_profiles_differ']
     names = {p['project']: p['name'] for p in warning.detail['profiles']}
     assert names == {'a': 'wheels', 'b': 'wheels'}

@@ -34,7 +34,7 @@ async def list_class_sources() -> dict[str, list[dict[str, str]]]:
 @router.get('/classes', response_model=ClassListResponse)
 async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     """List every class in the registry, with live counts from the items index."""
-    reg = await get_class_registry().snapshot(opensearch)
+    reg = await get_class_registry().snapshot()
     # Three counts per class, aggregated in one round-trip:
     #   * counts[cid]      = items whose class_id == cid (labeled)
     #   * validated[cid]   = items with class_id == cid AND class_validated=true
@@ -148,25 +148,25 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 class_id=c.class_id,
                 class_name=c.class_name,
                 group=c.group,
-                sample_count=counts.get(c.class_id, c.sample_count),
-                validated_count=validated.get(c.class_id, c.validated_count),
+                sample_count=counts.get(c.class_id, 0),
+                validated_count=validated.get(c.class_id, 0),
                 cluster_size=cluster_size.get(c.class_id, 0),
                 deprecated=c.deprecated,
                 merged_into=getattr(c, 'merged_into', None),
                 hotkey_letter=getattr(c, 'hotkey_letter', None),
-                adequacy=adequacy(validated.get(c.class_id, c.validated_count)),
+                adequacy=adequacy(validated.get(c.class_id, 0)),
                 added_at=getattr(c, 'added_at', None),
                 kind='region' if is_region_class(c) else 'item',
-                trainable=_trainable(c.class_id, validated.get(c.class_id, c.validated_count)),
+                trainable=_trainable(c.class_id, validated.get(c.class_id, 0)),
                 trainable_gap=max(
                     0,
-                    hard_min - _trainable(c.class_id, validated.get(c.class_id, c.validated_count)),
+                    hard_min - _trainable(c.class_id, validated.get(c.class_id, 0)),
                 ),
             )
             for c in reg.classes
         ],
         thresholds=thresholds,
-        reserved_hotkeys=await project_reserved_hotkeys(opensearch),
+        reserved_hotkeys=await project_reserved_hotkeys(),
     )
 
 

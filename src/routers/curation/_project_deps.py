@@ -36,7 +36,7 @@ _SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
 async def _resolve_and_bind(slug: str) -> ProjectRecord:
     registry = get_project_registry()
     record = await registry.lookup(slug)
-    if record is None or record.status == 'deleted':
+    if record is None:
         raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
     if record.status == 'building':
         raise api_error(
@@ -77,6 +77,12 @@ async def bind_path_project(request: Request, project: Annotated[str, Path()]) -
                 f"project '{project}' is bound read-only; refusing a {request.method}",
                 project=project,
             )
+    # Every project route reads the active profiles, packs and VLM from this API worker's
+    # snapshot: an activation made through another worker must reach this one within a second,
+    # not only when a config route happens to land here.
+    from src.services.config_store import get_config_store
+
+    await get_config_store().ensure_fresh()
     return record
 
 

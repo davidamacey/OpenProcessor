@@ -335,13 +335,13 @@ class TestIsSecondaryShape:
     async def test_explicit_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for grp in worker_state.region_profile().secondary_shape_groups:
             monkeypatch.setattr(worker_state, '_class_group', class_group_answer(grp))
-            assert await worker_state._is_secondary_shape(_make_task(class_name='some-class'), None)
+            assert await worker_state._is_secondary_shape(_make_task(class_name='some-class'))
 
     @pytest.mark.asyncio
     async def test_non_secondary_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for grp in ('cars', 'sportycars', 'exotics'):
             monkeypatch.setattr(worker_state, '_class_group', class_group_answer(grp))
-            assert not await worker_state._is_secondary_shape(_make_task(class_name='audi'), None)
+            assert not await worker_state._is_secondary_shape(_make_task(class_name='audi'))
 
     @pytest.mark.asyncio
     async def test_no_registry_group_is_never_secondary_shape(
@@ -352,7 +352,7 @@ class TestIsSecondaryShape:
         # not routed to the secondary-shape path.
         monkeypatch.setattr(worker_state, '_class_group', class_group_answer(None))
         t = _make_task(class_name='class_b')
-        assert not await worker_state._is_secondary_shape(t, None)
+        assert not await worker_state._is_secondary_shape(t)
 
     @pytest.mark.asyncio
     async def test_registry_group_takes_priority_over_class_name(
@@ -362,4 +362,4 @@ class TestIsSecondaryShape:
         the class name itself is never inspected."""
         monkeypatch.setattr(worker_state, '_class_group', class_group_answer('cars'))
         t = _make_task(class_name='class_b')
-        assert not await worker_state._is_secondary_shape(t, None)
+        assert not await worker_state._is_secondary_shape(t)

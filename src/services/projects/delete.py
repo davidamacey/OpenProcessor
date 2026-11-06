@@ -12,11 +12,14 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
-from src.config.projects import DEFAULT_SLUG, ProjectStatus
+from src.config.projects import DEFAULT_SLUG, new_project_record
+from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
+from src.db.repos import projects as repo
 from src.schemas.curation.config_common import ModelSharingUser
 from src.services.config_store.project_usage import model_dependents
 from src.services.projects.delete_models import _shared_model_users, _unload_owned_models
@@ -26,10 +29,11 @@ from src.services.projects.delete_paths import (
     _validate_delete_paths,
 )
 from src.services.projects.mlflow_cleanup import MlflowCleanup, delete_experiment
-from src.services.projects.registry import get_project_registry, get_record_with_seq
+from src.services.projects.records import record_from_row
+from src.services.projects.registry import get_project_registry
+from src.services.projects.store import get_row, run_repo
 from src.services.rejections import rejection
 from src.services.training.model_classes import owned_model_names
-from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -53,39 +57,11 @@ _DELETABLE_STATUSES = frozenset({'active', 'archived', 'failed'})
 # create in progress, so it stays refused.
 _BUILDING_STALE_SECONDS = 120.0
 
-# P3F pass-3 MA1 probe 2: a re-DELETE issued while a first finish's
-# drain wait is still running must never let a SECOND finish run to
-# completion concurrently -- both would independently decide the
-# record's fate (rollback vs. tombstone) with no coordination between
-# them, and whichever writes last wins, including a finish that deletes
-# a project its own drain-timed-out sibling just rolled back to
-# 'active'.
-#
-# P3F pass-4 F1 correction: this guard is PER-WORKER-PROCESS ONLY --
-# api runs `--workers=32` (docker-compose.yml), and each worker has
-# its own, separate, empty copy of this set. It stops the race only
-# within the one worker process that happens to handle both the
-# original DELETE and its retry. A retried DELETE that a proxy/client
-# lands on a DIFFERENT worker (31 times out of 32 in production) sees an
-# empty guard here and would previously have run its own finish to
-# completion regardless of what a sibling finish on another worker had
-# already done to the same record -- the review's cross-worker probe
-# showed exactly this: finish A timed out and rolled the record back to
-# 'active', and finish B (on a simulated second worker, unaware of A)
-# went on to unload the models and delete all 7 indexes of what was, by
-# then, an 'active' project.
-#
-# The actual cross-process protection is the claim write in
-# `delete_project_finish`, right after the drain succeeds and before the
-# first irreversible step: it re-reads the record with
-# `_refetch_for_write(expect_status='deleting')` and writes it back
-# through the OCC-guarded `write_record`. That is a real cross-process
-# mutual-exclusion primitive built on OpenSearch's own document
-# versioning (i.e. the same machinery `expect_status` already uses
-# elsewhere in this module), so it works across all 32 workers -- not
-# just this in-memory set, which remains useful only as a fast,
-# zero-round-trip guard against a duplicate finish racing itself within
-# one worker.
+# A re-DELETE issued while a first finish's drain wait is still running must never let a second
+# finish run to completion concurrently. This set is a fast, zero-round-trip guard within one
+# worker process only (the API runs many); the cross-process protection is the claim in
+# ``delete_project_finish``: a revision-guarded UPDATE of the ``deleting`` row, of which exactly one
+# concurrent finisher wins.
 _FINISH_IN_PROGRESS: set[str] = set()
 
 
@@ -164,9 +140,7 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
     promoted_models = owned_model_names(record.slug)
     referenced_by: list[dict[str, str]] = []
     try:
-        referenced_by = await model_dependents(
-            client, record.slug, await _shared_model_users(record)
-        )
+        referenced_by = await model_dependents(record.slug, await _shared_model_users(record))
     except Exception:
         blocking.append(
             {
@@ -227,19 +201,15 @@ async def _wait_for_drain(record: ProjectRecord) -> bool:
 
 
 async def delete_project(
-    client: Any,
     *,
     slug: str,
     confirm: str | None,
     force: bool = False,
 ) -> ProjectRecord:
-    """§4 guarded delete, background-completing (delta 10): the caller
-    gets the ``deleting`` record back immediately (202), and this
-    function runs the rest (drain wait, index/dir removal, tombstone) as
-    a background task so a slow delete never blocks past a proxy
-    timeout. Call :func:`delete_project_finish` to run steps 3-9; this
-    function only validates and flips the status."""
-    from src.services.projects.lifecycle import _get_mutable_record, write_record
+    """§4 guarded delete, background-completing (delta 10): the caller gets the ``deleting`` record
+    back immediately (202), and :func:`delete_project_finish` runs the rest (drain wait, index and
+    dir removal, retiring the slug) as a background task so a slow delete never blocks past a proxy
+    timeout. This function only validates and flips the status."""
     from src.services.projects.lifecycle_checks import (
         _last_active_check,
         _require_transition,
@@ -247,21 +217,10 @@ async def delete_project(
         running_jobs,
     )
 
-    # MA1: read the record ONCE, fresh (bypassing the registry's
-    # in-process cache -- ``_get_mutable_record`` is a direct
-    # get-by-id), and run every precondition check plus the write
-    # itself against that SAME read's seq/term. The prior version
-    # checked preconditions against a possibly-stale registry snapshot
-    # (``_resolve_existing``) and then re-read fresh immediately before
-    # the write -- a re-read taken right before a write always has a
-    # trivially-current seq/term, so OCC could never catch a doc that
-    # changed between the check and the write. Using ONE read for both
-    # means a real race (another writer landing in between) now
-    # genuinely conflicts (409 revision_conflict) instead of silently
-    # racing through.
-    record, seq, term = await _get_mutable_record(client, slug)
-    if record.status == 'deleted':
-        raise rejection(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+    # Read the row ONCE, fresh from the database, and run every precondition check plus the write
+    # against that same read's revision: a writer landing in between makes the write a 409
+    # revision_conflict instead of racing through.
+    record = record_from_row(await get_row(slug))
 
     if record.slug == DEFAULT_SLUG:
         raise rejection(
@@ -272,29 +231,20 @@ async def delete_project(
         )
 
     if record.status == 'deleting':
-        # M4 retry: a failed finish (a failed index or model-unload step)
-        # leaves the record 'deleting', retryable -- but m3's normal
-        # transition rule below refuses re-flipping a 'deleting' record,
-        # so a retry needs its own path. Every upfront check (busy,
-        # last-active, shared-model) already passed the first time a
-        # real delete flipped this record to 'deleting'; re-running them
-        # here would only block a legitimate retry. confirm is still
-        # required, so a bare accidental DELETE can't silently kick off a
-        # re-finish. The caller (the router) unconditionally re-schedules
-        # delete_project_finish after this returns, so returning the
-        # unchanged record is sufficient to retry.
+        # Retry of a failed finish (a failed index or model-unload step leaves the row
+        # 'deleting'): the normal transition rule below refuses re-flipping it, so a retry needs
+        # its own path. Every upfront check already passed the first time; re-running them here
+        # would only block a legitimate retry. confirm is still required, so a bare accidental
+        # DELETE cannot silently kick off a re-finish. The caller unconditionally re-schedules
+        # delete_project_finish after this returns.
         if confirm is None:
             raise rejection(422, 'confirm_mismatch', 'confirm is required for a real delete')
         if confirm != slug:
             raise rejection(422, 'confirm_mismatch', f"confirm must equal the slug '{slug}'")
         return record
 
-    # N1 escape hatch: a 'building' record stale enough that its create
-    # almost certainly crashed (never a live one -- see
-    # _is_stale_building) is deletable too. m3's normal rule
-    # (active|archived|failed -> deleting) would otherwise wedge it
-    # forever: nothing else can ever flip a 'building' record out of
-    # 'building'.
+    # A 'building' row stale enough that its create almost certainly crashed (never a live one)
+    # is deletable too; nothing else can ever flip a 'building' row out of 'building'.
     started_from_stale_building = record.status == 'building' and _is_stale_building(record)
     allowed = (
         _DELETABLE_STATUSES | frozenset({'building'})
@@ -321,7 +271,7 @@ async def delete_project(
     shared_models = await _shared_model_users(record)
     if shared_models and not force:
         try:
-            dependents = await model_dependents(client, record.slug, shared_models)
+            dependents = await model_dependents(record.slug, shared_models)
         except Exception as exc:
             raise rejection(
                 503,
@@ -348,19 +298,20 @@ async def delete_project(
             shared_models=shared_models,
         )
 
-    # m2: pre_delete_status is what M3's rollback (below, in
-    # delete_project_finish) restores on a drain timeout -- if this
-    # delete started from a stale 'building' record, restoring
-    # 'building' would recreate the exact N1 wedge, so land any rollback
-    # in 'failed' (recoverable through the ordinary path) instead of the
-    # record's real prior status.
-    pre_delete_status = 'failed' if started_from_stale_building else record.status
-    deleting = replace(
-        record, status='deleting', pre_delete_status=pre_delete_status, updated_at=now_iso()
+    # pre_delete_status is what the rollback on a drain timeout restores. A delete that started
+    # from a stale 'building' row rolls back to 'failed' (recoverable through the ordinary path),
+    # never to 'building', which would recreate the wedge.
+    row = await run_repo(
+        'mark a project deleting',
+        repo.mark_deleting,
+        slug,
+        from_states=allowed,
+        pre_delete_status='failed' if started_from_stale_building else None,
+        expected_revision=record.revision,
+        action='delete',
     )
-    await write_record(client, deleting, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
-    return deleting
+    return record_from_row(row)
 
 
 @dataclass(frozen=True)
@@ -373,45 +324,32 @@ class DeleteFinished:
 
 
 async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
-    """Steps 3-9 of the guarded delete (§4): validate every dir path,
-    drain wait, unload the project's own promoted models, delete the
-    exact indexes, remove the dirs, soft-delete the MLflow experiment over REST
-    (outcome reported in :class:`DeleteFinished`), tombstone.
+    """Steps 3-9 of the guarded delete (§4): validate every dir path, drain wait, unload the
+    project's own promoted models, delete the exact indexes, remove the dirs, soft-delete the
+    MLflow experiment over REST (outcome reported in :class:`DeleteFinished`), then in one
+    transaction retire the slug and delete the row.
 
-    Path validation (m-a) runs FIRST, before any irreversible step --
-    previously it ran only inside the dir-removal step, itself after
-    index deletion had already run, so a ``path_escape`` left the
-    record wedged ``deleting`` with the indexes already gone and no way
-    back (every retry hits the same escape again).
+    Path validation runs FIRST, before any irreversible step. Immediately after a successful drain
+    wait, and still before any irreversible step, this claims exclusive ownership of the finish
+    with a revision-guarded UPDATE of the ``deleting`` row: of two finishers reading one revision,
+    exactly one wins, in every API worker (``_FINISH_IN_PROGRESS`` is per-process only).
 
-    Immediately after a successful drain wait, and still before any
-    irreversible step, this claims exclusive ownership of the finish
-    with an OCC-guarded re-read-and-write (P3F pass-4 F1) -- the one
-    protection here that actually holds across ``--workers=32``
-    processes, not just within this one (``_FINISH_IN_PROGRESS`` above
-    is per-process only).
+    Model unload runs before index deletion: once the indexes are gone there is no cheap step back
+    if unload then fails, where retrying an unload against an already-unloaded model is a clean
+    no-op (``ModelNotPromotedError``, handled in :func:`_unload_owned_models`).
 
-    Model unload runs before index deletion, not alongside or after:
-    once the indexes are gone there is no cheap step back if unload then
-    fails, where retrying an unload against an already-unloaded model is
-    a clean, idempotent no-op (``ModelNotPromotedError``, handled in
-    :func:`_unload_owned_models`).
-
-    Idempotent: safe to re-run after a crash between any two steps,
-    because every step here is itself idempotent (model unload tolerates
-    "already gone", index delete uses ``ignore=[404]``,
-    ``rmtree(ignore_errors=True)``, and the final ``deleted`` write is
-    OCC-guarded so a duplicate run is a no-op)."""
-    from src.services.projects.lifecycle import _refetch_for_write, write_record
-
-    stored, _, _ = await get_record_with_seq(client, slug)
-    if stored is None:
-        raise rejection(404, 'project_not_found', f"no project named '{slug}'", project=slug)
-    record = stored
-    if record.status == 'deleted':
-        return DeleteFinished(
-            record, MlflowCleanup('done', 'already deleted; cleaned up by the first finish')
-        )
+    Idempotent: safe to re-run after a crash between any two steps, because every step is itself
+    idempotent (model unload tolerates "already gone", index delete uses ``ignore=[404]``,
+    ``rmtree(ignore_errors=True)``, and a finished delete is a retired slug)."""
+    try:
+        record = record_from_row(await get_row(slug))
+    except RequestRejectedError:
+        if slug in get_project_registry().retired_slugs():
+            return DeleteFinished(
+                replace(new_project_record(slug, base_curation_config()), status='deleted'),
+                MlflowCleanup('done', 'already deleted; cleaned up by the first finish'),
+            )
+        raise
 
     if slug in _FINISH_IN_PROGRESS:
         raise rejection(
@@ -422,69 +360,39 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
         )
     _FINISH_IN_PROGRESS.add(slug)
     try:
-        # m-a: validate every dir BEFORE any irreversible step (index
-        # deletion, below) runs.
+        # Validate every dir BEFORE any irreversible step (index deletion, below) runs.
         _validate_delete_paths(record)
 
         drained = await _wait_for_drain(record)
         if not drained:
-            # M3: roll back to the status delete found it in, not always
-            # 'failed'. m2: base the rollback doc on a fresh read (the
-            # drain wait can run up to _DELETE_DRAIN_TIMEOUT_SECONDS), not
-            # the possibly-stale `record` read at the top of this
-            # function. MA1: `expect_status='deleting'` refuses the
-            # rollback if the fresh read is no longer 'deleting' (e.g.
-            # some other writer already resolved this record) instead of
-            # blindly overwriting a status this call never validated.
-            rolled_back, seq, term = await _refetch_for_write(
-                client,
-                slug,
-                expect_status='deleting',
-                status=cast('ProjectStatus', record.pre_delete_status) or 'failed',
-                pre_delete_status=None,
-                updated_at=now_iso(),
-            )
-            await write_record(client, rolled_back, if_seq_no=seq, if_primary_term=term)
+            # Roll back to the status delete found. `from_states=('deleting',)` refuses the
+            # rollback if some other writer already resolved this row.
+            await run_repo('roll back a delete', repo.rollback_delete, slug)
             await get_project_registry().ensure_fresh()
             raise rejection(
                 409, 'project_busy', f"'{slug}' did not drain within the timeout", project=slug
             )
 
-        # F1: claim exclusive ownership of this finish, right here --
-        # after the drain succeeded, before the first irreversible step
-        # (model unload, below). `_FINISH_IN_PROGRESS` above is per-
-        # worker-process only, so a finish running on a DIFFERENT worker
-        # (the common case under `--workers=32`) has its own, empty copy
-        # and would otherwise have no way to know that a sibling finish
-        # for this same slug already rolled the record back to 'active'
-        # (M3 drain timeout) or otherwise moved it on. Re-reading fresh
-        # here with `expect_status='deleting'` makes THIS read the one
-        # thing that decides who still owns the finish: if some other
-        # finish already resolved the record, the fresh status is no
-        # longer 'deleting' and this raises 409 `invalid_transition`
-        # before anything destructive runs. If two finishes' claim reads
-        # both see 'deleting' and race each other's writes, only one
-        # write's seq/term is still current by the time it executes --
-        # the other gets `RevisionConflictError`, translated by
-        # `write_record` into 409 `revision_conflict`. Either way this is
-        # a genuine cross-process mutual-exclusion primitive built on
-        # OpenSearch's own document versioning, not an in-memory guard
-        # only one process can see. `record` is reassigned to the freshly
-        # claimed doc so every step below works from the same read that
-        # won this race, not the possibly-stale read from the top of this
-        # function.
-        claimed, seq, term = await _refetch_for_write(
-            client, slug, expect_status='deleting', updated_at=now_iso()
+        # Claim the finish, after the drain succeeded and before the first irreversible step. A
+        # fresh read says what the row is now; if another finisher already resolved it the status
+        # is no longer 'deleting' and this raises 409 invalid_transition before anything
+        # destructive runs; two claims reading one revision cannot both win.
+        fresh = await get_row(slug)
+        claimed = record_from_row(
+            await run_repo(
+                'claim a project delete',
+                repo.claim_delete,
+                slug,
+                expected_revision=fresh.revision,
+            )
         )
-        await write_record(client, claimed, if_seq_no=seq, if_primary_term=term)
         record = claimed
 
         failed_models = await _unload_owned_models(record)
         if failed_models:
-            # Same M4 rule as the index-delete failure below: leave the
-            # record 'deleting' (retryable via the M4 retry path in
-            # delete_project) rather than tombstoning past a model still
-            # live in Triton.
+            # Same rule as the index-delete failure below: leave the row 'deleting' (retryable via
+            # the retry path in delete_project) rather than retiring past a model still live in
+            # Triton.
             raise rejection(
                 409,
                 'project_busy',
@@ -494,11 +402,9 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
 
         failed_indexes = await _delete_indexes(client, record)
         if failed_indexes:
-            # M4: never tombstone past a failed index delete -- that
-            # permanently orphans the leftover indexes (the retired slug
-            # can never re-reach them). Leave the record 'deleting' so a
-            # re-issued DELETE retries; every step here is itself
-            # idempotent.
+            # Never retire past a failed index delete -- that permanently orphans the leftover
+            # indexes (the retired slug can never re-reach them). Leave the row 'deleting' so a
+            # re-issued DELETE retries; every step here is itself idempotent.
             raise rejection(
                 409,
                 'project_busy',
@@ -510,18 +416,15 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
         await _delete_dirs(record)
         mlflow_cleanup = await delete_experiment(record.resources.mlflow_experiment)
 
-        # MA1: expect_status='deleting' -- the same defense as the
-        # rollback above, on the write that makes the tombstone
-        # permanent.
-        tombstoned, seq, term = await _refetch_for_write(
-            client, slug, expect_status='deleting', status='deleted', updated_at=now_iso()
-        )
-        await write_record(client, tombstoned, if_seq_no=seq, if_primary_term=term)
+        # One transaction: retire the slug, delete the row (the cascade removes every control
+        # row), bump the registry counter. `from_states=('deleting',)` makes a duplicate finish
+        # fail instead of deleting twice.
+        await run_repo('finish a project delete', repo.finish_delete, slug)
         await get_project_registry().ensure_fresh()
 
         from src.services.projects.capacity import invalidate_capacity_cache
 
-        invalidate_capacity_cache()  # m7: the delete just freed this project's shards
+        invalidate_capacity_cache()  # the delete just freed this project's shards
 
         logger.info(
             'project_deleted',
@@ -529,7 +432,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
             mlflow_cleanup=mlflow_cleanup.outcome,
             mlflow_cleanup_reason=mlflow_cleanup.reason,
         )
-        return DeleteFinished(tombstoned, mlflow_cleanup)
+        return DeleteFinished(replace(record, status='deleted'), mlflow_cleanup)
     finally:
         _FINISH_IN_PROGRESS.discard(slug)
 

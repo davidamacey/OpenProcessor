@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
 import pytest
+from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 
 
 if TYPE_CHECKING:
@@ -20,15 +19,12 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _reset_caches() -> Iterator[None]:
-    from src.clients.curation_opensearch import settings_doc
     from src.services.config_store.store import reset_config_stores
     from src.services.curation.field_coverage import _reset_field_coverage_cache
 
-    settings_doc._settings_cache.clear()
     reset_config_stores()
     _reset_field_coverage_cache()
     yield
-    settings_doc._settings_cache.clear()
     reset_config_stores()
     _reset_field_coverage_cache()
 
@@ -37,7 +33,7 @@ def _reset_caches() -> Iterator[None]:
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeConfigOpenSearch()
+    fake_os = object()  # the config routes no longer read OpenSearch
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -46,9 +42,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
-    return client
+    return revision_aware(TestClient(app))
 
 
 def test_put_prompt_pack_activates_through_store(app_client: TestClient) -> None:
@@ -191,19 +185,17 @@ def test_put_prompt_pack_activates_a_stored_pack_at_its_real_revision(
 ) -> None:
     """M6: activating a STORED pack (not an env/file id) through the
     settings bridge must stamp its own current revision, not `None` --
-    every other process's `_axis_ref` read used to coerce a `None`
-    revision to `0`, so two processes disagreed about which revision
-    was active."""
+    every other process's read used to coerce a `None` revision to `0`, so
+    two processes disagreed about which revision was active."""
+    import asyncio
+
     from src.config.project_context import bind_project
-    from src.services.config_store.index import save_config
+    from src.services.config_store.documents import save_config
     from src.services.config_store.store import ConfigStore, reset_config_stores
     from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
-    fake_os = app_client.fake_os  # type: ignore[attr-defined]
-
-    async def _seed() -> tuple[int, str]:
+    async def _seed() -> int:
         from src.config.curation_accessors import base_curation_config
-        from src.config.curation_roles import IndexRole
         from src.config.projects import ProjectRecord, resources_for_new
 
         record = ProjectRecord(
@@ -218,21 +210,13 @@ def test_put_prompt_pack_activates_a_stored_pack_at_its_real_revision(
             resources=resources_for_new('default', base_curation_config()),
         )
         with bind_project(record):
-            idx = resources_for_new('default', base_curation_config()).indexes[IndexRole.CONFIGS]
             body = {**GENERIC_ITEM_PACK.to_dict(), 'name': 'stored_pack'}
-            doc = await save_config(
-                fake_os,
-                idx,
-                kind='prompt_pack',
-                name='stored_pack',
-                body=body,
-                expected_revision=None,
+            saved, _ = await save_config(
+                kind='prompt_pack', name='stored_pack', body=body, expected_revision=None
             )
-            return doc['revision'], idx
+            return saved.revision
 
-    import asyncio
-
-    revision, idx = asyncio.run(_seed())
+    revision = asyncio.run(_seed())
 
     r = app_client.put(
         '/curation/projects/default/settings',
@@ -241,14 +225,11 @@ def test_put_prompt_pack_activates_a_stored_pack_at_its_real_revision(
     assert r.status_code == 200, r.text
 
     # A fresh ConfigStore (simulating another process that never wrote
-    # this activation itself) reads the activation doc from scratch.
+    # this activation itself) reads the activation from scratch.
     reset_config_stores()
-    other_process_store = ConfigStore(index=idx, mode='live')
+    other_process_store = ConfigStore(mode='live', label='default')
 
-    async def _refresh() -> None:
-        await other_process_store.refresh(fake_os)
-
-    asyncio.run(_refresh())
+    asyncio.run(other_process_store.refresh())
     assert other_process_store.current.active_pack == ('stored_pack', revision)
     assert other_process_store.current.active_pack != ('stored_pack', 0)
 
@@ -268,11 +249,8 @@ async def test_settings_doc_key_cannot_override_the_active_pack() -> None:
 
 
 def test_get_settings_hides_a_stale_config_store_key(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, memory_settings
 ) -> None:
-    stale = AsyncMock(
-        return_value={'defaults': {'prompt_pack': 'ghost'}, 'updated_at': None, 'updated_by': None}
-    )
-    monkeypatch.setattr('src.clients.curation_opensearch.settings_doc.get_curation_settings', stale)
+    memory_settings.defaults['prompt_pack'] = 'ghost'
     r = app_client.get('/curation/projects/default/settings')
     assert 'ghost' not in r.json()['defaults'].values()

@@ -13,6 +13,9 @@ import pytest
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+
+
 @pytest.mark.asyncio
 async def test_bootstrap_retries_until_opensearch_is_reachable(
     fake_registry_client: Any, monkeypatch: pytest.MonkeyPatch
@@ -32,11 +35,11 @@ async def test_bootstrap_retries_until_opensearch_is_reachable(
     monkeypatch.setattr(guard, 'make_curation_opensearch', _flaky_client)
     monkeypatch.setattr(bootstrap, '_BOOTSTRAP_RETRY_INITIAL_S', 0.01)
 
-    async def _seed(_client: Any) -> None:
+    async def _seed() -> None:
         seeded.append('seeded')
 
     monkeypatch.setattr(bootstrap, '_seed_region_classes', _seed)
-    registry = ProjectRegistry(lambda: fake_registry_client)
+    registry = ProjectRegistry()
     set_project_registry(registry)
     try:
         task = await bootstrap.startup_bootstrap_project_registry_safe()

@@ -225,10 +225,9 @@ a dataset, a combined source or a promoted model is matched to it by name.
 | POST | `/classes/merge` | Merge `source_id` into `target_id`; `?dry_run=true` previews |
 | POST | `/classes/{class_id}/deprecate` | Retire a class that has no data yet |
 | POST | `/classes/{class_id}/restore` | Restore it |
-| POST | `/classes/sync_to_opensearch` | Re-sync the JSON registry into the classes index |
 
-The registry is a JSON file in the project's data directory; the first
-`POST /classes` creates it with dense ids starting at 0. A hotkey that the
+The registry lives in the control database; the first `POST /classes` gives class id 0 and each
+later class the next id, which is never reused. A hotkey that the
 project's keymap reserves answers `422 hotkey_reserved`; one that another
 class holds answers `409 hotkey_taken`.
 

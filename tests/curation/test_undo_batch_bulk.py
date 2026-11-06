@@ -6,6 +6,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+import pytest
+
 from curation.label_ops_env import build_env, proposal
 from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.schemas.curation.label_ops import CropUndoBatchResponse
@@ -14,9 +16,12 @@ from src.schemas.curation.label_ops import CropUndoBatchResponse
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
 
 N = 1_300
+
+
+pytest_plugins = ['_records_world']
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world')]
 
 
 def _ids(count: int) -> list[str]:

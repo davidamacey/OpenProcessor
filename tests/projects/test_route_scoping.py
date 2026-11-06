@@ -63,6 +63,12 @@ GLOBAL_ROUTES = frozenset(
         ('PUT', f'{API}/vlm/endpoints/{{name}}'),
         ('DELETE', f'{API}/vlm/endpoints/{{name}}'),
         ('POST', f'{API}/vlm/endpoints/{{name}}/probe'),
+        ('GET', f'{API}/serving_profiles'),
+        ('GET', f'{API}/serving_profiles/active'),
+        ('GET', f'{API}/serving_profiles/{{name}}'),
+        ('PUT', f'{API}/serving_profiles/{{name}}'),
+        ('DELETE', f'{API}/serving_profiles/{{name}}'),
+        ('POST', f'{API}/serving_profiles/{{name}}/activate'),
     }
 )
 

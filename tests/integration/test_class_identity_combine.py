@@ -24,8 +24,8 @@ from integration.test_class_identity_e2e import (
     step_real_export,
     step_stub_train_manifest,
 )
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.config.project_context import bind_project
+from src.services.classes.registry import get_class_registry
 from src.services.projects.combine import service
 
 
@@ -99,7 +99,7 @@ async def test_class_identity_holds_through_a_combine(tmp_path: Path, monkeypatc
     for registry_id, dense_id in dense_mapping.items():
         dense_names[dense_id] = names_by_id[registry_id]
     manifest = step_stub_train_manifest(dense_mapping, dense_names)
-    snapshot = await registry.snapshot(world.fake)
+    snapshot = await registry.snapshot()
     class_id_to_name, promote = step_promote_labels(  # type: ignore[arg-type]
         manifest, SimpleNamespace(load=lambda: snapshot)
     )

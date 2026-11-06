@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import HTTPException, Query
 
 from src.clients.opensearch.bulk import failed_bulk_items
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, logger, router
 from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
@@ -16,8 +18,9 @@ from src.services.curation.holdout import (
     build_cohort_query,
     compute_holdout_sha,
     fetch_cohort_strata,
-    persist_freeze_record,
+    freeze_transaction,
     select_test_holdout,
+    write_freeze_snapshot,
 )
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.utils.timeutil import now_iso
@@ -27,6 +30,7 @@ from src.utils.timeutil import now_iso
 async def freeze_test_holdout(
     payload: TestHoldoutFreezeRequest,
     opensearch: OpenSearchDep,
+    session: DbSessionDep,
     force: bool = Query(False, description='Allow re-running freeze (overwrites existing).'),
 ) -> TestHoldoutFreezeResponse:
     """Deterministic per-class sample of human-validated crops to ``test_holdout=true``.
@@ -44,8 +48,10 @@ async def freeze_test_holdout(
     Refuses (422) to freeze zero rows — a freeze that freezes nothing is
     never a success, and silently returning 200 with ``sha256('')`` hid
     that this endpoint has never actually frozen anything. Persists a
-    durable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad
-    freeze can be diagnosed and reverted from the recorded crop-id list.
+    durable freeze record (a ``holdout_freezes`` row and a snapshot of the crop-id
+    list) so a bad freeze can be diagnosed and reverted. The row is written first
+    inside the transaction that wraps the flagging: a database error refuses the
+    freeze before any item changes, and a failed flagging rolls the row back.
     """
     await ensure_indexes(opensearch)
     # Refuse re-run if an existing holdout exists.
@@ -97,45 +103,49 @@ async def freeze_test_holdout(
             ),
         )
 
-    # Bulk-flag.
-    bulk: list[dict[str, Any]] = []
-    now = now_iso()
-    for crop_id in chosen_ids:
-        bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
-        bulk.append({'doc': {'test_holdout': True, 'updated_at': now}})
-    try:
-        bulk_resp = await opensearch.bulk(body=bulk, refresh=True)
-    except Exception as exc:
-        raise server_error(503, 'bulk failed', exc) from exc
-
-    # Fail closed: a record (and sha) must cover exactly the flagged ids. A rerun is
-    # idempotent, so refuse rather than persist a partial freeze.
-    failed = failed_bulk_items(bulk_resp or {})
-    if failed:
-        failed_ids = [f['id'] for f in failed]
-        logger.error('curation_test_holdout_freeze_partial', failed=failed)
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                f'holdout freeze incomplete: {len(failed)} of {len(chosen_ids)} crops '
-                f'were not flagged (ids: {failed_ids[:20]}); no record persisted, retry'
-            ),
-        )
-
     digest = compute_holdout_sha(chosen_ids)
-
-    persist_freeze_record(
+    cohort_spec = {
+        'query': cohort_query,
+        'selection': 'sha1_per_class',
+        'percent': payload.percent,
+        'fraction': fraction,
+        'force': force,
+    }
+    snapshot_key = await asyncio.to_thread(
+        write_freeze_snapshot,
         crop_ids=chosen_ids,
         sha=digest,
-        cohort_spec={
-            'query': cohort_query,
-            'selection': 'sha1_per_class',
-            'percent': payload.percent,
-            'fraction': fraction,
-            'force': force,
-        },
+        cohort_spec=cohort_spec,
         per_class_counts=per_class,
     )
+
+    # Fail closed: the row is written first, inside the transaction that wraps the flagging.
+    # A database error refuses the freeze before any item changes; a partial flagging raises
+    # inside the block and rolls the row back, so a record always covers exactly the flagged
+    # ids. A rerun is idempotent.
+    async with freeze_transaction(
+        session, item_count=len(chosen_ids), snapshot_storage_key=snapshot_key
+    ):
+        bulk: list[dict[str, Any]] = []
+        now = now_iso()
+        for crop_id in chosen_ids:
+            bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
+            bulk.append({'doc': {'test_holdout': True, 'updated_at': now}})
+        try:
+            bulk_resp = await opensearch.bulk(body=bulk, refresh=True)
+        except Exception as exc:
+            raise server_error(503, 'bulk failed', exc) from exc
+        failed = failed_bulk_items(bulk_resp or {})
+        if failed:
+            failed_ids = [f['id'] for f in failed]
+            logger.error('curation_test_holdout_freeze_partial', failed=failed)
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f'holdout freeze incomplete: {len(failed)} of {len(chosen_ids)} crops '
+                    f'were not flagged (ids: {failed_ids[:20]}); no record persisted, retry'
+                ),
+            )
 
     return TestHoldoutFreezeResponse(
         n_frozen=len(chosen_ids),

@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 import structlog.testing
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 from src.clients.curation_opensearch import RegistryClassEntry
-from src.clients.curation_opensearch.registry import RegistryDoc
 from src.config import DetectionProfile
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
+from src.services.classes.registry import RegistryDoc
 from src.services.curation.ingest_detect import WholeImageDetector
 from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.detection import profile_registry

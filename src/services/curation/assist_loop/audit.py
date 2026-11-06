@@ -65,15 +65,13 @@ class AuditParams:
 
 
 async def resolve_audit_vlm(
-    opensearch: AsyncOpenSearch, vlm: str | None, *, pack: Any, acknowledge_external: bool
+    vlm: str | None, *, pack: Any, acknowledge_external: bool
 ) -> RunVlm | None:
     """Pin the audit endpoint through the run gate; ``None`` (no endpoint named) is an
     audit that is off."""
     if vlm is None:
         return None
-    return await resolve_run_vlm(
-        opensearch, vlm, pack=pack, acknowledge_external=acknowledge_external
-    )
+    return await resolve_run_vlm(vlm, pack=pack, acknowledge_external=acknowledge_external)
 
 
 class AuditJudge:

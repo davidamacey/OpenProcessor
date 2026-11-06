@@ -75,11 +75,6 @@ ErrorCode = Literal[
     'class_hotkey_conflict',
     'hotkey_reserved',
     'hotkey_taken',
-    # Class registry document: a 0.6.0 file not yet migrated, the 10,000-class bound, and
-    # five lost optimistic-concurrency races in a row.
-    'registry_not_migrated',
-    'registry_full',
-    'registry_conflict',
     # P3F m1: a delete-path directory guard refused because the persisted
     # record's own path pointed outside its expected root -- distinct
     # from internal_isolation_error (an OpenSearch-guard refusal).
@@ -507,8 +502,8 @@ class ActiveRef(BaseModel):
 
 class AppliedRuntime(BaseModel):
     """One worker process's "what did I actually apply" record,
-    served under ``ActiveConfigResponse.applied[]`` from
-    ``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``).
+    served under ``ActiveConfigResponse.applied[]`` from the
+    ``config_runtime_reports`` rows each worker writes.
     ``lagging`` is ``true`` when ``applied_config_revision`` is
     behind the axis's current ``config_revision`` for longer than the
     drain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a
@@ -526,28 +521,6 @@ class AppliedRuntime(BaseModel):
     applied_at: str | None = None
     lagging: bool = False
 
-    @classmethod
-    def from_runtime_doc(cls, doc: dict[str, Any], *, config_revision: int) -> AppliedRuntime:
-        """The record for one ``runtime:<process>:<host>`` doc, which the
-        worker writes flat (``profile`` / ``profile_revision`` / ``pack`` /
-        ``pack_revision`` / ``vlm`` / ``vlm_revision``). The one reader, for
-        every axis's ``/active`` route."""
-        applied_rev = int(doc.get('applied_config_revision') or 0)
-        return cls(
-            process=doc.get('process', 'detection_worker'),
-            host=doc.get('host', ''),
-            applied_config_revision=applied_rev,
-            profile=ActiveRef(name=doc.get('profile'), revision=doc.get('profile_revision')),
-            pack=ActiveRef(name=doc.get('pack'), revision=doc.get('pack_revision')),
-            vlm=(
-                ActiveRef(name=doc['vlm'], revision=doc.get('vlm_revision'))
-                if 'vlm' in doc
-                else None
-            ),
-            applied_at=doc.get('applied_at'),
-            lagging=applied_rev < config_revision,
-        )
-
 
 class ActiveConfigResponse(BaseModel):
     """``GET /prompt_packs/active`` / ``GET /region_profiles/active``;
@@ -561,9 +534,9 @@ class ActiveConfigResponse(BaseModel):
     deactivated -- ``active.name`` is ``None``). Never guessed from
     ``active`` alone: ``'env'`` is also nameless when no env default is
     configured, but only an explicit deactivation is ``'off'``.
-    ``activated_at`` is the activation doc's own timestamp -- ``None``
+    ``activated_at`` is the activation's own timestamp -- ``None``
     for ``'env'`` (there was no activation write). ``applied`` is every
-    live ``runtime:*`` doc for this axis (§4.5) -- empty when no worker
+    live worker report for this axis -- empty when no worker
     has ever applied anything, e.g. an API-only deployment.
     """
 

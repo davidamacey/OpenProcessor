@@ -30,10 +30,9 @@ _STATUS = {
 
 
 async def _refresh() -> None:
-    from src.services.projects.guard import make_curation_opensearch
 
     try:
-        await refresh_vlm_state(await make_curation_opensearch())
+        await refresh_vlm_state()
     except Exception as exc:
         logger.warning('models_status_vlm_refresh_failed', error=str(exc))
 

@@ -25,11 +25,12 @@ async def _interrupted(world: World, monkeypatch: pytest.MonkeyPatch) -> tuple[A
     world.records[target.slug] = dataclasses.replace(target, status='building')
     spawned: list[Any] = []
 
-    async def get_target(_client: Any, _slug: str) -> tuple[Any, int, int]:
-        await asyncio.sleep(0.01)  # a real OpenSearch round trip
-        return world.records[target.slug], 1, 1
+    class _Registry:
+        async def lookup(self, slug: str) -> Any:
+            await asyncio.sleep(0.01)  # a real database round trip
+            return world.records[slug]
 
-    monkeypatch.setattr(svc, 'get_record_with_seq', get_target)
+    monkeypatch.setattr(svc, 'get_project_registry', _Registry)
     monkeypatch.setattr(svc, '_spawn', lambda *a, **_k: spawned.append(a))
     return store, spawned
 
@@ -151,13 +152,14 @@ async def test_a_cancelled_job_resumed_through_the_service_runs_to_completion(
     monkeypatch.setattr(svc, '_spawn', real_spawn)  # a real worker this time
     target = world.records['combined']
 
-    async def get_target(_client: Any, _slug: str) -> tuple[Any, int, int]:
-        return target, 1, 1
+    class _Registry:
+        async def lookup(self, _slug: str) -> Any:
+            return target
 
     async def finish_building(_client: Any, _target: Any, *, ok: bool) -> None:
         assert ok
 
-    monkeypatch.setattr(svc, 'get_record_with_seq', get_target)
+    monkeypatch.setattr(svc, 'get_project_registry', _Registry)
     monkeypatch.setattr(lifecycle, 'finish_building', finish_building)
     store.job.update(status='cancelled')
     store.job.request_cancel()

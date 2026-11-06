@@ -8,19 +8,19 @@ from typing import Any
 
 import httpx
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
     ensure_open_vocab_fields,
 )
-from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.domain.ingest_class_sources import (
     OPEN_VOCAB_CLASS_SOURCE,
     unlabeled_proposal_class_sources,
 )
-from src.services.curation.class_ensure import ensure_class_by_name
+from src.services.classes.registry import ClassRegistryError
+from src.services.classes.resolve import ensure_class_by_name
 
 
 def _registry(*rows: tuple[int, str, bool]) -> InMemoryRegistry:
@@ -32,7 +32,7 @@ def _registry(*rows: tuple[int, str, bool]) -> InMemoryRegistry:
 @pytest.mark.asyncio
 async def test_ensure_class_matches_by_name_ignoring_case_and_deprecated() -> None:
     reg = _registry((0, 'Cone', True), (1, 'cone', False))
-    assert await ensure_class_by_name(reg, None, ' CONE ', group='g') == (1, 'cone')
+    assert await ensure_class_by_name(reg, ' CONE ', group='g') == (1, 'cone')
 
 
 @pytest.mark.asyncio
@@ -40,15 +40,15 @@ async def test_ensure_class_uses_the_one_name_equality_rule_and_returns_the_regi
     None
 ):
     reg = _registry((4, 'traffic_light', False))
-    assert await ensure_class_by_name(reg, None, 'Traffic Light', group='g') == (4, 'traffic_light')
+    assert await ensure_class_by_name(reg, 'Traffic Light', group='g') == (4, 'traffic_light')
     assert len(reg.load().classes) == 1
 
 
 @pytest.mark.asyncio
 async def test_ensure_class_adds_a_missing_name_once() -> None:
     reg = _registry((0, 'cup', False))
-    assert await ensure_class_by_name(reg, None, 'cone', group='g') == (1, 'cone')
-    assert await ensure_class_by_name(reg, None, 'cone', group='g') == (1, 'cone')
+    assert await ensure_class_by_name(reg, 'cone', group='g') == (1, 'cone')
+    assert await ensure_class_by_name(reg, 'cone', group='g') == (1, 'cone')
     assert len(reg.load().classes) == 2
 
 
@@ -56,8 +56,8 @@ async def test_ensure_class_adds_a_missing_name_once() -> None:
 async def test_ensure_class_concurrent_adds_of_the_same_name_share_one_id() -> None:
     reg = InMemoryRegistry()
     first, second = await asyncio.gather(
-        ensure_class_by_name(reg, None, 'cone', group='g'),
-        ensure_class_by_name(reg, None, 'cone', group='g'),
+        ensure_class_by_name(reg, 'cone', group='g'),
+        ensure_class_by_name(reg, 'cone', group='g'),
     )
     assert first == second
     assert len(reg.load().classes) == 1
@@ -66,7 +66,7 @@ async def test_ensure_class_concurrent_adds_of_the_same_name_share_one_id() -> N
 @pytest.mark.asyncio
 async def test_ensure_class_refuses_a_name_with_nothing_slug_safe() -> None:
     with pytest.raises(ClassRegistryError):
-        await ensure_class_by_name(InMemoryRegistry(), None, ' !! ', group='g')
+        await ensure_class_by_name(InMemoryRegistry(), ' !! ', group='g')
 
 
 def test_open_vocab_items_count_as_unlabeled_proposals() -> None:

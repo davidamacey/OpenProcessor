@@ -112,7 +112,7 @@ async def resolve_run_prompt_pack(
         from src.services.config_store import get_config_store
         from src.services.labeling.vlm_prompts import get_prompt_pack
 
-        await get_config_store().ensure_fresh(opensearch)
+        await get_config_store().ensure_fresh()
         # `revision is not None` only when `requested` carried an explicit
         # `name@rev` (checked above), so `resolve_strategy_selection` was
         # called with a non-`None` `name_only` and, having not raised,
@@ -151,7 +151,7 @@ async def resolve_run_prompt_pack(
         # which must stay untouched for the omitted-param path).
         from src.services.config_store import get_config_store
 
-        await get_config_store().ensure_fresh(opensearch)
+        await get_config_store().ensure_fresh()
         assert resolved is not None
         stored = get_config_store().current.packs.get(resolved)
         if stored is not None:

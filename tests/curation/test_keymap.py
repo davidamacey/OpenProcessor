@@ -7,13 +7,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _class_registry_fake import InMemoryRegistry
 from _curation_app import mount_curation_routers
-from _registry_doc_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation._cropwright_action_ids import CROPWRIGHT_ACTION_IDS
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.curation.keymap import (
     combo_grammar_error,
     effective_keys,
@@ -288,14 +287,14 @@ def registry(tmp_path: Any) -> InMemoryRegistry:
 
 
 @pytest.fixture
-def fake_os() -> FakeConfigOpenSearch:
-    return FakeConfigOpenSearch()
+def fake_os():
+    from curation.query_fakes import QueryFakeOpenSearch
+
+    return QueryFakeOpenSearch({})
 
 
 @pytest.fixture
-def client(
-    registry: InMemoryRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
-):
+def client(registry: InMemoryRegistry, fake_os, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
@@ -490,7 +489,7 @@ def test_config_changed_event_published_once_on_put(
 
 
 def test_keymap_save_failure_is_a_500_and_the_class_hotkey_survives(
-    registry: InMemoryRegistry, fake_os: FakeConfigOpenSearch, monkeypatch: pytest.MonkeyPatch
+    registry: InMemoryRegistry, fake_os, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An unbind runs before the save; a non-conflict failure of the save
     must roll the unbind back instead of leaving the hotkey cleared."""

@@ -46,7 +46,7 @@ class _Pass:
             raise RuntimeError('targets read failed')
         return list(docs)
 
-    async def policy(self, _os: Any) -> Any:
+    async def policy(self) -> Any:
         return SimpleNamespace(clustering=SimpleNamespace(automatic=False))
 
     async def reembed_items(self, _os: Any, _pe: Any, targets: list[str], **_kw: Any) -> dict:

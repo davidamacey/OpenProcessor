@@ -10,8 +10,7 @@ from _curation_app import mount_curation_routers
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from curation._fake_config_opensearch import FakeConfigOpenSearch
+from projects.clone_flow_fakes import target_docs
 
 
 PREFIX = '/curation/projects/default/region_profiles'
@@ -31,9 +30,10 @@ def _reset_caches():
 
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from curation.query_fakes import QueryFakeOpenSearch
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeConfigOpenSearch()
+    fake_os = QueryFakeOpenSearch({})
 
     async def _fake_repo_index() -> list[dict]:
         return [
@@ -242,8 +242,6 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.projects.registry import ProjectRegistry
 
-    fake_os = app_client.fake_os  # type: ignore[attr-defined]
-
     other = ProjectRecord(
         slug='other',
         display_name='Other',
@@ -256,34 +254,27 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
         resources=resources_for_new('other', base_curation_config()),
     )
 
-    async def _seed_other() -> str:
-        from src.services.config_store.index import save_config
+    async def _seed_other() -> None:
+        from src.services.config_store.documents import save_config
 
         with bind_project(other):
-            from src.config import get_curation_config
-
-            idx = get_curation_config().configs_index
-            body = _body()
             await save_config(
-                fake_os,
-                idx,
                 kind='region_profile',
                 name='other_profile',
-                body=body,
+                body=_body(),
                 expected_revision=None,
             )
-            return idx
 
     import asyncio
 
-    other_index = asyncio.run(_seed_other())
+    asyncio.run(_seed_other())
 
     monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', AsyncMock(return_value=None))
     from src.services.projects import lifecycle as lifecycle_mod
 
     monkeypatch.setattr(lifecycle_mod, '_resolve_existing', AsyncMock(return_value=other))
 
-    before = dict(fake_os._docs.get(other_index, {}))
+    before = target_docs(None, other)
 
     r = app_client.post(
         f'{PREFIX}/other_profile/clone',
@@ -292,7 +283,7 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
     assert r.status_code == 201, r.text
     assert r.json()['cloned_from'].startswith('other:other_profile@')
 
-    after = dict(fake_os._docs.get(other_index, {}))
+    after = target_docs(None, other)
     assert before == after
 
     r_get = app_client.get(f'{PREFIX}/cloned_from_other')

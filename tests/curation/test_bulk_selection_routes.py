@@ -21,6 +21,9 @@ pytestmark = pytest.mark.usefixtures('label_ops_state')
 P = f'{_common.config.api_prefix}/projects/default'
 
 
+pytest_plugins = ['_records_world']
+
+
 def _items() -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for i in range(6):
@@ -130,6 +133,8 @@ def test_a_cap_limits_how_many_are_changed(client: TestClient, fake: QueryFakeOp
     assert client.post(f'{P}/crops/batch_exclude', json=body).json()['excluded'] == 2
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_label_by_filter(client: TestClient, fake: QueryFakeOpenSearch) -> None:
     body = {'selection': {'filter': {'class_names': ['car']}}, 'class_id': 1}
     r = client.put(f'{P}/crops/batch_label', json=body)

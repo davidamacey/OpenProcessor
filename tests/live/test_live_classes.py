@@ -79,19 +79,6 @@ def test_rename_and_hotkey_update_persist(api_client: Any) -> None:
     assert _classes(api_client)[class_id]['class_name'] == 'live_probe_renamed'
 
 
-def test_sync_to_opensearch_mirrors_the_registry(api_client: Any, opensearch: Any) -> None:
-    resp = api_client.post('/classes/sync_to_opensearch')
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body['upserted'] == body['n_classes'] >= 9
-
-    refresh(opensearch, INDEXES['classes'])
-    count = opensearch.get(f'/{INDEXES["classes"]}/_count').json()['count']
-    assert count == body['n_classes']
-    doc = get_doc(opensearch, INDEXES['classes'], '0')['_source']
-    assert doc['class_name'] == 'box'
-
-
 def test_settings_put_then_get_round_trips(api_client: Any) -> None:
     methods = api_client.get('/methods')
     methods.raise_for_status()

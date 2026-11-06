@@ -37,6 +37,9 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.usefixtures('label_ops_state')
 
 
+pytest_plugins = ['_records_world']
+
+
 def _state(doc: dict[str, Any]) -> dict[str, Any]:
     return {**_class_state(doc), 'review_dismissed_at': doc.get('review_dismissed_at')}
 
@@ -168,6 +171,8 @@ async def test_class_source_is_always_human_on_a_human_write(crops, registry, id
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_batch_writes_return_updated_ids(crops, ids) -> None:  # noqa: F811
     from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
 

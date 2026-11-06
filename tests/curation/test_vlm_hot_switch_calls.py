@@ -12,10 +12,10 @@ from typing import Any
 
 import httpx
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 from PIL import Image
 
-from curation.conftest import ACTIVE, SCOPED, HybridOpenSearch, good_probe
+from curation.conftest import ACTIVE, SCOPED, good_probe
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 
@@ -94,7 +94,7 @@ def stack(vlm_api, tmp_path, monkeypatch: pytest.MonkeyPatch, reference_region_p
 
     from src.routers.curation import _raw_opensearch_dep
 
-    hybrid = HybridOpenSearch(vlm_api.fake_os, items)
+    hybrid = items
     vlm_api.client.app.dependency_overrides[_raw_opensearch_dep] = lambda: hybrid
 
     for name, host, root in (
@@ -208,7 +208,6 @@ async def test_a_started_job_keeps_the_endpoint_it_was_accepted_against(stack, m
         json={'expected_revision': 1, 'body': api.body(base_url='http://b.vlm.test/v1', model='x')},
     )
     resolved = await job_endpoint(
-        api.fake_os,
         vlm=None,
         acknowledge_external=False,
         pack=None,

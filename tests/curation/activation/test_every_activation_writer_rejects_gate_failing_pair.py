@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.activation.constants import PREFIX, RP, SETTINGS, pack_body, stripped_pack_body
 
 
@@ -165,18 +164,11 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
     import tempfile
     from datetime import UTC, datetime
 
+    from projects.clone_flow_fakes import Fake, activate_config, active_ref, save
+
     from src.config.curation_accessors import base_curation_config
-    from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
-    from src.services.config_store.index import activate, get_activation, save_config
     from src.services.config_store.store import reset_config_stores
-
-    class _Fake(FakeConfigOpenSearch):
-        async def count(self, index, body=None):  # noqa: ARG002
-            return {'count': 0}
-
-        async def bulk(self, body, refresh=False):  # noqa: ARG002
-            return {'errors': False, 'items': []}
 
     def _rec(slug: str) -> Any:
         now = datetime.now(UTC).isoformat()
@@ -206,58 +198,18 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
         curation_mod._default_curation_config = None
         reset_config_stores()
         try:
-            client = _Fake()
+            client = Fake()
             source, target = _rec('walk_alpha'), _rec('walk_beta')
 
-            with bind_project(source):
-                from src.config import get_curation_config
-
-                idx = get_curation_config().configs_index
-                asyncio.run(
-                    save_config(
-                        client,
-                        idx,
-                        kind='prompt_pack',
-                        name='single',
-                        body=stripped_pack_body(),
-                        expected_revision=None,
-                    )
-                )
-                asyncio.run(
-                    activate(
-                        client,
-                        idx,
-                        axis='prompt_pack',
-                        name='single',
-                        revision=1,
-                        expected_active=None,
-                    )
-                )
-                profile_body = {
-                    'detector_model': 'wheel_detector',
-                    'text_reader': 'none',
-                    'max_regions_per_item': 3,
-                }
-                asyncio.run(
-                    save_config(
-                        client,
-                        idx,
-                        kind='region_profile',
-                        name='multi',
-                        body=profile_body,
-                        expected_revision=None,
-                    )
-                )
-                asyncio.run(
-                    activate(
-                        client,
-                        idx,
-                        axis='detection_profile',
-                        name='multi',
-                        revision=1,
-                        expected_active=None,
-                    )
-                )
+            asyncio.run(save(client, source, 'prompt_pack', 'single', stripped_pack_body()))
+            asyncio.run(activate_config(client, source, 'prompt_pack', 'single', 1))
+            profile_body = {
+                'detector_model': 'wheel_detector',
+                'text_reader': 'none',
+                'max_regions_per_item': 3,
+            }
+            asyncio.run(save(client, source, 'region_profile', 'multi', profile_body))
+            asyncio.run(activate_config(client, source, 'detection_profile', 'multi', 1))
 
             from unittest.mock import AsyncMock, MagicMock
 
@@ -266,11 +218,15 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
 
             orig_resolve = lifecycle_mod._resolve_existing
             orig_mutable = lifecycle_mod._get_mutable_record
-            orig_write = lifecycle_mod.write_record
+            from src.services.projects import records as records_mod, store as store_mod
+
+            orig_run_repo = store_mod.run_repo
+            orig_from_row = records_mod.record_from_row
             orig_get_registry = registry_mod.get_project_registry
             lifecycle_mod._resolve_existing = AsyncMock(return_value=source)
-            lifecycle_mod._get_mutable_record = AsyncMock(return_value=(target, 1, 1))
-            lifecycle_mod.write_record = AsyncMock(return_value=None)
+            lifecycle_mod._get_mutable_record = AsyncMock(return_value=target)
+            store_mod.run_repo = AsyncMock(return_value=target)
+            records_mod.record_from_row = lambda row: row
             reg = MagicMock()
             reg.ensure_fresh = AsyncMock(return_value=None)
             registry_mod.get_project_registry = lambda: reg
@@ -288,15 +244,12 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
             finally:
                 lifecycle_mod._resolve_existing = orig_resolve
                 lifecycle_mod._get_mutable_record = orig_mutable
-                lifecycle_mod.write_record = orig_write
+                store_mod.run_repo = orig_run_repo
+                records_mod.record_from_row = orig_from_row
                 registry_mod.get_project_registry = orig_get_registry
 
-            with bind_project(target):
-                from src.config import get_curation_config as _tgt_cfg
-
-                tgt_idx = _tgt_cfg().configs_index
-                pack_act = asyncio.run(get_activation(client, tgt_idx, 'prompt_pack'))
-                prof_act = asyncio.run(get_activation(client, tgt_idx, 'detection_profile'))
+            pack_act = asyncio.run(active_ref(target, 'prompt_pack'))
+            prof_act = asyncio.run(active_ref(target, 'detection_profile'))
             print('clone target activations:', pack_act, prof_act)
             assert not (
                 (pack_act or {}).get('name') == 'single' and (prof_act or {}).get('name') == 'multi'

@@ -134,8 +134,8 @@ Each project owns six indexes named `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`
 (default prefix `op_prj_`). For project `cars`: `op_prj_cars__images`,
 `op_prj_cars__items`, `op_prj_cars__labels_confirmed`,
 `op_prj_cars__classes`, `op_prj_cars__umap_state`, `op_prj_cars__configs`. The
-registry is the separate `op_projects` index (`OP_PROJECTS_INDEX`), and VLM
-endpoints live in `op_global_configs` (`OP_GLOBAL_CONFIGS_INDEX`). Bodies are in
+registry is the separate `op_projects` index (`OP_PROJECTS_INDEX`); VLM
+endpoints live in PostgreSQL. Bodies are in
 `src/clients/curation_opensearch/` (`bodies_core.py` for images and items, `bodies_other.py` for the rest).
 
 An index created before a field existed gets it from an additive `PUT _mapping`
@@ -258,13 +258,9 @@ their own ledger on disk.
 
 ### `classes`
 
-The class registry mirror: `class_id` (integer), `class_name` (keyword),
-`group` (keyword), `sample_count`, `validated_count`, `added_at`, `deprecated`,
-`notes`. The registry document (below) is the source of record, and every write to
-it upserts the changed classes here (a failed mirror write is logged and the next
-index bootstrap re-syncs); `POST /curation/projects/{project}/classes/sync_to_opensearch`
-refreshes the whole mirror. Class identity across datasets is the name, not
-`class_id`.
+The class registry no longer has an OpenSearch mirror: the registry is in PostgreSQL
+(`class_registries`, `project_classes`), and the class list route joins its counts from one terms
+aggregation on `items.class_id`. Class identity across datasets is the name, not `class_id`.
 
 ### `umap_state`
 
@@ -288,28 +284,14 @@ UMAP projection state (id `current`: `projection_version`, `scope`, `n_points`,
 `fitted_at`, ...) are stored in this same index, by fixed id and never searched,
 so a project needs six indexes rather than eight.
 
-#### The class registry document
+#### The class registry
 
-The class registry is one document per project, id `class_registry`, in the project's
-settings index (the `configs` index on a folded project), under the object key
-`class_registry` (`enabled: false`: stored, not indexed). It holds the classes
-(`class_id`, `class_name`, `group`, `deprecated`, `merged_into`, `hotkey_letter`,
-`sample_count`, `validated_count`, `added_at`, `notes`), `next_class_id`,
-`registry_revision`, `updated_at`, `migrated_from_file_at` and `reversed_to_file_at`.
-
-Every write is one versioned read-modify-write (`if_seq_no` and `if_primary_term`,
-`op_type=create` for the first write); a 409 re-reads and re-applies, at most five
-times, then answers `registry_conflict`. Ids come from `next_class_id` and are never
-reused. The document holds at most 10,000 classes (`registry_full`), about 1-2 MB of
-`_source`, far below the default `http.max_content_length`. `ensure_class` is
-idempotent by name and is what the automated writers (import, combine, the VLM and
-open-vocabulary passes) call; `add_class` keeps the route's 409 on a duplicate name.
-
-A process caches the document by `_seq_no` and `_primary_term`, checked with a
-`_source=false` get. A project that still has `class_registry.json` and no document
-answers `registry_not_migrated` on every class route until
-`openprocessor curation migrate-registry` has run. `class_registry.json` is otherwise
-only an export snapshot, the training pin and what a rollback writes back.
+The class registry is two PostgreSQL tables per deployment, `class_registries` (one row per project:
+the id counter and a revision) and `project_classes` (the classes). See
+[02a](design/v070_rebuild/02a_postgres_schema.md) section 3. Ids come from `next_class_id` and are
+never reused; `ensure_class` is idempotent by name and is what the automated writers (import,
+combine, the VLM and open-vocabulary passes) call; `add_class` keeps the route's 409 on a duplicate
+name. `class_registry.json` is only an export snapshot and the training pin.
 
 ---
 

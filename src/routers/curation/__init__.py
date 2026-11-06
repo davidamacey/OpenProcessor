@@ -73,6 +73,7 @@ import src.routers.curation.regions_boxes_edit
 import src.routers.curation.regions_edit
 import src.routers.curation.regions_fp
 import src.routers.curation.reprocess
+import src.routers.curation.research_configs
 
 
 import src.routers.curation.review_terms  # isort: skip
@@ -89,9 +90,9 @@ import src.routers.curation.stats
 import src.routers.curation.viz
 import src.routers.curation.vlm_activation
 import src.routers.curation.vlm_policy  # noqa: F401 - side-effect import
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.routers.curation._common import _raw_opensearch_dep, router
 from src.routers.curation.images import crops_router as images_crops_router, router as images_router
+from src.services.classes.registry import get_class_registry
 
 
 # Side-effect imports: each module registers its endpoints on `router`.

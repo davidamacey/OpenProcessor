@@ -150,7 +150,6 @@ UNSET_VLM: Any = object()
 
 
 async def active_vlm_pairing_issues(
-    client: Any,
     pack: PromptPack | None,
     profile: DetectionProfile | None,
     *,
@@ -175,8 +174,7 @@ async def active_vlm_pairing_issues(
         # VLM it is about to activate, not the one it replaces.
         endpoint = pending_vlm
     else:
-        if client is not None:
-            await refresh_vlm_state(client)
+        await refresh_vlm_state()
         try:
             endpoint = active_vlm_endpoint()
         except VlmEndpointUnavailableError:

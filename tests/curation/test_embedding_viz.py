@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
+from config_store.memory_settings import current
 
 from src.services.curation import embedding_viz_read
 
@@ -24,15 +25,14 @@ from src.services.curation import embedding_viz_read
 # =============================================================================
 
 
-def test_viz_state_paths_are_distinct_from_retired_clustering_reducer() -> None:
-    from src.config.curation_accessors import umap_state_index
+def test_viz_reducer_slot_is_distinct_from_the_clustering_reducers() -> None:
     from src.services.curation import embedding_viz
     from src.services.curation.clustering import umap_state
 
-    viz_path = embedding_viz.viz_state_joblib_path()
-    assert viz_path != umap_state.umap_state_joblib_path()
-    assert viz_path != umap_state.umap_state_joblib_path_cuml()
-    assert embedding_viz.umap_viz_state_index() != umap_state_index()
+    assert embedding_viz.VIZ_REDUCER_STATE_ID not in {
+        umap_state.state_id_for('gpu'),
+        umap_state.state_id_for('cpu'),
+    }
 
 
 # =============================================================================
@@ -157,11 +157,12 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
     assert final_state['n_written'] == len(pool)
     assert final_state['projection_version'] == embedding_viz.VIZ_PROJECTION_VERSION
 
-    # Metadata was saved to embedding_viz's OWN index, never op_prj_default__umap_state.
-    fake_os.index.assert_awaited_once()
-    _, index_kwargs = fake_os.index.call_args
-    assert index_kwargs['index'] == embedding_viz.umap_viz_state_index()
-    assert index_kwargs['index'] != 'op_prj_default__umap_state'
+    # Metadata was saved as the project's view state, nothing was indexed.
+    fake_os.index.assert_not_awaited()
+    saved = current().projection
+    assert saved is not None
+    assert saved['projection_version'] == embedding_viz.VIZ_PROJECTION_VERSION
+    assert saved['n_points'] == len(pool)
 
     # Every bulk doc body writes ONLY viz_x/viz_y/viz_projection_version --
     # never cluster_id/cluster_subid/cluster_distance.
@@ -237,9 +238,7 @@ async def test_get_cached_projection_not_built_when_no_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_os = AsyncMock()
-    from opensearchpy.exceptions import NotFoundError
-
-    fake_os.get = AsyncMock(side_effect=NotFoundError(404, 'nf', {}))
+    current().projection = None
 
     with pytest.raises(embedding_viz_read.ProjectionNotBuiltError):
         await embedding_viz_read.get_cached_projection(fake_os)
@@ -263,17 +262,13 @@ async def test_get_cached_projection_never_triggers_a_fit(
     monkeypatch.setattr(embedding_viz, '_build_reducer', _boom)
 
     fake_os = AsyncMock()
-    fake_os.get = AsyncMock(
-        return_value={
-            '_source': {
-                'projection_version': 'umap_viz_v1',
-                'fitted_at': '2026-09-11T00:00:00+00:00',
-                'scope': 'residual',
-                'cluster_id': None,
-                'n_points': 2,
-            }
-        }
-    )
+    current().projection = {
+        'projection_version': 'umap_viz_v1',
+        'fitted_at': '2026-09-11T00:00:00+00:00',
+        'scope': 'residual',
+        'cluster_id': None,
+        'n_points': 2,
+    }
     fake_os.search = AsyncMock(
         return_value={
             'hits': {
@@ -315,9 +310,7 @@ async def test_get_cached_projection_stale_when_uncovered_crops_exist(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_os = AsyncMock()
-    fake_os.get = AsyncMock(
-        return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
-    )
+    current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
     fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     fake_os.count = AsyncMock(return_value={'count': 3})  # 3 in-scope crops missing the projection
 
@@ -330,9 +323,7 @@ async def test_get_cached_projection_applies_cluster_and_class_filters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_os = AsyncMock()
-    fake_os.get = AsyncMock(
-        return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
-    )
+    current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
     fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     fake_os.count = AsyncMock(return_value={'count': 0})
 
@@ -359,9 +350,7 @@ async def test_get_cached_projection_pages_with_search_after_no_oversized_reques
     """
 
     fake_os = AsyncMock()
-    fake_os.get = AsyncMock(
-        return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
-    )
+    current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
     fake_os.count = AsyncMock(return_value={'count': 0})
 
     page_size = embedding_viz_read._VIZ_PROJECTION_PAGE_SIZE

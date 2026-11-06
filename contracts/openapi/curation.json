@@ -275,7 +275,7 @@
         "type": "object"
       },
       "ActiveConfigResponse": {
-        "description": "``GET /prompt_packs/active`` / ``GET /region_profiles/active``;\nalso the activation-mutation response shape used by the settings\nbridge and by ``store.activate``'s callers.\n\n``source``: where ``active`` came from --\n``'stored'`` (an activation doc names a saved pack/profile),\n``'env'`` (never activated through the store; the env/file default\napplies, and ``active.name`` names it), or ``'off'`` (explicitly\ndeactivated -- ``active.name`` is ``None``). Never guessed from\n``active`` alone: ``'env'`` is also nameless when no env default is\nconfigured, but only an explicit deactivation is ``'off'``.\n``activated_at`` is the activation doc's own timestamp -- ``None``\nfor ``'env'`` (there was no activation write). ``applied`` is every\nlive ``runtime:*`` doc for this axis (§4.5) -- empty when no worker\nhas ever applied anything, e.g. an API-only deployment.",
+        "description": "``GET /prompt_packs/active`` / ``GET /region_profiles/active``;\nalso the activation-mutation response shape used by the settings\nbridge and by ``store.activate``'s callers.\n\n``source``: where ``active`` came from --\n``'stored'`` (an activation doc names a saved pack/profile),\n``'env'`` (never activated through the store; the env/file default\napplies, and ``active.name`` names it), or ``'off'`` (explicitly\ndeactivated -- ``active.name`` is ``None``). Never guessed from\n``active`` alone: ``'env'`` is also nameless when no env default is\nconfigured, but only an explicit deactivation is ``'off'``.\n``activated_at`` is the activation's own timestamp -- ``None``\nfor ``'env'`` (there was no activation write). ``applied`` is every\nlive worker report for this axis -- empty when no worker\nhas ever applied anything, e.g. an API-only deployment.",
         "properties": {
           "activated_at": {
             "anyOf": [
@@ -391,7 +391,7 @@
         "type": "object"
       },
       "AppliedRuntime": {
-        "description": "One worker process's \"what did I actually apply\" record,\nserved under ``ActiveConfigResponse.applied[]`` from\n``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``).\n``lagging`` is ``true`` when ``applied_config_revision`` is\nbehind the axis's current ``config_revision`` for longer than the\ndrain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a\nmomentary swap in progress.",
+        "description": "One worker process's \"what did I actually apply\" record,\nserved under ``ActiveConfigResponse.applied[]`` from the\n``config_runtime_reports`` rows each worker writes.\n``lagging`` is ``true`` when ``applied_config_revision`` is\nbehind the axis's current ``config_revision`` for longer than the\ndrain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a\nmomentary swap in progress.",
         "properties": {
           "applied_at": {
             "anyOf": [
@@ -6361,9 +6361,6 @@
               "class_hotkey_conflict",
               "hotkey_reserved",
               "hotkey_taken",
-              "registry_not_migrated",
-              "registry_full",
-              "registry_conflict",
               "path_escape",
               "label_op_not_found",
               "already_undone",
@@ -7543,6 +7540,12 @@
             "title": "Resource Links",
             "type": "array"
           },
+          "revision": {
+            "default": 0,
+            "description": "Send it back as `expected_revision` on the next PUT; 0 while never written.",
+            "title": "Revision",
+            "type": "integer"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -7570,7 +7573,7 @@
         "type": "object"
       },
       "CurationSettingsUpdateRequest": {
-        "description": "``PUT /curation/settings`` body -- partial by design. Only the axes\npresent here are validated + merged into the stored document; axes\nalready set are left untouched (see\n``src.clients.curation_opensearch.update_curation_settings``).\n\nA value of ``null`` for an axis clears that axis's shared override\n(falls back to that endpoint's own hardcoded default / each /review\ntab's own tuned sort) -- otherwise a pinned override was permanently\nunreachable once set, since every id must be currently-advertised and\nthere was no way to express \"go back to no override\" (raised by the\nCropwright settings-UI integration pass).",
+        "description": "``PUT /curation/settings`` body -- partial by design. Only the axes\npresent here are validated + merged into the stored document; axes\nalready set are left untouched (see\n``src.services.curation.settings_store.update_curation_settings``).\n\nA value of ``null`` for an axis clears that axis's shared override\n(falls back to that endpoint's own hardcoded default / each /review\ntab's own tuned sort) -- otherwise a pinned override was permanently\nunreachable once set, since every id must be currently-advertised and\nthere was no way to express \"go back to no override\" (raised by the\nCropwright settings-UI integration pass).",
         "properties": {
           "defaults": {
             "additionalProperties": {
@@ -7585,8 +7588,17 @@
             },
             "title": "Defaults",
             "type": "object"
+          },
+          "expected_revision": {
+            "description": "The `revision` of the settings this edit was made against (GET /settings); a stale one is a 409 `revision_conflict`.",
+            "minimum": 0.0,
+            "title": "Expected Revision",
+            "type": "integer"
           }
         },
+        "required": [
+          "expected_revision"
+        ],
         "title": "CurationSettingsUpdateRequest",
         "type": "object"
       },
@@ -15404,7 +15416,9 @@
           "kind": {
             "enum": [
               "label",
-              "move"
+              "move",
+              "assist_loop_propagate",
+              "assist_loop_review"
             ],
             "title": "Kind",
             "type": "string"
@@ -15647,10 +15661,6 @@
             "title": "Matched",
             "type": "integer"
           },
-          "members_known": {
-            "title": "Members Known",
-            "type": "boolean"
-          },
           "op_id": {
             "title": "Op Id",
             "type": "string"
@@ -15668,7 +15678,6 @@
           "op_id",
           "dry_run",
           "status",
-          "members_known",
           "matched",
           "restored",
           "already_undone",
@@ -26794,6 +26803,203 @@
         "title": "ReprocessWireResponse",
         "type": "object"
       },
+      "ResearchActivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "axis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The axis; the first one of the kind when omitted.",
+            "title": "Axis"
+          },
+          "expected_active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What is active now; null only when nothing is."
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = the current revision.",
+            "title": "Revision"
+          }
+        },
+        "title": "ResearchActivateRequest",
+        "type": "object"
+      },
+      "ResearchActive": {
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "axis": {
+            "title": "Axis",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "state": {
+            "enum": [
+              "none",
+              "active",
+              "off"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "axis",
+          "state"
+        ],
+        "title": "ResearchActive",
+        "type": "object"
+      },
+      "ResearchConfigDoc": {
+        "properties": {
+          "body": {
+            "additionalProperties": true,
+            "title": "Body",
+            "type": "object"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "title": "Updated By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "revision",
+          "description",
+          "body",
+          "created_at",
+          "updated_at",
+          "updated_by"
+        ],
+        "title": "ResearchConfigDoc",
+        "type": "object"
+      },
+      "ResearchConfigList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchConfigDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ResearchConfigList",
+        "type": "object"
+      },
+      "ResearchConfigPut": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "additionalProperties": true,
+            "title": "Body",
+            "type": "object"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null creates the document; a number saves the next revision.",
+            "title": "Expected Revision"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "ResearchConfigPut",
+        "type": "object"
+      },
       "ResolveConflict": {
         "properties": {
           "crop_id": {
@@ -30725,6 +30931,68 @@
           "selected"
         ],
         "title": "SelectionDryRunResponse",
+        "type": "object"
+      },
+      "ServingActivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_revision": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The setting revision read from GET /serving_profiles/active; null if none.",
+            "title": "Expected Revision"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = the current revision.",
+            "title": "Revision"
+          }
+        },
+        "title": "ServingActivateRequest",
+        "type": "object"
+      },
+      "ServingActive": {
+        "properties": {
+          "body": {
+            "additionalProperties": true,
+            "title": "Body",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "setting_revision": {
+            "title": "Setting Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "setting_revision",
+          "body"
+        ],
+        "title": "ServingActive",
         "type": "object"
       },
       "SkippedCounts": {
@@ -35188,7 +35456,7 @@
         "type": "object"
       },
       "src__clients__curation_opensearch__RegistryClassEntry": {
-        "description": "Single class entry in ``class_registry.json``.\n\nThe on-disk file uses ``id`` / ``name`` keys for backward\ncompatibility with older label-file schemas. Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
         "properties": {
           "added_at": {
             "title": "Added At",
@@ -35238,16 +35506,6 @@
             "default": "",
             "title": "Notes",
             "type": "string"
-          },
-          "sample_count": {
-            "default": 0,
-            "title": "Sample Count",
-            "type": "integer"
-          },
-          "validated_count": {
-            "default": 0,
-            "title": "Validated Count",
-            "type": "integer"
           }
         },
         "required": [
@@ -37248,6 +37506,346 @@
         ]
       }
     },
+    "/curation/projects/{project}/assist_loop_presets": {
+      "get": {
+        "operationId": "list_assist_loop_preset_curation_projects__project__assist_loop_presets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist_loop_presets/active": {
+      "get": {
+        "operationId": "active_assist_loop_preset_curation_projects__project__assist_loop_presets_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "axis",
+            "required": false,
+            "schema": {
+              "default": "assist_loop_preset",
+              "title": "Axis",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Active Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist_loop_presets/{name}": {
+      "delete": {
+        "operationId": "delete_assist_loop_preset_curation_projects__project__assist_loop_presets__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      },
+      "get": {
+        "operationId": "get_assist_loop_preset_curation_projects__project__assist_loop_presets__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      },
+      "put": {
+        "operationId": "put_assist_loop_preset_curation_projects__project__assist_loop_presets__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchConfigPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist_loop_presets/{name}/activate": {
+      "post": {
+        "operationId": "activate_assist_loop_preset_curation_projects__project__assist_loop_presets__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      }
+    },
     "/curation/projects/{project}/audit/queue": {
       "get": {
         "description": "Drawn crops still waiting for a human label, in a stable order.",
@@ -38233,51 +38831,6 @@
         ]
       }
     },
-    "/curation/projects/{project}/classes/sync_to_opensearch": {
-      "post": {
-        "description": "Rebuild the classes index from the registry document.",
-        "operationId": "sync_classes_curation_projects__project__classes_sync_to_opensearch_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Sync Classes Curation Projects  Project  Classes Sync To Opensearch Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Sync Classes",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/classes/{class_id}": {
       "get": {
         "description": "One registry class with the same live counts ``GET /classes`` reports.",
@@ -38695,6 +39248,346 @@
         "summary": "Post Umap Rebuild",
         "tags": [
           "Curation — Clustering"
+        ]
+      }
+    },
+    "/curation/projects/{project}/cluster_profiles": {
+      "get": {
+        "operationId": "list_cluster_profile_curation_projects__project__cluster_profiles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
+        ]
+      }
+    },
+    "/curation/projects/{project}/cluster_profiles/active": {
+      "get": {
+        "operationId": "active_cluster_profile_curation_projects__project__cluster_profiles_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "axis",
+            "required": false,
+            "schema": {
+              "default": "clustering_item",
+              "title": "Axis",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Active Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
+        ]
+      }
+    },
+    "/curation/projects/{project}/cluster_profiles/{name}": {
+      "delete": {
+        "operationId": "delete_cluster_profile_curation_projects__project__cluster_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
+        ]
+      },
+      "get": {
+        "operationId": "get_cluster_profile_curation_projects__project__cluster_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
+        ]
+      },
+      "put": {
+        "operationId": "put_cluster_profile_curation_projects__project__cluster_profiles__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchConfigPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
+        ]
+      }
+    },
+    "/curation/projects/{project}/cluster_profiles/{name}/activate": {
+      "post": {
+        "operationId": "activate_cluster_profile_curation_projects__project__cluster_profiles__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
         ]
       }
     },
@@ -56826,7 +57719,7 @@
     },
     "/curation/projects/{project}/test_holdout/freeze": {
       "post": {
-        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed (a ``seed`` field is a ``422``): the same cohort\nalways freezes the same set. The response names the method in\n``selection`` (``sha1_per_class``).\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad\nfreeze can be diagnosed and reverted from the recorded crop-id list.",
+        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed (a ``seed`` field is a ``422``): the same cohort\nalways freezes the same set. The response names the method in\n``selection`` (``sha1_per_class``).\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record (a ``holdout_freezes`` row and a snapshot of the crop-id\nlist) so a bad freeze can be diagnosed and reverted. The row is written first\ninside the transaction that wraps the flagging: a database error refuses the\nfreeze before any item changes, and a failed flagging rolls the row back.",
         "operationId": "freeze_test_holdout_curation_projects__project__test_holdout_freeze_post",
         "parameters": [
           {
@@ -58945,6 +59838,378 @@
         "summary": "Vlm Verify Region Batch",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/serving_profiles": {
+      "get": {
+        "operationId": "list_serving_profile_curation_serving_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "List Serving Profile",
+        "tags": [
+          "Projects",
+          "Serving"
+        ]
+      }
+    },
+    "/curation/serving_profiles/active": {
+      "get": {
+        "operationId": "get_active_serving_profile_curation_serving_profiles_active_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServingActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Get Active Serving Profile",
+        "tags": [
+          "Projects",
+          "Serving"
+        ]
+      }
+    },
+    "/curation/serving_profiles/{name}": {
+      "delete": {
+        "operationId": "delete_serving_profile_curation_serving_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Serving Profile",
+        "tags": [
+          "Projects",
+          "Serving"
+        ]
+      },
+      "get": {
+        "operationId": "get_serving_profile_curation_serving_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Serving Profile",
+        "tags": [
+          "Projects",
+          "Serving"
+        ]
+      },
+      "put": {
+        "operationId": "put_serving_profile_curation_serving_profiles__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchConfigPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Serving Profile",
+        "tags": [
+          "Projects",
+          "Serving"
+        ]
+      }
+    },
+    "/curation/serving_profiles/{name}/activate": {
+      "post": {
+        "operationId": "activate_serving_profile_route_curation_serving_profiles__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServingActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServingActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Serving Profile Route",
+        "tags": [
+          "Projects",
+          "Serving"
         ]
       }
     },

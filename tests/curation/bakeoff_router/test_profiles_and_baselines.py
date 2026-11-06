@@ -72,7 +72,7 @@ def test_profiles_context_class_names_resolved_by_registry_id(
             self.classes = classes
 
     class _FakeRegistry:
-        async def snapshot(self, _client: object) -> _Loaded:
+        async def snapshot(self) -> _Loaded:
             return _Loaded([_Cls(4, 'guardrail'), _Cls(7, 'cone')])
 
     monkeypatch.setattr(bakeoff, 'get_class_registry', _FakeRegistry)

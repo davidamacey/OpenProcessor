@@ -1,5 +1,5 @@
-"""The config store's low-level primitives (OCC, revision bump,
-per-process snapshot, hot reload)."""
+"""The config store's per-process snapshot and hot reload over the (in-memory) config repository:
+refresh on a moved epoch, staleness, pinned mode, project isolation and the poll loop."""
 
 from __future__ import annotations
 
@@ -9,26 +9,17 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from config_store.memory_config import current as memory_config_now
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.config_store.index import (
-    ActiveConflictError,
-    RevisionConflictError,
-    activate,
-    delete_config,
-    get_activation,
-    get_config_revision,
-    save_config,
-)
-from src.services.config_store.store import ConfigStore
+from src.services.config_store import documents
+from src.services.config_store.documents import ActiveConflictError
+from src.services.config_store.store import ConfigStore, config_store_for
 
 
 pytestmark = pytest.mark.unbound
-
-INDEX = 'op_prj_alpha__configs'
 
 
 def _record(slug: str) -> ProjectRecord:
@@ -46,157 +37,133 @@ def _record(slug: str) -> ProjectRecord:
     )
 
 
-@pytest.mark.asyncio
-async def test_save_config_occ_conflict() -> None:
-    client = FakeConfigOpenSearch()
-    doc = await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={'a': 1}, expected_revision=None
-    )
-    assert doc['revision'] == 1
-    # A stale expected_revision (0, as if the caller never saw rev 1) conflicts.
-    with pytest.raises(RevisionConflictError) as exc_info:
-        await save_config(
-            client, INDEX, kind='prompt_pack', name='wheel', body={'a': 2}, expected_revision=0
+async def _save(slug: str, kind: str, name: str, **kw: Any) -> Any:
+    with bind_project(_record(slug)):
+        saved, _ = await documents.save_config(
+            kind=kind, name=name, body={}, expected_revision=kw.pop('expected_revision', None)
         )
-    assert exc_info.value.current_revision == 1
-
-    # The correct expected_revision succeeds and bumps to 2.
-    doc2 = await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={'a': 2}, expected_revision=1
-    )
-    assert doc2['revision'] == 2
+    return saved
 
 
 @pytest.mark.asyncio
-async def test_save_config_bumps_revision_every_write() -> None:
-    client = FakeConfigOpenSearch()
-    assert await get_config_revision(client, INDEX) == 0
-    await save_config(client, INDEX, kind='prompt_pack', name='a', body={}, expected_revision=None)
-    assert await get_config_revision(client, INDEX) == 1
-    await save_config(
-        client, INDEX, kind='region_profile', name='b', body={}, expected_revision=None
-    )
-    assert await get_config_revision(client, INDEX) == 2
+async def test_a_save_bumps_the_projects_epoch_every_write() -> None:
+    memory = memory_config_now()
+    pid = memory.project_id('alpha')
+    assert memory.epochs.get(pid, 0) == 0
+    _, first = await _save_with_epoch('alpha', 'prompt_pack', 'a')
+    _, second = await _save_with_epoch('alpha', 'region_profile', 'b')
+    assert (first, second) == (1, 2)
 
 
-@pytest.mark.asyncio
-async def test_delete_then_recreate_never_reuses_revision() -> None:
-    client = FakeConfigOpenSearch()
-    await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={}, expected_revision=None
-    )
-    doc = await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={}, expected_revision=1
-    )
-    assert doc['revision'] == 2
-    await delete_config(client, INDEX, kind='prompt_pack', name='wheel', expected_revision=2)
-    recreated = await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={}, expected_revision=None
-    )
-    assert recreated['revision'] == 3  # continues past the highest revision copy (2), never 1
+async def _save_with_epoch(slug: str, kind: str, name: str) -> tuple[Any, int]:
+    with bind_project(_record(slug)):
+        return await documents.save_config(kind=kind, name=name, body={}, expected_revision=None)
 
 
 @pytest.mark.asyncio
 async def test_activate_occ_and_rollback() -> None:
-    client = FakeConfigOpenSearch()
-    result = await activate(
-        client, INDEX, axis='detection_profile', name='wheel', revision=None, expected_active=None
-    )
-    assert result['name'] == 'wheel'
-    current = await get_activation(client, INDEX, 'detection_profile')
-    assert current is not None
-    assert current['name'] == 'wheel'
-
-    with pytest.raises(ActiveConflictError):
-        await activate(
-            client,
-            INDEX,
-            axis='detection_profile',
-            name='other',
-            revision=None,
-            expected_active=None,  # stale: activation already exists
+    with bind_project(_record('alpha')):
+        for name in ('wheel', 'plate'):
+            await documents.save_config(
+                kind='region_profile', name=name, body={}, expected_revision=None
+            )
+        result = await documents.activate(
+            axis='detection_profile', name='wheel', revision=1, expected_active=None
         )
+        assert result.ref == ('wheel', 1)
 
-    from src.services.config_store.index import rollback
-
-    await activate(
-        client,
-        INDEX,
-        axis='detection_profile',
-        name='plate',
-        revision=None,
-        expected_active={'name': 'wheel', 'revision': None},
-    )
-    rolled_back = await rollback(
-        client, INDEX, axis='detection_profile', expected_active={'name': 'plate', 'revision': None}
-    )
-    assert rolled_back['name'] == 'wheel'
+        with pytest.raises(ActiveConflictError):
+            await documents.activate(
+                axis='detection_profile',
+                name='plate',
+                revision=1,
+                expected_active=None,  # stale: an activation already exists
+            )
+        await documents.activate(
+            axis='detection_profile',
+            name='plate',
+            revision=1,
+            expected_active={'name': 'wheel', 'revision': 1},
+        )
+        target = await documents.previous_target('detection_profile')
+        assert (target.name, target.revision) == ('wheel', 1)
+        rolled_back = await documents.activate(
+            axis='detection_profile',
+            name=target.name,
+            revision=target.revision,
+            expected_active={'name': 'plate', 'revision': 1},
+            reason='rollback',
+        )
+    assert rolled_back.ref == ('wheel', 1)
 
 
 @pytest.mark.asyncio
 async def test_two_stores_see_each_others_writes_after_ensure_fresh() -> None:
-    """Two ConfigStore instances on one fake OpenSearch (simulating two
-    uvicorn workers): B sees A's write after ``ensure_fresh``, and not
-    before ``max_age`` has elapsed."""
-    client = FakeConfigOpenSearch()
-    store_a = ConfigStore(index=INDEX, mode='live', label='a')
-    store_b = ConfigStore(index=INDEX, mode='live', label='b')
-    await store_a.refresh(client)
-    await store_b.refresh(client)
+    """Two ConfigStore instances (two uvicorn workers): B sees A's write after ``ensure_fresh``,
+    and not before ``max_age`` has elapsed."""
+    store_a = ConfigStore(mode='live', label='alpha')
+    store_b = ConfigStore(mode='live', label='alpha')
+    await store_a.refresh()
+    await store_b.refresh()
 
-    await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={}, expected_revision=None
-    )
-    store_a.apply_local(config_revision=1)  # writer applies its own write locally
+    await _save('alpha', 'prompt_pack', 'wheel')
 
-    # B hasn't refreshed yet -- stale snapshot until ensure_fresh forces it.
+    # B hasn't refreshed yet: a stale snapshot until ensure_fresh forces it.
     assert 'wheel' not in store_b.current.packs
-    snapshot = await store_b.ensure_fresh(client, max_age_s=0.0)
+    snapshot = await store_b.ensure_fresh(max_age_s=0.0)
     assert 'wheel' in snapshot.packs
     assert 'wheel' in store_b.current.packs
 
 
 @pytest.mark.asyncio
 async def test_ensure_fresh_skips_refresh_within_max_age() -> None:
-    client = FakeConfigOpenSearch()
-    store = ConfigStore(index=INDEX, mode='live', label='a')
-    await store.refresh(client)
-    await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={}, expected_revision=None
-    )
+    store = ConfigStore(mode='live', label='alpha')
+    await store.refresh()
+    await _save('alpha', 'prompt_pack', 'wheel')
     # A very generous max_age means the cached (pre-write) snapshot wins.
-    snapshot = await store.ensure_fresh(client, max_age_s=1000.0)
+    snapshot = await store.ensure_fresh(max_age_s=1000.0)
     assert 'wheel' not in snapshot.packs
 
 
 @pytest.mark.asyncio
-async def test_refresh_failure_keeps_snapshot_and_sets_stale() -> None:
-    client = FakeConfigOpenSearch()
-    store = ConfigStore(index=INDEX, mode='live', label='a')
-    await save_config(
-        client, INDEX, kind='prompt_pack', name='wheel', body={}, expected_revision=None
-    )
-    await store.refresh(client)
+async def test_an_unchanged_epoch_reloads_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = ConfigStore(mode='live', label='alpha')
+    await _save('alpha', 'prompt_pack', 'wheel')
+    await store.refresh()
+    loaded = store.current
+
+    async def boom() -> Any:
+        raise AssertionError('the snapshot was reloaded at the same epoch')
+
+    monkeypatch.setattr(store, '_load', boom)
+    assert await store.refresh() is loaded
+
+
+@pytest.mark.asyncio
+async def test_refresh_failure_keeps_snapshot_and_sets_stale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ConfigStore(mode='live', label='alpha')
+    await _save('alpha', 'prompt_pack', 'wheel')
+    await store.refresh()
     assert 'wheel' in store.current.packs
     assert store.current.stale is False
 
-    class _BrokenClient:
-        async def get(self, *_args: object, **_kwargs: object) -> dict[str, object]:
-            raise RuntimeError('opensearch down')
+    async def down() -> int:
+        raise RuntimeError('database down')
 
-    await store.refresh(_BrokenClient())
+    monkeypatch.setattr(store, '_epoch', down)
+    await store.refresh()
     assert store.current.stale is True
     assert 'wheel' in store.current.packs  # last good snapshot kept, not emptied
 
 
 @pytest.mark.asyncio
 async def test_pinned_mode_does_not_publish_until_pin_active() -> None:
-    client = FakeConfigOpenSearch()
-    store = ConfigStore(index=INDEX, mode='pinned', label='worker')
-    await save_config(
-        client, INDEX, kind='region_profile', name='wheel', body={}, expected_revision=None
-    )
-    await store.refresh(client)
+    store = ConfigStore(mode='pinned', label='worker-alpha')
+    # a pinned worker store reads the project it is labelled with
+    await _save('worker-alpha', 'region_profile', 'wheel')
+    await store.refresh()
     assert 'wheel' not in store.current.profiles  # staged only
     assert store.pending_snapshot is not None
     store.pin_active()
@@ -206,26 +173,18 @@ async def test_pinned_mode_does_not_publish_until_pin_active() -> None:
 
 @pytest.mark.asyncio
 async def test_pack_stored_in_one_project_invisible_in_another() -> None:
-    """Cross-project isolation: a pack saved against alpha's configs
-    index never appears in beta's ConfigStore, even sharing one fake
-    OpenSearch client."""
-    client = FakeConfigOpenSearch()
-    alpha_index = 'op_prj_alpha__configs'
-    beta_index = 'op_prj_beta__configs'
-    await save_config(
-        client, alpha_index, kind='prompt_pack', name='wheel', body={}, expected_revision=None
-    )
-    store_alpha = ConfigStore(index=alpha_index, mode='live', label='alpha')
-    store_beta = ConfigStore(index=beta_index, mode='live', label='beta')
-    await store_alpha.refresh(client)
-    await store_beta.refresh(client)
+    """Cross-project isolation: a pack saved in alpha never appears in beta's store."""
+    await _save('alpha', 'prompt_pack', 'wheel')
+    store_alpha = ConfigStore(mode='live', label='alpha')
+    store_beta = ConfigStore(mode='live', label='beta')
+    await store_alpha.refresh()
+    await store_beta.refresh()
     assert 'wheel' in store_alpha.current.packs
     assert 'wheel' not in store_beta.current.packs
     # Activating in alpha leaves beta's activation untouched.
-    await activate(
-        client, alpha_index, axis='prompt_pack', name='wheel', revision=1, expected_active=None
-    )
-    await store_beta.refresh(client)
+    with bind_project(_record('alpha')):
+        await documents.activate(axis='prompt_pack', name='wheel', revision=1, expected_active=None)
+    await store_beta.refresh()
     assert store_beta.current.active_pack is None
 
 
@@ -238,43 +197,7 @@ def test_get_config_store_isolates_by_bound_project() -> None:
     with bind_project(_record('beta')):
         store_beta = get_config_store()
     assert store_alpha is not store_beta
-    assert store_alpha.index != store_beta.index
-    assert store_alpha.index == 'op_prj_alpha__configs'
-    assert store_beta.index == 'op_prj_beta__configs'
-
-
-@pytest.mark.asyncio
-async def test_refresh_forces_the_index_current_before_searching_configs() -> None:
-    """B5 (reviewer probe #8): a save+activate followed by a refresh
-    must not cache a snapshot whose packs/profiles disagree with the
-    just-bumped revision. Reproduced against a fake whose ``search`` lags
-    a real near-real-time index until ``indices.refresh()`` runs --
-    ``ConfigStore._load_snapshot`` must issue that refresh itself before
-    reading configs, not rely on the caller."""
-    from curation._fake_config_opensearch import NearRealTimeConfigOpenSearch
-
-    client = NearRealTimeConfigOpenSearch()
-    store = ConfigStore(index=INDEX, mode='live')
-
-    doc = await save_config(
-        client, INDEX, kind='prompt_pack', name='mypack', body={'x': 1}, expected_revision=None
-    )
-    await activate(
-        client,
-        INDEX,
-        axis='prompt_pack',
-        name='mypack',
-        revision=doc['revision'],
-        expected_active=None,
-    )
-
-    snapshot = await store.refresh(client)
-    assert snapshot.active_pack == ('mypack', doc['revision'])
-    assert 'mypack' in snapshot.packs, (
-        f'snapshot paired revision {snapshot.config_revision} with a stale doc set '
-        f'(packs={list(snapshot.packs)}) -- _load_snapshot did not force the index '
-        'current before searching'
-    )
+    assert (store_alpha.label, store_beta.label) == ('alpha', 'beta')
 
 
 def test_active_config_response_serves_source_activated_at_and_applied() -> None:
@@ -329,241 +252,85 @@ def test_active_config_response_serves_source_activated_at_and_applied() -> None
 
 
 @pytest.mark.asyncio
-async def test_poll_all_active_projects_refreshes_every_project_not_just_one() -> None:
-    """M4: the background poll loop must fan out over every active
-    project's own store, not just whichever project happened to be
-    bound at lifespan startup -- otherwise an activation made through
-    one uvicorn worker stays invisible in another until some other
-    route happens to touch that project's store."""
-    from curation._fake_config_opensearch import TwoProjectOpenSearch
-    from src.config.curation_accessors import base_curation_config
-    from src.config.projects import resources_for_new
-    from src.services.config_store.store import get_config_store
+async def test_poll_loop_refreshes_every_project_whose_epoch_moved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The background poll loop fans out over every project whose epoch moved, not just the one
+    bound at lifespan startup: an activation made through one uvicorn worker is seen in another
+    without some route touching that project's store."""
     from src.services.config_store.store_poll import _poll_all_active_projects
-    from src.services.projects.registry import ProjectRecord, record_to_doc
 
-    client = TwoProjectOpenSearch()
-    projects_index = 'op_projects'
-    client._docs.setdefault(projects_index, {})
-
-    def _doc(slug: str) -> dict[str, Any]:
-        return record_to_doc(
-            ProjectRecord(
-                slug=slug,
-                display_name=slug,
-                description='',
-                status='active',
-                revision=1,
-                created_at='',
-                updated_at='',
-                origin=None,
-                resources=resources_for_new(slug, base_curation_config()),
-            )
+    await _save('alpha', 'region_profile', 'wheel')
+    with bind_project(_record('alpha')):
+        await documents.activate(
+            axis='detection_profile', name='wheel', revision=1, expected_active=None
         )
+    memory = memory_config_now()
+    memory.project_id('beta')
 
-    client._docs[projects_index]['project:alpha'] = {'_source': _doc('alpha'), '_seq_no': 0}
-    client._docs[projects_index]['project:beta'] = {'_source': _doc('beta'), '_seq_no': 0}
+    async def epochs(known: dict[str, int | None]) -> dict[str, int | None]:
+        current: dict[str, int | None] = {
+            slug: memory.epochs.get(pid, 0) for pid, slug in memory.slugs.items()
+        }
+        return {k: v for k, v in current.items() if known.get(k) != v}
 
-    with bind_project(_record('alpha')):
-        idx = get_config_store(mode='live').index
-    doc = await save_config(
-        client, idx, kind='region_profile', name='wheel', body={}, expected_revision=None
-    )
-    await activate(
-        client,
-        idx,
-        axis='detection_profile',
-        name='wheel',
-        revision=doc['revision'],
-        expected_active=None,
-    )
-
-    poll_task = asyncio.get_event_loop().create_task(_poll_all_active_projects(client, 0.01))
+    monkeypatch.setattr('src.services.config_store.store_poll.poll_config_epochs', epochs)
+    task = asyncio.get_event_loop().create_task(_poll_all_active_projects(0.01))
     try:
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.1)
     finally:
-        poll_task.cancel()
+        task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await poll_task
+            await task
 
-    with bind_project(_record('alpha')):
-        alpha_store = get_config_store(mode='live')
-    with bind_project(_record('beta')):
-        beta_store = get_config_store(mode='live')
-
+    alpha_store = config_store_for('alpha')
+    beta_store = config_store_for('beta')
     # The poll loop, never this test, refreshed alpha's store.
-    assert alpha_store.current.active_profile == ('wheel', doc['revision'])
+    assert alpha_store.current.active_profile == ('wheel', 1)
     # beta was polled too (its own, unrelated, empty store).
     assert beta_store.current.loaded_at > 0
 
 
 @pytest.mark.asyncio
-async def test_startup_bootstrap_config_store_safe_starts_poll_task_unbound(
+async def test_a_poll_whose_refresh_failed_is_retried_on_the_next_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``src.main``'s lifespan runs
-    unbound -- no project is EVER bound at process startup -- so the old
-    code's ``get_config_store(mode='live')`` + ``store.refresh(client)``
-    "warm the bound project's store" step always raised
-    ``ProjectNotBound``. The function's own broad ``except`` swallowed
-    that and returned ``None``, so the poll task never started in any
-    real deployment. Reproduces the reviewer's exact probe: call the
-    real function with no project bound, a fake client, and assert it
-    returns a task whose first tick refreshes an active project's store."""
-    from curation._fake_config_opensearch import TwoProjectOpenSearch
-    from src.services.config_store.global_store import reset_global_config_store
-    from src.services.config_store.store import get_config_store, reset_config_stores
-    from src.services.config_store.store_poll import (
-        shutdown_config_store_poll,
-        startup_bootstrap_config_store_safe,
-    )
-    from src.services.projects import guard
-    from src.services.projects.registry import record_to_doc
+    """A store that marked itself stale stays in the moved set until a refresh succeeds."""
+    from src.services.config_store.store_poll import _poll_all_active_projects
 
-    reset_config_stores()
-    reset_global_config_store()
+    await _save('alpha', 'prompt_pack', 'wheel')
+    memory = memory_config_now()
+    pid = memory.project_id('alpha')
+    calls = {'n': 0}
+    real_load = ConfigStore._load
 
-    client = TwoProjectOpenSearch()
-    projects_index = 'op_projects'
-    client._docs.setdefault(projects_index, {})
-    client._docs[projects_index]['project:alpha'] = {
-        '_source': record_to_doc(_record('alpha')),
-        '_seq_no': 0,
-    }
+    async def flaky(self: ConfigStore) -> Any:
+        calls['n'] += 1
+        if calls['n'] == 1:
+            raise RuntimeError('database blip')
+        return await real_load(self)
 
-    async def _fake_make_curation_opensearch() -> Any:
-        return client
+    async def epochs(known: dict[str, int | None]) -> dict[str, int | None]:
+        epoch = memory.epochs.get(pid, 0)
+        return {} if known.get('alpha') == epoch else {'alpha': epoch}
 
-    monkeypatch.setattr(guard, 'make_curation_opensearch', _fake_make_curation_opensearch)
-    monkeypatch.setenv('OP_CONFIG_POLL_S', '0.01')
-
-    task = await startup_bootstrap_config_store_safe()
-    assert task is not None  # MJ1: used to be None -- no poll task at all
+    monkeypatch.setattr(ConfigStore, '_load', flaky)
+    monkeypatch.setattr('src.services.config_store.store_poll.poll_config_epochs', epochs)
+    task = asyncio.get_event_loop().create_task(_poll_all_active_projects(0.01))
     try:
-        for _ in range(200):
-            with bind_project(_record('alpha')):
-                alpha_store = get_config_store(mode='live')
-            if alpha_store.current.loaded_at > 0:
-                break
-            await asyncio.sleep(0.01)
-        with bind_project(_record('alpha')):
-            alpha_store = get_config_store(mode='live')
-        assert alpha_store.current.loaded_at > 0
+        await asyncio.sleep(0.15)
     finally:
-        await shutdown_config_store_poll(task)
-        reset_config_stores()
-        reset_global_config_store()
-
-
-@pytest.mark.asyncio
-async def test_startup_bootstrap_config_store_safe_retries_until_opensearch_reachable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Reproduces a review probe: ``indices.exists`` raises
-    (OpenSearch unreachable at startup, or the same shape as a lost
-    index-create race) on the first few calls, then succeeds. The old
-    code ran ``ensure_global_configs_index`` inline before
-    ``create_task``, inside a broad ``except`` that just logged and
-    returned ``None`` -- no task at all, for that worker's entire
-    lifetime, on every cold stack start. This asserts the returned value
-    is a real, still-running task that keeps retrying with backoff and
-    eventually enters the poll loop once OpenSearch becomes reachable."""
-    from curation._fake_config_opensearch import TwoProjectOpenSearch
-    from src.services.config_store import store_poll as store_module
-    from src.services.config_store.global_store import reset_global_config_store
-    from src.services.config_store.store import get_config_store, reset_config_stores
-    from src.services.config_store.store_poll import (
-        shutdown_config_store_poll,
-        startup_bootstrap_config_store_safe,
-    )
-    from src.services.projects import guard
-    from src.services.projects.registry import record_to_doc
-
-    reset_config_stores()
-    reset_global_config_store()
-
-    class _FlakyIndices:
-        """Delegates to the real fake ``indices``, except ``exists``
-        raises a connection error the first ``fail_count`` calls --
-        modelling OpenSearch being unreachable (or, equally, a lost
-        create-race: either way ``exists`` is what fails first here)."""
-
-        def __init__(self, inner: Any, fail_count: int) -> None:
-            self._inner = inner
-            self._fail_count = fail_count
-            self.calls = 0
-
-        async def exists(self, index: str) -> bool:
-            self.calls += 1
-            if self.calls <= self._fail_count:
-                raise ConnectionError('mock: opensearch unreachable')
-            return await self._inner.exists(index=index)
-
-        async def create(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
-            return await self._inner.create(index=index, body=body)
-
-        async def refresh(self, index: str) -> dict[str, Any]:
-            return await self._inner.refresh(index=index)
-
-    client = TwoProjectOpenSearch()
-    flaky = _FlakyIndices(client.indices, fail_count=3)
-    client.indices = flaky
-    projects_index = 'op_projects'
-    client._docs.setdefault(projects_index, {})
-    client._docs[projects_index]['project:alpha'] = {
-        '_source': record_to_doc(_record('alpha')),
-        '_seq_no': 0,
-    }
-
-    async def _fake_make_curation_opensearch() -> Any:
-        return client
-
-    monkeypatch.setattr(guard, 'make_curation_opensearch', _fake_make_curation_opensearch)
-    monkeypatch.setenv('OP_CONFIG_POLL_S', '0.01')
-    # Fast, bounded backoff so the test doesn't wait out the real 1s/30s
-    # production schedule while still exercising the retry loop.
-    monkeypatch.setattr(store_module, '_CONFIG_STORE_BOOTSTRAP_RETRY_INITIAL_S', 0.01)
-    monkeypatch.setattr(store_module, '_CONFIG_STORE_BOOTSTRAP_RETRY_MAX_S', 0.01)
-
-    task = await startup_bootstrap_config_store_safe()
-    assert task is not None  # MJ3: used to be None whenever OpenSearch was unreachable
-    try:
-        for _ in range(500):
-            if task.done():
-                break
-            with bind_project(_record('alpha')):
-                alpha_store = get_config_store(mode='live')
-            if alpha_store.current.loaded_at > 0:
-                break
-            await asyncio.sleep(0.01)
-        # The task must still be alive and retrying/polling, not finished
-        # (crashed or returned) -- a task that already completed is just
-        # as useless in production as `None` was.
-        assert not task.done()
-        assert flaky.calls > flaky._fail_count  # actually retried past the failures
-        with bind_project(_record('alpha')):
-            alpha_store = get_config_store(mode='live')
-        assert alpha_store.current.loaded_at > 0
-    finally:
-        await shutdown_config_store_poll(task)
-        reset_config_stores()
-        reset_global_config_store()
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    assert calls['n'] >= 2
+    assert 'wheel' in config_store_for('alpha').current.packs
 
 
 @pytest.mark.asyncio
 async def test_miss_refresh_sees_write_made_through_another_worker() -> None:
-    from src.services.config_store import index as config_index
-
-    writer = FakeConfigOpenSearch()
-    reader = FakeConfigOpenSearch()
-    reader.__dict__ = writer.__dict__  # same cluster, distinct client (own absent-doc cache)
-    config_index._absent_until.clear()
-    store = ConfigStore(INDEX)
-    await store.refresh(reader)  # fresh project: revision doc absent, cached as absent
-    await save_config(
-        writer, INDEX, kind='region_profile', name='clone1', body={}, expected_revision=None
-    )
-    await store.refresh(reader)
-    assert 'clone1' not in store.current.profiles  # the 404 window the issue saw
-    await store.refresh_on_miss(reader)
+    store = ConfigStore(mode='live', label='alpha')
+    await store.refresh()
+    await _save('alpha', 'region_profile', 'clone1')
+    await store.refresh_on_miss()
     assert 'clone1' in store.current.profiles

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable, Generator
     from pathlib import Path
 
@@ -61,6 +62,33 @@ def current_project() -> BoundProject:
     if bound is None:
         raise ProjectNotBound
     return bound
+
+
+class ProjectHasNoIdError(RuntimeError):
+    """The bound record was not loaded from the database, so it names no ``projects`` row."""
+
+
+def current_project_id() -> uuid.UUID:
+    """``projects.id`` of the bound project: what ``project_tx`` and the repositories take.
+
+    Raises :class:`ProjectNotBound` when nothing is bound and :class:`ProjectHasNoIdError` for a
+    record built without a database behind it (never the case for a registry record).
+    """
+    project_id = current_project().record.id
+    if project_id is None:
+        msg = f"project '{current_project().record.slug}' has no database id"
+        raise ProjectHasNoIdError(msg)
+    return project_id
+
+
+def current_storage_prefix() -> str:
+    """``projects.storage_prefix`` of the bound project: the relative key prefix of its files
+    behind the storage seam (``projects/<slug>``). Never a filesystem path."""
+    record = current_project().record
+    if not record.storage_prefix:
+        msg = f"project '{record.slug}' has no storage prefix"
+        raise ProjectHasNoIdError(msg)
+    return record.storage_prefix
 
 
 def try_current_project() -> BoundProject | None:

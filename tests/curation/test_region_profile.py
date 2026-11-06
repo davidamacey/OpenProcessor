@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _fake_project_registry import install_static_project_registry
 from _region_profile_fixture import (
     EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
     EXAMPLE_LICENSE_PLATE_PROFILE_PATH,
@@ -221,39 +222,9 @@ def _patch_worker_io(
     pool.close = AsyncMock()
     os_client = MagicMock()
     if seed_default_project:
-        from src.config.curation_accessors import base_curation_config
-        from src.config.projects import resources_for_new
-        from src.services.projects.registry import (
-            REVISION_DOC_ID,
-            ProjectRecord,
-            projects_index,
-            record_to_doc,
-        )
-
-        default_record = ProjectRecord(
-            slug='default',
-            display_name='Default',
-            description='',
-            status='active',
-            revision=1,
-            created_at='',
-            updated_at='',
-            origin=None,
-            resources=resources_for_new('default', base_curation_config()),
-        )
-
-        async def _search(*, index: str, body: dict) -> dict:  # type: ignore[type-arg]
-            if index == projects_index():
-                return {'hits': {'hits': [{'_source': record_to_doc(default_record)}]}}
-            return {'hits': {'hits': []}}
-
-        async def _get(*, index: str, id: str) -> dict:  # type: ignore[type-arg] # noqa: A002
-            if index == projects_index() and id == REVISION_DOC_ID:
-                return {'found': True, '_source': {'revision': 1}}
-            return {'found': False}
-
-        os_client.search = AsyncMock(side_effect=_search)
-        os_client.get = AsyncMock(side_effect=_get)
+        install_static_project_registry(monkeypatch)
+        os_client.search = AsyncMock(return_value={'hits': {'hits': []}})
+        os_client.get = AsyncMock(return_value={'found': False})
     else:
         os_client.search = AsyncMock(return_value={'hits': {'hits': []}})
     os_client.bulk = AsyncMock()
@@ -357,9 +328,9 @@ async def test_secondary_shape_routing_follows_env_groups(
         class_name='audi',
     )
     monkeypatch.setattr(worker_state, '_class_group', class_group_answer('tall_things'))
-    assert await _is_secondary_shape(task, None)
+    assert await _is_secondary_shape(task)
     monkeypatch.setattr(worker_state, '_class_group', class_group_answer('unrelated_group'))
-    assert not await _is_secondary_shape(task, None)
+    assert not await _is_secondary_shape(task)
 
 
 @pytest.mark.asyncio
@@ -377,7 +348,7 @@ async def test_no_secondary_shape_routing_when_profile_has_no_groups(
         class_name='class_b',
     )
     monkeypatch.setattr(worker_state, '_class_group', class_group_answer(None))
-    assert not await _is_secondary_shape(task, None)
+    assert not await _is_secondary_shape(task)
 
 
 def test_retired_empty_class_ids_is_dropped_on_read() -> None:

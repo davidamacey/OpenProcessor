@@ -9,14 +9,12 @@ and :func:`clone_settings_into` so every existing caller
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
 from src.core.logging import get_logger
 from src.services.projects.clone_activation import _clone_activations
 from src.services.projects.clone_validate import _validate_clone
-from src.utils.timeutil import now_iso
 
 
 logger = get_logger(__name__)
@@ -27,7 +25,6 @@ if TYPE_CHECKING:
 
 
 async def _apply_clone(
-    client: Any,
     *,
     target_record: ProjectRecord,
     source: ProjectRecord,
@@ -50,18 +47,12 @@ async def _apply_clone(
     if 'settings_defaults' in axes:
         from src.services.projects.clone_settings import clone_settings_document
 
-        await clone_settings_document(client, source=source, target_record=target_record)
+        await clone_settings_document(source=source, target_record=target_record)
 
     if 'classes' in axes:
-        from src.clients.curation_opensearch.registry import get_class_registry
-        from src.clients.curation_opensearch.registry_transfer import copy_into
+        from src.services.classes.registry import registry_for
 
-        with bind_project(source, read_only=True):
-            source_doc = await get_class_registry().snapshot(client)
-        with bind_project(target_record):
-            registry = get_class_registry()
-            await copy_into(client, registry, source_doc)
-            await registry.sync_to_opensearch(client)
+        await registry_for(target_record.slug).copy_from(source.slug)
     else:
         # No class registry was copied -- the target's registry is empty
         # (or byte-identical to whatever it already had), so the active
@@ -70,10 +61,9 @@ async def _apply_clone(
         from src.services.curation.region_class import ensure_region_class
 
         with bind_project(target_record):
-            await ensure_region_class(client)
+            await ensure_region_class()
 
     if 'keymap' in axes:
-        from src.config import get_curation_config
         from src.services.curation.keymap import (
             get_keymap_doc,
             publish_keymap_changed,
@@ -82,12 +72,10 @@ async def _apply_clone(
         from src.services.curation.keymap_validator import validate_keymap
 
         with bind_project(source, read_only=True):
-            src_cfg = get_curation_config()
-            source_keymap = await get_keymap_doc(client, src_cfg.configs_index)
+            source_keymap = await get_keymap_doc()
         with bind_project(target_record):
-            target_cfg = get_curation_config()
-            target_keymap = await get_keymap_doc(client, target_cfg.configs_index)
-            from src.clients.curation_opensearch.registry import get_class_registry
+            target_keymap = await get_keymap_doc()
+            from src.services.classes.registry import get_class_registry
 
             target_classes = [
                 {
@@ -96,7 +84,7 @@ async def _apply_clone(
                     'hotkey_letter': c.hotkey_letter,
                     'deprecated': c.deprecated,
                 }
-                for c in (await get_class_registry().snapshot(client)).classes
+                for c in (await get_class_registry().snapshot()).classes
             ]
             report, class_conflicts, _resolved, _issues = validate_keymap(
                 source_keymap.overrides,
@@ -131,20 +119,16 @@ async def _apply_clone(
                 )
             else:
                 new_target_doc = await save_keymap_doc(
-                    client,
-                    target_cfg.configs_index,
-                    overrides=source_keymap.overrides,
-                    expected_revision=target_keymap.revision,
+                    overrides=source_keymap.overrides, expected_revision=target_keymap.revision
                 )
                 # Tabs already open on the target should refresh.
-                await publish_keymap_changed(new_target_doc, target_cfg.configs_index, client)
+                await publish_keymap_changed(new_target_doc)
 
     written_packs: dict[str, Any] = {}
     if 'prompt_packs' in axes:
         from src.services.projects.clone_stored import copy_stored_configs
 
         written_packs = await copy_stored_configs(
-            client,
             target_record=target_record,
             source=source,
             kind='prompt_pack',
@@ -153,7 +137,6 @@ async def _apply_clone(
 
     if 'activations' in axes:
         await _clone_activations(
-            client,
             target_record=target_record,
             source=source,
             written_packs=written_packs,
@@ -169,7 +152,6 @@ async def _apply_clone(
     for named in (OPEN_VOCAB, INGEST_PROFILE):
         if named.axis in axes:
             await apply_named_axis_clone(
-                client,
                 axis=named,
                 source=source,
                 target_record=target_record,
@@ -180,7 +162,6 @@ async def _apply_clone(
         from src.services.projects.clone_vlm import apply_vlm_activation_clone
 
         await apply_vlm_activation_clone(
-            client,
             source=source,
             target_record=target_record,
             expected_active=(target_activations or {}).get('vlm'),
@@ -207,7 +188,6 @@ async def clone_settings(
         client, target_record=target_record, from_slug=from_slug, axes=axes
     )
     return await _apply_clone(
-        client,
         target_record=target_record,
         source=source,
         axes=resolved_axes,
@@ -228,27 +208,30 @@ async def clone_settings_into(
     target emptiness) runs before anything is written, and the revision
     is bumped only after the copy succeeded -- a refused clone never
     changes the target's revision."""
-    from src.services.projects.lifecycle import _get_mutable_record, write_record
+    from src.db.repos import projects as repo
+    from src.services.projects.lifecycle import _get_mutable_record
     from src.services.projects.lifecycle_checks import _require_revision, _require_transition
+    from src.services.projects.records import record_from_row
     from src.services.projects.registry import get_project_registry
+    from src.services.projects.store import run_repo
 
-    record, seq, term = await _get_mutable_record(client, slug)
+    record = await _get_mutable_record(slug)
     _require_transition(record, 'clone settings into', frozenset({'active'}))
     _require_revision(record, expected_revision)
     source, resolved_axes, target_activations = await _validate_clone(
         client, target_record=record, from_slug=from_slug, axes=axes
     )
     conflicts = await _apply_clone(
-        client,
         target_record=record,
         source=source,
         axes=resolved_axes,
         target_activations=target_activations,
     )
-    updated = replace(record, revision=record.revision + 1, updated_at=now_iso())
-    await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
+    row = await run_repo(
+        'bump a project after a clone', repo.patch_project, slug, expected_revision=record.revision
+    )
     await get_project_registry().ensure_fresh()
-    return updated, conflicts
+    return record_from_row(row), conflicts
 
 
 __all__ = ['clone_settings', 'clone_settings_into']

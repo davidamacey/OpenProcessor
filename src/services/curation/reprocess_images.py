@@ -114,7 +114,7 @@ async def embed_image_chunk(
     try:
         if isinstance(targets, BaseException):
             raise targets
-        policy = await get_ingest_policy(opensearch)
+        policy = await get_ingest_policy()
         counts = await reembed_items(
             opensearch,
             pe,
@@ -219,9 +219,9 @@ async def process_images(
     results = {s: ReprocessScopeResult(scope=s, selected=len(image_ids)) for s in scopes}
     ov_pass: OpenVocabPass | None = None
     if 'open_vocab' in scopes:
-        ov, revision = await active_set_for_run(opensearch)
+        ov, revision = await active_set_for_run()
         ov_pass = await OpenVocabPass.start(
-            opensearch, ov, revision, segment or segment_image_http, results['open_vocab']
+            ov, revision, segment or segment_image_http, results['open_vocab']
         )
     cancelled = False
     # Targets are read ahead only when nothing else runs first on a chunk: detect and open-vocab
@@ -277,7 +277,7 @@ async def process_images(
         await window.abandon()
         raise
     if ov_pass is not None:
-        await ov_pass.finish(opensearch)
+        await ov_pass.finish()
     return [results[s] for s in scopes], cancelled
 
 

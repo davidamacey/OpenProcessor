@@ -1,60 +1,59 @@
-"""Found live: every ``GET .../{prompt_packs,region_profiles}/active`` answered
-500 once a detection worker had written its runtime doc -- the worker writes
-flat ``profile`` / ``profile_revision`` fields, the view read ``profile`` as a
-mapping (``ActiveRef(**'wheel_profile')``)."""
+"""A worker's report is the epoch it applied; ``applied[]`` shows the refs that epoch holds.
+
+Found live: every ``GET .../{prompt_packs,region_profiles}/active`` answered 500 once a detection
+worker had written its report because the view read the worker's refs as a mapping.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+import datetime as dt
+import uuid
+from dataclasses import replace
 
 import pytest
 
-from src.schemas.curation.config_common import AppliedRuntime
-from src.services.config_store.index import upsert_runtime_doc
+from src.db.repos.config_base import RuntimeReport
+from src.services.config_store.activation_view import applied_runtime
+from src.services.config_store.snapshot import _EMPTY_SNAPSHOT
 
 
-class _Client:
-    def __init__(self) -> None:
-        self.bodies: list[dict[str, Any]] = []
-
-    async def index(self, **kwargs: Any) -> None:
-        self.bodies.append(kwargs['body'])
+def _report(epoch: int) -> RuntimeReport:
+    return RuntimeReport(uuid.uuid4(), 'detection_worker', 'host-1', epoch, dt.datetime.now(dt.UTC))
 
 
-@pytest.mark.asyncio
-async def test_a_worker_written_runtime_doc_reads_back() -> None:
-    client = _Client()
-    await upsert_runtime_doc(
-        client,
-        'idx',
-        process='detection_worker',
-        hostname='host-1',
-        fields={
-            'project': 'alpha',
-            'applied_config_revision': 3,
-            'profile': 'wheel_profile',
-            'profile_revision': 2,
-            'pack': 'generic_item_v1',
-            'pack_revision': None,
-            'vlm': 'env',
-            'vlm_revision': None,
-        },
+def _snapshot(epoch: int):
+    return replace(
+        _EMPTY_SNAPSHOT,
+        config_revision=epoch,
+        active_profile=('wheel_profile', 2),
+        active_pack=('generic_item_v1', 1),
+        active_vlm=('env', None),
     )
 
-    runtime = AppliedRuntime.from_runtime_doc(client.bodies[0], config_revision=5)
+
+def test_a_current_worker_runs_the_current_activations() -> None:
+    runtime = applied_runtime(_report(5), _snapshot(5))
 
     assert runtime.host == 'host-1'
     assert runtime.applied_at
     assert (runtime.profile.name, runtime.profile.revision) == ('wheel_profile', 2)
-    assert (runtime.pack.name, runtime.pack.revision) == ('generic_item_v1', None)
+    assert (runtime.pack.name, runtime.pack.revision) == ('generic_item_v1', 1)
     assert runtime.vlm is not None
-    assert runtime.vlm.name == 'env'
-    assert runtime.lagging is True
-
-
-def test_a_current_worker_is_not_lagging() -> None:
-    runtime = AppliedRuntime.from_runtime_doc(
-        {'process': 'detection_worker', 'applied_config_revision': 5}, config_revision=5
-    )
-
+    assert (runtime.vlm.name, runtime.vlm.revision) == ('env', None)
     assert runtime.lagging is False
+
+
+def test_a_worker_behind_the_epoch_is_lagging_and_its_refs_are_unknown() -> None:
+    runtime = applied_runtime(_report(3), _snapshot(5))
+
+    assert runtime.lagging is True
+    assert runtime.applied_config_revision == 3
+    assert (runtime.profile.name, runtime.pack.name) == (None, None)
+
+
+@pytest.mark.parametrize('axis_ref', ['off', None])
+def test_an_axis_that_is_off_or_never_activated_serves_an_empty_ref_for_vlm(axis_ref) -> None:
+    runtime = applied_runtime(_report(5), replace(_snapshot(5), active_vlm=axis_ref))
+
+    assert runtime.vlm is not None
+    assert runtime.vlm.name is None

@@ -17,7 +17,6 @@ from fastapi import Query, Response
 
 from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - FastAPI resolves it
 from src.routers.curation._vlm_endpoint_models import (
     VlmEndpointCloneRequest,
     VlmEndpointCreate,
@@ -41,14 +40,13 @@ from src.routers.curation._vlm_endpoint_views import (
 )
 from src.routers.curation.projects import global_router
 from src.services.config_store import ConfigStoreUnavailableError, get_global_config_store
-from src.services.config_store.index import RevisionConflictError
+from src.services.config_store.documents import CloneSource, RevisionConflictError, get_revision
 from src.services.config_store.vlm_endpoints import (
     delete_endpoint,
     list_revisions,
     record_probe,
     save_endpoint,
 )
-from src.services.config_store.vlm_snapshot import fetch_revision
 from src.services.config_store.vlm_usage import activations_by_project, slugs_running
 from src.services.config_store.vlm_validation import external_policy, issue, validate_vlm_endpoint
 from src.services.labeling.vlm_endpoint_probe import ProbeBusyError, probe_endpoint
@@ -92,29 +90,29 @@ _NO_PROBE_CODES = frozenset(
 _PREFIX = '/vlm/endpoints'
 
 
-async def _registry(client: Any, *, name: str | None = None) -> Any:
+async def _registry(*, name: str | None = None) -> Any:
     """The refreshed registry. A ``name`` that is not in it forces a second read: an endpoint
     written through another API worker bumps a revision doc this process may hold as absent."""
     store = get_global_config_store()
-    await store.refresh(client)
+    await store.refresh()
     if name is not None and get_vlm_endpoint(name) is None:
         try:
-            await store.refresh_on_miss(client)
+            await store.refresh_on_miss()
         except ConfigStoreUnavailableError as exc:
             raise api_error(503, 'config_store_unavailable', str(exc)) from exc
     return store.current
 
 
-async def _active_in(client: Any) -> dict[str, list[str]]:
+async def _active_in() -> dict[str, list[str]]:
     """``endpoint name -> projects running it`` for display; a project whose
     activation cannot be read is left out (display only: a delete re-reads
     live and refuses)."""
     try:
-        activations = await activations_by_project(client)
+        activations = await activations_by_project()
     except Exception as exc:
         logger.warning('vlm_active_in_unavailable', error=str(exc))
         return {}
-    names = {(doc or {}).get('name') for doc in activations.values() if doc} | {ENV_ENDPOINT_NAME}
+    names = {ref.name for ref in activations.values() if ref is not None} | {ENV_ENDPOINT_NAME}
     return {n: slugs_running(activations, n) for n in names if n}
 
 
@@ -152,7 +150,6 @@ def _probe_blocked(report: ValidationReport) -> bool:
 
 
 async def _run_probe(
-    client: Any,
     body: VlmEndpointBody,
     *,
     record_for: VlmEndpoint | None,
@@ -178,17 +175,17 @@ async def _run_probe(
         raise api_error(422, 'validation_failed', str(exc)) from exc
     if record_for is not None:
         await record_probe(
-            client, name=record_for.name, revision=record_for.revision, body=body, record=record
+            name=record_for.name, revision=record_for.revision, body=body, record=record
         )
     return probe_wire(record)  # type: ignore[return-value]
 
 
 @global_router.get(_PREFIX, response_model=VlmEndpointList, tags=['VLM'])
-async def list_vlm_endpoints(client: OpenSearchDep) -> VlmEndpointList:
+async def list_vlm_endpoints() -> VlmEndpointList:
     """Every endpoint (the ``env`` built-in first), where each is in use,
     the external-images policy and the secret references present."""
-    snapshot = await _registry(client)
-    usage = await _active_in(client)
+    snapshot = await _registry()
+    usage = await _active_in()
     return VlmEndpointList(
         endpoints=[
             await summary_of(e, active_in=usage.get(e.name, [])) for e in available_vlm_endpoints()
@@ -210,13 +207,12 @@ async def vlm_endpoint_form_schema() -> VlmEndpointSchema:
 @global_router.post(f'{_PREFIX}/validate', response_model=VlmValidateResponse, tags=['VLM'])
 async def validate_vlm_draft(
     payload: VlmValidateRequest,
-    client: OpenSearchDep,
     probe: Annotated[bool, Query(description='Also test the endpoint (synthetic images).')] = False,
 ) -> VlmValidateResponse:
     """Validate a draft; never writes (except the probe record of an
     existing ``name``, when ``probe=true``). Always 200: the report says what
     is wrong."""
-    await _registry(client)
+    await _registry()
     existing = _all_names() if payload.name else None
     report, locality = await validate_vlm_endpoint(
         payload.body,
@@ -237,9 +233,7 @@ async def validate_vlm_draft(
             and current.source == 'stored'
             and probe_fingerprint(payload.body.normalized()) == probe_fingerprint(current.body)
         )
-        result = await _run_probe(
-            client, payload.body, record_for=current if same else None, is_env=False
-        )
+        result = await _run_probe(payload.body, record_for=current if same else None, is_env=False)
     from src.services.labeling.vlm_url_policy import sends_images_externally
 
     return VlmValidateResponse(
@@ -251,12 +245,10 @@ async def validate_vlm_draft(
 
 
 @global_router.get(f'{_PREFIX}/{{name}}', response_model=VlmEndpointDoc, tags=['VLM'])
-async def get_vlm_endpoint_doc(
-    name: str, client: OpenSearchDep, response: Response
-) -> VlmEndpointDoc:
-    await _registry(client, name=name)
+async def get_vlm_endpoint_doc(name: str, response: Response) -> VlmEndpointDoc:
+    await _registry(name=name)
     endpoint = _require_existing(name)
-    usage = await _active_in(client)
+    usage = await _active_in()
     response.headers['ETag'] = f'"{endpoint.etag}"'
     return await doc_of(endpoint, active_in=usage.get(name, []))
 
@@ -264,8 +256,8 @@ async def get_vlm_endpoint_doc(
 @global_router.get(
     f'{_PREFIX}/{{name}}/revisions', response_model=VlmRevisionsResponse, tags=['VLM']
 )
-async def list_vlm_endpoint_revisions(name: str, client: OpenSearchDep) -> VlmRevisionsResponse:
-    await _registry(client, name=name)
+async def list_vlm_endpoint_revisions(name: str) -> VlmRevisionsResponse:
+    await _registry(name=name)
     endpoint = _require_existing(name)
     if endpoint.source == 'env':
         return VlmRevisionsResponse(name=name, revisions=[])
@@ -273,12 +265,12 @@ async def list_vlm_endpoint_revisions(name: str, client: OpenSearchDep) -> VlmRe
         name=name,
         revisions=[
             VlmRevisionSummary(
-                revision=int(doc['revision']),
-                saved_at=doc.get('updated_at'),
-                cloned_from=doc.get('cloned_from'),
-                description=doc.get('description') or '',
+                revision=info.revision,
+                saved_at=info.created_at.isoformat(),
+                cloned_from=info.cloned_from,
+                description=info.description,
             )
-            for doc in await list_revisions(client, name)
+            for info in await list_revisions(name)
         ],
     )
 
@@ -287,11 +279,12 @@ async def list_vlm_endpoint_revisions(name: str, client: OpenSearchDep) -> VlmRe
     f'{_PREFIX}/{{name}}/revisions/{{revision}}', response_model=VlmEndpointDoc, tags=['VLM']
 )
 async def get_vlm_endpoint_revision(
-    name: str, revision: int, client: OpenSearchDep
+    name: str,
+    revision: int,
 ) -> VlmEndpointDoc:
-    registry = await _registry(client, name=name)
+    registry = await _registry(name=name)
     _require_stored(name)
-    item = await fetch_revision(client, name, revision)
+    item = await get_revision(kind='vlm_endpoint', name=name, revision=revision)
     if item is None:
         raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
     endpoint = stored_endpoint(item, registry.vlm_probes)
@@ -299,12 +292,11 @@ async def get_vlm_endpoint_revision(
 
 
 @global_router.post(_PREFIX, response_model=VlmEndpointDoc, status_code=201, tags=['VLM'])
-async def create_vlm_endpoint(payload: VlmEndpointCreate, client: OpenSearchDep) -> VlmEndpointDoc:
-    await _registry(client)
+async def create_vlm_endpoint(payload: VlmEndpointCreate) -> VlmEndpointDoc:
+    await _registry()
     report = await _validated(payload.body, name=payload.name, existing=_all_names())
     try:
         endpoint = await save_endpoint(
-            client,
             name=payload.name,
             body=payload.body,
             expected_revision=None,
@@ -319,12 +311,13 @@ async def create_vlm_endpoint(payload: VlmEndpointCreate, client: OpenSearchDep)
     f'{_PREFIX}/{{name}}/clone', response_model=VlmEndpointDoc, status_code=201, tags=['VLM']
 )
 async def clone_vlm_endpoint(
-    name: str, payload: VlmEndpointCloneRequest, client: OpenSearchDep
+    name: str,
+    payload: VlmEndpointCloneRequest,
 ) -> VlmEndpointDoc:
-    registry = await _registry(client, name=name)
+    registry = await _registry(name=name)
     source = _require_existing(name)
     if payload.revision is not None and source.source == 'stored':
-        item = await fetch_revision(client, name, payload.revision)
+        item = await get_revision(kind='vlm_endpoint', name=name, revision=payload.revision)
         if item is None:
             raise api_error(404, 'unknown_revision', f'{name!r} has no revision {payload.revision}')
         source = stored_endpoint(item, registry.vlm_probes)
@@ -353,14 +346,15 @@ async def clone_vlm_endpoint(
         )
     try:
         endpoint = await save_endpoint(
-            client,
             name=payload.new_name,
             body=body,
             expected_revision=None,
             description=payload.description
             if payload.description is not None
             else source.description,
-            cloned_from=name if source.source == 'env' else f'{name}@{source.revision}',
+            cloned_from=None
+            if source.source == 'env'
+            else CloneSource(None, 'vlm_endpoint', name, source.revision),
         )
     except RevisionConflictError as exc:
         raise api_error(409, 'name_conflict', f'{payload.new_name!r} already exists') from exc
@@ -369,16 +363,16 @@ async def clone_vlm_endpoint(
 
 @global_router.put(f'{_PREFIX}/{{name}}', response_model=VlmEndpointDoc, tags=['VLM'])
 async def update_vlm_endpoint(
-    name: str, payload: VlmEndpointSaveRequest, client: OpenSearchDep
+    name: str,
+    payload: VlmEndpointSaveRequest,
 ) -> VlmEndpointDoc:
     """A new revision. Does not change what any project runs until it is
     activated there."""
-    await _registry(client, name=name)
+    await _registry(name=name)
     current = _require_stored(name)
     report = await _validated(payload.body, name=None, existing=None)
     try:
         endpoint = await save_endpoint(
-            client,
             name=name,
             body=payload.body,
             expected_revision=payload.expected_revision,
@@ -397,14 +391,12 @@ async def update_vlm_endpoint(
 
 
 @global_router.delete(f'{_PREFIX}/{{name}}', status_code=204, tags=['VLM'])
-async def delete_vlm_endpoint(
-    name: str, client: OpenSearchDep, expected_revision: Annotated[int, Query()]
-) -> Response:
+async def delete_vlm_endpoint(name: str, expected_revision: Annotated[int, Query()]) -> Response:
     """409 ``in_use`` while any project runs it (read live, so an unreadable
     project blocks the delete rather than being skipped)."""
-    await _registry(client, name=name)
+    await _registry(name=name)
     _require_stored(name)
-    projects = slugs_running(await activations_by_project(client), name)
+    projects = slugs_running(await activations_by_project(), name)
     if projects:
         raise api_error(
             409,
@@ -413,7 +405,7 @@ async def delete_vlm_endpoint(
             projects=projects,
         )
     try:
-        await delete_endpoint(client, name=name, expected_revision=expected_revision)
+        await delete_endpoint(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
         raise api_error(
             409,
@@ -425,12 +417,12 @@ async def delete_vlm_endpoint(
 
 
 @global_router.post(f'{_PREFIX}/{{name}}/probe', response_model=VlmProbeResult, tags=['VLM'])
-async def probe_vlm_endpoint(name: str, client: OpenSearchDep) -> VlmProbeResult:
+async def probe_vlm_endpoint(name: str) -> VlmProbeResult:
     """Test the saved endpoint with synthetic images and record the result
     (it also picks up a rotated key file). Never bumps the endpoint's
     revision; bumps the config revision so every process and worker sees
     the new ``json_mode`` / model facts."""
-    await _registry(client, name=name)
+    await _registry(name=name)
     endpoint = _require_existing(name)
     report, locality = await validate_vlm_endpoint(
         endpoint.body,
@@ -444,6 +436,4 @@ async def probe_vlm_endpoint(name: str, client: OpenSearchDep) -> VlmProbeResult
         raise api_error(
             422, 'validation_failed', 'this endpoint may not be contacted', report=report
         )
-    return await _run_probe(
-        client, endpoint.body, record_for=endpoint, is_env=endpoint.source == 'env'
-    )
+    return await _run_probe(endpoint.body, record_for=endpoint, is_env=endpoint.source == 'env')

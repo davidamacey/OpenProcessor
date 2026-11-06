@@ -45,7 +45,7 @@ class Registry:
         self.resolved: list[tuple[str | None, int | None]] = []
         self.connected: list[str] = []
 
-        async def job_endpoint(_os: Any, **kw: Any) -> Any:
+        async def job_endpoint(**kw: Any) -> Any:
             assert kw['resolved'] is True, 'a worker resolves exactly what start pinned'
             self.resolved.append((kw['pinned_name'], kw['pinned_revision']))
             return SimpleNamespace(name=kw['pinned_name'], body=None)
@@ -186,7 +186,7 @@ def test_a_loop_that_cannot_reach_its_pinned_endpoint_fails_closed(
 ) -> None:
     from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 
-    async def gone(_os: Any, **_kw: Any) -> Any:
+    async def gone(**_kw: Any) -> Any:
         msg = 'the pinned VLM endpoint primary@3 no longer exists'
         raise VlmEndpointUnavailableError(msg)
 
@@ -236,7 +236,7 @@ def test_a_loop_the_worker_has_is_running_with_a_heartbeat_before_anything_is_re
     repair to ``interrupted``, not a ``queued`` loop nobody will ever claim."""
     seen: dict[str, Any] = {}
 
-    async def look(_os: Any, **_kw: Any) -> Any:
+    async def look(**_kw: Any) -> Any:
         loop = job.open_job(loop_id)
         seen.update(status=loop.read()['status'], beat=loop.heartbeat_file.exists())
         msg = 'stop here'

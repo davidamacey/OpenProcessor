@@ -4,7 +4,7 @@ locks, regions, negatives, splits. Ports every assertion of the retired
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,6 +12,13 @@ from curation.dataset_import.harness import Harness, activate_region_profile, ma
 from src.config.region_fields import get_region_fields
 from src.domain.region_boxes import read_boxes
 from src.services.curation.dataset_import.mapping import ClassMappingEntry
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+pytest_plugins = ['_records_world']
 
 
 def _items_of(h: Harness, class_name: str) -> list[dict]:
@@ -178,11 +185,15 @@ async def test_negatives_unlabeled_and_splits(tmp_path: Path, monkeypatch) -> No
     assert not [d for d in h.items.values() if d['image_id'] == neg['image_id']]
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_freeze_test_split_marks_holdout_and_leaves_current_untouched(
     tmp_path: Path, monkeypatch
 ) -> None:
-    from src.config import get_curation_config
+    from src.config.project_context import current_project_id
+    from src.db.repos.records import current_holdout_freeze, list_holdout_freezes
+    from src.db.session import async_session_factory, project_tx
 
     h = Harness(tmp_path, monkeypatch)
     h.registry.add('car')
@@ -190,7 +201,10 @@ async def test_freeze_test_split_marks_holdout_and_leaves_current_untouched(
     write_yolo(root, names=['car'], images={'t': ['0 0.5 0.5 0.2 0.2']}, split='test')
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car'), freeze_test_split=True))
     assert all(d['test_holdout'] is True for d in h.items.values())
-    holdout_dir = Path(get_curation_config().project_state_dir) / 'test_holdout'
-    assert not (holdout_dir / 'current.json').exists()
-    assert list((holdout_dir / 'imports').glob('*.json'))
+    project_id = current_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        assert await current_holdout_freeze(session, project_id) is None
+        [freeze] = await list_holdout_freezes(session, project_id)
+    assert freeze.source.startswith('import:')
+    assert store.job.read()['freeze_record'] == str(freeze.id)
     assert store.job.read()['report']['holdout_frozen'] == 1

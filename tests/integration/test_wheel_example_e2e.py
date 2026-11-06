@@ -134,9 +134,9 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
         ) as client,
     ):
         monkeypatch.setattr(curation_mod, '_default_curation_config', None)
-        registry = ProjectRegistry(lambda: cluster)
+        registry = ProjectRegistry()
         set_project_registry(registry)
-        asyncio.run(bootstrap_default_project(cluster))
+        asyncio.run(bootstrap_default_project())
         asyncio.run(registry.ensure_fresh())
         yield World(client, cluster, tmp_path)
     set_project_registry(None)

@@ -1,21 +1,11 @@
-"""Shared fixtures for the ingest-profile tests: an in-memory OpenSearch that serves
-both the config store and the settings document (the ingest policy), and a fake Triton
-pool."""
+"""Shared fixtures for the ingest-profile tests: a fake Triton pool and profile bodies."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
-
 
 END2END = ['num_dets', 'det_boxes', 'det_scores', 'det_classes']
-
-
-class WorldOpenSearch(FakeConfigOpenSearch):
-    async def index(self, index: str, id: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: A002
-        kw.pop('op_type', None)
-        return await super().index(index, id, body, **kw)
 
 
 class Pool:

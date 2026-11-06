@@ -13,7 +13,7 @@ from fastapi import Response
 
 from src.core.wire_json import WireJSONResponse
 from src.routers.curation._api_error import active_conflict_error, api_error
-from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._common import router
 from src.routers.curation._prompt_pack_models import (
     PromptPackActivateRequest,
     PromptPackBody,
@@ -41,6 +41,7 @@ from src.services.config_store import (
     get_config_store,
 )
 from src.services.config_store.activation_view import build_active_config_response
+from src.services.config_store.documents import CloneSource
 from src.services.config_store.pack_validation import validate_pack
 from src.services.config_store.packs import (
     PackRecord,
@@ -230,10 +231,10 @@ async def get_prompt_pack_schema() -> PromptPackSchema:
 
 @router.post('/prompt_packs/validate')
 async def validate_prompt_pack_route(
-    body: PromptPackValidateRequest, opensearch: OpenSearchDep, profile: str | None = None
+    body: PromptPackValidateRequest, profile: str | None = None
 ) -> Any:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     existing = all_known_names()
     report = validate_pack(
         body.name,
@@ -251,17 +252,15 @@ async def validate_prompt_pack_route(
 
 
 @router.get('/prompt_packs/active', response_model=ActiveConfigResponse)
-async def get_active_prompt_pack_route(opensearch: OpenSearchDep) -> ActiveConfigResponse:
-    return await build_active_config_response(opensearch, axis='prompt_pack')
+async def get_active_prompt_pack_route() -> ActiveConfigResponse:
+    return await build_active_config_response(axis='prompt_pack')
 
 
 @router.post('/prompt_packs/active/rollback', response_model=ActiveConfigResponse)
-async def rollback_active_prompt_pack(
-    body: PromptPackRollbackRequest, opensearch: OpenSearchDep
-) -> ActiveConfigResponse:
+async def rollback_active_prompt_pack(body: PromptPackRollbackRequest) -> ActiveConfigResponse:
     expected = body.expected_active.model_dump() if body.expected_active is not None else None
     try:
-        await rollback_pack(opensearch, expected_active=expected)
+        await rollback_pack(expected_active=expected)
     except LookupError as exc:
         # m-b fix: `previous_deleted` is distinct
         # from `no_previous` -- the pack was deleted while it was the
@@ -275,7 +274,7 @@ async def rollback_active_prompt_pack(
         ) from exc
     except ActiveConflictError as exc:
         raise active_conflict_error('the active pack', exc.current) from exc
-    return await build_active_config_response(opensearch, axis='prompt_pack')
+    return await build_active_config_response(axis='prompt_pack')
 
 
 # =============================================================================
@@ -284,9 +283,9 @@ async def rollback_active_prompt_pack(
 
 
 @router.get('/prompt_packs', response_model=PromptPackList)
-async def list_prompt_packs(opensearch: OpenSearchDep) -> PromptPackList:
+async def list_prompt_packs() -> PromptPackList:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     names = all_known_names() - set(_template_names_only())
     packs = [build_record(name) for name in sorted(names)]
     templates = [
@@ -313,11 +312,9 @@ def _template_names_only() -> list[str]:
 
 
 @router.post('/prompt_packs', response_model=PromptPackDoc, status_code=201)
-async def create_prompt_pack(
-    body: PromptPackCreateRequest, opensearch: OpenSearchDep
-) -> PromptPackDoc:
+async def create_prompt_pack(body: PromptPackCreateRequest) -> PromptPackDoc:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     existing = all_known_names()
     report = validate_pack(
         body.name,
@@ -340,7 +337,6 @@ async def create_prompt_pack(
         )
 
     record = await save_pack(
-        opensearch,
         name=body.name,
         body=body.body.model_dump(),
         expected_revision=None,
@@ -355,9 +351,9 @@ async def create_prompt_pack(
 
 
 @router.get('/prompt_packs/{name}', response_model=PromptPackDoc)
-async def get_prompt_pack_route(name: str, opensearch: OpenSearchDep) -> Any:
+async def get_prompt_pack_route(name: str) -> Any:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
@@ -366,10 +362,8 @@ async def get_prompt_pack_route(name: str, opensearch: OpenSearchDep) -> Any:
 
 
 @router.get('/prompt_packs/{name}/revisions', response_model=PromptPackRevisionsResponse)
-async def list_prompt_pack_revisions(
-    name: str, opensearch: OpenSearchDep
-) -> PromptPackRevisionsResponse:
-    revisions = await list_revisions(opensearch, name)
+async def list_prompt_pack_revisions(name: str) -> PromptPackRevisionsResponse:
+    revisions = await list_revisions(name)
     if revisions is None:
         raise api_error(404, 'not_found', f'{name!r} is not a stored pack')
     return PromptPackRevisionsResponse(
@@ -387,10 +381,8 @@ async def list_prompt_pack_revisions(
 
 
 @router.get('/prompt_packs/{name}/revisions/{revision}', response_model=PromptPackDoc)
-async def get_prompt_pack_revision(
-    name: str, revision: int, opensearch: OpenSearchDep
-) -> PromptPackDoc:
-    record = await get_revision_record(opensearch, name, revision)
+async def get_prompt_pack_revision(name: str, revision: int) -> PromptPackDoc:
+    record = await get_revision_record(name, revision)
     if record is None:
         raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
     return _to_doc(record)
@@ -402,10 +394,10 @@ async def get_prompt_pack_revision(
 
 
 async def _resolve_clone_source(
-    client: Any, *, name: str, revision: int | None, source: str | None
+    *, name: str, revision: int | None, source: str | None
 ) -> PackRecord:
     if source == 'stored' and revision is not None:
-        record = await get_revision_record(client, name, revision)
+        record = await get_revision_record(name, revision)
         if record is None:
             raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
         return record
@@ -415,7 +407,7 @@ async def _resolve_clone_source(
             raise api_error(404, 'not_found', f'{name!r} has no {source} source')
         return record
     if revision is not None:
-        record = await get_revision_record(client, name, revision)
+        record = await get_revision_record(name, revision)
         if record is not None:
             return record
     record = build_record(name, revision=revision)
@@ -425,28 +417,22 @@ async def _resolve_clone_source(
 
 
 @router.post('/prompt_packs/{name}/clone', response_model=PromptPackDoc, status_code=201)
-async def clone_prompt_pack(
-    name: str, body: PromptPackCloneRequest, opensearch: OpenSearchDep
-) -> PromptPackDoc:
+async def clone_prompt_pack(name: str, body: PromptPackCloneRequest) -> PromptPackDoc:
     from src.config import get_curation_config
     from src.services.config_store.clone_shared import (
         cloned_description,
-        cloned_from_tag,
         read_source_record,
         reject_invalid_clone_name,
     )
 
     target_slug = get_curation_config().project_slug
 
-    async def _resolve(client: Any) -> PackRecord:
-        return await _resolve_clone_source(
-            client, name=name, revision=body.revision, source=body.source
-        )
+    async def _resolve() -> PackRecord:
+        return await _resolve_clone_source(name=name, revision=body.revision, source=body.source)
 
     source = await read_source_record(
         from_project=body.from_project,
         target_slug=target_slug,
-        opensearch=opensearch,
         resolve=_resolve,
     )
 
@@ -473,12 +459,11 @@ async def clone_prompt_pack(
             422, 'validation_failed', 'the cloned pack has content errors', report=report
         )
 
-    cloned_from = cloned_from_tag(
-        source_project=body.from_project or target_slug, name=name, revision=source.revision
+    cloned_from = CloneSource(
+        body.from_project or target_slug, 'prompt_pack', name, source.revision
     )
     try:
         record = await save_pack(
-            opensearch,
             name=body.new_name,
             body=new_body,
             expected_revision=None,
@@ -499,11 +484,9 @@ async def clone_prompt_pack(
 
 
 @router.put('/prompt_packs/{name}', response_model=PromptPackDoc)
-async def save_prompt_pack(
-    name: str, body: PromptPackSaveRequest, opensearch: OpenSearchDep
-) -> PromptPackDoc:
+async def save_prompt_pack(name: str, body: PromptPackSaveRequest) -> PromptPackDoc:
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     existing = build_record(name)
     if existing is not None and existing.read_only:
         raise api_error(403, 'read_only', f'{name!r} is read-only')
@@ -522,7 +505,6 @@ async def save_prompt_pack(
 
     try:
         record = await save_pack(
-            opensearch,
             name=name,
             body=body.body.model_dump(),
             expected_revision=body.expected_revision,
@@ -541,12 +523,10 @@ async def save_prompt_pack(
 
 
 @router.delete('/prompt_packs/{name}', status_code=204)
-async def delete_prompt_pack_route(
-    name: str, expected_revision: int, opensearch: OpenSearchDep
-) -> Response:
+async def delete_prompt_pack_route(name: str, expected_revision: int) -> Response:
 
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name)
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
@@ -556,7 +536,7 @@ async def delete_prompt_pack_route(
     if isinstance(ref, tuple) and ref[0] == name:
         raise api_error(409, 'in_use', f'{name!r} is the active pack')
     try:
-        await delete_pack(opensearch, name=name, expected_revision=expected_revision)
+        await delete_pack(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
         raise api_error(
             409,
@@ -578,17 +558,17 @@ async def delete_prompt_pack_route(
 
 @router.post('/prompt_packs/{name}/activate', response_model=ActivateResponse)
 async def activate_prompt_pack_route(
-    name: str, body: PromptPackActivateRequest, opensearch: OpenSearchDep
+    name: str, body: PromptPackActivateRequest
 ) -> ActivateResponse:
     from src.services.config_store.activation_gate import run_activation_gate
 
     store = get_config_store()
-    await store.refresh(opensearch)
+    await store.refresh()
     record = build_record(name, revision=body.revision)
     if record is None and body.revision is None:
         # Written through another API worker: this process may hold a stale snapshot.
         try:
-            await store.refresh_on_miss(opensearch)
+            await store.refresh_on_miss()
         except ConfigStoreUnavailableError as exc:
             raise api_error(503, 'config_store_unavailable', str(exc)) from exc
         record = build_record(name)
@@ -597,19 +577,15 @@ async def activate_prompt_pack_route(
 
     # the ONE shared `for_activation` gate
     # every activation writer calls -- activate, settings-bridge, rollback.
-    report = await run_activation_gate(
-        'prompt_pack', name, record.revision, force=body.force, client=opensearch
-    )
+    report = await run_activation_gate('prompt_pack', name, record.revision, force=body.force)
 
     expected_active = (
         body.expected_active.model_dump() if body.expected_active is not None else None
     )
     try:
-        await activate_pack(
-            opensearch, name=name, revision=record.revision, expected_active=expected_active
-        )
+        await activate_pack(name=name, revision=record.revision, expected_active=expected_active)
     except ActiveConflictError as exc:
         raise active_conflict_error('the active pack', exc.current) from exc
 
-    response = await build_active_config_response(opensearch, axis='prompt_pack')
+    response = await build_active_config_response(axis='prompt_pack')
     return ActivateResponse(**response.model_dump(), validation=report)

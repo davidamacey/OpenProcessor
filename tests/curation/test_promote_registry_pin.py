@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _class_registry_fake import InMemoryRegistry, use_registry
 from _project_paths import default_train_jobs_dir
-from _registry_doc_fake import InMemoryRegistry, use_registry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

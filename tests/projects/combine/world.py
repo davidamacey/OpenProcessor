@@ -11,13 +11,13 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import io
+import uuid
 from typing import TYPE_CHECKING, Any
 
-from _registry_doc_fake import put_registry_doc
+from _class_registry_fake import registry_of
 from curation.query_fakes import QueryFakeOpenSearch
 from PIL import Image
 
-from src.clients.curation_opensearch import registry as curation_registry
 from src.config.curation_accessors import base_curation_config
 from src.config.curation_roles import IndexRole
 from src.config.projects import ProjectRecord, new_project_record
@@ -71,11 +71,6 @@ class World:
         monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
         monkeypatch.setenv('OP_COMBINE_JOBS_DIR', str(tmp_path / 'combine_jobs'))
         monkeypatch.setattr(curation_mod, '_default_curation_config', None)
-        # The registries here are documents in this world's own fake, read by the real store.
-        monkeypatch.setattr(curation_registry, '_registries', {})
-        monkeypatch.setattr(
-            'src.services.curation.registry_access.make_curation_opensearch', self._client
-        )
         self.fake = QueryFakeOpenSearch()
         self.records: dict[str, ProjectRecord] = {}
         self.registry = StubRegistry(self.records)
@@ -83,6 +78,7 @@ class World:
         self._seed = 0
         monkeypatch.setattr(combine_service, 'target_embedding_dim', lambda: DIM)
         self.settled: list[bool] = []
+        self.pg: Any = None  # set by a db test: every project then gets a real projects row
 
     async def _client(self) -> QueryFakeOpenSearch:
         return self.fake
@@ -105,7 +101,13 @@ class World:
         )
         record.resources.upload_root.mkdir(parents=True, exist_ok=True)
         record.resources.project_state_dir.mkdir(parents=True, exist_ok=True)
-        put_registry_doc(self.fake, record.resources.indexes[IndexRole.SETTINGS], classes)
+        if self.pg is not None:
+            from _records_world import make_project_row
+
+            record = dataclasses.replace(
+                record, id=make_project_row(self.pg, f'{slug}-{uuid.uuid4().hex[:8]}')
+            )
+        registry_of(record).seed(list(classes))
         self.records[slug] = record
         return record
 
@@ -125,13 +127,11 @@ class World:
         """The project's registry document as stable text, to compare before and after."""
         import json
 
-        index = self.records[slug].resources.indexes[IndexRole.SETTINGS]
-        return json.dumps(self.fake.docs(index).get('class_registry'), sort_keys=True)
+        doc = registry_of(self.records[slug]).load().model_dump(exclude={'updated_at'})
+        return json.dumps(doc, sort_keys=True, default=str)
 
     def registry_ids(self, slug: str) -> dict[str, int]:
-        index = self.records[slug].resources.indexes[IndexRole.SETTINGS]
-        raw = self.fake.docs(index)['class_registry']['class_registry']
-        return {c['class_name']: c['class_id'] for c in raw['classes']}
+        return {c.class_name: c.class_id for c in registry_of(self.records[slug]).load().classes}
 
     # -------------------------------------------------------------- images
 

@@ -15,25 +15,36 @@ any offline promotion tooling should both call :func:`select_test_holdout`
 rather than reimplementing the sampling.
 
 Freezing is high blast radius and permanent (crops never return to the
-trainable pool), so every freeze also persists a durable, auditable record
-via :func:`persist_freeze_record` — mirrors the snapshot-then-atomic-replace
-convention used by ``ClassRegistry._atomic_write`` in
-``src/clients/curation_opensearch/registry.py`` so a bad freeze can be diagnosed and
-reverted from the recorded crop-id list.
+trainable pool), so every freeze also leaves a durable, auditable record: a
+``holdout_freezes`` row (``src/db/repos/records.py``) and a snapshot blob of the
+frozen crop-id list behind the storage seam (:func:`write_freeze_snapshot`), so a
+bad freeze can be diagnosed and reverted from the recorded list.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from src.config.curation_accessors import get_curation_config
+from src.clients.storage.keys import make_key
+from src.clients.storage.roots import build_rooted_store
+from src.config.project_context import current_project, current_project_id
+from src.config.storage import storage_root_paths
 from src.core.exceptions import RequestRejectedError
+from src.db.repos.records import HoldoutFreezeRow, forget_holdout_freeze, freeze_holdout
+from src.db.session import project_tx
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
-from src.utils.atomic_write import atomic_write_bytes, atomic_write_json
+
+
+if TYPE_CHECKING:
+    import uuid
+    from collections.abc import AsyncIterator
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # Every class that appears in the cohort gets at least this many crops held
@@ -42,7 +53,7 @@ from src.utils.atomic_write import atomic_write_bytes, atomic_write_json
 MIN_TEST_PER_CLASS = MIN_TEST_CROPS_PER_CLASS
 
 FreezeKind = Literal['curated', 'import']
-# Where an import freeze's records live, under the holdout state dir.
+# Where an import freeze's snapshots live, under the project's holdout area.
 IMPORT_FREEZE_DIR = 'imports'
 
 # Composite-agg page size (max distinct (class_id, source) strata per
@@ -219,15 +230,6 @@ async def fetch_cohort_strata(
     return buckets
 
 
-def _default_state_dir() -> Path:
-    """The bound project's holdout dir (the frozen test split is project
-    data; ``default``'s is today's ``state_dir/test_holdout``), read at
-    call time (not import time) so tests can ``monkeypatch.setenv`` (via
-    ``CurationConfig.from_env``) around a single call without
-    import-order fragility."""
-    return Path(get_curation_config().project_state_dir) / 'test_holdout'
-
-
 def select_test_holdout(
     crop_ids_by_class: dict[Any, list[str]],
     *,
@@ -280,36 +282,20 @@ def compute_holdout_sha(crop_ids: list[str]) -> str:
     return hashlib.sha256('\n'.join(sorted(crop_ids)).encode('utf-8')).hexdigest()
 
 
-def persist_freeze_record(
+def write_freeze_snapshot(
     *,
     crop_ids: list[str],
     sha: str,
     cohort_spec: dict[str, Any],
     per_class_counts: dict[str, int],
-    state_dir: Path | None = None,
     kind: FreezeKind = 'curated',
-) -> Path:
-    """Write a durable freeze record and return the snapshot path.
+) -> str:
+    """Write the snapshot blob of a freeze and return its storage key.
 
-    ``kind='curated'`` (the default) writes two files under ``state_dir``
-    (default ``CurationConfig.state_dir/test_holdout/``):
-
-    - ``<ISO-timestamp>.json`` — an immutable snapshot of this freeze.
-    - ``current.json`` — atomically replaced to always point at the latest
-      freeze (tmp-write + fsync + rename, same durability contract as
-      ``ClassRegistry._atomic_write``).
-
-    ``kind='import'`` (a dataset import freezing its test split)
-    writes only the snapshot, under ``<state_dir>/imports/``: an import
-    freeze never replaces ``current.json``, which stays the curated freeze.
-
-    Without this, ``test_holdout_sha`` in the API response is a number
-    nobody can verify or use to revert a bad freeze.
+    ``projects/<slug>/holdout/<timestamp>.json`` for a curated freeze, under
+    ``holdout/imports/`` for an import's or a combine's. Without it ``test_holdout_sha`` in the
+    API response is a number nobody can verify or use to revert a bad freeze.
     """
-    base_dir = state_dir if state_dir is not None else _default_state_dir()
-    target_dir = base_dir / IMPORT_FREEZE_DIR if kind == 'import' else base_dir
-    target_dir.mkdir(parents=True, exist_ok=True)
-
     now = datetime.now(UTC)
     record = {
         'kind': kind,
@@ -320,32 +306,82 @@ def persist_freeze_record(
         'per_class_counts': per_class_counts,
         'crop_ids': sorted(crop_ids),
     }
-    payload = json.dumps(record, indent=2)
+    name = f'{now.strftime("%Y%m%dT%H%M%S%fZ")}.json'
+    slug = current_project().record.slug
+    key = (
+        make_key('projects', slug, 'holdout', IMPORT_FREEZE_DIR, name)
+        if kind == 'import'
+        else make_key('projects', slug, 'holdout', name)
+    )
+    build_rooted_store(storage_root_paths()).write_atomic(
+        key, json.dumps(record, indent=2).encode('utf-8')
+    )
+    return key
 
-    ts = now.strftime('%Y%m%dT%H%M%S%fZ')
-    snapshot_path = target_dir / f'{ts}.json'
-    snapshot_path.write_text(payload, encoding='utf-8')
-    if kind == 'import':
-        return snapshot_path
 
-    current_path = target_dir / 'current.json'
-    atomic_write_bytes(current_path, payload.encode('utf-8'))
+async def record_standing_freeze(
+    session: AsyncSession,
+    *,
+    crop_ids: list[str],
+    cohort_spec: dict[str, Any],
+    per_class_counts: dict[str, int],
+    source: str,
+    frozen_by: str,
+) -> HoldoutFreezeRow:
+    """Record a freeze that is not the project's curated split (an import's or a combine's).
 
-    return snapshot_path
-
-
-def mark_freeze_record_undone(snapshot_path: Path) -> None:
-    """Stamp ``undone_at`` on an import freeze record (import undo).
-
-    The record stays on disk as history; ``crop_ids`` are untouched, since
-    the flags themselves are cleared item by item from the import ledger.
-    Raises ``ValueError`` for a record that is not an import freeze (a
-    curated freeze is never undone this way) and ``FileNotFoundError`` for a
-    missing path.
+    Writes the snapshot, then the ``holdout_freezes`` row with ``make_current=False``, so the
+    curated freeze stays current. A database error propagates: nothing is recorded.
     """
-    record = json.loads(snapshot_path.read_text(encoding='utf-8'))
-    if not isinstance(record, dict) or record.get('kind') != 'import':
-        msg = f'{snapshot_path} is not an import freeze record'
-        raise ValueError(msg)
-    record['undone_at'] = datetime.now(UTC).isoformat()
-    atomic_write_json(snapshot_path, record, default=None, indent=2)
+    key = await asyncio.to_thread(
+        write_freeze_snapshot,
+        crop_ids=crop_ids,
+        sha=compute_holdout_sha(crop_ids),
+        cohort_spec=cohort_spec,
+        per_class_counts=per_class_counts,
+        kind='import',
+    )
+    project_id = current_project_id()
+    async with project_tx(session, project_id):
+        return await freeze_holdout(
+            session,
+            project_id,
+            source=source,
+            item_count=len(crop_ids),
+            frozen_by=frozen_by,
+            snapshot_storage_key=key,
+            make_current=False,
+        )
+
+
+async def forget_freeze(session: AsyncSession, freeze_id: uuid.UUID) -> bool:
+    """Drop the row of an undone import freeze (its items are no longer held out).
+
+    The current freeze is never dropped; the snapshot blob stays as history. Returns whether a
+    row was removed.
+    """
+    project_id = current_project_id()
+    async with project_tx(session, project_id):
+        return await forget_holdout_freeze(session, project_id, freeze_id)
+
+
+@asynccontextmanager
+async def freeze_transaction(
+    session: AsyncSession, *, item_count: int, snapshot_storage_key: str
+) -> AsyncIterator[HoldoutFreezeRow]:
+    """The curated freeze: its row is written first and committed only if the block completes.
+
+    The caller flags the items inside the block. A database error refuses the freeze before any
+    item changes (fail closed); an error raised inside the block rolls the row back, so a record
+    always covers exactly the flagged ids.
+    """
+    project_id = current_project_id()
+    async with project_tx(session, project_id):
+        yield await freeze_holdout(
+            session,
+            project_id,
+            source='manual',
+            item_count=item_count,
+            frozen_by='api',
+            snapshot_storage_key=snapshot_storage_key,
+        )

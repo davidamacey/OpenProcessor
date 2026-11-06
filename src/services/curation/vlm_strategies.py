@@ -69,7 +69,7 @@ async def vlm_strategies(opensearch: Any | None) -> list[dict[str, Any]]:
 
     if opensearch is not None:
         try:
-            await refresh_vlm_state(opensearch)
+            await refresh_vlm_state()
         except Exception as exc:
             logger.warning('curation_methods_vlm_refresh_failed', error=str(exc))
     endpoints = available_vlm_endpoints()

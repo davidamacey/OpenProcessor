@@ -2,7 +2,7 @@
 
 A VLM is always a *registered endpoint*: the ``env`` built-in
 (``OP_VLM_URL`` / ``OP_VLM_MODEL``, read-only) or a stored endpoint in the
-global registry (``op_global_configs``). This module owns
+deployment-wide registry. This module owns
 
 - :class:`VlmEndpoint` (frozen; body + provenance ref + last probe),
 - :func:`env_endpoint`, the built-in,
@@ -261,7 +261,7 @@ def resolve_api_key(ref: str | None, *, is_env_builtin: bool = False) -> str | N
 def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
     """The read-only ``env`` endpoint, or ``None`` when ``OP_VLM_URL`` is
     empty (then no VLM exists unless a stored one is activated).
-    ``probe_doc`` is the registry's ``vlm_probe:env`` body (used only while
+    ``probe_doc`` is the registry's probe of the ``env`` built-in (used only while
     its fingerprint still matches the env values)."""
     from src.services.labeling.vlm_catalog import catalog_entry_for_root
 
@@ -392,7 +392,7 @@ def external_ack_state(
 def _registry() -> ConfigSnapshot:
     """The deployment-wide registry snapshot as this process last loaded it
     (usable with no project bound). Async callers ``await
-    refresh_vlm_state(client)`` first; the worker refreshes its pinned
+    refresh_vlm_state()`` first; the worker refreshes its pinned
     stores itself."""
     from src.services.config_store import get_global_config_store
 
@@ -466,18 +466,17 @@ def vlm_configured() -> bool:
         return False
 
 
-async def refresh_vlm_state(client: Any) -> None:
+async def refresh_vlm_state() -> None:
     """Bring the global registry and the bound project's activation up to
     date in THIS process (both are separate snapshots in separate
     processes, so any route or job start that resolves a VLM calls this)."""
     from src.services.config_store import get_config_store, get_global_config_store
 
-    await get_global_config_store().ensure_fresh(client)
-    await get_config_store().ensure_fresh(client)
+    await get_global_config_store().ensure_fresh()
+    await get_config_store().ensure_fresh()
 
 
 async def resolve_vlm_source(
-    client: Any,
     name: str | None = None,
     revision: int | None = None,
     draft: VlmEndpointBody | None = None,
@@ -491,21 +490,21 @@ async def resolve_vlm_source(
     if draft is not None:
         return draft_endpoint(draft)
     if name is None:
-        await refresh_vlm_state(client)
+        await refresh_vlm_state()
         return active_vlm_endpoint()
     # By name the registry alone decides: usable with no project bound.
     from src.services.config_store import get_global_config_store
     from src.services.config_store.store import ConfigStoreUnavailableError
 
     store = get_global_config_store()
-    await store.ensure_fresh(client)
+    await store.ensure_fresh()
     endpoint = get_vlm_endpoint(name)
     if endpoint is None:
         # A just-created endpoint (written through another API worker) can sit
         # inside the freshness window; one cheap, coalesced counter read before
         # answering unknown. A failed read is "unavailable", not "unknown".
         try:
-            await store.refresh_on_miss(client)
+            await store.refresh_on_miss()
         except ConfigStoreUnavailableError as exc:
             msg = 'the VLM endpoint registry is unavailable; retry'
             raise VlmRegistryUnavailableError(msg) from exc
@@ -518,9 +517,9 @@ async def resolve_vlm_source(
         return None  # the built-in has no revisions
     if revision == endpoint.revision:
         return endpoint
-    from src.services.config_store import vlm_snapshot
+    from src.services.config_store.documents import get_revision
 
-    item = await vlm_snapshot.fetch_revision(client, name, revision)
+    item = await get_revision(kind='vlm_endpoint', name=name, revision=revision)
     if item is None:
         return None
     registry = _registry()

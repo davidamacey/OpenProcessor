@@ -17,6 +17,9 @@ from src.routers.curation.stats import _rollup_class_sources, stats_dataset
 from src.services.curation.stats_dataset_query import build_dataset_query_body
 
 
+pytest_plugins = ['_records_world']
+
+
 def test_missing_class_source_bucket_key_lands_in_other() -> None:
     """A doc with no class_source.keyword value must not be dropped.
 
@@ -80,6 +83,8 @@ def test_dataset_query_body_scopes_class_source_rollup_to_docs_with_class_id() -
     }
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_stats_dataset_vlm_labeled_excludes_class_less_vlm_proposals() -> None:
     """D1: a crop the VLM answered but never matched to a registry class
@@ -104,6 +109,8 @@ async def test_stats_dataset_vlm_labeled_excludes_class_less_vlm_proposals() -> 
     assert body['unlabeled']['vlm_no_class'] == 2
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_stats_dataset_uses_request_cache() -> None:
     """request_cache=True lets identical size:0 stats queries

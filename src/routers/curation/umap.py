@@ -4,9 +4,8 @@ The clustering pipeline normally runs in ``transform`` mode against the
 cached UMAP reducer (cheap, deterministic). After the classifier
 retrains — which changes the meaning of the residual embedding field —
 an operator calls ``POST {prefix}/cluster/umap/rebuild`` to refit the
-reducer on the current residual pool and write the new state to both
-the configured state dir's ``umap_state.joblib`` and the
-``op_umap_state`` OpenSearch index.
+reducer on the current residual pool and write the new state to the
+storage seam (``projects/<slug>/umap/<state_id>.bin``).
 
 This router is intentionally tiny — heavy logic lives in
 :mod:`src.services.curation.clustering.embedding_reduce`.

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService

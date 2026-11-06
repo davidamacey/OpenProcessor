@@ -40,7 +40,14 @@ embeddings or boxes, so a page of 500 documents stays small."""
 def class_undo_update(current: dict[str, Any]) -> dict[str, Any]:
     """Merge body putting ``current`` back to its state before its newest un-undone
     human class write. The unlabel entry records which operation it cancelled."""
-    snap = find_undo_snapshot(current.get('class_id_history'))
+    return restore_update(current, find_undo_snapshot(current.get('class_id_history')))
+
+
+def restore_update(current: dict[str, Any], snap: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge body putting ``current`` back to the state ``snap`` recorded (``None``: unlabeled).
+
+    The per-item undo takes ``snap`` from the item's history; the operation undo takes it from
+    ``label_operation_members.prior``."""
     restored = restore_class_state(snap)
     if current.get('class_excluded'):
         # Still excluded: the restored validation/placement is what
@@ -102,4 +109,4 @@ async def undo_class_writes(opensearch: Any, crop_ids: list[str]) -> dict[str, l
     return by
 
 
-__all__ = ['UNDO_READ_FIELDS', 'class_undo_update', 'undo_class_writes']
+__all__ = ['UNDO_READ_FIELDS', 'class_undo_update', 'restore_update', 'undo_class_writes']

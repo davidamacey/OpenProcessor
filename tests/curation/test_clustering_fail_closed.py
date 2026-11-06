@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry, use_registry
+from _class_registry_fake import InMemoryRegistry, use_registry
 
 from src.services.curation.clustering.region_box_clustering import count_false_positive_boxes
 from src.services.curation.clustering.residual_gate import _park_gated_residuals
@@ -42,11 +42,11 @@ async def test_an_unreadable_class_registry_stops_the_probe() -> None:
     use_registry(_Unreadable())
 
     with pytest.raises(ConnectionError, match='unreadable'):
-        await _registry_class_ids(None)  # type: ignore[arg-type]
+        await _registry_class_ids()  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
 async def test_an_empty_class_registry_is_no_classes() -> None:
     use_registry(InMemoryRegistry())
 
-    assert await _registry_class_ids(None) == {}  # type: ignore[arg-type]
+    assert await _registry_class_ids() == {}  # type: ignore[arg-type]

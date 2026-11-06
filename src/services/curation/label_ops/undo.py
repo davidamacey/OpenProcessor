@@ -18,26 +18,26 @@ from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.job_lease import LeaseKind
 from src.domain.label_ops import UndoOutcome, undo_outcome
-from src.services.curation.class_undo import UNDO_READ_FIELDS, class_undo_update
-from src.services.curation.item_selection import MAX_BULK_SELECTION
+from src.services.curation.class_undo import UNDO_READ_FIELDS, restore_update
 from src.services.curation.label_ops.store import (
     UNDO_PASSES_KEPT,
     LabelOpRecord,
     ServedStatus,
-    read_members,
+    member_pages,
     read_op,
     save_op,
     served_status,
 )
 from src.services.curation.label_ops.views import current_counts
 from src.services.curation.lease_heartbeat import leased
-from src.services.curation.reprocess_targets import scan_items
 from src.services.rejections import rejection
 from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from src.db.repos.records import LabelOperationMemberLoad
 
 logger = get_logger(__name__)
 
@@ -54,32 +54,15 @@ _PENDING = 'pending'
 _CONFLICT_IDS_SHOWN = 100
 
 
-async def _members(opensearch: Any, record: LabelOpRecord) -> tuple[list[str], bool]:
-    """The ids the operation wrote; from the tag when ``members.json`` is missing."""
-    known = read_members(record.op_id)
-    if known is not None:
-        return known, True
-    hits = await scan_items(
-        opensearch,
-        {'term': {'label_op_id': record.op_id}},
-        index=items_index(),
-        includes=['crop_id'],
-        max_docs=MAX_BULK_SELECTION + 1,
-    )
-    if len(hits) > MAX_BULK_SELECTION:
-        logger.error('label_op_tag_overflow', op_id=record.op_id, limit=MAX_BULK_SELECTION)
-        msg = f'label operation {record.op_id} tags more than {MAX_BULK_SELECTION} items'
-        raise RuntimeError(msg)
-    return [doc_id for doc_id, _ in hits], False
-
-
 async def _classify(
     opensearch: Any,
     record: LabelOpRecord,
-    ids: list[str],
+    members: list[LabelOperationMemberLoad],
     registry_name: Callable[[int], str | None],
 ) -> dict[str, str]:
     """Dry run: the outcome per id, read in pages, nothing written."""
+    priors = {m.item_id: m.prior for m in members}
+    ids = list(priors)
     outcomes: dict[str, str] = {}
     for start in range(0, len(ids), OCC_BULK_PAGE_SIZE):
         page = ids[start : start + OCC_BULK_PAGE_SIZE]
@@ -89,7 +72,7 @@ async def _classify(
         for doc_id in page:
             source = (docs.get(doc_id) or {}).get('_source')
             outcomes[doc_id] = undo_outcome(
-                source, record.fingerprint, registry_name=registry_name
+                source, record.fingerprint, prior=priors[doc_id], registry_name=registry_name
             ).value
     return outcomes
 
@@ -97,20 +80,23 @@ async def _classify(
 async def _restore(
     opensearch: Any,
     record: LabelOpRecord,
-    ids: list[str],
+    members: list[LabelOperationMemberLoad],
     registry_name: Callable[[int], str | None],
 ) -> dict[str, str]:
+    priors = {m.item_id: m.prior for m in members}
     outcomes: dict[str, str] = {}
 
     def prepare(doc_id: str, doc: dict[str, Any] | None) -> dict[str, Any] | None:
         source = None if doc is None else doc.get('_source') or {}
-        outcome = undo_outcome(source, record.fingerprint, registry_name=registry_name)
+        outcome = undo_outcome(
+            source, record.fingerprint, prior=priors[doc_id], registry_name=registry_name
+        )
         if outcome is not UndoOutcome.RESTORE:
             outcomes[doc_id] = outcome.value
             return None
         assert source is not None
         outcomes[doc_id] = _PENDING  # overwritten, never incremented, on a retry round
-        return class_undo_update(source)
+        return restore_update(source, priors[doc_id])
 
     def on_written(doc_id: str) -> None:
         outcomes[doc_id] = UndoOutcome.RESTORE.value
@@ -121,7 +107,7 @@ async def _restore(
     await occ_bulk_rounds(
         opensearch,
         index=items_index(),
-        ids=ids,
+        ids=list(priors),
         prepare=prepare,
         on_written=on_written,
         on_failed=on_failed,
@@ -137,7 +123,6 @@ def _response(
     outcomes: dict[str, str],
     *,
     dry_run: bool,
-    members_known: bool,
     status: ServedStatus,
 ) -> dict[str, Any]:
     tally = Counter(outcomes.values())
@@ -145,7 +130,6 @@ def _response(
         'op_id': record.op_id,
         'dry_run': dry_run,
         'status': status,
-        'members_known': members_known,
         'matched': len(outcomes),
         'restored': tally[UndoOutcome.RESTORE.value],
         'already_undone': tally[UndoOutcome.ALREADY_UNDONE.value],
@@ -176,18 +160,15 @@ async def undo_label_op(
 ) -> dict[str, Any]:
     """The :class:`LabelOpUndoResponse` of an undo pass over the operation."""
     if dry_run:
-        record = read_op(op_id)
+        record = await read_op(op_id)
         await _refuse_if_nothing_left(opensearch, record)
-        ids, known = await _members(opensearch, record)
-        outcomes = await _classify(opensearch, record, ids, registry_name)
+        outcomes: dict[str, str] = {}
+        async for members in member_pages(record):
+            outcomes.update(await _classify(opensearch, record, members, registry_name))
         return _response(
-            record,
-            outcomes,
-            dry_run=True,
-            members_known=known,
-            status=await served_status(opensearch, record),
+            record, outcomes, dry_run=True, status=await served_status(opensearch, record)
         )
-    read_op(op_id)  # 404 before any lease is taken
+    await read_op(op_id)  # 404 before any lease is taken
     async with (
         leased(
             opensearch,
@@ -208,13 +189,14 @@ async def undo_label_op(
             ),
         ),
     ):
-        record = read_op(op_id)  # fresh: a pass that just finished changed it
+        record = await read_op(op_id)  # fresh: a pass that just finished changed it
         await _refuse_if_nothing_left(opensearch, record)
-        ids, known = await _members(opensearch, record)
         record.status = 'undoing'
-        save_op(record)
-        outcomes = await _restore(opensearch, record, ids, registry_name)
-        response = _response(record, outcomes, dry_run=False, members_known=known, status='undone')
+        await save_op(record)
+        outcomes = {}
+        async for members in member_pages(record):
+            outcomes.update(await _restore(opensearch, record, members, registry_name))
+        response = _response(record, outcomes, dry_run=False, status='undone')
         record.status = 'undone'
         record.undo_passes = [
             *record.undo_passes,
@@ -223,6 +205,6 @@ async def undo_label_op(
                 **{k: response[k] for k in _PASS_KEYS},
             },
         ][-UNDO_PASSES_KEPT:]
-        save_op(record)
+        await save_op(record)
     logger.info('label_op_undone', op_id=op_id, **{k: response[k] for k in _PASS_KEYS})
     return response

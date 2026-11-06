@@ -12,12 +12,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.core.dependencies import get_curation_opensearch
-from src.services.config_store.index import activate, save_config
+from src.services.config_store.documents import activate, save_config
 from src.services.config_store.store import get_config_store, reset_config_stores
 
 
@@ -36,7 +35,6 @@ def _reset() -> Iterator[None]:
 async def test_a_project_route_sees_an_activation_made_through_another_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = FakeConfigOpenSearch()
     now = datetime.now(UTC).isoformat()
     record = ProjectRecord(
         slug='alpha',
@@ -50,28 +48,21 @@ async def test_a_project_route_sees_an_activation_made_through_another_worker(
         resources=resources_for_new('alpha', base_curation_config()),
     )
 
-    async def _client() -> FakeConfigOpenSearch:
-        return client
+    async def _client() -> object:
+        return object()
 
     monkeypatch.setattr('src.services.projects.guard.make_curation_opensearch', _client)
 
     with bind_project(record):
         store = get_config_store()
-        await store.refresh(client)  # this worker's snapshot, taken before the activation
-        doc = await save_config(
-            client,
-            store.index,
-            kind='region_profile',
-            name='wheel',
-            body={},
-            expected_revision=None,
+        await store.refresh()  # this worker's snapshot, taken before the activation
+        doc, _ = await save_config(
+            kind='region_profile', name='wheel', body={}, expected_revision=None
         )
         await activate(
-            client,
-            store.index,
             axis='detection_profile',
             name='wheel',
-            revision=doc['revision'],
+            revision=doc.revision,
             expected_active=None,
         )
         # ...and has been idle for a while, as an unlucky worker's would be.
@@ -80,4 +71,4 @@ async def test_a_project_route_sees_an_activation_made_through_another_worker(
 
         await get_curation_opensearch()
 
-        assert store.current.active_profile == ('wheel', doc['revision'])
+        assert store.current.active_profile == ('wheel', doc.revision)

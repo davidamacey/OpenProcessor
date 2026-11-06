@@ -74,12 +74,12 @@ async def _backfill_with_retry(client: Any, index: str) -> int:
     return 0  # unreachable: the last attempt returns or raises
 
 
-async def _ensure_active_region_class(client: Any) -> int | None:
+async def _ensure_active_region_class() -> int | None:
     from src.services.config_store import get_config_store
     from src.services.curation.region_class import ensure_region_class
 
-    await get_config_store().refresh(client)
-    return await ensure_region_class(client)
+    await get_config_store().refresh()
+    return await ensure_region_class()
 
 
 class _HeldElsewhereError(Exception):
@@ -107,8 +107,8 @@ async def repair_bound_project(client: Any, slug: str, items_index: str) -> None
 async def _repair_steps(client: Any, slug: str, items_index: str) -> None:
     summary: dict[str, Any] = {}
     steps = (
-        ('region_class_id', 'region_class_error', lambda: _ensure_active_region_class(client)),
-        ('vlm_pinned', 'vlm_pin_error', lambda: pin_legacy_vlm(client)),
+        ('region_class_id', 'region_class_error', _ensure_active_region_class),
+        ('vlm_pinned', 'vlm_pin_error', pin_legacy_vlm),
         (
             'embedded_state_backfilled',
             'embedded_state_error',

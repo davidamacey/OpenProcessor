@@ -136,17 +136,22 @@ def test_settings_bridge_runs_activation_gate(app_client, monkeypatch):
 def test_legacy_settings_doc_prompt_pack_does_not_override_activation(app_client):
     """A settings doc still carrying defaults.prompt_pack (no startup
     migration strips it) vs. a pack activated through the store."""
-    from src.clients.curation_opensearch.settings_doc import update_curation_settings
     from src.routers.curation.vlm import _default_pack_name
+    from src.services.curation.settings_store import update_curation_settings
     from src.services.labeling.run_labeler import get_vlm_labeler
 
     c = app_client
     assert c.post(PREFIX, json={'name': 'legacy', 'body': pack_body('LEGACY')}).status_code == 201
     assert c.post(PREFIX, json={'name': 'good', 'body': pack_body('GOOD')}).status_code == 201
     assert c.post(f'{PREFIX}/good/activate', json={'expected_active': None}).status_code == 200
-    asyncio.run(update_curation_settings(c.fake_os, {'prompt_pack': 'legacy'}))
+    asyncio.run(
+        update_curation_settings(
+            {'prompt_pack': 'legacy'},
+            expected_revision=c.get(SETTINGS).json()['revision'],
+        )
+    )
     shown = c.get(SETTINGS).json()['defaults'].get('prompt_pack')
-    name = asyncio.run(_default_pack_name(c.fake_os))
+    name = asyncio.run(_default_pack_name(object()))
     served = get_vlm_labeler(name)._pack.class_system
     print('GET /settings shows', shown, '| VLM routes default name', name, '| serves', served)
     assert served == 'GOOD'

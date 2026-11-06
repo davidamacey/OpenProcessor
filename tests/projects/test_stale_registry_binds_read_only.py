@@ -14,7 +14,10 @@ import pytest
 from src.config.project_context import try_current_project
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
-from .conftest import FakeRegistryOpenSearch, seed_default_project
+from .conftest import seed_default_project
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -34,20 +37,19 @@ def test_binds_read_only_when_last_refresh_failed() -> None:
     from src.routers.curation._project_deps import _resolve_and_bind
 
     async def _run() -> None:
-        client = FakeRegistryOpenSearch()
-        await seed_default_project(client)
+        await seed_default_project()
 
-        registry = ProjectRegistry(lambda: client)
+        registry = ProjectRegistry()
         await registry.ensure_fresh()  # succeeds once; default is now known active
         assert not registry.stale
 
-        # Simulate a flaky OpenSearch on the *next* refresh: ensure_fresh
+        # Simulate a flaky database on the *next* refresh: ensure_fresh
         # swallows the error and keeps the last snapshot, but the
         # registry must now report itself stale.
-        async def _broken_client():
-            raise ConnectionError('opensearch unreachable')
+        def _broken_read():
+            raise ConnectionError('database unreachable')
 
-        registry._client_factory = _broken_client
+        registry._source.read_revision = _broken_read  # type: ignore[method-assign]
         await registry.ensure_fresh()
         assert registry.stale
 
@@ -65,9 +67,8 @@ def test_binds_writable_when_registry_is_fresh() -> None:
     from src.routers.curation._project_deps import _resolve_and_bind
 
     async def _run() -> None:
-        client = FakeRegistryOpenSearch()
-        await seed_default_project(client)
-        registry = ProjectRegistry(lambda: client)
+        await seed_default_project()
+        registry = ProjectRegistry()
         await registry.ensure_fresh()
         assert not registry.stale
         set_project_registry(registry)
