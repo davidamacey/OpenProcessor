@@ -37,7 +37,6 @@ pytestmark = pytest.mark.usefixtures('label_ops_state')
 CFG = base_curation_config()
 ITEMS = CFG.items_index
 IMAGES = CFG.images_index
-CONFIRMED = CFG.labels_confirmed_index
 
 
 pytest_plugins = ['_records_world']
@@ -99,7 +98,6 @@ async def _export(fake: QueryFakeOpenSearch, registry: InMemoryRegistry, tmp_pat
 
     cfg = CurationConfig(
         items_index=ITEMS,
-        labels_confirmed_index=CONFIRMED,
         export_root=tmp_path / 'exports',
     )
     fake.searched_indexes.clear()
@@ -126,14 +124,12 @@ async def _human_label_paths(fake, registry, monkeypatch) -> None:
 @pytest.mark.usefixtures('world')
 async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp_path, monkeypatch):
     """The exact scenario of the reference hole: humans label, nothing is
-    imported, the confirmed-labels index stays empty — export must not."""
+    imported, export must not."""
     await _human_label_paths(fake, registry, monkeypatch)
 
-    assert fake.docs(CONFIRMED) == {}
     result = await _export(fake, registry, tmp_path)
 
     assert result.image_count == 4  # h1, b1, b2, m1
-    assert CONFIRMED not in fake.searched_indexes
     labels = sorted(Path(result.export_dir).glob('labels/*/*.txt'))
     assert len(labels) == 4
 
@@ -188,14 +184,8 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     validated = {i for i, d in items.items() if d.get('class_validated') is True}
     assert validated == {'h1', 'b1', 'b2', 'm1', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
     assert 'never' not in validated
-    # dataset import no longer writes the
-    # labels_confirmed ledger at all -- the import's own ledger (not
-    # built this pass; see the wave report) is the record now.
-    assert fake.docs(CONFIRMED) == {}
-
     result = await _export(fake, registry, tmp_path)
     assert result.image_count == len(validated) == 9
-    assert CONFIRMED not in fake.searched_indexes
     # Items, plus the images index the imported-negative-frame scan reads.
     assert set(fake.searched_indexes) == {ITEMS, IMAGES}
 

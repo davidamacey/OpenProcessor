@@ -2,8 +2,7 @@
 ``ensure_*`` helpers that add the same fields to indexes created before they
 existed (one ``PUT _mapping`` per field, additive and idempotent).
 
-The constants are spread into the index bodies in ``bodies_core.py`` and
-``bodies_other.py``.
+The constants are spread into the index bodies in ``bodies_core.py``.
 """
 
 from __future__ import annotations
@@ -31,15 +30,6 @@ DETECTOR_MAPPING: dict[str, Any] = {
 AUDIT_MAPPING: dict[str, Any] = dict(AUDIT_FIELDS)
 
 ITEMS_EXTRA_MAPPING: dict[str, Any] = {**DETECTOR_MAPPING, **AUDIT_MAPPING}
-
-# Per-project policy documents inside the settings document: stored, never indexed
-# (services/curation/ingest_policy_store.py, vlm_policy_store.py).
-POLICY_DOC_MAPPING: dict[str, Any] = {
-    'ingest_policy': {'type': 'object', 'enabled': False},
-    'vlm_policy': {'type': 'object', 'enabled': False},
-    'vlm_scope_reps': {'type': 'object', 'enabled': False},
-    'cluster_refresh': {'type': 'object', 'enabled': False},
-}
 
 
 async def _put_fields(client: AsyncOpenSearch, mapping: dict[str, Any]) -> dict[str, Any]:

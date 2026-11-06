@@ -23,14 +23,8 @@ index *names* are deployment data, not hardcoded here):
 - ``items`` (``op_prj_<project>__items``): one document per detected item
   crop (with embedding, class label, region-of-interest sub-bbox,
   holdout flag).
-- ``labels_confirmed`` (``op_prj_<project>__labels_confirmed``): provenance
-  ledger of imported YOLO-style ground-truth labels (no embedding),
-  written only by label import. NOT the export source: export and
-  training select ``class_validated=true`` items from ``items``, which
-  every labeling path (human label/move, auto-promote, label import)
-  sets; see ``tests/curation/test_labels_export_roundtrip.py``.
-- ``classes`` (``op_prj_<project>__classes``): no longer written; the class registry is in
-  PostgreSQL (``src/db/repos/classes.py``, ``src/services/classes/``).
+- ``leases`` (``op_prj_<project>__leases``): the job lease documents, transitional until lane 6A
+  deletes the B1 leases. Every other control record is in PostgreSQL.
 
 Every OpenSearch field reference for the per-item "region of interest"
 sub-annotation (e.g. a defect region on an item crop) is routed

@@ -26,29 +26,8 @@ config = get_curation_config()
 # =============================================================================
 
 
-def test_index_bodies_has_all_eight_roles() -> None:
-    assert set(INDEX_BODIES.keys()) == {
-        IndexRole.IMAGES,
-        IndexRole.ITEMS,
-        IndexRole.LABELS_CONFIRMED,
-        IndexRole.CLASSES,
-        IndexRole.SETTINGS,
-        IndexRole.UMAP_STATE,
-        IndexRole.UMAP_VIZ_STATE,
-        IndexRole.CONFIGS,
-    }
-
-
-def test_umap_state_bodies_have_zero_replicas_and_explicit_mapping() -> None:
-    for role in (IndexRole.UMAP_STATE, IndexRole.UMAP_VIZ_STATE):
-        body = INDEX_BODIES[role]
-        assert body['settings']['index']['number_of_replicas'] == 0
-        assert body['mappings']['dynamic'] is False
-
-
-def test_umap_state_reducer_blob_is_mapped_binary() -> None:
-    props = INDEX_BODIES[IndexRole.UMAP_STATE]['mappings']['properties']
-    assert props['reducer_b64']['type'] == 'binary'
+def test_index_bodies_has_exactly_the_remaining_roles() -> None:
+    assert set(INDEX_BODIES.keys()) == {IndexRole.IMAGES, IndexRole.ITEMS, IndexRole.LEASES}
 
 
 def test_images_has_knn_embedding() -> None:
@@ -150,38 +129,6 @@ def test_items_has_score_and_probe_fields() -> None:
     assert props['probe_pred_margin']['type'] == 'float'
 
 
-def test_labels_confirmed_has_no_embedding() -> None:
-    props = INDEX_BODIES[IndexRole.LABELS_CONFIRMED]['mappings']['properties']
-    assert 'embedding' not in props
-    for k in (
-        'label_id',
-        'image_path',
-        'bbox_norm',
-        'class_id',
-        'class_name',
-        'label_source',
-        'confirmed_at',
-        'crop_id',
-    ):
-        assert k in props
-
-
-def test_classes_mirrors_registry_schema() -> None:
-    props = INDEX_BODIES[IndexRole.CLASSES]['mappings']['properties']
-    assert 'embedding' not in props
-    for k in (
-        'class_id',
-        'class_name',
-        'group',
-        'sample_count',
-        'validated_count',
-        'added_at',
-        'deprecated',
-        'notes',
-    ):
-        assert k in props
-
-
 # =============================================================================
 # create_curation_indexes — mocked AsyncOpenSearch
 # =============================================================================
@@ -207,38 +154,16 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
     assert results == {
         'op_prj_default__images': True,
         'op_prj_default__items': True,
-        'op_prj_default__labels_confirmed': True,
-        'op_prj_default__classes': True,
-        'op_prj_default__umap_state': True,
-        'op_prj_default__configs': True,
+        'op_prj_default__leases': True,
     }
-    # Each distinct index name was created exactly once (SETTINGS and
-    # UMAP_VIZ_STATE fold onto CONFIGS's name -- 6 creates, not 8).
     create_calls = client.indices.create.await_args_list
-    assert len(create_calls) == 6
-    seen = {call.kwargs['index'] for call in create_calls}
-    assert seen == {
-        'op_prj_default__images',
-        'op_prj_default__items',
-        'op_prj_default__labels_confirmed',
-        'op_prj_default__classes',
-        'op_prj_default__umap_state',
-        'op_prj_default__configs',
-    }
-    # Each index name got the merged body for every role that resolves to
-    # it -- comparing against INDEX_BODIES itself only proves wiring, not
-    # content, so also pin one body's actual shape against literal
-    # expected values below.
+    assert len(create_calls) == 3
     by_name = {call.kwargs['index']: call.kwargs['body'] for call in create_calls}
     from src.config import index_name
 
-    configs_name = index_name(config, IndexRole.CONFIGS)
-    for role in (IndexRole.IMAGES, IndexRole.ITEMS, IndexRole.LABELS_CONFIRMED, IndexRole.CLASSES):
+    # Each index was created once, with its own body.
+    for role in (IndexRole.IMAGES, IndexRole.ITEMS, IndexRole.LEASES):
         assert by_name[index_name(config, role)] == INDEX_BODIES[role]
-    # The folded name's mapping is a union, not any single role's body.
-    for role in (IndexRole.CONFIGS, IndexRole.SETTINGS, IndexRole.UMAP_VIZ_STATE):
-        for field, spec in INDEX_BODIES[role]['mappings']['properties'].items():
-            assert by_name[configs_name]['mappings']['properties'][field] == spec
     # No deletes (we did not force-recreate).
     assert client.indices.delete.await_count == 0
 
@@ -259,7 +184,7 @@ async def test_create_curation_indexes_idempotent_when_existing() -> None:
     client = _make_mock_client(exists_returns=True)
     results = await create_curation_indexes(client, force_recreate=False)
     assert all(results.values())
-    # All four exist → no creates issued.
+    # Every index exists → no creates issued.
     assert client.indices.create.await_count == 0
     assert client.indices.delete.await_count == 0
 
@@ -269,8 +194,8 @@ async def test_create_curation_indexes_force_recreate_deletes_first() -> None:
     client = _make_mock_client(exists_returns=True)
     results = await create_curation_indexes(client, force_recreate=True)
     assert all(results.values())
-    assert client.indices.delete.await_count == 6
-    assert client.indices.create.await_count == 6
+    assert client.indices.delete.await_count == 3
+    assert client.indices.create.await_count == 3
 
 
 @pytest.mark.asyncio

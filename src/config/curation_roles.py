@@ -26,34 +26,15 @@ class IndexRole(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format
 
     IMAGES = 'images'
     ITEMS = 'items'
-    LABELS_CONFIRMED = 'labels_confirmed'
-    CLASSES = 'classes'
-    SETTINGS = 'settings'
-    # The two UMAP state indexes (see the ``umap_state_index`` /
-    # ``umap_viz_state_index`` fields below) were previously auto-created
-    # by dynamic mapping on first ``client.index()`` call -- no explicit
-    # mapping, replicas=1 (keeps a single-node cluster yellow). They now
-    # go through the same INDEX_BODIES bootstrap as every other curation
-    # index.
-    UMAP_STATE = 'umap_state'
-    UMAP_VIZ_STATE = 'umap_viz_state'
-    # The config store: prompt packs, region profiles, activations and the
-    # cross-process revision counter. For a new project,
-    # ``resources_for_new`` also folds SETTINGS and UMAP_VIZ_STATE onto
-    # this index's name (projects_plan.md §2.3, owner D4) -- ``default``
-    # keeps its own separate settings/umap-viz-state indexes.
-    CONFIGS = 'configs'
+    # Transitional: the job lease documents (``src/clients/job_lease.py``) have no other
+    # home until lane 6A deletes the B1 leases; they are the only documents it holds.
+    LEASES = 'leases'
 
 
 INDEX_ROLE_ATTR: dict[IndexRole, str] = {
     IndexRole.IMAGES: 'images_index',
     IndexRole.ITEMS: 'items_index',
-    IndexRole.LABELS_CONFIRMED: 'labels_confirmed_index',
-    IndexRole.CLASSES: 'classes_index',
-    IndexRole.SETTINGS: 'settings_index',
-    IndexRole.UMAP_STATE: 'umap_state_index',
-    IndexRole.UMAP_VIZ_STATE: 'umap_viz_state_index',
-    IndexRole.CONFIGS: 'configs_index',
+    IndexRole.LEASES: 'leases_index',
 }
 
 

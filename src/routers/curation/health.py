@@ -25,11 +25,9 @@ from src.config import get_curation_config
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
 from src.routers.curation._common import (
     OpenSearchDep,
-    classes_index,
     get_class_registry,
     images_index,
     items_index,
-    labels_confirmed_index,
     router,
 )
 from src.routers.curation._common_models import HealthResponse
@@ -133,12 +131,7 @@ async def curation_health(
 
     os_status: dict[str, Any] = {'reachable': False, 'indexes': {}}
     try:
-        for idx_name in (
-            images_index(),
-            items_index(),
-            labels_confirmed_index(),
-            classes_index(),
-        ):
+        for idx_name in (images_index(), items_index()):
             os_status['indexes'][idx_name] = bool(await raw_os.indices.exists(index=idx_name))
         os_status['reachable'] = True
     except Exception as exc:

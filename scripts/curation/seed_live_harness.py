@@ -8,12 +8,11 @@ What it creates
 ---------------
 1. Every curation index, through the application's own
    :func:`src.services.curation.index_bootstrap.ensure_indexes` — that chains
-   ``create_curation_indexes`` plus the eleven ``ensure_*`` migrations in the
-   right order, with the one intentionally-unwired migration correctly
-   skipped. Hand-rolling the mappings here would mean testing a schema the
+   ``create_curation_indexes`` plus the ``ensure_*`` migrations in the
+   right order. Hand-rolling the mappings here would mean testing a schema the
    product never produces.
-2. Eight classes through :meth:`ClassRegistry.ensure_class`, synced into the
-   classes index — before any item doc, since the label endpoints reject an
+2. Eight classes through :meth:`ClassRegistry.ensure_class`, recorded in
+   PostgreSQL — before any item doc, since the label endpoints reject an
    unknown class id.
 3. ~490 item documents with ``_id == crop_id`` (every OCC path addresses by
    doc id), spread across all three cluster-id bands: negative (noise /
@@ -171,9 +170,6 @@ def _assert_verify_scoped(cfg: Any) -> None:
     names = {
         'images_index': cfg.images_index,
         'items_index': cfg.items_index,
-        'labels_confirmed_index': cfg.labels_confirmed_index,
-        'classes_index': cfg.classes_index,
-        'settings_index': cfg.settings_index,
     }
     bad = {k: v for k, v in names.items() if not v.startswith('verify_')}
     if bad:
@@ -403,28 +399,6 @@ def _build_items(
     return docs
 
 
-def _confirmed_label_docs(item_docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """A confirmed-label row per merge-cohort item, so a class merge has
-    something to relabel in the labels-confirmed index too."""
-    out: list[dict[str, Any]] = []
-    for doc in item_docs:
-        if not str(doc['crop_id']).startswith('cls7_'):
-            continue
-        out.append(
-            {
-                'label_id': f'lbl_{doc["crop_id"]}',
-                'crop_id': doc['crop_id'],
-                'image_path': doc['image_path'],
-                'bbox_norm': doc['bbox_norm'],
-                'class_id': doc['class_id'],
-                'class_name': doc['class_name'],
-                'label_source': 'seed',
-                'confirmed_at': _utc_now().isoformat(),
-            }
-        )
-    return out
-
-
 async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str) -> None:
     chunk = 200
     for start in range(0, len(docs), chunk):
@@ -458,13 +432,7 @@ async def _seed(args: argparse.Namespace) -> int:
     client = make_script_opensearch([args.opensearch_url], timeout=60, max_retries=3)
     try:
         if args.wipe:
-            for name in (
-                cfg.images_index,
-                cfg.items_index,
-                cfg.labels_confirmed_index,
-                cfg.classes_index,
-                cfg.settings_index,
-            ):
+            for name in (cfg.images_index, cfg.items_index):
                 try:
                     await client.indices.delete(index=name, ignore=[404])
                 except Exception as exc:
@@ -502,11 +470,6 @@ async def _seed(args: argparse.Namespace) -> int:
         item_docs = _build_items(cfg, fields, image_docs)
         await _bulk(client, cfg.items_index, item_docs, 'crop_id')
         print(f'items: {len(item_docs)} docs -> {cfg.items_index}')
-
-        # 5. Confirmed labels for the merge cohort.
-        label_docs = _confirmed_label_docs(item_docs)
-        await _bulk(client, cfg.labels_confirmed_index, label_docs, 'label_id')
-        print(f'confirmed labels: {len(label_docs)} docs -> {cfg.labels_confirmed_index}')
 
         count = await client.count(index=cfg.items_index)
         print(f'done. {cfg.items_index} now holds {count.get("count")} documents')

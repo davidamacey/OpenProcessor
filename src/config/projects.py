@@ -126,16 +126,9 @@ def trainer_jobs_root() -> Path:
     return env_path('OP_TRAIN_JOBS_DIR', '/jobs')
 
 
-# Index roles that still exist in OpenSearch although ``project_indexes`` records only ``images``
-# and ``items``. Their names follow the creation rule; lanes 2B-2D delete the last users and this
-# set with them.
-_DERIVED_INDEX_ROLES = (
-    'labels_confirmed',
-    'classes',
-    'umap_state',
-    'configs',
-)
-_FOLDED_ON_CONFIGS = ('settings', 'umap_viz_state')
+# The transitional lease index is not stored in ``project_indexes`` (which records ``images`` and
+# ``items``); its name follows the creation rule. Lane 6A deletes it with the B1 leases.
+_DERIVED_INDEX_ROLES = ('leases',)
 
 
 def resources_from_stored(
@@ -154,10 +147,6 @@ def resources_from_stored(
     by_role: dict[IndexRole, str] = {IndexRole(role): name for role, name in indexes.items()}
     for role in _DERIVED_INDEX_ROLES:
         by_role[IndexRole(role)] = f'{index_prefix}{slug}__{role}'
-    # Shard folding (owner D4): settings and umap-viz-state live on the configs index.
-    configs_name = by_role[IndexRole.CONFIGS]
-    for role in _FOLDED_ON_CONFIGS:
-        by_role[IndexRole(role)] = configs_name
     data_root = projects_data_root() / slug
     return ProjectResources(
         indexes=by_role,

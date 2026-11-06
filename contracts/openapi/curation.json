@@ -39315,7 +39315,7 @@
     },
     "/curation/projects/{project}/classes/{class_id}/deprecate": {
       "post": {
-        "description": "Retire a class created by mistake that has no data yet.\n\nUnlike ``POST /classes/merge`` (which deprecates a source class while\nrelabeling its items into a target), this needs no target — it only\nflips ``deprecated`` on a class nothing references. Refuses with\n``409`` (naming the blocking counts) while any item or confirmed-label\ndoc still carries this ``class_id`` — merge instead. ``404`` for an\nunknown id. Idempotent: calling this on an already-deprecated class\njust returns it (no reference re-check). Clears any bound\n``hotkey_letter``.",
+        "description": "Retire a class created by mistake that has no data yet.\n\nUnlike ``POST /classes/merge`` (which deprecates a source class while\nrelabeling its items into a target), this needs no target — it only\nflips ``deprecated`` on a class nothing references. Refuses with\n``409`` (naming the blocking count) while any item\ndoc still carries this ``class_id`` — merge instead. ``404`` for an\nunknown id. Idempotent: calling this on an already-deprecated class\njust returns it (no reference re-check). Clears any bound\n``hotkey_letter``.",
         "operationId": "deprecate_class_curation_projects__project__classes__class_id__deprecate_post",
         "parameters": [
           {

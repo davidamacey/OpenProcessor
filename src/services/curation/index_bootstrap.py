@@ -27,7 +27,6 @@ from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_text_fields,
     ensure_items_validation_split_fields,
     ensure_items_vlm_raw_label_fields,
-    ensure_labels_confirmed_fields,
 )
 from src.clients.curation_opensearch.ensure_overlay_fields import (
     adopt_inner_result_window,
@@ -40,7 +39,6 @@ from src.clients.curation_opensearch.ensure_overlay_fields import (
     ensure_items_score_fields,
     ensure_items_viz_fields,
 )
-from src.clients.curation_opensearch.ensure_settings_fields import ensure_settings_object_keys
 from src.clients.curation_opensearch.items_extra import (
     ensure_items_audit_fields,
     ensure_items_detector_fields,
@@ -167,9 +165,7 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
         ('embedding_fields', ensure_items_embedding_fields),
         ('open_vocab_fields', ensure_open_vocab_fields),
         ('assist_fields', ensure_assist_fields),
-        ('labels_confirmed_fields', ensure_labels_confirmed_fields),
         ('label_op_field', ensure_items_label_op_field),
-        ('settings_object_keys', ensure_settings_object_keys),
     )
 
 

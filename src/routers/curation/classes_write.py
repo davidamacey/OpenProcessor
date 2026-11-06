@@ -9,13 +9,7 @@ from fastapi import HTTPException, status
 from src.clients.curation_opensearch import RegistryClassEntry
 from src.routers.curation._class_hotkeys import project_keymap_overrides, validated_hotkey
 from src.routers.curation._class_models import ClassCreateRequest, ClassUpdateRequest  # noqa: TC001 - FastAPI
-from src.routers.curation._common import (
-    OpenSearchDep,
-    get_class_registry,
-    items_index,
-    labels_confirmed_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
 from src.services.classes.registry import ClassRegistry, ClassRegistryError
 
 
@@ -120,15 +114,6 @@ async def _count_class_item_references(opensearch: Any, class_id: int) -> int:
     return int(resp.get('count', 0))
 
 
-async def _count_class_confirmed_label_references(opensearch: Any, class_id: int) -> int:
-    """Confirmed-labels index docs whose ``class_id`` == this class (the
-    index ``merge_class`` bulk-relabels via ``update_by_query``)."""
-    resp = await opensearch.count(
-        index=labels_confirmed_index(), body={'query': {'term': {'class_id': class_id}}}
-    )
-    return int(resp.get('count', 0))
-
-
 @router.post('/classes/{class_id}/deprecate', response_model=RegistryClassEntry)
 async def deprecate_class(class_id: int, opensearch: OpenSearchDep) -> RegistryClassEntry:
     """Retire a class created by mistake that has no data yet.
@@ -136,7 +121,7 @@ async def deprecate_class(class_id: int, opensearch: OpenSearchDep) -> RegistryC
     Unlike ``POST /classes/merge`` (which deprecates a source class while
     relabeling its items into a target), this needs no target — it only
     flips ``deprecated`` on a class nothing references. Refuses with
-    ``409`` (naming the blocking counts) while any item or confirmed-label
+    ``409`` (naming the blocking count) while any item
     doc still carries this ``class_id`` — merge instead. ``404`` for an
     unknown id. Idempotent: calling this on an already-deprecated class
     just returns it (no reference re-check). Clears any bound
@@ -151,8 +136,7 @@ async def deprecate_class(class_id: int, opensearch: OpenSearchDep) -> RegistryC
         return entry
 
     item_count = await _count_class_item_references(opensearch, class_id)
-    label_count = await _count_class_confirmed_label_references(opensearch, class_id)
-    if item_count or label_count:
+    if item_count:
         raise HTTPException(
             status_code=409,
             detail={
@@ -163,7 +147,6 @@ async def deprecate_class(class_id: int, opensearch: OpenSearchDep) -> RegistryC
                 ),
                 'class_id': class_id,
                 'item_count': item_count,
-                'confirmed_label_count': label_count,
             },
         )
     try:

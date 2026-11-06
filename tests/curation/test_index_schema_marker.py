@@ -209,14 +209,14 @@ async def test_a_changed_schema_runs_the_migrations_again(
 async def test_a_missing_index_is_recreated(monkeypatch: pytest.MonkeyPatch) -> None:
     cluster = _Cluster()
     await index_bootstrap.ensure_indexes(cluster)
-    classes = get_curation_config().classes_index
-    del cluster.indexes[classes]
+    leases = get_curation_config().leases_index
+    del cluster.indexes[leases]
     _new_process(monkeypatch)
 
     await index_bootstrap.ensure_indexes(cluster)
 
-    assert classes in cluster.indexes
-    assert _marker(cluster, classes) == index_bootstrap.schema_fingerprint()
+    assert leases in cluster.indexes
+    assert _marker(cluster, leases) == index_bootstrap.schema_fingerprint()
 
 
 @pytest.mark.asyncio
