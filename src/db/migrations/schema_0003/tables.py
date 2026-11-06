@@ -266,7 +266,7 @@ def _create_edges_and_state() -> None:
         *_project(nullable=True, name='near_dup_pending'),
         sa.CheckConstraint(LEVELS, name=op.f('ck_near_dup_pending_level')),
         sa.CheckConstraint(
-            "reason IN ('added', 'vector_changed', 'boxes_changed', 'deleted')",
+            "reason IN ('added', 'vector_changed', 'boxes_changed', 'deleted', 'group_changed')",
             name=op.f('ck_near_dup_pending_reason'),
         ),
         sa.ForeignKeyConstraint(

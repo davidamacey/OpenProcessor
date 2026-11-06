@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from src.services.jobs.bound import bound_job_project
-from src.services.near_duplicates import build, projection, rescore
+from src.services.near_duplicates import build, chain, projection, rescore
 from src.services.near_duplicates.plan import level_plan
 from src.services.near_duplicates.profiles import active_profile
 from src.services.near_duplicates.runs import Env
@@ -63,19 +63,30 @@ def _result(summary: Any) -> dict[str, Any]:
     }
 
 
+def _chained(result: dict[str, Any], item_job: uuid.UUID | None) -> dict[str, Any]:
+    """``result`` with the item-level job the image run started (None: none was needed or one was
+    already active)."""
+    return {**result, 'item_job_id': None if item_job is None else str(item_job)}
+
+
 async def score(ctx: JobContext) -> dict[str, Any]:
     """``near_dup_score``: a full build of one level (every vector, exact kNN, groups, flip)."""
     async with job_env(ctx, _level(ctx)) as env:
         await ctx.progress(0, None, 'score')
         summary = await build.full_build(env, cancelled=ctx.cancelled)
-    return {'cancelled': True} if summary is None else _result(summary)
+        if summary is None:
+            return {'cancelled': True}
+        item_job = await chain.after_image_run(env, summary.run_id, touched=None)
+    return _chained(_result(summary), item_job)
 
 
 async def group(ctx: JobContext) -> dict[str, Any]:
     """``near_dup_group``: regroup the stored edges (after a decision or a profile change)."""
     async with job_env(ctx, _level(ctx)) as env:
         await ctx.progress(0, None, 'group')
-        return _result(await build.group_stored(env, scored=0))
+        summary = await build.group_stored(env, scored=0)
+        item_job = await chain.after_image_run(env, summary.run_id, touched=None)
+        return _chained(_result(summary), item_job)
 
 
 async def run_rescore(ctx: JobContext) -> dict[str, Any]:
@@ -85,11 +96,15 @@ async def run_rescore(ctx: JobContext) -> dict[str, Any]:
         outcome = await rescore.rescore(env)
         if outcome.summary is None:
             return {'claimed': 0}
-        return {
+        item_job = await chain.after_image_run(
+            env, outcome.summary.run_id, touched=outcome.regrouped
+        )
+        result = {
             **_result(outcome.summary),
             'claimed': outcome.claimed,
             'missing_vectors': outcome.missing_vectors,
         }
+        return _chained(result, item_job)
 
 
 async def projection_sync(ctx: JobContext) -> dict[str, Any]:

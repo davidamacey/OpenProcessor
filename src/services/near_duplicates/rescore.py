@@ -37,6 +37,8 @@ class RescoreOutcome:
     summary: RunSummary | None
     claimed: int
     missing_vectors: int
+    regrouped: frozenset[str] = frozenset()
+    """The members whose groups were recomputed (the claimed ones and everything joined to them)."""
 
 
 async def _leak_partitions(env: Env) -> dict[str, list[str]]:
@@ -194,4 +196,4 @@ async def rescore(env: Env) -> RescoreOutcome:
         await repo.drain_claimed(
             session, env.job_id, [m for m in claimed_ids if m not in set(gone)]
         )
-    return RescoreOutcome(summary, len(claimed_ids), len(gone))
+    return RescoreOutcome(summary, len(claimed_ids), len(gone), frozenset(affected))

@@ -23,7 +23,13 @@ if TYPE_CHECKING:
 LEVELS: tuple[str, ...] = ('image', 'item', 'core')
 PROJECT_LEVELS: tuple[str, ...] = ('image', 'item')
 PURPOSES: tuple[str, ...] = ('dedup', 'leak')
-PENDING_REASONS: tuple[str, ...] = ('added', 'vector_changed', 'boxes_changed', 'deleted')
+PENDING_REASONS: tuple[str, ...] = (
+    'added',
+    'vector_changed',
+    'boxes_changed',
+    'deleted',
+    'group_changed',
+)
 RUN_MODES: tuple[str, ...] = ('full', 'incremental')
 RUN_STATUSES: tuple[str, ...] = ('building', 'current', 'superseded', 'failed')
 EDGE_KINDS: tuple[str, ...] = ('embedding',)
