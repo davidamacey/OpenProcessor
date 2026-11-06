@@ -34,6 +34,9 @@ def app_client(monkeypatch):
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: items
+    from src.core.db_session import get_db
+
+    app.dependency_overrides[get_db] = lambda: None
     return revision_aware(TestClient(app))
 
 

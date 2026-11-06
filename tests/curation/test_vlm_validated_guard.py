@@ -51,8 +51,8 @@ def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
 async def test_label_batch_never_overwrites_validated_class(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
+    from src.services.curation.vlm_batch import run_label_batch
 
     ids = ['promoted', 'raced', 'plain']
     buf = io.BytesIO()
@@ -67,11 +67,6 @@ async def test_label_batch_never_overwrites_validated_class(
     reg = InMemoryRegistry()
     reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
-
-    async def _no_pack(_os: Any) -> None:
-        return None
-
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
 
     fake = QueryFakeOpenSearch(
         {
@@ -107,9 +102,9 @@ async def test_label_batch_never_overwrites_validated_class(
                 for c in crops
             ]
 
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    labeler = _Labeler()
 
-    await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=ids), fake)
+    await run_label_batch(fake, labeler, ids)
 
     docs = fake.docs(ITEMS)
     assert 'promoted' not in sent

@@ -1,8 +1,7 @@
-"""Job kinds of the `trigger` family: the auto-label sweep, the assist loop and the VLM batch routes.
+"""Job kinds of the `trigger` family: the auto-label sweep and the VLM batch jobs.
 
 Values are the kind table of the jobs plan (02b section 2.1): ``autolabel`` is pausable between
-stages and VLM chunks; ``assist_loop`` runs in slices of ``slice_s`` seconds, each a delivery with
-its own 30 minute soft limit, and waits up to 24 hours between slices behind other projects.
+stages and VLM chunks. The assist loop's kind joins with its handler.
 """
 
 from __future__ import annotations
@@ -22,19 +21,6 @@ KINDS: tuple[JobKind, ...] = (
         max_queue_wait_s=3600,
         exclusive_group='autolabel',
         pausable=True,
-    ),
-    JobKind(
-        name='assist_loop',
-        task_name='op.assist_loop.run',
-        queue=TaskQueues.ASSIST_LOOP,
-        project_scope='project',
-        soft_limit_s=30 * 60,
-        hard_limit_s=35 * 60,
-        max_queue_wait_s=24 * 3600,
-        exclusive_group='assist_loop',
-        auto_resume=True,
-        pausable=True,
-        slice_s=600,
     ),
     JobKind(
         name='vlm_label_batch',

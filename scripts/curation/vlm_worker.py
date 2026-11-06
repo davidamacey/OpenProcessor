@@ -76,20 +76,9 @@ _RELEASED_AT_TTL_S = 300.0
 _OUTAGE_BACKOFF_MAX_S = 60.0
 
 
-def _error_code(response: httpx.Response) -> str | None:
-    try:
-        detail = response.json().get('detail')
-    except ValueError:
-        return None
-    return detail.get('error') if isinstance(detail, dict) else None
-
-
-def _error_message(response: httpx.Response) -> str:
-    try:
-        detail = response.json().get('detail')
-    except ValueError:
-        return ''
-    return str(detail.get('message', '')) if isinstance(detail, dict) else ''
+_TERMINAL = frozenset({'completed', 'completed_with_errors', 'failed', 'cancelled'})
+_POLL_S = 1.0
+_JOB_TIMEOUT_S = 300.0
 
 
 async def label_batch(
@@ -100,22 +89,32 @@ async def label_batch(
     slug: str,
     crop_ids: list[str],
 ) -> dict:
-    """Call the scoped /curation/projects/{slug}/vlm/label_batch for one chunk.
+    """Queue one chunk with the scoped ``/vlm/label_batch`` and poll its job until it ends.
 
-    Returns ``{'no_classes': True}`` when the project has no classes yet, and
-    ``{'vlm_unreachable': True, 'message': ...}`` when the VLM endpoint did not
-    answer, so the caller backs off instead of logging a failure per chunk."""
+    Returns the job's result: ``{'no_classes': True}`` when the project has no classes yet,
+    ``{'vlm_unreachable': True, 'message': ...}`` when the VLM endpoint did not answer (the
+    caller backs off instead of logging a failure per chunk), else the counts. A job that
+    failed or was cancelled, or one still running after the timeout, raises."""
     r = await client.post(
         scoped_url(api, api_prefix, slug, '/vlm/label_batch'),
         json={'crop_ids': crop_ids},
-        timeout=300.0,
+        timeout=_JOB_TIMEOUT_S,
     )
-    if r.status_code == 409 and _error_code(r) == 'no_classes':
-        return {'no_classes': True}
-    if r.status_code == 503 and _error_code(r) == 'vlm_unreachable':
-        return {'vlm_unreachable': True, 'message': _error_message(r)}
     r.raise_for_status()
-    result: dict = r.json()
+    job_url = scoped_url(api, api_prefix, slug, f'/jobs/{r.json()["job_id"]}')
+    deadline = time.monotonic() + _JOB_TIMEOUT_S
+    while True:
+        polled = await client.get(job_url, timeout=30.0)
+        polled.raise_for_status()
+        job = polled.json()
+        if job['status'] in _TERMINAL:
+            break
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f'label_batch job {job["id"]} still {job["status"]} after timeout')
+        await asyncio.sleep(_POLL_S)
+    if job['status'] in ('failed', 'cancelled'):
+        raise RuntimeError(f'label_batch job {job["status"]}: {job.get("error_message") or ""}')
+    result: dict = job.get('result') or {}
     return result
 
 

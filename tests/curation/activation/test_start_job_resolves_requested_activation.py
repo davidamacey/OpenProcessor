@@ -99,16 +99,16 @@ def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
 def _run_job(c, monkeypatch, query):
     from curation.test_pipeline import _FakeOpenSearch
     from src.services.curation import auto_label_run
-    from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel import service as auto_label_job
     from src.services.curation.autolabel.run_params import resolve_run_prompt_pack as real_resolve
 
     captured = {}
 
-    async def fake_start(_os, fn, args):
+    async def fake_start(_session, args):
         captured.update(args)
         return {'job_id': 'x'}
 
-    monkeypatch.setattr(auto_label_job, 'start_job', fake_start)
+    monkeypatch.setattr(auto_label_job, 'start', fake_start)
     r = c.post(f'/curation/projects/default/pipeline/auto_label/start{query}')
     assert r.status_code in (200, 202), r.text
 
@@ -161,15 +161,15 @@ def test_start_job_runs_what_the_request_resolved(app_client, monkeypatch, query
 
 
 def _start_args(c, monkeypatch, query):
-    from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel import service as auto_label_job
 
     captured: dict[str, Any] = {}
 
-    async def fake_start(_os, fn, args):
+    async def fake_start(_session, args):
         captured.update(args)
         return {'job_id': 'x'}
 
-    monkeypatch.setattr(auto_label_job, 'start_job', fake_start)
+    monkeypatch.setattr(auto_label_job, 'start', fake_start)
     r = c.post(f'/curation/projects/default/pipeline/auto_label/start{query}')
     assert r.status_code in (200, 202), r.text
     return {k: v for k, v in captured.items() if k != 'opensearch'}

@@ -36,7 +36,7 @@ async def test_global_vlm_status_needs_no_bound_project(monkeypatch: pytest.Monk
     )
     monkeypatch.setattr(vlm_endpoints, 'env_builtin', lambda: endpoint)
     monkeypatch.setattr('src.services.config_store.get_global_config_store', _Store)
-    monkeypatch.setattr(vlm_factory, 'labeler_for', lambda _endpoint, _pack: _Labeler())
+    monkeypatch.setattr(vlm_factory, 'labeler_for', lambda _endpoint, _pack, **_kw: _Labeler())
 
     status = await health.vlm_status(object(), scoped=False)
 

@@ -5,6 +5,7 @@ real one, over an in-memory item store."""
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 from types import SimpleNamespace
@@ -82,7 +83,7 @@ def stack(vlm_api, tmp_path, monkeypatch: pytest.MonkeyPatch, reference_region_p
     items = QueryFakeOpenSearch({ITEMS: docs})
     monkeypatch.setenv('OP_CROP_CACHE_DIR', str(tmp_path))
     import src.config.curation_accessors as curation_config_mod
-    import src.routers.curation.vlm as vlm_mod
+    import src.services.curation.vlm_batch as vlm_mod
 
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.setattr(
@@ -103,13 +104,32 @@ def stack(vlm_api, tmp_path, monkeypatch: pytest.MonkeyPatch, reference_region_p
     ):
         vlm_api.probe_record[0] = good_probe(root=root)
         vlm_api.ready(name, base_url=f'http://{host}/v1', model=f'alias-{name[1]}')
-    return SimpleNamespace(api=vlm_api, upstream=upstream, items=items)
+    queued: list[dict[str, Any]] = []
+
+    async def start(_session: Any, kind: str, params: dict[str, Any]) -> dict[str, Any]:
+        assert kind == 'vlm_label_batch'
+        queued.append(params)
+        return {'job_id': 'j1', 'status': 'queued'}
+
+    monkeypatch.setattr('src.services.curation.vlm_batch_jobs.start', start)
+    return SimpleNamespace(api=vlm_api, upstream=upstream, items=items, queued=queued)
 
 
 def _label(stack, crop: str, **params: Any) -> Any:
+    """Queue the crop through the route, then run the queued job's body in this process."""
+    from src.services.curation.vlm_batch import run_label_batch
+    from src.tasks.trigger import _labeler
+
     response = stack.api.client.post(LABEL, params=params, json={'crop_ids': [crop]})
-    assert response.status_code == 200, response.text
-    return response.json()
+    assert response.status_code == 202, response.text
+    job = stack.queued[-1]
+
+    async def run() -> Any:
+        return await run_label_batch(
+            stack.items, await _labeler(job, 'label_batch'), job['crop_ids']
+        )
+
+    return asyncio.run(run())
 
 
 def _doc(stack, crop: str) -> dict[str, Any]:

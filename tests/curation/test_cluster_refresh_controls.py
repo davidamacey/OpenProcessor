@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
-import pytest
 from projects.test_project_counts import _record
 
 from curation.query_fakes import SettingsFakeOpenSearch
@@ -15,6 +14,10 @@ from scripts.curation import cluster_refresh_daemon as d
 from src.services.curation.clustering.refresh_schedule import Policy, ScheduleBook
 from src.services.curation.ingest_policy import IngestPolicyBody
 from src.services.curation.ingest_policy_store import put_ingest_policy
+
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _args(monkeypatch: pytest.MonkeyPatch, *argv: str) -> Any:
@@ -98,28 +101,3 @@ def test_a_project_with_automatic_clustering_off_is_not_refreshed() -> None:
     book = asyncio.run(go())
     assert calls == []  # no promote, no retrain, not even a status poll
     assert book.get('alpha').job_id is None
-
-
-@pytest.mark.parametrize(('automatic', 'triggered'), [(False, False), (True, True)])
-def test_the_idle_retrain_follows_the_projects_clustering_switch(
-    monkeypatch: pytest.MonkeyPatch, automatic: bool, triggered: bool
-) -> None:
-    from scripts.curation import auto_label_worker as w
-    from src.config.project_context import bind_project
-    from src.services.curation.clustering import retrain_policy
-
-    async def _due(_client: Any) -> dict[str, Any]:
-        return {'should': True}
-
-    monkeypatch.setattr(retrain_policy, 'should_retrain_centroids', _due)
-    fake = SettingsFakeOpenSearch({})
-
-    async def go() -> Any:
-        with bind_project(_record('alpha')):
-            await put_ingest_policy(
-                IngestPolicyBody(clustering={'automatic': automatic}),  # type: ignore[arg-type]
-                expected_revision=0,
-            )
-            return await w._maybe_auto_retrain(fake)
-
-    assert (asyncio.run(go()) is not None) is triggered

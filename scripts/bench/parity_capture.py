@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from scripts.bench.parity_store import CaptureError
 from scripts.bench.suite_ingest import run_autolabel
+from scripts.bench.suite_probes import label_batch_and_wait
 from src.config.curation import ITEM_EMBEDDING_FIELD
 
 
@@ -220,7 +221,7 @@ def label_with_vlm(
     for name in classes:
         client.post(f'{base}/classes', json={'name': name, 'group': 'parity'})
     for part in chunks(list(ids), batch):
-        client.post(f'{base}/vlm/label_batch', json={'crop_ids': list(part)}).raise_for_status()
+        label_batch_and_wait(client, base, part).raise_for_status()
     out: dict[str, str] = {}
     for part in chunks(list(ids), 100):
         rows = _crops_page(client, base, {'ids': ','.join(part)})['crops']

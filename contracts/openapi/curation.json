@@ -33847,6 +33847,25 @@
         "title": "VlmActiveResponse",
         "type": "object"
       },
+      "VlmBatchAccepted": {
+        "description": "The 202 body of the VLM batch routes: the queued job, read at ``GET /jobs/{job_id}``.",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "VlmBatchAccepted",
+        "type": "object"
+      },
       "VlmBlock": {
         "properties": {
           "active": {
@@ -35614,62 +35633,6 @@
           "items"
         ],
         "title": "VlmVerifyRegionBatchRequest",
-        "type": "object"
-      },
-      "VlmVerifyRegionBatchResponse": {
-        "properties": {
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/VlmVerifyRegionBatchResult"
-            },
-            "title": "Results",
-            "type": "array"
-          }
-        },
-        "required": [
-          "results"
-        ],
-        "title": "VlmVerifyRegionBatchResponse",
-        "type": "object"
-      },
-      "VlmVerifyRegionBatchResult": {
-        "description": "One result in the verify_region_batch response.\n\nA ``crop_id`` from the request that got no usable VLM answer at all\n(whole-chunk upstream failure, empty/unparseable/misaligned reply,\nor an individual crop missing from an otherwise-aligned reply) is\nabsent from ``results`` entirely -- never emitted with a\nsynthesized ``is_region=False``. Callers must treat a missing\ncrop_id as \"retry later\", the same contract\n``/vlm/region_visible_batch`` uses for its map.",
-        "properties": {
-          "candidate_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Candidate Text"
-          },
-          "confidence": {
-            "title": "Confidence",
-            "type": "string"
-          },
-          "crop_id": {
-            "title": "Crop Id",
-            "type": "string"
-          },
-          "is_region": {
-            "title": "Is Region",
-            "type": "boolean"
-          },
-          "reason": {
-            "default": "",
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "crop_id",
-          "is_region",
-          "confidence"
-        ],
-        "title": "VlmVerifyRegionBatchResult",
         "type": "object"
       },
       "VocabEntry": {
@@ -60301,7 +60264,7 @@
     },
     "/curation/projects/{project}/vlm/label_batch": {
       "post": {
-        "description": "Send up to 64 crops to the VLM — chunked at ``max_images_per_call``.",
+        "description": "Queue up to 64 crops for the VLM; answers 202 with the job id.\n\nRead the outcome (``predicted``, ``updated``, ``new_class_proposals``, or the\n``no_classes`` / ``vlm_unreachable`` flags) from the job's ``result`` at\n``GET /jobs/{job_id}``.",
         "operationId": "vlm_label_batch_curation_projects__project__vlm_label_batch_post",
         "parameters": [
           {
@@ -60355,13 +60318,11 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Vlm Label Batch Curation Projects  Project  Vlm Label Batch Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VlmBatchAccepted"
                 }
               }
             },
@@ -60583,7 +60544,7 @@
     },
     "/curation/projects/{project}/vlm/verify_region_batch": {
       "post": {
-        "description": "Verify region crops in batches of ``max_images_per_call`` per upstream VLM call.\n\nWhy this endpoint exists\n------------------------\nA one-crop-at-a-time verify bottlenecks a\nhigh-throughput worker because every verify pins an upstream slot\nfor the whole prompt+decode round-trip. This endpoint mirrors the\nchunked-fan-out pattern from ``/curation/vlm/label_batch``: pack\nseveral region JPEGs per upstream call (the deployment's\nimages-per-prompt cap), fire chunks in parallel via\n:py:meth:`VlmLabeler.verify_region_batch`, and return verdicts\nordered by input ``crop_id``.\n\nUnlike the assist run's verify action (which reads the region JPEGs of\nstored boxes), this endpoint expects the caller to supply\nthe region JPEG directly — cheap for a worker that already holds\nthe cropped JPEG in memory.\n\nA ``crop_id`` the VLM gave no verdict for is omitted from\n``results`` — never emitted as a synthesized ``is_region=False``\nreject. The caller must diff the response against its request\n``crop_id``s and retry whatever is missing.",
+        "description": "Queue region crops for verification; answers 202 with the job id.\n\nThe images are staged in blob storage and the job reads them from there. The job's\n``result.results`` lists a verdict per ``crop_id`` the VLM answered; a ``crop_id`` missing\nfrom it got no verdict and must be retried, never read as a reject.",
         "operationId": "vlm_verify_region_batch_curation_projects__project__vlm_verify_region_batch_post",
         "parameters": [
           {
@@ -60637,11 +60598,11 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VlmVerifyRegionBatchResponse"
+                  "$ref": "#/components/schemas/VlmBatchAccepted"
                 }
               }
             },

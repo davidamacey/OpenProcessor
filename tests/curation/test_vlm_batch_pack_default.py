@@ -1,4 +1,4 @@
-"""``POST /vlm/verify_region_batch`` and ``/vlm/region_visible_batch`` resolve an
+"""``POST /vlm/verify_region_batch`` (pinned into the job) and ``/vlm/region_visible_batch`` resolve an
 omitted pack to the active pack (like ``label_batch`` / ``verify_regions``); a
 leftover settings-doc ``prompt_pack`` key does not override it."""
 
@@ -64,6 +64,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: empty_registry_reads(AsyncMock())
+    from src.core.db_session import get_db
+
+    app.dependency_overrides[get_db] = lambda: None
     return TestClient(app), requested
 
 
@@ -84,12 +87,24 @@ def test_region_visible_batch_uses_the_active_pack_not_a_stale_settings_key(
 
 
 @pytest.mark.usefixtures('reference_region_profile')
-def test_verify_region_batch_uses_the_active_pack_not_a_stale_settings_key(
-    client: tuple[TestClient, list[Any]],
+def test_verify_region_batch_pins_the_active_pack_not_a_stale_settings_key(
+    client: tuple[TestClient, list[Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    c, requested = client
-    c.post(
+    c, _requested = client
+    queued: list[dict[str, Any]] = []
+
+    async def start(_session: Any, kind: str, params: dict[str, Any]) -> dict[str, Any]:
+        queued.append({'kind': kind, **params})
+        return {'job_id': 'j1', 'status': 'queued'}
+
+    monkeypatch.setattr('src.services.curation.vlm_batch_jobs.start', start)
+    monkeypatch.setattr(
+        'src.services.curation.vlm_batch.stage_images', lambda _batch, images: ['k'] * len(images)
+    )
+    r = c.post(
         '/curation/projects/default/vlm/verify_region_batch',
         json={'items': [{'crop_id': 'a', 'region_image_b64': _IMG}]},
     )
-    assert requested == ['pallet_v1']
+    assert r.status_code == 202, r.text
+    assert queued[0]['kind'] == 'vlm_verify_region_batch'
+    assert queued[0]['pack_name'] == 'pallet_v1'

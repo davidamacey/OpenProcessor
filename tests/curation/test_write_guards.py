@@ -298,7 +298,9 @@ class TestAutomatedClassWritersExcludeTestHoldout:
         filter), so its test_holdout guard is a per-doc predicate
         consulted inside the OCC merger before any class field is
         written — this is that predicate."""
-        from src.routers.curation.vlm import _is_frozen_test_holdout
+        from src.services.curation.vlm_batch import (
+            is_frozen_test_holdout as _is_frozen_test_holdout,
+        )
 
         assert _is_frozen_test_holdout({'test_holdout': True}) is True
         assert _is_frozen_test_holdout({'test_holdout': False}) is False
@@ -388,14 +390,14 @@ class TestVlmLabelBatchHumanGuard:
         Image.new('RGB', (64, 64), (10, 20, 30)).save(buf, format='JPEG')
         (tmp_path / f'{crop_id}.jpg').write_bytes(buf.getvalue())
 
-        import src.routers.curation.vlm as vlm_mod
-        from src.routers.curation.vlm import VlmLabelBatchRequest
+        import src.services.curation.vlm_batch as vlm_mod
+        from src.services.curation.vlm_batch import run_label_batch
 
         fake_labeler = AsyncMock()
         fake_labeler.identity = VlmIdentity('env@None', 'test-vlm')
         fake_labeler._pack = GENERIC_ITEM_PACK
         fake_labeler.label_or_propose_batch = AsyncMock(return_value=[])
-        monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: fake_labeler)
+        labeler = fake_labeler
 
         fake_reg = MagicMock()
         # One class, so the route gets past its no-classes refusal and the
@@ -423,7 +425,7 @@ class TestVlmLabelBatchHumanGuard:
             }
         )
 
-        result = await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=[crop_id]), fake_os)
+        result = await run_label_batch(fake_os, labeler, [crop_id])
         fake_labeler.label_or_propose_batch.assert_not_called()
         assert result == {'predicted': 0, 'updated': 0}
 

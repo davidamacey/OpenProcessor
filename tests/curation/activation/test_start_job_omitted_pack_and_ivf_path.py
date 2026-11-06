@@ -3,7 +3,6 @@ self-trigger resolves to a pipeline function that accepts the worker's call shap
 
 from __future__ import annotations
 
-import inspect
 import sys
 from pathlib import Path
 from typing import Any
@@ -24,53 +23,6 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env_active')
-
-
-def test_ivf_pipeline_path_accepts_worker_call_shape() -> None:
-    """auto_label_worker._run_one always calls
-    ``pipeline_fn(opensearch=..., progress=..., **args)``
-    (auto_label_worker.py:257). The IVF self-trigger's ``pipeline`` path
-    must resolve to a callable whose signature actually binds that shape
-    with the IVF trigger's own args. Pointing ``_IVF_PIPELINE_PATH`` at the
-    public route wrapper ``pipeline_auto_label`` (which has no ``progress``
-    param) must make this fail.
-    """
-    import auto_label_worker as w
-
-    fn = w._resolve_pipeline_fn(w._IVF_PIPELINE_PATH)
-    args = w._ivf_retrain_trigger()['args']
-    # Must not raise TypeError.
-    inspect.signature(fn).bind(opensearch=None, progress=object(), **args)
-
-
-def test_ivf_pipeline_path_is_the_internal_implementation() -> None:
-    """Belt-and-suspenders: the resolved callable must be the real
-    ``run_auto_label`` internal, not the public route wrapper -- the
-    wrapper forces ``prompt_pack_resolved=False``/``prompt_pack_
-    revision=None``, silently re-resolving (and potentially re-pinning)
-    every IVF retrain even if its signature happened to accept
-    ``progress`` in the future."""
-    import auto_label_worker as w
-
-    from src.services.curation.auto_label_run import run_auto_label
-
-    fn = w._resolve_pipeline_fn(w._IVF_PIPELINE_PATH)
-    assert fn is run_auto_label
-
-
-def test_start_job_pipeline_path_also_binds_worker_call_shape() -> None:
-    """Every pipeline path the worker can be asked to resolve -- not just
-    the IVF constant -- must accept the worker's call shape."""
-    import auto_label_worker as w
-
-    from src.services.curation.auto_label_run import run_auto_label
-    from src.services.curation.autolabel.job import _pipeline_import_path
-
-    path = _pipeline_import_path(run_auto_label)
-    fn = w._resolve_pipeline_fn(path)
-    inspect.signature(fn).bind(
-        opensearch=None, progress=object(), train_clusters=False, run_vlm=False
-    )
 
 
 # =============================================================================
@@ -159,20 +111,22 @@ async def test_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_omit
     later resolve the labeler against ``(None, None)`` (the env/file
     default) while echoing 'food_v2'."""
     from src.routers.curation import pipeline_start
-    from src.services.curation.autolabel import job
+    from src.services.curation.autolabel import service as job
 
     captured: dict[str, Any] = {}
 
-    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_session: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'args': {k: v for k, v in kwargs.items() if k != 'opensearch'}}
 
-    monkeypatch.setattr(job, 'start_job', _fake_start)
+    monkeypatch.setattr(job, 'start', _fake_start)
     monkeypatch.setattr(
         'src.services.curation.settings_store.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
-    await pipeline_start.pipeline_auto_label_start(opensearch=object(), item_filter=ItemFilter())
+    await pipeline_start.pipeline_auto_label_start(
+        session=object(), opensearch=object(), item_filter=ItemFilter()
+    )
     assert captured['prompt_pack'] == 'pallet_v1'
     assert captured['prompt_pack_omitted'] is False
 
@@ -210,15 +164,15 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
 
     captured: dict[str, Any] = {}
 
-    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_session: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'job_id': 'x'}
 
-    from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel import service as auto_label_job
 
-    monkeypatch.setattr(auto_label_job, 'start_job', _fake_start)
+    monkeypatch.setattr(auto_label_job, 'start', _fake_start)
     r = c.post('/curation/projects/default/pipeline/auto_label/start')
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     assert captured['prompt_pack_omitted'] is True
 
     switch = c.post(

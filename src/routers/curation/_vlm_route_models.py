@@ -6,6 +6,13 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class VlmBatchAccepted(BaseModel):
+    """The 202 body of the VLM batch routes: the queued job, read at ``GET /jobs/{job_id}``."""
+
+    job_id: str
+    status: str
+
+
 class VlmLabelBatchRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -41,29 +48,6 @@ class VlmVerifyRegionBatchRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     items: list[VlmVerifyRegionBatchItem] = Field(..., min_length=1)
-
-
-class VlmVerifyRegionBatchResult(BaseModel):
-    """One result in the verify_region_batch response.
-
-    A ``crop_id`` from the request that got no usable VLM answer at all
-    (whole-chunk upstream failure, empty/unparseable/misaligned reply,
-    or an individual crop missing from an otherwise-aligned reply) is
-    absent from ``results`` entirely -- never emitted with a
-    synthesized ``is_region=False``. Callers must treat a missing
-    crop_id as "retry later", the same contract
-    ``/vlm/region_visible_batch`` uses for its map.
-    """
-
-    crop_id: str
-    is_region: bool
-    confidence: str
-    reason: str = ''
-    candidate_text: str | None = None
-
-
-class VlmVerifyRegionBatchResponse(BaseModel):
-    results: list[VlmVerifyRegionBatchResult]
 
 
 class VlmRegionVisibleBatchItem(BaseModel):

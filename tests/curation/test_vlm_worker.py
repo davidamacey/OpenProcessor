@@ -157,11 +157,22 @@ def _mock_client(status: int, body: dict[str, Any]) -> Any:
     )
 
 
+def _job_client(result: dict[str, Any]) -> Any:
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == 'POST':
+            return httpx.Response(202, json={'job_id': 'j1', 'status': 'queued'})
+        return httpx.Response(200, json={'id': 'j1', 'status': 'completed', 'result': result})
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
 def test_label_batch_reports_no_classes_instead_of_raising() -> None:
     import asyncio
 
     async def _run() -> dict[str, Any]:
-        async with _mock_client(409, {'detail': {'error': 'no_classes'}}) as client:
+        async with _job_client({'no_classes': True}) as client:
             return await vlm_worker.label_batch(
                 client, api='http://api', api_prefix='/curation', slug='default', crop_ids=['a']
             )

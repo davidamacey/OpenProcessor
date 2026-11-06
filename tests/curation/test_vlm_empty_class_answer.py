@@ -203,8 +203,8 @@ def _proposal(crop_id: str) -> dict[str, Any]:
 async def _run_label_batch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preds: dict[str, VlmClassPrediction]
 ) -> dict[str, dict[str, Any]]:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
+    from src.services.curation.vlm_batch import run_label_batch
 
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
@@ -218,7 +218,6 @@ async def _run_label_batch(
     reg.add('widget')
     reg.add('gadget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=None))
     docs = {cid: (_proposal(cid) if cid.startswith('p') else _item(cid)) for cid in preds}
     fake = QueryFakeOpenSearch({ITEMS: docs})
 
@@ -231,8 +230,8 @@ async def _run_label_batch(
         ) -> list[Any]:
             return [preds[c.img_id] for c in crops]
 
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
-    await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=list(preds)), fake)
+    labeler = _Labeler()
+    await run_label_batch(fake, labeler, list(preds))
     return fake.docs(ITEMS)
 
 

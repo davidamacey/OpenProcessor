@@ -17,7 +17,14 @@ if TYPE_CHECKING:
 
 from scripts.bench.baseline_report import metrics_delta, percentile
 from scripts.bench.suite_lib import best_point, parse_perf_csv, summarize_runs, triton_stats_delta
-from scripts.bench.suite_probes import Gauges, chunks, run_cmd, scrape, triton_snapshot
+from scripts.bench.suite_probes import (
+    Gauges,
+    chunks,
+    label_batch_and_wait,
+    run_cmd,
+    scrape,
+    triton_snapshot,
+)
 from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 from scripts.datasets.bench_set import load_pin
 from src.config.settings import TritonModelConfig
@@ -173,9 +180,7 @@ def phase_vlm(args: argparse.Namespace, prior: dict[str, Any]) -> dict[str, Any]
         warm, pool_ids = ids[n * args.vlm_reps :], ids[: n * args.vlm_reps]
         for name in VLM_CLASSES:
             client.post(f'{base}/classes', json={'name': name, 'group': 'bench'})
-        client.post(
-            f'{base}/vlm/label_batch', json={'crop_ids': warm}, params=args.vlm_params
-        ).raise_for_status()
+        label_batch_and_wait(client, base, warm, args.vlm_params).raise_for_status()
         runs = []
         for rep in range(args.vlm_reps):
             ids = pool_ids[rep * n : (rep + 1) * n]  # fresh crops each rep: no cache hits
@@ -186,12 +191,11 @@ def phase_vlm(args: argparse.Namespace, prior: dict[str, Any]) -> dict[str, Any]
 
                 def label(batch: Sequence[str]) -> None:
                     nonlocal errors
-                    r = client.post(
-                        f'{base}/vlm/label_batch',
-                        json={'crop_ids': list(batch)},
-                        params=args.vlm_params,
-                    )
-                    if r.status_code != 200:
+                    r = label_batch_and_wait(client, base, batch, args.vlm_params)
+                    if r.status_code != 200 or r.json()['status'] not in (
+                        'completed',
+                        'completed_with_errors',
+                    ):
                         errors += 1
 
                 with ThreadPoolExecutor(args.vlm_threads) as pool:

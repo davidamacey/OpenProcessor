@@ -87,7 +87,6 @@ LEGACY_DICT = frozenset(
         'GET /training_cohorts',
         'POST /viz/projection/cancel',
         'GET /viz/projection/status',
-        'POST /vlm/label_batch',
     }
 )
 

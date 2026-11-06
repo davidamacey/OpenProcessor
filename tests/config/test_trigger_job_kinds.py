@@ -21,15 +21,6 @@ def test_autolabel_is_pausable_unsliced_and_exclusive_per_project() -> None:
     assert kind.max_queue_wait_s == 3600
 
 
-def test_the_assist_loop_runs_in_ten_minute_slices_and_resumes_after_a_crash() -> None:
-    kind = KINDS['assist_loop']
-    assert kind.queue == TaskQueues.ASSIST_LOOP
-    assert (kind.pausable, kind.slice_s, kind.auto_resume) == (True, 600, True)
-    assert (kind.soft_limit_s, kind.hard_limit_s) == (1800, 2100)
-    assert kind.max_queue_wait_s == 24 * 3600
-    assert (kind.exclusive_group, kind.exclusive_scope) == ('assist_loop', '')
-
-
 @pytest.mark.parametrize('name', ['vlm_label_batch', 'vlm_verify_region_batch'])
 def test_the_vlm_batch_kinds_are_plain_jobs(name: str) -> None:
     kind = KINDS[name]
@@ -43,6 +34,6 @@ def test_the_vlm_batch_kinds_are_plain_jobs(name: str) -> None:
 
 
 def test_every_trigger_kind_has_exactly_its_route() -> None:
-    for name in ('autolabel', 'assist_loop', 'vlm_label_batch', 'vlm_verify_region_batch'):
+    for name in ('autolabel', 'vlm_label_batch', 'vlm_verify_region_batch'):
         kind = KINDS[name]
         assert ROUTES[kind.task_name] == kind.queue

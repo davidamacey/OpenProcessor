@@ -53,6 +53,9 @@ def app_client(fake_opensearch: AsyncMock) -> Any:
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
+    from src.core.db_session import get_db
+
+    app.dependency_overrides[get_db] = lambda: None
     app.dependency_overrides[get_async_triton] = lambda: fake_triton_pool
     with TestClient(app) as client:
         yield client
