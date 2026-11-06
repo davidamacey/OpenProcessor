@@ -1,30 +1,25 @@
-"""The bound project's class registry for a service that has no OpenSearch client in hand."""
+"""The bound project's class registry for a service that wants only its snapshot."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from src.clients.curation_opensearch.registry import get_class_registry
-from src.config.project_context import bind_project
-from src.services.projects.guard import make_curation_opensearch
+from src.services.classes.registry import get_class_registry, registry_for
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch.registry import RegistryDoc
     from src.config.projects import ProjectRecord
+    from src.services.classes.registry import RegistryDoc
 
 
 async def current_registry() -> RegistryDoc:
-    """A snapshot of the bound project's registry document (409 ``registry_not_migrated``
-    while its legacy file has no document)."""
-    return await get_class_registry().snapshot(await make_curation_opensearch())
+    """A snapshot of the bound project's registry."""
+    return await get_class_registry().snapshot()
 
 
-async def project_registry(client: Any, record: ProjectRecord) -> RegistryDoc:
-    """Another project's registry, read under a read-only binding of that project (the guard
-    refuses an index the bound project does not own). Never creates its document."""
-    with bind_project(record, read_only=True):
-        return await get_class_registry().snapshot(client, create=False)
+async def project_registry(record: ProjectRecord) -> RegistryDoc:
+    """Another project's registry (a read; nothing is created)."""
+    return await registry_for(record.slug).snapshot()
 
 
 __all__ = ['current_registry', 'project_registry']

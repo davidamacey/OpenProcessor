@@ -79,7 +79,7 @@ async def _ensure_active_region_class(client: Any) -> int | None:
     from src.services.curation.region_class import ensure_region_class
 
     await get_config_store().refresh(client)
-    return await ensure_region_class(client)
+    return await ensure_region_class()
 
 
 class _HeldElsewhereError(Exception):

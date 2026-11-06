@@ -54,7 +54,6 @@
 /bakeoff/trained_models
 /classes
 /classes/merge
-/classes/sync_to_opensearch
 /classes/{param}
 /clusters
 /clusters/refine/{param}

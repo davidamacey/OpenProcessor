@@ -17,6 +17,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.tasks.runtime',  # the job wrapper claims a job by id before it knows the project
     'src.services.jobs',  # job start and status across scopes, reaper rules
     'src.services.projects',  # the project registry, create, patch, delete and its job
+    'src.services.classes',  # slug to project id before a project-scoped class registry read
     'src.services.upgrade',  # the 0.6.0 control-data step
     'scripts.db',  # migration runner and db verify
     'scripts.admin',  # admin command-line tools

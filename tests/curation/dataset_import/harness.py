@@ -12,7 +12,7 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
-from _registry_doc_fake import InMemoryRegistry
+from _class_registry_fake import InMemoryRegistry
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from PIL import Image
 
@@ -186,7 +186,7 @@ class Harness:
         store, reused = await runner.claim_import(self.os, request, prepared)
         assert not reused
         self.last_store = store
-        await materialize_created_classes(prepared.resolved, self.registry, self.os)
+        await materialize_created_classes(prepared.resolved, self.registry)
         runner.persist_pinned(store, prepared)
         runner.persist_scan_summary(store, prepared, [])
         store.job.update(freeze_test=runner.freeze_default(prepared, request))
@@ -203,7 +203,7 @@ class Harness:
         but the dataset path comes from what the START persisted."""
         runner.check_resumable(store)
         entries = runner.rescan_for_resume(store, request, path_guard=self.guard)
-        await runner.prepare_resume(store, self.registry, self.os)
+        await runner.prepare_resume(store, self.registry)
         resolved, profile, parents = runner.load_pinned(store)
         state = store.job.read()
         ctx = ImportContext(

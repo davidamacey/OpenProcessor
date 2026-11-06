@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _registry_doc_fake import InMemoryRegistry, use_registry
+from _class_registry_fake import InMemoryRegistry, use_registry
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env_active')

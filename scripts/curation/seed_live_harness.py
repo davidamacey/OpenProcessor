@@ -447,8 +447,8 @@ async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str
 
 
 async def _seed(args: argparse.Namespace) -> int:
-    from src.clients.curation_opensearch.registry import get_class_registry
     from src.config import get_curation_config, get_region_fields
+    from src.services.classes.registry import get_class_registry
     from src.services.curation.index_bootstrap import ensure_indexes
 
     cfg = get_curation_config()
@@ -469,10 +469,6 @@ async def _seed(args: argparse.Namespace) -> int:
                     await client.indices.delete(index=name, ignore=[404])
                 except Exception as exc:
                     print(f'  (wipe) {name}: {exc}')
-            registry_path = Path(cfg.class_registry_path)
-            if registry_path.parent.is_dir():
-                for stale in registry_path.parent.glob(f'{registry_path.stem}*.json'):
-                    stale.unlink()
             for sub in ('projects', 'state', 'crop_cache'):
                 target = Path(args.data_root) / sub
                 if target.is_dir():
@@ -491,12 +487,11 @@ async def _seed(args: argparse.Namespace) -> int:
         # 2. Class registry — before any item or label write.
         registry = get_class_registry()
         for name in CLASS_NAMES:
-            await registry.ensure_class(client, name, group='shipping')
+            await registry.ensure_class(name, group='shipping')
         # The API adds the active region profile's class at startup; seeding
         # it here keeps a restart from changing the registry the tests read.
-        await ensure_region_class(client)
-        synced = await registry.sync_to_opensearch(client)
-        print(f'class registry: {len(CLASS_NAMES)} classes, synced={synced}')
+        await ensure_region_class()
+        print(f'class registry: {len(CLASS_NAMES)} classes')
 
         # 3. Source images + image docs.
         image_docs = _write_images(Path(args.source_root), N_IMAGES)

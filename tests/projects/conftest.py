@@ -289,7 +289,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         return {'count': len(self.indexes.get(index, []))}
 
     async def bulk(self, *, body: list[Any], refresh: bool = False) -> dict[str, Any]:  # noqa: ARG002
-        """Just enough of ``_bulk`` for ``ClassRegistry.sync_to_opensearch``:
+        """Just enough of ``_bulk`` for a mirror write:
         every other-odd item is an action header, every even item its doc."""
         for action, doc in zip(body[0::2], body[1::2], strict=True):
             index = next(iter(action.values()))['_index']

@@ -6,7 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from _registry_doc_fake import registry_of
+from _class_registry_fake import registry_of
 
 from src.config.project_context import bind_project
 from src.services.projects import lifecycle

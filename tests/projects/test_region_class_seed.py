@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock
 import pytest
 from curation._vlm_test_support import empty_registry_reads
 
-from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import DetectionProfile
+from src.services.classes.registry import get_class_registry
 from src.services.labeling.vlm_client import VlmIdentity
 
 
@@ -29,8 +29,8 @@ async def test_seeds_the_region_class_once(monkeypatch: pytest.MonkeyPatch) -> N
 
     reg = _seed(monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
 
-    first = await ensure_region_class(None)
-    second = await ensure_region_class(None)
+    first = await ensure_region_class()
+    second = await ensure_region_class()
 
     names = [c.class_name for c in reg.load().classes]
     assert names == ['wheel']
@@ -46,7 +46,7 @@ async def test_existing_class_is_matched_case_insensitively(
     reg = _seed(monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
     reg.seed(['car', 'Wheel'])
 
-    assert await ensure_region_class(None) == 1
+    assert await ensure_region_class() == 1
     assert [c.class_name for c in reg.load().classes] == ['car', 'Wheel']
 
 
@@ -55,9 +55,9 @@ async def test_no_region_profile_seeds_nothing(monkeypatch: pytest.MonkeyPatch) 
     from src.services.curation.region_class import ensure_region_class
 
     reg = _seed(monkeypatch, None)
-    assert await ensure_region_class(None) is None
+    assert await ensure_region_class() is None
     _seed(monkeypatch, DetectionProfile(name='p', region_class_name=''))
-    assert await ensure_region_class(None) is None
+    assert await ensure_region_class() is None
     assert reg.load().classes == []
 
 
@@ -85,7 +85,7 @@ async def test_item_classes_exclude_a_seeded_region_class_after_profile_deactiva
     from src.services.curation.region_class import ensure_region_class, item_classes
 
     reg = _seed(monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
-    await ensure_region_class(None)
+    await ensure_region_class()
     reg.seed(['car'])
     _seed(monkeypatch, None)  # profile now off; registry keeps 'wheel'
     names = [c.class_name for c in item_classes(reg.load().classes)]
@@ -130,6 +130,6 @@ async def test_worker_class_catalog_leaves_out_the_region_class(
     reg.seed(['wheel', 'car'])
     car_id = next(c.class_id for c in reg.load().classes if c.class_name == 'car')
 
-    names, name_to_id = await bound_class_catalog(None)
+    names, name_to_id = await bound_class_catalog()
     assert names == ['car']
     assert name_to_id == {'car': car_id}

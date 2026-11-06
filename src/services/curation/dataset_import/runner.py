@@ -49,7 +49,7 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.services.classes.registry import ClassRegistry
     from src.services.curation.dataset_import.context import ImportContext
     from src.services.curation.dataset_import.options import DatasetImportRequest
     from src.services.curation.dataset_import.paths import PathGuard
@@ -479,10 +479,10 @@ async def release_resume(opensearch: Any, store: ImportStore, prior: dict[str, A
     )
 
 
-async def prepare_resume(store: ImportStore, registry: ClassRegistry, client: Any) -> None:
+async def prepare_resume(store: ImportStore, registry: ClassRegistry) -> None:
     """Re-materialize classes an interrupted start created but never recorded."""
     resolved, _profile, _parents = load_pinned(store)
-    await materialize_created_classes(resolved, registry, client)
+    await materialize_created_classes(resolved, registry)
     raw = store.read_mapping()
     raw.update(mapping_to_dict(resolved))
     store.write_mapping(raw)

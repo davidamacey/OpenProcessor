@@ -72,7 +72,7 @@ async def activate_and_apply(
         # moment it is active; a no-op when it already does or none is named.
         from src.services.curation.region_class import ensure_region_class
 
-        await ensure_region_class(client)
+        await ensure_region_class()
     return result
 
 

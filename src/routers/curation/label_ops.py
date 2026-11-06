@@ -56,5 +56,5 @@ async def undo_op(
     what would happen and writes nothing; send ``{"dry_run": false}`` to write.
     The whole pass runs inside this request, one paged bulk at a time.
     """
-    names = {c.class_id: c.class_name for c in (await registry.snapshot(opensearch)).classes}
+    names = {c.class_id: c.class_name for c in (await registry.snapshot()).classes}
     return await undo_label_op(opensearch, op_id, dry_run=payload.dry_run, registry_name=names.get)

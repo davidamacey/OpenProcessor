@@ -54,7 +54,7 @@ from src.services.training.yolo_triton_config import render_labels_file
 
 
 if TYPE_CHECKING:
-    from _registry_doc_fake import InMemoryRegistry
+    from _class_registry_fake import InMemoryRegistry
 
 
 # =============================================================================

@@ -34,7 +34,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -42,8 +42,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.clients.curation_opensearch.registry import ClassRegistryError, get_class_registry
-from src.services.projects.guard import make_script_opensearch
+from src.services.classes.registry import ClassRegistryError, get_class_registry
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
@@ -63,9 +62,9 @@ def format_entry(entry: RegistryClassEntry) -> str:
     )
 
 
-async def run(client: Any, *, apply: bool, verbose: bool) -> int:
+async def run(*, apply: bool, verbose: bool) -> int:
     store = get_class_registry()
-    broken = find_broken(await store.snapshot(client))
+    broken = find_broken(await store.snapshot())
     if verbose:
         for entry in broken:
             print(format_entry(entry))
@@ -79,7 +78,7 @@ async def run(client: Any, *, apply: bool, verbose: bool) -> int:
     errors = 0
     for entry in broken:
         try:
-            await store.set_deprecated(client, entry.class_id, True)
+            await store.set_deprecated(entry.class_id, True)
         except ClassRegistryError as exc:
             print(f'error: class_id={entry.class_id}: {exc}', file=sys.stderr)
             errors += 1
@@ -104,11 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def _amain(args: argparse.Namespace) -> int:
-    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=60)
-    try:
-        return await run(client, apply=not args.dry_run, verbose=args.verbose)
-    finally:
-        await client.close()
+    return await run(apply=not args.dry_run, verbose=args.verbose)
 
 
 def main() -> int:

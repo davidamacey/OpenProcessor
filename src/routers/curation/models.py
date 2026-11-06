@@ -280,7 +280,7 @@ async def models_status(
 
     # External services (segmenter, VLM) belong to no project and have no
     # class list of their own.
-    registry = await bound_registry(opensearch)
+    registry = await bound_registry()
     for entry in models:
         if entry['kind'] == 'triton':
             entry.update(listing_fields(entry['name'], registry))

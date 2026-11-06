@@ -130,23 +130,30 @@ def _new_record(slug: str, tmp_path: Any) -> Any:
     )
 
 
-def test_class_registry_is_per_project(tmp_path: Any, monkeypatch: Any) -> None:
-    from src.clients.curation_opensearch import registry
-    from src.config.curation_roles import IndexRole
+def test_class_registry_is_per_project(tmp_path: Any) -> None:
     from src.config.project_context import bind_project
+    from src.services.classes.registry import get_class_registry
 
-    monkeypatch.setattr(registry, '_registries', {})
     alpha, beta = _new_record('alpha', tmp_path), _new_record('beta', tmp_path)
 
     with bind_project(alpha):
-        alpha_registry = registry.get_class_registry()
-        assert alpha_registry.legacy_path == alpha.resources.class_registry_path
-        assert alpha_registry.index == alpha.resources.indexes[IndexRole.SETTINGS]
+        alpha_registry = get_class_registry()
+        assert get_class_registry() is alpha_registry
     with bind_project(beta):
-        beta_registry = registry.get_class_registry()
-        assert beta_registry.legacy_path == beta.resources.class_registry_path
-        assert beta_registry.index == beta.resources.indexes[IndexRole.SETTINGS]
+        beta_registry = get_class_registry()
     assert alpha_registry is not beta_registry
+
+
+def test_the_real_registry_is_keyed_by_the_bound_slug(tmp_path: Any, monkeypatch: Any) -> None:
+    from src.config.project_context import bind_project
+    from src.services.classes import registry as registry_module
+
+    monkeypatch.setattr(registry_module, '_registries', {})
+    alpha, beta = _new_record('alpha', tmp_path), _new_record('beta', tmp_path)
+    with bind_project(alpha):
+        assert registry_module.get_class_registry().project == 'alpha'
+    with bind_project(beta):
+        assert registry_module.get_class_registry().project == 'beta'
 
 
 def test_index_bootstrap_runs_once_per_project(tmp_path: Any, monkeypatch: Any) -> None:

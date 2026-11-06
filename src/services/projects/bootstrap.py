@@ -191,7 +191,7 @@ async def _bootstrap_once() -> Any:
     await registry.ensure_fresh()
     if not registry.refreshed:
         raise RuntimeError('project registry not readable yet')
-    await _seed_region_classes(client)
+    await _seed_region_classes()
     from src.services.projects.legacy_repair import repair_legacy_projects
 
     await repair_legacy_projects(client)
@@ -211,12 +211,12 @@ async def startup_bootstrap_project_registry() -> Any:
     return asyncio.create_task(registry.poll_loop())
 
 
-async def _seed_region_classes(client: Any) -> None:
+async def _seed_region_classes() -> None:
     from src.services.curation.region_class import ensure_region_class
 
     for slug in for_each_project():
         try:
-            await ensure_region_class(client)
+            await ensure_region_class()
         except Exception as exc:
             logger.warning('region_class_seed_failed', project=slug, error=str(exc))
 

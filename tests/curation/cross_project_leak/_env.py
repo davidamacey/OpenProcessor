@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import numpy as np
 import pytest
-from _registry_doc_fake import registry_doc_source
+from _class_registry_fake import registry_of
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from opensearchpy import AsyncOpenSearch
 
@@ -67,7 +67,7 @@ def leak_env(
     from cachetools import TTLCache
 
     import src.config.curation_accessors as curation_config_mod
-    from src.clients.curation_opensearch import registry as curation_registry, settings_doc
+    from src.clients.curation_opensearch import settings_doc
     from src.config.curation_accessors import base_curation_config
     from src.config.curation_roles import IndexRole
     from src.config.projects import new_project_record, resources_for_new
@@ -130,7 +130,6 @@ def leak_env(
     # those routes' bodies exercise (force=true on activate bypasses it).
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter-disabled-in-leak-test:8000')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
-    monkeypatch.setattr(curation_registry, '_registries', {})
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', set())
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
     # change which index roles a route reaches between the two passes: a frozen
@@ -171,8 +170,11 @@ def leak_env(
         for role_value, docs in _docs(slug).items():
             store[record.resources.indexes[IndexRole(role_value)]] = docs
     for slug, record in records.items():
-        store.setdefault(record.resources.indexes[IndexRole.SETTINGS], {})['class_registry'] = (
-            registry_doc_source([CLASS_NAMES[slug], f'{slug}_second'], ids=[1, 2])
+        registry_of(record).seed_rows(
+            [
+                {'class_id': 1, 'class_name': CLASS_NAMES[slug]},
+                {'class_id': 2, 'class_name': f'{slug}_second'},
+            ]
         )
     own_dirs = {slug: _seed_files(record, tmp_path) for slug, record in records.items()}
 
@@ -218,15 +220,6 @@ def leak_env(
     # with an AttributeError. Give it the same sync-from-store behavior.
     monkeypatch.setattr(ProjectRegistry, 'refresh_strict', _fresh)
     registry_mod.set_project_registry(registry)
-
-    # The sweep drives the real registry store through the fake transport (not the in-memory
-    # stand-in every other test gets), so the document's reads and writes are recorded and
-    # checked against the bound project like any other index access.
-    from src.services.curation import registry_access
-    from src.services.projects.guard import make_curation_opensearch
-
-    monkeypatch.setattr(curation_registry, '_registries', {})
-    monkeypatch.setattr(registry_access, 'make_curation_opensearch', make_curation_opensearch)
 
     accesses: list[tuple[str | None, str, str, str]] = []
     fake = _FakeTransport(store)

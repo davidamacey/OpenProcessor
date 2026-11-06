@@ -32,7 +32,7 @@ async def test_bootstrap_retries_until_opensearch_is_reachable(
     monkeypatch.setattr(guard, 'make_curation_opensearch', _flaky_client)
     monkeypatch.setattr(bootstrap, '_BOOTSTRAP_RETRY_INITIAL_S', 0.01)
 
-    async def _seed(_client: Any) -> None:
+    async def _seed() -> None:
         seeded.append('seeded')
 
     monkeypatch.setattr(bootstrap, '_seed_region_classes', _seed)

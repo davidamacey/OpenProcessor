@@ -11,7 +11,6 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
 from src.config.curation_accessors import (  # noqa: F401 - re-exported for the router modules
     classes_index,
@@ -24,6 +23,7 @@ from src.core.logging import get_logger
 from src.core.wire_json import WireRoute
 from src.routers.curation._api_error import api_error
 from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
+from src.services.classes.registry import ClassRegistry
 
 
 def get_class_registry() -> ClassRegistry:
@@ -87,14 +87,9 @@ def is_not_found(exc: BaseException) -> bool:
     )
 
 
-async def _registry_dep(
-    opensearch: Annotated[Any, Depends(get_curation_opensearch)],
-) -> ClassRegistry:
-    """The bound project's registry store. Reading the document first makes every class
-    route answer 409 ``registry_not_migrated`` while a leftover file has no document."""
-    registry = get_class_registry()
-    await registry.snapshot(opensearch)
-    return registry
+async def _registry_dep() -> ClassRegistry:
+    """The bound project's class registry."""
+    return get_class_registry()
 
 
 RegistryDep = Annotated[ClassRegistry, Depends(_registry_dep)]

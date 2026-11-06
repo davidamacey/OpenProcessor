@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 
-async def _no_class_group(_opensearch: Any, _class_name: str) -> None:
+async def _no_class_group(_class_name: str) -> None:
     return None
 
 

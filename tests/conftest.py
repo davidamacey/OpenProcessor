@@ -122,21 +122,13 @@ def project_export_root() -> Path:
 
 @pytest.fixture(autouse=True)
 def _in_memory_class_registries(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every project's class registry is an in-memory document store unless a test installs its
-    own (the registry is an OpenSearch document; unit tests have no cluster).
+    """Every project's class registry is an in-memory stand-in unless a test installs its own
+    (the real one is PostgreSQL; the offline tier has no database, the ``db`` tier does)."""
+    from _class_registry_fake import InMemoryRegistries
 
-    ``registry_access`` reaches the registry through the shared client; here it needs none."""
-    from _registry_doc_fake import InMemoryRegistries
-
-    from src.clients.curation_opensearch import registry as registry_module
-
-    async def _no_client() -> None:
-        return None
+    from src.services.classes import registry as registry_module
 
     monkeypatch.setattr(registry_module, '_registries', InMemoryRegistries())
-    monkeypatch.setattr(
-        'src.services.curation.registry_access.make_curation_opensearch', _no_client
-    )
 
 
 @pytest.fixture(autouse=True)

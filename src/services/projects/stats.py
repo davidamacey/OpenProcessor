@@ -110,7 +110,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
     holdout_items = await _term_count(client, items_idx, 'test_holdout', True)
     from src.services.curation.registry_access import project_registry
 
-    classes_count = len((await project_registry(client, bound.record)).classes)
+    classes_count = len((await project_registry(bound.record)).classes)
 
     indexes = []
     for role, name in bound.record.resources.indexes.items():
