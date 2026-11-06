@@ -5,8 +5,8 @@ Provides liveness/readiness probes, service info, and connection pool
 statistics.
 
 - /live   — process responsive, no dependency probing (livenessProbe)
-- /ready  — Triton, its required models and OpenSearch actively probed
-            (readinessProbe / LB drain)
+- /ready  — the database, the task queue, Triton, its required models and
+            OpenSearch actively probed, one after another (readinessProbe / LB drain)
 - /health — backward-compat alias for /ready
 """
 
@@ -23,10 +23,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from opensearchpy import OpenSearchException
 
+from src.app.startup_gate import startup_probes
 from src.clients.triton_client_manager import get_async_triton_client, get_client_pool_stats
 from src.config import get_settings
 from src.config.faces import faces_enabled
 from src.core.metrics import render_metrics
+from src.db.schema_check import ProbeFailed
 from src.services.face_privacy import FaceDataCounts, stored_face_counts, stored_summary
 from src.services.model_readiness import models_not_ready, required_model_names
 from src.services.triton_control import TritonControlService
@@ -63,6 +65,21 @@ async def _probe_http(url: str) -> tuple[bool, str]:
     if response.status_code >= 500:
         return False, f'HTTP {response.status_code}'
     return True, f'HTTP {response.status_code}'
+
+
+async def _probe_dependency(name: str) -> tuple[bool, str]:
+    """Run the startup probe of ``name`` (database, queue) off the event loop, bounded.
+
+    The same probes the startup wait uses, so readiness and start agree on what "up" means.
+    """
+    probe = startup_probes(get_settings())[name]
+    try:
+        await asyncio.wait_for(asyncio.to_thread(probe), timeout=_READY_PROBE_TIMEOUT_S)
+    except ProbeFailed as exc:
+        return False, str(exc)
+    except TimeoutError:
+        return False, f'timeout after {_READY_PROBE_TIMEOUT_S}s'
+    return True, 'ok'
 
 
 async def _probe_triton() -> tuple[bool, str]:
@@ -149,20 +166,21 @@ async def _faces_entry() -> dict[str, Any]:
 
 
 async def _readiness_payload() -> tuple[int, dict[str, Any]]:
-    """Probe Triton and OpenSearch concurrently; build the payload.
+    """Probe every dependency in turn (no fan-out); build the payload.
 
     Returns the HTTP status code (200 if every dep and required model is
     ready, 503 otherwise)
     and a JSON-serializable body listing per-service status + detail.
     """
     settings = get_settings()
-    triton_task = asyncio.create_task(_probe_triton())
-    opensearch_task = asyncio.create_task(_probe_http(settings.opensearch_url))
+    database_ok, database_detail = await _probe_dependency('database')
+    queue_ok, queue_detail = await _probe_dependency('queue')
+    triton_ok, triton_detail = await _probe_triton()
+    opensearch_ok, opensearch_detail = await _probe_http(settings.opensearch_url)
 
-    triton_ok, triton_detail = await triton_task
-    opensearch_ok, opensearch_detail = await opensearch_task
-
-    services = {
+    services: dict[str, Any] = {
+        'database': {'ok': database_ok, 'detail': database_detail},
+        'queue': {'ok': queue_ok, 'detail': queue_detail},
         'triton': {'ok': triton_ok, 'detail': triton_detail, 'url': settings.triton_url},
         'opensearch': {
             'ok': opensearch_ok,
@@ -170,7 +188,7 @@ async def _readiness_payload() -> tuple[int, dict[str, Any]]:
             'url': settings.opensearch_url,
         },
     }
-    all_ok = triton_ok and opensearch_ok
+    all_ok = database_ok and queue_ok and triton_ok and opensearch_ok
     if triton_ok:
         # Without a reachable Triton the models cannot be judged; the triton
         # entry already fails the probe.
@@ -248,7 +266,7 @@ def live() -> dict[str, str]:
 
 @router.get('/ready')
 async def ready() -> JSONResponse:
-    """Readiness probe — Triton, its required models and OpenSearch.
+    """Readiness probe — the database, the queue, Triton, its required models and OpenSearch.
 
     Returns 200 with ``status='ready'`` when every dep responds; 503
     with per-service detail when at least one is unreachable. Designed
