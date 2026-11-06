@@ -140,14 +140,6 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
                 'image_path': f'{_source_root()}/{slug}/{slug}-lab-0001.jpg',
             },
         },
-        'labels_confirmed': {
-            f'{slug}-label-0001': {
-                'crop_id': f'{slug}-item-0001',
-                'class_id': 1,
-                'class_name': CLASS_NAMES[slug],
-            }
-        },
-        'classes': {'1': {'class_id': 1, 'class_name': CLASS_NAMES[slug]}},
     }
 
 
