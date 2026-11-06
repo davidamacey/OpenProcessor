@@ -119,3 +119,6 @@ _.QUEUE_PROFILE  # src/config/queue.py, queue -> compose profile table the consu
 _._on_worker_init  # src/tasks/app.py, connected to Celery's worker_init signal by decorator
 _._on_beat_init  # src/tasks/app.py, connected to Celery's beat_init signal by decorator
 _.make_app  # src/tasks/runtime/gpu_app.py, called by the trainer, export and evaluator images (stage 5)
+_.mark_queued  # src/clients/task_queue.py, called by start_job in the job service (stage 3)
+_.clear_queued  # src/clients/task_queue.py, called by the job claim and the reaper (stage 3)
+_.queued_state  # src/clients/task_queue.py, read by reaper rule c (stage 3)
