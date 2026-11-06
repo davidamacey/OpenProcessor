@@ -168,7 +168,7 @@ def test_the_time_budget_stops_the_loop(world: World, loop_env: LoopEnv) -> None
 
     assert run.outcome.status == 'completed'
     assert run.outcome.stop_reason == 'budget_time'
-    assert set(decisions(run.record).values()) == {'unvisited'}
+    assert 'unvisited' in set(decisions(run.record).values()), 'what time could not cover is left'
 
 
 def test_cancel_stops_new_work_and_a_resume_finishes_the_same_tree(

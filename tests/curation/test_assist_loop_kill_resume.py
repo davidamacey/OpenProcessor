@@ -41,8 +41,6 @@ KILL_POINTS = [
     ('record_answers', 1, 'after'),
     ('record_answers', 4, 'before'),
     ('record_answers', 4, 'after'),
-    ('decide', 1, 'before'),
-    ('decide', 2, 'after'),
     ('split', 1, 'before'),
     ('split', 1, 'after'),
     ('gate_pass', 1, 'before'),

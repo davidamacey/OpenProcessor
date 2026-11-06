@@ -38,7 +38,15 @@ def test_a_run_announces_its_nodes_budgets_audit_and_iteration(
     audit = AuditParams(rate=0.1, min_per_batch=30, floor=0.85, batch_items=100)
 
     run = asyncio.run(
-        drive(world, loop_env, FakeVlm(world.truth), audit=audit, judge=FakeVlm(world.truth))
+        drive(
+            world,
+            loop_env,
+            FakeVlm(world.truth),
+            audit=audit,
+            judge=FakeVlm(world.truth),
+            max_crops=150,
+            on_budget='complete',
+        )
     )
 
     loop_id = str(run.ref.run_id)
