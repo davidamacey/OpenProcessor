@@ -23,7 +23,7 @@ PROFILES = SimpleNamespace(
 
 @pytest.fixture(autouse=True)
 def _profiles(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _resolved(_client: Any) -> Any:
+    async def _resolved() -> Any:
         return PROFILES
 
     monkeypatch.setattr(repair, 'refreshed_ingest_profiles', _resolved)

@@ -10,8 +10,8 @@ import pytest
 from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from projects.clone_flow_fakes import target_docs
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
@@ -28,7 +28,7 @@ def _reset_caches():
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeConfigOpenSearch()
+    fake_os = object()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -153,7 +153,8 @@ def test_clone_of_builtin(app_client: TestClient) -> None:
     doc = r.json()
     assert doc['source'] == 'stored'
     assert doc['revision'] == 1
-    assert doc['cloned_from'].startswith('default:')
+    # a built-in has no stored document to point at, so the clone records no source
+    assert doc['cloned_from'] is None
     assert doc['body']['class_system'] == GENERIC_ITEM_PACK.class_system
 
 
@@ -201,8 +202,6 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.projects.registry import ProjectRegistry
 
-    fake_os = app_client.fake_os  # type: ignore[attr-defined]
-
     other = ProjectRecord(
         slug='other',
         display_name='Other',
@@ -215,34 +214,27 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
         resources=resources_for_new('other', base_curation_config()),
     )
 
-    async def _seed_other() -> str:
-        from src.services.config_store.index import save_config
+    async def _seed_other() -> None:
+        from src.services.config_store.documents import save_config
 
         with bind_project(other):
-            from src.config import get_curation_config
-
-            idx = get_curation_config().configs_index
-            body = {**GENERIC_ITEM_PACK.to_dict(), 'name': 'other_pack'}
             await save_config(
-                fake_os,
-                idx,
                 kind='prompt_pack',
                 name='other_pack',
-                body=body,
+                body={**GENERIC_ITEM_PACK.to_dict(), 'name': 'other_pack'},
                 expected_revision=None,
             )
-            return idx
 
     import asyncio
 
-    other_index = asyncio.run(_seed_other())
+    asyncio.run(_seed_other())
 
     monkeypatch.setattr(ProjectRegistry, 'ensure_fresh', AsyncMock(return_value=None))
     from src.services.projects import lifecycle as lifecycle_mod
 
     monkeypatch.setattr(lifecycle_mod, '_resolve_existing', AsyncMock(return_value=other))
 
-    before = dict(fake_os._docs.get(other_index, {}))
+    before = target_docs(None, other)
 
     r = app_client.post(
         f'{PREFIX}/other_pack/clone',
@@ -251,8 +243,8 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
     assert r.status_code == 201, r.text
     assert r.json()['cloned_from'].startswith('other:other_pack@')
 
-    # The source project's own index is byte-for-byte unchanged.
-    after = dict(fake_os._docs.get(other_index, {}))
+    # The source project's own documents and activations are unchanged.
+    after = target_docs(None, other)
     assert before == after
 
     # And the clone really landed in the (default) target project.

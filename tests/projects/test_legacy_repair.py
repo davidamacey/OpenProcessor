@@ -50,12 +50,12 @@ def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
     monkeypatch.setattr(legacy_repair.asyncio, 'sleep', _sleep)
 
-    async def _region(_client: Any) -> int:
+    async def _region() -> int:
         return 3
 
     monkeypatch.setattr(legacy_repair, '_ensure_active_region_class', _region)
 
-    async def _no_vlm_pin(_client: Any) -> None:
+    async def _no_vlm_pin() -> None:
         return None
 
     # The VLM pin has its own tests (curation/test_vlm_explicit_per_project.py).
@@ -127,7 +127,7 @@ async def test_active_region_class_is_registered_after_the_snapshot_loads(
     order: list[str] = []
 
     class _Store:
-        async def refresh(self, _client: Any) -> None:
+        async def refresh(self) -> None:
             order.append('refresh')
 
     monkeypatch.setattr('src.services.config_store.get_config_store', _Store)
@@ -137,7 +137,7 @@ async def test_active_region_class_is_registered_after_the_snapshot_loads(
         return 7
 
     monkeypatch.setattr('src.services.curation.region_class.ensure_region_class', _ensure)
-    assert await _REAL_ENSURE(object()) == 7
+    assert await _REAL_ENSURE() == 7
     assert order == ['refresh', 'ensure']
 
 

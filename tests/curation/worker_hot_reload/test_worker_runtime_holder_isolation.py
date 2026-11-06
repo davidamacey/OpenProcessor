@@ -8,10 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch, TwoProjectOpenSearch
 from src.config.project_context import bind_project
 from src.services.config_store import get_global_config_store
-from src.services.config_store.index import activate, save_config
+from src.services.config_store.documents import activate, save_config
 from src.services.config_store.store import get_config_store
 from src.services.detection import profile_registry
 
@@ -38,43 +37,39 @@ async def test_alpha_activation_does_not_swap_beta() -> None:
     the other."""
     from scripts.curation.worker.runtime import current_want
 
-    client = FakeConfigOpenSearch()
     alpha = _record('alpha')
     beta = _record('beta')
     registry = get_global_config_store(mode='pinned')
 
     with bind_project(alpha):
         alpha_store = get_config_store(mode='pinned')
-        await alpha_store.refresh(client)
+        await alpha_store.refresh()
     with bind_project(beta):
         beta_store = get_config_store(mode='pinned')
-        await beta_store.refresh(client)
-    await registry.refresh(client)
+        await beta_store.refresh()
+    await registry.refresh()
 
     baseline_alpha = current_want(alpha_store, registry)
     baseline_beta = current_want(beta_store, registry)
     assert baseline_alpha[:2] == baseline_beta[:2] == (None, None)
 
     with bind_project(alpha):
-        idx = alpha_store.index
-        doc = await save_config(
-            client, idx, kind='region_profile', name='wheel', body={}, expected_revision=None
+        doc, _ = await save_config(
+            kind='region_profile', name='wheel', body={}, expected_revision=None
         )
         await activate(
-            client,
-            idx,
             axis='detection_profile',
             name='wheel',
-            revision=doc['revision'],
+            revision=doc.revision,
             expected_active=None,
         )
-        await alpha_store.refresh(client)
+        await alpha_store.refresh()
         alpha_store.pin_active()
 
     # Alpha's own store now wants a swap...
     assert current_want(alpha_store, registry) != baseline_alpha
     # ...but beta's store, never refreshed against alpha's index, is untouched.
-    await beta_store.refresh(client)
+    await beta_store.refresh()
     assert current_want(beta_store, registry) == baseline_beta
 
 
@@ -107,9 +102,9 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
     from _fake_project_registry import StaticProjectRegistry
 
     from src.config.curation_accessors import base_curation_config
-    from src.config.projects import new_project_record, resources_for_new
+    from src.config.projects import new_project_record
 
-    client = TwoProjectOpenSearch()
+    client = MagicMock()
     client.close = AsyncMock()
 
     static_registry = StaticProjectRegistry(
@@ -181,41 +176,28 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
             await _eventually(lambda: detector_calls == {'alpha': 1, 'beta': 1})
             assert detector_calls == {'alpha': 1, 'beta': 1}
 
-            # M1: runtime:detection_worker:<host> was written for both
-            # projects on their first sync (never suppressed, never
-            # deferred past 60s the first time).
-            from src.config.curation_roles import IndexRole
-            from src.services.config_store.index import get_runtime_docs
+            # The worker's report was written for both projects on their first sync (never
+            # suppressed, never deferred past 60s the first time).
+            from src.services.config_store.documents import live_runtime_reports
 
-            alpha_idx = resources_for_new('alpha', base_curation_config()).indexes[
-                IndexRole.CONFIGS
-            ]
-            alpha_runtime_docs = await get_runtime_docs(
-                client, alpha_idx, process='detection_worker'
-            )
-            assert len(alpha_runtime_docs) == 1
-            assert alpha_runtime_docs[0]['project'] == 'alpha'
+            with bind_project(_record('alpha')):
+                alpha_reports = await live_runtime_reports(process='detection_worker')
+            assert len(alpha_reports) == 1
 
             # Activate a profile in ALPHA's store only.
             profile = profile_registry.get_active_region_profile()
             assert profile is not None
             with bind_project(_record('alpha')):
-                store = get_config_store(mode='pinned')
-                idx = store.index
-                doc = await save_config(
-                    client,
-                    idx,
+                doc, _ = await save_config(
                     kind='region_profile',
                     name=profile.name,
                     body={},
                     expected_revision=None,
                 )
                 await activate(
-                    client,
-                    idx,
                     axis='detection_profile',
                     name=profile.name,
-                    revision=doc['revision'],
+                    revision=doc.revision,
                     expected_active=None,
                 )
 

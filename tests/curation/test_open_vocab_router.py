@@ -10,8 +10,6 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
-
 
 PREFIX = '/curation/projects/default/open_vocab'
 
@@ -51,7 +49,7 @@ def client(monkeypatch: pytest.MonkeyPatch, segmenter: dict[str, Any]) -> TestCl
     monkeypatch.delenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', raising=False)
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    fake = FakeConfigOpenSearch()
+    fake = object()
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     return TestClient(app)
 
@@ -258,8 +256,8 @@ def test_template_is_read_only_and_clonable(client: TestClient) -> None:
     assert client.post(f'{PREFIX}/street_objects/activate', json={}).status_code == 403
     r = client.post(f'{PREFIX}/street_objects/clone', json={'new_name': 'mine'})
     assert r.status_code == 201, r.text
-    assert r.json()['cloned_from'].endswith(':street_objects')
-    assert '@' not in r.json()['cloned_from']
+    # a shipped template has no stored document to point at, so the clone records no source
+    assert r.json()['cloned_from'] is None
     assert r.json()['description'] == ''
     assert r.json()['body']['targets'][0]['prompt'] == 'traffic cone'
     assert (
@@ -302,12 +300,10 @@ def test_tier2_without_a_vision_model_warns(
     assert 'open_vocab_vlm_not_configured' not in [w['code'] for w in r.json()['warnings']]
 
 
-def test_clone_helpers_tag_and_describe_by_source() -> None:
-    from src.services.config_store.clone_shared import cloned_description, cloned_from_tag
-    from src.services.config_store.index import TEMPLATE_DESCRIPTION
+def test_clone_helpers_describe_by_source() -> None:
+    from src.services.config_store.clone_shared import cloned_description
+    from src.services.config_store.documents import TEMPLATE_DESCRIPTION
 
-    assert cloned_from_tag(source_project='p', name='n', revision=3) == 'p:n@3'
-    assert cloned_from_tag(source_project='p', name='n', revision=None) == 'p:n'
     assert cloned_description(None, TEMPLATE_DESCRIPTION) == ''
     assert cloned_description(None, 'mine') == 'mine'
     assert cloned_description('given', TEMPLATE_DESCRIPTION) == 'given'

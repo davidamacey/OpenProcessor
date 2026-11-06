@@ -17,8 +17,6 @@ from config_store.memory_settings import install, revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
-
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -150,7 +148,7 @@ def app_client_config_store(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     ``store.activate_axis``."""
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeConfigOpenSearch()
+    fake_os = object()
 
     # `PUT /settings` now runs the same
     # `for_activation` validation `POST /{name}/activate` runs, so a

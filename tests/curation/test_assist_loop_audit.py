@@ -231,14 +231,10 @@ def test_an_external_audit_endpoint_needs_the_acknowledgement(vlm_api: Any) -> N
     vlm_api.ready('ext', base_url='https://api.vendor.com/v1', allow_external=True)
 
     with pytest.raises(RequestRejectedError) as refused:
-        asyncio.run(
-            resolve_audit_vlm(vlm_api.fake_os, 'ext', pack=None, acknowledge_external=False)
-        )
+        asyncio.run(resolve_audit_vlm('ext', pack=None, acknowledge_external=False))
     assert 'vlm_external_not_acknowledged' in str(refused.value.detail)
 
-    pinned = asyncio.run(
-        resolve_audit_vlm(vlm_api.fake_os, 'ext', pack=None, acknowledge_external=True)
-    )
+    pinned = asyncio.run(resolve_audit_vlm('ext', pack=None, acknowledge_external=True))
     assert pinned.name == 'ext'
 
 
@@ -250,15 +246,12 @@ def test_a_denied_external_policy_refuses_the_audit_endpoint(
     monkeypatch.setenv('OP_VLM_EXTERNAL_POLICY', 'deny')
 
     with pytest.raises(RequestRejectedError) as refused:
-        asyncio.run(resolve_audit_vlm(vlm_api.fake_os, 'ext', pack=None, acknowledge_external=True))
+        asyncio.run(resolve_audit_vlm('ext', pack=None, acknowledge_external=True))
     assert 'vlm_external' in str(refused.value.detail)
 
 
 def test_no_audit_endpoint_means_the_audit_is_off(vlm_api: Any) -> None:
-    assert (
-        asyncio.run(resolve_audit_vlm(vlm_api.fake_os, None, pack=None, acknowledge_external=False))
-        is None
-    )
+    assert asyncio.run(resolve_audit_vlm(None, pack=None, acknowledge_external=False)) is None
 
 
 def test_an_audit_whose_every_call_fails_is_not_recorded_as_ok(

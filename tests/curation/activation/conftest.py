@@ -1,4 +1,4 @@
-"""Fixtures for the activation tests: an app over a fake config index, a READY-model state,
+"""Fixtures for the activation tests: an app over the in-memory config repository, a READY-model state,
 and a three-profile registry (single-region default, multi-region, other detector)."""
 
 from __future__ import annotations
@@ -10,8 +10,6 @@ from _curation_app import mount_curation_routers
 from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 
 
 @pytest.fixture(autouse=True)
@@ -27,16 +25,16 @@ def _reset_caches():
 def app_client(monkeypatch):
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = FakeConfigOpenSearch()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
+    from curation.query_fakes import QueryFakeOpenSearch
+
+    items = QueryFakeOpenSearch({})
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = revision_aware(TestClient(app))
-    client.fake_os = fake_os  # type: ignore[attr-defined]
-    return client
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: items
+    return revision_aware(TestClient(app))
 
 
 @pytest.fixture

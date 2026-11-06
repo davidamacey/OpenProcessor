@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextvars
 from datetime import UTC, datetime
 
 import pytest
@@ -11,14 +10,13 @@ import pytest
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import ProjectNotBound, bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.config_store.global_store import global_configs_index
 from src.services.projects.guard import ProjectGuardedTransport
 from src.services.projects.guard_errors import (
     CrossProjectAccess,
     ProjectReadOnly,
     cross_project_access_count,
 )
-from src.services.projects.guard_policy import check_request, global_configs_read
+from src.services.projects.guard_policy import check_request
 
 
 # These tests are about binding itself: no autouse `default` binding.
@@ -70,96 +68,6 @@ def test_all_rejected(snapshot) -> None:
 def test_unowned_index_passes_unbound(snapshot) -> None:
     check_request('GET', '/visual_search_global/_search', None, snapshot)
     check_request('GET', '/op_projects/_doc/project:default', None, snapshot)
-
-
-def test_global_configs_index_is_a_legitimate_unowned_index(snapshot) -> None:
-    """M3: ``op_global_configs`` (the one config-store index scoped to no
-    project -- sibling to ``op_projects``, ``visual_search_*``) is
-    readable and writable unbound, same as any other unowned index -- the
-    shape its future global-router routes will use. A request
-    already bound to a project has no business touching it, so it is
-    refused there exactly like any other unowned index (fail-closed).
-
-    Built from the real ``global_configs_index()``
-    resolver, not a hardcoded literal -- so this test would catch the
-    index resolving into a project's own namespace, not just prove the
-    generic unowned-index rule against a string that happens to match
-    today's default."""
-    index = global_configs_index()
-    check_request('GET', f'/{index}/_doc/pack:local_vlm', None, snapshot)
-    check_request('PUT', f'/{index}/_doc/pack:local_vlm', {'a': 1}, snapshot)
-    with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
-        check_request('GET', f'/{index}/_doc/pack:local_vlm', None, snapshot)
-
-
-def test_a_bound_project_reads_the_global_registry_only_inside_the_config_store_block(
-    snapshot,
-) -> None:
-    """A project-bound request resolves the deployment-wide VLM endpoints
-    through the config store, which enters ``global_configs_read`` for its own
-    reads. Outside that block the same read is still refused."""
-    index = global_configs_index()
-    with bind_project(snapshot['alpha']):
-        with pytest.raises(CrossProjectAccess):
-            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
-        with global_configs_read():
-            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
-            check_request('POST', f'/{index}/_search', {'query': {'match_all': {}}}, snapshot)
-        with pytest.raises(CrossProjectAccess):  # the allowance ended with the block
-            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
-
-
-@pytest.mark.parametrize('method', ['PUT', 'POST', 'DELETE'])
-def test_the_read_allowance_never_covers_a_write_to_the_global_registry(
-    snapshot, method: str
-) -> None:
-    index = global_configs_index()
-    with bind_project(snapshot['alpha']), global_configs_read():
-        with pytest.raises(CrossProjectAccess):
-            check_request(method, f'/{index}/_doc/vlm:x', {'a': 1}, snapshot)
-        with pytest.raises(CrossProjectAccess):
-            check_request('POST', f'/{index}/_update/vlm:x', {'doc': {'a': 1}}, snapshot)
-
-
-def test_the_read_allowance_opens_no_other_index(snapshot) -> None:
-    with bind_project(snapshot['alpha']), global_configs_read():
-        with pytest.raises(CrossProjectAccess):
-            check_request('GET', '/op_prj_beta__items/_doc/x', None, snapshot)
-        with pytest.raises(CrossProjectAccess):
-            check_request('GET', '/visual_search_global/_doc/x', None, snapshot)
-        with pytest.raises(CrossProjectAccess):
-            check_request('GET', '/_all/_search', None, snapshot)
-        with pytest.raises(CrossProjectAccess):
-            check_request(
-                'GET', f'/{global_configs_index()},op_prj_beta__items/_search', None, snapshot
-            )
-
-
-def test_the_read_allowance_does_not_leak_into_the_next_request(snapshot) -> None:
-    index = global_configs_index()
-    with bind_project(snapshot['alpha']):
-        with global_configs_read():
-            pass
-        with pytest.raises(CrossProjectAccess):
-            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
-
-
-def test_the_allowance_is_per_context_so_a_concurrent_task_never_inherits_it(snapshot) -> None:
-    index = global_configs_index()
-
-    async def other_task() -> None:
-        with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
-            check_request('GET', f'/{index}/_doc/vlm:x', None, snapshot)
-
-    async def main() -> None:
-        with global_configs_read():
-            # a task started elsewhere runs in its own copy of the context
-            # only if it was created outside the block
-            await asyncio.get_running_loop().create_task(
-                other_task(), context=contextvars.Context()
-            )
-
-    asyncio.run(main())
 
 
 def test_unbound_plus_project_index_raises_not_bound(snapshot) -> None:

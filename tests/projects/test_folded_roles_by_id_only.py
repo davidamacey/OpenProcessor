@@ -46,31 +46,3 @@ def test_settings_and_umap_viz_state_never_searched() -> None:
             if 'SETTINGS' in snippet or 'UMAP_VIZ_STATE' in snippet or 'settings_index' in snippet:
                 offending.append(f'{path}:{node.lineno}: {snippet.splitlines()[0]}')
     assert not offending, f'search-like call against a folded role: {offending}'
-
-
-def test_folded_doc_ids_never_collide_with_config_store_ids() -> None:
-    # The visualization-only umap-viz-state doc id ("current") is a
-    # module-level literal in embedding_viz.py, checked the same way.
-    umap_viz_doc_id = 'current'
-    assert ':' not in umap_viz_doc_id
-
-    from src.services.config_store.index import activation_doc_id, config_doc_id, runtime_doc_id
-
-    config_store_ids = [
-        config_doc_id('prompt_pack', 'x'),
-        config_doc_id('region_profile', 'x', 3),
-        activation_doc_id('prompt_pack'),
-        'meta:config_revision',
-        runtime_doc_id('detection_worker', 'host'),
-    ]
-    for doc_id in config_store_ids:
-        assert ':' in doc_id
-        assert doc_id != umap_viz_doc_id
-
-
-def test_lease_and_class_registry_ids_never_collide_with_config_store_ids() -> None:
-    from src.services.config_store.index import config_doc_id
-
-    # Lease docs live on the same index and are read by id only; no config-store kind is
-    # named ``lease`` or ``class_registry``, so ``kind:name`` ids cannot meet them.
-    assert not config_doc_id('prompt_pack', 'x').startswith(('lease:', 'class_registry'))

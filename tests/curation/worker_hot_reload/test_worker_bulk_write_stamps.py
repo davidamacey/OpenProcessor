@@ -7,14 +7,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
 from curation.worker_hot_reload._helpers import _record
 from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.state import _ItemTask
 from src.config import get_region_fields
 from src.config.project_context import bind_project, current_project
-from src.services.config_store.index import activate, save_config
+from src.services.config_store.documents import activate, save_config
 from src.services.config_store.store import get_config_store
 from src.services.detection import profile_registry
 
@@ -115,7 +114,6 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
     that revision, not ``None`` -- distinguishing a stored activation
     from the env/file default."""
     F = get_region_fields()
-    client = FakeConfigOpenSearch()
     project = _record('wheel-project')
 
     active_profile = profile_registry.get_active_region_profile()
@@ -123,24 +121,19 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
 
     with bind_project(project):
         store = get_config_store(mode='pinned')
-        idx = store.index
-        doc = await save_config(
-            client,
-            idx,
+        doc, _ = await save_config(
             kind='region_profile',
-            name=active_profile.name,
+            name=f'stored_{active_profile.name}',
             body={},
             expected_revision=None,
         )
         await activate(
-            client,
-            idx,
             axis='detection_profile',
-            name=doc['name'],
-            revision=doc['revision'],
+            name=doc.name,
+            revision=doc.revision,
             expected_active=None,
         )
-        await store.refresh(client)
+        await store.refresh()
         store.pin_active()
 
         a = _make_task(crop_id='a')
@@ -165,4 +158,4 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
         assert opensearch.bulk.await_args is not None
         bulk_body = opensearch.bulk.await_args.kwargs['body']
         written_doc = bulk_body[1]['doc']
-        assert written_doc[F.profile_revision] == doc['revision']
+        assert written_doc[F.profile_revision] == doc.revision

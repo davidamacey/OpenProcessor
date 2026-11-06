@@ -88,14 +88,12 @@ def test_the_detector_spec_rejects_bad_paths_and_accepts_a_good_one(
 def ingest_profile_client(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     from unittest.mock import AsyncMock
 
-    from curation._fake_config_opensearch import FakeConfigOpenSearch
-
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = FakeConfigOpenSearch
+    app.dependency_overrides[_raw_opensearch_dep] = object
     return TestClient(app)
 
 
@@ -114,14 +112,12 @@ def test_ingest_profile_answers_422_for_an_outside_labels_path(
 def profile_client(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     from unittest.mock import AsyncMock
 
-    from curation._fake_config_opensearch import FakeConfigOpenSearch
-
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = FakeConfigOpenSearch
+    app.dependency_overrides[_raw_opensearch_dep] = object
     return TestClient(app)
 
 

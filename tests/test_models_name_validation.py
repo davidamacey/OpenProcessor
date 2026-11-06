@@ -10,7 +10,6 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from src.core.dependencies import get_curation_opensearch
 from src.routers import models as models_router, models_lifecycle
 from src.services.model_repository import inside_repository
 
@@ -43,7 +42,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     )
     monkeypatch.setattr(models_lifecycle, 'TritonControlService', _Triton)
 
-    async def _no_other_projects(_client: object) -> dict[str, frozenset[str]]:
+    async def _no_other_projects() -> dict[str, frozenset[str]]:
         return {}
 
     monkeypatch.setattr(
@@ -56,7 +55,6 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def client(repo: Path) -> TestClient:  # repo patches the module first
     app = FastAPI()
     app.include_router(models_router.router)
-    app.dependency_overrides[get_curation_opensearch] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     return TestClient(app)
 
 
@@ -66,7 +64,7 @@ BAD_NAMES = ['..', '.', '', 'a/b', '../models', '../../etc', 'UPPER', 'a b', '-x
 @pytest.mark.parametrize('name', BAD_NAMES)
 def test_delete_refuses_bad_names_and_deletes_nothing(repo: Path, name: str) -> None:
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(models_lifecycle.delete_model(name, object(), force=True))
+        asyncio.run(models_lifecycle.delete_model(name, force=True))
     assert exc.value.status_code == 400
     assert (repo / 'keep.txt').exists()
     assert sorted(p.name for p in (repo / 'models').iterdir()) == ['good_trt', 'other_trt']
@@ -77,7 +75,7 @@ def test_other_lifecycle_routes_refuse_bad_names(repo: Path, name: str) -> None:
     calls = [
         models_lifecycle.get_model_status(name),
         models_lifecycle.load_model(name),
-        models_lifecycle.unload_model(name, object(), force=True),
+        models_lifecycle.unload_model(name, force=True),
     ]
     for call in calls:
         with pytest.raises(HTTPException) as exc:
