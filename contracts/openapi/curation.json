@@ -31736,6 +31736,24 @@
         "title": "SkippedCounts",
         "type": "object"
       },
+      "SourceBackfillStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind"
+        ],
+        "title": "SourceBackfillStarted",
+        "type": "object"
+      },
       "SourceBucket": {
         "properties": {
           "doc_count": {
@@ -58743,6 +58761,50 @@
         "summary": "Update Curation Settings Route",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/source_backfill/runs": {
+      "post": {
+        "description": "Start the pass that reads each stored image once and records its content key.",
+        "operationId": "start_source_backfill_curation_projects__project__source_backfill_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceBackfillStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Source Backfill",
+        "tags": [
+          "Curation",
+          "Source backfill"
         ]
       }
     },

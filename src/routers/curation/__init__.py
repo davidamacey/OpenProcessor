@@ -88,6 +88,7 @@ import src.routers.curation.search
 import src.routers.curation.search_image
 import src.routers.curation.select
 import src.routers.curation.settings
+import src.routers.curation.source_backfill
 import src.routers.curation.stats
 import src.routers.curation.viz
 import src.routers.curation.vlm_activation
