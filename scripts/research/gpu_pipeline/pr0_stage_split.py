@@ -147,9 +147,17 @@ def run_gpu(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
         sample = count[: args.check]
         res1 = pipe.run_batch(sample, keep=True)
         res2 = pipe.run_batch(sample, keep=True)
-        frames = [reference.pillow_frame(p) for p in sample]
-        out['parity'] = parity_rows(res1, frames)
-        same = [(a, b) for a, b in zip(res1, res2, strict=True) if a.rects == b.rects]
+        # files the router declines have no GPU output to check
+        both = [
+            (p, a, b)
+            for p, a, b in zip(sample, res1, res2, strict=True)
+            if a.status == 'ok' and b.status == 'ok'
+        ]
+        out['checked_images'] = len(both)
+        out['parity'] = parity_rows(
+            [a for _, a, _ in both], [reference.pillow_frame(p) for p, _, _ in both]
+        )
+        same = [(a, b) for _, a, b in both if a.rects == b.rects]
         # the detector's own run-to-run variation moves a crop rectangle by a pixel now and then;
         # the kernels are deterministic when the same rectangles give the same bytes
         out['deterministic'] = all(
@@ -158,7 +166,7 @@ def run_gpu(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
             and np.array_equal(a.sums, b.sums)
             for a, b in same
         )
-        out['images_with_detector_rect_variation'] = len(res1) - len(same)
+        out['images_with_detector_rect_variation'] = len(both) - len(same)
     return out
 
 

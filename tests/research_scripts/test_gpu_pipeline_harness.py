@@ -47,6 +47,9 @@ def test_ordered_files_follow_pin_then_manifest_then_name(tmp_path: Path) -> Non
     man = tmp_path / 'man.json'
     man.write_text(json.dumps({'files': [{'name': 'b.jpg'}, {'name': 'c.jpg'}]}))
     assert [p.name for p in common.ordered_files(tmp_path, pin=pin)] == ['c.jpg', 'a.jpg']
+    id_pin = tmp_path / 'id_pin.json'
+    id_pin.write_text(json.dumps({'images': [{'image_id': 'b'}, {'image_id': 'a'}]}))
+    assert [p.name for p in common.ordered_files(tmp_path, pin=id_pin)] == ['b.jpg', 'a.jpg']
     assert [p.name for p in common.ordered_files(tmp_path, manifest=man)] == ['b.jpg', 'c.jpg']
     assert [p.name for p in common.ordered_files(tmp_path)] == ['a.jpg', 'b.jpg', 'c.jpg']
 

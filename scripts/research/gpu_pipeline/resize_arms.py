@@ -140,6 +140,7 @@ class CvCudaFused(CvCuda):
             cv.Interp.LINEAR,
             cv.RectI(g.left, g.top, PE, PE),
             layout='NCHW',
+            data_type=cv.Type.U8,
         )
         return cp.asarray(out.cuda())
 

@@ -52,37 +52,48 @@ def block_rates(dec: Any, datas: list[bytes]) -> tuple[list[float], float]:
     return rates, (time.process_time() - cpu0) / max(done, 1)
 
 
-def parity(dec: Any, files: list[Path], datas: list[bytes], verdicts: list[str]) -> dict[str, Any]:
-    """Tensor gate vs the Pillow decode (EXIF applied) for every file the router passes."""
+def parity(
+    decs: dict[str, Any], files: list[Path], datas: list[bytes]
+) -> dict[str, dict[str, Any]]:
+    """Tensor gate against the Pillow decode (EXIF applied), per arm, for the files given.
+
+    The reference is decoded once per file and compared on the GPU (one int16 difference per arm),
+    the same gate as ``cpu_reference.tensor_gate``.
+    """
     import cupy as cp
 
-    n_ok = n_fail = n_err = 0
-    worst_mean = worst_max = 0.0
-    for path, data, verdict in zip(files, datas, verdicts, strict=True):
-        if verdict != 'gpu':
-            continue
-        try:
-            out = dec.decode([data])[0]
-        except DECODE_FAILURES:
-            n_err += 1
-            continue
-        if out is None:
-            n_err += 1
-            continue
-        gate = reference.tensor_gate(reference.pillow_frame(path), cp.asnumpy(out))
-        n_ok += gate.passed
-        n_fail += not gate.passed
-        worst_mean, worst_max = (
-            max(worst_mean, gate.mean_abs if gate.mean_abs != float('inf') else 1e9),
-            max(worst_max, gate.max_abs),
-        )
-    return {
-        'gate_pass': n_ok,
-        'gate_fail': n_fail,
-        'decode_errors': n_err,
-        'worst_mean_abs': worst_mean,
-        'worst_max_abs': worst_max,
+    acc: dict[str, dict[str, Any]] = {
+        spec: {
+            'gate_pass': 0,  # nosec B105
+            'gate_fail': 0,
+            'decode_errors': 0,
+            'worst_mean_abs': 0.0,
+            'worst_max_abs': 0,
+        }
+        for spec in decs
     }
+    for path, data in zip(files, datas, strict=True):
+        ref = cp.asarray(reference.pillow_frame(path)).astype(cp.int16)
+        for spec, dec in decs.items():
+            row = acc[spec]
+            try:
+                out = dec.decode([data])[0]
+            except DECODE_FAILURES:
+                out = None
+            if out is None:
+                row['decode_errors'] += 1
+                continue
+            if out.shape != ref.shape:
+                row['gate_fail'] += 1
+                continue
+            diff = cp.abs(ref - out.astype(cp.int16))
+            mean, peak = float(diff.mean()), int(diff.max())
+            row['worst_mean_abs'] = max(row['worst_mean_abs'], mean)
+            row['worst_max_abs'] = max(row['worst_max_abs'], peak)
+            ok = mean < reference.GATE_MEAN_ABS and peak <= reference.GATE_MAX_ABS
+            row['gate_pass' if ok else 'gate_fail'] += 1
+        del ref
+    return acc
 
 
 def _simplejpeg(data: bytes) -> Any:
@@ -178,6 +189,7 @@ def bench(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
     }
     out['cpu_columns'] = cpu_columns(passed)
     ctrl = rates.get('control')
+    checks = parity(decs, pass_files[: args.check], passed[: args.check]) if args.check else {}
     for spec in args.arms:
         flat = [x for rep in rates[spec] for x in rep]
         row: dict[str, Any] = {
@@ -191,12 +203,7 @@ def bench(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
             row['ratio_vs_control'] = common.paired_bootstrap_ratio(
                 flat, [x for rep in ctrl for x in rep]
             )
-        row['parity'] = parity(
-            decs[spec],
-            pass_files[: args.check],
-            passed[: args.check],
-            ['gpu'] * min(args.check, len(passed)),
-        )
+        row['parity'] = checks.get(spec, {})
         out['arms'][spec] = row
     return out
 

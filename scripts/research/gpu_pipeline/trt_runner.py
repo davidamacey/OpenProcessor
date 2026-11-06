@@ -62,7 +62,8 @@ class TrtModel:
         try:
             produced = cp.cuda.Event()
             produced.record(cp.cuda.get_current_stream())  # the caller's kernels wrote the batch
-            ctx.context.set_input_shape(self.input, tuple(batch.shape))
+            if not ctx.context.set_input_shape(self.input, tuple(batch.shape)):
+                raise ValueError(f'batch shape {tuple(batch.shape)} is outside the plan profile')
             with ctx.stream:
                 ctx.stream.wait_event(produced)
                 outs = {

@@ -44,7 +44,11 @@ def ordered_files(
     Neither: the sorted ``*.jpg`` names of ``root``.
     """
     if pin is not None:
-        names = [row['file_name'] for row in json.loads(pin.read_text())['images']]
+        rows = json.loads(pin.read_text())['images']
+        # pins name files either explicitly or by image id
+        names = [
+            row['file_name'] if 'file_name' in row else f'{row["image_id"]}.jpg' for row in rows
+        ]
     elif manifest is not None:
         names = [row['name'] for row in json.loads(manifest.read_text())['files']]
     else:

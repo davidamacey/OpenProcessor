@@ -76,6 +76,7 @@ def downstream(
     detector: Any, encoder: Any, canvas: Any, squares: Any, size: tuple[int, int]
 ) -> tuple[np.ndarray, np.ndarray]:
     """Boxes in frame pixels (from the arm's letterbox) and PE vectors (from the arm's squares)."""
+    import cupy as cp
     from prep_geometry import letterbox_geometry, undo_letterbox
 
     out = detector.run(canvas)
@@ -85,7 +86,14 @@ def downstream(
         [undo_letterbox(tuple(b), 640, lb) for b in out['det_boxes'][0][:n].astype(np.float32)],
         np.float32,
     ).reshape(-1, 4)
-    vec = encoder.run(squares)['image_embeddings']
+    vec = np.concatenate(
+        [
+            encoder.run(cp.ascontiguousarray(squares[i : i + encoder.max_batch]))[
+                'image_embeddings'
+            ]
+            for i in range(0, int(squares.shape[0]), encoder.max_batch)
+        ]
+    )
     return boxes, vec / np.linalg.norm(vec, axis=1, keepdims=True)
 
 
