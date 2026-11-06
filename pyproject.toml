@@ -73,6 +73,15 @@ dependencies = [
     "cachetools==7.3.0",
     "regex==2026.9.29",
     "docker==7.2.0",
+    "SQLAlchemy[asyncio]==2.1.8",
+    "alembic==1.20.1",
+    "psycopg[c]==3.3.8",
+    "celery[redis]==5.7.0",
+    "kombu==5.7.0",
+    "billiard==4.3.2",
+    "redis==8.1.0",
+    "asgi-correlation-id==5.0.1",
+    "flower==2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -340,8 +349,9 @@ addopts = [
     # Live write-path tests need the isolated harness in docker/test/ to be
     # up; they are deselected by default so the offline gate is unchanged.
     # Run them with: pytest tests/live -q --no-cov -m live
+    # Database tests need a PostgreSQL (testcontainers, so Docker): pytest -m db
     "-m",
-    "not live and not families",
+    "not live and not families and not db",
 ]
 # Seconds per test: three times the slowest offline test (124 s measured under 6 parallel workers).
 timeout = 400
@@ -351,6 +361,7 @@ markers = [
     "families: tests that need the official Ultralytics weights or the official YOLOv5 ONNX (CI job `families`); run with -m families",
     "unbound: opt out of the autouse `default` project binding (tests/conftest.py)",
     "real_lease_io: opt out of the in-memory lease store (tests/conftest.py); the test supplies its own lease client",
+    "db: tests that need a PostgreSQL database (testcontainers or OP_TEST_DATABASE_URL); run with -m db",
 ]
 
 # =============================================================================

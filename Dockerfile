@@ -41,6 +41,7 @@ RUN apt-get update && apt-get upgrade -y \
     libgl1 \
     libglib2.0-0t64 \
     libgomp1 \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -95,6 +96,7 @@ RUN apt-get update && apt-get upgrade -y \
     make \
     git \
     pkg-config \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

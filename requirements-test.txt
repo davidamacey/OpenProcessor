@@ -119,3 +119,16 @@ imohash==1.1.0
 onnxruntime
 pycocotools==2.0.11
 docker==7.2.0
+
+# Control plane (docs/design/v070_rebuild/01_package_pins.md section 4): PostgreSQL through
+# SQLAlchemy and Alembic, Celery on Valkey, the request id carried into every log line.
+SQLAlchemy[asyncio]==2.1.8
+alembic==1.20.1
+psycopg[binary]==3.3.8  # same version as the image; the binary wheel needs no system libpq
+celery[redis]==5.7.0
+kombu==5.7.0
+billiard==4.3.2  # 4.3.0 acks a task interrupted by a cold shutdown instead of requeuing it
+redis==8.1.0  # inside kombu 5.7.0's redis<9,>=6.4.0; the client for the Valkey server
+asgi-correlation-id==5.0.1
+# The `db` tier (pytest -m db): one throwaway PostgreSQL (and Valkey) per session; needs Docker
+testcontainers[postgres,redis]==4.15.0

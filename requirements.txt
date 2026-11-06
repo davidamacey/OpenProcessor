@@ -105,3 +105,15 @@ joblib==1.6.0  # src/services/curation/clustering/umap_state.py, embedding_viz.p
 # call falls back to a sentinel-only pause that never actually stops
 # anything -- fail-open. Pin the SDK, not "docker" the CLI wrapper.
 docker==7.2.0
+
+# Control plane (docs/design/v070_rebuild/01_package_pins.md section 4): PostgreSQL through
+# SQLAlchemy and Alembic, Celery on Valkey, the request id carried into every log line.
+SQLAlchemy[asyncio]==2.1.8
+alembic==1.20.1
+psycopg[c]==3.3.8  # built from source in the image (libpq-dev in the builder, libpq5 at run time)
+celery[redis]==5.7.0
+kombu==5.7.0
+billiard==4.3.2  # 4.3.0 acks a task interrupted by a cold shutdown instead of requeuing it
+redis==8.1.0  # inside kombu 5.7.0's redis<9,>=6.4.0; the client for the Valkey server
+asgi-correlation-id==5.0.1
+flower==2.2.0  # the monitoring-profile Flower service runs from the api image
