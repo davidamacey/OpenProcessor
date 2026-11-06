@@ -3,10 +3,10 @@ the list route and retention."""
 
 from __future__ import annotations
 
-import json
-import shutil
+import uuid
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from _lease_hold import held
 
 from curation.label_ops_env import build_env, proposal
@@ -18,9 +18,22 @@ from src.services.curation.label_ops import store
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
-
     from curation.label_ops_env import OpsEnv
+
+
+pytest_plugins = ['_records_world']
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world')]
+
+
+def _members(op_id: str) -> list[str]:
+    import asyncio
+
+    from src.services.curation.label_ops import store
+
+    async def read() -> list[str] | None:
+        return await store.read_members(await store.read_op(op_id))
+
+    return asyncio.run(read()) or []
 
 
 def _env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, n: int = 6) -> OpsEnv:
@@ -43,7 +56,7 @@ def test_batch_label_returns_an_op_id_and_tags_every_written_item(
         assert find_undo_snapshot(doc['class_id_history']) is newest
     assert 'label_op_id' not in env.docs()['c3']
 
-    record = json.loads((env.state() / op_id / 'state.json').read_text())
+    record = env.record(op_id)
     assert record['status'] == 'written'
     assert (record['kind'], record['count'], record['conflicts'], record['selected']) == (
         'label',
@@ -51,8 +64,8 @@ def test_batch_label_returns_an_op_id_and_tags_every_written_item(
         0,
         3,
     )
-    members = json.loads((env.state() / op_id / 'members.json').read_text())['ids']
-    assert sorted(members) == ['c0', 'c1', 'c2']
+    assert record['members_recorded'] is True
+    assert sorted(_members(op_id)) == ['c0', 'c1', 'c2']
 
 
 def test_dry_run_and_empty_selection_record_nothing(
@@ -67,7 +80,7 @@ def test_dry_run_and_empty_selection_record_nothing(
     empty = env.label('widget', selection={'filter': {'class_names': ['no_such_class']}})
     assert empty['op_id'] is None
     assert empty['updated'] == 0
-    assert not env.state().exists() or not list(env.state().iterdir())
+    assert env.row_count() == 0
     assert env.list_ops().json()['items'] == []
     assert env.fake.write_calls == 0
 
@@ -77,15 +90,15 @@ def test_a_write_without_a_record_never_happens(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
 
-    def refuse(_new: Any) -> Any:
-        raise OSError('disk full')
+    async def refuse(_new: Any) -> Any:
+        raise RuntimeError('database down')
 
-    monkeypatch.setattr(store, 'save_op', refuse)
+    monkeypatch.setattr('src.services.curation.label_ops.record.create_op', refuse)
     resp = env.client.put(
         f'{env.prefix}/crops/batch_label',
         json={'class_id': env.class_ids['widget'], 'crop_ids': ['c0']},
     )
-    assert resp.status_code == 503, resp.text
+    assert resp.status_code == 500, resp.text
     assert env.fake.write_calls == 0
     assert 'label_op_id' not in env.docs()['c0']
 
@@ -150,10 +163,7 @@ def test_interrupted_and_writing_operations_are_served_and_not_undoable(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
     op_id = env.label('widget', crop_ids=['c0'])['op_id']
-    path = env.state() / op_id / 'state.json'
-    record = json.loads(path.read_text())
-
-    path.write_text(json.dumps({**record, 'status': 'writing'}))
+    env.set_status(op_id, 'writing')
     item = env.list_ops().json()['items'][0]
     assert item['status'] == 'interrupted'  # no live lease guards the write
     assert item['undoable'] is True
@@ -170,18 +180,16 @@ def test_retention_keeps_the_newest_200_and_never_prunes_a_live_op(
     env = _env(monkeypatch, tmp_path, n=3)
     monkeypatch.setattr(store, 'LABEL_OPS_KEEP', 5)
     first = env.label('widget', crop_ids=['c0'])['op_id']
-    first_dir = env.state() / first
-    record = json.loads((first_dir / 'state.json').read_text())
-    (first_dir / 'state.json').write_text(json.dumps({**record, 'status': 'undoing'}))
+    env.set_status(first, 'undoing')
     for _ in range(7):
         env.label('gadget', crop_ids=['c1'])
-    kept = sorted(p.name for p in env.state().iterdir() if p.is_dir())
+    kept = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
     assert first in kept, 'an operation that is undoing is never pruned'
     assert len(kept) == 6  # the undoing one plus the newest five
 
     for _ in range(2):
         env.label('gadget', crop_ids=['c1'])
-    kept = sorted(p.name for p in env.state().iterdir() if p.is_dir())
+    kept = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
     assert first in kept, (
         'an undoing record is not pruned, even a dead one: its next undo cleans it'
     )
@@ -239,8 +247,6 @@ def test_label_ops_same_timestamp_is_ordered_by_id(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     env = _env(monkeypatch, tmp_path)
-    ids = iter(['lop_20261031T000000000000_00000a', 'lop_20261031T000000000000_00000b'])
-    monkeypatch.setattr(store, 'new_label_op_id', lambda _now: next(ids))
     monkeypatch.setattr(store, 'now_iso', lambda: '2026-10-31T00:00:00+00:00')
     a, b = _ops(env, 2)
     assert [o['op_id'] for o in _page(env)['items']] == [b, a]
@@ -254,7 +260,7 @@ def test_label_ops_same_timestamp_is_ordered_by_id(
 def test_label_ops_malformed_after_is_422(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     env = _env(monkeypatch, tmp_path)
     _ops(env, 1)
-    for bad in ('x', '../decoy', 'lop_2026'):
+    for bad in ('x', '../decoy', 'lop_20261031T000000000000_00000a', str(uuid.uuid4()).upper()):
         resp = env.list_ops(after=bad)
         assert (resp.status_code, resp.json()['detail']['error']) == (422, 'invalid_request'), bad
 
@@ -264,10 +270,27 @@ def test_label_ops_pruned_cursor_still_pages(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
     oldest, middle, _newest = _ops(env, 3)
-    shutil.rmtree(env.state() / middle)
+    _delete(middle)
     body = _page(env, after=middle)
     assert [o['op_id'] for o in body['items']] == [oldest]
     assert body['next_after'] is None
+
+
+def _delete(op_id: str) -> None:
+    import asyncio
+
+    from sqlalchemy import text
+
+    from src.config.project_context import current_project_id
+    from src.db.session import async_session_factory, project_tx
+
+    async def drop() -> None:
+        async with async_session_factory()() as session, project_tx(session, current_project_id()):
+            await session.execute(
+                text('DELETE FROM label_operations WHERE id = :id'), {'id': uuid.UUID(op_id)}
+            )
+
+    asyncio.run(drop())
 
 
 def test_label_ops_undoable_paging_skips_non_undoable(

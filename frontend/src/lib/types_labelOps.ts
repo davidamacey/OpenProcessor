@@ -26,7 +26,7 @@ export interface LabelOpUndoPass {
 /** `LabelOp`: one recorded bulk label or move. Class identity is the name. */
 export interface LabelOp {
   op_id: string;
-  kind: 'label' | 'move';
+  kind: 'label' | 'move' | 'assist_loop_propagate' | 'assist_loop_review';
   at: string;
   finished_at: string | null;
   class_name: string | null;

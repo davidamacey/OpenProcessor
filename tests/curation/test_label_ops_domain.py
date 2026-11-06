@@ -4,7 +4,6 @@ history stack, and the shared restore. No route, no index."""
 from __future__ import annotations
 
 import copy
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -26,13 +25,12 @@ from src.domain.label_ops import (
     current_query,
     label_fingerprint,
     move_fingerprint,
-    new_label_op_id,
     undo_outcome,
 )
 
 
-OP = 'lop_20260301T120000000000_abc123'
-OTHER = 'lop_20260301T130000000000_def456'
+OP = '01a1b00f-8d37-77d2-a545-50e87fe15f52'
+OTHER = '01a1b00f-8d37-77d2-a545-50e87fe15f53'
 AT = '2026-03-01T12:00:00.000000+00:00'
 BEFORE = '2026-03-01T11:00:00.000000+00:00'
 AFTER = '2026-03-01T13:00:00.000000+00:00'
@@ -66,22 +64,27 @@ def _written(prior: dict[str, Any] | None = None, op_id: str = OP) -> dict[str, 
     }
 
 
-def test_op_id_format_and_regex() -> None:
-    now = datetime(2026, 3, 1, 12, 0, 0, 123456, tzinfo=UTC)
-    op_id = new_label_op_id(now)
-    assert op_id.startswith('lop_20260301T120000123456_')
-    assert LABEL_OP_ID_RE.fullmatch(op_id)
-    later = new_label_op_id(datetime(2026, 3, 1, 12, 0, 1, tzinfo=UTC))
-    assert later > op_id, 'lexicographic order is creation order'
+def test_op_id_is_a_lowercase_uuid() -> None:
+    assert LABEL_OP_ID_RE.fullmatch(OP)
     for bad in (
         '',
         '../x',
-        'lop_20260301T120000123456_ABCDEF',
-        f'{op_id}/..',
-        f'{op_id}\n',
-        'x' + op_id,
+        'lop_20260301T120000123456_abc123',
+        OP.upper(),
+        f'{OP}/..',
+        f'{OP}\n',
+        'x' + OP,
     ):
         assert LABEL_OP_ID_RE.fullmatch(bad) is None, bad
+
+
+def test_the_loop_kinds_are_label_operation_kinds() -> None:
+    from typing import get_args
+
+    from src.db.repos.records import LABEL_OPERATION_KINDS
+    from src.domain.label_ops import LabelOpKind
+
+    assert set(get_args(LabelOpKind)) == set(LABEL_OPERATION_KINDS)
 
 
 # (name, mutate(doc, fp-kwargs) -> doc, expected). One row per rule of the decision, in order.

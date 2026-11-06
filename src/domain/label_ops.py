@@ -9,7 +9,6 @@ item alone. Imports only ``src.domain`` and ``src.utils``.
 from __future__ import annotations
 
 import re
-import secrets
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
@@ -21,19 +20,14 @@ from src.utils.class_names import normalize_class_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from datetime import datetime
 
-LabelOpKind = Literal['label', 'move']
+LabelOpKind = Literal['label', 'move', 'assist_loop_propagate', 'assist_loop_review']
 
-LABEL_OP_ID_RE = re.compile(r'lop_\d{8}T\d{12}_[0-9a-f]{6}')
-"""Matched with ``fullmatch`` before any path is built from an id."""
+LABEL_OP_ID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+"""A label operation id is the lowercase uuid of its ``label_operations`` row; matched with
+``fullmatch`` before any query is built from an id."""
 
 HUMAN_MOVE_CLASS_SOURCE = 'human_move'
-
-
-def new_label_op_id(now: datetime) -> str:
-    """``lop_<UTC YYYYMMDDTHHMMSSffffff>_<6 hex>``; sorts in creation order."""
-    return f'lop_{now.strftime("%Y%m%dT%H%M%S%f")}_{secrets.token_hex(3)}'
 
 
 class UndoOutcome(str, Enum):  # noqa: UP042 -- str-valued members are serialised as the plain count keys
@@ -161,6 +155,5 @@ __all__ = [
     'current_query',
     'label_fingerprint',
     'move_fingerprint',
-    'new_label_op_id',
     'undo_outcome',
 ]

@@ -15416,7 +15416,9 @@
           "kind": {
             "enum": [
               "label",
-              "move"
+              "move",
+              "assist_loop_propagate",
+              "assist_loop_review"
             ],
             "title": "Kind",
             "type": "string"

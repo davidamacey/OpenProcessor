@@ -35,7 +35,7 @@ async def recorded_relabel(
 ) -> dict[str, Any]:
     """The batch relabel response plus ``op_id``. ``merger_for(op_id)`` builds the
     merge body that tags each item with the operation."""
-    record = create_op(op)
+    record = await create_op(op)
     async with leased(
         opensearch,
         LeaseKind.LABEL_OP,
@@ -46,15 +46,12 @@ async def recorded_relabel(
         result = await occ_bulk_human_relabel(
             opensearch, ids, merger_for(record.op_id), writer_id=op.writer
         )
-        try:
-            write_members(record.op_id, result['updated_ids'])
-        except OSError as exc:
-            logger.error('label_op_members_failed', op_id=record.op_id, error=str(exc))
+        await write_members(record, result['updated_ids'])
         record.status = 'written'
         record.count = result['updated']
         record.conflicts = len(result['conflicts'])
         record.finished_at = now_iso()
-        save_op(record)
+        await save_op(record)
     logger.info(
         'label_op_written', op_id=record.op_id, count=record.count, conflicts=record.conflicts
     )

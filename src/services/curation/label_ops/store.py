@@ -1,26 +1,36 @@
-"""On-disk record of label operations, one directory per operation under the
-bound project's state dir (``<project_state_dir>/label_ops/<op_id>/``).
+"""Records of label operations: a ``label_operations`` row per operation and a
+``label_operation_members`` row per item it wrote, in the bound project (``src/db/repos/records.py``).
 
-``state.json`` (atomic temp+rename through :class:`FileJob`) holds the record;
-``members.json`` the ids the operation wrote. Liveness is the ``label_op:<op_id>`` lease while
-the operation writes and the ``label_undo`` lease while any undo of the project runs.
-The project's dir is the only place read or written: the id is matched against
-:data:`LABEL_OP_ID_RE` before any path is built.
+The row holds the record (kind, status, writer, the fingerprint of what the operation wrote and
+the undo passes in ``params``); the members are the ids the operation wrote. Liveness is the
+``label_op:<op_id>`` lease while the operation writes and the ``label_undo`` lease while any undo of
+the project runs. The id is matched against :data:`LABEL_OP_ID_RE` before any query is built.
 """
 
 from __future__ import annotations
 
-import json
-import shutil
+import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
 from src.clients.job_lease import is_live
-from src.config import get_curation_config
-from src.config.project_context import current_project, ensure_marked_dir
+from src.config.project_context import current_project, current_project_id
 from src.core.logging import get_logger
+from src.db.repos.records import (
+    LabelOperationMemberLoad,
+    LabelOperationRow,
+    add_label_operation_members,
+    create_label_operation,
+    get_label_operation,
+    label_operation_members,
+    list_label_operations,
+    new_label_operation_id,
+    prune_label_operations,
+    save_label_operation,
+)
+from src.db.session import async_session_factory, project_tx
 from src.domain.job_lease import LeaseKind
 from src.domain.label_ops import (
     LABEL_OP_ID_RE,
@@ -28,17 +38,10 @@ from src.domain.label_ops import (
     OpFingerprint,
     label_fingerprint,
     move_fingerprint,
-    new_label_op_id,
 )
-from src.services.curation.file_job import FileJob
 from src.services.rejections import rejection
-from src.utils.atomic_write import atomic_write_json
 from src.utils.timeutil import now_iso
 
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -49,8 +52,6 @@ UNDO_PASSES_KEPT = 10
 
 StoredStatus = Literal['writing', 'written', 'undoing', 'undone']
 ServedStatus = Literal['writing', 'interrupted', 'written', 'undoing', 'undo_interrupted', 'undone']
-
-_MEMBERS = 'members.json'
 
 
 class LabelOpRecord(BaseModel):
@@ -73,6 +74,7 @@ class LabelOpRecord(BaseModel):
     conflicts: int | None = None
     fingerprint: OpFingerprint
     status: StoredStatus = 'writing'
+    members_recorded: bool = False
     undo_passes: list[dict[str, Any]] = []
 
 
@@ -90,111 +92,132 @@ class NewLabelOp(BaseModel):
     selected: int
 
 
-def label_ops_root() -> Path:
-    return get_curation_config().project_state_dir / 'label_ops'
-
-
 def _not_found(op_id: str) -> Exception:
     return rejection(404, 'label_op_not_found', f'no label operation {op_id!r} in this project')
 
 
-def op_dir(op_id: str) -> Path:
-    """The operation's dir; ``404`` for an id of the wrong shape (no path is built)."""
+def parse_op_id(op_id: str) -> uuid.UUID:
+    """The id as a uuid; ``404`` for an id of the wrong shape (no query is made)."""
     if not LABEL_OP_ID_RE.fullmatch(op_id):
         raise _not_found(op_id)
-    return label_ops_root() / op_id
+    return uuid.UUID(op_id)
 
 
-def create_op(new: NewLabelOp) -> LabelOpRecord:
+def _params(record: LabelOpRecord) -> dict[str, Any]:
+    return record.model_dump(mode='json', exclude={'op_id', 'kind', 'status', 'schema_version'})
+
+
+def _record(row: LabelOperationRow) -> LabelOpRecord | None:
+    try:
+        return LabelOpRecord.model_validate(
+            {
+                **row.params,
+                'op_id': str(row.id),
+                'kind': row.kind,
+                'status': row.status,
+            }
+        )
+    except ValidationError as exc:
+        logger.warning('label_op_record_unreadable', op_id=str(row.id), error=str(exc))
+        return None
+
+
+async def create_op(new: NewLabelOp) -> LabelOpRecord:
     """Write the record (status ``writing``) before any item is written, and prune
     the oldest operations beyond :data:`LABEL_OPS_KEEP`."""
     if current_project().read_only:
         raise rejection(409, 'project_read_only', 'the project is read-only; nothing was written')
-    now = datetime.now(UTC)
-    op_id = new_label_op_id(now)
-    at = now_iso()
-    if new.kind == 'label':
-        assert new.class_name is not None
-        fingerprint = label_fingerprint(
-            op_id=op_id, writer=new.writer, at=at, class_name=new.class_name
-        )
-    else:
-        fingerprint = move_fingerprint(
+    project_id = current_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        op_id = await new_label_operation_id(session)
+        at = now_iso()
+        if new.kind == 'label':
+            assert new.class_name is not None
+            fingerprint = label_fingerprint(
+                op_id=str(op_id), writer=new.writer, at=at, class_name=new.class_name
+            )
+        else:
+            fingerprint = move_fingerprint(
+                op_id=str(op_id),
+                writer=new.writer,
+                at=at,
+                class_name=new.class_name if new.target_kind == 'class' else None,
+                cluster_id=new.target_cluster_id,
+            )
+        record = LabelOpRecord(op_id=str(op_id), at=at, fingerprint=fingerprint, **new.model_dump())
+        await create_label_operation(
+            session,
+            project_id,
+            kind=record.kind,
+            created_by=record.writer,
+            params=_params(record),
             op_id=op_id,
-            writer=new.writer,
-            at=at,
-            class_name=new.class_name if new.target_kind == 'class' else None,
-            cluster_id=new.target_cluster_id,
         )
-    record = LabelOpRecord(op_id=op_id, at=at, fingerprint=fingerprint, **new.model_dump())
-    try:
-        ensure_marked_dir(label_ops_root())
-        save_op(record)
-    except OSError as exc:
-        logger.error('label_op_record_failed', error=str(exc))
-        raise rejection(503, 'config_store_unavailable', 'could not record the operation') from exc
-    _prune(keep=LABEL_OPS_KEEP)
-    logger.info('label_op_created', op_id=op_id, kind=record.kind, selected=record.selected)
+        await prune_label_operations(session, project_id, keep=LABEL_OPS_KEEP)
+    logger.info('label_op_created', op_id=record.op_id, kind=record.kind, selected=record.selected)
     return record
 
 
-def save_op(record: LabelOpRecord) -> None:
-    FileJob(op_dir(record.op_id)).write(record.model_dump(mode='json'))
+async def save_op(record: LabelOpRecord) -> None:
+    project_id = current_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        await save_label_operation(
+            session,
+            project_id,
+            parse_op_id(record.op_id),
+            status=record.status,
+            params=_params(record),
+            undone_at=datetime.now(UTC) if record.status == 'undone' else None,
+        )
 
 
-def _read_file(directory: Path) -> LabelOpRecord | None:
-    raw = FileJob(directory).read()
-    if not raw:
-        return None
-    try:
-        return LabelOpRecord.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning('label_op_record_unreadable', op_id=directory.name, error=str(exc))
-        return None
-
-
-def read_op(op_id: str) -> LabelOpRecord:
+async def read_op(op_id: str) -> LabelOpRecord:
     """The stored record; ``404`` when it is unknown, unreadable or pruned."""
-    record = _read_file(op_dir(op_id))
+    key = parse_op_id(op_id)
+    project_id = current_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        row = await get_label_operation(session, project_id, key)
+    record = None if row is None else _record(row)
     if record is None:
         raise _not_found(op_id)
     return record
 
 
-def iter_ops(*, after: str | None = None) -> Iterator[LabelOpRecord]:
+async def list_ops(*, limit: int, after: str | None = None) -> list[LabelOpRecord]:
     """Readable records, newest first (ids sort in creation order), older than
     ``after`` (exclusive) when given. An unreadable one is skipped and logged."""
-    root = label_ops_root()
-    try:
-        names = sorted(
-            (
-                p.name
-                for p in root.iterdir()
-                if LABEL_OP_ID_RE.fullmatch(p.name) and (after is None or p.name < after)
-            ),
-            reverse=True,
+    project_id = current_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        rows = await list_label_operations(
+            session, project_id, limit=limit, after=None if after is None else parse_op_id(after)
         )
-    except FileNotFoundError:
-        return
-    for name in names:
-        record = _read_file(root / name)
-        if record is not None:
-            yield record
+    return [r for r in map(_record, rows) if r is not None]
 
 
-def write_members(op_id: str, ids: list[str]) -> None:
-    path = op_dir(op_id) / _MEMBERS
-    atomic_write_json(path, {'ids': ids}, default=None)
+async def write_members(record: LabelOpRecord, ids: list[str]) -> None:
+    """Record the ids the operation wrote and mark them known on ``record`` (saved by the caller)."""
+    async with async_session_factory()() as session, project_tx(session, current_project_id()):
+        await add_label_operation_members(
+            session,
+            parse_op_id(record.op_id),
+            (LabelOperationMemberLoad(item_id=i, prior={}) for i in ids),
+        )
+    record.members_recorded = True
 
 
-def read_members(op_id: str) -> list[str] | None:
-    """The ids the operation wrote, or ``None`` when the file is missing or unreadable."""
-    try:
-        raw = json.loads((op_dir(op_id) / _MEMBERS).read_text(encoding='utf-8'))
-        ids = raw['ids']
-    except (OSError, ValueError, KeyError, TypeError):
+async def read_members(record: LabelOpRecord) -> list[str] | None:
+    """The ids the operation wrote, or ``None`` when they were never recorded (a crash between
+    the write and the record): the caller then finds them through the ``label_op_id`` tag."""
+    if not record.members_recorded:
         return None
-    return [str(i) for i in ids] if isinstance(ids, list) else None
+    key = parse_op_id(record.op_id)
+    ids: list[str] = []
+    after: str | None = None
+    async with async_session_factory()() as session, project_tx(session, current_project_id()):
+        while page := await label_operation_members(session, key, after=after):
+            ids.extend(m.item_id for m in page)
+            after = page[-1].item_id
+    return ids
 
 
 async def served_status(opensearch: Any, record: LabelOpRecord) -> ServedStatus:
@@ -210,19 +233,6 @@ async def served_status(opensearch: Any, record: LabelOpRecord) -> ServedStatus:
     return record.status
 
 
-def _prune(*, keep: int) -> None:
-    """Delete the oldest operations beyond ``keep``; one that is writing or undoing is never deleted."""
-    root = label_ops_root()
-    names = sorted(
-        (p.name for p in root.iterdir() if LABEL_OP_ID_RE.fullmatch(p.name)), reverse=True
-    )
-    for name in names[keep:]:
-        record = _read_file(root / name)
-        if record is not None and record.status in ('writing', 'undoing'):
-            continue
-        shutil.rmtree(root / name, ignore_errors=True)
-
-
 __all__ = [
     'LABEL_OPS_KEEP',
     'UNDO_PASSES_KEPT',
@@ -231,9 +241,8 @@ __all__ = [
     'ServedStatus',
     'StoredStatus',
     'create_op',
-    'iter_ops',
-    'label_ops_root',
-    'op_dir',
+    'list_ops',
+    'parse_op_id',
     'read_members',
     'read_op',
     'save_op',

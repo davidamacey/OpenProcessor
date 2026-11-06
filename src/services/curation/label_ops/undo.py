@@ -55,8 +55,8 @@ _CONFLICT_IDS_SHOWN = 100
 
 
 async def _members(opensearch: Any, record: LabelOpRecord) -> tuple[list[str], bool]:
-    """The ids the operation wrote; from the tag when ``members.json`` is missing."""
-    known = read_members(record.op_id)
+    """The ids the operation wrote; from the tag when the members were never recorded."""
+    known = await read_members(record)
     if known is not None:
         return known, True
     hits = await scan_items(
@@ -176,7 +176,7 @@ async def undo_label_op(
 ) -> dict[str, Any]:
     """The :class:`LabelOpUndoResponse` of an undo pass over the operation."""
     if dry_run:
-        record = read_op(op_id)
+        record = await read_op(op_id)
         await _refuse_if_nothing_left(opensearch, record)
         ids, known = await _members(opensearch, record)
         outcomes = await _classify(opensearch, record, ids, registry_name)
@@ -187,7 +187,7 @@ async def undo_label_op(
             members_known=known,
             status=await served_status(opensearch, record),
         )
-    read_op(op_id)  # 404 before any lease is taken
+    await read_op(op_id)  # 404 before any lease is taken
     async with (
         leased(
             opensearch,
@@ -208,11 +208,11 @@ async def undo_label_op(
             ),
         ),
     ):
-        record = read_op(op_id)  # fresh: a pass that just finished changed it
+        record = await read_op(op_id)  # fresh: a pass that just finished changed it
         await _refuse_if_nothing_left(opensearch, record)
         ids, known = await _members(opensearch, record)
         record.status = 'undoing'
-        save_op(record)
+        await save_op(record)
         outcomes = await _restore(opensearch, record, ids, registry_name)
         response = _response(record, outcomes, dry_run=False, members_known=known, status='undone')
         record.status = 'undone'
@@ -223,6 +223,6 @@ async def undo_label_op(
                 **{k: response[k] for k in _PASS_KEYS},
             },
         ][-UNDO_PASSES_KEPT:]
-        save_op(record)
+        await save_op(record)
     logger.info('label_op_undone', op_id=op_id, **{k: response[k] for k in _PASS_KEYS})
     return response
