@@ -86,6 +86,81 @@ def test_allowed_directions_pass(scratch_repo: ScratchRepo, path: str, source: s
     assert run(scratch_repo) == 0
 
 
+@pytest.mark.parametrize(
+    ('path', 'source'),
+    [
+        # the database layer stays below services, clients and the web
+        ('src/db/a.py', 'from src.services.x import y\n'),
+        ('src/db/a.py', 'import src.clients\n'),
+        ('src/db/a.py', 'from src.routers import x\n'),
+        ('src/db/a.py', 'from fastapi import Depends\n'),
+        ('src/db/models/a.py', 'import starlette.requests\n'),
+        # pure layers never reach the database
+        ('src/domain/a.py', 'from src.db import engine\n'),
+        ('src/config/a.py', 'import src.db.models\n'),
+        ('src/utils/a.py', 'from src.db.session import project_tx\n'),
+        ('src/schemas/a.py', 'from src.db import base\n'),
+        # scripts and everything else may use only the runtime leaf of the task layer
+        ('scripts/curation/a.py', 'from src.tasks import app\n'),
+        ('scripts/curation/a.py', 'import src.tasks.families_a\n'),
+        # the task layer carries no web stack
+        ('src/tasks/a.py', 'from fastapi import FastAPI\n'),
+        ('src/tasks/families_a.py', 'import starlette\n'),
+        ('src/tasks/a.py', 'from src.routers.x import y\n'),
+        # the runtime leaf imports only db, config, domain, utils (even inside a function)
+        ('src/tasks/runtime/a.py', 'from src.services.x import y\n'),
+        ('src/tasks/runtime/a.py', 'def f():\n    from src.services import x\n    return x\n'),
+        ('src/tasks/runtime/a.py', 'from src.clients.task_queue import enqueue\n'),
+        ('src/tasks/runtime/a.py', 'from src.tasks.families_a import run\n'),
+        ('src/tasks/runtime/a.py', 'from src.core.logging import get_logger\n'),
+        # a service, trainer, exporter or bake-off module reaches no task module but the runtime
+        ('src/services/jobs/a.py', 'from src.tasks.families_a import run\n'),
+        ('docker/trainer/a.py', 'from src.tasks.families_a import run\n'),
+        ('export/a.py', 'import src.tasks.app\n'),
+        ('scripts/curation/bakeoff/a.py', 'from src.tasks.families_a import run\n'),
+        # handlers go through services, not repositories
+        ('src/routers/a.py', 'from src.db.repos import jobs\n'),
+        ('src/routers/a.py', 'import src.db.repos.jobs\n'),
+    ],
+)
+def test_the_control_plane_contracts_are_enforced(
+    scratch_repo: ScratchRepo, path: str, source: str
+) -> None:
+    scratch_repo.write(path, source)
+    assert run(scratch_repo) == 1
+
+
+@pytest.mark.parametrize(
+    ('path', 'source'),
+    [
+        ('src/db/a.py', 'from sqlalchemy import select\nfrom src.config.database import X\n'),
+        ('src/db/a.py', 'from src.domain.job_states import STATUSES\nfrom src.utils.q import r\n'),
+        ('src/core/a.py', 'from src.db.session import project_tx\nfrom fastapi import Depends\n'),
+        ('src/services/a.py', 'from src.db.repos import jobs\n'),
+        ('src/routers/a.py', 'from src.db.session import project_tx\n'),
+        ('src/tasks/a.py', 'from src.services.x import y\nfrom src.db import engine\n'),
+        (
+            'src/tasks/runtime/a.py',
+            'from src.db.repos.jobs import claim\nfrom src.config import x\n',
+        ),
+        ('src/tasks/runtime/a.py', 'from src.domain import job_states\nfrom src.utils import q\n'),
+        ('src/tasks/runtime/a.py', 'from src.tasks.runtime import job_task\nimport redis\n'),
+        ('src/tasks/runtime/a.py', 'from . import heartbeat\n'),
+        ('src/services/jobs/a.py', 'from src.tasks.runtime.job_task import JobTask\n'),
+        ('docker/trainer/a.py', 'from src.tasks.runtime import gpu_app\n'),
+        ('export/a.py', 'from src.tasks.runtime.gpu_app import make_app\n'),
+        ('scripts/curation/bakeoff/a.py', 'from src.tasks.runtime import gpu_app\n'),
+        ('scripts/db/a.py', 'from src.db import roles\n'),
+        ('src/tasks/families_a.py', 'from src.tasks.runtime import x\nfrom src.tasks import app\n'),
+    ],
+)
+def test_the_allowed_control_plane_directions_pass(
+    scratch_repo: ScratchRepo, path: str, source: str
+) -> None:
+    scratch_repo.write(path, source)
+    assert run(scratch_repo) == 0
+
+
 def test_relative_imports_are_resolved(scratch_repo: ScratchRepo) -> None:
     scratch_repo.write('src/services/pkg/a.py', 'from ...routers import models\n')
     assert run(scratch_repo) == 1
