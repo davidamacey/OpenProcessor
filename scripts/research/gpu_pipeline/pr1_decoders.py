@@ -18,6 +18,7 @@ in order inside every repetition; the page cache is dropped before each repetiti
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -167,6 +168,8 @@ def bench(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
             cpu[spec].append(c)
     out: dict[str, Any] = {
         'tier': 1,
+        'decoded_images_per_arm': min(BLOCK, len(passed))
+        + args.reps * (len(passed) // BLOCK * BLOCK),
         'images': len(files),
         'declined': len(files) - len(passed),
         'decline_reasons': {v: verdicts.count(v) for v in set(verdicts)},
@@ -196,6 +199,41 @@ def bench(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
         )
         out['arms'][spec] = row
     return out
+
+
+def profile(args: argparse.Namespace, argv: list[str]) -> dict[str, Any]:
+    """GPU kernel and copy ms per decoded image of each arm: one traced repetition per arm."""
+    import nsys_stats
+
+    rows: dict[str, Any] = {}
+    for spec in args.arms:
+        inner = [sys.executable, str(Path(__file__).resolve()), 'bench']
+        skip = False
+        for tok in argv[1:]:
+            if skip:
+                skip = False
+            elif tok in ('--arms', '--reps', '--check', '--out'):
+                skip = True
+            elif not tok.startswith('--') and tok in args.arms:
+                continue
+            else:
+                inner.append(tok)
+        traced = args.out / f'traced_{spec.replace(":", "_")}'
+        inner += ['--arms', spec, '--reps', '1', '--check', '0', '--out', str(traced)]
+        sqlite = nsys_stats.profile(
+            inner, args.out / f'nsys_pr1_{args.label}_{spec.replace(":", "_")}'
+        )
+        busy = nsys_stats.kernel_busy(sqlite)
+        decoded = json.loads((traced / f'pr1_bench_{args.label}.json').read_text())[
+            'decoded_images_per_arm'
+        ]
+        rows[spec] = {
+            'decoded_images': decoded,
+            'gpu_kernel_ms_per_image': busy['kernel_ms'] / decoded,
+            'gpu_memcpy_ms_per_image': busy['memcpy_ms'] / decoded,
+            'busy_share': busy['busy_share'],
+        }
+    return {'tier': 1, 'arms': rows}
 
 
 def coverage(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
@@ -242,7 +280,7 @@ def coverage(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument('mode', choices=('cpu-smoke', 'bench', 'coverage'))
+    p.add_argument('mode', choices=('cpu-smoke', 'bench', 'coverage', 'profile'))
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--pin', type=Path)
     p.add_argument('--manifest', type=Path)
@@ -263,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
         'cpu-smoke': lambda: cpu_smoke(files),
         'bench': lambda: bench(args, files),
         'coverage': lambda: coverage(args, files),
+        'profile': lambda: profile(args, argv if argv is not None else sys.argv[1:]),
     }[args.mode]()
     body['set'] = args.label
     body['environment'] = common.environment(args.gpu_index)

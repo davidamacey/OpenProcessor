@@ -124,6 +124,26 @@ class CvCuda:
         return rows
 
 
+class CvCudaFused(CvCuda):
+    """K-b variant: the whole-frame square in one ``resize_crop_convert_reformat`` call (output
+    NCHW uint8). Everything else is K-b's."""
+
+    name = 'K-b-fused cvcuda'
+
+    def whole_square(self, frame: Any) -> Any:
+        h, w = frame.shape[:2]
+        g = whole_square_geometry(w, h, PE)
+        cv = self.cv
+        out = cv.resize_crop_convert_reformat(
+            self._tensor(frame),
+            (g.new_w, g.new_h),
+            cv.Interp.LINEAR,
+            cv.RectI(g.left, g.top, PE, PE),
+            layout='NCHW',
+        )
+        return cp.asarray(out.cuda())
+
+
 class DaliResize:
     name = 'K-c dali-fn.resize'
 
@@ -197,7 +217,9 @@ class DaliResize:
 
 
 def build(name: str) -> Any:
-    return {'K-a': ShippedKernels, 'K-b': CvCuda, 'K-c': DaliResize}[name]()
+    return {'K-a': ShippedKernels, 'K-b': CvCuda, 'K-b-fused': CvCudaFused, 'K-c': DaliResize}[
+        name
+    ]()
 
 
 def traced(label: str) -> Any:

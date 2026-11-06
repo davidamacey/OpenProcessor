@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ sys.path.insert(0, str(_HARNESS))
 import cpu_reference as reference
 import exif_fixtures
 import harness_common as common
+import nsys_stats
 import pr0_stage_split
 import pr2_resize_ops
 import set_p_sample
@@ -154,3 +156,23 @@ def test_exif_fixtures_cover_every_registered_kind(tmp_path: Path) -> None:
     with Image.open(io.BytesIO(fixtures['progressive'])) as p:
         assert p.info.get('progressive') or p.info.get('progression')
     assert len(fixtures['truncated']) < len(fixtures['baseline'])
+
+
+def test_kernel_busy_takes_the_union_of_overlapping_kernels(tmp_path: Path) -> None:
+    db = tmp_path / 'trace.sqlite'
+    con = sqlite3.connect(db)
+    con.execute('CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INTEGER, end INTEGER)')
+    con.execute('CREATE TABLE CUPTI_ACTIVITY_KIND_MEMCPY (start INTEGER, end INTEGER)')
+    # two overlapping kernels (0-4 ms, 2-6 ms) and one later (8-10 ms): union 8 ms of a 10 ms window
+    con.executemany(
+        'INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?)',
+        [(0, 4_000_000), (2_000_000, 6_000_000), (8_000_000, 10_000_000)],
+    )
+    con.execute('INSERT INTO CUPTI_ACTIVITY_KIND_MEMCPY VALUES (1000000, 2000000)')
+    con.commit()
+    con.close()
+    out = nsys_stats.kernel_busy(db)
+    assert out['kernel_ms'] == pytest.approx(10.0)
+    assert out['memcpy_ms'] == pytest.approx(1.0)
+    assert out['window_ms'] == pytest.approx(10.0)
+    assert out['busy_share'] == pytest.approx(0.8)
