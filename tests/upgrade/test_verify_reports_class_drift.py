@@ -28,7 +28,7 @@ async def test_the_upgrade_verify_reports_the_drift_it_finds_but_does_not_fail(m
     assert drift['default']['name_disagrees'] == 1  # class 0 named 'truck' on the item
     kinds = {s['kind'] for s in drift['default']['samples']}
     assert kinds == {'unknown_class_id', 'name_disagrees'}
-    assert drift['demo'] == {'items': 3, 'unknown_class_id': 0, 'name_disagrees': 0, 'samples': []}
+    assert drift['demo'] == {'items': 5, 'unknown_class_id': 0, 'name_disagrees': 0, 'samples': []}
 
 
 @pytest.mark.asyncio

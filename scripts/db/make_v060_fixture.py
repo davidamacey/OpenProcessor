@@ -298,6 +298,18 @@ def item(
     return doc
 
 
+OP_ENTRY = {
+    'op_id': 'lop_20260105T101010000001_aaaaaa', 'writer': 'labeler', 'class_id': 3,
+    'class_name': 'Person', 'class_source': 'detector', 'class_validated': False, 'restorable': True,
+}  # fmt: skip
+OTHER_ENTRY = {
+    'op_id': 'lop_20251201T000000000000_ffffff',
+    'writer': 'labeler',
+    'class_id': 1,
+    'restorable': True,
+}
+
+
 def sqlite_queue() -> str:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / 'queue.sqlite'
@@ -655,6 +667,9 @@ def build_opensearch() -> dict[str, Any]:
     out[demo_roles['images']] = index(images_body('lucene'))
     out[demo_roles['items']] = index(items_body('lucene'), {
         'd1': item('d1', 0, 'car'), 'd2': item('d2', 5, 'bus', state=None), 'd3': item('d3', None, None, vector=False, state=None),
+        # members of the label operation: c1 recorded what the operation replaced, c2 was pruned, c3 is gone
+        'c1': {**item('c1', 0, 'car'), 'class_id_history': [OTHER_ENTRY, OP_ENTRY]},
+        'c2': {**item('c2', 0, 'car'), 'class_id_history': [OTHER_ENTRY]},
     })  # fmt: skip
     folded = {**configs_docs(), 'default': settings_doc(), 'class_registry': classes_doc(),
               'current': {'state_id': 'current', 'projection_version': 'umap_viz_v1', 'scope': 'all', 'cluster_id': None, 'n_points': 3, 'fitted_at': T2, 'n_components': 2, 'metric': 'cosine'}}  # fmt: skip

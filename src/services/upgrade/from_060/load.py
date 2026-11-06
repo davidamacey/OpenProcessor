@@ -12,7 +12,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete
 
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.clients.storage.base import BlobStore
+    from src.services.upgrade.from_060.admin_client import ControlReader
     from src.services.upgrade.from_060.model import (
         ExportSrc,
         GlobalData,
@@ -199,17 +200,44 @@ async def _load_jobs(
     report.add('interrupted_jobs', n)
 
 
+PRIOR_BATCH = 1000
+
+
+async def member_priors(
+    reader: ControlReader, items_index: str, legacy_op_id: str, ids: list[str]
+) -> dict[str, Any]:
+    """The state each item had before the operation: the ``class_id_history`` entry whose
+    ``op_id`` is the operation (it carries the class fields, op id, writer and restorable). An
+    item with no such entry (pruned, or deleted) has no prior."""
+    priors: dict[str, Any] = {}
+    for start in range(0, len(ids), PRIOR_BATCH):
+        histories = await reader.get_field(
+            items_index, ids[start : start + PRIOR_BATCH], 'class_id_history'
+        )
+        for item_id, history in histories.items():
+            entries = [e for e in history or [] if e.get('op_id') == legacy_op_id]
+            if entries:
+                priors[item_id] = entries[-1]
+    return priors
+
+
 async def _load_bulk(
     session: AsyncSession,
     bundle: Path,
     parsed: Parsed,
     project_ids: dict[str, uuid.UUID],
     report: LoadReport,
+    reader: ControlReader,
 ) -> None:
     imports = {(i.project_slug, i.legacy_id): i for i in parsed.imports}
     sources = {(s.project_slug, s.config['legacy_source_id']): s for s in parsed.sources}
     ops = {(slug, op.legacy_id): op for slug, group in parsed.label_ops.items() for op in group}
     done_ops: set[tuple[str, str]] = set()
+    indexes = {pd.project.slug: pd.project.indexes['items'] for pd in parsed.projects}
+
+    def items_index(slug: str) -> str:
+        return indexes[slug]
+
     for file in iter_bulk(bundle):
         area, _, slug = file.area.partition(':')
         parts = file.rel.split('/')
@@ -236,13 +264,14 @@ async def _load_bulk(
             op = ops.get((slug, parts[1]))
             if op is not None:
                 ids = member_ids(file.data)
-                await control_rows.load_label_op(session, project_ids[slug], op, ids)
+                priors = await member_priors(reader, items_index(slug), op.legacy_id, ids)
+                await control_rows.load_label_op(session, project_ids[slug], op, ids, priors)
                 report.add('label_operations')
                 report.add('label_operation_members', len(ids))
                 done_ops.add((slug, op.legacy_id))
     for key, op in ops.items():  # operations whose member list is missing or was never written
         if key not in done_ops:
-            await control_rows.load_label_op(session, project_ids[key[0]], op, [])
+            await control_rows.load_label_op(session, project_ids[key[0]], op, [], {})
             report.add('label_operations')
 
 
@@ -255,7 +284,12 @@ class LoadResult:
 
 
 async def run_load(
-    session: AsyncSession, bundle: Path, store: BlobStore, *, now: dt.datetime
+    session: AsyncSession,
+    bundle: Path,
+    store: BlobStore,
+    reader: ControlReader,
+    *,
+    now: dt.datetime,
 ) -> LoadResult:
     """Write every row. The caller owns the transaction (``deployment_tx``) and the commit."""
     snap = read_snapshot(bundle)
@@ -274,7 +308,7 @@ async def run_load(
         report.add('deployment_settings')
     await _load_project_rows(session, parsed, project_ids, config_ids, reducers, report)
     await _load_jobs(session, parsed, project_ids, report)
-    await _load_bulk(session, bundle, parsed, project_ids, report)
+    await _load_bulk(session, bundle, parsed, project_ids, report, reader)
     await direct_rows.set_projects_revision(session, parsed.global_data.projects_revision)
     # The events table is only the 24-hour UI feed, and the repositories' creates wrote some;
     # nothing a reader could resume from survives the upgrade (decision D-73).

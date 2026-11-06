@@ -151,7 +151,7 @@ class UpgradeRunner:
                 text(f'SET LOCAL idle_in_transaction_session_timeout = {IDLE_LIMIT}')
             )
             await session.execute(text(f'SET LOCAL statement_timeout = {IDLE_LIMIT}'))
-            loaded = await run_load(session, result.bundle, self.store, now=self.now())
+            loaded = await run_load(session, result.bundle, self.store, self.reader, now=self.now())
             ctx = steps.StepContext(
                 session=session,
                 parsed=loaded.parsed,

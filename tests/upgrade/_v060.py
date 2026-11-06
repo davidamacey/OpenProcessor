@@ -28,6 +28,7 @@ FIXTURE = Path(__file__).parent / 'fixtures' / 'v060'
 READ_CALLS = frozenset(
     {
         'get',
+        'mget',
         'search',
         'count',
         'tasks.get',
@@ -141,6 +142,20 @@ class FakeOpenSearch:
             for i in page
         ]
         return {'hits': {'hits': hits}}
+
+    async def mget(
+        self, index: str, body: dict[str, Any], _source_includes: list[str]
+    ) -> dict[str, Any]:
+        self.calls.append('mget')
+        docs = self.docs(index)
+        found = []
+        for doc_id in body['ids']:
+            if doc_id in docs:
+                source = {k: v for k, v in docs[doc_id].items() if k in _source_includes}
+                found.append({'_id': doc_id, 'found': True, '_source': copy.deepcopy(source)})
+            else:
+                found.append({'_id': doc_id, 'found': False})
+        return {'docs': found}
 
     async def count(self, index: str, body: dict[str, Any]) -> dict[str, int]:
         self.calls.append('count')

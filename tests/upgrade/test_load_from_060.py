@@ -265,3 +265,26 @@ async def test_the_upgrade_state_ends_completed_and_delete_sources_is_recorded(
 
 def test_the_runner_type_is_the_one_the_script_builds() -> None:
     assert UpgradeRunner.__name__ == 'UpgradeRunner'
+
+
+@pytest.mark.asyncio
+async def test_label_operation_members_load_the_state_the_operation_replaced(
+    make_runner, clean_db
+) -> None:
+    """Undo reads each member's prior from the member row: the class_id_history entry of that
+    operation, or JSON null where the item has none (pruned) or is gone."""
+    await make_runner().run()
+    members = dict(
+        rows(
+            clean_db,
+            'SELECT m.item_id, m.prior FROM label_operation_members m JOIN label_operations o ON o.id = m.op_id '
+            "WHERE o.params ->> 'legacy_op_id' = 'lop_20260105T101010000001_aaaaaa'",
+        )
+    )
+    assert members['c1']['op_id'] == 'lop_20260105T101010000001_aaaaaa'
+    assert (members['c1']['class_id'], members['c1']['restorable']) == (3, True)
+    assert members['c2'] is None  # the item has no entry of this operation
+    assert members['c3'] is None  # the item no longer exists
+    assert rows(clean_db, 'SELECT count(*) FROM label_operation_members WHERE prior IS NULL') == [
+        (0,)
+    ]  # JSON null, not SQL NULL

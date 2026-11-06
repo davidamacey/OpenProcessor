@@ -381,11 +381,11 @@ def install() -> None:
         kind: str
         status: str
         params: Any
-        member_count: int
-        job_id: uuid.UUID | None
         created_at: datetime
         created_by: str
-        undone_at: datetime | None
+        member_count: int = 0
+        job_id: uuid.UUID | None = None
+        undone_at: datetime | None = None
 
     @dataclass(frozen=True)
     class LabelOperationMemberLoad:

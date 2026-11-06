@@ -216,9 +216,17 @@ async def load_holdouts(
 
 
 async def load_label_op(
-    session: AsyncSession, project_id: uuid.UUID, op: LabelOpSrc, member_ids: Iterable[str]
+    session: AsyncSession,
+    project_id: uuid.UUID,
+    op: LabelOpSrc,
+    member_ids: Sequence[str],
+    priors: Mapping[str, Any],
 ) -> None:
-    """One operation and its members (the repository writes them in batches of 5,000, trap T-14)."""
+    """One operation and its members (the repository writes them in batches of 5,000, trap T-14).
+
+    ``priors`` maps an item id to the state the operation replaced (undo reads it from the member
+    row); an item with no entry loads ``None``, which undo keeps as changed.
+    """
     records = _repo('records')
     row = records.LabelOperationLoad(
         id=op.id,
@@ -226,13 +234,11 @@ async def load_label_op(
         kind=op.kind,
         status=op.status,
         params=op.params,
-        member_count=0,
-        job_id=None,
         created_at=op.created_at,
         created_by=op.created_by,
         undone_at=op.undone_at,
     )
-    members = (records.LabelOperationMemberLoad(item_id=i, prior={}) for i in member_ids)
+    members = (records.LabelOperationMemberLoad(item_id=i, prior=priors.get(i)) for i in member_ids)
     await records.load_label_operation(session, row, members)
 
 

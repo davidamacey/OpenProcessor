@@ -59,6 +59,16 @@ class ControlReader:
         clean = {k: v for k, v in index_settings.items() if k not in SYSTEM_SETTINGS}
         return dict(body.get('mappings', {})), {'index': clean}
 
+    async def get_field(self, name: str, ids: list[str], field: str) -> dict[str, Any]:
+        """``{id: value of field}`` for the documents of ``ids`` that exist and have the field
+        (one ``mget`` of that single ``_source`` field)."""
+        resp = await self._client.mget(index=name, body={'ids': ids}, _source_includes=[field])
+        return {
+            str(d['_id']): d['_source'][field]
+            for d in resp['docs']
+            if d.get('found') and field in (d.get('_source') or {})
+        }
+
     async def iter_docs(self, name: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         """Every document as ``(id, source)``, paged with ``search_after`` on ``_doc``."""
         after: list[Any] | None = None

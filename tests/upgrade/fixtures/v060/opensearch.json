@@ -1348,6 +1348,51 @@
  },
  "op_prj_demo__items": {
   "docs": {
+   "c1": {
+    "class_id": 0,
+    "class_id_history": [
+     {
+      "class_id": 1,
+      "op_id": "lop_20251201T000000000000_ffffff",
+      "restorable": true,
+      "writer": "labeler"
+     },
+     {
+      "class_id": 3,
+      "class_name": "Person",
+      "class_source": "detector",
+      "class_validated": false,
+      "op_id": "lop_20260105T101010000001_aaaaaa",
+      "restorable": true,
+      "writer": "labeler"
+     }
+    ],
+    "class_name": "car",
+    "crop_id": "c1",
+    "embedding_state": "embedded",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
+   "c2": {
+    "class_id": 0,
+    "class_id_history": [
+     {
+      "class_id": 1,
+      "op_id": "lop_20251201T000000000000_ffffff",
+      "restorable": true,
+      "writer": "labeler"
+     }
+    ],
+    "class_name": "car",
+    "crop_id": "c2",
+    "embedding_state": "embedded",
+    "pe_embedding": [
+     0.1,
+     0.2
+    ]
+   },
    "d1": {
     "class_id": 0,
     "class_name": "car",
