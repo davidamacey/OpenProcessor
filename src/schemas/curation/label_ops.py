@@ -66,7 +66,6 @@ class LabelOpUndoResponse(BaseModel):
     op_id: str
     dry_run: bool
     status: str
-    members_known: bool
     matched: int
     restored: int
     already_undone: int

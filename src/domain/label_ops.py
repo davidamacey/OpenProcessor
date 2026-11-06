@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.domain.history import find_undo_snapshot, op_write_undone
+from src.domain.history import op_write_undone
 from src.domain.ingest_class_sources import HUMAN_CLASS_SOURCE
 from src.utils.class_names import normalize_class_name
 
@@ -90,9 +90,14 @@ def undo_outcome(
     source: dict[str, Any] | None,
     fp: OpFingerprint,
     *,
+    prior: dict[str, Any] | None,
     registry_name: Callable[[int], str | None],
 ) -> UndoOutcome:
-    """What an undo of the operation does to one item. First matching rule wins."""
+    """What an undo of the operation does to one item. First matching rule wins.
+
+    ``prior`` is the item's state before the operation, as recorded in
+    ``label_operation_members.prior``; an item with none recorded is kept.
+    """
     if source is None:
         return UndoOutcome.KEPT_CHANGED
     history = source.get('class_id_history')
@@ -102,15 +107,14 @@ def undo_outcome(
         return UndoOutcome.KEPT_CHANGED
     if source.get('test_holdout'):
         return UndoOutcome.KEPT_HOLDOUT
-    snap = find_undo_snapshot(history)
-    if snap is None or snap.get('op_id') != fp.op_id or snap.get('writer') != fp.writer:
+    if prior is None:
         return UndoOutcome.KEPT_CHANGED
     if _excluded_after(source, fp) or not _matches_fingerprint(source, fp):
         return UndoOutcome.KEPT_CHANGED
-    restore_id = snap.get('class_id')
+    restore_id = prior.get('class_id')
     if restore_id is not None and normalize_class_name(
         registry_name(int(restore_id)) or ''
-    ) != normalize_class_name(snap.get('class_name') or ''):
+    ) != normalize_class_name(prior.get('class_name') or ''):
         return UndoOutcome.KEPT_STALE_CLASS
     return UndoOutcome.RESTORE
 

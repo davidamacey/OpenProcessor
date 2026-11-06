@@ -35,7 +35,6 @@ function undoResult(
     op_id: 'a',
     dry_run: dry,
     status: 'written',
-    members_known: true,
     matched: 10,
     restored: 8,
     already_undone: 0,

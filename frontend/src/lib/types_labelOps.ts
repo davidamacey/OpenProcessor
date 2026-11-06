@@ -62,7 +62,6 @@ export interface LabelOpUndoResponse {
   op_id: string;
   dry_run: boolean;
   status: string;
-  members_known: boolean;
   matched: number;
   restored: number;
   already_undone: number;

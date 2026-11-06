@@ -99,12 +99,6 @@
       <h3 class="font-medium">
         {r.dry_run ? 'Dry run: nothing has been written' : 'Undo finished'}
       </h3>
-      {#if !r.members_known}
-        <p class="mt-1 text-xs text-amber-300">
-          The members of this operation are not recorded, so the counts below are
-          incomplete.
-        </p>
-      {/if}
       <p class="mt-1 text-xs text-zinc-400">
         Matched <span class="font-mono" data-testid="label-op-matched">{r.matched}</span> items.
       </p>

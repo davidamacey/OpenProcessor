@@ -69,7 +69,6 @@ const CASES: [string, string[]][] = [
       op_id: true,
       dry_run: true,
       status: true,
-      members_known: true,
       matched: true,
       restored: true,
       already_undone: true,

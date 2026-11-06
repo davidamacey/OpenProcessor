@@ -25,15 +25,19 @@ pytest_plugins = ['_records_world']
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world')]
 
 
-def _members(op_id: str) -> list[str]:
+def _members(op_id: str) -> dict[str, Any]:
+    """The recorded members of an operation with the state each one had before it."""
     import asyncio
 
     from src.services.curation.label_ops import store
 
-    async def read() -> list[str] | None:
-        return await store.read_members(await store.read_op(op_id))
+    async def read() -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        async for page in store.member_pages(await store.read_op(op_id)):
+            out.update({m.item_id: m.prior for m in page})
+        return out
 
-    return asyncio.run(read()) or []
+    return asyncio.run(read())
 
 
 def _env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, n: int = 6) -> OpsEnv:
@@ -64,8 +68,10 @@ def test_batch_label_returns_an_op_id_and_tags_every_written_item(
         0,
         3,
     )
-    assert record['members_recorded'] is True
-    assert sorted(_members(op_id)) == ['c0', 'c1', 'c2']
+    members = _members(op_id)
+    assert sorted(members) == ['c0', 'c1', 'c2']
+    assert all(p['op_id'] == op_id and p['restorable'] is True for p in members.values())
+    assert members['c0']['class_validated'] is False, 'the state the label replaced'
 
 
 def test_dry_run_and_empty_selection_record_nothing(

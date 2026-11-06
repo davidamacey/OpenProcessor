@@ -15661,10 +15661,6 @@
             "title": "Matched",
             "type": "integer"
           },
-          "members_known": {
-            "title": "Members Known",
-            "type": "boolean"
-          },
           "op_id": {
             "title": "Op Id",
             "type": "string"
@@ -15682,7 +15678,6 @@
           "op_id",
           "dry_run",
           "status",
-          "members_known",
           "matched",
           "restored",
           "already_undone",

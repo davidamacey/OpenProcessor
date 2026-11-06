@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -19,6 +19,7 @@ from src.clients.job_lease import is_live
 from src.config.project_context import current_project, current_project_id
 from src.core.logging import get_logger
 from src.db.repos.records import (
+    MEMBER_BATCH,
     LabelOperationMemberLoad,
     LabelOperationRow,
     add_label_operation_members,
@@ -42,6 +43,9 @@ from src.domain.label_ops import (
 from src.services.rejections import rejection
 from src.utils.timeutil import now_iso
 
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Iterable
 
 logger = get_logger(__name__)
 
@@ -74,7 +78,6 @@ class LabelOpRecord(BaseModel):
     conflicts: int | None = None
     fingerprint: OpFingerprint
     status: StoredStatus = 'writing'
-    members_recorded: bool = False
     undo_passes: list[dict[str, Any]] = []
 
 
@@ -194,30 +197,27 @@ async def list_ops(*, limit: int, after: str | None = None) -> list[LabelOpRecor
     return [r for r in map(_record, rows) if r is not None]
 
 
-async def write_members(record: LabelOpRecord, ids: list[str]) -> None:
-    """Record the ids the operation wrote and mark them known on ``record`` (saved by the caller)."""
+async def write_members(record: LabelOpRecord, members: Iterable[tuple[str, Any]]) -> None:
+    """Record the items the operation wrote, each with its state before the write (``prior``)."""
     async with async_session_factory()() as session, project_tx(session, current_project_id()):
         await add_label_operation_members(
             session,
             parse_op_id(record.op_id),
-            (LabelOperationMemberLoad(item_id=i, prior={}) for i in ids),
+            (LabelOperationMemberLoad(item_id=i, prior=p) for i, p in members),
         )
-    record.members_recorded = True
 
 
-async def read_members(record: LabelOpRecord) -> list[str] | None:
-    """The ids the operation wrote, or ``None`` when they were never recorded (a crash between
-    the write and the record): the caller then finds them through the ``label_op_id`` tag."""
-    if not record.members_recorded:
-        return None
+async def member_pages(record: LabelOpRecord) -> AsyncIterator[list[LabelOperationMemberLoad]]:
+    """The operation's members with their prior state, in pages of :data:`MEMBER_BATCH`."""
     key = parse_op_id(record.op_id)
-    ids: list[str] = []
     after: str | None = None
-    async with async_session_factory()() as session, project_tx(session, current_project_id()):
-        while page := await label_operation_members(session, key, after=after):
-            ids.extend(m.item_id for m in page)
-            after = page[-1].item_id
-    return ids
+    while True:
+        async with async_session_factory()() as session, project_tx(session, current_project_id()):
+            page = await label_operation_members(session, key, after=after, limit=MEMBER_BATCH)
+        if not page:
+            return
+        yield page
+        after = page[-1].item_id
 
 
 async def served_status(opensearch: Any, record: LabelOpRecord) -> ServedStatus:
@@ -242,8 +242,8 @@ __all__ = [
     'StoredStatus',
     'create_op',
     'list_ops',
+    'member_pages',
     'parse_op_id',
-    'read_members',
     'read_op',
     'save_op',
     'served_status',

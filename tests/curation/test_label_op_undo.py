@@ -83,7 +83,6 @@ def test_exact_restore_of_a_12000_item_selection_op(
     body = _undo_ok(env, op['op_id'])
     assert body['restored'] == 12_000
     assert body['kept_changed'] == body['conflicts'] == 0
-    assert body['members_known'] is True
     after = {k: _state(v) for k, v in env.docs().items()}
     assert after == before, 'every item is back exactly, audit verdict included'
 
@@ -325,10 +324,8 @@ def test_undo_while_writing_is_409_and_an_interrupted_op_is_undoable(
     assert listed['count'] is None
     assert listed['current'] == OCC_BULK_PAGE_SIZE
     assert listed['undoable'] is True
-    assert big.record(listed['op_id'])['members_recorded'] is False
 
     body = _undo_ok(big, listed['op_id'])
-    assert body['members_known'] is False
     assert body['restored'] == OCC_BULK_PAGE_SIZE
     assert all(not d.get('class_validated') for d in big.docs().values())
 
@@ -394,3 +391,39 @@ def test_the_op_record_survives_and_holds_the_passes(
     assert record['undo_passes'][0]['restored'] == 2
     (listed,) = env.list_ops().json()['items']
     assert listed['status'] == 'undone'
+
+
+def test_undo_restores_from_the_members_table_not_the_item_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The state each item had before the operation is recorded with its member row, so an
+    item whose own history was lost (a cleared or capped stack) is still put back."""
+    env = _env(monkeypatch, tmp_path)
+    before = {k: _state(v) for k, v in env.docs().items()}
+    op = env.label('widget', crop_ids=_ids(0, 1, 2))
+    for crop_id in _ids(0, 1, 2):
+        env.docs()[crop_id]['class_id_history'] = []
+
+    body = _undo_ok(env, op['op_id'])
+
+    assert (body['restored'], body['kept_changed']) == (3, 0)
+    for crop_id in _ids(0, 1, 2):
+        assert _state(env.docs()[crop_id]) == before[crop_id]
+
+
+def test_undo_still_keeps_an_item_a_person_labelled_after_the_op_even_with_no_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path)
+    op = env.label('widget', crop_ids=_ids(0, 1))
+    edit = env.client.put(
+        f'{env.prefix}/crops/{_ids(0)[0]}/label', json={'class_id': env.class_ids['gizmo']}
+    )
+    assert edit.status_code == 200
+    for crop_id in _ids(0, 1):
+        env.docs()[crop_id]['class_id_history'] = []
+
+    body = _undo_ok(env, op['op_id'])
+
+    assert (body['restored'], body['kept_changed']) == (1, 1)
+    assert env.docs()[_ids(0)[0]]['class_name'] == 'gizmo'
