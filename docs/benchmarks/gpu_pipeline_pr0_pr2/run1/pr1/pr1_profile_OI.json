@@ -1,0 +1,86 @@
+{
+ "arms": {
+  "control": {
+   "busy_share": 0.07596527487682085,
+   "decoded_images": 256,
+   "gpu_kernel_ms_per_image": 0.11274203515625,
+   "gpu_memcpy_ms_per_image": 0.0503398984375
+  },
+  "dali:0:64": {
+   "busy_share": 0.08921653860879507,
+   "decoded_images": 256,
+   "gpu_kernel_ms_per_image": 0.1120417109375,
+   "gpu_memcpy_ms_per_image": 0.05055243359375
+  },
+  "dali:default:64": {
+   "busy_share": 0.01850676330976106,
+   "decoded_images": 256,
+   "gpu_kernel_ms_per_image": 0.02309890234375,
+   "gpu_memcpy_ms_per_image": 0.2508294765625
+  },
+  "nvimgcodec:hybrid:1": {
+   "busy_share": 0.0038116517742665472,
+   "decoded_images": 256,
+   "gpu_kernel_ms_per_image": 0.021158859375,
+   "gpu_memcpy_ms_per_image": 0.24680434765625
+  },
+  "nvimgcodec:hybrid:64": {
+   "busy_share": 0.010969915035245395,
+   "decoded_images": 256,
+   "gpu_kernel_ms_per_image": 0.0241780078125,
+   "gpu_memcpy_ms_per_image": 0.25277398828125
+  },
+  "nvimgcodec:hybrid:8": {
+   "busy_share": 0.005204407458386019,
+   "decoded_images": 256,
+   "gpu_kernel_ms_per_image": 0.02333484765625,
+   "gpu_memcpy_ms_per_image": 0.25312358984375
+  }
+ },
+ "environment": {
+  "commit": "13dd96e59051ef1da86cd7d355a7b52f7f0284e6",
+  "compute_processes_at_start": 0,
+  "cuda_visible_devices": "0",
+  "gpu": "NVIDIA RTX A6000, GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5, 620.70.06, 2100 MHz, 300.00 W, 49140 MiB",
+  "host_load_1m": 26.99609375,
+  "packages": {
+   "PyYAML": "6.0.3",
+   "Pygments": "2.21.0",
+   "astunparse": "1.6.3",
+   "cupy-cuda13x": "13.6.0",
+   "cvcuda-cu13": "0.19.0",
+   "fastrlock": "0.8.4",
+   "gast": "0.7.0",
+   "iniconfig": "2.3.1",
+   "libcst": "1.9.0",
+   "makefun": "1.16.0",
+   "numpy": "2.5.4",
+   "nvidia-dali-cuda130": "2.4.0",
+   "nvidia-libnvcomp-cu13": "5.3.0.16",
+   "nvidia-ml-py": "13.615.71",
+   "nvidia-nvimgcodec-cu13": "0.9.0.20",
+   "nvidia-nvjpeg": "13.3.2.43",
+   "nvidia-nvjpeg2k-cu13": "0.12.0.58",
+   "nvidia-nvtiff-cu13": "0.9.0.86",
+   "nvtx": "0.2.17",
+   "opencv-python-headless": "4.13.0.92",
+   "optree": "0.20.0",
+   "packaging": "26.3",
+   "pillow": "13.0.0",
+   "pip": "24.0",
+   "pluggy": "1.7.0",
+   "pytest": "9.2.0",
+   "simplejpeg": "1.9.0",
+   "six": "1.17.0",
+   "tensorrt_cu13": "11.1.0.106",
+   "tensorrt_cu13_bindings": "11.1.0.106",
+   "tensorrt_cu13_libs": "11.1.0.106",
+   "typing_extensions": "4.16.0",
+   "wheel": "0.48.0"
+  },
+  "python": "3.12.3",
+  "time_utc": "2026-11-06T04:16:32Z"
+ },
+ "set": "OI",
+ "tier": 1
+}
