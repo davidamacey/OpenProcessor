@@ -30,12 +30,13 @@ _cp_ensure_file() {
     chmod 600 "$file"
 }
 
-# ensure_control_plane_secrets ROOT -> secrets/{postgres,valkey,flower} under ROOT
+# ensure_control_plane_secrets ROOT -> secrets/{postgres,valkey,flower} under ROOT (and the empty
+# secrets/vlm directory, so Docker never creates it root-owned)
 ensure_control_plane_secrets() {
     local root="${1:-.}" sdir pw
     sdir="$root/secrets"
-    ( umask 077; mkdir -p "$sdir/postgres" "$sdir/valkey" "$sdir/flower" ) || return 1
-    chmod 700 "$sdir" "$sdir/postgres" "$sdir/valkey" "$sdir/flower"
+    ( umask 077; mkdir -p "$sdir/vlm" "$sdir/postgres" "$sdir/valkey" "$sdir/flower" ) || return 1
+    chmod 700 "$sdir" "$sdir/vlm" "$sdir/postgres" "$sdir/valkey" "$sdir/flower"
     local name
     for name in super_password owner_password app_password; do
         _cp_ensure_file "$sdir/postgres/$name" || return 1

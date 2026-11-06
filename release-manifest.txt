@@ -15,6 +15,7 @@ scripts/lib/config.sh
 scripts/lib/env_generator.sh
 scripts/lib/config_models.sh
 scripts/lib/cli_core.sh
+scripts/lib/cli_db.sh
 scripts/lib/cli_dev.sh
 scripts/lib/cli_gpu.sh
 scripts/lib/download.sh

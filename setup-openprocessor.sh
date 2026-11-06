@@ -560,6 +560,7 @@ _place_file() { cp -p "$1" "$2.op-new" && mv -f "$2.op-new" "$2"; }
 # backups/<UTC timestamp>/ and prints that directory
 backup_install() {
     local ts dest rel
+    [[ "${OP_DRY_RUN:-0}" == 1 || -z "$(dc ps -q postgres 2>/dev/null)" ]] || "${OP_DIR}/openprocessor" db backup >&2 || return 1
     ts="$(date -u +%Y%m%dT%H%M%SZ)"
     dest="${OP_DIR}/backups/${ts}"
     mkdir -p "$dest"
@@ -2639,7 +2640,6 @@ do_install() {
     source "${OP_DIR}/scripts/lib/registry_migration.sh"
     refuse_retired_env "$ENV_FILE"
 
-    # .env: created at mode 600 from env.template, or only the keys new in the template are added
     _env_msg="$(env_generate "${OP_DIR}/env.template" "$ENV_FILE")" || die "could not create ${ENV_FILE}"
     [[ -z "$_env_msg" ]] || log_info "$_env_msg"
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
@@ -2844,7 +2844,6 @@ YAML
     fi
 
     local d
-    ( umask 077; mkdir -p "${OP_DIR}/secrets/vlm" )  # else Docker creates it root-owned
     ensure_control_plane_secrets "$OP_DIR" || die "could not create the control-plane secrets under ${OP_DIR}/secrets"
     for d in models pytorch_models data data/samples data/source cache cache/huggingface cache/vllm; do
         mkdir -p "${OP_DIR}/${d}"
