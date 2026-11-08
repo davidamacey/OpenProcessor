@@ -109,7 +109,6 @@ ErrorCode = Literal[
     'dataset_changed',
     'import_not_resumable',
     'import_not_undoable',
-    'reprocess_busy',
     'upload_too_large',
     'dataset_path_not_allowed',
     'format_undetected',
