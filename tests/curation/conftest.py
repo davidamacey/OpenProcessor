@@ -212,3 +212,14 @@ def _ingest_test_detector_labels(monkeypatch: pytest.MonkeyPatch) -> None:
         return {0: 'gadget', 1: 'widget'} if model_name == 'primary_end2end' else real(model_name)
 
     monkeypatch.setattr(ingest_profiles, 'get_class_names', names_for)
+
+
+@pytest.fixture(autouse=True)
+def _no_active_bakeoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The GPU arbiter reads bake-off jobs from PostgreSQL; these tests have no database."""
+    from src.services.training import gpu_arbiter
+
+    async def _none() -> bool:
+        return False
+
+    monkeypatch.setattr(gpu_arbiter, '_bakeoff_holds_gpus', _none)

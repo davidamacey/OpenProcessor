@@ -1,33 +1,17 @@
-"""Every jobs dir the global GPU arbiter must watch (projects_plan.md §5.3).
+"""Every training jobs dir the global GPU arbiter must watch (projects_plan.md §5.3).
 
-The arbiter is one process-global loop, but training and bake-off jobs are
-written into the bound project's own dirs, so its active-run scans need
-the union over every active and archived project.
+The arbiter is one process-global loop, but training jobs are written into the
+bound project's own dir, so its active-run scan needs the union over every
+active and archived project.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from src.config import get_gpu_arbiter_config
+from typing import TYPE_CHECKING
 
 
-def all_bakeoff_jobs_dirs() -> list[Path]:
-    """``GpuArbiterConfig.bakeoff_jobs_dir`` plus every active/archived
-    project's own ``bakeoff_jobs_dir`` (``default`` included), deduplicated.
-    Reads the registry's in-process snapshot; no I/O."""
-    from src.services.projects.registry import get_project_registry
-
-    dirs: list[Path] = []
-    configured = get_gpu_arbiter_config().bakeoff_jobs_dir
-    if configured:
-        dirs.append(Path(configured))
-    for record in get_project_registry().snapshot().values():
-        if record.status in ('active', 'archived'):
-            candidate = Path(record.resources.bakeoff_jobs_dir)
-            if candidate not in dirs:
-                dirs.append(candidate)
-    return dirs
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _resolve_train_jobs_dir() -> Path:
@@ -61,4 +45,4 @@ def all_train_jobs_dirs() -> dict[str, Path]:
     return dirs
 
 
-__all__ = ['all_bakeoff_jobs_dirs', 'all_train_jobs_dirs']
+__all__ = ['all_train_jobs_dirs']

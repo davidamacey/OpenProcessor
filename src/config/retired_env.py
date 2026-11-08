@@ -67,6 +67,7 @@ RETIRED_ENV: dict[str, str] = {
     'OP_GLOBAL_CONFIGS_INDEX': f'{_REMOVED} the endpoint registry is stored in PostgreSQL',
     # The project records are PostgreSQL rows, not an OpenSearch index.
     'OP_PROJECTS_INDEX': f'{_REMOVED} projects are rows in PostgreSQL; there is no projects index',
+    'OP_BAKEOFF_JOBS_DIR': f'{_REMOVED} bake-offs are bakeoff jobs; there is no job directory',
 }
 
 

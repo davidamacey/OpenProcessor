@@ -41,11 +41,13 @@ from __future__ import annotations
 import dataclasses
 import json
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.config import get_gpu_arbiter_config
 from src.core.logging import get_logger
-from src.services.training.arbiter_dirs import all_bakeoff_jobs_dirs, all_train_jobs_dirs
+from src.db.repos import bakeoff as bakeoff_repo
+from src.db.session import async_session_factory, deployment_tx
+from src.services.training.arbiter_dirs import all_train_jobs_dirs
 from src.services.training.gpu_arbiter_docker import start_gpu_services, stop_gpu_services
 from src.services.training.gpu_arbiter_policy import (
     ArbiterAction,
@@ -58,6 +60,10 @@ from src.services.training.gpu_arbiter_policy import (
     sentinel_path,
     set_training_lock,
 )
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 logger = get_logger(__name__)
@@ -88,23 +94,16 @@ TRAINER_TERMINAL_STATES = frozenset({'finished', 'failed', 'cancelled', 'skipped
 LOCK_GRACE_SECONDS = 90.0
 
 
-def bakeoff_active(*, jobs_dir: Path | None = None) -> bool:
-    """True if a bake-off job is queued or running (job.json still present).
-
-    ``jobs_dir`` scans only that dir. By default every dir a bake-off can
-    be queued in is scanned (:func:`all_bakeoff_jobs_dirs`): the arbiter is
-    global, but the bake-off router writes into the bound project's own
-    ``bakeoff_jobs_dir`` (projects_plan.md §5.3). A missing dir means
-    nothing queued.
-    """
-    targets = [Path(jobs_dir)] if jobs_dir is not None else all_bakeoff_jobs_dirs()
-    for target in targets:
-        try:
-            if any(target.glob('*.job.json')):
-                return True
-        except OSError:
-            continue
-    return False
+async def _bakeoff_holds_gpus() -> bool:
+    """True while any project has a bake-off job queued, running, paused or cancelling."""
+    async with (
+        async_session_factory()() as session,
+        deployment_tx(
+            session, "the GPU arbiter is global: any project's bake-off keeps the GPUs claimed"
+        ),
+    ):
+        found = await session.run_sync(bakeoff_repo.active_bakeoffs)
+    return bool(found)
 
 
 # ---- top-level dispatch ------------------------------------------------
@@ -290,7 +289,7 @@ async def reconcile_on_startup(
     # A queued bake-off claims every configured container unless
     # OP_BAKEOFF_HOST_GPUS scopes it to the evaluator's host GPUs (then
     # only an intersecting container stays stopped).
-    if bakeoff_active():
+    if await _bakeoff_holds_gpus():
         active_stems.add('__bakeoff__')
         scope = get_gpu_arbiter_config().bakeoff_host_gpus
         stop_names.update(containers_to_stop(scope) if scope else all_configured)
@@ -312,7 +311,6 @@ __all__ = [
     'HEALTH_WAIT_SECONDS',
     'LOCK_GRACE_SECONDS',
     'TRAINER_TERMINAL_STATES',
-    'bakeoff_active',
     'claim_gpus_for_training',
     'reconcile_on_startup',
     'release_gpus_after_training',
