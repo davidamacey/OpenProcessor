@@ -1,74 +1,51 @@
-"""The import job: claim, run in chunks, resume, cancel.
+"""The import loop: seed the ledger, claim pending images in chunks, import them, report.
 
-Runs in-process as an ``asyncio.Task`` in one ``api`` worker; every
-fact another process needs lives on disk (:mod:`.store`), so status, cancel
-and resume work from whichever worker a request lands on.
+The loop runs inside the ``dataset_import`` job (:mod:`.job`). Its position is the ledger: a
+chunk is the next pending images in scan order, so a run that was interrupted, failed or
+cancelled continues with what is still ``pending`` (an image the dead run had begun carries its
+write-ahead row, which keeps ``created`` vs ``updated`` truthful across the re-run).
 
-A resume consumes what the START persisted: the resolved mapping with its
-real class ids and the pinned region profile. It never re-resolves them
-against the registry or config store of the resuming process.
+A resume consumes what the START persisted: the resolved mapping with its real class ids and the
+pinned region profile. It never re-resolves them against the registry or config store of the
+process that resumes.
 """
 
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+import math
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Protocol
 
-from src.config.project_context import ensure_marked_dir
 from src.core.logging import get_logger
-from src.domain.job_lease import LeaseKind
 from src.services.curation.dataset_import import limits
-from src.services.curation.dataset_import.actions import resume_blocker, undo_blocker
 from src.services.curation.dataset_import.chunk import import_chunk
-from src.services.curation.dataset_import.holdout_record import mark_freeze_undone
 from src.services.curation.dataset_import.prepare import (
     PinnedProfile,
     PreparedImport,
     mapping_from_dict,
     mapping_to_dict,
-    materialize_created_classes,
 )
-from src.services.curation.dataset_import.report import ImportReport
 from src.services.curation.dataset_import.scan import ScanEntry, scan_dataset, source_sha
-from src.services.curation.dataset_import.store import (
-    ACTIVE_STATUSES,
-    COMPLETED_STATUSES,
-    RESUMABLE_STATUSES,
-    ImportStore,
-    active_import,
-    imports_root,
-    latest_with_key,
-    new_import_id,
-    open_store,
-)
-from src.services.curation.dataset_import.undo import UndoContext, undo_import
-from src.services.curation.lease_heartbeat import acquire_heartbeat, hold, run_leased, take
-from src.services.curation.next_steps import cluster_regions
-from src.utils.timeutil import now_iso
+from src.services.curation.dataset_import.status import BACKPRESSURE_STAGE
 
 
 if TYPE_CHECKING:
-    from src.services.classes.registry import ClassRegistry
+    from collections.abc import Mapping
+
     from src.services.curation.dataset_import.context import ImportContext
     from src.services.curation.dataset_import.options import DatasetImportRequest
     from src.services.curation.dataset_import.paths import PathGuard
+    from src.services.curation.dataset_import.report import ImportReport
 
 logger = get_logger(__name__)
 
 _SPLIT_ORDER = {'train': 0, 'val': 1, 'test': 2}
-_tasks: dict[str, asyncio.Task[None]] = {}
 
 
 class ImportBusyError(Exception):
     def __init__(self, import_id: str | None) -> None:
         super().__init__(f'an import is already running: {import_id}')
-        self.import_id = import_id
-
-
-class ImportResumableError(Exception):
-    def __init__(self, import_id: str) -> None:
-        super().__init__(f'import {import_id} can be resumed')
         self.import_id = import_id
 
 
@@ -84,130 +61,38 @@ class DatasetChangedError(Exception):
     pass
 
 
+class RunControl(Protocol):
+    """The slice of the job context the loop uses."""
+
+    def cancelled(self) -> bool: ...
+
+    async def progress(
+        self,
+        done: int,
+        total: int | None = None,
+        stage: str | None = None,
+        counters: Mapping[str, Any] | None = None,
+        *,
+        force: bool = False,
+    ) -> None: ...
+
+
+@dataclass
+class ImportOutcome:
+    report: ImportReport
+    cancelled: bool = False
+    error: str | None = None
+    failed_chunks: list[int] = field(default_factory=list)
+    issues: list[dict[str, Any]] = field(default_factory=list)
+
+
 def ordered_entries(entries: list[ScanEntry]) -> list[ScanEntry]:
     """Chunk order: split, then relative path. Stable across restarts."""
     return sorted(entries, key=lambda e: (_SPLIT_ORDER.get(e.split or '', 3), e.rel_path))
 
 
-def chunked(entries: list[ScanEntry]) -> list[list[ScanEntry]]:
-    size = limits.import_chunk_size()
-    return [entries[i : i + size] for i in range(0, len(entries), size)]
-
-
-# ------------------------------------------------------------------ claiming
-
-
-def reusable_prior(prepared: PreparedImport) -> tuple[ImportStore, str] | None:
-    """``(store, status)`` of an earlier import of this same request, by its
-    key (or by ``reuse_key`` when its created classes now exist)."""
-    for key in (prepared.import_key, prepared.reuse_key):
-        if key is None:
-            continue
-        previous = latest_with_key(key)
-        if previous is not None:
-            return previous, previous.job.read().get('status', '')
-    return None
-
-
-async def _lease(opensearch: Any, store: ImportStore, *, start: bool) -> None:
-    """Take the project's ``dataset_import`` lease for ``store`` (a start, a resume and an
-    undo exclude each other) and remember it for :func:`spawn` / :func:`spawn_undo`."""
-    beat = await acquire_heartbeat(
-        opensearch,
-        LeaseKind.DATASET_IMPORT,
-        None,
-        store.import_id,
-        job=store.job,
-        busy=ImportBusyError,
-    )
-    hold(store.import_id, beat)
-    if start:
-        beat.start()
-
-
-async def abandon_claim(opensearch: Any, store: ImportStore) -> None:
-    """Give back the lease of a claim whose run will not start."""
-    await take(store.import_id).release(opensearch)
-
-
-async def claim_import(
-    opensearch: Any, request: DatasetImportRequest, prepared: PreparedImport
-) -> tuple[ImportStore, bool]:
-    """Claim a new import (or return the completed one) under the project lease.
-
-    Returns ``(store, reused)``. Raises :class:`ImportBusyError` while any
-    import of the project is live and :class:`ImportResumableError` when the
-    same key has an interrupted/failed/cancelled run.
-    """
-    root = ensure_marked_dir(imports_root())
-    live = active_import()
-    if live is not None:
-        raise ImportBusyError(live.import_id)
-    previous = latest_with_key(prepared.import_key)
-    if previous is not None:
-        status = previous.job.read().get('status')
-        if status in COMPLETED_STATUSES:
-            return previous, True
-        if status in RESUMABLE_STATUSES:
-            raise ImportResumableError(previous.import_id)
-    store = ImportStore(root / new_import_id(prepared.import_key))
-    await _lease(opensearch, store, start=False)
-    store.write_request(request.model_dump(mode='json'))
-    store.job.write(
-        {
-            'import_id': store.import_id,
-            'import_key': prepared.import_key,
-            'project': prepared.view.project,
-            'name': request.options.name,
-            'status': 'queued',
-            'mode': 'import',
-            'source_sha': prepared.source_sha,
-            'source_format': prepared.scan.format,
-            'source_root': str(prepared.scan.root),
-            'started_at': now_iso(),
-            'updated_at': now_iso(),
-        }
-    )
-    store.job.touch_heartbeat()
-    return store, False
-
-
-# ----------------------------------------------------------------- execution
-
-
-def persist_scan_summary(
-    store: ImportStore, prepared: PreparedImport, issues: list[dict[str, Any]]
-) -> None:
-    """Store the scan totals and ``issues``, the wire issues the job serves as
-    ``issues_summary`` (the same shape the preview serves)."""
-    entries = prepared.scan.entries
-    store.write_scan(
-        {
-            'images_total': len(entries),
-            'chunks_total': len(chunked(entries)),
-            'source_sha': prepared.source_sha,
-            'boxes': sum(len(e.boxes) for e in entries),
-            'issues': issues,
-        }
-    )
-
-
-def persist_pinned(store: ImportStore, prepared: PreparedImport) -> None:
-    store.write_mapping(
-        {
-            **mapping_to_dict(prepared.resolved),
-            'profile': prepared.view.profile.to_dict() if prepared.view.profile else None,
-            'parents': prepared.parents,
-        }
-    )
-    op = prepared.scan.op_export
-    if op is not None:
-        store.job.update(
-            test_split={
-                'test_label_sha': op.test_frozen.test_label_sha,
-                'source_frozen_test_sha': op.frozen_test_sha,
-            }
-        )
+def chunks_total(images: int) -> int:
+    return math.ceil(images / limits.import_chunk_size())
 
 
 def freeze_default(prepared: PreparedImport, request: DatasetImportRequest) -> bool:
@@ -218,7 +103,65 @@ def freeze_default(prepared: PreparedImport, request: DatasetImportRequest) -> b
     return bool(getattr(op, 'freeze_test_split_default', False))
 
 
-async def _backpressure(ctx: ImportContext, store: ImportStore) -> None:
+def scan_document(
+    prepared: PreparedImport,
+    request: DatasetImportRequest,
+    issues: list[dict[str, Any]],
+    *,
+    freeze_test: bool,
+) -> dict[str, Any]:
+    """The scan summary and the run facts a worker reads back (``dataset_imports.scan``)."""
+    entries = prepared.scan.entries
+    document: dict[str, Any] = {
+        'images_total': len(entries),
+        'source_sha': prepared.source_sha,
+        'boxes': sum(len(e.boxes) for e in entries),
+        'issues': issues,
+        'import_key': prepared.import_key,
+        'reuse_key': prepared.reuse_key,
+        'name': request.options.name,
+        'source_format': prepared.scan.format,
+        'source_root': str(prepared.scan.root),
+        'freeze_test': freeze_test,
+    }
+    op = prepared.scan.op_export
+    if op is not None:
+        document['test_split'] = {
+            'test_label_sha': op.test_frozen.test_label_sha,
+            'source_frozen_test_sha': op.frozen_test_sha,
+        }
+    return document
+
+
+def pinned_mapping(prepared: PreparedImport) -> dict[str, Any]:
+    return {
+        **mapping_to_dict(prepared.resolved),
+        'profile': prepared.view.profile.to_dict() if prepared.view.profile else None,
+        'parents': prepared.parents,
+    }
+
+
+def load_pinned(raw: dict[str, Any]) -> tuple[Any, PinnedProfile | None, str]:
+    return (
+        mapping_from_dict(raw),
+        PinnedProfile.from_dict(raw.get('profile')),
+        raw.get('parents', 'labels'),
+    )
+
+
+def rescan(
+    request: DatasetImportRequest, expected_sha: str | None, *, path_guard: PathGuard
+) -> list[ScanEntry]:
+    """Scan the dataset again and refuse to go on when it changed since the start."""
+    scan = scan_dataset(
+        request.source, path_guard=path_guard, missing_label=request.options.missing_label
+    )
+    if source_sha(scan) != expected_sha:
+        raise DatasetChangedError(expected_sha)
+    return ordered_entries(scan.entries)
+
+
+async def _backpressure(ctx: ImportContext, job: RunControl, done: int, total: int) -> None:
     """Pause while the region worker is behind (propose / detected parents)."""
     if not ctx.uses_detector or ctx.profile is None:
         return
@@ -226,7 +169,8 @@ async def _backpressure(ctx: ImportContext, store: ImportStore) -> None:
     from src.services.curation.region_drain import region_drain_poll_interval_s
 
     fields = ctx.region_fields
-    while True:
+    waiting = False
+    while not job.cancelled():
         resp = await ctx.opensearch.count(
             index=ctx.items_index,
             body={
@@ -242,283 +186,91 @@ async def _backpressure(ctx: ImportContext, store: ImportStore) -> None:
         )
         if int(resp.get('count', 0)) <= limits.import_max_pending():
             break
-        store.job.update(status='paused_backpressure', waiting_for='region_worker')
-        if store.job.cancel_requested():
-            return
+        waiting = True
+        await job.progress(done, total, BACKPRESSURE_STAGE, force=True)
         await asyncio.sleep(region_drain_poll_interval_s())
-    store.job.update(status='running', waiting_for=None)
+    if waiting:
+        await job.progress(done, total, 'running', force=True)
 
 
-async def run_import_job(ctx: ImportContext, store: ImportStore, entries: list[ScanEntry]) -> None:
-    """Run every chunk not yet recorded in ``chunks_done.jsonl``."""
-    job = store.job
-    chunks = chunked(entries)
-    done = store.chunks_done()
-    report = ImportReport()
-    for r in done.values():
-        report.add(ImportReport.from_dict(r))
-    job.update(
-        status='running',
-        images_total=len(entries),
-        chunks_total=len(chunks),
-        chunks_done=len(done),
-        report=report.to_dict(),
-        waiting_for=None,
-    )
-    job.touch_heartbeat()
+def _counters(report: ImportReport, *, chunks: int, total: int, rate: float) -> dict[str, Any]:
+    return {
+        'images_done': report.images_created + report.images_reused,
+        'images_failed': report.images_failed,
+        'images_skipped': report.images_skipped,
+        'chunks_done': chunks,
+        'chunks_total': chunks_total(total),
+        'images_per_s': rate,
+    }
+
+
+async def run_import_job(
+    job: RunControl, ctx: ImportContext, entries: list[ScanEntry]
+) -> ImportOutcome:
+    """Import every image still ``pending`` in the ledger, a chunk at a time."""
+    ledger = ctx.ledger
+    by_key = {e.rel_path: e for e in entries}
+    await ledger.seed(entries)
+    report, done = await ledger.finished_report()
+    total = len(entries)
+    size = limits.import_chunk_size()
+    outcome = ImportOutcome(report)
+    chunks_done = done // size
     consecutive_failures = 0
-    failed_chunks: list[int] = []
+    last = -1
     started = asyncio.get_running_loop().time()
-    for idx, chunk_entries in enumerate(chunks):
-        if idx in done:
-            continue
-        if job.cancel_requested():
-            job.update(status='cancelled', finished_at=now_iso(), poll_after_s=None)
-            return
-        await _backpressure(ctx, store)
-        if job.cancel_requested():
-            job.update(status='cancelled', finished_at=now_iso(), poll_after_s=None)
-            return
+    start_done = done
+    await job.progress(
+        done,
+        total,
+        'running',
+        _counters(report, chunks=chunks_done, total=total, rate=0.0),
+        force=True,
+    )
+    while True:
+        if job.cancelled():
+            outcome.cancelled = True
+            return outcome
+        batch = await ledger.claim(size, after=last)
+        if not batch:
+            return outcome
+        last = batch[-1].order
+        await _backpressure(ctx, job, done, total)
+        if job.cancelled():
+            outcome.cancelled = True
+            return outcome
+        number = chunks_done + len(outcome.failed_chunks)
         try:
-            chunk_report = await import_chunk(ctx, store, idx, chunk_entries)
+            chunk_report = await import_chunk(
+                ctx, [by_key[c.key] for c in batch], {c.key: c.prior for c in batch}
+            )
         except Exception as exc:
-            logger.error('dataset_import_chunk_failed', chunk=idx, error=str(exc))
-            store.append_issues([{'code': 'chunk_failed', 'chunk': idx, 'error': str(exc)[:300]}])
-            failed_chunks.append(idx)
+            logger.error('dataset_import_chunk_failed', chunk=number, error=str(exc))
+            outcome.issues.append(
+                {'code': 'chunk_failed', 'chunk': number, 'error': str(exc)[:300]}
+            )
+            outcome.failed_chunks.append(number)
+            await ledger.save_report(report, issues=outcome.issues)
             consecutive_failures += 1
             if consecutive_failures > limits.import_max_failed_chunks():
-                job.update(
-                    status='failed',
-                    error=f'{consecutive_failures} consecutive chunks failed: {exc}'[:300],
-                    finished_at=now_iso(),
-                    poll_after_s=None,
-                )
-                return
+                outcome.error = f'{consecutive_failures} consecutive chunks failed: {exc}'[:300]
+                return outcome
             continue
         consecutive_failures = 0
         report.add(chunk_report)
-        store.mark_chunk_done(idx, chunk_report.to_dict())
-        done[idx] = chunk_report.to_dict()
+        done += len(batch)
+        chunks_done += 1
         elapsed = max(asyncio.get_running_loop().time() - started, 1e-6)
-        images_done = sum(
-            r.get('images_created', 0) + r.get('images_reused', 0) for r in done.values()
-        )
-        job.update(
-            chunks_done=len(done),
-            images_done=images_done,
-            images_failed=report.images_failed,
-            report=report.to_dict(),
-            images_per_s=round(images_done / elapsed, 3),
-            updated_at=now_iso(),
+        rate = round((done - start_done) / elapsed, 3)
+        await ledger.save_report(report, issues=outcome.issues)
+        await job.progress(
+            done,
+            total,
+            'running',
+            _counters(report, chunks=chunks_done, total=total, rate=rate),
         )
         if ctx.after_chunk is not None:
-            await ctx.after_chunk(idx)
-    if failed_chunks:
-        job.update(
-            status='failed',
-            error=f'chunks failed: {failed_chunks}',
-            finished_at=now_iso(),
-            poll_after_s=None,
-        )
-        return
-    await finalize(ctx, store, report)
-
-
-async def finalize(ctx: ImportContext, store: ImportStore, report: ImportReport) -> None:
-    """Persist the holdout freeze record and set the terminal status."""
-    from src.services.curation.dataset_import.holdout_record import persist_import_freeze
-
-    if ctx.freeze_test:
-        await persist_import_freeze(ctx, store)
-    next_steps = []
-    if report.boxes_written or report.standalone_regions:
-        next_steps.append(cluster_regions())
-    status = (
-        'completed_with_errors' if report.images_failed or report.images_skipped else 'completed'
-    )
-    store.job.update(
-        status=status,
-        finished_at=now_iso(),
-        poll_after_s=None,
-        report=report.to_dict(),
-        next_steps=next_steps,
-    )
-
-
-def check_undoable(store: ImportStore) -> None:
-    """An import that finished (or was cut off) can be undone; one a live
-    worker is still running cannot."""
-    if undo_blocker(store.repaired_state()):
-        raise ImportNotUndoableError(store.import_id)
-
-
-async def claim_undo(opensearch: Any, store: ImportStore) -> None:
-    """Move ``store`` to ``undoing`` under the project lease. Like a start or a resume it
-    refuses while any other import of the project is live: an undo and an import writing
-    the same items would race each other's decisions."""
-    check_undoable(store)
-    live = active_import()
-    if live is not None:
-        raise ImportBusyError(live.import_id)
-    await _lease(opensearch, store, start=True)
-    job = store.job
-    job.clear_signals()
-    job.update(status='undoing', mode='undo', error=None, finished_at=None, poll_after_s=2)
-    job.touch_heartbeat()
-
-
-def spawn_undo(
-    ctx: UndoContext, store: ImportStore, body: Any, created_classes: dict[str, int]
-) -> None:
-    """Run a claimed undo (:func:`claim_undo`) as a background job:
-    ``undoing`` -> ``undone``."""
-    job = store.job
-
-    async def run() -> None:
-        try:
-            report = await undo_import(
-                ctx,
-                store,
-                dry_run=False,
-                remove_images=body.remove_images,
-                deprecate_created_classes=body.deprecate_created_classes,
-                created_classes=created_classes,
-            )
-            await mark_freeze_undone(store)
-            job.update(
-                status='undone',
-                undo=report.to_dict(),
-                finished_at=now_iso(),
-                poll_after_s=None,
-            )
-        except Exception as exc:
-            logger.error('dataset_import_undo_failed', import_id=store.import_id, error=str(exc))
-            job.update(
-                status='failed', error=str(exc)[:300], finished_at=now_iso(), poll_after_s=None
-            )
-
-    _tasks[store.import_id] = asyncio.create_task(
-        run_leased(take(store.import_id), ctx.opensearch, run())
-    )
-
-
-def spawn(ctx: ImportContext, store: ImportStore, entries: list[ScanEntry]) -> None:
-    async def runner() -> None:
-        try:
-            await run_import_job(ctx, store, entries)
-        except asyncio.CancelledError:
-            store.job.update(status='cancelled', finished_at=now_iso(), poll_after_s=None)
-            raise
-        except Exception as exc:
-            logger.error('dataset_import_failed', import_id=store.import_id, error=str(exc))
-            store.job.update(
-                status='failed', error=str(exc)[:300], finished_at=now_iso(), poll_after_s=None
-            )
-
-    _tasks[store.import_id] = asyncio.create_task(
-        run_leased(take(store.import_id), ctx.opensearch, runner())
-    )
-
-
-# -------------------------------------------------------------------- resume
-
-
-def load_pinned(store: ImportStore) -> tuple[Any, PinnedProfile | None, str]:
-    raw = store.read_mapping()
-    return (
-        mapping_from_dict(raw),
-        PinnedProfile.from_dict(raw.get('profile')),
-        raw.get('parents', 'labels'),
-    )
-
-
-def rescan_for_resume(
-    store: ImportStore, request: DatasetImportRequest, *, path_guard: PathGuard
-) -> list[ScanEntry]:
-    """Re-scan the dataset and refuse to continue when it changed."""
-    scan = scan_dataset(
-        request.source, path_guard=path_guard, missing_label=request.options.missing_label
-    )
-    if source_sha(scan) != store.job.read().get('source_sha'):
-        raise DatasetChangedError(store.import_id)
-    return ordered_entries(scan.entries)
-
-
-def check_resumable(store: ImportStore) -> None:
-    state = store.repaired_state()
-    if resume_blocker(state):
-        raise ImportNotResumableError(store.import_id)
-    live = active_import()
-    if live is not None:
-        raise ImportBusyError(live.import_id)
-
-
-async def claim_resume(opensearch: Any, store: ImportStore) -> dict[str, Any]:
-    """Move ``store`` to ``queued`` under the project lease (the same one a start and an
-    undo take: two resumes, or a resume and an undo, cannot both pass). The heartbeat
-    starts at once, so a rescan of a big dataset outlasting the stale window keeps the
-    claim live. Returns the job state to hand back to :func:`release_resume` if the resume
-    then fails before its worker runs."""
-    check_resumable(store)
-    await _lease(opensearch, store, start=True)
-    prior = store.job.read()
-    store.job.clear_signals()
-    store.job.update(status='queued', error=None, finished_at=None)
-    store.job.touch_heartbeat()
-    return prior
-
-
-async def release_resume(opensearch: Any, store: ImportStore, prior: dict[str, Any]) -> None:
-    """Put a claimed-but-not-started resume back to its pre-claim state and give back its
-    lease."""
-    await abandon_claim(opensearch, store)
-    store.job.update(
-        status=prior.get('status'),
-        error=prior.get('error'),
-        finished_at=prior.get('finished_at'),
-    )
-
-
-async def prepare_resume(store: ImportStore, registry: ClassRegistry) -> None:
-    """Re-materialize classes an interrupted start created but never recorded."""
-    resolved, _profile, _parents = load_pinned(store)
-    await materialize_created_classes(resolved, registry)
-    raw = store.read_mapping()
-    raw.update(mapping_to_dict(resolved))
-    store.write_mapping(raw)
-
-
-def cancel_import(import_id: str) -> ImportStore | None:
-    store = open_store(import_id)
-    if store is None:
-        return None
-    if store.job.read().get('status') in ACTIVE_STATUSES:
-        store.job.request_cancel()
-    return store
-
-
-def reconcile_orphaned_jobs() -> bool:
-    """Startup repair for the bound project: any import left active by a dead
-    process becomes ``interrupted``, and expired uploads no import references
-    are removed. True when an import state was rewritten."""
-    from src.config import get_curation_config
-    from src.services.curation.dataset_import.store import list_stores
-    from src.services.curation.dataset_import.upload import sweep_uploads, upload_id_of
-
-    upload_root = Path(get_curation_config().upload_root)
-    repaired = False
-    referenced: set[str] = set()
-    for store in list_stores():
-        repaired |= store.job.reconcile(
-            active_statuses=ACTIVE_STATUSES, error_prefix='dataset import'
-        )
-        upload_id = upload_id_of(
-            store.read_request().get('source', {}).get('path', ''), upload_root
-        )
-        if upload_id:
-            referenced.add(upload_id)
-    sweep_uploads(upload_root, referenced=referenced)
-    return repaired
+            await ctx.after_chunk(number)
 
 
 __all__ = [
@@ -526,24 +278,14 @@ __all__ = [
     'ImportBusyError',
     'ImportNotResumableError',
     'ImportNotUndoableError',
-    'ImportResumableError',
-    'cancel_import',
-    'check_resumable',
-    'check_undoable',
-    'chunked',
-    'claim_import',
-    'claim_resume',
-    'claim_undo',
+    'ImportOutcome',
+    'RunControl',
+    'chunks_total',
     'freeze_default',
     'load_pinned',
     'ordered_entries',
-    'persist_pinned',
-    'persist_scan_summary',
-    'prepare_resume',
-    'reconcile_orphaned_jobs',
-    'rescan_for_resume',
-    'reusable_prior',
+    'pinned_mapping',
+    'rescan',
     'run_import_job',
-    'spawn',
-    'spawn_undo',
+    'scan_document',
 ]

@@ -20,6 +20,8 @@ from src.services.detection.geometry import crop_id as make_crop_id
 
 if TYPE_CHECKING:
     from src.config.region_fields import RegionFields
+    from src.domain.embedding_spaces import ResolvedSpace
+    from src.services.projects.combine.spaces import SpaceCopy, SpacePair
 
 # Fields that hold a source registry id, a restorable snapshot keyed by source
 # ids, or a source clustering/UMAP result: none of them mean anything in the
@@ -94,6 +96,55 @@ def _clean_boxes(boxes: Any) -> Any:
     return [{k: v for k, v in b.items() if k not in _BOX_CLUSTER_KEYS} for b in boxes]
 
 
+def _carry_item_vector(doc: dict[str, Any], pair: SpacePair) -> bool:
+    """Move the item's vector into the target's field of the same space, or drop it and defer
+    the item. True when a vector was dropped."""
+    source, target = pair.source, pair.target
+    vector = doc.pop(source.vector_field, None)
+    if vector is None:
+        return False
+    if target is not None and keep_vector(vector, target.dim):
+        doc[target.vector_field] = vector
+        if source.state_field and target.state_field and source.state_field != target.state_field:
+            doc[target.state_field] = doc.pop(source.state_field)
+        return False
+    doc[(target or source).state_field or 'embedding_state'] = DEFERRED
+    return True
+
+
+def _carry_frame_vector(doc: dict[str, Any], pair: SpacePair) -> None:
+    vector = doc.pop(pair.source.vector_field, None)
+    target = pair.target
+    if target is not None and keep_vector(vector, target.dim):
+        doc[target.vector_field] = vector
+
+
+def _leaf(space: ResolvedSpace) -> str:
+    """The vector's key inside one nested box-embedding entry."""
+    path = space.nested_path or ''
+    return space.vector_field.removeprefix(f'{path}.') if path else space.vector_field
+
+
+def _carry_box_vectors(doc: dict[str, Any], pair: SpacePair, fields: RegionFields) -> None:
+    """Keep the per-box vectors the target's space can hold (renamed to its leaf)."""
+    if fields.box_embeddings not in doc:
+        return
+    target = pair.target
+    entries = []
+    for entry in doc[fields.box_embeddings] or []:
+        if target is None or not isinstance(entry, dict):
+            continue
+        vector = entry.get(_leaf(pair.source))
+        if keep_vector(vector, target.dim):
+            moved = {k: v for k, v in entry.items() if k != _leaf(pair.source)}
+            moved[_leaf(target)] = vector
+            entries.append(moved)
+    if entries:
+        doc[fields.box_embeddings] = entries
+    else:
+        del doc[fields.box_embeddings]
+
+
 def transform_item(
     item: dict[str, Any],
     *,
@@ -103,32 +154,19 @@ def transform_item(
     job_id: str,
     origin_project: str,
     now: str,
-    embedding_dim: int,
+    spaces: SpaceCopy,
     fields: RegionFields,
 ) -> tuple[dict[str, Any], bool]:
-    """A target item doc and whether an embedding had to be dropped (a
-    dimension the target cannot use). ``target_class`` is the target
+    """A target item doc and whether an embedding had to be dropped (the target has no space
+    of the vector's space key). ``target_class`` is the target
     ``(class_id, class_name)``; ``None`` keeps the item unclassed."""
     doc = copy.deepcopy(item)
     for name in (*_SOURCE_NUMBERED_FIELDS, fields.class_id):
         doc.pop(name, None)
     if fields.boxes in doc:
         doc[fields.boxes] = _clean_boxes(doc[fields.boxes])
-    dropped = False
-    if 'pe_embedding' in doc and not keep_vector(doc['pe_embedding'], embedding_dim):
-        dropped = True
-        doc['embedding_state'] = DEFERRED
-        del doc['pe_embedding']
-    if fields.box_embeddings in doc:
-        entries = [
-            e
-            for e in doc[fields.box_embeddings] or []
-            if isinstance(e, dict) and keep_vector(e.get('embedding'), embedding_dim)
-        ]
-        if entries:
-            doc[fields.box_embeddings] = entries
-        else:
-            del doc[fields.box_embeddings]
+    dropped = _carry_item_vector(doc, spaces.item)
+    _carry_box_vectors(doc, spaces.box, fields)
     if target_class is None:
         doc.pop('class_id', None)
         doc.pop('class_name', None)
@@ -158,7 +196,7 @@ def transform_image(
     job_id: str,
     origin_project: str,
     now: str,
-    embedding_dim: int,
+    spaces: SpaceCopy,
     negative_for: list[str] | None,
 ) -> dict[str, Any]:
     """A target images doc: the source's, re-keyed, with its provenance.
@@ -167,8 +205,7 @@ def transform_image(
     doc = copy.deepcopy(image_doc)
     for name in ('import_ids', 'negative_for'):
         doc.pop(name, None)
-    if 'pe_embedding' in doc and not keep_vector(doc['pe_embedding'], embedding_dim):
-        del doc['pe_embedding']
+    _carry_frame_vector(doc, spaces.frame)
     doc.update(
         image_id=target_image_id,
         image_path=target_image_path_,

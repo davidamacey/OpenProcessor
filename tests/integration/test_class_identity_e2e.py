@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from curation.dataset_import.db_fixture import import_database  # noqa: F401 - fixture
 from curation.dataset_import.harness import Harness
 
 from src.config.curation import CurationConfig
@@ -63,6 +64,9 @@ if TYPE_CHECKING:
 # not index, and every row's normalized bbox is recorded so later hops
 # can tie a specific geometry back to its intended name.
 # =============================================================================
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('import_database')]
 
 
 def _row_to_bbox(row: str) -> tuple[str, tuple[float, float, float, float]]:

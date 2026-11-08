@@ -26,7 +26,6 @@ JOB_MODULES: tuple[tuple[str, LeaseKind], ...] = (
     ('src.services.curation.probe_job', LeaseKind.PROBE),
     ('src.services.curation.reprocess_job', LeaseKind.REPROCESS),
     ('src.services.curation.assist.job', LeaseKind.ASSIST_RUN),
-    ('src.services.curation.dataset_import.runner', LeaseKind.DATASET_IMPORT),
 )
 
 
@@ -40,7 +39,6 @@ async def reconcile_all_jobs(opensearch: Any) -> None:
     own repair runs under the lease taken here.
     """
     from src.services.projects.bootstrap import for_each_project
-    from src.services.projects.combine.store import reconcile_orphaned_jobs
 
     for name, kind in JOB_MODULES:
         module = importlib.import_module(name)
@@ -52,12 +50,6 @@ async def reconcile_all_jobs(opensearch: Any) -> None:
                 logger.warning(
                     'orphaned_job_reconcile_skipped', module=name, project=slug, error=str(exc)
                 )
-    # Combine jobs are global (not nested under one project), so once.
-    try:
-        if reconcile_orphaned_jobs():
-            logger.warning('orphaned_combine_jobs_reconciled')
-    except Exception as exc:
-        logger.warning('orphaned_combine_reconcile_skipped', error=str(exc))
 
 
 async def _reconcile_under_lease(opensearch: Any, module: Any, kind: LeaseKind) -> bool:

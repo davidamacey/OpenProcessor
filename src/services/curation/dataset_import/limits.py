@@ -3,17 +3,7 @@ time (so a test can ``monkeypatch.setenv`` around one call)."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from src.config.env import env_int, env_path
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-
-def imports_base_dir() -> Path:
-    return env_path('OP_DATASET_IMPORTS_DIR', '/jobs/imports')
+from src.config.env import env_int
 
 
 def import_chunk_size() -> int:
@@ -114,7 +104,6 @@ __all__ = [
     'import_chunk_size',
     'import_max_failed_chunks',
     'import_max_pending',
-    'imports_base_dir',
     'preview_max_files',
     'reprocess_sync_max',
     'upload_max_bytes',

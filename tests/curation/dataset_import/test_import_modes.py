@@ -23,6 +23,9 @@ SAME = '0 0.3 0.3 0.4 0.4'
 FAR = '0 0.8 0.8 0.1 0.1'
 
 
+pytestmark = pytest.mark.db
+
+
 async def _ingest_machine_item(h: Harness, image: Path) -> str:
     result = await h.service.ingest_one(image.read_bytes(), str(image.resolve()))
     assert result.status == 'success', result

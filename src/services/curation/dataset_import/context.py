@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from src.services.curation.dataset_import.mapping import ResolvedMapping
     from src.services.curation.dataset_import.options import DatasetImportOptions
     from src.services.curation.dataset_import.prepare import PinnedProfile
+    from src.services.curation.dataset_import.rows import Ledger
     from src.services.curation.ingest import CurationIngestService
 
 
@@ -39,11 +40,15 @@ class ImportContext:
     upload_root: Path
     export_root: Path | None
     freeze_test: bool
+    ledger: Ledger
     region_fields: RegionFields = field(default_factory=get_region_fields)
     stem_resolutions: dict[str, Any] = field(default_factory=dict)
     """OpenProcessor-export stems resolved to existing docs (per chunk)."""
     seen_images: dict[str, dict[str, Any]] = field(default_factory=dict)
     """content hash -> the image this run already indexed (search may not see it yet)."""
+    enqueue_pending: Callable[[list[str]], Awaitable[None]] | None = None
+    """Records imported image ids as near-duplicate pending rows (reason ``added``), awaited
+    before the image's documents are written."""
     after_chunk: Callable[[int], Awaitable[None]] | None = None
     """Test hook: awaited after each finished chunk (crash injection)."""
 

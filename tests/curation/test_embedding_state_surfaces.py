@@ -135,6 +135,18 @@ async def test_empty_all_queue_says_items_are_not_embedded() -> None:
     assert await compute_empty_reason('all', None, os_fake) == 'no items match'
 
 
+def _space_copy(target_dim: int):
+    from projects.combine.world import legacy_space
+
+    from src.domain.embedding_spaces import Target
+    from src.services.projects.combine.spaces import SpaceCopy, SpacePair
+
+    def pair(target: Target) -> SpacePair:
+        return SpacePair(legacy_space(target), legacy_space(target, dim=target_dim))
+
+    return SpaceCopy(pair(Target.ITEM), pair(Target.FRAME), pair(Target.BOX))
+
+
 def test_combine_marks_a_dropped_vector_deferred() -> None:
     item = {
         'crop_id': 'c',
@@ -150,7 +162,7 @@ def test_combine_marks_a_dropped_vector_deferred() -> None:
         job_id='j',
         origin_project='o',
         now='n',
-        embedding_dim=3,
+        spaces=_space_copy(3),
         fields=get_region_fields(),
     )
     assert dropped is True
@@ -165,7 +177,7 @@ def test_combine_marks_a_dropped_vector_deferred() -> None:
         job_id='j',
         origin_project='o',
         now='n',
-        embedding_dim=2,
+        spaces=_space_copy(2),
         fields=get_region_fields(),
     )
     assert dropped is False

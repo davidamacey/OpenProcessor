@@ -16,9 +16,10 @@ POSTGRES_BACKED_PREFIXES: tuple[str, ...] = ('/cluster_profiles', '/assist_loop_
 NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/datasets/preview'): 'scans a dataset read-only; writes nothing',
     ('POST', '/datasets/imports'): (
-        'the sweep sends no mapping, so it is refused before anything is claimed; the '
-        'import writes are covered in tests/integration/test_dataset_import_routes.py'
+        'the sweep sends no mapping, so it is refused before anything is queued; the '
+        'import job is covered in tests/families_b/test_dataset_import_job.py'
     ),
+    ('POST', '/classes/merge'): 'queues the class_merge job; the job relabels (tests/families_b)',
     ('POST', '/datasets/imports/{import_id}/cancel'): 'the sweep has no live import to cancel',
     ('POST', '/datasets/imports/{import_id}/resume'): 'the sweep has no interrupted import',
     ('POST', '/datasets/imports/{import_id}/undo'): 'a dry run reads the ledger; writes nothing',

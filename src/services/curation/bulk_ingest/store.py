@@ -91,13 +91,6 @@ class BulkStore:
         self.directory.mkdir(parents=True, exist_ok=True)
         atomic_write_json(self.directory / 'request.json', payload, default=None)
 
-    def read_request(self) -> dict[str, Any]:
-        try:
-            raw = json.loads((self.directory / 'request.json').read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            return {}
-        return raw if isinstance(raw, dict) else {}
-
     # ------------------------------------------------------------------ ledger
 
     def append_done(self, rows: list[tuple[str, str]]) -> None:

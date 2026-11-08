@@ -3,16 +3,18 @@ plan section 6). The routes are thin over this."""
 
 from __future__ import annotations
 
-import asyncio
-import shutil
-from typing import TYPE_CHECKING, Any
+import uuid
+from typing import Any
 
-from src.config.curation_accessors import get_curation_config
+from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
+from src.db.session import async_session_factory
 from src.schemas.curation.config_common import ValidationIssue, ValidationReport
+from src.services.jobs import service as jobs
+from src.services.jobs.status import get_job
 from src.services.projects import lifecycle
-from src.services.projects.combine import lease, store as job_store
-from src.services.projects.combine.execute import load_plan, persist_plan, run_combine
+from src.services.projects.combine import runs
+from src.services.projects.combine.execute import load_plan, plan_documents
 from src.services.projects.combine.models import (
     CombineIssue,
     CombinePreview,
@@ -30,20 +32,11 @@ from src.services.projects.combine.plan import (
 )
 from src.services.projects.registry import get_project_registry
 from src.services.rejections import rejection
-from src.utils.timeutil import now_iso
 
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-    from src.config.projects import ProjectRecord
-    from src.services.curation.dataset_import.store import ImportStore
-    from src.services.curation.lease_heartbeat import LeaseHeartbeat
 
 logger = get_logger(__name__)
 
-# Strong references so a fire-and-forget job is never collected mid-run.
-_TASKS: dict[str, asyncio.Task[None]] = {}
+RESUMABLE_STATUSES = frozenset({'interrupted', 'paused'})
 
 # The target is a new project: its own keymap and classes are not cloned.
 _CLONE_AXES = ['settings_defaults', 'activations', 'prompt_packs']
@@ -51,9 +44,13 @@ _CLONE_AXES = ['settings_defaults', 'activations', 'prompt_packs']
 _SLUG_ERRORS = frozenset({'slug_taken', 'slug_retired', 'slug_invalid'})
 
 
-def target_embedding_dim() -> int:
-    """The vector size the target (the process-wide encoder) uses."""
-    return get_curation_config().encoder_embedding_dim
+def target_space_keys() -> frozenset[str]:
+    """The space keys a new target will have: its default encoder's (every project is created
+    with the default spaces)."""
+    from src.domain.embedding_spaces import space_key
+    from src.services.projects.store import DEFAULT_ENCODER
+
+    return frozenset({space_key(*DEFAULT_ENCODER)})
 
 
 def report_of(issues: list[CombineIssue]) -> ValidationReport:
@@ -81,7 +78,7 @@ async def preview(client: Any, request: CombineRequest) -> tuple[CombinePreview,
     slug_available = not any(e.code in _SLUG_ERRORS for e in errors)
     if len(records) != len(request.sources):
         return _unreadable(request, errors, warnings, slug_available), None
-    analysis = await analyze(client, request, records, target_dim=target_embedding_dim())
+    analysis = await analyze(client, request, records, target_keys=target_space_keys())
     states = [await source_state(client, r) for r in records]
     result = build_preview(
         analysis,
@@ -113,8 +110,10 @@ def _unreadable(
 
 
 async def start(client: Any, request: CombineStartRequest) -> dict[str, str]:
-    """Validate, create the ``building`` target, persist the plan and run the
-    job in the background. Returns ``{job_id, target}``."""
+    """Validate, create the ``building`` target, persist the plan and queue the job.
+
+    Returns ``{job_id, target}``; the work runs in a worker (``combine``, scope: the target).
+    """
     plain = CombineRequest.model_validate(request.model_dump(exclude={'expected_preview_sha'}))
     result, analysis = await preview(client, plain)
     if not result.ok or analysis is None:
@@ -131,142 +130,105 @@ async def start(client: Any, request: CombineStartRequest) -> dict[str, str]:
             'a source changed since the preview; preview again',
             project=request.target.slug,
         )
-    job_id = job_store.new_job_id()
-    store = job_store.create_job(job_id)
-    persist_plan(store, analysis, result.preview_sha)
+    params, document = plan_documents(analysis, result.preview_sha)
     slugs = [r.slug for r in analysis.records]
-    try:
-        target, _warnings = await lifecycle.create_project(
-            client,
-            slug=request.target.slug,
-            display_name=request.target.display_name,
-            description=request.target.description,
-            clone_settings_from=request.settings_from,
-            clone_axes=_CLONE_AXES if request.settings_from else None,
-            origin={'kind': 'combine', 'job_id': job_id, 'sources': slugs},
-            activate=False,
-        )
-    except BaseException:
-        shutil.rmtree(store.directory, ignore_errors=True)
-        raise
-    store.job.write(
-        {
-            'job_id': job_id,
-            'status': 'queued',
-            'phase': 'queued',
-            'target': target.slug,
-            'sources': slugs,
-            'done': 0,
-            'total': sum(s.images for s in analysis.stats),
-            'started_at': now_iso(),
-        }
-    )
-    beat = await lease.take(client, target, job_id, busy=_not_resumable_busy)
-    _spawn(client, store, analysis.records, target, beat)
-    return {'job_id': job_id, 'target': target.slug}
-
-
-def _not_resumable_busy(_holder: str | None) -> Exception:
-    return rejection(409, 'combine_not_resumable', 'the job is already being resumed')
-
-
-def _spawn(
-    client: Any,
-    store: ImportStore,
-    sources: list[ProjectRecord],
-    target: ProjectRecord,
-    beat: LeaseHeartbeat,
-) -> None:
-    task = asyncio.create_task(_run(client, store, sources, target, beat))
-    _TASKS[store.import_id] = task
-    task.add_done_callback(lambda _t: _TASKS.pop(store.import_id, None))
-
-
-async def _run(
-    client: Any,
-    store: ImportStore,
-    sources: list[ProjectRecord],
-    target: ProjectRecord,
-    beat: LeaseHeartbeat,
-) -> None:
-    """Run the job, then settle the target: ``active`` on success, ``failed`` on
-    a failure; a cancelled or interrupted job leaves it ``building`` so it can
-    resume."""
-
-    async def settle(ok: bool) -> None:
-        await lifecycle.finish_building(client, target, ok=ok)
-        if ok:
-            from src.services.events.publish import apublish_global_event
-
-            await apublish_global_event(
-                'project.created', target=target.slug, status='active', revision=target.revision
-            )
-
-    lease.begin(beat, target)
-    try:
-        await _run_combine(client, store, sources, target, settle)
-    finally:
-        await lease.give_back(client, target, beat)
-
-
-async def _run_combine(
-    client: Any,
-    store: ImportStore,
-    sources: list[ProjectRecord],
-    target: ProjectRecord,
-    settle: Callable[[bool], Awaitable[None]],
-) -> None:
-    await run_combine(
+    target, _warnings = await lifecycle.create_project(
         client,
-        store=store,
-        plan=load_plan(store),
-        sources=sources,
-        target=target,
-        embedding_dim=target_embedding_dim(),
-        settle=settle,
+        slug=request.target.slug,
+        display_name=request.target.display_name,
+        description=request.target.description,
+        clone_settings_from=request.settings_from,
+        clone_axes=_CLONE_AXES if request.settings_from else None,
+        origin={'kind': 'combine', 'sources': slugs},
+        activate=False,
     )
 
+    async def with_rows(session: Any, job: Any) -> None:
+        await runs.insert_rows(
+            session,
+            job,
+            target=target,
+            sources=analysis.records,
+            holdout=request.holdout,
+            document=document,
+        )
 
-def job_state(job_id: str) -> dict[str, Any]:
-    store = job_store.open_job(job_id)
-    if store is None:
+    try:
+        async with async_session_factory()() as session:
+            started = await jobs.start_job(
+                session, 'combine', target.id, params=params, with_rows=with_rows
+            )
+    except BaseException:
+        await lifecycle.finish_building(client, target, ok=False)
+        raise
+    return {'job_id': str(started.job.id), 'target': target.slug}
+
+
+def _parse(job_id: str) -> uuid.UUID:
+    """A malformed id names no job: answered before any database work."""
+    try:
+        return uuid.UUID(job_id)
+    except ValueError:
+        raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'") from None
+
+
+async def _run_of(session: Any, job_id: str) -> runs.CombineRunRow:
+    run = await runs.find(session, _parse(job_id))
+    if run is None:
         raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
-    state = store.job.served_state(job_store.ACTIVE_STATUSES, error_prefix='combine')
-    return {'job_id': job_id, **state}
+    return run
 
 
-def cancel(job_id: str) -> dict[str, Any]:
-    store = job_store.open_job(job_id)
-    if store is None:
-        raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
-    if store.job.read().get('status') not in job_store.ACTIVE_STATUSES:
-        raise rejection(409, 'combine_not_resumable', 'the job is not running')
-    store.job.request_cancel()
-    return job_state(job_id)
+async def job_state(job_id: str) -> dict[str, Any]:
+    _parse(job_id)
+    async with async_session_factory()() as session:
+        run = await _run_of(session, job_id)
+        view = await get_job(session, run.job_id, project=run.target_project_id)
+    progress = view.progress
+    finished = view.result or {}
+    return {
+        'job_id': job_id,
+        'status': view.status,
+        'phase': progress.get('stage'),
+        'target': view.project,
+        'sources': run.sources,
+        'done': int(progress.get('done') or 0),
+        'total': int(progress.get('total') or 0),
+        'report': finished.get('report') or progress.get('counters') or {},
+        'next_steps': finished.get('next_steps') or [],
+        'error': view.error_message,
+        'started_at': view.started_at.isoformat() if view.started_at else None,
+        'finished_at': view.finished_at.isoformat() if view.finished_at else None,
+    }
+
+
+async def cancel(job_id: str) -> dict[str, Any]:
+    _parse(job_id)
+    async with async_session_factory()() as session:
+        run = await _run_of(session, job_id)
+        try:
+            await jobs.cancel_job(session, run.job_id, run.target_project_id, requested_by='api')
+        except RequestRejectedError as exc:
+            if isinstance(exc.detail, dict) and exc.detail.get('error') == 'job_finished':
+                raise rejection(409, 'combine_not_resumable', 'the job is not running') from exc
+            raise
+    return await job_state(job_id)
 
 
 async def resume(client: Any, job_id: str) -> dict[str, Any]:
-    """Resume an interrupted or cancelled combine. One worker per job: the
-    claim (the ``queued`` write) is made under the job's ``combine`` lease, and the
-    sources go through the same :func:`resolve_sources` gate as a start. A job
-    whose worker is still alive in this process is not resumable, stale
-    heartbeat or not; across processes the worker that notices a newer claim
-    stops at its next chunk (:func:`~src.services.projects.combine.execute.
-    ensure_owner`)."""
-    store = job_store.open_job(job_id)
-    if store is None:
-        raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
-    running = _TASKS.get(job_id)
-    if running is not None and not running.done():
-        raise rejection(409, 'combine_not_resumable', 'a worker for this job is still running')
-    state = job_state(job_id)
-    if state.get('status') not in job_store.RESUMABLE_STATUSES:
+    """Resume an interrupted combine. The sources go through the same :func:`resolve_sources`
+    gate as a start and must still match the preview; the target must still be ``building``."""
+    state = await job_state(job_id)
+    if state['status'] not in RESUMABLE_STATUSES:
         raise rejection(
             409,
             'combine_not_resumable',
-            f'the job is {state.get("status")}; only an interrupted or cancelled combine resumes',
+            f'the job is {state["status"]}; only an interrupted combine resumes',
         )
-    plan = load_plan(store)
+    async with async_session_factory()() as session:
+        run = await _run_of(session, job_id)
+        view = await get_job(session, run.job_id, project=run.target_project_id)
+    plan = load_plan(view.params or {}, run.document)
     sources, errors = await resolve_sources(plan.request, ignore_job=job_id)
     if errors:
         raise rejection(
@@ -276,7 +238,7 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
             report=report_of(errors),
         )
     states = [await source_state(client, r) for r in sources]
-    if compute_preview_sha(plan.request, states) != store.read_request().get('preview_sha'):
+    if compute_preview_sha(plan.request, states) != (view.params or {}).get('preview_sha'):
         raise rejection(
             409,
             'preview_stale',
@@ -285,16 +247,9 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
     target = await get_project_registry().lookup(state['target'])
     if target is None or target.status != 'building':
         raise rejection(409, 'combine_not_resumable', 'the target project is no longer building')
-    beat = await lease.take(client, target, job_id, busy=_not_resumable_busy)
-    try:
-        store.job.clear_signals()
-        store.job.update(status='queued', error=None, finished_at=None)
-        store.job.touch_heartbeat()
-    except BaseException:
-        await lease.give_back(client, target, beat)
-        raise
-    _spawn(client, store, sources, target, beat)
-    return job_state(job_id)
+    async with async_session_factory()() as session:
+        await jobs.resume_job(session, run.job_id, run.target_project_id)
+    return await job_state(job_id)
 
 
 __all__ = ['cancel', 'job_state', 'preview', 'resume', 'start']

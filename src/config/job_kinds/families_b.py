@@ -1,12 +1,77 @@
-"""Job kinds of the `families_b` family; filled by the lane that owns it."""
+"""Job kinds of the `families_b` family: class registry writes, dataset import, combine."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from src.config.job_kinds.kind import JobKind
+from src.config.queue import TaskQueues
 
 
-if TYPE_CHECKING:
-    from src.config.job_kinds.kind import JobKind
+_H = 3600
+_QUEUE_WAIT_S = 24 * _H
 
-
-KINDS: tuple[JobKind, ...] = ()
+KINDS: tuple[JobKind, ...] = (
+    JobKind(
+        name='class_merge',
+        task_name='op.families_b.class_merge',
+        queue=TaskQueues.JOBS,
+        project_scope='project',
+        soft_limit_s=3 * _H,
+        hard_limit_s=3 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='class_registry_write',
+    ),
+    JobKind(
+        name='class_projection_sync',
+        task_name='op.families_b.class_projection_sync',
+        queue=TaskQueues.JOBS,
+        project_scope='project',
+        soft_limit_s=3 * _H,
+        hard_limit_s=3 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='class_registry_write',
+        auto_resume=True,
+    ),
+    JobKind(
+        name='combine',
+        task_name='op.families_b.combine',
+        queue=TaskQueues.JOBS,
+        project_scope='target',
+        soft_limit_s=24 * _H,
+        hard_limit_s=24 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='combine',
+        auto_resume=True,
+    ),
+    JobKind(
+        name='dataset_import',
+        task_name='op.families_b.dataset_import',
+        queue=TaskQueues.JOBS,
+        project_scope='project',
+        soft_limit_s=24 * _H,
+        hard_limit_s=24 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='dataset_import',
+        auto_resume=True,
+    ),
+    JobKind(
+        name='dataset_import_undo',
+        task_name='op.families_b.dataset_import_undo',
+        queue=TaskQueues.JOBS,
+        project_scope='project',
+        soft_limit_s=24 * _H,
+        hard_limit_s=24 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='dataset_import',
+    ),
+    JobKind(
+        name='dataset_upload_extract',
+        task_name='op.families_b.dataset_upload_extract',
+        queue=TaskQueues.JOBS,
+        project_scope='project',
+        soft_limit_s=3 * _H,
+        hard_limit_s=3 * _H + 900,
+        max_queue_wait_s=_QUEUE_WAIT_S,
+        exclusive_group='dataset_upload',
+        exclusive_scope='upload_id',
+    ),
+)

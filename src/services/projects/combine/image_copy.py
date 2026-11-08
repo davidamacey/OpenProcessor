@@ -12,6 +12,7 @@ import asyncio
 import copy
 import hashlib
 from collections import Counter
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -37,8 +38,12 @@ if TYPE_CHECKING:
     from src.services.curation.dataset_import.project_source import SourceImage
     from src.services.projects.combine.mapping import CombineMapping
     from src.services.projects.combine.models import CombineRequest
+    from src.services.projects.combine.spaces import SpaceCopy
 
 _BULK_BATCH = 500
+PendingEnqueue = Callable[[str, list[str]], Awaitable[None]]
+"""``enqueue(level, member_ids)``: the near-duplicate pending rows (``added``) of a page, written
+before the documents they describe."""
 
 
 @dataclass
@@ -52,11 +57,13 @@ class CopyContext:
     target_ids: dict[str, int]
     names: list[dict[int, str]]
     fields: RegionFields
-    embedding_dim: int
+    spaces: list[SpaceCopy]
+    """Per source: which of its vectors the target can hold (:mod:`.spaces`)."""
     now: str
     duplicates: dict[tuple[int, str], tuple[int, str]]
     originals: dict[tuple[int, str], tuple[str, str]]
     """``(source index, image id) -> (path, imohash)`` of every duplicate's priority image."""
+    enqueue_pending: PendingEnqueue
     containment: float = 0.9
     counts: Counter[str] = field(default_factory=Counter)
 
@@ -140,7 +147,7 @@ def _item_docs(
                 job_id=ctx.job_id,
                 origin_project=project,
                 now=ctx.now,
-                embedding_dim=ctx.embedding_dim,
+                spaces=ctx.spaces[source_index],
                 fields=ctx.fields,
             )
             ctx.counts['embeddings_dropped'] += dropped
@@ -248,7 +255,7 @@ async def _copy_image(
                 job_id=ctx.job_id,
                 origin_project=project,
                 now=ctx.now,
-                embedding_dim=ctx.embedding_dim,
+                spaces=ctx.spaces[source_index],
                 negative_for=negative_for,
             ),
         }
@@ -350,6 +357,14 @@ async def _merge_duplicate(
     return ops
 
 
+async def _enqueue_near_duplicates(ctx: CopyContext, ops: list[dict[str, Any]]) -> None:
+    """One ``added`` pending row per copied image and item, before the write that adds them."""
+    for level, index in (('image', ctx.images_index), ('item', ctx.items_index)):
+        ids = [op['id'] for op in ops if op['index'] == index]
+        if ids:
+            await ctx.enqueue_pending(level, ids)
+
+
 async def copy_page(ctx: CopyContext, source_index: int, images: list[SourceImage]) -> Counter[str]:
     """Copy (or merge) one page; returns this page's counters."""
     before = Counter(ctx.counts)
@@ -362,6 +377,7 @@ async def copy_page(ctx: CopyContext, source_index: int, images: list[SourceImag
             ops.extend(await _merge_duplicate(ctx, source_index, image))
         else:
             ops.extend(await _copy_image(ctx, source_index, image))
+    await _enqueue_near_duplicates(ctx, ops)
     await _bulk(ctx, ops)
     return ctx.counts - before
 

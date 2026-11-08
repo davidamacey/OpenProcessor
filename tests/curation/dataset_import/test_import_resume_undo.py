@@ -7,12 +7,15 @@ from typing import TYPE_CHECKING
 import pytest
 
 from curation.dataset_import.harness import Harness, map_all, write_yolo
-from src.services.curation.dataset_import import runner
+from src.services.curation.dataset_import import rows, runner
 from src.services.curation.dataset_import.undo import undo_import
 
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+pytestmark = pytest.mark.db
 
 
 class SimulatedCrash(BaseException):
@@ -39,9 +42,11 @@ def _snapshot(h: Harness) -> dict[str, tuple]:
 
 
 @pytest.mark.asyncio
-async def test_same_key_completed_import_is_reused_and_writes_nothing(
+async def test_the_same_request_finds_its_completed_import_by_key(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """A repeat of a request names the import it already made (the route answers 200 with it
+    and writes nothing; see ``families_b/test_dataset_import_job.py``)."""
     h = Harness(tmp_path, monkeypatch)
     h.registry.add('car')
     h.registry.add('truck')
@@ -49,30 +54,13 @@ async def test_same_key_completed_import_is_reused_and_writes_nothing(
     _dataset(root)
     request = h.request(root, map_all(h.registry, 'car', 'truck'))
     store, _ = await h.run(request)
-    before = {k: dict(v) for k, v in h.items.items()}
     writes = h.os.bulk_calls
-    again, reused = await runner.claim_import(object(), request, h.prepare(request))
-    assert reused
-    assert again.import_id == store.import_id
+    prepared = h.prepare(request)
+    async with store.sessions() as session:
+        found = await rows.latest_with_key(session, [prepared.import_key])
+    assert found is not None
+    assert str(found.id) == store.import_id
     assert h.os.bulk_calls == writes
-    assert {k: dict(v) for k, v in h.items.items()} == before
-
-
-@pytest.mark.asyncio
-async def test_only_one_import_runs_per_project(tmp_path: Path, monkeypatch) -> None:
-    h = Harness(tmp_path, monkeypatch)
-    h.registry.add('car')
-    h.registry.add('truck')
-    root = tmp_path / 'ds'
-    _dataset(root)
-    request = h.request(root, map_all(h.registry, 'car', 'truck'))
-    store, _ = await runner.claim_import(object(), request, h.prepare(request))
-    other = tmp_path / 'ds2'
-    write_yolo(other, names=['car'], images={'z': ['0 0.5 0.5 0.2 0.2']})
-    req2 = h.request(other, map_all(h.registry, 'car'))
-    with pytest.raises(runner.ImportBusyError) as busy:
-        await runner.claim_import(object(), req2, h.prepare(req2))
-    assert busy.value.import_id == store.import_id
 
 
 @pytest.mark.asyncio
@@ -93,12 +81,10 @@ async def test_crash_then_resume_equals_an_uninterrupted_run(tmp_path: Path, mon
         await h.run(request, after_chunk=die_after_first_chunk)
     store = h.last_store
     assert store is not None
-    assert store.job.read()['status'] == 'running'
-    # The process died: its heartbeat goes stale, the next startup repairs it.
-    store.job.heartbeat_file.unlink()
-    assert runner.reconcile_orphaned_jobs() is True
     assert store.job.read()['status'] == 'interrupted'
-    assert set(store.chunks_done()) == {0}
+    # The one finished chunk is in the ledger; the rest is still pending.
+    assert [r['status'] for r in store.ledger_rows()].count('ok') == 1
+    assert [r['status'] for r in store.ledger_rows()].count('pending') == 2
 
     await h.resume(store, request)
     assert store.job.read()['status'] == 'completed'
@@ -138,8 +124,6 @@ async def test_resume_consumes_the_persisted_mapping_not_the_resumers_registry(
     store = h.last_store
     assert store is not None
     truck_id = store.read_mapping()['created_classes']['truck']
-    store.job.heartbeat_file.unlink()
-    runner.reconcile_orphaned_jobs()
     # A cold worker: nothing but the registry file survives; a stray class
     # claims the id the interrupted run's 'truck' would take next.
     await h.resume(store, request)
@@ -166,8 +150,6 @@ async def test_resume_refuses_when_the_dataset_changed(tmp_path: Path, monkeypat
         await h.run(request, after_chunk=die)
     store = h.last_store
     assert store is not None
-    store.job.heartbeat_file.unlink()
-    runner.reconcile_orphaned_jobs()
     (root / 'labels/train/b.txt').write_text('1 0.5 0.5 0.3 0.3\n')
     with pytest.raises(runner.DatasetChangedError):
         await h.resume(store, request)
@@ -239,12 +221,10 @@ async def test_a_crash_inside_a_chunk_keeps_created_truthful_for_undo(
         await h.run(request)
     store = h.last_store
     assert store is not None
-    pending = [r for r in store.ledger_rows() if r['status'] == 'pending']
-    assert len(pending) == 1
+    begun = [r for r in store.ledger_rows() if r['status'] == 'pending' and 'items' in r]
+    assert len(begun) == 1  # the write-ahead row of the image that was in flight
 
     monkeypatch.setattr(h.service, 'index_items', real)
-    store.job.heartbeat_file.unlink()
-    runner.reconcile_orphaned_jobs()
     await h.resume(store, request)
     assert {r['status'] for r in store.ledger_rows()} == {'ok'}
     actions = [i['action'] for r in store.ledger_rows() for i in r['items']]

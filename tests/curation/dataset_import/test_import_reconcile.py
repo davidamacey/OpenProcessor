@@ -23,6 +23,9 @@ CAR = '0 0.3 0.3 0.2 0.2'
 TRUCK = '1 0.7 0.7 0.2 0.2'
 
 
+pytestmark = pytest.mark.db
+
+
 async def _v1(tmp_path: Path, monkeypatch: Any) -> tuple[Harness, Path]:
     h = Harness(tmp_path, monkeypatch)
     h.registry.add('car')

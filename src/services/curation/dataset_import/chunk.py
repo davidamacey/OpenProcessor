@@ -45,12 +45,9 @@ from src.utils.timeutil import now_iso
 if TYPE_CHECKING:
     from src.services.curation.dataset_import.context import ImportContext
     from src.services.curation.dataset_import.scan import LabelBox, ScanEntry
-    from src.services.curation.dataset_import.store import ImportStore
     from src.services.curation.proposal_merge import MergePlan
 
 logger = get_logger(__name__)
-
-_FINAL = ('ok', 'failed', 'skipped')
 
 
 def _resolve_stem(ctx: ImportContext, entry: ScanEntry) -> ScanEntry:
@@ -137,12 +134,12 @@ async def _ingest_entry_image(ctx: ImportContext, entry: ScanEntry) -> ImageCont
     return img
 
 
-def _reject(
-    store: ImportStore, chunk: int, base: dict[str, Any], rejected: _Rejected, report: ImportReport
+async def _reject(
+    ctx: ImportContext, base: dict[str, Any], rejected: _Rejected, report: ImportReport
 ) -> ImportReport:
     if rejected.outcome == 'skipped':
-        return _skipped(store, chunk, base, rejected.kind, report)
-    return _failed(store, chunk, base, rejected.kind, rejected.message, report)
+        return await _skipped(ctx, base, rejected.kind, report)
+    return await _failed(ctx, base, rejected.kind, rejected.message, report)
 
 
 def _pending_row(
@@ -205,14 +202,10 @@ def _tally_image(
 
 
 async def _import_one(
-    ctx: ImportContext,
-    store: ImportStore,
-    chunk: int,
-    entry: ScanEntry,
-    prior: dict[str, Any] | None,
+    ctx: ImportContext, entry: ScanEntry, prior: dict[str, Any] | None
 ) -> ImportReport:
     report = ImportReport()
-    base = {
+    base: dict[str, Any] = {
         'source_stem': entry.source_stem,
         'rel_path': entry.rel_path,
         'split': entry.split,
@@ -227,7 +220,7 @@ async def _import_one(
 
     img = await _ingest_entry_image(ctx, entry)
     if isinstance(img, _Rejected):
-        return _reject(store, chunk, base, img, report)
+        return await _reject(ctx, base, img, report)
     created_image = prior.get('image_created') if prior else img.created
     img.image_extra = _image_stamp(ctx, entry, state, {})
     now = now_iso()
@@ -238,17 +231,18 @@ async def _import_one(
     parent_keys = {c.key for c in plan.parent_cands}
 
     row = _pending_row(base, img, created_image, plan)
-    store.append_ledger(chunk, row)
+    if ctx.enqueue_pending is not None:
+        await ctx.enqueue_pending([img.image_id])
+    await ctx.ledger.write_ahead(base['rel_path'], row)
 
     # ---- apply
     seed = ctx.options.processing == 'propose'
     outcome = await ctx.service.index_items(img, new.all(), seed_region=seed)
     if outcome.result.status == 'duplicate':
-        return await _import_onto_stored(ctx, store, chunk, entry, prior, img, base)
+        return await _import_onto_stored(ctx, entry, prior, img, base)
     if outcome.result.status == 'failed':
-        return _failed(
-            store,
-            chunk,
+        return await _failed(
+            ctx,
             base,
             outcome.result.error_kind or 'bulk_index',
             outcome.result.error or '',
@@ -294,14 +288,12 @@ async def _import_one(
         'boxes': ledger_boxes,
         'report': report.to_dict(),
     }
-    store.append_ledger(chunk, final)
+    await ctx.ledger.finish(base['rel_path'], final)
     return report
 
 
 async def _import_onto_stored(
     ctx: ImportContext,
-    store: ImportStore,
-    chunk: int,
     entry: ScanEntry,
     prior: dict[str, Any] | None,
     img: ImageContext,
@@ -314,9 +306,9 @@ async def _import_onto_stored(
     stored = await ctx.service.stored_image(img.image_id)
     if stored is None:
         message = f'images doc {img.image_id} was refused as existing but cannot be read'
-        return _failed(store, chunk, base, 'bulk_index', message, ImportReport())
+        return await _failed(ctx, base, 'bulk_index', message, ImportReport())
     ctx.seen_images[img.content_sha256] = stored
-    return await _import_one(ctx, store, chunk, entry, prior)
+    return await _import_one(ctx, entry, prior)
 
 
 def _hash_of(data: bytes) -> str:
@@ -368,17 +360,16 @@ async def _write_regions(
         ledger_boxes.extend({'crop_id': key, **b} for b in write.boxes)
 
 
-def _failed(
-    store: ImportStore,
-    chunk: int,
+async def _failed(
+    ctx: ImportContext,
     base: dict[str, Any],
     kind: str,
     message: str,
     report: ImportReport,
 ) -> ImportReport:
     report.images_failed += 1
-    store.append_ledger(
-        chunk,
+    await ctx.ledger.finish(
+        base['rel_path'],
         {
             **base,
             'status': 'failed',
@@ -390,33 +381,29 @@ def _failed(
     return report
 
 
-def _skipped(
-    store: ImportStore, chunk: int, base: dict[str, Any], kind: str, report: ImportReport
+async def _skipped(
+    ctx: ImportContext, base: dict[str, Any], kind: str, report: ImportReport
 ) -> ImportReport:
     report.images_skipped += 1
-    store.append_ledger(
-        chunk, {**base, 'status': 'skipped', 'error_kind': kind, 'report': report.to_dict()}
+    await ctx.ledger.finish(
+        base['rel_path'],
+        {**base, 'status': 'skipped', 'error_kind': kind, 'report': report.to_dict()},
     )
     return report
 
 
 async def import_chunk(
-    ctx: ImportContext, store: ImportStore, chunk: int, entries: list[ScanEntry]
+    ctx: ImportContext, entries: list[ScanEntry], priors: dict[str, dict[str, Any] | None]
 ) -> ImportReport:
-    """Import one chunk; returns its report. Images a previous (crashed) run
-    already finished are not redone."""
-    prior_rows = store.chunk_rows(chunk)
+    """Import one chunk of claimed images; returns its report. ``priors`` maps an image's
+    ``rel_path`` to the write-ahead row an earlier attempt left on it."""
     total = ImportReport()
     if ctx.source_format == 'openprocessor_export':
         ctx.stem_resolutions = await resolve_stems(
             ctx.opensearch, entries, images_index=ctx.images_index, items_index=ctx.items_index
         )
     for entry in entries:
-        prior = prior_rows.get(entry.rel_path)
-        if prior and prior.get('status') in _FINAL:
-            total.add(ImportReport.from_dict(prior.get('report') or {}))
-            continue
-        total.add(await _import_one(ctx, store, chunk, entry, prior))
+        total.add(await _import_one(ctx, entry, priors.get(entry.rel_path)))
     for index in (ctx.images_index, ctx.items_index):
         await ctx.opensearch.indices.refresh(index=index)
     return total

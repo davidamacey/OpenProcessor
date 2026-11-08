@@ -86,7 +86,7 @@ def _snapshot(key: str) -> dict:
 @pytest.mark.asyncio
 async def test_preserve_union_keeps_anything_test_in_any_source(world: World) -> None:
     ids = build(world)
-    store, target = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
+    run, target = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
     images = by_origin(world)
     expect_test = {
         images[ids['a_test']]['image_id'],  # the test split
@@ -113,7 +113,7 @@ async def test_preserve_union_keeps_anything_test_in_any_source(world: World) ->
     record = _snapshot(freeze.snapshot_storage_key)
     assert record['crop_ids'] == frozen
     assert record['test_holdout_sha'] == compute_holdout_sha(frozen)
-    assert store.job.read()['report']['holdout_items'] == len(frozen)
+    assert run.report['holdout_items'] == len(frozen)
 
 
 @pytest.mark.asyncio

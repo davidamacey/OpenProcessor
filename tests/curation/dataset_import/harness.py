@@ -1,25 +1,31 @@
-"""Run a real import end to end against the in-memory fakes.
+"""Run a real import end to end against the in-memory fakes and a real database.
 
-The harness builds exactly what the route builds (``prepare_import`` ->
-claim -> pinned mapping -> ``ImportContext`` -> ``run_import_job``) with the
-OpenSearch, Triton and PE-encoder I/O boundary faked, so a test exercises
-the production importer, not a stand-in.
+The harness builds exactly what the job builds (``prepare_import`` -> pinned mapping ->
+``ImportContext`` -> ``run_import_job`` -> ``finish``) with the OpenSearch, Triton and
+PE-encoder I/O boundary faked. The ``dataset_imports`` row and the ledger are real rows in the
+test database (a ``db`` test: ``pytestmark = pytest.mark.db``), so a test exercises the
+production importer and ledger, not a stand-in.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import uuid
 from pathlib import Path
 from typing import Any
 
 from _class_registry_fake import InMemoryRegistry
+from fixtures.job_rows import sql
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import CurationConfig, DetectionProfile, get_curation_config
-from src.services.curation.dataset_import import runner
+from src.config.project_context import current_project_id
+from src.db.models.datasets import DatasetImport
+from src.services.curation.dataset_import import rows as import_rows, runner
 from src.services.curation.dataset_import.context import ImportContext
+from src.services.curation.dataset_import.job import ImportRunError, finish
 from src.services.curation.dataset_import.mapping import ClassMappingEntry
 from src.services.curation.dataset_import.options import (
     DatasetImportOptions,
@@ -32,8 +38,83 @@ from src.services.curation.dataset_import.prepare import (
     pin_project_view,
     prepare_import,
 )
-from src.services.curation.dataset_import.store import ImportStore, imports_root, new_import_id
 from src.services.curation.ingest import CurationIngestService
+
+
+PG: Any = None
+"""The test database, set by the directory's conftest."""
+
+
+class FakeRun:
+    """The slice of the job context the loop uses: ``cancel_after`` cancels once that many
+    progress snapshots were written."""
+
+    def __init__(self, cancel_after: int | None = None) -> None:
+        self.snapshots: list[dict[str, Any]] = []
+        self._cancel_after = cancel_after
+
+    def cancelled(self) -> bool:
+        return self._cancel_after is not None and len(self.snapshots) >= self._cancel_after
+
+    async def progress(
+        self,
+        done: int,
+        total: int | None = None,
+        stage: str | None = None,
+        counters: Any = None,
+        *,
+        force: bool = False,  # noqa: ARG002
+    ) -> None:
+        self.snapshots.append(
+            {'done': done, 'total': total, 'stage': stage, 'counters': dict(counters or {})}
+        )
+
+
+class _JobState:
+    """What the old per-import state file served to a test: status, report, run facts."""
+
+    def __init__(self, handle: ImportHandle) -> None:
+        self._handle = handle
+
+    def read(self) -> dict[str, Any]:
+        [(report, scan)] = sql(
+            PG,
+            'SELECT report, scan FROM dataset_imports WHERE id = %s',
+            uuid.UUID(self._handle.import_id),
+        )
+        return {
+            **(scan or {}),
+            'report': {k: v for k, v in (report or {}).items() if k != 'job_issues'} or None,
+            'job_issues': (report or {}).get('job_issues') or [],
+            'status': self._handle.status,
+            'error': self._handle.error,
+        }
+
+
+class ImportHandle(import_rows.Ledger):
+    """One import's ledger (what ``undo_import`` reads) with the facts a test asserts on."""
+
+    def __init__(self, import_id: uuid.UUID) -> None:
+        super().__init__(import_rows.project_sessions(), import_id)
+        self.status = 'queued'
+        self.error: str | None = None
+        self.snapshots: list[dict[str, Any]] = []
+        self.job = _JobState(self)
+
+    def ledger_rows(self) -> list[dict[str, Any]]:
+        found = sql(
+            PG,
+            'SELECT image_key, status, image_id, error, detail FROM dataset_import_images '
+            "WHERE import_id = %s ORDER BY (detail->>'ord')::int",
+            uuid.UUID(self.import_id),
+        )
+        return [import_rows.legacy_row(*r) for r in found]
+
+    def read_mapping(self) -> dict[str, Any]:
+        [(mapping,)] = sql(
+            PG, 'SELECT mapping FROM dataset_imports WHERE id = %s', uuid.UUID(self.import_id)
+        )
+        return dict(mapping)
 
 
 def write_image(path: Path, size: tuple[int, int] = (100, 100), color: str = 'red') -> None:
@@ -95,7 +176,6 @@ class Harness:
         self.tmp = tmp_path
         import src.config.curation_accessors as curation_config_mod
 
-        monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
         monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
         monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
         monkeypatch.setattr(
@@ -126,7 +206,8 @@ class Harness:
             config=self.cfg,
         )
         self.guard = dataset_path_guard()
-        self.last_store: ImportStore | None = None
+        self.last_store: ImportHandle | None = None
+        self.pending: list[str] = []
 
     @property
     def items(self) -> dict[str, dict[str, Any]]:
@@ -156,8 +237,29 @@ class Harness:
             request, pin_project_view(self.registry.load()), path_guard=self.guard
         )
 
+    async def begin(self, request: DatasetImportRequest, prepared: Any) -> ImportHandle:
+        """What a start persists: the import row (request, pinned mapping, scan facts)."""
+        import_id = uuid.uuid4()
+        async with import_rows.project_sessions()() as session:
+            session.add(
+                DatasetImport(
+                    id=import_id,
+                    project_id=current_project_id(),
+                    source_key=request.source.path,
+                    format=prepared.scan.format,
+                    mapping=runner.pinned_mapping(prepared),
+                    options=request.model_dump(mode='json'),
+                    scan=runner.scan_document(
+                        prepared, request, [], freeze_test=runner.freeze_default(prepared, request)
+                    ),
+                )
+            )
+        handle = ImportHandle(import_id)
+        self.last_store = handle
+        return handle
+
     def context(
-        self, store: ImportStore, request: DatasetImportRequest, prepared: Any
+        self, store: ImportHandle, request: DatasetImportRequest, prepared: Any
     ) -> ImportContext:
         return ImportContext(
             import_id=store.import_id,
@@ -176,45 +278,83 @@ class Harness:
             upload_root=self.tmp / 'uploads',
             export_root=None,
             freeze_test=runner.freeze_default(prepared, request),
+            ledger=store,
+            enqueue_pending=self._record_pending,
         )
 
+    async def _record_pending(self, image_ids: list[str]) -> None:
+        self.pending.extend(image_ids)
+
+    async def _execute(
+        self,
+        store: ImportHandle,
+        ctx: ImportContext,
+        entries: list[Any],
+        *,
+        cancel_after: int | None = None,
+    ) -> None:
+        """Run the loop and settle the way the job wrapper does; a crash (any exception out of
+        the loop) leaves the import ``interrupted``, as the reaper would."""
+        control = FakeRun(cancel_after)
+        store.status = 'running'
+        try:
+            outcome = await runner.run_import_job(control, ctx, entries)
+            record = await self._record(store)
+            result = await finish(store.sessions, ctx, record, outcome, total=len(entries))
+        except ImportRunError as exc:
+            store.status, store.error = 'failed', str(exc)
+            return
+        except BaseException:
+            store.status = 'interrupted'
+            raise
+        finally:
+            store.snapshots = control.snapshots
+        if outcome.cancelled:
+            store.status = 'cancelled'
+        else:
+            with_errors = getattr(result, 'with_errors', False)
+            store.status = 'completed_with_errors' if with_errors else 'completed'
+
+    async def _record(self, store: ImportHandle) -> import_rows.ImportRecord:
+        async with store.sessions() as session:
+            record = await import_rows.get(session, uuid.UUID(store.import_id))
+        assert record is not None
+        return record
+
     async def run(
-        self, request: DatasetImportRequest, *, after_chunk: Any = None
-    ) -> tuple[ImportStore, Any]:
+        self,
+        request: DatasetImportRequest,
+        *,
+        after_chunk: Any = None,
+        cancel_after: int | None = None,
+    ) -> tuple[ImportHandle, Any]:
         prepared = self.prepare(request)
         assert not prepared.resolved.errors, prepared.resolved.errors
-        store, reused = await runner.claim_import(self.os, request, prepared)
-        assert not reused
-        self.last_store = store
         await materialize_created_classes(prepared.resolved, self.registry)
-        runner.persist_pinned(store, prepared)
-        runner.persist_scan_summary(store, prepared, [])
-        store.job.update(freeze_test=runner.freeze_default(prepared, request))
+        store = await self.begin(request, prepared)
         ctx = self.context(store, request, prepared)
         ctx.after_chunk = after_chunk
-        try:
-            await runner.run_import_job(ctx, store, runner.ordered_entries(prepared.scan.entries))
-        finally:
-            await runner.abandon_claim(self.os, store)
+        await self._execute(
+            store, ctx, runner.ordered_entries(prepared.scan.entries), cancel_after=cancel_after
+        )
         return store, ctx
 
-    async def resume(self, store: ImportStore, request: DatasetImportRequest) -> ImportContext:
-        """Resume exactly as ``POST /imports/{id}/resume`` does: everything
-        but the dataset path comes from what the START persisted."""
-        runner.check_resumable(store)
-        entries = runner.rescan_for_resume(store, request, path_guard=self.guard)
-        await runner.prepare_resume(store, self.registry)
-        resolved, profile, parents = runner.load_pinned(store)
-        state = store.job.read()
+    async def resume(self, store: ImportHandle, request: DatasetImportRequest) -> ImportContext:
+        """Resume exactly as the job does at the start of an attempt: the dataset is scanned
+        again (and must be unchanged); everything else comes from what the START persisted."""
+        record = await self._record(store)
+        entries = runner.rescan(request, record.scan.get('source_sha'), path_guard=self.guard)
+        resolved, profile, parents = runner.load_pinned(record.mapping)
+        await materialize_created_classes(resolved, self.registry)
         ctx = ImportContext(
             import_id=store.import_id,
             options=request.options,
             resolved=resolved,
             profile=profile,
             parents=parents,
-            source_sha=state['source_sha'],
-            source_format=state['source_format'],
-            source_root=Path(state['source_root']),
+            source_sha=record.scan['source_sha'],
+            source_format=record.scan['source_format'],
+            source_root=Path(record.scan['source_root']),
             opensearch=self.os,
             service=self.service,
             images_index=self.cfg.images_index,
@@ -222,11 +362,11 @@ class Harness:
             crop_cache_dir=self.cfg.crop_cache_dir,
             upload_root=self.tmp / 'uploads',
             export_root=None,
-            freeze_test=bool(state.get('freeze_test')),
+            freeze_test=bool(record.scan.get('freeze_test')),
+            ledger=store,
+            enqueue_pending=self._record_pending,
         )
-        store.job.clear_signals()
-        store.job.update(status='queued', error=None, finished_at=None)
-        await runner.run_import_job(ctx, store, entries)
+        await self._execute(store, ctx, entries)
         return ctx
 
     def undo_context(self, import_id: str):
@@ -242,12 +382,6 @@ class Harness:
             region_fields=get_region_fields(),
             registry=self.registry,
         )
-
-    def fresh_id(self) -> str:
-        return new_import_id('0' * 64)
-
-    def imports_dir(self) -> Path:
-        return imports_root()
 
 
 def map_all(registry: InMemoryRegistry, *names: str) -> list[ClassMappingEntry]:

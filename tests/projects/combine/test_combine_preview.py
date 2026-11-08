@@ -14,7 +14,6 @@ from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.combine import service
 from src.services.projects.combine.models import CombineRequest, CombineStartRequest
-from src.services.projects.combine.store import combine_base_dir
 from src.services.rejections import rejection
 
 from .world import World, snapshot_indexes
@@ -201,7 +200,7 @@ async def test_a_stale_sha_is_a_409_on_start(world: World) -> None:
         await service.start(world.fake, stale)
     assert exc.value.status_code == 409
     assert exc.value.detail['error'] == 'preview_stale'
-    assert not combine_base_dir().exists()  # nothing was created
+    assert 'combined' not in world.records  # no target project was created
 
 
 @pytest.mark.asyncio

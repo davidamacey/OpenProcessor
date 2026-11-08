@@ -3,22 +3,13 @@ the target leaves the sources whole)."""
 
 from __future__ import annotations
 
-import os
 import shutil
-import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from src.services.projects.combine import execute
-from src.services.projects.combine.store import (
-    ACTIVE_STATUSES,
-    iter_jobs,
-    open_job,
-    reconcile_orphaned_jobs,
-    running_jobs_for,
-)
 
 from .test_combine_execute import MAPPING, build
 from .world import World, run_job, snapshot_indexes, tree_hash
@@ -36,12 +27,8 @@ def renamed(request: Any, slug: str) -> Any:
     return request.model_copy(update={'target': request.target.model_copy(update={'slug': slug})})
 
 
-def combined_store() -> Any:
-    return next(s for s in iter_jobs() if s.job.read().get('target') == 'combined')
-
-
 @pytest.mark.asyncio
-async def test_cancel_after_a_chunk_then_resume_finishes_without_duplicates(
+async def test_cancel_after_a_chunk_settles_the_target_and_a_new_attempt_resumes_from_the_checkpoint(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     build(world)
@@ -56,25 +43,21 @@ async def test_cancel_after_a_chunk_then_resume_finishes_without_duplicates(
 
     monkeypatch.setattr(execute, 'copy_page', counting)
     reference, _ = await run_job(world, renamed(request, 'reference'))
-    assert reference.job.read()['status'] == 'completed'
+    assert reference.status == 'completed'
     pages = len(calls)
     assert pages > 2
     calls.clear()
+    world.settled.clear()
 
-    async def cancel_after_first(ctx: Any, source_index: int, page: Any) -> Any:
-        out = await counting(ctx, source_index, page)
-        if len(calls) == 1:
-            combined_store().job.request_cancel()
-        return out
-
-    monkeypatch.setattr(execute, 'copy_page', cancel_after_first)
-    store, _ = await run_job(world, request)
-    assert store.job.read()['status'] == 'cancelled'
+    run, _ = await run_job(world, request, cancel_after=1)
+    assert run.status == 'cancelled'
+    assert world.settled == [False]  # cancel is terminal: the target is failed, not left building
     assert 0 < len(world.items('combined')) < len(world.items('reference'))
 
-    monkeypatch.setattr(execute, 'copy_page', counting)
-    await run_job(world, request, resume=store)
-    assert store.job.read()['status'] == 'completed'
+    # The reaper resumes an interrupted job under the same id with the checkpoint it wrote.
+    world.settled.clear()
+    resumed, _ = await run_job(world, request, resume=run)
+    assert resumed.status == 'completed'
     assert origins(world, 'combined') == origins(world, 'reference')
     assert len(origins(world, 'combined')) == len(set(origins(world, 'combined')))
     assert len(world.images('combined')) == len(world.images('reference'))
@@ -82,7 +65,7 @@ async def test_cancel_after_a_chunk_then_resume_finishes_without_duplicates(
 
 
 @pytest.mark.asyncio
-async def test_a_kill_mid_chunk_is_repaired_and_resumes_to_the_same_result(
+async def test_an_error_mid_chunk_resumes_to_the_same_result(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     build(world)
@@ -97,28 +80,17 @@ async def test_a_kill_mid_chunk_is_repaired_and_resumes_to_the_same_result(
         out = await real(ctx, source_index, page)
         seen['n'] += 1
         if seen['n'] == 2:
-            raise Killed  # the docs of this chunk are written, its mark is not
+            raise RuntimeError('worker died')  # the docs of this chunk are written, its mark is not
         return out
 
     monkeypatch.setattr(execute, 'copy_page', die_after_writing)
-    with pytest.raises(Killed):
-        await run_job(world, request)
-    store = combined_store()
-    assert store.job.read()['status'] == 'running'  # nothing got to finish it
-
-    # Startup repair: a dead process's live-looking job becomes interrupted.
-    old = time.time() - 600
-    os.utime(store.job.heartbeat_file, (old, old))
-    assert reconcile_orphaned_jobs() == 1
-    assert store.job.read()['status'] == 'interrupted'
-    assert not running_jobs_for('cars-a')  # no longer busy
+    run, _ = await run_job(world, request)
+    assert run.status == 'failed'
+    assert world.settled[-1] is False
 
     monkeypatch.setattr(execute, 'copy_page', real)
-    # A cold worker: nothing but the files on disk.
-    cold = open_job(store.import_id)
-    assert cold is not None
-    await run_job(world, request, resume=cold)
-    assert cold.job.read()['status'] == 'completed'
+    resumed, _ = await run_job(world, request, resume=run)
+    assert resumed.status == 'completed'
     assert origins(world, 'combined') == origins(world, 'reference')
     assert len(world.images('combined')) == len(world.images('reference'))
 
@@ -127,8 +99,8 @@ async def test_a_kill_mid_chunk_is_repaired_and_resumes_to_the_same_result(
 async def test_resume_uses_the_persisted_plan_not_a_fresh_one(world: World) -> None:
     build(world)
     request = world.request(['cars-a', 'cars-b'], MAPPING)
-    store, _ = await run_job(world, request)
-    plan = execute.load_plan(store)
+    run, _ = await run_job(world, request)
+    plan = execute.load_plan(run.params, run.document)
     assert plan.mapping.target_classes == ['car', 'truck']
     assert plan.mapping.per_source['cars-b']['sedan'].class_name == 'car'
     assert plan.duplicates  # the dedup decision is part of the plan
@@ -136,16 +108,13 @@ async def test_resume_uses_the_persisted_plan_not_a_fresh_one(world: World) -> N
 
 
 @pytest.mark.asyncio
-async def test_a_job_with_a_live_heartbeat_marks_its_projects_busy(world: World) -> None:
+async def test_a_run_that_lost_its_lease_writes_nothing_more(world: World) -> None:
     build(world)
     request = world.request(['cars-a', 'cars-b'], MAPPING)
-    store, _ = await run_job(world, request)
-    store.job.update(status='running')
-    store.job.touch_heartbeat()
-    assert store.job.read()['status'] in ACTIVE_STATUSES
-    assert [j for j, _ in running_jobs_for('cars-a')] == [store.import_id]
-    assert [j for j, _ in running_jobs_for('combined')] == [store.import_id]
-    assert not running_jobs_for('unrelated')
+    run, _ = await run_job(world, request, lease_lost=True)
+    assert run.result is None
+    assert world.items('combined') == {}
+    assert world.settled == []  # the successor settles the target
 
 
 @pytest.mark.asyncio
@@ -163,27 +132,3 @@ async def test_deleting_the_target_leaves_the_sources_whole(world: World) -> Non
     assert {s: tree_hash(world.records[s].resources.upload_root) for s in slugs} == trees
     for image in world.images('cars-a').values():
         assert Path(image['image_path']).read_bytes()  # hard links never shared the source's fate
-
-
-@pytest.mark.asyncio
-async def test_progress_events_name_the_target_and_busy_lists_the_job(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from src.services.events import publish as event_publish
-
-    build(world)
-    events: list[tuple[str, dict[str, Any]]] = []
-
-    async def _record_global(event_type: str, **fields: object) -> None:
-        events.append((event_type, fields))
-
-    monkeypatch.setattr(
-        event_publish,
-        'apublish_global_event',
-        _record_global,
-    )
-    store, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
-    assert events
-    assert {t for t, _ in events} == {'combine.progress'}
-    assert all(f['target'] == 'combined' and f['job_id'] == store.import_id for _, f in events)
-    assert events[-1][1]['status'] == 'completed'

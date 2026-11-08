@@ -18,10 +18,11 @@ from src.services.curation.dataset_import import upload
 from src.services.curation.dataset_import.upload import (
     ArchiveInvalidError,
     datasets_root,
-    receive_archive,
     safe_extract,
     sweep_uploads,
 )
+
+from .upload_support import receive_archive
 
 
 if TYPE_CHECKING:

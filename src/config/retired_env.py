@@ -71,6 +71,10 @@ RETIRED_ENV: dict[str, str] = {
     'OP_GLOBAL_CONFIGS_INDEX': f'{_REMOVED} the endpoint registry is stored in PostgreSQL',
     # The project records are PostgreSQL rows, not an OpenSearch index.
     'OP_PROJECTS_INDEX': f'{_REMOVED} projects are rows in PostgreSQL; there is no projects index',
+    # A combine is a jobs row with combine_runs beside it, not a directory of job files.
+    'OP_COMBINE_JOBS_DIR': f'{_REMOVED} a combine is a row in jobs; there is no job directory',
+    # A dataset import is a dataset_imports row and a jobs row, its ledger rows in the database.
+    'OP_DATASET_IMPORTS_DIR': f'{_REMOVED} an import is rows in PostgreSQL, not a directory',
 }
 
 

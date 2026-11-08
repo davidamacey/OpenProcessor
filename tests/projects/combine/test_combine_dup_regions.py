@@ -53,9 +53,9 @@ async def test_a_validated_region_box_of_a_duplicate_image_is_kept(world: World)
             {'cls': 'wheel', 'bbox': WHEEL, 'class_validated': True},
         ],
     )
-    store, _ = await run_job(world, world.request(['a', 'b'], MAPPING))
+    run, _ = await run_job(world, world.request(['a', 'b'], MAPPING))
     assert _boxes(world) == [tuple(WHEEL)]
-    assert store.job.read()['report']['regions_attached'] == 1
+    assert run.report['regions_attached'] == 1
 
 
 @pytest.mark.asyncio
@@ -67,9 +67,9 @@ async def test_a_box_the_priority_copy_already_holds_is_not_added_twice(world: W
             seed=SEED,
             items=[{'cls': 'car', 'bbox': CAR}, {'cls': 'wheel', 'bbox': WHEEL}],
         )
-    store, _ = await run_job(world, world.request(['a', 'b'], MAPPING))
+    run, _ = await run_job(world, world.request(['a', 'b'], MAPPING))
     assert _boxes(world) == [tuple(WHEEL)]
-    assert store.job.read()['report']['regions_already_present'] == 1
+    assert run.report['regions_already_present'] == 1
 
 
 @pytest.mark.asyncio

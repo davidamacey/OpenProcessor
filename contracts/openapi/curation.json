@@ -8827,6 +8827,17 @@
             "title": "Issues Summary",
             "type": "array"
           },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
           "labels": {
             "additionalProperties": {
               "additionalProperties": {
@@ -10000,6 +10011,31 @@
         "title": "DatasetUndoRequest",
         "type": "object"
       },
+      "DatasetUploadAccepted": {
+        "description": "The archive is stored and its extraction queued. The job's result carries\n``{upload_id, dataset_path, bytes, files}`` once it completes.",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "queued",
+            "title": "Status",
+            "type": "string"
+          },
+          "upload_id": {
+            "title": "Upload Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "job_id",
+          "status"
+        ],
+        "title": "DatasetUploadAccepted",
+        "type": "object"
+      },
       "DatasetUploadLimits": {
         "properties": {
           "max_bytes": {
@@ -10026,34 +10062,6 @@
           "preview_max_files"
         ],
         "title": "DatasetUploadLimits",
-        "type": "object"
-      },
-      "DatasetUploadResponse": {
-        "properties": {
-          "bytes": {
-            "title": "Bytes",
-            "type": "integer"
-          },
-          "dataset_path": {
-            "title": "Dataset Path",
-            "type": "string"
-          },
-          "files": {
-            "title": "Files",
-            "type": "integer"
-          },
-          "upload_id": {
-            "title": "Upload Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "upload_id",
-          "dataset_path",
-          "bytes",
-          "files"
-        ],
-        "title": "DatasetUploadResponse",
         "type": "object"
       },
       "DeleteBlockingIssue": {
@@ -40490,7 +40498,7 @@
     },
     "/curation/projects/{project}/classes/merge": {
       "post": {
-        "description": "Mark source deprecated; bulk-relabel matching crops + labels.\n\n``dry_run=true`` returns ``{dry_run, source_id, target_id,\nwould_relabel, validations_carried_over, holdout_blocking, blocked}``\nand writes nothing (a real merge 409s when ``holdout_blocking > 0``).\nA human-validated crop of the source class stays validated under the\ntarget — ``validations_carried_over`` counts how many crops keep their\nvalidation this way, not (unlike the retired ``would_unvalidate``\nfield) how many lose it.",
+        "description": "Queue the merge of ``source_id`` into ``target_id``: 202 with the ``class_merge`` job.\n\nThe job deprecates the source in the registry, then bulk-relabels its crops and labels; a\nmerge whose source holds frozen ``test_holdout`` crops is refused with 409 here and again by\nthe job. ``dry_run=true`` returns ``{dry_run, source_id, target_id, would_relabel,\nvalidations_carried_over, holdout_blocking, blocked}`` and writes nothing. A human-validated\ncrop of the source class stays validated under the target.",
         "operationId": "merge_class_curation_projects__project__classes_merge_post",
         "parameters": [
           {
@@ -40529,11 +40537,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Merge Class Curation Projects  Project  Classes Merge Post",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -45610,6 +45614,7 @@
     },
     "/curation/projects/{project}/datasets/imports/{import_id}/resume": {
       "post": {
+        "description": "Queue the rest of the import. Nothing is scanned in the request: the worker scans the\ndataset again and fails the job if it changed since the import started.",
         "operationId": "resume_dataset_import_curation_projects__project__datasets_imports__import_id__resume_post",
         "parameters": [
           {
@@ -45782,6 +45787,7 @@
     },
     "/curation/projects/{project}/datasets/uploads": {
       "post": {
+        "description": "Store the archive and queue its extraction (`dataset_upload_extract`); nothing is\nextracted in the request. Poll the job: its result names the extracted `dataset_path`.",
         "operationId": "upload_dataset_curation_projects__project__datasets_uploads_post",
         "parameters": [
           {
@@ -45805,11 +45811,11 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatasetUploadResponse"
+                  "$ref": "#/components/schemas/DatasetUploadAccepted"
                 }
               }
             },

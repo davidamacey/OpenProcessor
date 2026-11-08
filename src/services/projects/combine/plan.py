@@ -336,7 +336,11 @@ def _byte_counts(
 
 
 async def analyze(
-    client: Any, request: CombineRequest, records: list[ProjectRecord], *, target_dim: int
+    client: Any,
+    request: CombineRequest,
+    records: list[ProjectRecord],
+    *,
+    target_keys: frozenset[str],
 ) -> Analysis:
     """Read the sources and compute the whole plan. ``records`` are in
     ``request.sources`` order, every source present."""
@@ -385,7 +389,7 @@ async def analyze(
                 'the recomputed test images',
             )
         )
-    warnings.extend(await embedding_model_mismatch(client, records, target_dim))
+    warnings.extend(await embedding_model_mismatch(client, records, target_keys))
     warnings.extend(await region_profiles_differ(request, records))
     return Analysis(
         request=request,

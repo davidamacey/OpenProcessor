@@ -179,6 +179,8 @@ class DatasetUndoReportWire(BaseModel):
 class DatasetImportJob(BaseModel):
     project: str
     import_id: str
+    job_id: str | None = None
+    """The queued job to poll (`GET /jobs/{id}`): the undo job while an undo runs."""
     import_key: str
     name: str
     status: ImportStatus
@@ -244,11 +246,13 @@ class DatasetUndoRequest(BaseModel):
     deprecate_created_classes: bool = True
 
 
-class DatasetUploadResponse(BaseModel):
+class DatasetUploadAccepted(BaseModel):
+    """The archive is stored and its extraction queued. The job's result carries
+    ``{upload_id, dataset_path, bytes, files}`` once it completes."""
+
     upload_id: str
-    dataset_path: str
-    bytes: int
-    files: int
+    job_id: str
+    status: Literal['queued']
 
 
 class DatasetFormatInfo(BaseModel):

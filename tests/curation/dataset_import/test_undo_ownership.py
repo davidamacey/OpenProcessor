@@ -32,6 +32,9 @@ HUMAN = {'class_source': 'human', 'label_source': 'human', 'class_validated': Tr
 pytest_plugins = ['_records_world']
 
 
+pytestmark = pytest.mark.db
+
+
 @pytest.mark.asyncio
 async def test_a_human_verdict_on_an_untouched_import_box_keeps_the_box(
     tmp_path: Path, monkeypatch: Any

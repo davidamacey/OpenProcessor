@@ -9,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+from curation.dataset_import.db_fixture import import_database  # noqa: F401 - fixture
 from curation.dataset_import.harness import Harness, write_yolo_splits
 
 from src.config.curation import CurationConfig
@@ -28,6 +29,9 @@ SPLITS = {
 
 
 pytest_plugins = ['_records_world']
+
+
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('import_database')]
 
 
 def _mapping(h: Harness, root: Path) -> list[ClassMappingEntry]:

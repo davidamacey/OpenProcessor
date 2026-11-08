@@ -10,7 +10,6 @@ from typing import Any
 import pytest
 
 from src.services.detection.geometry import crop_id as make_crop_id
-from src.services.projects.combine.store import ACTIVE_STATUSES
 
 from .world import DIM, World, run_job, snapshot_indexes, tree_hash
 
@@ -93,15 +92,14 @@ def target_item(world: World, scenario: Scenario, origin_crop: str, project: str
 async def test_two_sources_combine_into_one_project(world: World) -> None:
     sc = build(world)
     request = world.request(['cars-a', 'cars-b'], MAPPING)
-    store, _target = await run_job(world, request)
+    run, _target = await run_job(world, request)
 
-    state = store.job.read()
-    assert state['status'] == 'completed', state.get('error')
+    assert run.status == 'completed', run.error
     # 3 + 3 images, the shared one once.
     assert len(world.images('combined')) == 5
     items = world.items('combined')
     assert len(items) == 5  # a: 1+1+2, b: 1 + (shared: one merged, one conflict)
-    report = state['report']
+    report = run.report
     assert report['images_copied'] == 5
     assert report['images_duplicate'] == 1
     assert report['items_merged'] == 1
@@ -111,7 +109,7 @@ async def test_two_sources_combine_into_one_project(world: World) -> None:
     assert ids == {'car': 0, 'truck': 1}
     for doc in items.values():
         assert doc['class_id'] == ids[doc['class_name']]
-        assert doc['import_ids'] == [store.import_id]
+        assert doc['import_ids'] == [run.job_id]
         assert doc['origin_project'] in ('cars-a', 'cars-b')
         assert 'cluster_id' not in doc
         assert 'class_id_history' not in doc  # snapshots of source numbering
@@ -124,7 +122,7 @@ async def test_two_sources_combine_into_one_project(world: World) -> None:
 @pytest.mark.asyncio
 async def test_provenance_and_label_source_are_preserved(world: World) -> None:
     sc = build(world)
-    store, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
+    run, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
     human = target_item(world, sc, sc.crops['a1_car'], 'cars-a')
     assert human['label_source'] == 'human'
     assert human['class_validated'] is True
@@ -134,7 +132,7 @@ async def test_provenance_and_label_source_are_preserved(world: World) -> None:
     assert detector['class_validated'] is False
     # The images doc carries the same provenance.
     image = next(d for d in world.images('combined').values() if d['origin_image_id'] == sc.b1)
-    assert (image['origin_project'], image['import_ids']) == ('cars-b', [store.import_id])
+    assert (image['origin_project'], image['import_ids']) == ('cars-b', [run.job_id])
     # The crop id is recomputed from the TARGET image id.
     for crop_id, doc in world.items('combined').items():
         assert crop_id == make_crop_id(doc['image_id'], doc['bbox_norm'])
@@ -254,9 +252,9 @@ async def test_validated_only_copies_validated_items_and_their_frames(world: Wor
 @pytest.mark.asyncio
 async def test_dedup_none_keeps_both_copies(world: World) -> None:
     build(world)
-    store, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING, dedup='none'))
+    run, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING, dedup='none'))
     assert len(world.images('combined')) == 6
-    assert store.job.read()['report'].get('items_merged', 0) == 0
+    assert run.report.get('items_merged', 0) == 0
 
 
 @pytest.mark.asyncio
@@ -273,20 +271,20 @@ async def test_skipped_class_is_dropped_and_embeddings_survive_by_dimension(
             {'dataset_class': 'bus', 'action': 'skip'},
         ]
     }
-    store, _ = await run_job(world, world.request(['p'], mapping))
+    run, _ = await run_job(world, world.request(['p'], mapping))
     (doc,) = world.items('combined').values()
     assert doc['origin_item_id'] == car
     assert doc['pe_embedding'] == [0.2] * DIM
-    assert store.job.read()['report']['items_skipped'] == 1
+    assert run.report['items_skipped'] == 1
     assert world.items_index('combined') != world.items_index('p')
     assert bus  # silence unused
 
 
 @pytest.mark.asyncio
-async def test_job_status_is_terminal_and_not_active(world: World) -> None:
+async def test_the_result_carries_the_report_and_the_next_step(world: World) -> None:
     build(world)
-    store, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
-    state = store.job.read()
-    assert state['status'] not in ACTIVE_STATUSES
-    assert state['phase'] == 'done'
-    assert state['next_steps'][0]['action'] == 'recluster'
+    run, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
+    assert run.status == 'completed'
+    assert run.result['next_steps'][0]['action'] == 'recluster'
+    assert run.ctx.stages[0] == 'registry'
+    assert 'images' in run.ctx.stages

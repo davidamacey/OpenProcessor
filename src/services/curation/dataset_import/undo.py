@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from src.config.region_fields import RegionFields
     from src.services.classes.registry import ClassRegistry
-    from src.services.curation.dataset_import.store import ImportStore
+    from src.services.curation.dataset_import.rows import Ledger
 
 _IMPORT_STAMP_FIELDS = (
     'imported_at',
@@ -300,20 +300,19 @@ async def _mget(ctx: UndoContext, index: str, ids: list[str]) -> dict[str, dict[
 
 async def undo_import(
     ctx: UndoContext,
-    store: ImportStore,
+    ledger: Ledger,
     *,
     dry_run: bool,
     remove_images: bool = True,
     deprecate_created_classes: bool = True,
     created_classes: dict[str, int] | None = None,
 ) -> UndoReport:
-    """Undo (or, with ``dry_run``, count) one import from its ledger."""
+    """Undo (or, with ``dry_run``, count) one import from its ledger. Rows an earlier undo
+    finished are ``undone`` and not read again."""
     report = UndoReport(import_id=ctx.import_id, dry_run=dry_run)
     to_delete: dict[str, tuple[dict[str, Any], list[dict[str, Any]], str]] = {}
     created_images: list[str] = []
-    for row in store.ledger_rows():
-        if row.get('status') == 'failed':
-            continue
+    async for row in ledger.rows(statuses=('pending', 'written', 'skipped')):
         froze = bool(row.get('froze_test'))
         entries = [{**e, 'import_froze_holdout': froze} for e in row.get('items') or []]
         boxes_by_crop: dict[str, list[dict[str, Any]]] = {}
