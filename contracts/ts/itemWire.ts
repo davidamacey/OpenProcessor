@@ -14,6 +14,15 @@ export interface AssistBoxWire {
   attributes: AssistAttributeWire[];
 }
 
+export interface ClusterRef {
+  uid: string | null;
+  partition_id: string;
+  state: string | null;
+  score: number | null;
+  margin: number | null;
+  assigned_by: string | null;
+}
+
 export interface ItemAssistWire {
   run_id: string;
   run_created_at: string;
@@ -72,6 +81,7 @@ export interface ItemWire {
   proposed_class_name: string;
   needs_new_class: boolean;
   needs_new_class_note: string | null;
+  cluster: ClusterRef | null;
   cluster_id: number | null;
   cluster_kind: string | null;
   cluster_distance: number | null;
@@ -200,6 +210,7 @@ export const ITEM_WIRE_KEYS = [
   'proposed_class_name',
   'needs_new_class',
   'needs_new_class_note',
+  'cluster',
   'cluster_id',
   'cluster_kind',
   'cluster_distance',

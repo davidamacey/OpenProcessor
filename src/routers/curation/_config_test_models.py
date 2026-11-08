@@ -152,6 +152,12 @@ class RegionTestCandidate(BaseModel):
     cluster_id: int | None
     cluster_subid: str | None
     cluster_distance: float | None
+    cluster_partition_id: str | None
+    cluster_uid: str | None
+    cluster_state: str | None
+    cluster_score: float | None
+    cluster_margin: float | None
+    cluster_assigned_by: str | None
     detected_at: str | None
     locked: bool
     #: The item-crop frame (what the leg returned); ``bbox_norm`` is the

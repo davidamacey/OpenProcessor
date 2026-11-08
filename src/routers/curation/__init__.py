@@ -27,6 +27,7 @@ import src.routers.curation.classes_merge  # isort: skip
 import src.routers.curation.classes_crops  # isort: skip
 import src.routers.curation.ingest  # isort: skip
 import src.routers.curation.class_seed
+import src.routers.curation.cluster_partitions
 import src.routers.curation.clusters
 import src.routers.curation.cohorts
 import src.routers.curation.config_test

@@ -133,6 +133,28 @@ class PersonManagementMixin:
         )
         return counts['updated'], counts['skipped'], counts['failed']
 
+    async def person_assignments(self) -> dict[str, str]:
+        """``face_id -> person_id`` for every face that has a person (ids only, no vectors)."""
+        out: dict[str, str] = {}
+        search_after = None
+        while True:
+            query: dict[str, Any] = {
+                'size': 5000,
+                'query': {'exists': {'field': 'person_id'}},
+                '_source': ['face_id', 'person_id'],
+                'sort': [{'_id': 'asc'}],
+            }
+            if search_after:
+                query['search_after'] = search_after
+            response = await self.opensearch.client.search(index=IndexName.FACES.value, body=query)
+            hits = response['hits']['hits']
+            if not hits:
+                return out
+            for hit in hits:
+                source = hit['_source']
+                out[source.get('face_id') or hit['_id']] = source['person_id']
+            search_after = hits[-1]['sort']
+
     async def auto_cluster_faces(
         self,
         similarity_threshold: float = 0.7,

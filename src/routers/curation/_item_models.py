@@ -16,6 +16,17 @@ from src.domain.embedding_state import EmbeddingState
 from src.services.curation.reprocess_models import ReprocessRequest
 
 
+class ClusterRef(BaseModel):
+    """The served cluster of an item (the active partition's assignment)."""
+
+    uid: str | None = None
+    partition_id: str
+    state: Literal['assigned', 'review', 'unassigned'] | None = None
+    score: float | None = None
+    margin: float | None = None
+    assigned_by: Literal['run', 'incremental', 'edit'] | None = None
+
+
 class ItemTextLine(BaseModel):
     """One OCR text line on the item crop (``box_norm`` in the item-crop
     frame; ``rel_height`` = line height / crop height)."""
@@ -123,6 +134,7 @@ class ItemDoc(BaseModel):
     proposed_class_name: str = ''
     needs_new_class: bool = False
     needs_new_class_note: str | None = None
+    cluster: ClusterRef | None = None
     cluster_id: int | None = None
     cluster_kind: Literal['class', 'candidate', 'unassigned'] | None = None
     cluster_distance: float | None = None

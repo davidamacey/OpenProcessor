@@ -14,7 +14,10 @@ from src.clients.curation_opensearch.base import (
     default_knn_spec,
     knn_field_body,
 )
-from src.clients.curation_opensearch.cluster_fields import CLUSTER_ITEM_MAPPING
+from src.clients.curation_opensearch.cluster_fields import (
+    CLUSTER_ITEM_MAPPING,
+    CLUSTER_PARTITION_MAPPING,
+)
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_ITEM_MAPPING
 from src.clients.curation_opensearch.open_vocab_fields import (
@@ -204,6 +207,7 @@ def _region_boxes_mapping() -> dict[str, Any]:
                 'cluster_id': {'type': 'integer'},
                 'cluster_subid': {'type': 'keyword'},
                 'cluster_distance': {'type': 'float'},
+                **CLUSTER_PARTITION_MAPPING,
                 'detected_at': {'type': 'date'},
             },
         },
