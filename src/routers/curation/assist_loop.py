@@ -1,20 +1,20 @@
 """Curation router sub-module: auto-label loops.
 
-``POST /assist/loops`` sizes a loop (a dry run, the default) or queues it for the loop
-worker, which samples each cluster, asks the VLM, propagates a class to a cluster that
-passes its statistical gate and splits one that does not. The routes only adapt HTTP; the
-rules (the plan, the pins, one loop per project, the lock rule, rollback) live in
+``POST /assist/loops`` sizes a loop (a dry run, the default) or queues it as a job, which
+samples each cluster, asks the VLM, propagates a class to a cluster that passes its
+statistical gate and splits one that does not. The routes only adapt HTTP; the rules (the
+plan, the pins, one loop per project, the lock rule, rollback) live in
 :mod:`src.services.curation.assist_loop`. Nothing here writes a label except ``rollback``.
 """
 
-from __future__ import annotations
-
 from typing import Annotated
 
-from fastapi import Query
+from fastapi import Header, Query
 
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, router
 from src.schemas.curation.assist_loop import (
+    AssistLoopBudgetEdit,
     AssistLoopList,
     AssistLoopRequest,
     AssistLoopState,
@@ -24,22 +24,17 @@ from src.schemas.curation.assist_loop import (
     LoopRollbackRequest,
     LoopRollbackResponse,
 )
-from src.services.curation.assist_loop import job, views
+from src.services.curation.assist_loop import service
 from src.services.curation.assist_loop.prepare import prepare_loop
-from src.services.curation.assist_loop.rollback import rollback_loop
-from src.services.curation.assist_loop.start import dry_run_state, start_loop
-
-
-def _state(loop_id: str) -> AssistLoopState:
-    state = job.read_state(loop_id)
-    if state is None:
-        views.open_store(loop_id)  # the 404
-    assert state is not None
-    return views.loop_state(state)
 
 
 @router.post('/assist/loops', response_model=AssistLoopState)
-async def create_assist_loop(body: AssistLoopRequest, opensearch: OpenSearchDep) -> AssistLoopState:
+async def create_assist_loop(
+    body: AssistLoopRequest,
+    opensearch: OpenSearchDep,
+    session: DbSessionDep,
+    idempotency_key: Annotated[str | None, Header()] = None,
+) -> AssistLoopState:
     """Size an auto-label loop, and queue it unless ``dry_run`` (the default).
 
     The response is the plan: the clusters and eligible items in scope, the sample each
@@ -53,30 +48,31 @@ async def create_assist_loop(body: AssistLoopRequest, opensearch: OpenSearchDep)
     label (``assist_propagated``) that rollback can undo."""
     prepared = await prepare_loop(opensearch, body)
     if body.dry_run:
-        return dry_run_state(prepared)
-    return views.loop_state(await start_loop(opensearch, prepared))
+        return service.dry_run_state(prepared)
+    return await service.start_loop(session, prepared, idempotency_key=idempotency_key)
 
 
 @router.get('/assist/loops', response_model=AssistLoopList)
 async def list_assist_loops(
-    active: Annotated[bool, Query(description='Only queued and running loops.')] = False,
+    session: DbSessionDep,
+    active: Annotated[bool, Query(description='Only queued, running and pausing loops.')] = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> AssistLoopList:
     """The newest loops, newest first."""
-    states = job.list_states(active_only=active, limit=limit)
-    return AssistLoopList(loops=[views.loop_state(s) for s in states])
+    return await service.list_states(session, active_only=active, limit=limit)
 
 
 @router.get('/assist/loops/{loop_id}', response_model=AssistLoopState)
-async def get_assist_loop(loop_id: str) -> AssistLoopState:
-    """One loop: its status, budget, per-level record, totals and audit. A loop whose worker
-    died reads ``interrupted`` until resumed."""
-    return _state(loop_id)
+async def get_assist_loop(loop_id: str, session: DbSessionDep) -> AssistLoopState:
+    """One loop: its status, budget, per-level record, totals, audit and what may be done
+    with it now (`control`). A loop whose worker died reads `interrupted` until resumed."""
+    return await service.get_state(session, loop_id)
 
 
 @router.get('/assist/loops/{loop_id}/nodes', response_model=LoopNodePage)
 async def list_assist_loop_nodes(
     loop_id: str,
+    session: DbSessionDep,
     level: Annotated[int | None, Query(ge=0)] = None,
     decision: Annotated[LoopDecision | None, Query()] = None,
     after: Annotated[str | None, Query(description='`next_after` of the previous page.')] = None,
@@ -84,8 +80,8 @@ async def list_assist_loop_nodes(
 ) -> LoopNodePage:
     """The nodes of the loop's tree by level then path, with each node's vote distribution
     and decision (`review_*`, `stale` and `unvisited` nodes are the ones left for review)."""
-    return views.node_page(
-        views.open_store(loop_id), level=level, decision=decision, after=after, limit=limit
+    return await service.node_page(
+        session, loop_id, level=level, decision=decision, after=after, limit=limit
     )
 
 
@@ -93,51 +89,59 @@ async def list_assist_loop_nodes(
 async def list_assist_loop_node_members(
     loop_id: str,
     node_path: str,
+    session: DbSessionDep,
     after: Annotated[str | None, Query(description='`next_after` of the previous page.')] = None,
     limit: Annotated[int, Query(ge=1, le=5000)] = 500,
 ) -> LoopMembersPage:
     """The crop ids pinned in a node at the snapshot, in id order: every member, including
     ones the lock rule keeps out of the loop."""
-    return views.member_page(views.open_store(loop_id), node_path, after=after, limit=limit)
+    return await service.member_page(session, loop_id, node_path, after=after, limit=limit)
 
 
 @router.post('/assist/loops/{loop_id}/cancel', response_model=AssistLoopState)
-async def cancel_assist_loop(loop_id: str) -> AssistLoopState:
+async def cancel_assist_loop(loop_id: str, session: DbSessionDep) -> AssistLoopState:
     """Stop a live loop after the requests in flight; what it wrote stays (roll it back to
-    undo). A loop still waiting for the worker is cancelled at once."""
-    _state(loop_id)
-    job.cancel_loop(loop_id)
-    return _state(loop_id)
+    undo). Cancel is final: a stopped loop that should continue is paused, not cancelled. A
+    loop still waiting for a worker is cancelled at once. 409 `job_finished` for a loop that
+    already ended."""
+    return await service.cancel(session, loop_id)
+
+
+@router.post('/assist/loops/{loop_id}/pause', response_model=AssistLoopState)
+async def pause_assist_loop(loop_id: str, session: DbSessionDep) -> AssistLoopState:
+    """Ask the loop to pause at its next node boundary (`control.state` is `pausing` until
+    it does); requests in flight finish. A queued loop pauses at once; a paused one stays
+    paused. 409 `job_cancelling` or `job_finished` otherwise."""
+    return await service.pause(session, loop_id)
 
 
 @router.post('/assist/loops/{loop_id}/resume', response_model=AssistLoopState)
-async def resume_assist_loop(loop_id: str, opensearch: OpenSearchDep) -> AssistLoopState:
-    """Queue an `interrupted`, `paused` or `cancelled` loop (or a `failed` one with `stop_reason` `vlm_failed`) again; it continues from its
-    event log. 409 `assist_loop_not_resumable` for any other status, `assist_loop_busy` while
-    another loop is live."""
-    await job.resume_loop(opensearch, loop_id)
-    return _state(loop_id)
+async def resume_assist_loop(loop_id: str, session: DbSessionDep) -> AssistLoopState:
+    """Queue a `paused` or `interrupted` loop again; it continues from its tables. 409
+    `resume_blocked` names the reason (`project_paused`, `vlm_unavailable`), `job_busy` while
+    another loop is live, `job_finished` for a loop that ended."""
+    return await service.resume(session, loop_id)
+
+
+@router.patch('/assist/loops/{loop_id}/budget', response_model=AssistLoopState)
+async def edit_assist_loop_budget(
+    loop_id: str, body: AssistLoopBudgetEdit, session: DbSessionDep
+) -> AssistLoopState:
+    """Set limits of a queued, running or paused loop. A limit under what is already spent
+    plus reserved is 409 `budget_below_spent`; the loop is never resumed by an edit."""
+    return await service.edit_budget(session, loop_id, body)
 
 
 @router.post('/assist/loops/{loop_id}/rollback', response_model=LoopRollbackResponse)
 async def rollback_assist_loop(
-    loop_id: str, opensearch: OpenSearchDep, body: LoopRollbackRequest | None = None
+    loop_id: str,
+    opensearch: OpenSearchDep,
+    session: DbSessionDep,
+    body: LoopRollbackRequest | None = None,
 ) -> LoopRollbackResponse:
-    """Restore the items the loop propagated (only those of `node_paths` when given) to the
-    class state before it wrote them. A dry run (the default) counts. An item changed by
-    anyone since the loop wrote it, or locked, validated, excluded or in the holdout, is kept
-    and counted in `kept_changed`. 409 `assist_loop_running` while the loop is live: cancel it
-    first."""
-    request = body or LoopRollbackRequest()
-    store = views.open_store(loop_id)
-    job.require_stopped(loop_id)
-    result = await rollback_loop(
-        opensearch, store, node_paths=request.node_paths, dry_run=request.dry_run
-    )
-    return LoopRollbackResponse(
-        dry_run=result.dry_run,
-        matched=result.matched,
-        restored=result.restored,
-        kept_changed=result.kept_changed,
-        conflicts=result.conflicts,
-    )
+    """Undo the loop's propagations (only those of `node_paths` when given): each is a label
+    operation, restored only while the item is as the loop left it. A dry run (the default)
+    counts. An item changed by anyone since, or locked, validated, excluded or in the holdout,
+    is kept and counted in `kept_changed`. 409 `assist_loop_running` while the loop is live:
+    cancel or pause it first."""
+    return await service.rollback(session, opensearch, loop_id, body or LoopRollbackRequest())

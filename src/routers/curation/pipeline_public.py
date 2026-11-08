@@ -17,6 +17,7 @@ from typing import Annotated, Any
 
 from fastapi import Query
 
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation.pipeline_params import (
     ACKNOWLEDGE_EXTERNAL_DESC,
@@ -29,7 +30,7 @@ from src.routers.curation.pipeline_params import (
     VLM_DESC,
     VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
 )
-from src.services.curation.assist_loop.job import require_no_live_loop
+from src.services.curation.assist_loop.service import require_no_live_loop
 from src.services.curation.auto_label_run import run_auto_label
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
@@ -44,6 +45,7 @@ from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
 @router.post('/pipeline/auto_label')
 async def pipeline_auto_label(
     opensearch: OpenSearchDep,
+    session: DbSessionDep,
     train_clusters: Annotated[
         bool, Query(description='Re-train clusters on the items index before promote/VLM.')
     ] = True,
@@ -98,7 +100,7 @@ async def pipeline_auto_label(
     /pipeline/auto_label/start`` instead.
     """
     if train_clusters:
-        require_no_live_loop()
+        await require_no_live_loop(session)
     return await run_auto_label(
         opensearch=opensearch,
         train_clusters=train_clusters,

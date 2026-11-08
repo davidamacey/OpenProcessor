@@ -4,8 +4,8 @@ After every ``batch_items`` propagated items, and once more at the end, a seeded
 the batch's propagated items (``ceil(rate x written)``, at least ``min_per_batch``,
 spread over the batch's nodes in proportion to what each wrote) is shown to a second
 model with the same pack's classify call, through the labeler like any VLM request. Its
-class is compared with the propagated one by name. The answers are recorded in
-``audit.jsonl`` and the ``audit`` event only: an audit never writes a label, so an
+class is compared with the propagated one by name. The answers are recorded as ``audit`` proposals and
+``audit`` selections, the batch totals on the iteration: an audit never writes a label, so an
 external judge cannot change data.
 
 The run's agreement so far and its one-sided Wilson lower bound are reported; once at
@@ -19,7 +19,6 @@ A remote audit endpoint goes through the same external-images consent as any run
 
 from __future__ import annotations
 
-import json
 import math
 import random
 from dataclasses import dataclass, field
@@ -27,28 +26,30 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.domain.loop_stats import wilson_lower_bound
-from src.services.curation.assist_loop.budget import AUDIT
 from src.services.curation.assist_loop.concurrent import gather_all
+from src.services.curation.assist_loop.tree import AUDIT
 from src.services.curation.assist_loop.vlm_failure import VlmFailedError
 from src.services.curation.autolabel.run_vlm import resolve_run_vlm
 from src.services.curation.vlm_class_attempt import NEW_CLASS_SENTINEL
 from src.services.curation.vlm_class_batch import chunk_crops
 from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS
+from src.services.labeling.vlm_usage import observe_usage, total_usage
 from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Callable, Sequence
+    from collections.abc import Awaitable, Callable
 
     from opensearchpy import AsyncOpenSearch
 
-    from src.services.curation.assist_loop.budget import LoopBudget
-    from src.services.curation.assist_loop.store import LoopStore, LoopTree
+    from src.domain.vlm_usage import VlmUsage
+    from src.services.curation.assist_loop.budget import LoopBudget, Reservation
+    from src.services.curation.assist_loop.record import LoopRecord
+    from src.services.curation.assist_loop.tree import LoopTree
     from src.services.curation.autolabel.run_vlm import RunVlm
     from src.services.curation.vlm_class_batch import VlmContext
 
-AUDIT_FILE = 'audit.jsonl'
 WILSON_Z = 1.645
 """One-sided 95 %."""
 MIN_AUDITED_TO_PAUSE = 30
@@ -102,12 +103,13 @@ class AuditJudge:
         return resolved or raw.strip().lower()
 
     async def judge(
-        self, chunk: list[str], admit: Callable[[], bool]
-    ) -> dict[str, str | None] | None:
-        """``{crop_id: class or None}`` for one chunk; ``None`` when ``admit`` refused it
-        (called once the chunk has its turn, before anything is sent)."""
+        self, chunk: list[str], reserve: Callable[[], Awaitable[Reservation | None]]
+    ) -> tuple[dict[str, str | None], Reservation, VlmUsage] | None:
+        """``({crop_id: class or None}, reservation, usage)`` for one chunk; ``None`` when
+        ``reserve`` refused it (awaited once the chunk has its turn, before anything is sent)."""
         async with self._semaphore:
-            if not admit():
+            reservation = await reserve()
+            if reservation is None:
                 return None
             docs = await mget_crops(
                 self._os,
@@ -115,19 +117,20 @@ class AuditJudge:
                 source_includes=['image_path', 'bbox_norm', 'test_holdout', *DETECTOR_HINT_FIELDS],
             )
             crops = chunk_crops(docs, self._ctx)
-            preds = (
-                await self._ctx.labeler.label_or_propose_batch(
-                    crops, self._ctx.class_names, class_catalog=self._ctx.class_catalog
+            with observe_usage() as seen:
+                preds = (
+                    await self._ctx.labeler.label_or_propose_batch(
+                        crops, self._ctx.class_names, class_catalog=self._ctx.class_catalog
+                    )
+                    if crops
+                    else []
                 )
-                if crops
-                else []
-            )
         self.request_failed += sum(1 for pred in preds if pred.failure == 'request_failed')
         self.replied += sum(1 for pred in preds if pred.failure != 'request_failed')
         out: dict[str, str | None] = dict.fromkeys(chunk)
         for pred in preds:
             out[pred.img_id] = self._name(pred)
-        return out
+        return out, reservation, total_usage(seen)
 
 
 @dataclass(frozen=True)
@@ -151,18 +154,18 @@ def _allocate(sizes: dict[str, int], total: int) -> dict[str, int]:
 
 
 class Auditor:
-    """The audit of one loop, resumed from its event log."""
+    """The audit of one loop; its totals live on the iteration row and survive a slice."""
 
     def __init__(
         self,
-        store: LoopStore,
+        record: LoopRecord,
         budget: LoopBudget,
         judge: AuditJudge,
         params: AuditParams,
         *,
         seed: int,
     ) -> None:
-        self._store = store
+        self._record = record
         self._budget = budget
         self._judge = judge
         self.params = params
@@ -170,26 +173,26 @@ class Auditor:
 
     # ------------------------------------------------------------------ state
 
-    def _batch(self, tree: LoopTree) -> list[tuple[str, str, list[str]]]:
-        """Propagated nodes no audit covered yet: ``(path, class, written ids)``."""
-        covered = {p for event in tree.audits for p in event.get('nodes') or []}
+    def _uncovered(self, tree: LoopTree) -> list[tuple[str, str, int]]:
+        """Propagated nodes no audit covered yet: ``(path, class, items written)``."""
+        covered = set(tree.audit.get('covered') or [])
         return [
-            (path, str(node.propagated['class_name']), list(node.propagated['written_ids']))
+            (path, str(node.propagated['class_name']), int(node.propagated['written']))
             for path, node in sorted(tree.nodes.items())
             if node.propagated is not None and path not in covered
         ]
 
     def pending(self, tree: LoopTree) -> bool:
-        return any(ids for _, _, ids in self._batch(tree))
+        return any(n for _, _, n in self._uncovered(tree))
 
     def due(self, tree: LoopTree) -> bool:
-        return sum(len(ids) for _, _, ids in self._batch(tree)) >= self.params.batch_items
+        return sum(n for _, _, n in self._uncovered(tree)) >= self.params.batch_items
 
     def exhausted(self, tree: LoopTree) -> bool:
-        return any(e.get('status') == 'budget_exhausted' for e in tree.audits)
+        return tree.audit.get('status') == 'budget_exhausted'
 
     def summary(self, tree: LoopTree) -> dict[str, Any]:
-        last = tree.audits[-1] if tree.audits else {}
+        last = tree.audit
         sampled = int(last.get('total_sampled', 0))
         agreed = int(last.get('total_agreed', 0))
         spent = self._budget.snapshot().get(AUDIT, {})
@@ -203,6 +206,13 @@ class Auditor:
         }
 
     # ------------------------------------------------------------------ one batch
+
+    async def _batch(self, tree: LoopTree) -> list[tuple[str, str, list[str]]]:
+        out: list[tuple[str, str, list[str]]] = []
+        for path, class_name, written in self._uncovered(tree):
+            ids = await self._record.written_ids(tree.node(path)) if written else []
+            out.append((path, class_name, ids))
+        return out
 
     def _sample(
         self, batch: list[tuple[str, str, list[str]]], number: int
@@ -219,26 +229,27 @@ class Auditor:
 
     async def _ask(self, picked: list[tuple[str, str, str]]) -> tuple[dict[str, str | None], bool]:
         ids = [crop_id for crop_id, _, _ in picked]
+        node_of = {crop_id: path for crop_id, path, _ in picked}
         size = self._judge.images_per_call
         chunks = [ids[i : i + size] for i in range(0, len(ids), size)]
         refused = False
 
         async def one(chunk: list[str]) -> dict[str, str | None]:
             nonlocal refused
-            held = []
 
-            def admit() -> bool:
-                res = self._budget.reserve(AUDIT, 'audit', chunk)
-                if res is not None:
-                    held.append(res)
-                return res is not None
+            async def reserve() -> Reservation | None:
+                return await self._budget.reserve(AUDIT, 'audit', chunk)
 
-            got = await self._judge.judge(chunk, admit)
+            got = await self._judge.judge(chunk, reserve)
             if got is None:
                 refused = True
                 return {}
-            self._budget.settle(held[0])
-            return got
+            answers, reservation, usage = got
+            await self._record.record_audit_chunk(
+                reservation.request_id, [(i, node_of[i]) for i in chunk], answers
+            )
+            await self._budget.settle(reservation, usage)
+            return answers
 
         answers: dict[str, str | None] = {}
         for part in await gather_all([one(c) for c in chunks]):
@@ -246,61 +257,45 @@ class Auditor:
         return answers, refused
 
     async def run_batch(self, tree: LoopTree) -> AuditResult:
-        """Audit every propagated node not audited yet; log and return the outcome."""
-        batch = self._batch(tree)
-        number = len(tree.audits) + 1
+        """Audit every propagated node not audited yet; record and return the outcome."""
+        batch = await self._batch(tree)
+        number = int(tree.audit.get('batches', 0)) + 1
         picked = self._sample(batch, number)
         failed_before, replied_before = self._judge.request_failed, self._judge.replied
         answers, refused = await self._ask(picked)
         if self._judge.request_failed > failed_before and self._judge.replied == replied_before:
-            # no log line: the batch stays uncovered and a resume audits it again
+            # nothing is marked covered: a later slice audits the batch again
             msg = 'every audit VLM call failed: check the audit endpoint and model'
             raise VlmFailedError(msg)
-        rows = [
-            {
-                'batch': number,
-                'crop_id': crop_id,
-                'node': path,
-                'propagated_class': class_name,
-                'audit_answer': answers[crop_id],
-                'agree': normalize_class_name(answers[crop_id] or '')
-                == normalize_class_name(class_name),
-            }
-            for crop_id, path, class_name in picked
+        agreed = sum(
+            1
+            for crop_id, _, class_name in picked
             if answers.get(crop_id) is not None
-        ]
-        self._write_rows(rows)
-        last = tree.audits[-1] if tree.audits else {}
-        total_sampled = int(last.get('total_sampled', 0)) + len(rows)
-        total_agreed = int(last.get('total_agreed', 0)) + sum(1 for r in rows if r['agree'])
+            and normalize_class_name(answers[crop_id] or '') == normalize_class_name(class_name)
+        )
+        sampled = sum(1 for crop_id, _, _ in picked if answers.get(crop_id) is not None)
+        total_sampled = int(tree.audit.get('total_sampled', 0)) + sampled
+        total_agreed = int(tree.audit.get('total_agreed', 0)) + agreed
         lower = wilson_lower_bound(total_agreed, total_sampled, WILSON_Z)
         failing = total_sampled >= MIN_AUDITED_TO_PAUSE and lower < self.params.floor
         status = 'fail' if failing else 'budget_exhausted' if refused else 'ok'
         nodes = [path for path, _, _ in batch]
-        self._store.append(
-            'audit',
-            batch=number,
-            nodes=nodes,
-            sampled=len(rows),
-            agreed=sum(1 for r in rows if r['agree']),
-            total_sampled=total_sampled,
-            total_agreed=total_agreed,
-            lower_bound=round(lower, 4),
-            status=status,
+        await self._record.set_audit(
+            {
+                'batches': number,
+                'covered': sorted({*(tree.audit.get('covered') or []), *nodes}),
+                'sampled': sampled,
+                'agreed': agreed,
+                'total_sampled': total_sampled,
+                'total_agreed': total_agreed,
+                'lower_bound': round(lower, 4),
+                'status': status,
+            }
         )
         return AuditResult(failing=failing, nodes=nodes)
 
-    def _write_rows(self, rows: Sequence[dict[str, Any]]) -> None:
-        if not rows:
-            return
-        target = self._store.directory / AUDIT_FILE
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open('a', encoding='utf-8') as fh:
-            fh.write(''.join(json.dumps(r) + '\n' for r in rows))
-
 
 __all__ = [
-    'AUDIT_FILE',
     'AuditJudge',
     'AuditParams',
     'AuditResult',

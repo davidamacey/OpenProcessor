@@ -201,14 +201,6 @@ _.ServerReady  # docker/test/fake_triton.py, called by gRPC by Triton's method n
 # The lane 4D VLM usage seam: the job handlers of the trigger family call it.
 
 # The assist loop's SQL budget lands ahead of the loop driver that calls it (lane 4D).
-_.seed_budgets  # src/db/repos/assist_loop.py
-_.forfeit_open  # src/db/repos/assist_loop.py
-_.add_spent  # src/db/repos/assist_loop.py
-_.budgets  # src/db/repos/assist_loop.py
-_.edit_limit  # src/db/repos/assist_loop.py
-_.call_units  # src/domain/assist_loop_budget.py
-_.settled_amounts  # src/domain/assist_loop_budget.py
-_.as_amounts  # src/domain/assist_loop_budget.py
 _.POOLS  # src/domain/assist_loop_budget.py
 _.UNITS  # src/domain/assist_loop_budget.py
 

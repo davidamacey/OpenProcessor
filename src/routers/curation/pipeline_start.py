@@ -91,11 +91,11 @@ async def pipeline_auto_label_start(
     Only one job per project is queued, running or paused at a time; a second start
     request returns 409 ``job_busy``.
     """
-    from src.services.curation.assist_loop.job import require_no_live_loop
+    from src.services.curation.assist_loop.service import require_no_live_loop
     from src.services.curation.autolabel import service
 
     if train_clusters:
-        require_no_live_loop()
+        await require_no_live_loop(session)
     # Resolved here (422 before queueing) so the job args echo what runs.
     reject_detection_profile(detection_profile)
     # captured BEFORE

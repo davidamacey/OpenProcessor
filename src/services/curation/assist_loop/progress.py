@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from src.services.curation.assist_loop.partition import MemberState
-    from src.services.curation.assist_loop.store import LoopTree, NodeRecord
+    from src.services.curation.assist_loop.tree import LoopTree, NodeRecord
 
 DECISIONS = ('pass', 'split', 'review_leaf', 'review_small', 'stale', 'unvisited')
 LEFT_FOR_REVIEW = frozenset({'review_leaf', 'review_small', 'stale', 'unvisited'})

@@ -14,7 +14,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.domain.history import op_write_undone
-from src.domain.ingest_class_sources import HUMAN_CLASS_SOURCE
+from src.domain.ingest_class_sources import HUMAN_CLASS_SOURCE, PROPAGATED_CLASS_SOURCE
 from src.utils.class_names import normalize_class_name
 
 
@@ -53,6 +53,11 @@ class OpFingerprint:
 
 def label_fingerprint(*, op_id: str, writer: str, at: str, class_name: str) -> OpFingerprint:
     return OpFingerprint(op_id, writer, at, class_name, HUMAN_CLASS_SOURCE, True, None)
+
+
+def propagated_fingerprint(*, op_id: str, writer: str, at: str, class_name: str) -> OpFingerprint:
+    """A class the assist loop propagated: a machine label, so never validated."""
+    return OpFingerprint(op_id, writer, at, class_name, PROPAGATED_CLASS_SOURCE, False, None)
 
 
 def move_fingerprint(

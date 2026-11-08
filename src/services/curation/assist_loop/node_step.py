@@ -1,18 +1,19 @@
-"""One node's way through the loop: open, evaluate, then propagate, split or leave for review.
+"""One node's way through the loop: evaluate, then propagate, split or leave for review.
 
-Every step is logged before the next begins (``node_open``, the evaluation's ``reserve``
-and ``answers``, ``decision``, then ``children`` or ``propagate_begin`` and
-``propagated``), so a resumed node continues at the step it was in. A ``pass`` that turns
-out to be ``stale`` at write time gets a second ``decision``; the last one counts.
+Every step is committed to the node's row before the next begins (the asks and answers,
+``gated`` for a pass, ``propagating`` once the write starts, ``done`` with the decision), so a
+resumed node continues at the step it was in. A ``pass`` that turns out to be ``stale`` at
+write time ends with that decision instead.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.domain.loop_stats import required_sample
-from src.domain.loop_tree import child_path, parent_path, parse_path, path_level, root_path
+from src.domain.loop_tree import parse_path, root_path
 from src.services.curation.assist.scope import membership_digest
 from src.services.curation.assist_loop.evaluate import NodeInput, evaluate_node
 from src.services.curation.assist_loop.propagate import propagate_node
@@ -23,57 +24,68 @@ from src.services.curation.class_registry_names import registry_item_class
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Awaitable, Callable
 
     from src.services.curation.assist.proposal import ClassAnswer
     from src.services.curation.assist_loop.budget import LoopBudget
     from src.services.curation.assist_loop.driver import LoopDeps, LoopParams
+    from src.services.curation.assist_loop.emit import LoopEvents
     from src.services.curation.assist_loop.evaluate import EvalContext, Verdict
     from src.services.curation.assist_loop.partition import MemberState, RootRef
-    from src.services.curation.assist_loop.store import LoopStore, LoopTree, NodeRecord
+    from src.services.curation.assist_loop.record import LoopRecord
+    from src.services.curation.assist_loop.tree import LoopTree, NodeRecord
 
 LOOP_WRITER = 'assist_loop'
 """Prefix of the writer id of every class the loop propagates (``assist_loop:<loop_id>``)."""
-_EVENT_KEYS = ('seq', 'at', 'event')
 
 
 @dataclass
 class LoopRun:
     """Everything a node step reads and writes."""
 
-    store: LoopStore
+    record: LoopRecord
     budget: LoopBudget
     params: LoopParams
     deps: LoopDeps
-    tree: LoopTree
     roots: dict[str, RootRef]
     states: dict[str, MemberState]
     split_slots: asyncio.Semaphore
     evals: EvalContext
+    control: RunControl
+    events: LoopEvents
     stop_reason: str | None = None
     """The first budget that left a node unvisited."""
     halt: str | None = None
     """Set by the audit to stop scheduling (``audit``)."""
     _members: dict[str, list[str]] = field(default_factory=dict)
 
+    @property
+    def tree(self) -> LoopTree:
+        return self.record.tree
+
     def halted(self) -> bool:
-        return (
-            self.halt is not None or self.store.cancel_requested() or self.store.pause_requested()
-        )
+        return self.halt is not None or self.control.stopping()
+
+    async def ensure_members(self, path: str) -> None:
+        if path in self._members:
+            return
+        if path in self.roots:
+            self._members[path] = self.roots[path].member_ids
+        else:
+            self._members[path] = await self.record.snapshots.read_ids(
+                self.tree.node(path).snapshot_key
+            )
 
     def members(self, path: str) -> list[str]:
-        """Every member of the node (a child holds its eligible and ground-truth ones)."""
-        if path not in self._members:
-            if path in self.roots:
-                self._members[path] = self.roots[path].member_ids
-            else:
-                self._members[path] = self.store.read_node_members(path)
+        """Every member of the node (a child holds its eligible and ground-truth ones); the
+        node's blob must have been read with :meth:`ensure_members`."""
         return self._members[path]
 
     def eligible(self, ids: list[str]) -> list[str]:
         return sorted(i for i in ids if self.states[i].state == 'eligible')
 
     def label(self, class_id: int, class_name: str) -> ItemLabel:
-        loop_id = self.store.loop_id
+        loop_id = self.record.loop_id
         return ItemLabel.propagated(
             class_id=class_id,
             class_name=class_name,
@@ -82,28 +94,26 @@ class LoopRun:
         )
 
 
+@dataclass(frozen=True)
+class RunControl:
+    """What the job tells the loop: stop for a cancel or a pause, or hand over after a slice."""
+
+    cancelled: Callable[[], bool]
+    paused: Callable[[], bool]
+    slice_due: Callable[[], bool]
+    progress: Callable[[int, int | None, str, dict[str, Any]], Awaitable[None]]
+
+    def stopping(self) -> bool:
+        return self.cancelled() or self.paused()
+
+
 def finished(record: NodeRecord | None) -> bool:
     if record is None or record.decision is None:
         return False
     kind = record.decision['kind']
     if kind == 'pass':
         return record.propagated is not None
-    if kind == 'split':
-        return record.children is not None
     return True
-
-
-def _open(run: LoopRun, path: str) -> NodeRecord:
-    ids = run.members(path)
-    run.store.append(
-        'node_open',
-        path=path,
-        parent=parent_path(path),
-        n=len(run.eligible(ids)),
-        digest=membership_digest(ids),
-        level=path_level(path),
-    )
-    return run.tree.nodes[path]
 
 
 def _inherited(
@@ -113,14 +123,14 @@ def _inherited(
     asked without a usable answer."""
     reused: dict[str, ClassAnswer] = {}
     failed: set[str] = set()
-    ancestor = parent_path(path)
+    ancestor = run.tree.node(path).parent
     while ancestor is not None:
-        upper = run.tree.nodes[ancestor]
+        upper = run.tree.node(ancestor)
         for crop_id in eligible:
             if crop_id in upper.answers and crop_id not in reused:
                 reused[crop_id] = upper.answers[crop_id]
         failed |= upper.failed
-        ancestor = parent_path(ancestor)
+        ancestor = upper.parent
     return reused, failed
 
 
@@ -150,25 +160,24 @@ def crops_needed(run: LoopRun, path: str, *, with_top_up: bool) -> int:
     gate = run.params.gate
     dissent = gate.max_dissent if with_top_up else 0
     need = required_sample(len(eligible), gate.theta, gate.alpha_stage, dissent)
-    record = run.tree.nodes.get(path)
-    held = set(record.answers) | record.failed if record is not None else set()
+    record = run.tree.node(path)
+    held = set(record.answers) | record.failed
     reused, _ = _inherited(run, path, eligible)
     return max(0, need - len(held | set(reused)))
 
 
-def admit(run: LoopRun, path: str, claim: int) -> None:
+async def admit(run: LoopRun, path: str, claim: int) -> None:
     """Record that node ``path`` was admitted against ``claim`` crops in total."""
-    if path not in run.tree.nodes:
-        _open(run, path)
-    run.store.append('admit', path=path, claim=claim)
+    requests = math.ceil(claim / max(1, run.params.images_per_call))
+    await run.record.admit(run.tree.node(path), claim, requests)
 
 
-def leave_unvisited(run: LoopRun, path: str, reason: str) -> None:
+async def leave_unvisited(run: LoopRun, path: str, reason: str) -> None:
     """Record that node ``path`` was not worked on because ``reason`` (a budget) cannot
     cover it, before any crop was spent on it."""
-    record = run.tree.nodes.get(path) or _open(run, path)
+    record = run.tree.node(path)
     run.stop_reason = run.stop_reason or reason
-    _decision(run, record, 'unvisited', reason=reason, sampled=0)
+    await run.record.decide(record, 'unvisited', reason=reason, sampled=0)
 
 
 def _verdict_fields(verdict: Verdict) -> dict[str, Any]:
@@ -212,91 +221,55 @@ async def _split_children(run: LoopRun, record: NodeRecord) -> tuple[list[list[s
     return (labelable if len(labelable) >= 2 else []), len(result.unplaced)
 
 
-def _log_children(
-    run: LoopRun, record: NodeRecord, children: list[list[str]], unplaced: int
-) -> None:
-    entries = []
-    for index, ids in enumerate(children):
-        path = child_path(record.path, index)
-        entries.append(
-            {
-                'path': path,
-                'n': len(run.eligible(ids)),
-                'file': run.store.write_node_members(path, ids),
-            }
-        )
-    run.store.append('children', path=record.path, children=entries, unplaced=unplaced)
-
-
-def _decision(run: LoopRun, record: NodeRecord, kind: str, **fields: Any) -> None:
-    run.store.append(
-        'decision',
-        path=record.path,
-        kind=kind,
-        level=record.level,
-        n=record.n,
-        wall_s=round(run.budget.wall_s(), 3),
-        **fields,
-    )
-
-
 async def _decide(run: LoopRun, record: NodeRecord) -> bool:
     """Evaluate and record the node's decision; ``False`` when it was stopped (left open)."""
     node = _view(run, record)
     evaluation = await evaluate_node(run.evals, node)
     verdict = evaluation.verdict
-    common = {'sampled': evaluation.sampled}
+    common: dict[str, Any] = {'sampled': evaluation.sampled}
+    rec = run.record
     if not node.eligible:
-        _decision(run, record, 'review_small', reason='no_eligible_members', **common)
+        await rec.decide(record, 'review_small', reason='no_eligible_members', **common)
         return True
     if verdict is None:
         if evaluation.unvisited is None:
             return False
         run.stop_reason = run.stop_reason or evaluation.unvisited
-        _decision(run, record, 'unvisited', reason=evaluation.unvisited, **common)
+        await rec.decide(record, 'unvisited', reason=evaluation.unvisited, **common)
         return True
     common.update(_verdict_fields(verdict))
     if verdict.passed:
-        _decision(run, record, 'pass', **common)
+        await rec.gate_pass(record, **common)
         return True
     kind = _decide_kind(run, record)
     if kind != 'split':
-        _decision(run, record, kind, **common)
+        await rec.decide(record, kind, **common)
         return True
     children, unplaced = await _split_children(run, record)
     if not children:
-        _decision(run, record, 'review_leaf', reason='no_split', **common)
+        await rec.decide(record, 'review_leaf', reason='no_split', **common)
         return True
-    _decision(run, record, 'split', **common)
-    _log_children(run, record, children, unplaced)
+    await rec.split(
+        record,
+        children,
+        run.eligible,
+        membership_digest,
+        unplaced=unplaced,
+        **common,
+    )
     return True
 
 
-async def _resume_split(run: LoopRun, record: NodeRecord) -> None:
-    children, unplaced = await _split_children(run, record)
-    if children:
-        _log_children(run, record, children, unplaced)
-    else:
-        _decision(run, record, 'review_leaf', reason='no_split', sampled=0)
-
-
-def _restate(run: LoopRun, record: NodeRecord, kind: str, **fields: Any) -> None:
-    previous = {k: v for k, v in (record.decision or {}).items() if k not in _EVENT_KEYS}
-    previous.update(kind=kind, wall_s=round(run.budget.wall_s(), 3), **fields)
-    run.store.append('decision', **previous)
-
-
 async def _propagate(run: LoopRun, record: NodeRecord) -> None:
+    rec = run.record
     found = await registry_item_class(str((record.decision or {}).get('class_name') or ''))
     if found is None:
-        _restate(run, record, 'stale', reason='class_not_in_registry')
+        await rec.restate(record, 'stale', reason='class_not_in_registry')
         return
     node = _view(run, record)
     resuming = record.propagate_begun
     if not resuming:
-        run.store.append(
-            'propagate_begin', path=record.path, class_name=found[1], n_eligible=len(node.eligible)
-        )
+        await rec.begin_propagate(record)
     result = await propagate_node(
         run.deps.opensearch,
         run.deps.reader,
@@ -308,35 +281,34 @@ async def _propagate(run: LoopRun, record: NodeRecord) -> None:
         resuming=resuming,
     )
     if result.stale:
-        _restate(run, record, 'stale', reason='drift', drift=result.drift)
+        await rec.restate(record, 'stale', reason='drift', drift=result.drift)
         return
-    run.store.append(
-        'propagated',
-        path=record.path,
+    await rec.finish_propagate(
+        record,
         class_name=found[1],
-        written=len(result.written_ids),
         written_ids=result.written_ids,
         skipped=result.skipped,
         drift=result.drift,
+        label_op_id=result.label_op_id,
     )
 
 
 async def advance(run: LoopRun, path: str) -> list[str]:
     """Take node ``path`` as far as it goes; the children to schedule next."""
-    record = run.tree.nodes.get(path) or _open(run, path)
-    if record.decision is None and not await _decide(run, record):
+    await run.ensure_members(path)
+    record = run.tree.node(path)
+    if record.step in ('open', 'admitted') and not await _decide(run, record):
         return []
     kind = (record.decision or {}).get('kind')
     if kind == 'pass' and record.propagated is None and not run.halted():
         await _propagate(run, record)
-    elif kind == 'split' and record.children is None:
-        await _resume_split(run, record)
-    return list(record.children or []) if (record.decision or {}).get('kind') == 'split' else []
+    return list(record.children or []) if kind == 'split' else []
 
 
 __all__ = [
     'LOOP_WRITER',
     'LoopRun',
+    'RunControl',
     'admit',
     'advance',
     'crops_needed',

@@ -7,6 +7,9 @@ the record of every movement (``reserve``, ``settle``, ``release``, ``forfeit``)
 open while it has ``reserve`` rows and no closing row for the same unit, and closing is
 idempotent, so a replayed settle changes nothing.
 
+Budget rows are always locked in ``(pool, unit)`` order, by a reserve, a settle and a forfeit
+alike, so concurrent calls of one run queue behind each other and never deadlock.
+
 Functions take the caller's sync session inside its project transaction and never commit.
 """
 
@@ -79,21 +82,22 @@ _OPEN_OF_REQUEST = text(
     "WHERE r.run_id = :run AND r.request_id = :request AND r.entry = 'reserve' "
     'AND NOT EXISTS (SELECT 1 FROM assist_loop_budget_ledger c WHERE c.run_id = r.run_id '
     'AND c.request_id = r.request_id AND c.pool = r.pool AND c.unit = r.unit '
-    "AND c.entry IN ('settle', 'release', 'forfeit'))"
+    "AND c.entry IN ('settle', 'release', 'forfeit')) ORDER BY r.pool, r.unit"
 )
 _OPEN_OF_RUN = text(
     'SELECT r.request_id, r.pool, r.unit, r.amount FROM assist_loop_budget_ledger r '
     "WHERE r.run_id = :run AND r.entry = 'reserve' "
     'AND NOT EXISTS (SELECT 1 FROM assist_loop_budget_ledger c WHERE c.run_id = r.run_id '
     'AND c.request_id = r.request_id AND c.pool = r.pool AND c.unit = r.unit '
-    "AND c.entry IN ('settle', 'release', 'forfeit'))"
+    "AND c.entry IN ('settle', 'release', 'forfeit')) ORDER BY r.pool, r.unit, r.request_id"
 )
 _MOVE = text(
     'UPDATE assist_loop_budgets SET reserved = reserved - :reserved, spent = spent + :spent, '
     'updated_at = now() WHERE run_id = :run AND pool = :pool AND unit = :unit'
 )
 _ADD_SPENT = text(
-    'UPDATE assist_loop_budgets SET spent = spent + :n, updated_at = now() '
+    'UPDATE assist_loop_budgets SET updated_at = now(), spent = CASE WHEN limit_value IS NULL '
+    'THEN spent + :n ELSE LEAST(spent + :n, GREATEST(limit_value - reserved, spent)) END '
     'WHERE run_id = :run AND pool = :pool AND unit = :unit'
 )
 _ROWS = text(
@@ -139,7 +143,7 @@ def reserve(
     unit that refused."""
     assert_fenced(session, job_id, token)
     with session.begin_nested():
-        for unit, amount in amounts.items():
+        for unit, amount in sorted(amounts.items()):
             params = {'run': run_id, 'pool': pool, 'unit': unit, 'n': amount}
             if session.execute(_RESERVE, params).first() is None:
                 raise BudgetExhaustedError(pool, unit)
@@ -245,7 +249,8 @@ def add_spent(
     unit: str,
     amount: int,
 ) -> None:
-    """Charge ``amount`` straight to spent (wall time of a slice)."""
+    """Charge ``amount`` straight to spent (wall time of a slice); a charge past the limit is
+    cut at the limit, so the row never breaks its own check."""
     assert_fenced(session, job_id, token)
     session.execute(_ADD_SPENT, {'run': run_id, 'pool': pool, 'unit': unit, 'n': amount})
 

@@ -21,9 +21,9 @@ from src.services.curation.class_write_guard import class_state_token
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from curation.assist_loop_fakes import LoopEnv
 
-pytestmark = pytest.mark.usefixtures('readable_crops')
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('readable_crops')]
 
 ROOT = 10001
 
@@ -54,8 +54,8 @@ WRITTEN: dict[str, dict[str, Any]] = {
 
 
 @pytest.fixture
-def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
-    w = make_world(tmp_path, monkeypatch)
+def world(monkeypatch: pytest.MonkeyPatch) -> World:
+    w = make_world(monkeypatch)
     w.add_cluster(ROOT, {'car': 200}, prefix='free')
     truck = w.class_id('truck')
     for name, fields in {**NEVER_WRITTEN, **WRITTEN}.items():
@@ -64,12 +64,12 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
 
 
 def test_no_locked_validated_holdout_or_excluded_item_is_ever_written(
-    world: World, tmp_path: Path
+    world: World, loop_env: LoopEnv
 ) -> None:
     before = copy.deepcopy(world.os.docs(ITEMS))
     vlm = FakeVlm(world.truth)
 
-    run = asyncio.run(drive(world, tmp_path / 'loop', vlm))
+    run = asyncio.run(drive(world, loop_env, vlm))
 
     assert run.outcome.status == 'completed'
     assert any(
@@ -81,9 +81,9 @@ def test_no_locked_validated_holdout_or_excluded_item_is_ever_written(
 
 
 def test_an_unvalidated_import_and_a_vlm_label_are_machine_labels_and_are_written(
-    world: World, tmp_path: Path
+    world: World, loop_env: LoopEnv
 ) -> None:
-    asyncio.run(drive(world, tmp_path / 'loop', FakeVlm(world.truth)))
+    asyncio.run(drive(world, loop_env, FakeVlm(world.truth)))
 
     for name in WRITTEN:
         doc = world.doc(name)
@@ -91,14 +91,14 @@ def test_an_unvalidated_import_and_a_vlm_label_are_machine_labels_and_are_writte
         assert doc['class_source'] in ('assist_propagated', 'vlm'), name
 
 
-def test_boxes_are_never_touched(world: World, tmp_path: Path) -> None:
-    asyncio.run(drive(world, tmp_path / 'loop', FakeVlm(world.truth)))
+def test_boxes_are_never_touched(world: World, loop_env: LoopEnv) -> None:
+    asyncio.run(drive(world, loop_env, FakeVlm(world.truth)))
 
     for doc in world.os.docs(ITEMS).values():
         assert doc['region_boxes'] == BOXES
 
 
-def test_a_human_relabel_after_the_snapshot_wins(world: World, tmp_path: Path) -> None:
+def test_a_human_relabel_after_the_snapshot_wins(world: World, loop_env: LoopEnv) -> None:
     vlm = FakeVlm(world.truth)
     target = 'free-car-0199'
 
@@ -110,7 +110,7 @@ def test_a_human_relabel_after_the_snapshot_wins(world: World, tmp_path: Path) -
 
     vlm.before_answer = human_relabels
 
-    asyncio.run(drive(world, tmp_path / 'loop', vlm))
+    asyncio.run(drive(world, loop_env, vlm))
 
     doc = world.doc(target)
     assert (doc['class_name'], doc['class_source']) == ('bus', 'human')
@@ -125,10 +125,10 @@ def test_a_human_relabel_after_the_snapshot_wins(world: World, tmp_path: Path) -
     ids=['excluded', 'machine_relabel'],
 )
 def test_an_unlocked_change_after_the_snapshot_is_not_overwritten(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: dict[str, Any]
+    loop_env: LoopEnv, monkeypatch: pytest.MonkeyPatch, change: dict[str, Any]
 ) -> None:
     """Nothing locks the item, but its class state is not the one the node decided on."""
-    world = make_world(tmp_path, monkeypatch)
+    world = make_world(monkeypatch)
     eligible = world.add_cluster(ROOT, {'car': 200}, prefix='free')
     k1 = required_sample(len(eligible), 0.9, 0.025, 0)
     sampled = set(child_sample([], sorted(eligible), k1, seed=0, path='r10001').draw)
@@ -140,11 +140,11 @@ def test_an_unlocked_change_after_the_snapshot_is_not_overwritten(
 
     vlm.before_answer = someone_changes_it
 
-    run = asyncio.run(drive(world, tmp_path / 'loop', vlm, max_depth=0))
+    run = asyncio.run(drive(world, loop_env, vlm, max_depth=0))
 
-    (propagated,) = [e for e in run.store.events() if e['event'] == 'propagated']
-    assert target not in propagated['written_ids']
-    assert propagated['skipped']['token_changed'] == 1
+    node = run.record.tree.node('r10001')
+    assert target not in asyncio.run(run.record.written_ids(node))
+    assert node.propagated['skipped']['token_changed'] == 1
     assert world.doc(target)['class_source'] != 'assist_propagated'
 
 

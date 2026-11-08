@@ -11,22 +11,26 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from curation.assist_loop_fakes import FakeVlm, World, drive, make_world, without_times
+from curation.assist_loop_fakes import FakeVlm, World, drive, make_world
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.assist_loop.splitter import SplitResult, fetch_embeddings, split_node
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
-    from src.services.curation.assist_loop.store import LoopStore
+    from curation.assist_loop_fakes import LoopEnv
+    from src.services.curation.assist_loop.record import LoopRecord
 
 
 pytestmark = pytest.mark.asyncio
 
+
+@pytest.fixture
+def world_env(loop_world: World, loop_env: LoopEnv) -> tuple[World, LoopEnv]:
+    return loop_world, loop_env
+
+
 ITEMS = base_curation_config().items_index
-LOOP = 'alp_20261028T000000Z_000002'
 
 
 def _blobs(per_blob: int = 12, centres: int = 4, dim: int = 8) -> dict[str, list[float]]:
@@ -143,74 +147,69 @@ async def test_fetch_embeddings_reads_the_residual_field() -> None:
 # ---------------------------------------------------------------- the whole loop
 
 
-def _loop_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
-    world = make_world(tmp_path, monkeypatch)
+@pytest.fixture
+def loop_world(monkeypatch: pytest.MonkeyPatch) -> World:
+    world = make_world(monkeypatch)
     world.add_cluster(10001, {'car': 60, 'truck': 60, 'bus': 60, 'van': 60}, prefix='a')
     world.add_cluster(10002, {'car': 150}, prefix='b')
     return world
 
 
-def _events(store: LoopStore) -> list[dict[str, Any]]:
-    return [
-        {k: v for k, v in without_times(e).items() if k not in ('seq',)} for e in store.events()
-    ]
-
-
-def _by_node(store: LoopStore) -> dict[str, list[dict[str, Any]]]:
-    out: dict[str, list[dict[str, Any]]] = {}
-    for event in _events(store):
-        event.pop('rid', None)
-        out.setdefault(event.get('path', ''), []).append(event)
-    return out
-
-
-def _sampled(store: LoopStore) -> set[str]:
+def _tree(record: LoopRecord) -> dict[str, Any]:
+    """What a run decided, by node: no timestamps, no request ids."""
     return {
-        crop_id
-        for e in store.events()
-        if e['event'] == 'answers'
-        for crop_id in [*e['answers'], *e['failed']]
+        path: {
+            'decision': node.decision,
+            'answers': {i: (a.class_name, a.proposed) for i, a in sorted(node.answers.items())},
+            'failed': sorted(node.failed),
+            'claim': node.claim,
+            'written': (node.propagated or {}).get('written'),
+        }
+        for path, node in sorted(record.tree.nodes.items())
     }
 
 
+def _sampled(record: LoopRecord) -> set[str]:
+    return {i for n in record.tree.nodes.values() for i in (*n.answers, *n.failed)}
+
+
+@pytest.mark.db
 @pytest.mark.usefixtures('readable_crops')
-async def test_the_same_seed_gives_the_same_event_log(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    world = _loop_world(tmp_path, monkeypatch)
+async def test_the_same_seed_gives_the_same_tree(world_env: tuple[World, LoopEnv]) -> None:
+    world, env = world_env
     pristine = world.snapshot()
     serial = {'node_concurrency': 1, 'vlm_concurrency': 1}
 
-    first = await drive(world, tmp_path / 'one' / LOOP, FakeVlm(world.truth), **serial)
+    first = await drive(world, env, FakeVlm(world.truth), **serial)
     world.restore(pristine)
-    second = await drive(world, tmp_path / 'two' / LOOP, FakeVlm(world.truth), **serial)
+    second = await drive(world, env, FakeVlm(world.truth), **serial)
 
-    assert _events(first.store) == _events(second.store)
+    assert _tree(first.record) == _tree(second.record)
 
 
+@pytest.mark.db
 @pytest.mark.usefixtures('readable_crops')
-async def test_the_same_seed_gives_the_same_node_events_under_concurrency(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+async def test_the_same_seed_gives_the_same_decisions_under_concurrency(
+    world_env: tuple[World, LoopEnv],
 ) -> None:
-    world = _loop_world(tmp_path, monkeypatch)
+    world, env = world_env
     pristine = world.snapshot()
 
-    first = await drive(world, tmp_path / 'one' / LOOP, FakeVlm(world.truth))
+    first = await drive(world, env, FakeVlm(world.truth))
     world.restore(pristine)
-    second = await drive(world, tmp_path / 'two' / LOOP, FakeVlm(world.truth))
+    second = await drive(world, env, FakeVlm(world.truth))
 
-    assert _by_node(first.store) == _by_node(second.store)
+    assert _tree(first.record) == _tree(second.record)
 
 
+@pytest.mark.db
 @pytest.mark.usefixtures('readable_crops')
-async def test_a_different_seed_draws_a_different_sample(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    world = _loop_world(tmp_path, monkeypatch)
+async def test_a_different_seed_draws_a_different_sample(world_env: tuple[World, LoopEnv]) -> None:
+    world, env = world_env
     pristine = world.snapshot()
 
-    first = await drive(world, tmp_path / 'one' / LOOP, FakeVlm(world.truth), seed=0)
+    first = await drive(world, env, FakeVlm(world.truth), seed=0)
     world.restore(pristine)
-    second = await drive(world, tmp_path / 'two' / LOOP, FakeVlm(world.truth), seed=1)
+    second = await drive(world, env, FakeVlm(world.truth), seed=1)
 
-    assert _sampled(first.store) != _sampled(second.store)
+    assert _sampled(first.record) != _sampled(second.record)

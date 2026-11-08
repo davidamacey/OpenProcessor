@@ -10,42 +10,49 @@ node path and the answers already on record, so a resumed node draws the same id
 
 The VLM is asked through the assist core (:func:`~src.services.curation.assist.sample_eval.ask_sample`),
 one chunk per call, under the semaphore every node shares. Each chunk is reserved in the
-budget when it gets its turn on that semaphore, before anything is sent, and its answers
-are logged when it returns. The per-item writes are the assist run's own: the sampled
-item gets the VLM's class (never a locked one) and an ``assist`` slot whose run id is
-``<loop_id>/<path>``, which is how a resume finds an answer that never reached the log.
+budget when it gets its turn on that semaphore, before anything is sent: the chunk's ids go
+on record as selections, the call is made, the answers become proposals and the reservation is
+settled at the usage the endpoint reported. The per-item writes are the assist run's own: the
+sampled item gets the VLM's class (never a locked one) and an ``assist`` slot whose run id is
+``<loop_id>/<path>``, which is how a resume finds an answer that never reached the tables.
 """
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
+import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.domain.loop_stats import homogeneity_lower_bound, required_sample
 from src.domain.loop_tree import child_sample
 from src.services.curation.assist.proposal import ClassAnswer, compute_proposal
 from src.services.curation.assist.sample_eval import ask_sample
-from src.services.curation.assist_loop.budget import VLM
 from src.services.curation.assist_loop.concurrent import gather_all
+from src.services.curation.assist_loop.tree import VLM
 from src.services.curation.assist_loop.vlm_failure import VlmFailedError
+from src.services.labeling.vlm_usage import observe_usage, total_usage
 from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
-    import asyncio
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Awaitable, Callable, Iterable, Sequence
 
     from opensearchpy import AsyncOpenSearch
 
+    from src.domain.vlm_usage import VlmUsage
     from src.services.curation.assist.slot_write import RunMeta
-    from src.services.curation.assist_loop.budget import LoopBudget
-    from src.services.curation.assist_loop.store import LoopStore, NodeRecord
+    from src.services.curation.assist_loop.budget import LoopBudget, Reservation
+    from src.services.curation.assist_loop.record import LoopRecord
+    from src.services.curation.assist_loop.tree import NodeRecord
     from src.services.curation.vlm_class_batch import VlmContext
 
 ASK_ACTIONS = ('classify',)
 VETO_MIN_TRUTH = 3
+_RECOVERED = 'recovered'
+_STAGE_TAG = {'node_draw': '1', 'node_topup': '2'}
 MIN_CONSECUTIVE_FAILURES = 5
 """Failed crops in a row, with no reply in between, that count as an outage rather than a
 flaky request. A node whose own crops all failed is only stopped on when the VLM has been
@@ -150,6 +157,9 @@ class Asked:
     """The usable answers by crop id; a crop missing from it got none."""
     request_failed: frozenset[str]
     """Crops whose call failed (no reply at all), not crops the VLM answered with nothing usable."""
+    reservation: Reservation
+    usage: VlmUsage
+    """What the endpoint reported for the call (``NO_USAGE`` when it reported none)."""
 
 
 class VlmAsker:
@@ -176,29 +186,28 @@ class VlmAsker:
     def registry(self) -> frozenset[str]:
         return frozenset(self._ctx.class_names)
 
-    async def ask(self, path: str, chunk: list[str], admit: Callable[[], bool]) -> Asked | None:
-        """Ask about one chunk; ``None`` when ``admit`` (called once the chunk has its
-        turn on the shared semaphore, before anything is sent) refused it."""
-        admitted = False
-
-        def refused() -> bool:
-            nonlocal admitted
-            admitted = admit()
-            return not admitted
-
-        out = await ask_sample(
-            self._os,
-            self._ctx,
-            chunk,
-            actions=ASK_ACTIONS,
-            box_ids=None,
-            images_per_call=len(chunk),
-            meta=dataclasses.replace(self._meta, run_id=slot_run_id(self._meta.run_id, path)),
-            semaphore=self._semaphore,
-            should_stop=refused,
-        )
-        if not admitted:
-            return None
+    async def ask(
+        self, path: str, chunk: list[str], reserve: Callable[[], Awaitable[Reservation | None]]
+    ) -> Asked | None:
+        """Ask about one chunk; ``None`` when ``reserve`` (awaited once the chunk has its turn
+        on the shared semaphore, before anything is sent) refused it."""
+        async with self._semaphore:
+            reservation = await reserve()
+            if reservation is None:
+                return None
+            with observe_usage() as seen:
+                out = await ask_sample(
+                    self._os,
+                    self._ctx,
+                    chunk,
+                    actions=ASK_ACTIONS,
+                    box_ids=None,
+                    images_per_call=len(chunk),
+                    meta=dataclasses.replace(
+                        self._meta, run_id=slot_run_id(self._meta.run_id, path)
+                    ),
+                    semaphore=asyncio.Semaphore(1),
+                )
         if out.request_failed_ids and out.predicted == len(out.request_failed_ids):
             self.silent_crops += len(out.request_failed_ids)
         elif out.predicted:
@@ -208,6 +217,8 @@ class VlmAsker:
                 a.crop_id: a for a in out.answers if a.crop_id and (a.class_name or a.proposed)
             },
             request_failed=frozenset(out.request_failed_ids),
+            reservation=reservation,
+            usage=total_usage(seen),
         )
 
     async def recover(self, path: str, ids: Sequence[str]) -> dict[str, ClassAnswer | None]:
@@ -238,7 +249,7 @@ class VlmAsker:
 
 @dataclass
 class EvalContext:
-    store: LoopStore
+    record: LoopRecord
     budget: LoopBudget
     asker: VlmAsker
     gate: GateParams
@@ -276,10 +287,6 @@ class _Stop(Exception):  # noqa: N818  # a control-flow signal, not an error
         self.unvisited = unvisited
 
 
-def _dump(answers: dict[str, ClassAnswer]) -> dict[str, Any]:
-    return {cid: {'class_name': a.class_name, 'proposed': a.proposed} for cid, a in answers.items()}
-
-
 class _Node:
     def __init__(self, ec: EvalContext, node: NodeInput) -> None:
         self.ec = ec
@@ -310,48 +317,48 @@ class _Node:
         ).draw
 
     async def recover(self) -> None:
+        """Answers an earlier ask of this node left on the items but not in the tables."""
         record = self.node.record
         if not record.pending:
             return
-        known = set(record.answers) | record.failed
-        ids = sorted({i for ids in record.pending.values() for i in ids} - known)
-        found = await self.ec.asker.recover(self.path, ids)
-        for rid, rid_ids in sorted(record.pending.items()):
-            got = {i: a for i in rid_ids if (a := found.get(i)) is not None}
-            failed = [i for i in rid_ids if i in found and found[i] is None]
-            self.ec.store.append(
-                'answers',
-                path=self.path,
-                rid=rid,
-                answers=_dump(got),
-                failed=failed,
-                recovered=True,
+        found = await self.ec.asker.recover(self.path, sorted(record.pending))
+        got = {i: a for i, a in found.items() if a is not None}
+        gone = [i for i, a in found.items() if a is None]
+        if got:
+            await self.ec.record.record_answers(
+                record, uuid.uuid4(), sorted(got), got, proposer_ref=_RECOVERED
+            )
+        if gone:
+            await self.ec.record.record_answers(
+                record, uuid.uuid4(), gone, {}, proposer_ref=_RECOVERED
             )
 
-    async def _chunk(self, chunk: list[str]) -> bool:
-        held = []
+    async def _chunk(self, chunk: list[str], purpose: str) -> bool:
+        record = self.node.record
 
-        def admit() -> bool:
+        async def reserve() -> Reservation | None:
             if self.ec.should_stop():
-                return False
-            res = self.ec.budget.reserve(VLM, self.path, chunk)
+                return None
+            res = await self.ec.budget.reserve(VLM, self.path, chunk)
             if res is not None:
-                held.append(res)
-            return res is not None
+                await self.ec.record.select(record, purpose, chunk)
+            return res
 
-        asked = await self.ec.asker.ask(self.path, chunk, admit)
+        asked = await self.ec.asker.ask(self.path, chunk, reserve)
         if asked is None:
             return False
-        (res,) = held
-        failed = [i for i in chunk if i not in asked.answers]
         self.request_failed |= asked.request_failed
-        self.ec.store.append(
-            'answers', path=self.path, rid=res.rid, answers=_dump(asked.answers), failed=failed
+        await self.ec.record.record_answers(
+            record,
+            asked.reservation.request_id,
+            chunk,
+            asked.answers,
+            request_failed=asked.request_failed,
         )
-        self.ec.budget.settle(res)
+        await self.ec.budget.settle(asked.reservation, asked.usage)
         return True
 
-    async def ask(self, ids: list[str]) -> None:
+    async def ask(self, ids: list[str], purpose: str) -> None:
         record = self.node.record
         missing = [i for i in ids if i not in record.answers and i not in record.failed]
         if not missing:
@@ -361,12 +368,12 @@ class _Node:
         reason = self.ec.budget.would_refuse(VLM, crops=len(missing), requests=len(chunks))
         if reason is not None:
             raise _Stop(reason)
-        done = await gather_all([self._chunk(c) for c in chunks])
+        done = await gather_all([self._chunk(c, purpose) for c in chunks])
         if not all(done):
             raise _Stop(None if self.ec.should_stop() else self.ec.budget.refused)
-        self._check_outage(missing)
+        await self._check_outage(missing)
 
-    def _check_outage(self, asked: list[str]) -> None:
+    async def _check_outage(self, asked: list[str]) -> None:
         """Raise when this ask got no answer and every miss is a failed call: the VLM said
         nothing, so the gate has no evidence to decide on. Misses that are answers with no
         usable class (or unreadable crops) mean the VLM is up and keep the gate's say."""
@@ -376,19 +383,19 @@ class _Node:
             return
         if self.ec.asker.silent_crops < MIN_CONSECUTIVE_FAILURES:
             return
-        self.ec.store.append('vlm_failed', path=self.path, ids=sorted(misses))
+        await self.ec.record.forget_failed(self.node.record, sorted(misses))
         msg = (
             f'every VLM call for node {self.path} failed ({len(misses)} crops): '
             'check the endpoint and the model; the node is left open for a resume'
         )
         raise VlmFailedError(msg)
 
-    async def stage(self, before: list[str], ids: list[str], tag: str) -> list[str]:
+    async def stage(self, before: list[str], ids: list[str], purpose: str) -> list[str]:
         """Ask ``ids`` and re-draw their failures once; every id the stage asked."""
-        await self.ask(ids)
+        await self.ask(ids, purpose)
         failed = sum(1 for i in ids if i in self.node.record.failed or i in self.request_failed)
-        again = self.draw([*before, *ids], failed, f'#redraw{tag}')
-        await self.ask(again)
+        again = self.draw([*before, *ids], failed, f'#redraw{_STAGE_TAG[purpose]}')
+        await self.ask(again, 'redraw')
         return [*ids, *again]
 
     async def run(self) -> Verdict:
@@ -399,12 +406,12 @@ class _Node:
         first = child_sample(
             reused, self.drawable, max(k1, 1), seed=self.ec.seed, path=self.path
         ).draw
-        asked = [*reused, *await self.stage(reused, first, '1')]
+        asked = [*reused, *await self.stage(reused, first, 'node_draw')]
         verdict = self.verdict()
         if verdict.may_top_up:
             more = self.draw(asked, verdict.need - verdict.answered, '#topup')
             if more:
-                await self.stage(asked, more, '2')
+                await self.stage(asked, more, 'node_topup')
                 verdict = self.verdict()
         return verdict
 

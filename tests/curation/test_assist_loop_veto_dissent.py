@@ -15,16 +15,16 @@ from src.domain.loop_tree import child_sample
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from curation.assist_loop_fakes import LoopEnv
 
-pytestmark = pytest.mark.usefixtures('readable_crops')
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('readable_crops')]
 
 ROOT = 10001
 
 
 @pytest.fixture
-def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
-    w = make_world(tmp_path, monkeypatch)
+def world(monkeypatch: pytest.MonkeyPatch) -> World:
+    w = make_world(monkeypatch)
     w.add_cluster(ROOT, {'car': 200}, prefix='a')
     return w
 
@@ -42,38 +42,40 @@ def _human(world: World, crop_id: str, name: str) -> None:
     )
 
 
-def test_validated_members_disagreeing_block_the_pass(world: World, tmp_path: Path) -> None:
+def test_validated_members_disagreeing_block_the_pass(world: World, loop_env: LoopEnv) -> None:
     for i in range(3):
         _human(world, f'h{i}', 'truck')  # the VLM confuses trucks for cars in this root
 
-    run = asyncio.run(drive(world, tmp_path / 'loop', FakeVlm(world.truth), max_depth=0))
+    run = asyncio.run(drive(world, loop_env, FakeVlm(world.truth), max_depth=0))
 
-    assert decisions(run.store) == {'r10001': 'review_leaf'}
-    (decision,) = [e for e in run.store.events() if e['event'] == 'decision']
+    assert decisions(run.record) == {'r10001': 'review_leaf'}
+    decision = run.record.tree.node('r10001').decision
     assert decision['vetoed'] is True
     assert decision['class_name'] == 'car'
     assert not any(d['class_source'] == 'assist_propagated' for d in world.os.docs(ITEMS).values())
 
 
-def test_fewer_than_three_validated_members_do_not_veto(world: World, tmp_path: Path) -> None:
+def test_fewer_than_three_validated_members_do_not_veto(world: World, loop_env: LoopEnv) -> None:
     for i in range(2):
         _human(world, f'h{i}', 'truck')
 
-    run = asyncio.run(drive(world, tmp_path / 'loop', FakeVlm(world.truth), max_depth=0))
+    run = asyncio.run(drive(world, loop_env, FakeVlm(world.truth), max_depth=0))
 
-    assert decisions(run.store) == {'r10001': 'pass'}
+    assert decisions(run.record) == {'r10001': 'pass'}
 
 
-def test_validated_members_agreeing_do_not_veto(world: World, tmp_path: Path) -> None:
+def test_validated_members_agreeing_do_not_veto(world: World, loop_env: LoopEnv) -> None:
     for i in range(5):
         _human(world, f'h{i}', 'car')
 
-    run = asyncio.run(drive(world, tmp_path / 'loop', FakeVlm(world.truth), max_depth=0))
+    run = asyncio.run(drive(world, loop_env, FakeVlm(world.truth), max_depth=0))
 
-    assert decisions(run.store) == {'r10001': 'pass'}
+    assert decisions(run.record) == {'r10001': 'pass'}
 
 
-def test_a_dissenting_sampled_member_keeps_its_own_vlm_answer(world: World, tmp_path: Path) -> None:
+def test_a_dissenting_sampled_member_keeps_its_own_vlm_answer(
+    world: World, loop_env: LoopEnv
+) -> None:
     eligible = sorted(world.truth)
     first_draw = child_sample(
         [], eligible, required_sample(200, 0.9, 0.025, 0), seed=0, path='r10001'
@@ -81,13 +83,13 @@ def test_a_dissenting_sampled_member_keeps_its_own_vlm_answer(world: World, tmp_
     dissenter, agreer = first_draw.draw[:2]
     vlm = FakeVlm(world.truth, answers={dissenter: 'van'})
 
-    run = asyncio.run(drive(world, tmp_path / 'loop', vlm, max_depth=0))
+    run = asyncio.run(drive(world, loop_env, vlm, max_depth=0))
 
-    assert decisions(run.store) == {'r10001': 'pass'}
+    assert decisions(run.record) == {'r10001': 'pass'}
     doc = world.doc(dissenter)
     assert (doc['class_name'], doc['class_source']) == ('van', 'vlm')
     agreeing = world.doc(agreer)
     assert (agreeing['class_name'], agreeing['class_source']) == ('car', 'vlm')
-    (propagated,) = [e for e in run.store.events() if e['event'] == 'propagated']
-    assert dissenter not in propagated['written_ids']
-    assert propagated['skipped']['dissent'] == 1
+    node = run.record.tree.node('r10001')
+    assert dissenter not in asyncio.run(run.record.written_ids(node))
+    assert node.propagated['skipped']['dissent'] == 1

@@ -151,6 +151,8 @@ ErrorCode = Literal[
     'assist_loop_busy',
     'assist_loop_running',
     'assist_loop_not_resumable',
+    'budget_below_spent',
+    'budget_not_editable',
     'no_roots',
     'clustering_running',
     'scope_changed',
@@ -410,6 +412,12 @@ class ConfigErrorDetail(BaseModel):
     run_id: str | None = None
     # auto-label loop: the loop a 404/409 names.
     loop_id: str | None = None
+    # 409 budget_below_spent: the limit that was edited and the least it may be set to.
+    pool: str | None = None
+    unit: str | None = None
+    floor: int | None = None
+    # 409 resume_blocked: why the loop cannot be resumed yet.
+    reason: str | None = None
     limit: int | None = None
     # 422 too_few_items: the smallest pool the clustering route accepts.
     min_items: int | None = None

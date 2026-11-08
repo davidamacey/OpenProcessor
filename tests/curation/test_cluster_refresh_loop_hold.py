@@ -14,7 +14,7 @@ from projects.test_project_counts import _record
 from curation.query_fakes import SettingsFakeOpenSearch
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from scripts.curation import cluster_refresh_daemon as d
-from src.services.curation.assist_loop import job
+from src.services.curation.assist_loop import service
 from src.services.curation.clustering.refresh_schedule import (
     Action,
     Observation,
@@ -26,8 +26,6 @@ from src.services.curation.clustering.refresh_schedule import (
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from fastapi.testclient import TestClient
 
 POLICY = Policy(threshold=200, max_deferral_s=600.0, retry_backoff_s=300.0)
@@ -39,15 +37,26 @@ def http(request: pytest.FixtureRequest) -> TestClient:
     return request.getfixturevalue('client')  # type: ignore[no-any-return]
 
 
+LOOP_ID = '01a1b198-3400-7fd7-a7c3-1acc88024d4a'
+
+
+@pytest.fixture
+def live_loop(monkeypatch: pytest.MonkeyPatch) -> str:
+    """The project has a live loop (the lookup the hold reads, answered)."""
+
+    async def live(_session: Any) -> str:
+        return LOOP_ID
+
+    monkeypatch.setattr(service, '_live_loop_id', live)
+    return LOOP_ID
+
+
 @pytest.fixture(autouse=True)
-def _loops(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_ASSIST_LOOP_JOBS_DIR', str(tmp_path / 'loops'))
+def _no_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def none(_session: Any) -> None:
+        return None
 
-
-def _live_loop() -> str:
-    return asyncio.run(
-        job.create_loop(object(), state={'status': 'queued'}, request={})
-    ).directory.name
+    monkeypatch.setattr(service, '_live_loop_id', none)
 
 
 # ---- the schedule ---------------------------------------------------------
@@ -163,8 +172,10 @@ def test_the_daemon_fails_closed_when_it_cannot_tell_whether_a_loop_is_live() ->
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')
-def test_a_retraining_start_is_refused_with_409_while_a_loop_is_live(http: TestClient) -> None:
-    loop_id = _live_loop()
+def test_a_retraining_start_is_refused_with_409_while_a_loop_is_live(
+    http: TestClient, live_loop: str
+) -> None:
+    loop_id = live_loop
 
     refused = http.post(START)
 
@@ -175,8 +186,8 @@ def test_a_retraining_start_is_refused_with_409_while_a_loop_is_live(http: TestC
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')
+@pytest.mark.usefixtures('live_loop')
 def test_a_start_that_does_not_retrain_is_not_held(http: TestClient) -> None:
-    _live_loop()
 
     allowed = http.post(START, params={'train_clusters': 'false'})
 
@@ -184,8 +195,8 @@ def test_a_start_that_does_not_retrain_is_not_held(http: TestClient) -> None:
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')
+@pytest.mark.usefixtures('live_loop')
 def test_the_synchronous_chain_is_held_too(http: TestClient) -> None:
-    _live_loop()
 
     refused = http.post('/curation/projects/default/pipeline/auto_label')
 
@@ -195,7 +206,4 @@ def test_the_synchronous_chain_is_held_too(http: TestClient) -> None:
 
 @pytest.mark.usefixtures('packs', 'job_dir')
 def test_a_start_goes_through_once_the_loop_has_ended(http: TestClient) -> None:
-    loop = asyncio.run(job.create_loop(object(), state={'status': 'queued'}, request={}))
-    loop.update(status='completed')
-
     assert http.post(START).status_code == 202
