@@ -20,6 +20,7 @@ docstring); the latter (``PATCH /crops/{id}/region_meta``) lives on
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -30,7 +31,7 @@ from opensearchpy.exceptions import NotFoundError
 from src.services.labeling.vlm_client import VlmIdentity
 
 
-pytest_plugins = ['_records_world']
+pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
 
 
 if TYPE_CHECKING:
@@ -366,7 +367,7 @@ def test_unlabel_crop_clears_stale_human_provenance(
     ],
 )
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 def test_human_class_writers_replace_detector_provenance(
     app_client: Any, fake_opensearch: AsyncMock, method: str, url: str, body: dict[str, Any]
 ) -> None:
@@ -405,12 +406,16 @@ def test_human_class_writers_replace_detector_provenance(
 
     fake_opensearch.mget = AsyncMock(side_effect=_fake_mget)
     fake_opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
+    from curation.queued_label import run_job
+    from src.services.curation.label_ops.record import run_relabel
+
     reg = InMemoryRegistry()
     reg.seed_rows([{'class_id': 3, 'class_name': 'gadget'}])
 
     with patch('src.routers.curation.crops_write.get_class_registry', return_value=reg):
         r = getattr(app_client, method)(url, json=body)
-    assert r.status_code == 200, r.text
+        assert r.status_code == 202, r.text
+        asyncio.run(run_job(r.json()['job_id'], lambda ctx: run_relabel(ctx, fake_opensearch)))
 
     [call] = fake_opensearch.bulk.call_args_list
     bulk_body = call.kwargs['body']
@@ -609,6 +614,8 @@ def test_crops_listing_includes_test_when_requested(
     assert not has_test_filter
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world', 'fake_queue')
 def test_batch_label_rejects_more_than_5000_crop_ids(app_client: Any) -> None:
     """crop_ids batch fields are capped at 5000 (max_length) so a
     malformed/huge payload 422s instead of driving an unbounded OCC-bulk

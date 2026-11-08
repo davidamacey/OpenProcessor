@@ -20,6 +20,7 @@ import pytest
 from _class_registry_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
+from curation.queued_label import call_raw, call_route
 from src.config.curation_accessors import base_curation_config
 from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
@@ -51,7 +52,7 @@ CLASS_STATE_FIELDS = (
 )
 
 
-pytest_plugins = ['_records_world']
+pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
 
 
 def _ingest_doc(crop_id: str, **item_kw: Any) -> dict[str, Any]:
@@ -184,17 +185,19 @@ async def test_undo_restores_prior_vlm_label(crops, registry, ids) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_undo_reverses_batch_label_and_move(crops, registry, ids) -> None:
     from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'b': _proposal_doc('b'), 'm': _proposal_doc('m')}})
     before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}
 
-    await crops.batch_label_crops(
-        CropBatchLabelRequest(crop_ids=['b'], class_id=ids['gadget']), fake
+    await call_route(
+        crops.batch_label_crops, CropBatchLabelRequest(crop_ids=['b'], class_id=ids['gadget']), fake
     )
-    await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=ids['widget']), fake)
+    await call_route(
+        crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=ids['widget']), fake
+    )
     assert fake.docs(ITEMS)['m']['class_source'] == 'human_move'
 
     await label_undo.unlabel_crop('b', fake)
@@ -368,7 +371,7 @@ async def test_unexclude_unvalidated_item_from_another_class_cluster_goes_residu
 
 @pytest.mark.asyncio
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_move_into_candidate_cluster_sets_placement_not_class(crops, registry, ids) -> None:
     from src.routers.curation._common_models import CropMoveRequest
 
@@ -379,7 +382,9 @@ async def test_move_into_candidate_cluster_sets_placement_not_class(crops, regis
     fake = QueryFakeOpenSearch({ITEMS: {'m': doc, 'peer': peer}})
     before = _class_state(fake.docs(ITEMS)['m'])
 
-    out = await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=10000), fake)
+    out = await call_route(
+        crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=10000), fake
+    )
     assert out['updated'] == 1
     m = fake.docs(ITEMS)['m']
     assert m['cluster_id'] == 10000
@@ -393,7 +398,7 @@ async def test_move_into_candidate_cluster_sets_placement_not_class(crops, regis
 
 @pytest.mark.asyncio
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) -> None:
     """A human-validated crop moved into a candidate group is no longer that
     class; keeping it validated would leak the old class into export."""
@@ -401,7 +406,7 @@ async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) ->
 
     fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h'), 'peer': _proposal_doc('peer')}})
     await _label(crops, fake, registry, 'h', ids['widget'])
-    await crops.move_crops(CropMoveRequest(crop_ids=['h'], cluster_id=10003), fake)
+    await call_route(crops.move_crops, CropMoveRequest(crop_ids=['h'], cluster_id=10003), fake)
     h = fake.docs(ITEMS)['h']
     assert h['cluster_id'] == 10003
     assert h['class_id'] is None
@@ -409,6 +414,8 @@ async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) ->
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world', 'fake_queue')
 @pytest.mark.parametrize('target', [-2, 9999])
 async def test_move_rejects_unassigned_and_unregistered_targets(crops, registry, target) -> None:
     from fastapi import HTTPException
@@ -418,12 +425,14 @@ async def test_move_rejects_unassigned_and_unregistered_targets(crops, registry,
     fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
     before = dict(fake.docs(ITEMS)['m'])
     with pytest.raises(HTTPException) as exc:
-        await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=target), fake)
+        await call_raw(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=target), fake)
     assert exc.value.status_code == 400
     assert fake.docs(ITEMS)['m'] == before
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_move_rejects_a_candidate_target_with_no_members(crops, registry) -> None:
     """A candidate id nobody is in (never existed, or renumbered away) is
     not a move target; writing it would invent a phantom cluster."""
@@ -434,7 +443,7 @@ async def test_move_rejects_a_candidate_target_with_no_members(crops, registry) 
     fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
     before = dict(fake.docs(ITEMS)['m'])
     with pytest.raises(HTTPException) as exc:
-        await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=99999), fake)
+        await call_raw(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=99999), fake)
     assert exc.value.status_code == 400
     assert '99999' in str(exc.value.detail)
     assert fake.docs(ITEMS)['m'] == before
@@ -568,14 +577,16 @@ def test_undo_route_unknown_crop_is_404(client_for) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_undo_batch_reverses_a_batch_label(crops, ids, client_for) -> None:
     from src.routers.curation._common_models import CropBatchLabelRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('b1', 'b2', 'untouched')}})
     before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}
-    await crops.batch_label_crops(
-        CropBatchLabelRequest(crop_ids=['b1', 'b2'], class_id=ids['gizmo']), fake
+    await call_route(
+        crops.batch_label_crops,
+        CropBatchLabelRequest(crop_ids=['b1', 'b2'], class_id=ids['gizmo']),
+        fake,
     )
     client = client_for(fake)
 

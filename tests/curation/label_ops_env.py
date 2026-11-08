@@ -94,25 +94,9 @@ class OpsEnv:
 
     def _run_job(self, job_id: str, runner: Any) -> Any:
         """Run a queued job's handler body in this process, as the worker would."""
-        import uuid
+        from curation.queued_label import run_job
 
-        from curation.jobs_a.ctx import FakeCtx
-        from src.db.repos import jobs as repo
-        from src.db.session import async_session_factory, project_tx
-        from src.services.jobs.service import cancel_job
-
-        async def go() -> Any:
-            project_id = current_project_id()
-            async with async_session_factory()() as session, project_tx(session, project_id):
-                job = await session.run_sync(lambda sync: repo.get(sync, uuid.UUID(job_id)))
-            assert job is not None
-            try:
-                return await runner(FakeCtx(project_id, job.id, job.params))
-            finally:  # the wrapper is not run here: end the queued row so the group is free
-                async with async_session_factory()() as session:
-                    await cancel_job(session, job.id, project_id, requested_by='test')
-
-        return asyncio.run(go())
+        return asyncio.run(run_job(job_id, runner))
 
     def queue_label(self, class_name: str, **target: Any) -> Any:
         """Queue a relabel and leave its job active (a writer that has not finished)."""
@@ -136,19 +120,9 @@ class OpsEnv:
         asyncio.run(go())
 
     def _written(self, accepted: dict[str, Any]) -> dict[str, Any]:
-        """Queue answer -> run the relabel job -> the shape the synchronous route used to give."""
-        from src.services.curation.label_ops.record import run_relabel
+        from curation.queued_label import written
 
-        result = self._run_job(accepted['job_id'], lambda ctx: run_relabel(ctx, self.fake))
-        tagged = sorted(
-            i for i, d in self.docs().items() if d.get('label_op_id') == result['op_id']
-        )
-        return {
-            'updated': result['updated'],
-            'updated_ids': tagged,
-            'conflicts': result['conflicts'],
-            'op_id': result['op_id'],
-        }
+        return asyncio.run(written(self.fake, accepted))
 
     def _answer(self, resp: Any) -> dict[str, Any]:
         body = resp.json()

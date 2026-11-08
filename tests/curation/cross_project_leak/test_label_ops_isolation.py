@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
+pytest_plugins = ['curation.jobs_a.autoqueue']
 pytestmark = pytest.mark.db
 
 
@@ -34,19 +35,33 @@ def _stored_op_ids(leak_env: LeakEnv, slug: str) -> list[str]:
     return asyncio.run(read())
 
 
-def _label(client: TestClient, slug: str) -> str:
+def _label(leak_env: LeakEnv, client: TestClient, slug: str) -> str:
+    """Queue a relabel in ``slug`` and run its job body against that project's guarded client."""
+    import asyncio
+
+    from curation.queued_label import run_job
+    from src.config.project_context import bind_project
+    from src.core.dependencies import app_state
+    from src.services.curation.label_ops.record import run_relabel
+
     resp = client.put(
         f'{SCOPED.format(project=slug)}/crops/batch_label',
         json={'crop_ids': [f'{slug}-item-0002'], 'class_id': 1},
     )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()['updated'] == 1
+    assert resp.status_code == 202, resp.text
+    opensearch = app_state._opensearch_client.client
+    with bind_project(leak_env.records[slug]):
+        result = asyncio.run(
+            run_job(resp.json()['job_id'], lambda ctx: run_relabel(ctx, opensearch))
+        )
+    assert result['updated'] == 1
+    assert resp.json()['op_id'] == result['op_id']
     return str(resp.json()['op_id'])
 
 
 def test_an_operation_is_listed_and_stored_only_in_its_own_project(leak_env: LeakEnv) -> None:
     client = TestClient(leak_env.app, raise_server_exceptions=False)
-    op_id = _label(client, 'alpha')
+    op_id = _label(leak_env, client, 'alpha')
 
     def listed(slug: str) -> list[str]:
         resp = client.get(f'{SCOPED.format(project=slug)}/label_ops')
@@ -63,7 +78,7 @@ def test_an_operation_is_listed_and_stored_only_in_its_own_project(leak_env: Lea
 
 def test_listing_reaches_only_the_bound_projects_indexes(leak_env: LeakEnv) -> None:
     client = TestClient(leak_env.app, raise_server_exceptions=False)
-    _label(client, 'alpha')
+    _label(leak_env, client, 'alpha')
     leak_env.accesses.clear()
 
     resp = client.get(f'{SCOPED.format(project="alpha")}/label_ops')
@@ -79,7 +94,7 @@ def test_listing_reaches_only_the_bound_projects_indexes(leak_env: LeakEnv) -> N
 
 def test_another_projects_operation_id_is_404_and_nothing_changes(leak_env: LeakEnv) -> None:
     client = TestClient(leak_env.app, raise_server_exceptions=False)
-    op_id = _label(client, 'alpha')
+    op_id = _label(leak_env, client, 'alpha')
     alpha_history = f'{SCOPED.format(project="alpha")}/crops/alpha-item-0002/history'
     before = client.get(alpha_history).json()
     assert before['entries'][-1]['op_id'] == op_id

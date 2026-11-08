@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.usefixtures('label_ops_state')
 
 
-pytest_plugins = ['_records_world']
+pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
 
 
 def _state(doc: dict[str, Any]) -> dict[str, Any]:
@@ -140,6 +140,8 @@ def test_discard_batch(client_for) -> None:  # noqa: F811
 # ------------------------------------------------------------------ label_source
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world', 'fake_queue')
 def test_label_source_must_be_a_human_source(client_for, ids) -> None:  # noqa: F811
     client = client_for(QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}}))
     r = client.put(
@@ -172,18 +174,21 @@ async def test_class_source_is_always_human_on_a_human_write(crops, registry, id
 
 @pytest.mark.asyncio
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_batch_writes_return_updated_ids(crops, ids) -> None:  # noqa: F811
+    from curation.queued_label import call_route
     from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('a', 'b')}})
-    out = await crops.batch_label_crops(
-        CropBatchLabelRequest(crop_ids=['a', 'gone'], class_id=ids['widget']), fake
+    out = await call_route(
+        crops.batch_label_crops,
+        CropBatchLabelRequest(crop_ids=['a', 'gone'], class_id=ids['widget']),
+        fake,
     )
     assert out['updated_ids'] == ['a']
-    assert [c['crop_id'] for c in out['conflicts']] == ['gone']
-    out = await crops.move_crops(
-        CropMoveRequest(crop_ids=['b', 'gone'], cluster_id=ids['gadget']), fake
+    assert out['conflicts'] == 1, 'the unknown id is the one conflict'
+    out = await call_route(
+        crops.move_crops, CropMoveRequest(crop_ids=['b', 'gone'], cluster_id=ids['gadget']), fake
     )
     assert out['updated_ids'] == ['b']
 
