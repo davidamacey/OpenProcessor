@@ -7,6 +7,7 @@ from src.config.queue import TaskQueues
 
 ROUTES: dict[str, str] = {
     'op.autolabel.run': TaskQueues.AUTOLABEL,
+    'op.assist_loop.run': TaskQueues.ASSIST_LOOP,
     'op.vlm.label_batch': TaskQueues.JOBS,
     'op.vlm.verify_region_batch': TaskQueues.JOBS,
     'op.periodic.vlm_batch_staging_sweep': TaskQueues.PERIODIC,

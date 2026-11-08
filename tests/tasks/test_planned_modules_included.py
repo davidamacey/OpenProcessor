@@ -21,6 +21,7 @@ TASK_FAMILIES = (
     'jobs_b',
     'jobs_c',
     'trigger',
+    'assist_loop',
     'promote',
     'periodic',
     'b4_fanout',
