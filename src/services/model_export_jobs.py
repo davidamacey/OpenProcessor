@@ -20,7 +20,7 @@ from src.db.repos.jobs_listing import JobFilter, get_one, list_page
 from src.db.session import async_session_factory, deployment_tx
 from src.schemas.models import ExportStatus, ExportTaskStatus
 from src.services.jobs.service import StartResult, rejection, start_job
-from src.services.model_export import ExportWorkerUnavailableError
+from src.services.model_export import ExportWorkerUnavailableError, StagedUpload
 
 
 if TYPE_CHECKING:
@@ -92,11 +92,14 @@ async def start_export(
     model_info: Mapping[str, Any],
     new_version: bool,
     requested_by: str = 'api',
+    staged: StagedUpload | None = None,
 ) -> StartResult:
     """Queue one export: the job and, in its transaction, the ``models`` version it builds.
 
     ``new_version`` is an upload (a new version of ``triton_name``); a re-export reuses the
     latest version. 409 ``job_busy`` while another export of the same name is active.
+    ``staged`` (an upload) is placed as the stored weights in the job's transaction, after the
+    insert accepted the job and before anything is sent: a refused start replaces nothing.
     """
     params = {
         'pt_file': str(pt_file),
@@ -112,6 +115,9 @@ async def start_export(
     }
 
     async def model_row(session: AsyncSession, _job: jobs_repo.JobRow) -> None:
+        if staged is not None:
+            await asyncio.to_thread(staged.place)
+
         def write(sync: Any) -> None:
             existing = (
                 None if new_version else engine_builds.latest_model_version(sync, triton_name)

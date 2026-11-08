@@ -1,7 +1,7 @@
 """POST /models/upload and POST /models/{name}/export start a ``model_export`` job.
 
 The routes run against the database; only the checkpoint validator, the worker probe and the
-weights directory are replaced.
+weights directory are replaced. A refused start (409) leaves the stored weights untouched.
 """
 
 from __future__ import annotations
@@ -71,3 +71,21 @@ def test_export_route_starts_the_job_for_stored_weights(client, weights, pg, pro
     [(kind, scope)] = sql(pg, 'SELECT kind, scope FROM jobs WHERE id = %s', task_id)
     assert (kind, scope) == ('model_export', 'exproute')
     assert sql(pg, "SELECT count(*) FROM models WHERE name = 'exproute'") == [(1,)]
+
+
+def test_a_refused_upload_does_not_replace_the_weights_a_running_build_reads(
+    client, weights, pg, producer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = client.post('/models/upload', files=_pt(b'a' * 2000), data={'triton_name': 'racename'})
+    assert first.status_code == 200, first.text
+
+    async def passes(_session, _name) -> None:
+        """The pre-check ran before the first start committed: only the start can refuse."""
+
+    monkeypatch.setattr(models_export, 'ensure_not_building', passes)
+    second = client.post('/models/upload', files=_pt(b'b' * 2000), data={'triton_name': 'racename'})
+    assert second.status_code == 409
+    assert second.json()['detail']['error'] == 'job_busy'
+    assert (weights / 'racename.pt').read_bytes() == b'a' * 2000
+    assert sorted(p.name for p in weights.iterdir()) == ['racename.pt'], 'no staged file is left'
+    assert producer.sent() == [first.json()['task_id']]

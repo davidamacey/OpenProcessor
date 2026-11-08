@@ -10,8 +10,8 @@ status; nothing is kept in a process or in a file.
 
 import logging
 import re
-import shutil
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -117,40 +117,50 @@ class ExportWorkerUnavailableError(RuntimeError):
     """No model-export worker is running, so a started job would never be picked up."""
 
 
-async def save_uploaded_file(
-    content: bytes,
-    triton_name: str,
-) -> tuple[Path, dict[str, Any]]:
-    """
-    Save uploaded file and validate it.
+@dataclass(frozen=True)
+class StagedUpload:
+    """A validated upload waiting beside its final path; ``place`` makes it the stored weights."""
 
-    Returns:
-        Tuple of (saved_path, model_info)
+    path: Path
+    final_path: Path
+    model_info: dict[str, Any]
+
+    def place(self) -> None:
+        """Atomic: the weights a running build reads are never half-written."""
+        self.path.replace(self.final_path)
+
+    def discard(self) -> None:
+        self.path.unlink(missing_ok=True)
+
+
+async def stage_uploaded_file(content: bytes, triton_name: str) -> StagedUpload:
+    """
+    Validate an uploaded file and keep it next to its final path without replacing anything.
+
+    The caller places it only once the export job exists (the job start is what answers 409
+    for a running build of the same name).
 
     Raises:
         ValueError: If validation fails
     """
     PYTORCH_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Save to temp file first for validation
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.pt') as tmp:
+    # Same directory as the final path (so ``place`` is a rename); a leading dot keeps it out of
+    # the ``{name}*.pt`` lookup of the export route.
+    with tempfile.NamedTemporaryFile(
+        delete=False, dir=PYTORCH_MODELS_DIR, prefix='.upload-', suffix='.pt'
+    ) as tmp:
         tmp.write(content)
         tmp_path = Path(tmp.name)
 
     try:
         is_valid, error_msg, model_info = validate_pytorch_model(tmp_path)
         if not is_valid:
-            tmp_path.unlink(missing_ok=True)
             raise ValueError(error_msg)
-
-        # Move to final location
-        final_path = PYTORCH_MODELS_DIR / f'{triton_name}.pt'
-        shutil.move(tmp_path, final_path)
-
-        return final_path, model_info
-
     except ValueError:
+        tmp_path.unlink(missing_ok=True)
         raise
     except Exception as e:
         tmp_path.unlink(missing_ok=True)
         raise ValueError(f'Failed to save file: {e}') from e
+    return StagedUpload(tmp_path, PYTORCH_MODELS_DIR / f'{triton_name}.pt', model_info)

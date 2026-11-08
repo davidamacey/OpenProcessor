@@ -27,7 +27,7 @@ from src.services.model_export import (
     ExportWorkerUnavailableError,
     check_triton_name,
     generate_triton_name,
-    save_uploaded_file,
+    stage_uploaded_file,
     validate_pytorch_model,
 )
 from src.services.model_export_jobs import (
@@ -133,7 +133,7 @@ async def upload_model(
         await ensure_not_building(session, name)
 
     try:
-        pt_file, model_info = await save_uploaded_file(content, name)
+        staged = await stage_uploaded_file(content, name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -143,16 +143,21 @@ async def upload_model(
     if 'trt_end2end' in format_strs and 'onnx_end2end' not in format_strs:
         format_strs.insert(0, 'onnx_end2end')
 
-    started = await start_export(
-        triton_name=name,
-        pt_file=pt_file,
-        max_batch=max_batch,
-        formats=format_strs,
-        normalize_boxes=normalize_boxes,
-        auto_load=auto_load,
-        model_info=model_info,
-        new_version=True,
-    )
+    try:
+        started = await start_export(
+            triton_name=name,
+            pt_file=staged.final_path,
+            max_batch=max_batch,
+            formats=format_strs,
+            normalize_boxes=normalize_boxes,
+            auto_load=auto_load,
+            model_info=staged.model_info,
+            new_version=True,
+            staged=staged,
+        )
+    except BaseException:
+        staged.discard()
+        raise
     return _started(started.job.id, started.job.params, started.job.created_at)
 
 
