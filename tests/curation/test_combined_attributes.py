@@ -47,7 +47,7 @@ def _labeler(content: Any, pack: Any) -> VlmLabeler:
     resp.json = MagicMock(return_value={'choices': [{'message': {'content': json.dumps(content)}}]})
     resp.raise_for_status = MagicMock()
     fake.post = AsyncMock(return_value=resp)
-    return VlmLabeler(client=fake, pack=pack)
+    return VlmLabeler(client=fake, pack=pack, usage_source=None)
 
 
 def _sent_text(labeler: VlmLabeler) -> str:

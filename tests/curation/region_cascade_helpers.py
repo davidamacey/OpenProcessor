@@ -46,7 +46,7 @@ def _chat(content: str) -> dict[str, Any]:
 
 
 def _labeler(reply: dict[str, Any] | str) -> VlmLabeler:
-    lab = VlmLabeler(base_url='http://vlm.invalid/v1')
+    lab = VlmLabeler(base_url='http://vlm.invalid/v1', usage_source=None)
     content = reply if isinstance(reply, str) else json.dumps(reply)
     lab._post_chat = AsyncMock(return_value=_chat(content))  # type: ignore[method-assign]
     return lab

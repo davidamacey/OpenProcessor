@@ -12,6 +12,7 @@ import contextlib
 import os
 import signal
 import time
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -236,7 +237,7 @@ async def run(args: argparse.Namespace) -> int:
                     region_detector_cls=RegionDetector,
                     ocr_recognizer_cls=PaddleOcrTextRecognizer,
                     segmenter_cls=SegmenterClient,
-                    build_vlm=build_vlm_labeler,
+                    build_vlm=partial(build_vlm_labeler, usage_source='vlm_worker'),
                 )
                 if rt is None:
                     return

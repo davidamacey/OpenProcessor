@@ -43,7 +43,7 @@ async def _live_health(endpoint: VlmEndpoint) -> tuple[str, str | None]:
 
     try:
         await assert_may_connect(endpoint)
-        health = await labeler_for(endpoint, active_prompt_pack()).health()
+        health = await labeler_for(endpoint, active_prompt_pack(), usage_source=None).health()
     except Exception as exc:
         return 'unavailable', str(exc)
     return ('ready' if health.reachable else 'unavailable'), health.last_error

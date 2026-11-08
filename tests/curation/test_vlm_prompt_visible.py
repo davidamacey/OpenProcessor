@@ -15,7 +15,11 @@ from src.services.labeling.vlm_labeler import VlmLabeler
 def _labeler(handler: Any) -> VlmLabeler:
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     return VlmLabeler(
-        base_url='http://vlm.invalid/v1', model='m', client=client, requests_per_second=1000.0
+        base_url='http://vlm.invalid/v1',
+        model='m',
+        client=client,
+        requests_per_second=1000.0,
+        usage_source=None,
     )
 
 

@@ -115,7 +115,7 @@ async def _embed_missing_stage(run: Run) -> dict[str, Any]:
 async def _normalize_stage(run: Run) -> dict[str, Any]:
     """Make ``cluster_id`` equal ``class_id`` for labeled items; the residual
     clusterer handles the rest."""
-    from src.services.curation.autolabel.job import with_elapsed_tick
+    from src.services.curation.autolabel.progress import with_elapsed_tick
 
     start_cancellable_stage(run, 'cluster_id_normalize')
     try:
@@ -142,7 +142,7 @@ async def _cluster_residuals_stage(
     """AHC over the residual pool. ``reassign_only`` stream-assigns residuals against the
     persisted IVF centroids (no retrain); otherwise ``cluster_residuals`` dispatches via
     the ClusterMethod registry (a bad method becomes a stage error)."""
-    from src.services.curation.autolabel.job import with_elapsed_tick
+    from src.services.curation.autolabel.progress import with_elapsed_tick
     from src.services.curation.clustering.cluster_geometry import cluster_geometry_stage
 
     start_cancellable_stage(run, 'cluster_residuals')
@@ -180,7 +180,7 @@ async def _cluster_residuals_stage(
 async def _auto_promote_stage(
     run: Run, *, run_auto_promote: bool, min_purity: float, min_members: int
 ) -> dict[str, Any]:
-    from src.services.curation.autolabel.job import with_elapsed_tick
+    from src.services.curation.autolabel.progress import with_elapsed_tick
     from src.services.curation.clustering.auto_promote import gated_auto_promote
 
     start_cancellable_stage(run, 'auto_promote')

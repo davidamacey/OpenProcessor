@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 import src.services.curation.clustering.orchestrator as orch
-from src.services.curation.autolabel.job import failed_stages
+from src.services.curation.autolabel.progress import failed_stages
 from src.services.curation.clustering.pool_coverage import POOL_COVERAGE_MIN
 
 

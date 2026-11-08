@@ -67,7 +67,11 @@ def _vlm_routes(endpoints: dict) -> dict[tuple[str, str], tuple[int, object]]:
         {'active': {'name': None, 'revision': None}, 'source': 'off'},
     )
     routes[('GET', f'{P}/crops')] = (200, {'total': 1, 'crops': [{'crop_id': 'c0'}]})
-    routes[('POST', f'{P}/vlm/label_batch')] = (200, {'predicted': 1})
+    routes[('POST', f'{P}/vlm/label_batch')] = (202, {'job_id': 'lb1', 'status': 'queued'})
+    routes[('GET', f'{P}/jobs/lb1')] = (
+        200,
+        {'id': 'lb1', 'status': 'completed', 'result': {'predicted': 1}},
+    )
     return routes
 
 
@@ -538,7 +542,11 @@ def test_confirm_one_class_then_train_single_class_subset(fake, tmp_path):
     routes[('POST', f'{P}/train/preflight')] = (200, {'blocked': False, 'checks': []})
     routes[('POST', f'{P}/train/start')] = (201, {'job_id': 'j'})
     routes[('GET', f'{P}/train/status/j')] = (200, {'state': 'finished'})
-    routes[('POST', f'{P}/vlm/label_batch')] = (200, {'predicted': 1})
+    routes[('POST', f'{P}/vlm/label_batch')] = (202, {'job_id': 'lb1', 'status': 'queued'})
+    routes[('GET', f'{P}/jobs/lb1')] = (
+        200,
+        {'id': 'lb1', 'status': 'completed', 'result': {'predicted': 1}},
+    )
     routes[('GET', f'{P}/vlm/endpoints/active')] = (
         200,
         {'active': {'name': None, 'revision': None}, 'source': 'off'},

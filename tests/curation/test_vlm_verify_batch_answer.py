@@ -32,7 +32,7 @@ def _labeler(message: dict[str, Any] | None = None, *, fail: bool = False) -> Vl
         resp.json = MagicMock(return_value={'choices': [{'message': message or {}}]})
         resp.raise_for_status = MagicMock()
         fake.post = AsyncMock(return_value=resp)
-    return VlmLabeler(client=fake)
+    return VlmLabeler(client=fake, usage_source=None)
 
 
 def _crops(n: int) -> list[RegionCrop]:

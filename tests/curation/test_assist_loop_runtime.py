@@ -55,9 +55,12 @@ class Registry:
 
         monkeypatch.setattr(runtime, 'job_endpoint', job_endpoint)
         monkeypatch.setattr(runtime, 'assert_may_connect', assert_may_connect)
-        monkeypatch.setattr(
-            runtime, 'get_vlm_labeler', lambda _p, _r, *, endpoint: self.vlms[endpoint.name]
-        )
+
+        def get_vlm_labeler(_p: Any, _r: Any, *, endpoint: Any, usage_source: str) -> Any:
+            assert usage_source == 'assist_loop'
+            return self.vlms[endpoint.name]
+
+        monkeypatch.setattr(runtime, 'get_vlm_labeler', get_vlm_labeler)
 
 
 def _queue(world: World, *, pinned: dict[str, Any] | None = None, **request: Any) -> str:

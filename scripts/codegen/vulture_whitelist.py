@@ -197,3 +197,24 @@ _.slice_due  # src/tasks/runtime/context.py, read by the sliced handlers (assist
 _.install_server_chooser  # src/tasks/runtime/hooks.py, called by the GPU router when it lands
 _.ServerLive  # docker/test/fake_triton.py, called by gRPC by Triton's method name
 _.ServerReady  # docker/test/fake_triton.py, called by gRPC by Triton's method name
+
+# The lane 4D VLM usage seam: the job handlers of the trigger family call it.
+
+# The assist loop's SQL budget lands ahead of the loop driver that calls it (lane 4D).
+_.seed_budgets  # src/db/repos/assist_loop.py
+_.forfeit_open  # src/db/repos/assist_loop.py
+_.add_spent  # src/db/repos/assist_loop.py
+_.budgets  # src/db/repos/assist_loop.py
+_.edit_limit  # src/db/repos/assist_loop.py
+_.call_units  # src/domain/assist_loop_budget.py
+_.settled_amounts  # src/domain/assist_loop_budget.py
+_.as_amounts  # src/domain/assist_loop_budget.py
+_.POOLS  # src/domain/assist_loop_budget.py
+_.UNITS  # src/domain/assist_loop_budget.py
+
+# Lane 4D left these without a production caller.
+_.should_retrain_centroids  # src/services/curation/clustering/retrain_policy.py, the IVF policy; it goes with the IVF method (lane 4F), the auto-label worker that called it is deleted
+_.__qualname__  # src/tasks/runtime/register.py, Celery names the task by it
+
+# Scheduled by 6A (every 15 min); remove this line when beat_schedule names it.
+_.vlm_batch_staging_sweep  # src/tasks/trigger.py, op.periodic.vlm_batch_staging_sweep

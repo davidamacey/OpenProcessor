@@ -61,7 +61,7 @@ class TestOverlay:
 class TestDirective:
     @pytest.mark.asyncio
     async def test_batch_directive_names_the_red_rectangle(self) -> None:
-        lab = VlmLabeler(base_url='http://vlm.invalid/v1')
+        lab = VlmLabeler(base_url='http://vlm.invalid/v1', usage_source=None)
         post = AsyncMock(return_value=_chat(json.dumps({'results': []})))
         lab._post_chat = post  # type: ignore[method-assign]
         crops = [
@@ -81,7 +81,7 @@ class TestDirective:
 
     @pytest.mark.asyncio
     async def test_single_call_names_the_red_rectangle(self) -> None:
-        lab = VlmLabeler(base_url='http://vlm.invalid/v1')
+        lab = VlmLabeler(base_url='http://vlm.invalid/v1', usage_source=None)
         reply = {'region_visible': True, 'region_boxes': [{'box': 1, 'region_bbox_correct': True}]}
         post = AsyncMock(return_value=_chat(json.dumps(reply)))
         lab._post_chat = post  # type: ignore[method-assign]

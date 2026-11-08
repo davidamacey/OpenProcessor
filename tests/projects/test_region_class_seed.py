@@ -96,10 +96,7 @@ async def test_item_classes_exclude_a_seeded_region_class_after_profile_deactiva
 async def test_label_batch_with_only_the_region_class_is_no_classes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from fastapi import HTTPException
-
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
 
     reg = _seed(monkeypatch, DetectionProfile(name='p', region_class_name='wheel'))
     reg.seed(['wheel'])
@@ -110,14 +107,12 @@ async def test_label_batch_with_only_the_region_class_is_no_classes(
         async def label_or_propose_batch(self, *_a: object, **_k: object) -> None:
             raise AssertionError('the VLM must not be called with only the region class')
 
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
+    labeler = _NeverCalled()
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000/v1')
 
-    with pytest.raises(HTTPException) as exc_info:
-        await vlm_mod.vlm_label_batch(
-            VlmLabelBatchRequest(crop_ids=['a']), empty_registry_reads(AsyncMock())
-        )
-    assert exc_info.value.status_code == 409
+    assert await vlm_mod.run_label_batch(empty_registry_reads(AsyncMock()), labeler, ['a']) == {
+        'no_classes': True
+    }
 
 
 @pytest.mark.asyncio

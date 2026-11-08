@@ -46,6 +46,18 @@ _stats_cache_expires_at: dict[str, float] = {}
 _stats_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
 
+def _marker(state: dict[str, Any]) -> tuple[Any, ...]:
+    """What a frame is sent for: any change of these fields of the job state."""
+    return (
+        state.get('job_id'),
+        state.get('status'),
+        state.get('stage'),
+        state.get('processed'),
+        state.get('total'),
+        state.get('finished_at'),
+    )
+
+
 async def _aggregate_stats(slug: str, opensearch: AsyncOpenSearch) -> dict[str, Any]:
     from src.routers.curation.stats import stats_dataset
 
@@ -88,7 +100,7 @@ async def pipeline_events(opensearch: OpenSearchDep) -> AsyncIterator[ServerSent
       REST call.
     * ``state`` — whenever ``auto_label`` state changes (stage
       transitions, progress advances, terminal status), noticed by a 1 s
-      poll of the bound project's ``state.json`` mtime.
+      poll of the job row.
     * ``stats`` — refreshed dataset aggregation. Emitted at auto_label
       stage boundaries AND on a periodic timer (``STATS_REFRESH_SECONDS``)
       so the dashboard counts (unlabeled / pending_detection /
@@ -101,7 +113,8 @@ async def pipeline_events(opensearch: OpenSearchDep) -> AsyncIterator[ServerSent
     The dashboard consumes this with ``new EventSource(url)`` and
     switches on ``ev.type`` (snapshot | state | stats).
     """
-    from src.services.curation.autolabel import job as auto_label_job
+    from src.db.session import async_session_factory
+    from src.services.curation.autolabel import service as auto_label_service
 
     # Periodic stats refresh — the detection worker writes back to the
     # items index continuously as it drains, but those writes don't touch
@@ -122,8 +135,12 @@ async def pipeline_events(opensearch: OpenSearchDep) -> AsyncIterator[ServerSent
 
     # Bootstrap. Send the current state + stats so the client renders
     # without any parallel REST call.
-    last_mtime = auto_label_job.state_mtime()
-    state = auto_label_job.get_state()
+    async def _state() -> dict[str, Any]:
+        async with async_session_factory()() as session:
+            return await auto_label_service.current(session)
+
+    state = await _state()
+    last_marker = _marker(state)
     stats = await _build_stats_payload()
     yield ServerSentEvent(event='snapshot', data={'state': state, 'stats': stats})
 
@@ -133,10 +150,9 @@ async def pipeline_events(opensearch: OpenSearchDep) -> AsyncIterator[ServerSent
     while True:
         await asyncio.sleep(STATE_POLL_SECONDS)
         now = time.monotonic()
-        mtime = auto_label_job.state_mtime()
-        if mtime != last_mtime:
-            last_mtime = mtime
-            state = auto_label_job.get_state()
+        state = await _state()
+        if _marker(state) != last_marker:
+            last_marker = _marker(state)
             yield ServerSentEvent(event='state', data=state)
             stage = state.get('stage')
             status = state.get('status')

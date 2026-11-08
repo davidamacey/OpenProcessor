@@ -162,7 +162,7 @@ def _wire_label_batch(
     from _class_registry_fake import InMemoryRegistry
     from PIL import Image
 
-    import src.routers.curation.vlm as vlm_mod
+    import src.services.curation.vlm_batch as vlm_mod
     from curation.query_fakes import QueryFakeOpenSearch
     from src.config.curation_accessors import base_curation_config
 
@@ -178,11 +178,7 @@ def _wire_label_batch(
     reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
-    async def _no_pack(_os: Any) -> None:
-        return None
-
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    fake = QueryFakeOpenSearch(
+    return QueryFakeOpenSearch(
         {
             items: {
                 'c1': {
@@ -196,8 +192,6 @@ def _wire_label_batch(
             }
         }
     )
-
-    return vlm_mod, fake
 
 
 class _RecordingLabeler:
@@ -221,10 +215,10 @@ class _RecordingLabeler:
 async def test_label_batch_attaches_the_stored_detector_name_only_when_enabled(
     tmp_path: Any, monkeypatch: pytest.MonkeyPatch, pct: int, hinted: bool
 ) -> None:
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    from src.services.curation.vlm_batch import run_label_batch
 
     pack = dataclasses.replace(GENERIC_ITEM_PACK, detector_hint_min_confidence_pct=pct)
-    vlm_mod, fake = _wire_label_batch(
+    fake = _wire_label_batch(
         tmp_path,
         monkeypatch,
         pack,
@@ -232,9 +226,7 @@ async def test_label_batch_attaches_the_stored_detector_name_only_when_enabled(
         doc_extra={'detector_class_name': 'car', 'detector_confidence': 0.9},
     )
     crops: list[Any] = []
-    monkeypatch.setattr(
-        vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _RecordingLabeler(pack, crops)
-    )
-    await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['c1']), fake)
+    labeler = _RecordingLabeler(pack, crops)
+    await run_label_batch(fake, labeler, ['c1'])
     assert len(crops) == 1
     assert crops[0].detector_class == ('car' if hinted else '')

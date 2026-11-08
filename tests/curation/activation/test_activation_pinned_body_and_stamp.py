@@ -30,7 +30,7 @@ def test_vlm_route_default_serves_pinned_body_and_stamp(app_client):
 
     _activate_then_put(app_client)
     name = asyncio.run(_default_pack_name(object()))
-    lab = get_vlm_labeler(name)
+    lab = get_vlm_labeler(name, usage_source=None)
     print('route default', name, lab._pack.class_system[:20], prompt_pack_stamp(lab._pack))
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
     assert prompt_pack_stamp(lab._pack) == 'my_pack@1'
@@ -43,7 +43,7 @@ def test_pipeline_default_serves_pinned_body_and_stamp(app_client):
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), None))
-    lab = get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev, usage_source=None)
     print('pipeline default', name, rev, lab._pack.class_system[:20], prompt_pack_stamp(lab._pack))
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
     assert prompt_pack_stamp(lab._pack) == 'my_pack@1'
@@ -57,7 +57,7 @@ def test_per_run_pin_of_current_draft_is_stamped_with_its_own_revision(app_clien
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@2'))
-    lab = get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev, usage_source=None)
     stamp = prompt_pack_stamp(lab._pack)
     print('per-run my_pack@2 served', lab._pack.class_system[:20], 'stamp', stamp)
     assert lab._pack.class_system == 'R2 DRAFT'
@@ -71,7 +71,7 @@ def test_per_run_explicit_name_resolves_latest_revision(app_client):
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack'))
-    lab = get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev, usage_source=None)
     print('per-run explicit my_pack ->', rev, lab._pack.class_system[:20])
     assert lab._pack.class_system == 'R2 DRAFT'
 
@@ -83,7 +83,7 @@ def test_per_run_pin_of_active_old_revision(app_client):
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@1'))
-    lab = get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev, usage_source=None)
     assert (name, rev) == ('my_pack', 1)
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
     assert prompt_pack_stamp(lab._pack) == 'my_pack@1'
@@ -172,7 +172,7 @@ def test_vlm_api_default_labeler_serves_pinned_body(app_client):
 
     _activate_then_put(app_client)
     name = asyncio.run(_default_pack_name(object()))
-    labeler = get_vlm_labeler(name)
+    labeler = get_vlm_labeler(name, usage_source=None)
     stamp = prompt_pack_stamp(labeler._pack)
     print('default name', name, 'served', labeler._pack.class_system[:30], 'stamp', stamp)
     assert labeler._pack.class_system == GENERIC_ITEM_PACK.class_system, (
@@ -186,7 +186,7 @@ def test_pipeline_omitted_prompt_pack_serves_pinned_body(app_client):
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), None))
-    labeler = get_vlm_labeler(name, rev)
+    labeler = get_vlm_labeler(name, rev, usage_source=None)
     print('pipeline default', name, rev, labeler._pack.class_system[:30])
     assert labeler._pack.class_system == GENERIC_ITEM_PACK.class_system
 
@@ -229,7 +229,7 @@ def test_per_run_name_at_past_revision_labels_successfully(app_client):
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@1'))
     print('resolved', name, rev)
     try:
-        labeler = get_vlm_labeler(name, rev)
+        labeler = get_vlm_labeler(name, rev, usage_source=None)
     except ValueError as exc:
         pytest.fail(
             f'valid past revision my_pack@1 accepted at request time but labeler raises: {exc}'
@@ -282,12 +282,12 @@ def test_per_run_tag_isolated_from_default_path(app_client):
         == 200
     )
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack'))
-    lab = get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev, usage_source=None)
     assert rev == 3
     assert prompt_pack_stamp(lab._pack, revision=rev) == 'my_pack@3'
-    d = get_vlm_labeler(asyncio.run(_default_pack_name(object())))
+    d = get_vlm_labeler(asyncio.run(_default_pack_name(object())), usage_source=None)
     print('per-run', prompt_pack_stamp(lab._pack), 'default route', prompt_pack_stamp(d._pack))
     assert prompt_pack_stamp(d._pack) == 'my_pack@1'
     # per-run draft pin
     name, rev = asyncio.run(resolve_run_prompt_pack(object(), 'my_pack@3'))
-    assert prompt_pack_stamp(get_vlm_labeler(name, rev)._pack) == 'my_pack@3'
+    assert prompt_pack_stamp(get_vlm_labeler(name, rev, usage_source=None)._pack) == 'my_pack@3'

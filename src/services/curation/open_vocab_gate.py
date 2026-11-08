@@ -45,7 +45,7 @@ async def active_vlm_visible() -> VlmVisibleFn | None:
         return None
     if endpoint is None:
         return None
-    labeler = labeler_for(endpoint, active_prompt_pack())
+    labeler = labeler_for(endpoint, active_prompt_pack(), usage_source=None)
 
     async def ask(jpeg: bytes, prompt: str) -> bool | None:
         return await labeler.prompt_visible(jpeg, prompt)

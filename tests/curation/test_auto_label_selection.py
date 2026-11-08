@@ -49,16 +49,19 @@ def packs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CurationConfig:
 
 
 @pytest.fixture
-def job_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    from src.services.curation.autolabel import job
+def job_dir(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """The start route's job service replaced by a recorder (these tests check what the route
+    resolves and passes, not the database); the recorded list is the params of each start."""
+    from src.services.curation.autolabel import service
 
-    state_dir = tmp_path / 'auto_label'
-    # Every other path helper (_state_file/_cancel_flag/etc.) calls
-    # _state_dir() internally, so patching just this one function
-    # (looked up fresh from job's module namespace at call time)
-    # redirects all of them.
-    monkeypatch.setattr(job, '_state_dir', lambda: state_dir)
-    return state_dir
+    started: list[dict[str, Any]] = []
+
+    async def start(_session: Any, params: Any, *, idempotency_key: str | None = None) -> Any:
+        started.append(dict(params))
+        return {'job_id': 'job-1', 'status': 'queued', 'args': dict(params)}
+
+    monkeypatch.setattr(service, 'start', start)
+    return started
 
 
 @pytest.fixture
@@ -76,6 +79,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+    from src.core.db_session import get_db
+
+    app.dependency_overrides[get_db] = lambda: None
     return TestClient(app)
 
 
@@ -116,23 +122,24 @@ def test_start_rejects_any_detection_profile(client: TestClient, value: str) -> 
 
 
 @pytest.mark.usefixtures('packs')
-def test_start_echoes_prompt_pack_override_in_job_args(client: TestClient, job_dir: Path) -> None:
+def test_start_echoes_prompt_pack_override_in_job_args(
+    client: TestClient, job_dir: list[dict[str, Any]]
+) -> None:
     r = client.post(
         '/curation/projects/default/pipeline/auto_label/start', params={'prompt_pack': 'food_v2'}
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     args = r.json()['args']
     assert args['prompt_pack'] == 'food_v2'
     assert 'detection_profile' not in args
-    # The worker runs from the trigger file -- it must carry the same id.
-    trigger = json.loads((job_dir / 'trigger.json').read_text())
-    assert trigger['args']['prompt_pack'] == 'food_v2'
+    # The worker runs from the job's params -- they must carry the same id.
+    assert job_dir[0]['prompt_pack'] == 'food_v2'
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')
 def test_start_omitted_resolves_to_settings_default(client: TestClient) -> None:
     r = client.post('/curation/projects/default/pipeline/auto_label/start')
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     assert r.json()['args']['prompt_pack'] == 'pallet_v1'  # OP_PROMPT_PACK_PATH pack
 
 
@@ -142,20 +149,22 @@ async def test_start_ignores_a_stale_settings_doc_pack_when_omitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.routers.curation import pipeline_start
-    from src.services.curation.autolabel import job
+    from src.services.curation.autolabel import service
 
     captured: dict[str, Any] = {}
 
-    async def _fake_start(_os: object, _fn: object, kwargs: dict[str, Any]) -> dict[str, Any]:
+    async def _fake_start(_session: object, kwargs: dict[str, Any]) -> dict[str, Any]:
         captured.update(kwargs)
         return {'args': kwargs}
 
-    monkeypatch.setattr(job, 'start_job', _fake_start)
+    monkeypatch.setattr(service, 'start', _fake_start)
     monkeypatch.setattr(
         'src.services.curation.settings_store.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
-    await pipeline_start.pipeline_auto_label_start(opensearch=object(), item_filter=ItemFilter())
+    await pipeline_start.pipeline_auto_label_start(
+        session=object(), opensearch=object(), item_filter=ItemFilter()
+    )
     assert captured['prompt_pack'] == 'pallet_v1'
 
 

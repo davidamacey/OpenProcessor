@@ -66,7 +66,7 @@ def test_a_labeler_built_from_the_env_endpoint_logs_no_credential(
     monkeypatch.setenv('OP_VLM_MODEL', 'served')
     endpoint = env_endpoint()
     assert endpoint is not None
-    labeler = build_uncached_labeler(endpoint, GENERIC_ITEM_PACK)
+    labeler = build_uncached_labeler(endpoint, GENERIC_ITEM_PACK, usage_source=None)
     health = asyncio.run(labeler.health())
     assert health.reachable is False
     captured = capsys.readouterr()

@@ -12,8 +12,7 @@
 from __future__ import annotations
 
 import copy
-import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
 
@@ -21,12 +20,6 @@ from curation.query_fakes import QueryFakeOpenSearch, matches
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from curation.test_vlm_cluster_scope import CLUSTER, _Labeler, pipeline_env  # noqa: F401
 from src.config.curation_accessors import base_curation_config
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from fastapi.testclient import TestClient
 
 
 ITEMS = base_curation_config().items_index
@@ -38,52 +31,6 @@ ITEMS = base_curation_config().items_index
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env_active', 'readable_crops')
-
-
-def _finish_current(job_dir: Path, status: str = 'completed') -> None:  # noqa: F811
-    """Play the worker: claim the trigger and write a terminal state."""
-    (job_dir / 'trigger.json').unlink()
-    state = json.loads((job_dir / 'state.json').read_text())
-    state.update(status=status, result={'marker': state['job_id']})
-    (job_dir / 'state.json').write_text(json.dumps(state))
-
-
-@pytest.mark.usefixtures('packs')
-def test_status_by_id_follows_the_started_job(client: TestClient, job_dir: Path) -> None:  # noqa: F811
-    first = client.post('/curation/projects/default/pipeline/auto_label/start').json()
-    job1 = first['job_id']
-
-    r = client.get(f'/curation/projects/default/pipeline/auto_label/status/{job1}')
-    assert r.status_code == 200, r.text
-    assert r.json()['job_id'] == job1
-    assert r.json()['status'] == 'queued'
-
-    _finish_current(job_dir)
-    job2 = client.post('/curation/projects/default/pipeline/auto_label/start').json()['job_id']
-    assert job2 != job1
-
-    # The unscoped status now reports job2; job1 is still answerable.
-    assert (
-        client.get('/curation/projects/default/pipeline/auto_label/status').json()['job_id'] == job2
-    )
-    r = client.get(f'/curation/projects/default/pipeline/auto_label/status/{job1}')
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body['job_id'] == job1
-    assert body['status'] == 'completed'
-    assert body['result'] == {'marker': job1}
-    assert (
-        client.get(f'/curation/projects/default/pipeline/auto_label/status/{job2}').json()['job_id']
-        == job2
-    )
-
-
-@pytest.mark.usefixtures('packs', 'job_dir')
-@pytest.mark.parametrize('job_id', ['0' * 32, 'not-a-job', '..%2Fstate'])
-def test_status_by_unknown_id_is_404(client: TestClient, job_id: str) -> None:  # noqa: F811
-    client.post('/curation/projects/default/pipeline/auto_label/start')
-    r = client.get(f'/curation/projects/default/pipeline/auto_label/status/{job_id}')
-    assert r.status_code == 404, r.text
 
 
 # =============================================================================

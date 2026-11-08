@@ -127,7 +127,7 @@ class TestCombinedNoVerdictIsCapped:
 
 class TestVerifyPlateTransportSignal:
     def _labeler(self) -> VlmLabeler:
-        lab = VlmLabeler(base_url='http://vlm.invalid/v1')
+        lab = VlmLabeler(base_url='http://vlm.invalid/v1', usage_source=None)
         lab._post_chat = AsyncMock(side_effect=httpx.ConnectError('down'))  # type: ignore[method-assign]
         return lab
 
@@ -146,7 +146,7 @@ class TestVerifyPlateTransportSignal:
 
     @pytest.mark.asyncio
     async def test_unparseable_reply_is_no_verdict_even_with_opt_in(self) -> None:
-        lab = VlmLabeler(base_url='http://vlm.invalid/v1')
+        lab = VlmLabeler(base_url='http://vlm.invalid/v1', usage_source=None)
         lab._post_chat = AsyncMock(  # type: ignore[method-assign]
             return_value={'choices': [{'message': {'content': 'not json'}}]}
         )

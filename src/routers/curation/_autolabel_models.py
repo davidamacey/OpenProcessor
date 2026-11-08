@@ -1,6 +1,6 @@
 """Wire model for the auto-label job state every ``/pipeline/auto_label*`` route
 returns. Documentation/OpenAPI model: routes declare it through ``responses=``
-(the state is read from the job's state file). Leaf module."""
+(the state is read from the job's row). Leaf module."""
 
 from __future__ import annotations
 
@@ -11,7 +11,18 @@ from pydantic import BaseModel, Field
 
 class AutoLabelJobState(BaseModel):
     job_id: str
-    status: Literal['idle', 'queued', 'running', 'completed', 'failed', 'cancelled']
+    status: Literal[
+        'idle',
+        'queued',
+        'running',
+        'paused',
+        'cancelling',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelled',
+        'interrupted',
+    ]
     stage: str
     processed: int
     total: int
@@ -36,6 +47,9 @@ class AutoLabelJobState(BaseModel):
     stage_durations: dict[str, float] = Field(description='Wall seconds per finished stage.')
     eta_seconds: float | None
     elapsed_seconds: float
+    pause_reason: str | None = Field(
+        default=None, description='Why the job is paused or pausing; null otherwise.'
+    )
     queue_age_seconds: float | None = Field(
         description='Seconds a queued job has waited for a worker; null once it is not queued.'
     )
@@ -48,4 +62,8 @@ class AutoLabelCancelResponse(AutoLabelJobState):
     cancelled: bool = Field(description='A cancellation was requested for a running job.')
 
 
-__all__ = ['AutoLabelCancelResponse', 'AutoLabelJobState']
+class AutoLabelActionResponse(AutoLabelJobState):
+    done: bool = Field(description='There was a job to pause or resume.')
+
+
+__all__ = ['AutoLabelActionResponse', 'AutoLabelCancelResponse', 'AutoLabelJobState']

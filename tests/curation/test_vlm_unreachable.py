@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import io
-import json
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -45,8 +44,8 @@ async def _call_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failures: dict[str, str | None]
 ) -> tuple[Any, QueryFakeOpenSearch]:
     """Run the route; ``failures[crop]`` is ``'request_failed'`` or ``None`` (answered)."""
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
+    from src.services.curation.vlm_batch import run_label_batch
 
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
@@ -60,10 +59,6 @@ async def _call_route(
     reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
-    async def _no_pack(_os: Any) -> None:
-        return None
-
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
     fake = QueryFakeOpenSearch({ITEMS: {cid: _item(cid) for cid in failures}})
 
     class _Labeler:
@@ -83,12 +78,8 @@ async def _call_route(
                 for c in crops
             ]
 
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
-    try:
-        result = await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=list(failures)), fake)
-    except Exception as exc:
-        return exc, fake
-    return result, fake
+    labeler = _Labeler()
+    return await run_label_batch(fake, labeler, list(failures)), fake
 
 
 @pytest.mark.usefixtures('vlm_env_active')
@@ -96,14 +87,10 @@ async def _call_route(
 async def test_label_batch_is_503_vlm_unreachable_when_no_crop_got_an_answer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from fastapi import HTTPException
-
-    exc, fake = await _call_route(
+    result, fake = await _call_route(
         tmp_path, monkeypatch, {'c1': 'request_failed', 'c2': 'request_failed'}
     )
-    assert isinstance(exc, HTTPException)
-    assert exc.status_code == 503
-    assert exc.detail['error'] == 'vlm_unreachable'
+    assert result['vlm_unreachable'] is True
     # Nothing was written: the crops stay pending, not failed.
     assert all(
         'class_source' in d and d['class_source'] == 'item_proposal'
@@ -234,17 +221,49 @@ async def test_worker_backs_off_when_the_api_itself_is_unreachable(
     assert 'processed=2 updated=2 chunks=1' in out
 
 
-@pytest.mark.asyncio
-async def test_label_batch_client_maps_503_vlm_unreachable() -> None:
-    def _handler(_req: httpx.Request) -> httpx.Response:
-        body = {'detail': {'error': 'vlm_unreachable', 'message': 'no route to host'}}
-        return httpx.Response(503, content=json.dumps(body))
+def _job_api(*, statuses: list[str], result: dict | None = None, error: str | None = None):
+    """A mock API: POST queues job j1, GET walks ``statuses`` then repeats the last."""
+    polls = iter(statuses)
+    last = {'status': statuses[-1]}
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(_handler)) as client:
-        result = await vlm_worker.label_batch(
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == 'POST':
+            return httpx.Response(202, json={'job_id': 'j1', 'status': 'queued'})
+        status = next(polls, last['status'])
+        return httpx.Response(
+            200, json={'id': 'j1', 'status': status, 'result': result, 'error_message': error}
+        )
+
+    return httpx.MockTransport(handler)
+
+
+async def _poll(transport: httpx.MockTransport) -> dict:
+    async with httpx.AsyncClient(transport=transport) as client:
+        return await vlm_worker.label_batch(
             client, api='http://api.test', api_prefix='/curation', slug='alpha', crop_ids=['c1']
         )
-    assert result == {'vlm_unreachable': True, 'message': 'no route to host'}
+
+
+@pytest.mark.asyncio
+async def test_label_batch_client_polls_the_job_and_returns_its_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(vlm_worker, '_POLL_S', 0.0)
+    result = {'vlm_unreachable': True, 'message': 'no route to host'}
+    got = await _poll(_job_api(statuses=['queued', 'running', 'completed'], result=result))
+    assert got == result
+
+
+@pytest.mark.asyncio
+async def test_label_batch_client_raises_for_a_failed_job_and_on_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(vlm_worker, '_POLL_S', 0.0)
+    with pytest.raises(RuntimeError, match='boom'):
+        await _poll(_job_api(statuses=['running', 'failed'], error='boom'))
+    monkeypatch.setattr(vlm_worker, '_JOB_TIMEOUT_S', 0.0)
+    with pytest.raises(TimeoutError):
+        await _poll(_job_api(statuses=['running']))
 
 
 def test_heartbeat_serves_the_stall_reason_and_stays_healthy(

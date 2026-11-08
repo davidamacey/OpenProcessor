@@ -50,8 +50,8 @@ def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
 async def test_label_batch_moves_labelled_items_into_their_class_cluster(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
+    from src.services.curation.vlm_batch import run_label_batch
 
     answers = {'cand': 'widget', 'other_class': 'widget', 'unmatched': 'zeppelin'}
     buf = io.BytesIO()
@@ -67,10 +67,6 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
     widget_id = reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
-    async def _no_pack(_os: Any) -> None:
-        return None
-
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
     fake = QueryFakeOpenSearch(
         {
             ITEMS: {
@@ -93,8 +89,8 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
                 for c in crops
             ]
 
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
-    await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=list(answers)), fake)
+    labeler = _Labeler()
+    await run_label_batch(fake, labeler, list(answers))
 
     docs = fake.docs(ITEMS)
     for cid in ('cand', 'other_class'):
@@ -127,10 +123,8 @@ async def test_label_batch_with_no_classes_is_a_409_not_a_500(
     finds unlabelled items and calls this route. That must be a clean,
     machine-readable refusal the worker can back off on, not an unhandled
     ValueError (500) retried forever."""
-    from fastapi import HTTPException
-
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
+    from src.services.curation.vlm_batch import run_label_batch
 
     reg = InMemoryRegistry()
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
@@ -141,12 +135,8 @@ async def test_label_batch_with_no_classes_is_a_409_not_a_500(
         async def label_or_propose_batch(self, *_a: Any, **_k: Any) -> Any:
             raise AssertionError('the VLM must not be called with no classes')
 
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
+    labeler = _NeverCalled()
     fake = QueryFakeOpenSearch({ITEMS: {'a': _item('a')}})
 
-    with pytest.raises(HTTPException) as exc_info:
-        await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['a']), fake)
-
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.detail['error'] == 'no_classes'
+    assert await run_label_batch(fake, labeler, ['a']) == {'no_classes': True}
     assert fake.docs(ITEMS)['a'] == _item('a')

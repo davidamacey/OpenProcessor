@@ -68,8 +68,8 @@ class _Labeler:
 async def test_label_batch_stamps_vlm_prompt_pack(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
+    from src.services.curation.vlm_batch import run_label_batch
 
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
@@ -82,14 +82,10 @@ async def test_label_batch_stamps_vlm_prompt_pack(
     reg.add('widget')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
 
-    async def _no_pack(_os: Any) -> None:
-        return None
-
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    labeler = _Labeler()
     fake = QueryFakeOpenSearch({ITEMS: {'cand': _item('cand')}})
 
-    await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['cand']), fake)
+    await run_label_batch(fake, labeler, ['cand'])
 
     doc = fake.docs(ITEMS)['cand']
     assert doc['vlm_prompt_pack'] == prompt_pack_stamp(GENERIC_ITEM_PACK)

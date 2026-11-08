@@ -42,9 +42,9 @@ def test_malformed_cap_raises(monkeypatch: pytest.MonkeyPatch, raw: str) -> None
 def test_env_cap_governs_labeler_default_and_hard_clamp() -> None:
     snippet = (
         'from src.services.labeling.vlm_labeler import VlmLabeler\n'
-        'print(VlmLabeler().max_images_per_call, '
-        'VlmLabeler(max_images_per_call=8).max_images_per_call, '
-        'VlmLabeler(max_images_per_call=2).max_images_per_call)\n'
+        'print(VlmLabeler(usage_source=None).max_images_per_call, '
+        'VlmLabeler(max_images_per_call=8, usage_source=None).max_images_per_call, '
+        'VlmLabeler(max_images_per_call=2, usage_source=None).max_images_per_call)\n'
     )
     env = {**os.environ, 'OP_VLM_MAX_IMAGES_PER_CALL': '6'}
     out = subprocess.run(  # nosec B603

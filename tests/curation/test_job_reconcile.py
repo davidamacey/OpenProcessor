@@ -5,8 +5,7 @@ Each of ``item_scores.job``, ``selection.job`` and ``embedding_viz`` shares
 the same state.json/heartbeat/cancel.flag file-backed job-runner shape and
 delegates its ``reconcile_orphaned_jobs()`` to the shared
 :func:`src.services.curation.job_reconcile.reconcile_stale_running` helper.
-``autolabel.job`` has a materially different shape (a separate worker
-container + a pending-trigger file) and is tested on its own below.
+``autolabel`` is a queue job: the reaper recovers it, not a startup repair.
 
 Every test redirects the module's state-dir env var to a per-test
 ``tmp_path`` (same convention ``test_scores_router.py`` /
@@ -274,71 +273,3 @@ def test_embedding_viz_leaves_fresh_running_state_alone(
     assert embedding_viz.reconcile_orphaned_jobs() is False
     on_disk = json.loads((tmp_path / 'viz' / 'projects' / 'default' / 'state.json').read_text())
     assert on_disk['status'] == 'running'
-
-
-# =============================================================================
-# autolabel.job.reconcile_orphaned_jobs — different shape (separate worker
-# container, pending-trigger file)
-# =============================================================================
-
-
-def test_autolabel_job_reconciles_orphaned_running_state(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    from src.config.curation_accessors import base_curation_config
-    from src.config.project_context import bind_project
-    from src.config.projects import DEFAULT_SLUG, new_project_record
-    from src.services.curation.autolabel import job
-
-    with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
-        job._state_dir().mkdir(parents=True, exist_ok=True)
-        job._job().state_file.write_text(
-            json.dumps({'job_id': 'j4', 'status': 'running', 'stage': 'vlm'})
-        )
-        job._job().heartbeat_file.touch()
-        old = time.time() - 120
-        os.utime(job._job().heartbeat_file, (old, old))
-
-        assert job.reconcile_orphaned_jobs() is True
-        on_disk = json.loads(job._job().state_file.read_text())
-        assert on_disk['status'] == 'interrupted'
-
-
-def test_autolabel_job_leaves_fresh_running_state_alone(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    from src.config.curation_accessors import base_curation_config
-    from src.config.project_context import bind_project
-    from src.config.projects import DEFAULT_SLUG, new_project_record
-    from src.services.curation.autolabel import job
-
-    with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
-        job._state_dir().mkdir(parents=True, exist_ok=True)
-        job._job().state_file.write_text(json.dumps({'job_id': 'j4', 'status': 'running'}))
-        job._job().heartbeat_file.touch()
-
-        assert job.reconcile_orphaned_jobs() is False
-        assert json.loads(job._job().state_file.read_text())['status'] == 'running'
-
-
-def test_autolabel_job_ignores_pending_unclaimed_trigger(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A queued trigger the worker hasn't picked up yet is not an
-    orphaned run -- the worker container has its own independent
-    lifecycle and may simply not have gotten to it."""
-    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    from src.config.curation_accessors import base_curation_config
-    from src.config.project_context import bind_project
-    from src.config.projects import DEFAULT_SLUG, new_project_record
-    from src.services.curation.autolabel import job
-
-    with bind_project(new_project_record(DEFAULT_SLUG, base_curation_config())):
-        job._state_dir().mkdir(parents=True, exist_ok=True)
-        job._job().state_file.write_text(json.dumps({'job_id': 'j5', 'status': 'queued'}))
-        job._trigger_file().write_text(json.dumps({'job_id': 'j5'}))
-
-        assert job.reconcile_orphaned_jobs() is False
-        assert json.loads(job._job().state_file.read_text())['status'] == 'queued'

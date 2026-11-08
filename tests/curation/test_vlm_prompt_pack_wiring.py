@@ -31,7 +31,7 @@ pytestmark = pytest.mark.usefixtures('vlm_env_active')
 def test_get_vlm_labeler_uses_generic_pack_by_default() -> None:
     from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
-    labeler = vlm_mod.get_vlm_labeler()
+    labeler = vlm_mod.get_vlm_labeler(usage_source=None)
     assert labeler._pack is GENERIC_ITEM_PACK
 
 
@@ -52,7 +52,7 @@ def test_get_vlm_labeler_resolves_a_configured_pack(tmp_path: Path) -> None:
     with patch(
         'src.services.labeling.vlm_prompt_resolution.resolve_prompt_pack', return_value=custom
     ) as mock_resolve:
-        labeler = vlm_mod.get_vlm_labeler()
+        labeler = vlm_mod.get_vlm_labeler(usage_source=None)
     mock_resolve.assert_called_once()
     assert labeler._pack.name == 'pallet_v1'
 
@@ -87,10 +87,13 @@ def test_get_vlm_labeler_selects_and_caches_per_pack_name(
     cfg = CurationConfig(prompt_pack_path=default_path, prompt_pack_paths=(extra_path,))
     monkeypatch.setattr('src.config.curation_accessors.get_curation_config', lambda: cfg)
 
-    assert vlm_mod.get_vlm_labeler()._pack.name == 'pallet_v1'
-    food = vlm_mod.get_vlm_labeler('food_v2')
+    assert vlm_mod.get_vlm_labeler(usage_source=None)._pack.name == 'pallet_v1'
+    food = vlm_mod.get_vlm_labeler('food_v2', usage_source=None)
     assert food._pack.name == 'food_v2'
-    assert vlm_mod.get_vlm_labeler('food_v2') is food
-    assert vlm_mod.get_vlm_labeler(GENERIC_ITEM_PACK.name)._pack is GENERIC_ITEM_PACK
+    assert vlm_mod.get_vlm_labeler('food_v2', usage_source=None) is food
+    assert (
+        vlm_mod.get_vlm_labeler(GENERIC_ITEM_PACK.name, usage_source=None)._pack
+        is GENERIC_ITEM_PACK
+    )
     with pytest.raises(ValueError, match='unknown prompt pack'):
-        vlm_mod.get_vlm_labeler('nope')
+        vlm_mod.get_vlm_labeler('nope', usage_source=None)

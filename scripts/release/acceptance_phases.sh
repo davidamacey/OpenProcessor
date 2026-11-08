@@ -173,6 +173,16 @@ vlm_endpoint_pick() {
 # A project calls no VLM until it activates one, so the phase opts in to the
 # deployment's endpoint first (the OCC value is what the project reports now).
 # An untested endpoint cannot be activated: probe it first.
+# vlm_label_job_done JOB: 0 once the label job completed, fails the phase if it failed or was cancelled.
+vlm_label_job_done() {
+    api GET "${PROJECT_API}/jobs/$1"
+    case "$(jqb '.status')" in
+        completed | completed_with_errors) return 0 ;;
+        failed | cancelled) fail "label job $1 $(jqb '.status'): $(snippet)" ;;
+    esac
+    return 1
+}
+
 ph_vlm_label() {
     local current endpoint status
     vlm_endpoint_pick
@@ -196,8 +206,11 @@ ph_vlm_label() {
     [[ "$(jq 'length' <<< "$ids")" -gt 0 ]] || fail "no crops to label"
     st_set crop_ids "$ids"
     api_json POST "${PROJECT_API}/vlm/label_batch" "$(jq -nc --argjson i "$ids" '{crop_ids:$i}')"
-    expect 200
-    ev "vlm/label_batch on $(jq 'length' <<< "$ids") crops -> 200: $(snippet)"
+    expect 202
+    local job
+    job="$(jqb '.job_id')"
+    poll 300 vlm_label_job_done "$job"
+    ev "vlm/label_batch on $(jq 'length' <<< "$ids") crops -> job ${job}: $(snippet)"
 }
 
 # The trainer refuses classes under the per-class floor (20 validated crops),

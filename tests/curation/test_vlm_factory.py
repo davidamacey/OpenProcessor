@@ -62,7 +62,7 @@ def test_the_labeler_takes_everything_from_the_endpoint() -> None:
         json_mode='off',
         probe=_probe(root='org/real'),
     )
-    labeler = labeler_for(endpoint, GENERIC_ITEM_PACK)
+    labeler = labeler_for(endpoint, GENERIC_ITEM_PACK, usage_source=None)
     assert labeler.base_url == 'http://vlm:8000/v1'
     assert labeler.model == 'm'  # what is SENT is the served alias
     assert labeler.max_images_per_call == 3
@@ -77,20 +77,20 @@ def test_the_labeler_takes_everything_from_the_endpoint() -> None:
 def test_the_endpoints_own_cap_is_the_ceiling_not_the_deployment_default() -> None:
     """The deployment default (``OP_VLM_MAX_IMAGES_PER_CALL``, 8) used to
     clamp every labeler; an endpoint that takes 12 images per call gets 12."""
-    labeler = labeler_for(_endpoint(max_images_per_call=12), GENERIC_ITEM_PACK)
+    labeler = labeler_for(_endpoint(max_images_per_call=12), GENERIC_ITEM_PACK, usage_source=None)
     assert labeler.max_images_per_call == 12
 
 
 def test_json_mode_auto_follows_the_probe() -> None:
-    assert labeler_for(_endpoint(), GENERIC_ITEM_PACK).json_mode is True
+    assert labeler_for(_endpoint(), GENERIC_ITEM_PACK, usage_source=None).json_mode is True
     reset_labeler_cache()
     off = _endpoint(probe=_probe(json_mode_supported=False))
-    assert labeler_for(off, GENERIC_ITEM_PACK).json_mode is False
+    assert labeler_for(off, GENERIC_ITEM_PACK, usage_source=None).json_mode is False
 
 
 def test_equal_inputs_share_one_labeler() -> None:
-    a = labeler_for(_endpoint(), GENERIC_ITEM_PACK)
-    b = labeler_for(_endpoint(), GENERIC_ITEM_PACK)
+    a = labeler_for(_endpoint(), GENERIC_ITEM_PACK, usage_source=None)
+    b = labeler_for(_endpoint(), GENERIC_ITEM_PACK, usage_source=None)
     assert a is b
 
 
@@ -122,17 +122,17 @@ def _tagged(pack: PromptPack, revision: int) -> PromptPack:
 @pytest.mark.parametrize('case', range(6))
 def test_anything_the_labeler_is_built_from_makes_a_new_one(case: int) -> None:
     label, endpoint, pack = _cases()[case]
-    base = labeler_for(_endpoint(), GENERIC_ITEM_PACK)
-    assert labeler_for(endpoint, pack) is not base, label
+    base = labeler_for(_endpoint(), GENERIC_ITEM_PACK, usage_source=None)
+    assert labeler_for(endpoint, pack, usage_source=None) is not base, label
 
 
 def test_a_reprobe_is_a_new_labeler_even_when_the_facts_are_the_same() -> None:
     """The probe marker changes with the probe's timestamp: that is how a
     rotated key file is picked up."""
-    first = labeler_for(_endpoint(probe=_probe()), GENERIC_ITEM_PACK)
+    first = labeler_for(_endpoint(probe=_probe()), GENERIC_ITEM_PACK, usage_source=None)
     later = _probe()
     later = later.model_copy(update={'probed_at': '2026-09-28T13:00:00+00:00'})
-    assert labeler_for(_endpoint(probe=later), GENERIC_ITEM_PACK) is not first
+    assert labeler_for(_endpoint(probe=later), GENERIC_ITEM_PACK, usage_source=None) is not first
 
 
 def test_the_cache_is_bounded_and_retires_what_it_drops(
@@ -144,7 +144,10 @@ def test_the_cache_is_bounded_and_retires_what_it_drops(
         closed.append(labeler)
 
     monkeypatch.setattr(vlm_factory, '_retire', defer)
-    built = [labeler_for(_endpoint(revision=n), GENERIC_ITEM_PACK) for n in range(1, 40)]
+    built = [
+        labeler_for(_endpoint(revision=n), GENERIC_ITEM_PACK, usage_source=None)
+        for n in range(1, 40)
+    ]
     assert len(vlm_factory._LABELERS) == vlm_factory._CACHE_MAX
     assert (
         closed == built[: len(built) - vlm_factory._CACHE_MAX]
@@ -228,13 +231,13 @@ async def test_a_build_after_an_async_precheck_does_not_resolve_again(
     await vlm_factory.assert_may_connect(endpoint)
     seen = len(calls)
     assert seen
-    labeler_for(endpoint, GENERIC_ITEM_PACK)
+    labeler_for(endpoint, GENERIC_ITEM_PACK, usage_source=None)
     assert len(calls) == seen
 
 
 def test_the_uncached_builder_owns_what_it_returns() -> None:
-    a = build_uncached_labeler(_endpoint(), GENERIC_ITEM_PACK)
-    b = build_uncached_labeler(_endpoint(), GENERIC_ITEM_PACK)
+    a = build_uncached_labeler(_endpoint(), GENERIC_ITEM_PACK, usage_source=None)
+    b = build_uncached_labeler(_endpoint(), GENERIC_ITEM_PACK, usage_source=None)
     assert a is not b
     assert vlm_factory._LABELERS == {} or a not in vlm_factory._LABELERS.values()
 
@@ -243,14 +246,14 @@ def test_a_url_that_turned_forbidden_after_it_was_saved_is_refused_at_build(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     good = _endpoint(base_url='http://sneaky.example.com/v1', allow_external=True)
-    assert labeler_for(good, GENERIC_ITEM_PACK) is not None
+    assert labeler_for(good, GENERIC_ITEM_PACK, usage_source=None) is not None
     reset_labeler_cache()
     monkeypatch.setattr(policy, '_resolve', lambda _host: ['169.254.169.254'])  # rebinding
     policy.reset_policy_caches()
     with pytest.raises(VlmEndpointDeniedError):
-        labeler_for(good, GENERIC_ITEM_PACK)
+        labeler_for(good, GENERIC_ITEM_PACK, usage_source=None)
     with pytest.raises(VlmEndpointDeniedError):
-        build_uncached_labeler(good, GENERIC_ITEM_PACK)
+        build_uncached_labeler(good, GENERIC_ITEM_PACK, usage_source=None)
     assert issubclass(VlmEndpointDeniedError, VlmEndpointUnavailableError)
 
 
@@ -260,19 +263,21 @@ def test_the_env_builtin_is_not_subject_to_the_url_denial(monkeypatch: pytest.Mo
     endpoint = replace(
         _endpoint(base_url='http://127.0.0.1:8000/v1'), source='env', revision=None, name='env'
     )
-    assert labeler_for(endpoint, GENERIC_ITEM_PACK) is not None
+    assert labeler_for(endpoint, GENERIC_ITEM_PACK, usage_source=None) is not None
 
 
 def test_a_stored_endpoints_missing_secret_fails_closed_not_open(tmp_path: Any) -> None:
     with pytest.raises(VlmEndpointUnavailableError, match='missing or empty'):
-        labeler_for(_endpoint(api_key_ref='secret:absent'), GENERIC_ITEM_PACK)
+        labeler_for(_endpoint(api_key_ref='secret:absent'), GENERIC_ITEM_PACK, usage_source=None)
     (tmp_path / 'present').write_text('k')
-    labeler = labeler_for(_endpoint(api_key_ref='secret:present'), GENERIC_ITEM_PACK)
+    labeler = labeler_for(
+        _endpoint(api_key_ref='secret:present'), GENERIC_ITEM_PACK, usage_source=None
+    )
     assert labeler.api_key == 'k'
 
 
 def test_no_key_means_the_conventional_placeholder() -> None:
-    assert labeler_for(_endpoint(), GENERIC_ITEM_PACK).api_key == 'EMPTY'
+    assert labeler_for(_endpoint(), GENERIC_ITEM_PACK, usage_source=None).api_key == 'EMPTY'
 
 
 # ---- the host is re-checked at use time -------------------------
@@ -292,20 +297,20 @@ def test_a_build_refuses_an_unacknowledged_endpoint_whose_host_went_public(
     its DNS later names a public host. The worker's build must not follow."""
     _flip_to(monkeypatch, 'flip.corp.example', '10.0.0.9')
     endpoint = _endpoint(base_url='http://flip.corp.example/v1')
-    assert build_uncached_labeler(endpoint, GENERIC_ITEM_PACK) is not None
+    assert build_uncached_labeler(endpoint, GENERIC_ITEM_PACK, usage_source=None) is not None
     _flip_to(monkeypatch, 'flip.corp.example', '93.184.216.34')
     with pytest.raises(VlmEndpointDeniedError, match='outside this deployment'):
-        build_uncached_labeler(endpoint, GENERIC_ITEM_PACK)
+        build_uncached_labeler(endpoint, GENERIC_ITEM_PACK, usage_source=None)
 
 
 def test_the_deny_policy_applies_to_a_build_even_for_an_acknowledged_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     endpoint = _endpoint(base_url='http://sneaky.example.com/v1', allow_external=True)
-    assert build_uncached_labeler(endpoint, GENERIC_ITEM_PACK) is not None
+    assert build_uncached_labeler(endpoint, GENERIC_ITEM_PACK, usage_source=None) is not None
     monkeypatch.setenv('OP_VLM_EXTERNAL_POLICY', 'deny')
     with pytest.raises(VlmEndpointDeniedError, match='OP_VLM_EXTERNAL_POLICY'):
-        build_uncached_labeler(endpoint, GENERIC_ITEM_PACK)
+        build_uncached_labeler(endpoint, GENERIC_ITEM_PACK, usage_source=None)
 
 
 @pytest.mark.asyncio
@@ -325,7 +330,9 @@ async def test_a_long_lived_labeler_re_checks_its_host_after_the_ttl(
         return httpx.Response(200, json={'choices': [{'message': {'content': 'OK'}}]})
 
     _flip_to(monkeypatch, 'drift.corp.example', '10.0.0.9')
-    labeler = labeler_for(_endpoint(base_url='http://drift.corp.example/v1'), GENERIC_ITEM_PACK)
+    labeler = labeler_for(
+        _endpoint(base_url='http://drift.corp.example/v1'), GENERIC_ITEM_PACK, usage_source=None
+    )
     labeler._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     assert (await labeler.health()).reachable is True
 

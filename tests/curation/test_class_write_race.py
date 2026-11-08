@@ -126,8 +126,8 @@ def test_guard_refuses_unread_and_locked_items() -> None:
 async def test_label_batch_skips_item_restored_during_vlm_call(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmLabelBatchRequest
+    import src.services.curation.vlm_batch as vlm_mod
+    from src.services.curation.vlm_batch import run_label_batch
 
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
@@ -140,7 +140,6 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
     reg = InMemoryRegistry()
     reg.add('sportscar')
     monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: reg)
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', AsyncMock(return_value=None))
 
     fake = QueryFakeOpenSearch({ITEMS: {'undone': _discarded('undone'), 'plain': _plain('plain')}})
 
@@ -157,9 +156,9 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
                 for c in crops
             ]
 
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    labeler = _Labeler()
 
-    await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['undone', 'plain']), fake)
+    await run_label_batch(fake, labeler, ['undone', 'plain'])
 
     docs = fake.docs(ITEMS)
     assert (docs['undone']['class_id'], docs['undone']['class_source']) == (12, 'det_model')

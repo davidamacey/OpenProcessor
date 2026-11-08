@@ -168,6 +168,37 @@ def stage_table(delta: dict[str, Any]) -> dict[str, dict[str, float]]:
     return table
 
 
+def label_batch_and_wait(
+    client: httpx.Client,
+    base: str,
+    crop_ids: Sequence[str],
+    params: Any = None,
+    timeout_s: float = 900.0,
+) -> httpx.Response:
+    """Queue a ``vlm/label_batch`` job and poll it to the end; the job's response.
+
+    The route answers 202; the response returned is the final ``jobs`` poll, so a caller reads
+    ``status`` (and ``result``) from it. A POST that is not 202 is returned as is."""
+    posted = client.post(
+        f'{base}/vlm/label_batch', json={'crop_ids': list(crop_ids)}, params=params
+    )
+    if posted.status_code != 202:
+        return posted
+    deadline = time.monotonic() + timeout_s
+    while True:
+        polled = client.get(f'{base}/jobs/{posted.json()["job_id"]}')
+        if polled.status_code != 200 or polled.json()['status'] in (
+            'completed',
+            'completed_with_errors',
+            'failed',
+            'cancelled',
+        ):
+            return polled
+        if time.monotonic() >= deadline:
+            raise TimeoutError('label_batch job did not finish')
+        time.sleep(1.0)
+
+
 def chunks(items: Sequence[Any], size: int) -> list[Sequence[Any]]:
     return [items[i : i + size] for i in range(0, len(items), size)]
 

@@ -78,9 +78,12 @@ def _pack_hash(pack: PromptPack) -> str:
     return hashlib.sha256(json.dumps(pack.to_dict(), sort_keys=True).encode()).hexdigest()[:12]
 
 
-def _cache_key(endpoint: VlmEndpoint, pack: PromptPack) -> tuple[Any, ...]:
+def _cache_key(
+    endpoint: VlmEndpoint, pack: PromptPack, usage_source: str | None
+) -> tuple[Any, ...]:
     return (
         endpoint.ref,
+        usage_source,
         endpoint.json_mode_on,
         endpoint.probe_marker,
         pack.name,
@@ -195,7 +198,7 @@ def _egress_check(endpoint: VlmEndpoint, pin: AddressPin | None) -> Callable[[],
     return check
 
 
-def _build(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
+def _build(endpoint: VlmEndpoint, pack: PromptPack, usage_source: str | None) -> VlmLabeler:
     body = endpoint.body
     is_env = endpoint.source == 'env'
     fresh, addresses = _prechecked(endpoint)
@@ -224,27 +227,33 @@ def _build(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
         identity=VlmIdentity(endpoint_ref=endpoint.ref, model=endpoint.model_id),
         egress_check=_egress_check(endpoint, pin),
         pin=pin,
+        usage_source=usage_source,
     )
 
 
-def labeler_for(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
-    """The cached labeler for ``(endpoint, pack)``; built on first use."""
-    key = _cache_key(endpoint, pack)
+def labeler_for(endpoint: VlmEndpoint, pack: PromptPack, *, usage_source: str | None) -> VlmLabeler:
+    """The cached labeler for ``(endpoint, pack, usage_source)``; built on first use.
+
+    ``usage_source`` names who the calls are recorded under in ``vlm_usage_hourly``
+    (``src.db.models.assist_loop.VLM_USAGE_SOURCES``); ``None`` records nothing (a probe)."""
+    key = _cache_key(endpoint, pack, usage_source)
     cached = _LABELERS.get(key)
     if cached is not None:
         _LABELERS.move_to_end(key)
         return cached
-    labeler = _build(endpoint, pack)
+    labeler = _build(endpoint, pack, usage_source)
     _LABELERS[key] = labeler
     while len(_LABELERS) > _CACHE_MAX:
         _retire(_LABELERS.popitem(last=False)[1])
     return labeler
 
 
-def build_uncached_labeler(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
+def build_uncached_labeler(
+    endpoint: VlmEndpoint, pack: PromptPack, *, usage_source: str | None
+) -> VlmLabeler:
     """A labeler the caller owns and must ``aclose()`` (the worker's
     per-runtime labeler, whose lifetime is its runtime's)."""
-    return _build(endpoint, pack)
+    return _build(endpoint, pack, usage_source)
 
 
 def reset_labeler_cache() -> None:

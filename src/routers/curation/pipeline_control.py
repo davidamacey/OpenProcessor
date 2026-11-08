@@ -1,18 +1,21 @@
-"""Curation auto-label job control endpoints (status and cancel).
+"""Curation auto-label job control endpoints (status, cancel, pause, resume).
 
-Split out of :mod:`pipeline` to keep that module under the 700-LOC hook
-ceiling. Side-effect import: registers ``@router`` handlers on the shared
-``_common.router``.
+Side-effect import: registers ``@router`` handlers on the shared ``_common.router``. The job is a
+``jobs`` row; these routes are the family's view of it.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException
-
-from src.routers.curation._autolabel_models import AutoLabelCancelResponse, AutoLabelJobState
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.routers.curation._autolabel_models import (
+    AutoLabelActionResponse,
+    AutoLabelCancelResponse,
+    AutoLabelJobState,
+)
 from src.routers.curation._common import router
+from src.services.curation.autolabel import service
 
 
 @router.get(
@@ -20,11 +23,9 @@ from src.routers.curation._common import router
     response_model=None,
     responses={200: {'model': AutoLabelJobState}},
 )
-async def pipeline_auto_label_status() -> dict[str, Any]:
+async def pipeline_auto_label_status(session: DbSessionDep) -> dict[str, Any]:
     """Poll the current/last auto_label job state."""
-    from src.services.curation.autolabel import job as auto_label_job
-
-    return auto_label_job.get_state()
+    return await service.current(session)
 
 
 @router.get(
@@ -32,19 +33,9 @@ async def pipeline_auto_label_status() -> dict[str, Any]:
     response_model=None,
     responses={200: {'model': AutoLabelJobState}},
 )
-async def pipeline_auto_label_job_status(job_id: str) -> dict[str, Any]:
-    """State of one auto_label job by the ``job_id`` its start returned.
-
-    Same shape as ``GET /pipeline/auto_label/status``. Answers for the job
-    even after a later job replaced it as the current one (its final
-    state is kept; the newest 50 are retained). ``404`` for an unknown id.
-    """
-    from src.services.curation.autolabel import job as auto_label_job
-
-    state = auto_label_job.get_job_state(job_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail=f'unknown auto_label job {job_id!r}')
-    return state
+async def pipeline_auto_label_job_status(session: DbSessionDep, job_id: str) -> dict[str, Any]:
+    """State of one auto_label job by the ``job_id`` its start returned (404 for another id)."""
+    return await service.by_id(session, job_id)
 
 
 @router.post(
@@ -52,9 +43,29 @@ async def pipeline_auto_label_job_status(job_id: str) -> dict[str, Any]:
     response_model=None,
     responses={200: {'model': AutoLabelCancelResponse}},
 )
-async def pipeline_auto_label_cancel() -> dict[str, Any]:
-    """Request cancellation of the active auto_label job."""
-    from src.services.curation.autolabel import job as auto_label_job
+async def pipeline_auto_label_cancel(session: DbSessionDep) -> dict[str, Any]:
+    """Cancel the active auto_label job: a queued one at once, a running one at its next boundary."""
+    cancelled = await service.cancel(session, requested_by='api')
+    return {'cancelled': cancelled, **await service.current(session)}
 
-    cancelled = auto_label_job.cancel_job()
-    return {'cancelled': cancelled, **auto_label_job.get_state()}
+
+@router.post(
+    '/pipeline/auto_label/pause',
+    response_model=None,
+    responses={200: {'model': AutoLabelActionResponse}},
+)
+async def pipeline_auto_label_pause(session: DbSessionDep) -> dict[str, Any]:
+    """Pause the active job between stages or VLM chunks; chunks in flight finish."""
+    done = await service.pause(session)
+    return {'done': done, **await service.current(session)}
+
+
+@router.post(
+    '/pipeline/auto_label/resume',
+    response_model=None,
+    responses={200: {'model': AutoLabelActionResponse}},
+)
+async def pipeline_auto_label_resume(session: DbSessionDep) -> dict[str, Any]:
+    """Resume the paused job (409 ``resume_blocked`` names why it cannot yet)."""
+    done = await service.resume(session)
+    return {'done': done, **await service.current(session)}

@@ -1,10 +1,9 @@
-"""``POST /curation/vlm/verify_region_batch`` omits crops the VLM gave no
+"""The verify-region batch job omits crops the VLM gave no
 verdict for -- it must never emit a synthesized ``is_region=False``
 reject for a crop that simply got no answer."""
 
 from __future__ import annotations
 
-import base64
 from typing import Any
 
 import pytest
@@ -14,9 +13,6 @@ from src.services.labeling.vlm_models import VlmRegionVerdict
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env_active')
-
-
-_IMG = base64.b64encode(b'\xff\xd8\xff\xd9').decode()
 
 
 class _Labeler:
@@ -29,61 +25,57 @@ class _Labeler:
         return self._verdicts
 
 
-def _setup(monkeypatch: pytest.MonkeyPatch, labeler: _Labeler) -> None:
-    import src.routers.curation.vlm as vlm_mod
-
-    async def _no_pack(_os: Any) -> None:
-        return None
-
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: labeler)
+def _items(*crop_ids: str) -> list[dict[str, Any]]:
+    return [
+        {'crop_id': c, 'key': f'cache/vlm_batch/b/{c}.jpg', 'candidate_text': None}
+        for c in crop_ids
+    ]
 
 
-@pytest.mark.asyncio
-async def test_no_verdict_crop_is_omitted_not_a_reject(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation._vlm_route_models import (
-        VlmVerifyRegionBatchItem,
-        VlmVerifyRegionBatchRequest,
-    )
+@pytest.fixture(autouse=True)
+def _staged(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services.curation import vlm_batch
 
-    _setup(
-        monkeypatch,
-        _Labeler([VlmRegionVerdict(crop_id='a', is_region=True, confidence='high', reason='ok')]),
-    )
-
-    resp = await vlm_mod.vlm_verify_region_batch(
-        VlmVerifyRegionBatchRequest(
-            items=[
-                VlmVerifyRegionBatchItem(crop_id='a', region_image_b64=_IMG),
-                VlmVerifyRegionBatchItem(crop_id='b', region_image_b64=_IMG),
-            ]
-        ),
-        object(),  # opensearch is unused on this path
-        object(),  # profile dependency, unused on this path
-    )
-
-    result_ids = {r.crop_id for r in resp.results}
-    assert result_ids == {'a'}
-    assert not any(r.reason == 'no_response' for r in resp.results)
+    monkeypatch.setattr(vlm_batch, 'read_staged', lambda _key: b'\xff\xd8\xff\xd9')
 
 
 @pytest.mark.asyncio
-async def test_all_no_verdict_returns_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation._vlm_route_models import (
-        VlmVerifyRegionBatchItem,
-        VlmVerifyRegionBatchRequest,
+async def test_no_verdict_crop_is_omitted_not_a_reject() -> None:
+    from src.services.curation.vlm_batch import run_verify_region_batch
+
+    labeler = _Labeler(
+        [VlmRegionVerdict(crop_id='a', is_region=True, confidence='high', reason='ok')]
     )
 
-    _setup(monkeypatch, _Labeler([]))
+    out = await run_verify_region_batch(labeler, _items('a', 'b'))
 
-    resp = await vlm_mod.vlm_verify_region_batch(
-        VlmVerifyRegionBatchRequest(
-            items=[VlmVerifyRegionBatchItem(crop_id='a', region_image_b64=_IMG)]
-        ),
-        object(),
-        object(),
+    assert {r['crop_id'] for r in out['results']} == {'a'}
+    assert not any(r['reason'] == 'no_response' for r in out['results'])
+
+
+@pytest.mark.asyncio
+async def test_all_no_verdict_returns_empty_results() -> None:
+    from src.services.curation.vlm_batch import run_verify_region_batch
+
+    assert await run_verify_region_batch(_Labeler([]), _items('a')) == {'results': []}
+
+
+@pytest.mark.asyncio
+async def test_candidate_text_is_echoed_and_results_follow_input_order() -> None:
+    from src.services.curation.vlm_batch import run_verify_region_batch
+
+    labeler = _Labeler(
+        [
+            VlmRegionVerdict(crop_id='b', is_region=False, confidence='low', reason='r'),
+            VlmRegionVerdict(crop_id='a', is_region=True, confidence='high', reason='ok'),
+        ]
     )
+    items = _items('a', 'b')
+    items[0]['candidate_text'] = 'TEXT'
 
-    assert resp.results == []
+    out = await run_verify_region_batch(labeler, items)
+
+    assert [(r['crop_id'], r['candidate_text']) for r in out['results']] == [
+        ('a', 'TEXT'),
+        ('b', None),
+    ]

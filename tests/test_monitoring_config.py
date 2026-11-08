@@ -203,11 +203,6 @@ def test_prometheus_scrapes_each_worker_on_the_port_it_serves() -> None:
             'OP_VLM_WORKER_METRICS_PORT',
             'scripts/curation/vlm_worker.py',
         ),
-        'curation-auto-label-worker': (
-            '4611',
-            'OP_AUTO_LABEL_WORKER_METRICS_PORT',
-            'scripts/curation/auto_label_worker.py',
-        ),
     }
     for service, (port, env_var, source) in expected.items():
         assert jobs[service] == f'{service}:{port}'

@@ -61,9 +61,12 @@ class _RecordingClient:
                 return None
 
             def json(self) -> dict[str, Any]:
-                return {}
+                return {'job_id': 'j1', 'status': 'completed', 'id': 'j1', 'result': {}}
 
         return _Resp()
+
+    async def get(self, url: str, **kwargs: Any) -> Any:
+        return await self.post(url, **kwargs)
 
 
 # vlm_worker.py/cluster_refresh_daemon.py no longer read OP_API_PREFIX
@@ -119,7 +122,10 @@ async def test_vlm_worker_uses_configured_prefix() -> None:
     await mod.label_batch(
         client, api='http://api', api_prefix='/custom-mount', slug='alpha', crop_ids=['c1']
     )
-    assert client.urls == ['http://api/custom-mount/projects/alpha/vlm/label_batch']
+    assert client.urls == [
+        'http://api/custom-mount/projects/alpha/vlm/label_batch',
+        'http://api/custom-mount/projects/alpha/jobs/j1',
+    ]
 
 
 @pytest.mark.unbound

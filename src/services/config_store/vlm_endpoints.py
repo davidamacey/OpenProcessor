@@ -29,6 +29,8 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    import uuid
+
     from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
 
 ENV_DESCRIPTION = 'From OP_VLM_URL / OP_VLM_MODEL'
@@ -115,6 +117,16 @@ async def record_probe(
     await _reload()
 
 
+async def endpoint_config_id(name: str) -> uuid.UUID | None:
+    """The stored document id of endpoint ``name`` (every revision shares it), or ``None``.
+
+    Usage rows (``vlm_usage_hourly``) point at the document; the endpoint registry is
+    deployment-wide, so the read runs in the deployment scope."""
+    async with documents.tx('look up a vlm endpoint document for usage') as session:
+        doc = await repo.get_config(session, project_id=None, kind='vlm_endpoint', name=name)
+    return None if doc is None else doc.id
+
+
 async def _write_desired(value: dict[str, Any]) -> None:
     for _ in range(_SETTING_ATTEMPTS):
         async with documents.tx('write desired local vlm') as session:
@@ -149,6 +161,7 @@ __all__ = [
     'ENV_DESCRIPTION',
     'clear_local_desired',
     'delete_endpoint',
+    'endpoint_config_id',
     'list_revisions',
     'record_probe',
     'save_endpoint',

@@ -31,7 +31,11 @@ def resolve_pack(pack_name: str | None, revision: int | None = None) -> Any:
 
 
 def get_vlm_labeler(
-    pack_name: str | None = None, revision: int | None = None, *, endpoint: Any = None
+    pack_name: str | None = None,
+    revision: int | None = None,
+    *,
+    endpoint: Any = None,
+    usage_source: str | None,
 ) -> Any:
     """The labeler for ``(endpoint, pack)`` -- a thin wrapper over the one
     factory (:func:`~src.services.labeling.vlm_factory.labeler_for`).
@@ -48,7 +52,7 @@ def get_vlm_labeler(
     resolved = endpoint if endpoint is not None else active_vlm_endpoint()
     if resolved is None:
         raise VlmEndpointUnavailableError(NO_VLM_MESSAGE)
-    return labeler_for(resolved, pack)
+    return labeler_for(resolved, pack, usage_source=usage_source)
 
 
 def vlm_stamp(labeler: Any) -> dict[str, str]:

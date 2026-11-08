@@ -26,6 +26,13 @@ CLUSTER = 10000
 @pytest.fixture(autouse=True)
 def _env(stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_ASSIST_LOOP_JOBS_DIR', str(tmp_path / 'loops'))
+    # The auto-label job is a database row: these tests have no database and run no such job.
+    from src.services.curation.autolabel import service
+
+    async def not_busy() -> bool:
+        return False
+
+    monkeypatch.setattr(service, 'is_busy', not_busy)
 
 
 def _seed(stack: Any, count: int = 60, *, cluster: int = CLUSTER, prefix: str = 'c', **doc: Any):
@@ -184,10 +191,13 @@ def test_a_second_loop_is_busy_and_names_the_first(stack: Any) -> None:
 def test_a_start_is_refused_while_an_auto_label_job_is_live(
     stack: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel import service
+
+    async def busy() -> bool:
+        return True
 
     _seed(stack)
-    monkeypatch.setattr(auto_label_job, 'is_busy', lambda: True)
+    monkeypatch.setattr(service, 'is_busy', busy)
 
     r = _start(stack)
 

@@ -77,7 +77,9 @@ async def _resolve(pin: dict[str, Any], pack: dict[str, Any]) -> _Model:
         msg = 'the loop pinned no VLM endpoint'
         raise ValueError(msg)
     await assert_may_connect(endpoint)
-    labeler = get_vlm_labeler(pack.get('name'), pack.get('revision'), endpoint=endpoint)
+    labeler = get_vlm_labeler(
+        pack.get('name'), pack.get('revision'), endpoint=endpoint, usage_source='assist_loop'
+    )
     return _Model(labeler, endpoint)
 
 
