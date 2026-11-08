@@ -48,7 +48,11 @@ def test_route_refuses_an_ocr_model_and_removes_nothing(
     (tmp_path / 'models' / 'paddleocr_det_trt').mkdir(parents=True)
     curation_unload = AsyncMock()
     monkeypatch.setattr('src.routers.curation.models.unload_triton_model', curation_unload)
-    monkeypatch.setattr('src.routers.curation.models.project_owns_model', lambda _n: True)
+
+    async def _owns(_name: str) -> bool:
+        return True
+
+    monkeypatch.setattr('src.routers.curation.models.project_owns_model', _owns)
     monkeypatch.setattr(triton_promote, 'unload_triton_model', curation_unload)
     removers.append(curation_unload)
 

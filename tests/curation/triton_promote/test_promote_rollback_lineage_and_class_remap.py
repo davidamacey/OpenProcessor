@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from curation.triton_promote._helpers import CLASS_MAP, _promoter
+from curation.triton_promote._helpers import CLASS_MAP, FakeRecorder, _promoter
 from src.services.training.triton_promote import PromoteResult, TritonPromoter
 
 
@@ -52,7 +52,7 @@ async def test_promote_restores_previous_version_on_failure(
         await promoter.promote(
             status=fake_status,
             triton_name=triton_name,
-            class_id_to_name=CLASS_MAP,
+            recorder=FakeRecorder(CLASS_MAP),
             overwrite=True,
         )
 
@@ -89,7 +89,7 @@ async def test_promote_config_write_failure_also_rolls_back_new_version(
         await promoter.promote(
             status=fake_status,
             triton_name=triton_name,
-            class_id_to_name=CLASS_MAP,
+            recorder=FakeRecorder(CLASS_MAP),
         )
     assert not (scratch_models_dir / triton_name / '1').exists()
 
@@ -100,80 +100,92 @@ async def test_promote_config_write_failure_also_rolls_back_new_version(
 
 
 @pytest.mark.asyncio
-async def test_promote_writes_job_id_backpointer_and_version(
+async def test_promote_records_the_version_and_writes_labels_from_the_recorded_rows(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Before the fix: neither promote.json nor any on-disk lineage existed
-    at all — given only a serving model dir, there was no way to trace it
-    back to the run that produced it."""
+    """The promoter stores the promotion (name and version) before it writes anything the
+    model directory says, and renders labels.txt from what was stored, not from its input."""
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = _promoter(scratch_models_dir)
     triton_name = 'op_smoke_v1'
+    recorder = FakeRecorder({0: 'ignored', 1: 'ignored'})
+    recorder.class_id_to_name = {0: 'stored_a', 1: 'stored_b'}
 
     result: PromoteResult = await promoter.promote(
-        status=fake_status,
-        triton_name=triton_name,
-        class_id_to_name=CLASS_MAP,
+        status=fake_status, triton_name=triton_name, recorder=recorder
     )
 
-    backpointer_path = scratch_models_dir / triton_name / 'promote.json'
-    assert backpointer_path.is_file()
-    backpointer = json.loads(backpointer_path.read_text())
-    assert backpointer['job_id'] == 'job-abc'
-    assert backpointer['triton_name'] == triton_name
-    assert backpointer['version'] == '1'
-    assert 'promoted_at' in backpointer
+    assert recorder.recorded == [(triton_name, 1)]
+    assert (scratch_models_dir / triton_name / 'labels.txt').read_text().split() == [
+        'stored_a',
+        'stored_b',
+    ]
+    assert not (scratch_models_dir / triton_name / 'promote.json').exists()
     assert result.version == '1'
 
 
 @pytest.mark.asyncio
-async def test_re_promote_carries_sharing_and_its_revision_forward(
+async def test_a_re_promote_records_the_next_version(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A re-promote rewrites promote.json. It must keep the owner's
-    ``shared`` opt-in AND its ``sharing_revision``: resetting the revision
-    would 409 a client that still holds the current one."""
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = _promoter(scratch_models_dir)
-    triton_name = 'op_smoke_v1'
-    await promoter.promote(status=fake_status, triton_name=triton_name, class_id_to_name=CLASS_MAP)
-    path = scratch_models_dir / triton_name / 'promote.json'
-    first = json.loads(path.read_text())
-    path.write_text(json.dumps({**first, 'shared': True, 'sharing_revision': 5}))
-
+    recorder = FakeRecorder(CLASS_MAP)
+    await promoter.promote(status=fake_status, triton_name='op_smoke_v1', recorder=recorder)
     await promoter.promote(
-        status=fake_status, triton_name=triton_name, class_id_to_name=CLASS_MAP, overwrite=True
+        status=fake_status, triton_name='op_smoke_v1', recorder=recorder, overwrite=True
     )
 
-    second = json.loads(path.read_text())
-    assert second['version'] == '2'
-    assert second['shared'] is True
-    assert second['sharing_revision'] == 5
+    assert recorder.recorded == [('op_smoke_v1', 1), ('op_smoke_v1', 2)]
+    assert recorder.withdrawn == 0
 
 
 @pytest.mark.asyncio
-async def test_promote_backpointer_written_even_when_triton_load_times_out(
+async def test_a_failed_load_withdraws_the_recorded_promotion_and_the_new_version(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The back-pointer records what's on disk, not whether Triton has
-    picked it up yet — it must exist even on a fail-soft load outcome."""
+    """A promote that never served must not stay live: Triton refusing the load (4xx) withdraws
+    the rows and removes the new version directory."""
+    from src.services.training.promote_errors import TritonLoadError
+
+    monkeypatch.setattr(
+        TritonPromoter, '_trigger_load', AsyncMock(side_effect=TritonLoadError('refused'))
+    )
+    promoter = _promoter(scratch_models_dir)
+    recorder = FakeRecorder(CLASS_MAP)
+
+    with pytest.raises(TritonLoadError):
+        await promoter.promote(status=fake_status, triton_name='op_smoke_v1', recorder=recorder)
+
+    assert recorder.recorded == [('op_smoke_v1', 1)]
+    assert recorder.withdrawn == 1
+    assert not (scratch_models_dir / 'op_smoke_v1' / '1').exists()
+
+
+@pytest.mark.asyncio
+async def test_a_fail_soft_load_keeps_the_promotion(
+    fake_status: TrainJobStatus,
+    scratch_models_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rows record what is on disk, not whether Triton has picked it up yet: a load that
+    timed out (fail-soft) still leaves the promotion and its files."""
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=False))
     promoter = _promoter(scratch_models_dir)
-    triton_name = 'op_smoke_v1'
+    recorder = FakeRecorder(CLASS_MAP)
 
     result = await promoter.promote(
-        status=fake_status,
-        triton_name=triton_name,
-        class_id_to_name=CLASS_MAP,
+        status=fake_status, triton_name='op_smoke_v1', recorder=recorder
     )
     assert result.triton_loaded is False
-    assert (scratch_models_dir / triton_name / 'promote.json').is_file()
+    assert recorder.withdrawn == 0
+    assert (scratch_models_dir / 'op_smoke_v1' / 'labels.txt').is_file()
 
 
 # =============================================================================
@@ -298,36 +310,32 @@ def test_class_remap_manifest_lineage_preferred_over_weights_dir(tmp_path: Path)
 
 
 @pytest.mark.asyncio
-async def test_promote_copies_class_remap_into_model_dir(
+async def test_promote_copies_the_stored_class_remap_into_model_dir(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """P2-7 step 6: a resolved remap must land in the served model dir too
-    (class_remap.json alongside config.pbtxt/labels.txt), and promote.json
-    must carry a class_remap provenance block."""
-    from src.services.training.class_remap import ClassRemapResult
-
+    """A stored remap lands in the served model dir too (class_remap.json alongside
+    config.pbtxt/labels.txt), rendered from the promotion row."""
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = _promoter(scratch_models_dir)
-    remap = ClassRemapResult(
-        mapping={12: 0, 81: 1},
-        names=['pickup', 'license_plate'],
-        single_cls=False,
-        include_classes=[12, 81],
-        source='manifest',
-    )
+    stored = {
+        'original_to_new': {'12': 0, '81': 1},
+        'single_cls': False,
+        'names': ['pickup', 'license_plate'],
+        'include_classes': [12, 81],
+        'source': 'manifest',
+        'job_id': 'job-abc',
+    }
     result = await promoter.promote(
         status=fake_status,
         triton_name='op_smoke_remap',
-        class_id_to_name={0: 'pickup', 1: 'license_plate'},
-        class_remap=remap,
+        recorder=FakeRecorder({0: 'pickup', 1: 'license_plate'}, class_remap=stored),
     )
     assert result.class_remap_source == 'manifest'
-    model_dir = scratch_models_dir / 'op_smoke_remap'
-    remap_dest = json.loads((model_dir / 'class_remap.json').read_text())
+    remap_dest = json.loads(
+        (scratch_models_dir / 'op_smoke_remap' / 'class_remap.json').read_text()
+    )
     assert remap_dest['original_to_new'] == {'12': 0, '81': 1}
     assert remap_dest['source'] == 'manifest'
-    promote_json = json.loads((model_dir / 'promote.json').read_text())
-    assert promote_json['class_remap']['source'] == 'manifest'
-    assert promote_json['class_remap']['n_classes'] == 2
+    assert remap_dest['version'] == '1'

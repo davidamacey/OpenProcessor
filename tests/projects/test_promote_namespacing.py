@@ -3,7 +3,7 @@
 
 Covers: a non-default project's promote name is ``{prefix}{requested}``
 (``model_prefix`` from ``resources_for_new`` -- ``'{slug}__'``);
-``promote.json.project`` records the promoting project; a requested name
+the live promotion records the promoting project; a requested name
 containing ``'__'`` is rejected before it can spoof the separator; and a
 project's ``/models/status``-equivalent ownership check never lets one
 project see or unload another's promoted model.
@@ -11,7 +11,6 @@ project see or unload another's promoted model.
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
@@ -22,11 +21,12 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from curation.triton_promote._helpers import write_float_image_onnx
+from curation._promote_start_fake import no_database
+from curation.triton_promote._helpers import FakeRecorder, write_float_image_onnx
 
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
-from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_new
+from src.config.projects import ProjectRecord, resources_for_new
 from src.services.training.job_models import TrainJobStatus
 from src.services.training.triton_promote import TritonPromoter
 
@@ -89,7 +89,7 @@ def test_model_prefix_matches_resources_for_new_convention() -> None:
 
 
 @pytest.mark.asyncio
-async def test_promote_writes_namespaced_name_and_project(
+async def test_promote_records_the_namespaced_name(
     fake_status: TrainJobStatus,
     scratch_models_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -105,19 +105,15 @@ async def test_promote_writes_namespaced_name_and_project(
         triton_name = f'{cfg.model_prefix}{requested}'
         assert triton_name == 'beta__detector_v3'
 
+        recorder = FakeRecorder({0: 'car'})
         result = await promoter.promote(
             status=fake_status,
             triton_name=triton_name,
-            class_id_to_name={0: 'car'},
-            project=cfg.project_slug,
+            recorder=recorder,
         )
 
     assert result.triton_name == 'beta__detector_v3'
-    promote_json = json.loads(
-        (scratch_models_dir / 'beta__detector_v3' / 'promote.json').read_text(encoding='utf-8')
-    )
-    assert promote_json['project'] == 'beta'
-    assert promote_json['triton_name'] == 'beta__detector_v3'
+    assert recorder.recorded == [('beta__detector_v3', 1)]
 
 
 @pytest.mark.asyncio
@@ -143,12 +139,8 @@ async def test_default_promote_name_is_unprefixed(
         triton_name = f'{cfg.model_prefix}detector_v3'
 
     with bind_project(new_project_record('default', base_curation_config())):
-        # the promote.json write takes a lease in the bound (owning) project's index
         result = await promoter.promote(
-            status=fake_status,
-            triton_name=triton_name,
-            class_id_to_name={0: 'car'},
-            project=DEFAULT_SLUG,
+            status=fake_status, triton_name=triton_name, recorder=FakeRecorder({0: 'car'})
         )
     assert result.triton_name == 'detector_v3'
 
@@ -164,6 +156,7 @@ def test_requested_name_with_reserved_separator_is_rejected(
     design), or it 409s before the router's own validation runs."""
     del not_stale_registry
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    no_database(monkeypatch)
 
     from _curation_app import SCOPED, curation_test_app
     from fastapi.testclient import TestClient
@@ -183,7 +176,8 @@ def test_requested_name_with_reserved_separator_is_rejected(
     assert resp.json()['detail']['code'] == 'triton_name_reserved_separator'
 
 
-def test_project_owns_model_prefix_isolation() -> None:
+@pytest.mark.asyncio
+async def test_project_owns_model_prefix_isolation() -> None:
     """A project only owns model names under its own prefix; default
     (empty prefix) owns everything not claimed by another known
     project's prefix."""
@@ -197,15 +191,15 @@ def test_project_owns_model_prefix_isolation() -> None:
     set_project_registry(registry)
     try:
         with bind_project(beta):
-            assert project_owns_model('beta__x') is True
-            assert project_owns_model('other__x') is False
-            assert project_owns_model('yolov11_small_trt_end2end') is False
+            assert await project_owns_model('beta__x') is True
+            assert await project_owns_model('other__x') is False
+            assert await project_owns_model('yolov11_small_trt_end2end') is False
 
         from src.config.curation_accessors import base_curation_config
         from src.config.projects import new_project_record
 
         with bind_project(new_project_record('default', base_curation_config())):
-            assert project_owns_model('yolov11_small_trt_end2end') is True
-            assert project_owns_model('beta__x') is False
+            assert await project_owns_model('yolov11_small_trt_end2end') is True
+            assert await project_owns_model('beta__x') is False
     finally:
         set_project_registry(None)

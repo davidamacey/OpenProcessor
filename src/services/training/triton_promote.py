@@ -5,15 +5,15 @@ The workflow:
 1. The user clicks "Promote to Triton" on a finished training run in
    the labeler frontend's train page.
 2. Frontend calls ``POST {api_prefix}/train/promote/{job_id}``.
-3. The router calls :func:`promote_yolo26_to_triton` here.
+3. The ``promote`` job calls :func:`promote_yolo26_to_triton` here.
 4. We read ``status.json`` for the run's ONNX export (the trainer
    produces ``best.onnx`` alongside ``best.pt`` during the
    ``exporting`` state).
 5. Copy the ONNX into the Triton model repo at
    ``models/<triton_name>/1/model.onnx``.
-6. Write ``config.pbtxt`` (rendered by
-   :mod:`src.services.training.yolo_triton_config`) and
-   ``labels.txt``.
+6. Store the ``models`` and ``promotions`` rows, then write ``config.pbtxt``
+   (rendered by :mod:`src.services.training.yolo_triton_config`) and
+   ``labels.txt`` from the stored labels.
 7. POST ``/v2/repository/models/<triton_name>/load`` to make the model
    active immediately.
 
@@ -30,12 +30,11 @@ import asyncio
 import json
 import shutil
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from src.core.logging import get_logger
-from src.services.training.class_remap import _NONE_REMAP
+from src.services.training import model_registry
 from src.services.training.onnx_head import nms_free_head_problem
 from src.services.training.promote_errors import (
     CheckpointNotFoundError,
@@ -44,7 +43,6 @@ from src.services.training.promote_errors import (
     PromoteError,
     TritonUnloadError,
 )
-from src.services.training.promote_json import write_promote_backpointer
 from src.services.training.triton_http import TritonHttpControl
 from src.services.training.triton_repo import resolve_triton_http_url, resolve_triton_models_dir
 from src.services.training.yolo_triton_config import (
@@ -58,13 +56,34 @@ from src.utils.uint8_input import add_uint8_input
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping, Sequence
 
-    from src.services.training.class_remap import ClassRemapResult
     from src.services.training.job_models import TrainJobStatus
 
 
 logger = get_logger(__name__)
+
+
+class RecordedPromotion(Protocol):
+    """What a stored promotion tells the promoter to write: ``labels`` in model output order."""
+
+    @property
+    def labels(self) -> Sequence[str]: ...
+
+    @property
+    def class_remap(self) -> Mapping[str, object] | None: ...
+
+
+class PromotionRecorder(Protocol):
+    """Stores the promotion once the version directory exists and withdraws it on failure.
+
+    ``labels.txt`` and ``class_remap.json`` are written from what ``record`` returns, so the rows
+    in PostgreSQL are the source and the files their rendering.
+    """
+
+    async def record(self, *, triton_name: str, triton_version: int) -> RecordedPromotion: ...
+
+    async def withdraw(self) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -149,13 +168,11 @@ class TritonPromoter(TritonHttpControl):
         *,
         status: TrainJobStatus,
         triton_name: str,
-        class_id_to_name: dict[int, str],
+        recorder: PromotionRecorder,
         max_batch_size: int = DEFAULT_MAX_BATCH,
         input_size: int = DEFAULT_INPUT_SIZE,
         fp16: bool = True,
         overwrite: bool = False,
-        class_remap: ClassRemapResult | None = None,
-        project: str | None = None,
         on_phase: Callable[[str], None] | None = None,
     ) -> PromoteResult:
         """Run the promote pipeline end-to-end.
@@ -171,11 +188,9 @@ class TritonPromoter(TritonHttpControl):
                 find the ONNX file.
             triton_name: Desired Triton model name (URL-safe;
                 lowercase + underscore preferred).
-            class_id_to_name: Maps the **trained** class ids (post any
-                subset renumber) to their human-readable names. The
-                caller looks this up in ``class_remap.json`` next to
-                the checkpoint when the run was a subset training, or
-                from the full registry for a full-class run.
+            recorder: Stores the promotion rows once the version directory is
+                known; ``labels.txt`` is rendered from the stored labels, and
+                the rows are withdrawn if a later step fails.
             max_batch_size: Triton dynamic-batch upper bound. Default 8.
             input_size: Square input dim. Must match the model's export.
             fp16: TensorRT precision mode for the JIT-compiled engine.
@@ -252,109 +267,53 @@ class TritonPromoter(TritonHttpControl):
             await asyncio.to_thread(shutil.rmtree, version_dir, ignore_errors=True)
             raise
 
-        # Render config + labels. These are shared across all versions
-        # (Triton's model repo layout keeps config.pbtxt/labels.txt at the
-        # model-dir level, not per-version), so a re-promote under the
-        # same name updates them too — consistent with the new version
-        # actually being what those files describe.
-        config_path = model_dir / 'config.pbtxt'
-        labels_path = model_dir / 'labels.txt'
+        # The rows come first: labels.txt and class_remap.json are rendered from what was stored,
+        # so the registry, not a side file, says what the model's outputs mean (class identity is
+        # the name). A step that fails after this withdraws the rows and the new version dir.
         try:
+            recorded = await recorder.record(triton_name=triton_name, triton_version=next_version)
+            # config.pbtxt and labels.txt are shared across versions (Triton's repo layout keeps
+            # them at the model-dir level), so a re-promote updates them too.
+            config_path = model_dir / 'config.pbtxt'
+            labels_path = model_dir / 'labels.txt'
             cfg = Yolo26TritonConfig(
                 model_name=triton_name,
                 input_size=input_size,
                 max_batch_size=max_batch_size,
                 fp16=fp16,
             )
-            config_text = render_config(cfg)
-            labels_text = render_labels_file(class_id_to_name)
-            await asyncio.to_thread(config_path.write_text, config_text, encoding='utf-8')
-            await asyncio.to_thread(labels_path.write_text, labels_text, encoding='utf-8')
-        except Exception:
+            await asyncio.to_thread(config_path.write_text, render_config(cfg), encoding='utf-8')
+            await asyncio.to_thread(
+                labels_path.write_text,
+                render_labels_file(dict(enumerate(recorded.labels))),
+                encoding='utf-8',
+            )
+            remap = recorded.class_remap
+            if remap is not None:
+                # An operator reading the served model repo sees which registry ids this
+                # model's dense ids map to; the rows stay the source.
+                await asyncio.to_thread(
+                    (model_dir / 'class_remap.json').write_text,
+                    json.dumps({**remap, 'version': str(next_version)}, indent=2, sort_keys=True),
+                    encoding='utf-8',
+                )
+            # Trigger Triton load, then pay the first-inference engine build here rather than
+            # on the first real request.
+            if on_phase:
+                on_phase('loading')
+            loaded = await self._trigger_load(triton_name)
+            warmed = loaded and await self._warm_up(
+                triton_name, input_size, max_batch_size, on_phase=on_phase
+            )
+        except BaseException:
             logger.error(
-                'train_promote_config_write_failed_rolling_back',
+                'train_promote_failed_rolling_back',
                 triton_name=triton_name,
                 version=str(next_version),
             )
+            await recorder.withdraw()
             await asyncio.to_thread(shutil.rmtree, version_dir, ignore_errors=True)
             raise
-
-        # Lineage back-pointer: given only a serving model dir, an
-        # operator can trace it back to the run that produced it without
-        # needing the API's own job store. Written before the Triton load
-        # attempt so it's present even if the load itself times out or
-        # 5xx's (fail-soft — the files are still valid and loadable later).
-        promote_json_path = model_dir / 'promote.json'
-        remap = class_remap or _NONE_REMAP
-        backpointer = {
-            'job_id': status.job_id,
-            'triton_name': triton_name,
-            'version': str(next_version),
-            'promoted_at': datetime.now(tz=UTC).isoformat(),
-            # the project-isolation design §5.3: the
-            # project that submitted this promote, so an operator (or
-            # DELETE /models/{name}'s ownership check) can trace a served
-            # model back to its owning project without re-deriving it from
-            # ``triton_name``'s prefix.
-            'project': project,
-            # §5.5: never crosses a project boundary by raw id -- other
-            # projects consume this model only by class NAME
-            # (src.services.training.model_classes), via labels.txt's own
-            # model-output order. `shared`/`sharing_revision` are carried
-            # over from the prior promote.json by write_promote_backpointer.
-            'classes': [
-                {'model_id': i, 'name': class_id_to_name[i]} for i in sorted(class_id_to_name)
-            ],
-            'class_remap_source': remap.source,
-            'class_remap': {
-                'source': remap.source,
-                'n_classes': len(remap.mapping)
-                if remap.mapping
-                else (1 if remap.single_cls else 0),
-                'sha256': None,
-            },
-        }
-        await write_promote_backpointer(promote_json_path, backpointer)
-
-        # Copy the resolved remap into the served model dir too, alongside
-        # config.pbtxt/labels.txt, so an operator inspecting the served
-        # model repo (not the training job store) can still see exactly
-        # which original registry ids this model's dense ids map to.
-        # Best-effort — a failure here doesn't roll back an otherwise
-        # successful promote, but is logged loudly.
-        if remap.source != 'none':
-            try:
-                remap_dest = model_dir / 'class_remap.json'
-                remap_payload = {
-                    'original_to_new': {str(k): v for k, v in remap.mapping.items()},
-                    'single_cls': remap.single_cls,
-                    'names': remap.names,
-                    'include_classes': remap.include_classes,
-                    'source': remap.source,
-                    'job_id': status.job_id,
-                    'version': str(next_version),
-                    'resolved_at': datetime.now(tz=UTC).isoformat(),
-                }
-                await asyncio.to_thread(
-                    remap_dest.write_text,
-                    json.dumps(remap_payload, indent=2, sort_keys=True),
-                    encoding='utf-8',
-                )
-            except OSError as exc:
-                logger.error(
-                    'train_promote_class_remap_copy_to_model_dir_failed',
-                    triton_name=triton_name,
-                    error=str(exc),
-                )
-
-        # Trigger Triton load, then pay the first-inference engine build here
-        # rather than on the first real request.
-        if on_phase:
-            on_phase('loading')
-        loaded = await self._trigger_load(triton_name)
-        warmed = loaded and await self._warm_up(
-            triton_name, input_size, max_batch_size, on_phase=on_phase
-        )
 
         logger.info(
             'train_promote_ok',
@@ -373,7 +332,7 @@ class TritonPromoter(TritonHttpControl):
             labels_path=str(labels_path),
             triton_loaded=loaded,
             version=str(next_version),
-            class_remap_source=remap.source,
+            class_remap_source=str(remap['source']) if remap is not None else 'none',
             cold_start_expected_on_first_inference=not warmed,
         )
 
@@ -386,8 +345,7 @@ class TritonPromoter(TritonHttpControl):
         """Return the numbered version subdirectories already under ``model_dir``.
 
         Triton's model repo layout numbers version dirs as plain integers
-        (``1``, ``2``, ...); anything else (``config.pbtxt``, a stray
-        ``promote.json`` from a prior promote, non-numeric dirs) is
+        (``1``, ``2``, ...); anything else (``config.pbtxt``, non-numeric dirs) is
         ignored. Empty list means "no version has ever been promoted here"
         even if the directory itself exists.
         """
@@ -469,28 +427,24 @@ async def promote_yolo26_to_triton(
     *,
     status: TrainJobStatus,
     triton_name: str,
-    class_id_to_name: dict[int, str],
+    recorder: PromotionRecorder,
     max_batch_size: int = DEFAULT_MAX_BATCH,
     input_size: int = DEFAULT_INPUT_SIZE,
     fp16: bool = True,
     overwrite: bool = False,
-    class_remap: ClassRemapResult | None = None,
     promoter: TritonPromoter | None = None,
-    project: str | None = None,
     on_phase: Callable[[str], None] | None = None,
 ) -> PromoteResult:
-    """Convenience wrapper. The router uses this; tests pass a custom promoter."""
+    """Convenience wrapper. The promote job uses this; tests pass a custom promoter."""
     p = promoter or TritonPromoter()
     return await p.promote(
         status=status,
         triton_name=triton_name,
-        class_id_to_name=class_id_to_name,
+        recorder=recorder,
         max_batch_size=max_batch_size,
         input_size=input_size,
         fp16=fp16,
         overwrite=overwrite,
-        class_remap=class_remap,
-        project=project,
         **({'on_phase': on_phase} if on_phase is not None else {}),
     )
 
@@ -506,4 +460,7 @@ async def unload_triton_model(
     belong in the router, not here — see :meth:`TritonPromoter.unload`.
     """
     p = promoter or TritonPromoter()
-    return await p.unload(triton_name)
+    result = await p.unload(triton_name)
+    # The directory is gone, so the model no longer serves: its live promotion ends.
+    await model_registry.retire(triton_name)
+    return result

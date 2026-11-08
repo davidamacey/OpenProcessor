@@ -124,7 +124,9 @@ def test_unload_of_a_core_model_needs_force(
 
 def _promoted(tmp_path: Path, name: str, owner: str) -> None:
     _dirs(tmp_path, name)
-    (tmp_path / 'models' / name / 'promote.json').write_text(f'{{"project": "{owner}"}}')
+    import _fake_model_registry
+
+    _fake_model_registry.CURRENT.promote(name, owner=owner)
 
 
 def test_global_delete_of_a_project_promoted_model_is_a_typed_409_naming_the_owner(

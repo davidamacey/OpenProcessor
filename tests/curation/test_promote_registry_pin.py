@@ -26,6 +26,8 @@ from _project_paths import default_train_jobs_dir
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._promote_start_fake import install as install_start_fake
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -125,31 +127,16 @@ def test_labels_txt_uses_pinned_registry_not_live(
 
     captured: dict[str, Any] = {}
 
-    async def _fake_promote(**kwargs: Any) -> Any:
-        from src.services.training.triton_promote import PromoteResult
-
-        captured.update(kwargs)
-        return PromoteResult(
-            job_id=job_id,
-            triton_name='yolo26m_pin_test',
-            onnx_path='/triton-models/yolo26m_pin_test/1/model.onnx',
-            config_path='/triton-models/yolo26m_pin_test/config.pbtxt',
-            labels_path='/triton-models/yolo26m_pin_test/labels.txt',
-            triton_loaded=True,
-        )
-
-    monkeypatch.setattr(
-        'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
-    )
+    install_start_fake(monkeypatch, captured)
 
     # No class_remap.json here either (older run) and the single pinned id
     # (5) isn't contiguous from 0, so this also needs force -- the pin-vs-
     # live distinction under test is orthogonal to that gate.
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}?wait=true',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_pin_test', 'force': True},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
 
     class_id_to_name = captured['class_id_to_name']
     assert class_id_to_name[5] == 'suv', (
@@ -189,36 +176,21 @@ def test_labels_txt_falls_back_to_live_registry_without_a_pin(
 
     captured: dict[str, Any] = {}
 
-    async def _fake_promote(**kwargs: Any) -> Any:
-        from src.services.training.triton_promote import PromoteResult
-
-        captured.update(kwargs)
-        return PromoteResult(
-            job_id=job_id,
-            triton_name='yolo26m_no_pin',
-            onnx_path='/triton-models/yolo26m_no_pin/1/model.onnx',
-            config_path='/triton-models/yolo26m_no_pin/config.pbtxt',
-            labels_path='/triton-models/yolo26m_no_pin/labels.txt',
-            triton_loaded=True,
-        )
-
-    monkeypatch.setattr(
-        'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
-    )
+    install_start_fake(monkeypatch, captured)
 
     # No class_remap.json (older run) and the pinned/live registry's single
     # id (5) is not contiguous from 0 -- the identity map is unprovable, so
     # this now 422s unless forced (the class-remap correctness fix).
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}?wait=true',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_no_pin'},
     )
     assert r.status_code == 422, r.text
     assert r.json()['detail']['failures'][0]['code'] == 'class_remap_missing_full_class'
 
     r = app_client.post(
-        f'/curation/projects/default/train/promote/{job_id}?wait=true',
+        f'/curation/projects/default/train/promote/{job_id}',
         json={'triton_name': 'yolo26m_no_pin', 'force': True},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     assert captured['class_id_to_name'][5] == 'suv_renamed'

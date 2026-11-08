@@ -13,14 +13,14 @@ Split out of ``models.py`` to stay under the repo's 700-LOC ratchet.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
 from src.config.curation_accessors import get_curation_config
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import get_class_registry, logger, router
+from src.routers.curation._common import get_class_registry, router
+from src.services.training import model_registry
 from src.services.training.model_classes import (
     is_model_shared,
     model_class_mapping,
@@ -32,8 +32,6 @@ from src.services.training.triton_repo import resolve_triton_models_dir
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from src.clients.curation_opensearch import ClassRegistryFile
 
 
@@ -82,7 +80,7 @@ async def bound_registry() -> ClassRegistryFile:
     return await get_class_registry().snapshot()
 
 
-def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, Any]:
+async def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, Any]:
     """``project``, ``shared``, ``class_mapping``, ``owned`` and
     ``sharing_revision`` for one Triton model list entry. ``class_mapping``
     is null for a model with no class list (an encoder, an OCR model).
@@ -95,10 +93,10 @@ def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, An
     never unloadable through this project's ``DELETE /models/{name}``."""
     from src.services.training.promoted_models import project_owns_model
 
-    owned = project_owns_model(model_name)
+    owned = await project_owns_model(model_name)
     summary: dict[str, Any] | None = None
-    if model_classes(model_name):
-        mapping = model_class_mapping(
+    if await model_classes(model_name):
+        mapping = await model_class_mapping(
             model_name, registry, project=get_curation_config().project_slug
         )
         summary = ModelClassMappingSummary(
@@ -106,51 +104,36 @@ def listing_fields(model_name: str, registry: ClassRegistryFile) -> dict[str, An
             unmapped=list(mapping.unmapped),
         ).model_dump()
     return {
-        'project': model_owner_project(model_name),
-        'shared': is_model_shared(model_name),
+        'project': await model_owner_project(model_name),
+        'shared': await is_model_shared(model_name),
         'class_mapping': summary,
         'owned': owned,
-        'sharing_revision': model_sharing_revision(model_name) if owned else None,
+        'sharing_revision': await model_sharing_revision(model_name) if owned else None,
         **({} if owned else {'unloadable': False}),
     }
 
 
-def _is_foreign_shared(model_name: str) -> bool:
-    owner = model_owner_project(model_name)
+async def _is_foreign_shared(model_name: str) -> bool:
+    owner = await model_owner_project(model_name)
     return (
         owner is not None
         and owner != get_curation_config().project_slug
-        and is_model_shared(model_name)
+        and await is_model_shared(model_name, get_curation_config().project_slug)
     )
 
 
-def discover_foreign_shared_models(models_dir: Path | None = None) -> list[dict[str, Any]]:
-    """Other projects' promoted models whose owner opted in to sharing
-    (``promote.json.shared``), for ``?include_other_projects=true``."""
-    resolved_dir = models_dir if models_dir is not None else resolve_triton_models_dir()
-    try:
-        entries = sorted(resolved_dir.iterdir())
-    except OSError:
-        return []
-    out: list[dict[str, Any]] = []
-    for entry in entries:
-        promote_json = entry / 'promote.json'
-        if not entry.is_dir() or not promote_json.is_file() or not _is_foreign_shared(entry.name):
-            continue
-        try:
-            meta = json.loads(promote_json.read_text(encoding='utf-8'))
-        except (OSError, ValueError) as exc:
-            logger.warning('models_status_promote_json_unreadable', name=entry.name, error=str(exc))
-            continue
-        out.append(
-            {
-                'name': entry.name,
-                'job_id': meta.get('job_id'),
-                'promoted_at': meta.get('promoted_at'),
-                'project': meta.get('project'),
-            }
-        )
-    return out
+async def discover_foreign_shared_models() -> list[dict[str, Any]]:
+    """Other projects' promoted models whose owner shared them with this project
+    (a ``model_shares`` row), for ``?include_other_projects=true``."""
+    return [
+        {
+            'name': live.promotion.triton_model_name,
+            'job_id': live.run_job_id,
+            'promoted_at': live.promotion.promoted_at.isoformat(),
+            'project': live.owner_slug,
+        }
+        for live in await model_registry.shared_with(get_curation_config().project_slug)
+    ]
 
 
 def dedupe_triton_rows(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -177,14 +160,16 @@ async def get_model_class_mapping(model_name: str) -> ModelClassMappingResponse:
     from src.services.training.promoted_models import project_owns_model
 
     exists = (resolve_triton_models_dir() / model_name).is_dir()
-    if not exists or not (project_owns_model(model_name) or _is_foreign_shared(model_name)):
+    if not exists or not (
+        await project_owns_model(model_name) or await _is_foreign_shared(model_name)
+    ):
         raise api_error(
             404,
             'model_not_found',
             f'{model_name!r} is not a model this project can use',
             project=get_curation_config().project_slug,
         )
-    mapping = model_class_mapping(
+    mapping = await model_class_mapping(
         model_name, await bound_registry(), project=get_curation_config().project_slug
     )
     return ModelClassMappingResponse(

@@ -182,13 +182,13 @@ async def test_reload_promoted_models_reloads_unavailable_promoted_models(
 async def test_reload_promoted_models_ignores_non_promoted_model_dirs(
     scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A model dir with no promote.json (e.g. a core pipeline model) is
+    """A model dir with no live promotion (e.g. a core pipeline model) is
     never a reload target, ready or not."""
     from src.services.training.triton_reload import reload_promoted_models
 
     core_dir = scratch_models_dir / 'core_model'
     (core_dir / '1').mkdir(parents=True)
-    (core_dir / 'config.pbtxt').write_text('# core, no promote.json')
+    (core_dir / 'config.pbtxt').write_text('# core, no promotion')
 
     fake_client = _FakeIndexAndLoadClient(
         index_response=[{'name': 'core_model', 'state': 'UNAVAILABLE'}], load_ok=set()
@@ -239,7 +239,7 @@ async def test_unloaded_model_is_never_resurrected_by_reload_promoted_models(
     live index -- otherwise the next reconcile tick (or a Triton
     restart) would silently reload something an operator deliberately
     unloaded. unload() rmtree's the whole model dir, which is exactly
-    what strands promote.json for the discovery scan below."""
+    what ends its live promotion for the discovery scan below."""
     from src.services.training.triton_reload import reload_promoted_models
 
     name = 'op_deliberately_unloaded_v1'
@@ -251,7 +251,7 @@ async def test_unloaded_model_is_never_resurrected_by_reload_promoted_models(
     assert not model_dir.exists()
 
     # Even if Triton still (implausibly) reports it UNAVAILABLE in the
-    # index, there's no promote.json left to discover -- no load call.
+    # index, there's no live promotion left to discover -- no load call.
     fake_client = _FakeIndexAndLoadClient(
         index_response=[{'name': name, 'state': 'UNAVAILABLE'}], load_ok={name}
     )

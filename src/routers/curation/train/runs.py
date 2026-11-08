@@ -7,6 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 from pydantic import BaseModel
 
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers._errors import server_error
 from src.services.training import job_campaigns, jobs as train_jobs, promote_job
 from src.services.training.job_models import TrainJobStatus
@@ -30,6 +32,7 @@ async def latest_status() -> TrainJobStatus | None:
 @router.get('/status/{job_id}', response_model=TrainJobStatus)
 async def status_by_id(
     job_id: Annotated[str, PathParam(description='Training job_id')],
+    session: DbSessionDep,
 ) -> TrainJobStatus:
     """Return the ``status.json`` for a specific run.
 
@@ -41,7 +44,8 @@ async def status_by_id(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail=f'job_id not found: {job_id}')
-    return result.model_copy(update={'promote': promote_job.latest_for_run(job_id)})
+    latest = await promote_job.latest_for_run(session, current_project_id(), job_id)
+    return result.model_copy(update={'promote': None if latest is None else latest.model_dump()})
 
 
 class RunsListResponse(BaseModel):

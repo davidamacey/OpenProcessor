@@ -389,4 +389,5 @@ def ready_engine_contracts(session: Session) -> dict[str, dict[str, Any]]:
             ModelEngine.status == 'ready'
         )
     )
-    return dict(rows.tuples())
+    # not ``dict(rows)``: a Result has ``keys()``, so ``dict`` would read it as a mapping
+    return {row[0]: row[1] for row in rows}

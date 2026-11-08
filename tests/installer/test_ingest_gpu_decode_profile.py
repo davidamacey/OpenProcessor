@@ -186,3 +186,16 @@ def test_gpu_plan_sizes_the_gpu_decode_by_the_installed_instance_count(
     )
     done = cli(shimmed, inst, 'gpu', 'plan')
     assert f'about {3 * GPU_IMAGE_PREP_MIB} MiB more on the primary card' in done.stdout
+
+
+def test_gpu_plan_prefers_the_registrys_measured_figure(shimmed: Shimmed, inst: Path) -> None:
+    shimmed.gpus(A6000)
+    set_env(inst, GPU_PROFILE='full', TRITON_GPU_ID='0', OP_INGEST_GPU_DECODE='1')
+    shimmed.flag('postgres_container')
+    shimmed.flag('device_mib', '9000\n')
+    done = cli(shimmed, inst, 'gpu', 'plan')
+    assert 'about 9000 MiB more on the primary card' in done.stdout
+    shimmed.flag('postgres_container', '')
+    (shimmed.state / 'device_mib').unlink()
+    done = cli(shimmed, inst, 'gpu', 'plan')
+    assert f'about {GPU_IMAGE_PREP_MIB} MiB more on the primary card' in done.stdout

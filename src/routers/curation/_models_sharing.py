@@ -7,23 +7,19 @@ ratchet.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from fastapi import Query
 from pydantic import BaseModel
 
 from src.config.curation_accessors import get_curation_config
+from src.config.project_context import current_project_id
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import logger, router
 from src.schemas.curation.config_common import ModelSharingUser
 from src.services.config_store.project_usage import active_detector_users
-from src.services.training.promote_json import SharingRevisionConflictError, update_sharing
-
-
-def _promote_json_path(model_name: str) -> Any:
-    from src.services.training.triton_repo import resolve_triton_models_dir
-
-    return resolve_triton_models_dir() / model_name / 'promote.json'
+from src.services.projects.registry import get_project_registry
+from src.services.training import model_registry
 
 
 class ModelSharingRequest(BaseModel):
@@ -93,7 +89,7 @@ async def set_model_sharing(
     from src.services.training.promoted_models import project_owns_model
 
     project = get_curation_config().project_slug
-    if not project_owns_model(model_name):
+    if not await project_owns_model(model_name):
         raise api_error(
             404,
             'model_not_found',
@@ -134,13 +130,23 @@ async def set_model_sharing(
             projects=[u.project for u in used_by],
         )
 
+    registry = get_project_registry()
+    await registry.ensure_fresh()
+    consumers = [
+        record.id
+        for record in registry.active_projects()
+        if record.id is not None and record.slug != project
+    ]
     try:
-        revision = await update_sharing(
-            _promote_json_path(model_name),
+        revision = await model_registry.set_sharing(
+            current_project_id(),
+            model_name,
             shared=payload.shared,
             expected_revision=payload.expected_revision,
+            consumers=consumers,
+            requested_by=project,
         )
-    except SharingRevisionConflictError as exc:
+    except model_registry.SharingRevisionConflictError as exc:
         raise api_error(
             409,
             'revision_conflict',
@@ -148,11 +154,11 @@ async def set_model_sharing(
             f'not {payload.expected_revision}',
             current_revision=exc.current_revision,
         ) from exc
-    except (OSError, ValueError) as exc:
+    except model_registry.ModelNotOwnedError as exc:
         raise api_error(
             404,
             'model_not_found',
-            f'{model_name!r} has no promote.json to share (not promoted through this pipeline)',
+            f'{model_name!r} has no live promotion to share (not promoted through this pipeline)',
             project=project,
         ) from exc
 

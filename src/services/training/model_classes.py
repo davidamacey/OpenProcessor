@@ -10,18 +10,15 @@ model id as a registry id.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from src.core.logging import get_logger
+from src.db.repos import models as repo
+from src.services.training import model_registry
 
 
 if TYPE_CHECKING:
     from src.clients.curation_opensearch import ClassRegistryFile
-
-
-logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -54,95 +51,42 @@ class ModelClassMapping:
     not_covered: tuple[str, ...]
 
 
-def _promote_json_path(triton_name: str) -> Any:
-    from src.services.training.triton_repo import resolve_triton_models_dir
+async def owned_model_names(slug: str) -> list[str]:
+    """Every Triton model ``slug`` owns (its live promotions), private and shared alike. The one
+    ownership enumeration: project delete (unload) and ``/stats`` (``promoted_models``) both
+    read it."""
+    return await model_registry.owned_names(slug)
 
-    return resolve_triton_models_dir() / triton_name / 'promote.json'
+
+async def is_model_shared(triton_name: str, consumer: str | None = None) -> bool:
+    """Whether the owner shared the model, with ``consumer`` when given, with anyone otherwise.
+    ``False`` for anything no project promoted, e.g. every core-pipeline / base model."""
+    consumers = await model_registry.consumers(triton_name)
+    return bool(consumers) if consumer is None else consumer in consumers
 
 
-def _classes_from_promote_json(triton_name: str) -> list[ModelClass] | None:
-    """``promote.json.classes`` (§5.5 #2: model order == ``labels.txt``
-    order), when the model was promoted through this pipeline and its
-    promote.json already carries the (newer) ``classes`` field."""
-    path = _promote_json_path(triton_name)
-    try:
-        raw = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
+async def model_owner_project(triton_name: str) -> str | None:
+    """The owning project's slug -- ``None`` for a model no project promoted (a core-pipeline /
+    base model belongs to no project)."""
+    return await model_registry.owner_slug(triton_name)
+
+
+async def model_sharing_revision(triton_name: str) -> int | None:
+    """The revision the sharing PUT is conditioned on (Cropwright BA-P2-1) -- ``None`` for a
+    model no project promoted."""
+    if await model_registry.live_model(triton_name) is None:
         return None
-    classes_raw = raw.get('classes')
-    if not isinstance(classes_raw, list) or not classes_raw:
-        return None
-    try:
-        return [ModelClass(model_id=int(c['model_id']), name=str(c['name'])) for c in classes_raw]
-    except (KeyError, TypeError, ValueError) as exc:
-        logger.warning(
-            'model_classes_promote_json_malformed', triton_name=triton_name, error=str(exc)
-        )
-        return None
+    return repo.sharing_revision(len(await model_registry.consumers(triton_name)))
 
 
-def owned_model_names(slug: str) -> list[str]:
-    """Every Triton model ``slug`` owns (``promote.json.project == slug``),
-    private and shared alike. The one ownership enumeration: project
-    delete (unload) and ``/stats`` (``promoted_models``) both read it."""
-    from src.services.training.triton_repo import resolve_triton_models_dir
-
-    models_dir = resolve_triton_models_dir()
-    if not models_dir.is_dir():
-        return []
-    return sorted(
-        entry.name
-        for entry in models_dir.iterdir()
-        if entry.is_dir() and model_owner_project(entry.name) == slug
-    )
-
-
-def is_model_shared(triton_name: str) -> bool:
-    """``promote.json.shared`` -- ``False`` (never shared) for anything
-    without a promote.json, e.g. every core-pipeline / base model."""
-    path = _promote_json_path(triton_name)
-    try:
-        raw = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return False
-    return bool(raw.get('shared'))
-
-
-def model_owner_project(triton_name: str) -> str | None:
-    """``promote.json.project`` -- ``None`` for a model with no
-    promote.json (a core-pipeline / base model belongs to no project)."""
-    path = _promote_json_path(triton_name)
-    try:
-        raw = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return None
-    project = raw.get('project')
-    return str(project) if project else None
-
-
-def model_sharing_revision(triton_name: str) -> int | None:
-    """``promote.json.sharing_revision`` -- ``None`` for a model with no
-    promote.json (Cropwright BA-P2-1: only an owned promoted model has a
-    revision the sharing PUT can be conditioned on)."""
-    from src.services.training.promote_json import sharing_revision
-
-    path = _promote_json_path(triton_name)
-    try:
-        raw = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return None
-    return sharing_revision(raw)
-
-
-def model_classes(triton_name: str) -> list[ModelClass]:
+async def model_classes(triton_name: str) -> list[ModelClass]:
     """This model's own classes, in model-output order.
 
     Resolution order:
-    1. ``promote.json.classes`` (a model promoted through this pipeline,
-       post the §5.5 fix -- model order, never the registry's).
-    2. ``labels.txt`` (older promotes without a ``classes`` field, and
-       every base/core-pipeline model, which ships its own ``labels.txt``
-       and was never promoted through here at all).
+    1. ``models.labels`` of the live promotion (a model promoted through this pipeline: model
+       order, never the registry's).
+    2. ``labels.txt`` (every base/core-pipeline model, which ships its own ``labels.txt`` and
+       was never promoted through here at all).
 
     There is deliberately no third fallback to a stock vocabulary
     (COCO or otherwise): a model's names come from the model's own
@@ -152,9 +96,9 @@ def model_classes(triton_name: str) -> list[ModelClass]:
     """
     from src.utils.class_names import get_class_names
 
-    from_promote = _classes_from_promote_json(triton_name)
-    if from_promote is not None:
-        return from_promote
+    live = await model_registry.live_model(triton_name)
+    if live is not None:
+        return [ModelClass(model_id=i, name=n) for i, n in enumerate(live.model.labels)]
     names = get_class_names(triton_name)
     return [ModelClass(model_id=i, name=names[i]) for i in sorted(names)]
 
@@ -173,7 +117,7 @@ def _match_name(model_name: str, registry_by_name: dict[str, tuple[int, str]]) -
     return MappingEntry(0, model_name, None, None, 'none')
 
 
-def model_class_mapping(
+async def model_class_mapping(
     triton_name: str,
     registry: ClassRegistryFile,
     *,
@@ -188,7 +132,7 @@ def model_class_mapping(
         c.class_name: (c.class_id, c.class_name) for c in registry.classes if not c.deprecated
     }
     entries: list[MappingEntry] = []
-    for mc in model_classes(triton_name):
+    for mc in await model_classes(triton_name):
         matched = _match_name(mc.name, registry_by_name)
         entries.append(
             MappingEntry(mc.model_id, mc.name, matched.class_id, matched.class_name, matched.match)
@@ -204,7 +148,7 @@ def model_class_mapping(
         model=triton_name,
         model_project=model_project
         if model_project is not None
-        else model_owner_project(triton_name),
+        else await model_owner_project(triton_name),
         project=project,
         entries=tuple(entries),
         unmapped=unmapped,

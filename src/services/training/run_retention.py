@@ -7,9 +7,8 @@ This module plans (and, best-effort, applies) a keep-last prune that never
 touches:
 
 * a **non-terminal** run (``queued``/``starting``/``running``/``exporting``);
-* a run promoted to Triton (``job_id`` appears in any
-  ``<model_repo>/*/promote.json`` -- written by
-  ``src.services.training.triton_promote``);
+* a run promoted to Triton (the caller passes the ``run_job_id`` of the project's live
+  promotions, read from the registry in PostgreSQL);
 * a run referenced by a queued/running bake-off job (``job_id`` appears as
   a ``models[].run_id`` in any ``<bakeoff_jobs_dir>/*.job.json``).
 
@@ -83,18 +82,6 @@ def list_runs(jobs_dir: Path) -> dict[str, dict[str, Any]]:
     return runs
 
 
-def collect_promoted_job_ids(model_repo: Path) -> set[str]:
-    """Every ``job_id`` recorded in a served model's ``promote.json``."""
-    if not model_repo.is_dir():
-        return set()
-    ids: set[str] = set()
-    for promote_file in model_repo.glob('*/promote.json'):
-        job_id = _read_json(promote_file).get('job_id')
-        if job_id:
-            ids.add(str(job_id))
-    return ids
-
-
 def collect_active_bakeoff_run_ids(bakeoff_jobs_dir: Path) -> set[str]:
     """Every training ``run_id`` a queued/running bake-off job still scores."""
     if not bakeoff_jobs_dir.is_dir():
@@ -111,7 +98,7 @@ def collect_active_bakeoff_run_ids(bakeoff_jobs_dir: Path) -> set[str]:
 def plan_run_prune(
     *,
     jobs_dir: Path,
-    model_repo: Path,
+    promoted_job_ids: set[str],
     bakeoff_jobs_dir: Path,
     keep_last: int,
 ) -> list[str]:
@@ -130,7 +117,7 @@ def plan_run_prune(
     ordered = sorted(runs, reverse=True)  # newest job_id first
     beyond_keep_last = ordered[keep_last:]
 
-    promoted = collect_promoted_job_ids(model_repo)
+    promoted = promoted_job_ids
     bakeoff_active = collect_active_bakeoff_run_ids(bakeoff_jobs_dir)
 
     plan: list[str] = []
@@ -202,7 +189,6 @@ __all__ = [
     'apply_bakeoff_out_prune',
     'apply_run_prune',
     'collect_active_bakeoff_run_ids',
-    'collect_promoted_job_ids',
     'list_runs',
     'plan_bakeoff_out_prune',
     'plan_run_prune',

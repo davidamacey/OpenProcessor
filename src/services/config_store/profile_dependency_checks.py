@@ -54,10 +54,10 @@ async def _check_detector(
     )
     from src.services.training.promoted_models import is_promoted, project_owns_model
 
-    if project_slug is not None and not project_owns_model(name):
-        owner = model_owner_project(name)
+    if project_slug is not None and not await project_owns_model(name):
+        owner = await model_owner_project(name)
         if owner is not None:
-            if not is_model_shared(name):
+            if not await is_model_shared(name, project_slug):
                 issues.append(
                     _issue(
                         'detector_model_not_shared',
@@ -80,7 +80,7 @@ async def _check_detector(
                 try:
                     from src.services.curation.registry_access import current_registry
 
-                    mapping = model_class_mapping(
+                    mapping = await model_class_mapping(
                         name, await current_registry(), project=project_slug
                     )
                     if mapping.unmapped:
@@ -100,7 +100,7 @@ async def _check_detector(
                         'profile_validation_class_mapping_failed', model=name, error=str(exc)
                     )
 
-    promoted = is_promoted(name)
+    promoted = await is_promoted(name)
     if not triton_reachable:
         code = 'triton_unreachable'
         severity = 'error' if for_activation else 'warning'

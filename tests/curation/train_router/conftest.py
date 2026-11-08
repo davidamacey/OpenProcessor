@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -44,6 +45,15 @@ def app_client(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """Build a minimal FastAPI app with just the train router."""
+    from curation._promote_start_fake import no_database
+
+    no_database(monkeypatch)
+
+    async def _no_promote(*_a: Any, **_k: Any) -> None:
+        return None
+
+    monkeypatch.setattr('src.routers.curation.train.runs.promote_job.latest_for_run', _no_promote)
+    monkeypatch.setattr('src.routers.curation.train.runs.current_project_id', uuid.uuid4)
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     # P1R §6.1/D-A: project_jobs_dir() always nests /projects/<slug>,
     # `default` (the project every unit test binds) included.

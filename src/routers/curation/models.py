@@ -245,8 +245,8 @@ async def models_status(
         # need one: always say whether it is configured and reachable.
         models.append(await build_standalone_segmenter_entry())
 
-    # Surface any additional model promoted through this pipeline (carries
-    # promote.json) that isn't one of the fixed core models above, so a
+    # Surface any additional model promoted through this pipeline (has a
+    # live promotion) that isn't one of the fixed core models above, so a
     # throwaway/experimental promote is visible (and unloadable) from
     # /models without a shell into the host.
     models.extend(
@@ -259,7 +259,7 @@ async def models_status(
             job_id=promoted.get('job_id'),
             promoted_at=promoted.get('promoted_at'),
         )
-        for promoted in discover_promoted_models()
+        for promoted in await discover_promoted_models()
     )
     if include_other_projects:
         models.extend(
@@ -271,7 +271,7 @@ async def models_status(
                 job_id=shared.get('job_id'),
                 promoted_at=shared.get('promoted_at'),
             )
-            for shared in discover_foreign_shared_models()
+            for shared in await discover_foreign_shared_models()
         )
 
     models = dedupe_triton_rows(models)
@@ -282,7 +282,7 @@ async def models_status(
     registry = await bound_registry()
     for entry in models:
         if entry['kind'] == 'triton':
-            entry.update(listing_fields(entry['name'], registry))
+            entry.update(await listing_fields(entry['name'], registry))
         else:
             entry.update(
                 {
@@ -349,7 +349,7 @@ async def unload_model(
       409 ``detector_in_use`` without ``force=true``: deleting it makes every
       later ingest fail until another detector is set.
     """
-    if not project_owns_model(model_name):
+    if not await project_owns_model(model_name):
         raise HTTPException(
             status_code=404,
             detail=f'{model_name!r} is not a model owned by this project',

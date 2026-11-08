@@ -143,6 +143,17 @@ def _in_memory_class_registries(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def model_registry_fake(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """The model registry (promotions, shares) is PostgreSQL; offline tests seed an in-memory
+    one with ``model_registry_fake.promote(...)``. A ``db`` test runs the real module."""
+    if request.node.get_closest_marker('db') is not None:
+        return None
+    import _fake_model_registry
+
+    return _fake_model_registry.install(monkeypatch)
+
+
+@pytest.fixture(autouse=True)
 def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
     """Bind the ``default`` project for every test (projects_plan.md §3.3).
 

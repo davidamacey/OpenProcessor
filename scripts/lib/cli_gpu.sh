@@ -8,6 +8,26 @@
 [[ -n "${_CLI_GPU_SH_LOADED:-}" ]] && return 0
 _CLI_GPU_SH_LOADED=1
 
+GPU_IMAGE_PREP_FALLBACK_MIB=8704
+
+# MiB one instance of MODEL takes on its card: the registry's measured value when the database
+# is up (model_engines.device_mib_measured), else the GPU_MIB_PER_INSTANCE the model ships in
+# its config.pbtxt. Prints nothing when neither is known.
+_gpu_model_mib() {
+    local model="$1" mib=""
+    if command -v docker &> /dev/null && [[ -n "$(dc ps -q postgres 2>/dev/null)" ]]; then
+        mib="$(dc exec -T postgres psql -U op_owner -d openprocessor -Atc \
+            "SELECT device_mib_measured FROM model_engines WHERE triton_model_name = '${model}' AND status = 'ready' AND device_mib_measured IS NOT NULL ORDER BY built_at DESC NULLS LAST LIMIT 1" \
+            2>/dev/null | head -1 | tr -d '[:space:]')" || mib=""
+    fi
+    if [[ ! "$mib" =~ ^[0-9]+$ ]]; then
+        mib="$(sed -n -E '/GPU_MIB_PER_INSTANCE/{s/.*string_value: *"([0-9]+)".*/\1/p;n;s/.*string_value: *"([0-9]+)".*/\1/p}' \
+            "${PROJECT_DIR}/models/${model}/config.pbtxt" 2>/dev/null | head -1)" || mib=""
+    fi
+    [[ "$mib" =~ ^[0-9]+$ ]] && echo "$mib"
+    return 0
+}
+
 # Explain where the PE image encoder runs and refuse a TRITON_GPU_ID that this
 # host cannot honour (missing card, mixed architectures, no room).
 _gpu_plan_placement() {
@@ -18,8 +38,7 @@ _gpu_plan_placement() {
         log_warn "nvidia-smi not found: the placement of TRITON_GPU_ID=${ids} is not verified"
         return 0
     fi
-    pe_mib="$(sed -n -E '/GPU_MIB_PER_INSTANCE/{n;s/.*string_value: *"([0-9]+)".*/\1/p}' \
-        "${PROJECT_DIR}/models/pe_image_encoder/config.pbtxt" 2>/dev/null | head -1)" || true
+    pe_mib="$(_gpu_model_mib pe_image_encoder)"
     pe_mib="${pe_mib:-1536}"
     project="$(_env_value COMPOSE_PROJECT_NAME)"
     if command -v docker &> /dev/null \
@@ -52,10 +71,14 @@ _gpu_plan_placement() {
 # use and falls back to the CPU path per image, so a forced-on card without room only warns.
 _gpu_plan_decode() {
     local ids="$1" table="$2" running="$3" primary_mib="$4" setting profile source primary
-    local decode_mib per_instance=8704 instances
+    local decode_mib per_instance instances
     setting="$(_env_value OP_INGEST_GPU_DECODE)"
     profile="$(_env_value GPU_PROFILE)"
     profile="${profile:-standard}"
+    # Last resort only: an installed directory with the database down has neither the registry
+    # value nor the model's config.pbtxt, and the plan still has to size the decode.
+    per_instance="$(_gpu_model_mib gpu_image_prep)"
+    per_instance="${per_instance:-$GPU_IMAGE_PREP_FALLBACK_MIB}"
     # One copy of the model per instance; the installed config holds the profile's count (#268).
     instances="$(sed -n -E 's/^[[:space:]]*count:[[:space:]]*([0-9]+).*/\1/p' \
         "${PROJECT_DIR}/models/gpu_image_prep/config.pbtxt" 2>/dev/null | head -1)" || true

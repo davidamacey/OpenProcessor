@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import onnx
 import pytest
 
-from curation.triton_promote._helpers import CLASS_MAP, _promoter
+from curation.triton_promote._helpers import CLASS_MAP, FakeRecorder, _promoter
 from src.services.training.promote_errors import ModelNameConflictError
 from src.services.training.triton_promote import TritonPromoter
 
@@ -58,7 +58,7 @@ async def test_promote_does_not_rmtree_before_copy(
     result = await promoter.promote(
         status=fake_status,
         triton_name=triton_name,
-        class_id_to_name=CLASS_MAP,
+        recorder=FakeRecorder(CLASS_MAP),
         overwrite=True,
     )
 
@@ -88,7 +88,7 @@ async def test_promote_fresh_model_uses_version_1(
     result = await promoter.promote(
         status=fake_status,
         triton_name='op_smoke_v1',
-        class_id_to_name=CLASS_MAP,
+        recorder=FakeRecorder(CLASS_MAP),
     )
     assert result.version == '1'
     assert (scratch_models_dir / 'op_smoke_v1' / '1' / 'model.onnx').is_file()
@@ -110,7 +110,7 @@ async def test_promote_result_flags_cold_start(
     result = await promoter.promote(
         status=fake_status,
         triton_name='op_smoke_cold_start',
-        class_id_to_name=CLASS_MAP,
+        recorder=FakeRecorder(CLASS_MAP),
     )
     assert result.cold_start_expected_on_first_inference is True
 
@@ -147,7 +147,7 @@ async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_cle
     )
     promoter = _promoter(scratch_models_dir)
     result = await promoter.promote(
-        status=fake_status, triton_name='op_warm_up_ok', class_id_to_name=CLASS_MAP
+        status=fake_status, triton_name='op_warm_up_ok', recorder=FakeRecorder(CLASS_MAP)
     )
     assert calls == [
         '/v2/repository/models/op_warm_up_ok/load',
@@ -180,7 +180,7 @@ async def test_promote_warm_up_failure_keeps_the_cold_flag_and_does_not_fail_the
     )
     promoter = _promoter(scratch_models_dir)
     result = await promoter.promote(
-        status=fake_status, triton_name='op_warm_up_bad', class_id_to_name=CLASS_MAP
+        status=fake_status, triton_name='op_warm_up_bad', recorder=FakeRecorder(CLASS_MAP)
     )
     assert result.triton_loaded is True
     assert result.cold_start_expected_on_first_inference is True
@@ -202,7 +202,7 @@ async def test_promote_without_overwrite_still_conflicts(
         await promoter.promote(
             status=fake_status,
             triton_name='op_smoke_v1',
-            class_id_to_name=CLASS_MAP,
+            recorder=FakeRecorder(CLASS_MAP),
             overwrite=False,
         )
 
@@ -227,7 +227,7 @@ async def test_promote_refuses_a_raw_one_to_many_head(
 
     with pytest.raises(PromoteError, match=r'\[84, -1\]') as err:
         await _promoter(scratch_models_dir).promote(
-            status=fake_status, triton_name='raw_head_v1', class_id_to_name=CLASS_MAP
+            status=fake_status, triton_name='raw_head_v1', recorder=FakeRecorder(CLASS_MAP)
         )
 
     assert err.value.status_code == 422

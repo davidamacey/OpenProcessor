@@ -217,7 +217,7 @@ async def delete_model(
     deleted_files, unloaded = [], False
     model_dirs = resolve_model_dirs(TRITON_MODELS_DIR, model_name)
     for model_dir in model_dirs:
-        owner = promoted_owner(model_dir)
+        owner = await promoted_owner(model_dir.name)
         if owner is not None:
             raise api_error(
                 409,

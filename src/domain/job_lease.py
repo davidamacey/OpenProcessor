@@ -36,8 +36,6 @@ class LeaseKind(enum.StrEnum):
     DATASET_IMPORT = 'dataset_import'
     ITEM_SCORES = 'item_scores'
     PROBE = 'probe'
-    PROMOTE = 'promote'
-    PROMOTE_JSON = 'promote_json'
     COMBINE = 'combine'
     BULK_INGEST = 'bulk_ingest'
     SOURCE_SCAN = 'source_scan'

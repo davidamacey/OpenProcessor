@@ -9,12 +9,11 @@ project's registry, never the model's raw output ids.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
 from curation.cross_project_leak import _env as _sweep
-from curation.cross_project_leak._seeders import _promoted_model
+from curation.cross_project_leak._seeders import _promoted_model, set_promoted_classes
 from fastapi.testclient import TestClient
 
 
@@ -35,10 +34,7 @@ def _client(env: LeakEnv) -> TestClient:
 
 
 def _set_classes(env: LeakEnv, slug: str, names: list[str]) -> None:
-    path = env.root / 'models' / f'{slug}__model' / 'promote.json'
-    raw = json.loads(path.read_text(encoding='utf-8'))
-    raw['classes'] = [{'model_id': i, 'name': n} for i, n in enumerate(names)]
-    path.write_text(json.dumps(raw), encoding='utf-8')
+    set_promoted_classes(env, slug, names)
 
 
 def _share(client: TestClient, slug: str) -> None:

@@ -38,7 +38,6 @@ class TestPlanRunPrune:
     def test_keeps_last_n_and_never_prunes_non_terminal(self, tmp_path: Path) -> None:
         jobs_dir = tmp_path / 'jobs'
         jobs_dir.mkdir()
-        model_repo = tmp_path / 'models'
         bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
 
         ids = _job_ids(10)
@@ -49,7 +48,10 @@ class TestPlanRunPrune:
         _write_status(jobs_dir, ids[9], 'queued')
 
         plan = plan_run_prune(
-            jobs_dir=jobs_dir, model_repo=model_repo, bakeoff_jobs_dir=bakeoff_jobs_dir, keep_last=3
+            jobs_dir=jobs_dir,
+            promoted_job_ids=set(),
+            bakeoff_jobs_dir=bakeoff_jobs_dir,
+            keep_last=3,
         )
         for job_id in (ids[8], ids[9]):
             assert job_id not in plan
@@ -57,18 +59,18 @@ class TestPlanRunPrune:
     def test_promoted_run_survives(self, tmp_path: Path) -> None:
         jobs_dir = tmp_path / 'jobs'
         jobs_dir.mkdir()
-        model_repo = tmp_path / 'models'
-        (model_repo / 'my_model').mkdir(parents=True)
         bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
 
         ids = _job_ids(6)
         for job_id in ids:
             _write_status(jobs_dir, job_id, 'finished')
         promoted_id = ids[0]  # the OLDEST -- would otherwise be pruned first
-        (model_repo / 'my_model' / 'promote.json').write_text(json.dumps({'job_id': promoted_id}))
 
         plan = plan_run_prune(
-            jobs_dir=jobs_dir, model_repo=model_repo, bakeoff_jobs_dir=bakeoff_jobs_dir, keep_last=2
+            jobs_dir=jobs_dir,
+            promoted_job_ids={promoted_id},
+            bakeoff_jobs_dir=bakeoff_jobs_dir,
+            keep_last=2,
         )
         assert promoted_id not in plan
         assert ids[1] in plan  # the next-oldest, unprotected, IS planned
@@ -76,7 +78,6 @@ class TestPlanRunPrune:
     def test_bakeoff_active_run_survives(self, tmp_path: Path) -> None:
         jobs_dir = tmp_path / 'jobs'
         jobs_dir.mkdir()
-        model_repo = tmp_path / 'models'
         bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
         bakeoff_jobs_dir.mkdir()
 
@@ -89,7 +90,10 @@ class TestPlanRunPrune:
         )
 
         plan = plan_run_prune(
-            jobs_dir=jobs_dir, model_repo=model_repo, bakeoff_jobs_dir=bakeoff_jobs_dir, keep_last=2
+            jobs_dir=jobs_dir,
+            promoted_job_ids=set(),
+            bakeoff_jobs_dir=bakeoff_jobs_dir,
+            keep_last=2,
         )
         assert active_id not in plan
         assert ids[1] in plan
@@ -97,7 +101,6 @@ class TestPlanRunPrune:
     def test_oldest_terminal_run_beyond_keep_last_is_planned(self, tmp_path: Path) -> None:
         jobs_dir = tmp_path / 'jobs'
         jobs_dir.mkdir()
-        model_repo = tmp_path / 'models'
         bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
 
         ids = _job_ids(5)
@@ -105,7 +108,10 @@ class TestPlanRunPrune:
             _write_status(jobs_dir, job_id, 'finished')
 
         plan = plan_run_prune(
-            jobs_dir=jobs_dir, model_repo=model_repo, bakeoff_jobs_dir=bakeoff_jobs_dir, keep_last=3
+            jobs_dir=jobs_dir,
+            promoted_job_ids=set(),
+            bakeoff_jobs_dir=bakeoff_jobs_dir,
+            keep_last=3,
         )
         assert set(plan) == {ids[0], ids[1]}
 
@@ -116,7 +122,7 @@ class TestPlanRunPrune:
             _write_status(jobs_dir, job_id, 'finished')
         plan = plan_run_prune(
             jobs_dir=jobs_dir,
-            model_repo=tmp_path / 'models',
+            promoted_job_ids=set(),
             bakeoff_jobs_dir=tmp_path / 'bakeoff_jobs',
             keep_last=0,
         )

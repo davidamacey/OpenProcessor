@@ -54,7 +54,11 @@ def test_prune_plans_the_bound_projects_own_out_dir(
 
     monkeypatch.setattr(prune_training_runs, 'plan_bakeoff_out_prune', _plan_out)
     monkeypatch.setattr(prune_training_runs, 'plan_run_prune', lambda **_kw: [])
-    monkeypatch.setattr(prune_training_runs, 'resolve_triton_models_dir', lambda: tmp_path)
+
+    async def _no_promotions(_slug: str) -> list[Any]:
+        return []
+
+    monkeypatch.setattr(prune_training_runs.model_registry, 'owned_live', _no_promotions)
     record = _record(slug, tmp_path)
     args = argparse.Namespace(keep_last=3, bakeoff_out_keep_last=3, apply=False)
     with bind_project(record):
