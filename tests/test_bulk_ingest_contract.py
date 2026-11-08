@@ -13,32 +13,40 @@ from src.routers.curation._ingest_bulk_models import (
     BulkIngestRun,
     BulkIngestStatus,
 )
+from src.schemas.jobs import JobView
 from src.services.curation.bulk_ingest import limits
 from src.services.curation.bulk_ingest.runner import BulkIngestRun as Runner, BulkOptions
-from src.services.curation.bulk_ingest.source import BulkSource
-from src.services.curation.bulk_ingest.store import ACTIVE_STATUSES, RESUMABLE_STATUSES, BulkStore
+from src.services.curation.bulk_ingest.source_runs import (
+    ACTIVE_RUN_STATUSES,
+    RESUMABLE_RUN_STATUSES,
+)
 
 
 CONTRACT = Path(__file__).resolve().parents[1] / 'contracts' / 'openapi' / 'curation.json'
 PREFIX = '/curation/projects/{project}/ingest/bulk'
 
 
-def test_every_status_the_runner_can_write_is_on_the_wire_and_nothing_else() -> None:
-    assert set(get_args(BulkIngestStatus)) == ACTIVE_STATUSES | RESUMABLE_STATUSES | {'completed'}
+def test_every_status_a_run_job_can_reach_is_on_the_wire() -> None:
+    # A job a run is paused cannot be: bulk_ingest_run is not pausable.
+    reachable = set(get_args(JobView.model_fields['status'].annotation)) - {'paused'}
+    assert set(get_args(BulkIngestStatus)) == reachable
+    assert (ACTIVE_RUN_STATUSES | RESUMABLE_RUN_STATUSES | {'completed'}) - {'paused'} <= reachable
 
 
-def test_the_runner_snapshot_fills_the_progress_model_exactly(tmp_path: Path) -> None:
+def test_the_runner_counters_fill_the_progress_model_exactly() -> None:
     run = Runner(
         sender=None,  # type: ignore[arg-type]
-        store=BulkStore(tmp_path),
-        source=BulkSource('folder', '/x'),
+        ledger=None,  # type: ignore[arg-type]
+        reporter=None,  # type: ignore[arg-type]
         options=BulkOptions(),
+        run_id='r',
     )
-    snapshot = run._snapshot(0.0)
+    counters = run.counters(0.0)
     served = set(BulkIngestProgress.model_fields)
-    written = set(snapshot) - {'stage_s', 'updated_at'}
+    written = set(counters) - {'stage_s'}
     # elapsed_s, eta_s, images_per_s(_recent) are written; everything served is written.
-    assert served == written
+    # run_wire fills ``processed`` from the job's own counter and ``skipped`` is fixed at 0.
+    assert served - {'processed', 'skipped'} == written
 
 
 def test_committed_openapi_serves_the_bulk_routes() -> None:

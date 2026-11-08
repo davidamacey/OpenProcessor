@@ -1,20 +1,22 @@
-"""The dispatcher: turns due triggers of registered sources into scans and bulk runs.
+"""The dispatcher: turns due triggers of registered sources into poll and bulk-run jobs.
 
-One periodic task per API worker process. Each tick, per active project and under a
-non-blocking file lock (so one worker acts per project per tick), it looks at every
-source and :func:`decide` s, from the source's state and queue counts only, what is due:
+:func:`dispatch_once` looks at every source of a project and :func:`decide` s, from the source's
+state and queue counts only, what is due:
 
-- ``run_scan``: the cron schedule fired. A run (scan, then drain) is started; fires
-  missed while the process was down collapse into one.
-- ``poll``: the watch interval elapsed. A scan pass runs on its own, without a run, and
-  a run is started only if rows are pending afterwards (a quiet bucket makes no runs).
+- ``run_scan``: the cron schedule fired. A run (scan, then drain) is started; fires missed
+  while the process was down collapse into one.
+- ``poll``: the watch interval elapsed. A ``source_poll`` job scans on its own, without a run,
+  and starts a run only if rows are pending afterwards (a quiet bucket makes no runs).
 - ``drain``: rows are pending (a webhook, or a run that was interrupted) and a trigger
   is enabled. Held after a cancel, and for five minutes after a failed run.
 
 A scan that fails (the store is unreachable, credentials missing, a prefix removed from
 the allow-list) records its error and backs off, doubling to ten minutes. Everything the
-dispatcher needs is on disk, so a worker that dies loses nothing: a stale run becomes
-``interrupted`` and is resumed by the next ``drain``; a scan resumes from its checkpoint.
+dispatcher needs is in the database, so a process that dies loses nothing, and a start that
+meets a live job of the same group is skipped: one run per project, one poll per source.
+
+Until the scheduler lane turns the loop into a beat task, :func:`run_tick` calls
+:func:`dispatch_once` for every active project on an asyncio interval.
 """
 
 from __future__ import annotations
@@ -22,47 +24,44 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.config import get_curation_config
-from src.config.env import env_float, env_str
+from sqlalchemy.exc import SQLAlchemyError
+
+from src.config.env import env_float
+from src.config.project_context import current_project_id
+from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
-from src.services.curation.bulk_ingest import runner
+from src.db.repos import ingest_sources as repo
+from src.db.session import async_session_factory, project_tx
 from src.services.curation.bulk_ingest.schedule import (
     Cron,
     InvalidCronError,
     interval_due,
     schedule_due,
 )
-from src.services.curation.bulk_ingest.source_runs import last_run_summary, start_source_run
-from src.services.curation.bulk_ingest.source_scan import scan_source
-from src.services.curation.bulk_ingest.sources import (
-    IngestSource,
-    list_sources,
-    load_source,
-    source_queue,
-    source_state,
-    sources_root,
+from src.services.curation.bulk_ingest.source_runs import (
+    BulkBusyError,
+    last_run,
+    run_summary,
+    start_poll,
+    start_source_run,
 )
-from src.services.curation.bulk_ingest.store import active_run
-from src.services.curation.job_lock import exclusive_start_lock
+from src.services.curation.bulk_ingest.sources import IngestSource, from_row
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 
 DEFAULT_TICK_S = 5
-DEFAULT_BASE_URL = 'http://127.0.0.1:8000'
 MAX_BACKOFF_S = 600.0
 FAILED_RUN_HOLD_S = 300.0
 ActionKind = Literal['run_scan', 'poll', 'drain']
-_scans: dict[tuple[str, str], asyncio.Task[None]] = {}
-# 'tasks': the loop run and poll tasks belong to (the tick itself runs in a thread).
-_loops: dict[str, asyncio.AbstractEventLoop] = {}
 
 
 @dataclass(frozen=True)
@@ -73,10 +72,6 @@ class Action:
 
 def tick_interval_s() -> float:
     return env_float('OP_INGEST_DISPATCH_S', float(DEFAULT_TICK_S), minimum=0.0)
-
-
-def loopback_url() -> str:
-    return env_str('OP_API_LOOPBACK_URL') or DEFAULT_BASE_URL
 
 
 def _held(last_run: dict[str, Any] | None, now: float) -> bool:
@@ -111,7 +106,11 @@ def decide(
                     datetime.fromisoformat(last),
                     datetime.fromtimestamp(now, UTC),
                 )
-            except (InvalidCronError, ValueError):
+            except (InvalidCronError, ValueError) as exc:
+                # validated when saved, so a stored one that no longer parses is worth a line
+                logger.warning(
+                    'ingest_source_schedule_unreadable', source=source.source_id, error=str(exc)
+                )
                 due = False
             if due:
                 return Action('run_scan', source.source_id)
@@ -125,126 +124,82 @@ def decide(
     return None
 
 
-def _backoff(failures: int) -> float:
+def backoff_s(failures: int) -> float:
+    """Seconds a failing source waits before its next poll: 10, 20, 40... up to ten minutes."""
     typed: float = min(MAX_BACKOFF_S, 10.0 * 2 ** max(0, failures - 1))
     return typed
 
 
-async def _poll(source: IngestSource, *, start_run: Callable[[IngestSource, bool], object]) -> None:
-    """One watcher pass: scan into the queue, then start a drain if rows are pending."""
-    state = source_state(source.source_id)
-
-    def stop() -> bool:
-        return load_source(source.source_id) is None
-
-    try:
-        await asyncio.to_thread(scan_source, source, should_stop=stop)
-    except Exception as exc:
-        failures = int(state.read().get('failures') or 0) + 1
-        state.update(
-            failures=failures,
-            last_poll_error=f'{type(exc).__name__}: {exc}'[:300],
-            backoff_until=time.time() + _backoff(failures),
-        )
-        logger.warning('ingest_source_poll_failed', source=source.source_id, error=str(exc))
-        return
-    state.update(failures=0, last_poll_error=None, backoff_until=None)
-    if source_queue(source.source_id).counts()['pending'] > 0:
-        start_run(source, False)
-
-
-def _start(source: IngestSource, scan: bool) -> None:
-    try:
-        start_source_run(
-            source,
-            base_url=loopback_url(),
-            api_prefix=get_curation_config().api_prefix,
-            project=get_curation_config().project_slug,
-            scan=scan,
-            loop=_loops.get('tasks'),
-        )
-    except runner.BulkBusyError:
-        return  # another run holds the project; the next tick tries again
-    if scan:
-        source_state(source.source_id).update(last_fire_at=datetime.now(UTC).isoformat())
-
-
-def _on_task_loop() -> bool:
-    try:
-        return asyncio.get_running_loop() is _loops.get('tasks')
-    except RuntimeError:
-        return False
-
-
-def _execute(action: Action, source: IngestSource) -> None:
-    key = (get_curation_config().project_slug, source.source_id)
+async def _start(
+    session: AsyncSession, project: uuid.UUID, source: IngestSource, action: Action, moment: float
+) -> bool:
+    """Start the job of ``action``; ``False`` when a live job of its group makes it wait."""
+    source_id = uuid.UUID(source.source_id)
     if action.kind == 'poll':
-        running = _scans.get(key)
-        if running is not None and not running.done():
-            return
-        # Stamped here, under the tick's lock, so a second worker's tick sees it at once.
-        source_state(source.source_id).update(last_poll_started_at=time.time())
-
-        def begin() -> None:
-            task = asyncio.create_task(_poll(source, start_run=_start))
-            _scans[key] = task
-            task.add_done_callback(lambda _t: _scans.pop(key, None))
-
-        task_loop = _loops.get('tasks')
-        if task_loop is not None and task_loop.is_running() and not _on_task_loop():
-            task_loop.call_soon_threadsafe(begin)
-        else:
-            begin()
-    elif action.kind == 'run_scan':
-        _start(source, True)
+        if not await start_poll(session, project, source):
+            return False
+        stamp: dict[str, Any] = {'last_poll_started_at': moment}
     else:
-        _start(source, False)
+        try:
+            await start_source_run(session, project, source, scan=action.kind == 'run_scan')
+        except BulkBusyError:
+            return False  # another run holds the project; the next tick tries again
+        stamp = (
+            {'last_fire_at': datetime.fromtimestamp(moment, UTC).isoformat()}
+            if action.kind == 'run_scan'
+            else {}
+        )
+    if stamp:
+        async with project_tx(session, project):
+            await session.run_sync(lambda sync: repo.state_update(sync, source_id, stamp))
+    return True
 
 
-def run_project_tick(*, now: float | None = None) -> list[Action]:
-    """One tick for the bound project; returns the actions it took."""
+async def dispatch_once(
+    session: AsyncSession, project: uuid.UUID, *, now: float | None = None
+) -> list[Action]:
+    """One decision pass over the project's registered sources; returns the actions it started.
+
+    The one function the tick loop calls today and the periodic task calls later."""
     moment = now if now is not None else time.time()
+    async with project_tx(session, project):
+        rows = await session.run_sync(lambda sync: repo.list_for_project(sync, project))
     taken: list[Action] = []
-    root = sources_root()
-    if not root.is_dir():
-        return taken
-    with exclusive_start_lock(root / 'dispatch.lock') as mine:
-        if not mine:
-            return taken
-        live = active_run() is not None
-        for source in list_sources():
-            state_file = source_state(source.source_id)
-            state = state_file.read()
-            if source.schedule.enabled and not state.get('last_fire_at'):
-                # A schedule starts counting from the moment it was seen, not from the epoch.
-                state_file.update(last_fire_at=datetime.fromtimestamp(moment, UTC).isoformat())
-                state = state_file.read()
-            action = decide(
-                source,
-                state,
-                source_queue(source.source_id).counts(),
-                last_run_summary(state),
-                now=moment,
-            )
-            if action is None or (action.kind != 'poll' and live):
-                continue
-            _execute(action, source)
+    for row in rows:
+        source = from_row(row)
+        if source.one_shot or not source.triggered:
+            continue
+        state = dict(row.scan_state)
+        if source.schedule.enabled and not state.get('last_fire_at'):
+            # A schedule starts counting from the moment it was seen, not from the epoch.
+            state['last_fire_at'] = datetime.fromtimestamp(moment, UTC).isoformat()
+            async with project_tx(session, project):
+                await session.run_sync(
+                    repo.state_update, row.id, {'last_fire_at': state['last_fire_at']}
+                )
+        async with project_tx(session, project):
+            counts = await session.run_sync(repo.counts, row.id)
+        action = decide(
+            source,
+            state,
+            counts,
+            run_summary(await last_run(session, project, state)),
+            now=moment,
+        )
+        if action is not None and await _start(session, project, source, action, moment):
             taken.append(action)
-            if action.kind != 'poll':
-                live = True  # one run per project: the rest wait for the next tick
     return taken
 
 
 async def run_tick() -> None:
     from src.services.projects.bootstrap import for_each_project
 
-    _loops['tasks'] = asyncio.get_running_loop()
     for slug in for_each_project():
         try:
-            # The tick does blocking file I/O, so it runs in a thread; the run and the poll
-            # are asyncio tasks, created on `_loops['tasks']`.
-            await asyncio.to_thread(run_project_tick)
-        except Exception as exc:  # one project's failure must not stop the others' ticks
+            async with async_session_factory()() as session:
+                await dispatch_once(session, current_project_id())
+        except (SQLAlchemyError, RequestRejectedError, OSError) as exc:
+            # one project's failure must not stop the others' ticks
             logger.warning('ingest_dispatch_failed', project=slug, error=str(exc))
 
 

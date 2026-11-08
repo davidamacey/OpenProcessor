@@ -16,11 +16,13 @@ from typing import TYPE_CHECKING
 from fastapi import Request  # noqa: TC002 - FastAPI resolves route annotations at runtime
 
 from src.config import get_curation_config
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves route annotations at runtime
 from src.core.disk_space import DISK_GUARD
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._ingest_bulk_models import BulkIngestRequest, BulkIngestRun
-from src.routers.curation._ingest_bulk_wire import own_address, run_wire, slug
+from src.routers.curation._ingest_bulk_wire import run_wire, slug
 from src.routers.curation._ingest_sources_models import (
     EventsAccepted,
     IngestSourceList,
@@ -40,13 +42,13 @@ from src.routers.curation._ingest_sources_models import (
     TriggersWire,
     WatchTriggerWire,
 )
-from src.services.curation.bulk_ingest import limits, runner
-from src.services.curation.bulk_ingest.object_queue import QueueEntry
+from src.services.curation.bulk_ingest import limits
 from src.services.curation.bulk_ingest.object_store import (
     S3Config,
     S3NotAllowedError,
     S3NotConfiguredError,
 )
+from src.services.curation.bulk_ingest.runs import get_run, live_run
 from src.services.curation.bulk_ingest.s3_events import (
     EventRecord,
     InvalidS3EventError,
@@ -54,7 +56,11 @@ from src.services.curation.bulk_ingest.s3_events import (
 )
 from src.services.curation.bulk_ingest.s3_listing import wanted_extension
 from src.services.curation.bulk_ingest.source import normalise_extensions
+from src.services.curation.bulk_ingest.source_queue import QueueEntry
 from src.services.curation.bulk_ingest.source_runs import (
+    RESUMABLE_RUN_STATUSES,
+    BulkBusyError,
+    last_run,
     run_is_live,
     source_status,
     start_source_run,
@@ -65,24 +71,25 @@ from src.services.curation.bulk_ingest.sources import (
     IngestSource,
     InvalidSourceDefinitionError,
     ScheduleTrigger,
+    SourceNameTakenError,
     WatchTrigger,
     delete_source,
     list_sources,
     load_source,
-    new_source_id,
-    s3_source_id,
+    one_shot_source,
     save_source,
     source_queue,
     validate_source_definition,
 )
-from src.services.curation.bulk_ingest.store import active_run
 from src.services.curation.ingest_service_factory import get_ingest_service
 
 
 if TYPE_CHECKING:
+    import uuid
     from typing import Any
 
     from fastapi import HTTPException
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 LIVE_POLL_S = 2.0
@@ -95,9 +102,9 @@ def _not_found(source_id: str) -> HTTPException:
     )
 
 
-def _load(source_id: str) -> IngestSource:
-    source = load_source(source_id)
-    if source is None:
+async def _load(source_id: str) -> IngestSource:
+    source = await load_source(source_id)
+    if source is None or source.one_shot:
         raise _not_found(source_id)
     return source
 
@@ -122,7 +129,7 @@ _BLOCKED_MESSAGES = {
 }
 
 
-def _blocked_reason(source: IngestSource) -> str | None:
+def _blocked_reason(source: IngestSource, *, project_run_live: bool) -> str | None:
     try:
         validate_source_definition(source, S3Config.from_env())
     except S3NotConfiguredError:
@@ -131,12 +138,14 @@ def _blocked_reason(source: IngestSource) -> str | None:
         return 's3_not_allowed'
     except InvalidSourceDefinitionError:
         return 'invalid_source'
-    return 'project_run_live' if active_run() is not None else None
+    return 'project_run_live' if project_run_live else None
 
 
-def status_wire(source: IngestSource) -> IngestSourceStatus:
-    data: dict[str, Any] = source_status(source)
-    reason = _blocked_reason(source)
+async def status_wire(
+    session: AsyncSession, project: uuid.UUID, source: IngestSource, *, project_run_live: bool
+) -> IngestSourceStatus:
+    data: dict[str, Any] = await source_status(session, project, source)
+    reason = _blocked_reason(source, project_run_live=project_run_live)
     run = data['last_run']
     api = get_curation_config().api_prefix
     return IngestSourceStatus(
@@ -186,10 +195,23 @@ def _apply_triggers(source: IngestSource, triggers: TriggersWire) -> None:
     source.webhook_enabled = triggers.webhook_enabled
 
 
+async def _save(source: IngestSource) -> IngestSource:
+    try:
+        return await save_source(source)
+    except SourceNameTakenError:
+        raise api_error(
+            409, 'ingest_source_invalid', f'a source named {source.name!r} exists', project=slug()
+        ) from None
+
+
 @router.get('/ingest/sources', response_model=IngestSourceList)
-async def list_ingest_sources() -> IngestSourceList:
+async def list_ingest_sources(session: DbSessionDep) -> IngestSourceList:
     s3 = S3Config.from_env()
-    items = [status_wire(s) for s in list_sources()]
+    project = current_project_id()
+    live = await live_run(session, project) is not None
+    items = [
+        await status_wire(session, project, s, project_run_live=live) for s in await list_sources()
+    ]
     busy = any(
         i.scan.active or run_is_live(i.last_run.model_dump() if i.last_run else None) for i in items
     )
@@ -205,10 +227,17 @@ async def list_ingest_sources() -> IngestSourceList:
     )
 
 
+async def _one(session: AsyncSession, source: IngestSource) -> IngestSourceStatus:
+    project = current_project_id()
+    live = await live_run(session, project) is not None
+    return await status_wire(session, project, source, project_run_live=live)
+
+
 @router.post('/ingest/sources', response_model=IngestSourceStatus, status_code=201)
-async def create_ingest_source(body: IngestSourceRequest) -> IngestSourceStatus:
+async def create_ingest_source(
+    body: IngestSourceRequest, session: DbSessionDep
+) -> IngestSourceStatus:
     source = IngestSource(
-        source_id=new_source_id(),
         name=body.name,
         backend=body.backend,
         bucket=body.s3.bucket if body.s3 else '',
@@ -221,18 +250,19 @@ async def create_ingest_source(body: IngestSourceRequest) -> IngestSourceStatus:
     )
     _apply_triggers(source, body.triggers)
     check_definition(source)
-    save_source(source)
-    return status_wire(source)
+    return await _one(session, await _save(source))
 
 
 @router.get('/ingest/sources/{source_id}', response_model=IngestSourceStatus)
-async def get_ingest_source(source_id: str) -> IngestSourceStatus:
-    return status_wire(_load(source_id))
+async def get_ingest_source(source_id: str, session: DbSessionDep) -> IngestSourceStatus:
+    return await _one(session, await _load(source_id))
 
 
 @router.patch('/ingest/sources/{source_id}', response_model=IngestSourceStatus)
-async def update_ingest_source(source_id: str, body: IngestSourcePatch) -> IngestSourceStatus:
-    source = _load(source_id)
+async def update_ingest_source(
+    source_id: str, body: IngestSourcePatch, session: DbSessionDep
+) -> IngestSourceStatus:
+    source = await _load(source_id)
     if body.name is not None:
         source.name = body.name
     if body.extensions is not None:
@@ -246,76 +276,77 @@ async def update_ingest_source(source_id: str, body: IngestSourcePatch) -> Inges
     if body.triggers is not None:
         _apply_triggers(source, body.triggers)
     check_definition(source)
-    save_source(source)
-    return status_wire(source)
+    return await _one(session, await _save(source))
 
 
 @router.delete('/ingest/sources/{source_id}', status_code=204)
-async def delete_ingest_source(source_id: str) -> None:
+async def delete_ingest_source(source_id: str, session: DbSessionDep) -> None:
     """Remove the definition and its queue. Images already ingested stay."""
-    _load(source_id)
-    live = active_run()
-    if live is not None and live.job.read().get('source_key') == f'queue:{source_id}':
+    source = await _load(source_id)
+    live = await live_run(session, current_project_id())
+    if live is not None and (live.params or {}).get('source_id') == source.source_id:
         raise api_error(
             409,
             'bulk_ingest_busy',
             'a run of this source is live',
-            run_id=live.run_id,
+            run_id=live.id,
             project=slug(),
         )
-    delete_source(source_id)
+    await delete_source(source_id)
 
 
 async def start_run_now(
-    source: IngestSource, request: Request, opensearch: OpenSearchDep, registry: RegistryDep
+    session: AsyncSession,
+    source: IngestSource,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+    *,
+    checked: bool = False,
 ) -> BulkIngestRun:
-    """Scan the source, then drain its queue, as a run (409 while the project has one live)."""
-    check_definition(source)
+    """Scan the source, then drain its queue, as a run (409 while the project has one live).
+
+    A source that stopped with work left is continued (``resumed``); a finished one-shot source
+    starts over."""
+    if not checked:
+        check_definition(source)
     # Refuse up front (503) what the first batch would refuse: no detector, no encoder.
     await get_ingest_service(opensearch, registry)
-    host, port = own_address(request)
-    netloc = f'[{host}]' if ':' in host else host
+    project = current_project_id()
+    state = await asyncio.to_thread(source_queue(source).meta_all)
+    previous = await last_run(session, project, state)
+    resumed = previous is not None and previous.status in RESUMABLE_RUN_STATUSES
     try:
-        store, resumed = start_source_run(
-            source,
-            base_url=f'http://{netloc}:{port}',
-            api_prefix=get_curation_config().api_prefix,
-            project=slug(),
-            scan=True,
+        run_id = await start_source_run(
+            session, project, source, scan=True, fresh=source.one_shot and not resumed
         )
-    except runner.BulkBusyError as exc:
+    except BulkBusyError as exc:
         raise api_error(
             409, 'bulk_ingest_busy', str(exc), run_id=exc.run_id, project=slug()
         ) from None
-    return run_wire(store, resumed=resumed)
+    run = await get_run(session, project, str(run_id))
+    assert run is not None  # the row was committed by the start
+    return run_wire(run, resumed=resumed)
 
 
-def resolve_bulk_source(body: BulkIngestRequest) -> IngestSource:
+async def resolve_bulk_source(body: BulkIngestRequest) -> IngestSource:
     """The source a ``s3`` or ``source_id`` bulk start names: a registered one, or the
     trigger-less source of the bucket/prefix (created on first use, so a repeat start
     of the same bucket/prefix resumes its run)."""
     if body.source_id is not None:
-        return _load(body.source_id)
+        return await _load(body.source_id)
     assert body.s3 is not None
-    prefix = body.s3.prefix.lstrip('/')
-    source_id = s3_source_id(body.s3.bucket, prefix)
-    existing = load_source(source_id)
-    if existing is not None:
-        return existing
     source = IngestSource(
-        source_id=source_id,
-        name=f's3://{body.s3.bucket}/{prefix}',
+        name='',
         backend='s3',
         bucket=body.s3.bucket,
-        prefix=prefix,
+        prefix=body.s3.prefix.lstrip('/'),
         extensions=list(normalise_extensions(body.extensions)),
         source_tag=body.source,
         batch_size=body.batch_size,
         concurrency=body.concurrency,
     )
     check_definition(source)
-    save_source(source)
-    return source
+    return await one_shot_source(source)
 
 
 @router.post(
@@ -325,19 +356,19 @@ def resolve_bulk_source(body: BulkIngestRequest) -> IngestSource:
     status_code=202,
 )
 async def run_ingest_source(
-    source_id: str, request: Request, opensearch: OpenSearchDep, registry: RegistryDep
+    source_id: str, session: DbSessionDep, opensearch: OpenSearchDep, registry: RegistryDep
 ) -> BulkIngestRun:
     """Run now: scan the source and ingest what is new, or resume its interrupted run."""
-    return await start_run_now(_load(source_id), request, opensearch, registry)
+    return await start_run_now(session, await _load(source_id), opensearch, registry)
 
 
 @router.post('/ingest/sources/{source_id}/retry-dead', response_model=RetryDeadResult)
-async def retry_dead_objects(source_id: str) -> RetryDeadResult:
+async def retry_dead_objects(source_id: str, session: DbSessionDep) -> RetryDeadResult:
     """Put the objects that gave up (or can never succeed) back in the queue; the next
     run tries them again."""
-    source = _load(source_id)
-    retried = source_queue(source_id).retry_dead()
-    return RetryDeadResult(retried=retried, source=status_wire(source))
+    source = await _load(source_id)
+    retried = await asyncio.to_thread(source_queue(source).retry_dead)
+    return RetryDeadResult(retried=retried, source=await _one(session, source))
 
 
 def _record_matches(source: IngestSource, record: EventRecord, s3: S3Config) -> bool:
@@ -357,7 +388,7 @@ def _record_matches(source: IngestSource, record: EventRecord, s3: S3Config) -> 
 def _queue_events(source: IngestSource, records: list[EventRecord]) -> EventsAccepted:
     s3 = S3Config.from_env()
     wanted = [r for r in records if _record_matches(source, r, s3)]
-    queue = source_queue(source.source_id)
+    queue = source_queue(source)
     queued, duplicates = queue.enqueue(
         QueueEntry(r.key, r.etag, r.version_id, r.size) for r in wanted
     )
@@ -383,7 +414,7 @@ async def receive_s3_events(source_id: str, request: Request) -> EventsAccepted:
     prefixes or file types, and non-create events, are ignored (a bucket-wide
     notification can feed several sources). The request only writes queue rows; the
     dispatcher starts the run, so the answer is fast."""
-    source = _load(source_id)
+    source = await _load(source_id)
     if not source.webhook_enabled:
         raise api_error(
             409, 'webhook_disabled', 'this source does not accept events', project=slug()

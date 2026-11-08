@@ -17,7 +17,14 @@ from src.services.curation.bulk_ingest.limits import (
 
 
 BulkIngestStatus = Literal[
-    'queued', 'running', 'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted'
+    'queued',
+    'running',
+    'cancelling',
+    'completed',
+    'completed_with_errors',
+    'failed',
+    'cancelled',
+    'interrupted',
 ]
 BulkSourceKind = Literal['folder', 'manifest', 'queue']
 

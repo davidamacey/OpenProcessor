@@ -9,4 +9,6 @@ ROUTES: dict[str, str] = {
     'op.families_c.project_delete': TaskQueues.JOBS,
     'op.families_c.open_vocab_drain': TaskQueues.OPEN_VOCAB,
     'op.families_c.directory_ingest': TaskQueues.JOBS,
+    'op.families_c.bulk_ingest_run': TaskQueues.JOBS,
+    'op.families_c.source_poll': TaskQueues.JOBS,
 }

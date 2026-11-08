@@ -98,14 +98,14 @@ def _wire(
     )
 
 
-def _plan(
+async def _plan(
     body: BulkPreviewRequest,
 ) -> tuple[str, str, tuple[str, ...], Callable[..., PreviewResult]]:
     """``(kind, target, extensions, run)`` for the request; ``run`` takes ``should_stop``."""
     config = get_curation_config()
     gpu_decode = config.ingest_gpu_decode
     if body.source_id is not None:
-        defn = load_source(body.source_id)
+        defn = await load_source(body.source_id)
         if defn is None:
             raise api_error(
                 404,
@@ -164,7 +164,7 @@ async def preview_bulk_ingest(body: BulkPreviewRequest, request: Request) -> Bul
     duration and index footprint from measured figures (``GET /ingest/bulk/config``).
     Capped by file count and seconds (``partial: true`` then); a client disconnect stops
     the walk."""
-    kind, target, extensions, run = _plan(body)
+    kind, target, extensions, run = await _plan(body)
     cancelled = threading.Event()
 
     async def watch_disconnect() -> None:

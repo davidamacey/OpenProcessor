@@ -1,9 +1,9 @@
-"""The bulk-ingest runner against a fake ingest route: bounded concurrency, the
-ledger-driven resume, cancel, failure reporting and the stop-on-outage rule.
+"""The bulk-ingest runner against a fake ingest route and an in-memory ledger: bounded
+concurrency, resume from the ledger, cancel, failure reporting and the stop-on-outage rule.
 
-The pipeline behind ``POST /ingest/batch`` is exercised in
-``tests/integration/test_bulk_ingest_routes.py``; here the route is replaced so each
-behaviour of the runner is observable on its own.
+The queue itself (claims, retries, dead rows) is tested on PostgreSQL in
+``test_ingest_source_files_claim.py`` and the whole job in ``tests/tasks/test_families_c_ingest.py``; here the
+ledger is a list so each behaviour of the runner is observable on its own.
 """
 
 from __future__ import annotations
@@ -14,14 +14,15 @@ from typing import Any
 
 import pytest
 
+from src.domain.job_perf import JobPerfSummary
 from src.services.curation.bulk_ingest import limits, runner, sender as sender_mod
+from src.services.curation.bulk_ingest.runner import BulkRunAbortedError, ClaimedPath
 from src.services.curation.bulk_ingest.source import (
     BulkSource,
     InvalidSourceError,
-    iter_source_paths,
+    iter_manifest_paths,
     validate_source,
 )
-from src.services.curation.bulk_ingest.store import BulkStore, open_store
 
 
 @pytest.fixture(autouse=True)
@@ -30,17 +31,66 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     root = tmp_path / 'served'
     root.mkdir()
-    monkeypatch.setenv('OP_BULK_INGEST_DIR', str(tmp_path / 'bulk'))
     monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (root.resolve(),))  # noqa: ARG005
     return root
 
 
-def _images(root: Path, n: int, *, folder: str = 'imgs') -> Path:
-    directory = root / folder
-    directory.mkdir(exist_ok=True)
-    for i in range(n):
-        (directory / f'{i:03d}.jpg').write_bytes(b'img-%d' % i)
-    return directory
+class MemoryLedger:
+    """The queue of one source as a dict: ``pending`` -> ``claimed`` -> ``done``/``failed``."""
+
+    def __init__(self, paths: list[str]) -> None:
+        self.rows = dict.fromkeys(paths, 'pending')
+        self.errors: dict[str, tuple[str, str]] = {}
+        self.images: dict[str, str | None] = {}
+
+    async def remaining(self) -> int:
+        return sum(1 for s in self.rows.values() if s in {'pending', 'claimed', 'failed'})
+
+    async def claim(self, limit: int) -> list[ClaimedPath]:
+        picked = [k for k, s in self.rows.items() if s == 'pending'][:limit]
+        for key in picked:
+            self.rows[key] = 'claimed'
+        return [ClaimedPath(k, k) for k in picked]
+
+    async def settle(self, done: Any, failed: Any) -> None:
+        for key, image in done:
+            self.rows[key] = 'done'
+            self.images[key] = image
+        for key, error, kind in failed:
+            self.rows[key] = 'failed'
+            self.errors[key] = (error, kind)
+
+    async def release(self) -> None:
+        for key, state in self.rows.items():
+            if state == 'claimed':
+                self.rows[key] = 'pending'
+
+    def count(self, state: str) -> int:
+        return sum(1 for s in self.rows.values() if s == state)
+
+
+class MemoryReporter:
+    def __init__(self) -> None:
+        self.stop = False
+        self.snapshots: list[dict[str, Any]] = []
+        self.checkpoints: list[dict[str, Any]] = []
+
+    def cancelled(self) -> bool:
+        return self.stop
+
+    async def progress(
+        self,
+        done: int,
+        total: int | None = None,
+        stage: str | None = None,
+        counters: Any = None,
+        *,
+        force: bool = False,  # noqa: ARG002
+    ) -> None:
+        self.snapshots.append({'done': done, 'total': total, 'stage': stage, **(counters or {})})
+
+    async def checkpoint(self, cursor: Any) -> None:
+        self.checkpoints.append(dict(cursor or {}))
 
 
 class FakeSender:
@@ -110,221 +160,179 @@ class FakeSender:
         return {'embed': 10.0 * self.stage_calls, 'decode': 1.0 * self.stage_calls}
 
 
-def _start(
-    sender: FakeSender, source: BulkSource, *, batch_size: int = 4, concurrency: int = 2
-) -> tuple[BulkStore, bool, runner.BulkIngestRun]:
-    options = runner.BulkOptions('tag', batch_size, concurrency)
-    store, resumed = runner.claim_run(source, options)
-    run = runner.BulkIngestRun(sender=sender, store=store, source=source, options=options)
-    return store, resumed, run
+def _paths(n: int) -> list[str]:
+    return [f'/served/imgs/{i:03d}.jpg' for i in range(n)]
 
 
-def test_runs_a_folder_with_bounded_concurrency_and_reports_progress(served: Path) -> None:
-    folder = _images(served, 23)
-    sender = FakeSender()
-    store, resumed, run = _start(sender, BulkSource('folder', str(folder)), concurrency=3)
-    asyncio.run(run.run())
+def _run(
+    ledger: MemoryLedger,
+    sender: FakeSender,
+    *,
+    batch_size: int = 4,
+    concurrency: int = 2,
+    reporter: MemoryReporter | None = None,
+    prior: dict[str, Any] | None = None,
+) -> tuple[runner.BulkIngestRun, MemoryReporter]:
+    reporter = reporter or MemoryReporter()
+    return (
+        runner.BulkIngestRun(
+            sender=sender,
+            ledger=ledger,
+            reporter=reporter,
+            options=runner.BulkOptions('tag', batch_size, concurrency),
+            run_id='run-1',
+            prior=prior,
+            servers=['triton-a'],
+        ),
+        reporter,
+    )
 
-    state = store.job.read()
-    assert not resumed
-    assert state['status'] == 'completed'
-    assert (state['discovered'], state['ingested'], state['failed']) == (23, 23, 0)
-    assert state['discovery_complete'] is True
-    assert state['processed'] == 23
-    assert state['crops_indexed'] == 46
-    assert state['images_per_s'] > 0
-    assert state['stage_s']['batch_requests'] > 0
-    assert state['stage_s']['embed'] > 0  # the pipeline's own timers, as the API serves them
+
+def test_drains_the_queue_with_bounded_concurrency_and_reports_progress() -> None:
+    ledger, sender = MemoryLedger(_paths(23)), FakeSender()
+    run, reporter = _run(ledger, sender, concurrency=3)
+    result = asyncio.run(run.run())
+
+    assert (result['discovered'], result['ingested'], result['failed']) == (23, 23, 0)
+    assert result['discovery_complete'] is True
+    assert result['processed'] == 23
+    assert result['crops_indexed'] == 46
+    assert result['images_per_s'] > 0
+    assert result['stage_s']['batch_requests'] > 0
+    assert result['stage_s']['embed'] > 0  # the pipeline's own timers, as the API serves them
     assert 2 <= sender.max_in_flight <= 3
-    assert sorted(p for call in sender.calls for p in call) == sorted(
-        str(p) for p in folder.iterdir()
-    )
+    assert sorted(p for call in sender.calls for p in call) == sorted(_paths(23))
     assert all(len(call) <= 4 for call in sender.calls)
-    assert sender.run_ids == {store.run_id}
+    assert sender.run_ids == {'run-1'}
+    assert ledger.count('done') == 23
+    assert reporter.snapshots[-1]['done'] == 23
+    assert reporter.checkpoints[-1]['ingested'] == 23
+    JobPerfSummary.model_validate(result['perf_summary'])
+    assert result['perf_summary']['servers'] == ['triton-a']
 
 
-def test_counts_duplicates_apart_from_ingested_images(served: Path) -> None:
-    folder = _images(served, 6)
-    sender = FakeSender(duplicates={'000.jpg', '001.jpg'})
-    store, _, run = _start(sender, BulkSource('folder', str(folder)))
-    asyncio.run(run.run())
-    state = store.job.read()
-    assert (state['ingested'], state['duplicates'], state['status']) == (4, 2, 'completed')
+def test_counts_duplicates_apart_from_ingested_images() -> None:
+    ledger = MemoryLedger(_paths(6))
+    run, _ = _run(ledger, FakeSender(duplicates={'000.jpg', '001.jpg'}))
+    result = asyncio.run(run.run())
+    assert (result['ingested'], result['duplicates'], result['failed']) == (4, 2, 0)
+    assert ledger.count('done') == 6
+    assert ledger.images['/served/imgs/002.jpg'] == '002.jpg'
 
 
-def test_images_the_route_refuses_are_reported_with_their_reason(served: Path) -> None:
-    folder = _images(served, 4)
-    manifest = served / 'list.txt'
-    manifest.write_text(
-        '# a comment\n' + '\n'.join(str(p) for p in sorted(folder.iterdir())) + '\n\n'
-    )
+def test_images_the_route_refuses_are_failed_rows_with_their_reason_and_kind() -> None:
+    ledger = MemoryLedger(_paths(4))
     sender = FakeSender(failing={'001.jpg': 'cannot read', '003.jpg': 'not under a source root'})
-    store, _, run = _start(sender, BulkSource('manifest', str(manifest)))
-    asyncio.run(run.run())
+    run, _ = _run(ledger, sender)
+    result = asyncio.run(run.run())
 
-    state = store.job.read()
-    assert state['status'] == 'completed_with_errors'
-    assert (state['discovered'], state['ingested'], state['failed']) == (4, 2, 2)
-    rows, total = store.failures(offset=0, limit=10)
-    assert total == 2
-    assert {Path(r['path']).name: r['error'] for r in rows} == {
-        '001.jpg': 'cannot read',
-        '003.jpg': 'not under a source root',
+    assert (result['discovered'], result['ingested'], result['failed']) == (4, 2, 2)
+    assert {Path(k).name: v for k, v in ledger.errors.items()} == {
+        '001.jpg': ('cannot read', 'unservable_path'),
+        '003.jpg': ('not under a source root', 'unservable_path'),
     }
-    assert store.done()[1] == 2
 
 
-def test_a_path_the_route_never_answered_for_is_a_failure_not_a_success(served: Path) -> None:
-    folder = _images(served, 3)
-
+def test_a_path_the_route_never_answered_for_is_a_failure_not_a_success() -> None:
     class Dropping(FakeSender):
         async def post_batch(self, paths: list[str], **kw: Any) -> dict[str, Any]:
             body = await super().post_batch(paths, **kw)
             body['results'] = body['results'][:-1]
             return body
 
-    store, _, run = _start(Dropping(), BulkSource('folder', str(folder)), batch_size=3)
+    ledger = MemoryLedger(_paths(3))
+    run, _ = _run(ledger, Dropping(), batch_size=3)
+    result = asyncio.run(run.run())
+    assert (result['ingested'], result['failed']) == (2, 1)
+    assert list(ledger.errors.values()) == [('no result returned', runner.ERROR_KIND_BATCH)]
+
+
+def test_a_resumed_run_continues_the_totals_of_the_earlier_attempt() -> None:
+    ledger = MemoryLedger(_paths(8))
+    for key in _paths(4):
+        ledger.rows[key] = 'done'
+    sender = FakeSender()
+    prior = {'ingested': 4, 'duplicates': 0, 'crops_indexed': 8, 'n_embedded': 8}
+    run, _ = _run(ledger, sender, prior=prior)
+    result = asyncio.run(run.run())
+
+    assert sorted(p for call in sender.calls for p in call) == _paths(8)[4:]
+    assert result['discovered'] == 4  # what this attempt had left
+    assert (result['ingested'], result['crops_indexed'], result['n_embedded']) == (8, 16, 16)
+
+
+def test_a_failed_row_goes_back_to_the_queue_for_the_next_run() -> None:
+    ledger = MemoryLedger(_paths(4))
+    run, _ = _run(ledger, FakeSender(failing={'002.jpg': 'transient'}))
     asyncio.run(run.run())
-    state = store.job.read()
-    assert (state['ingested'], state['failed'], state['status']) == (2, 1, 'completed_with_errors')
-    assert store.failures(offset=0, limit=5)[0][0]['error'] == 'no result returned'
+    assert ledger.count('failed') == 1
+    # the queue (not the runner) decides a failed row is claimable again; once it is pending
+    ledger.rows[_paths(4)[2]] = 'pending'
+    sender = FakeSender()
+    run2, _ = _run(ledger, sender)
+    result = asyncio.run(run2.run())
+    assert sender.calls == [[_paths(4)[2]]]
+    assert (result['ingested'], result['failed']) == (1, 0)
+
+
+def test_cancel_stops_after_in_flight_batches_and_hands_the_claims_back() -> None:
+    ledger = MemoryLedger(_paths(40))
+    sender = FakeSender()
+    sender.gate = asyncio.Event()
+    run, reporter = _run(ledger, sender, batch_size=4, concurrency=2)
+
+    async def scenario() -> dict[str, Any]:
+        task = asyncio.create_task(run.run())
+        await sender.entered.wait()
+        reporter.stop = True
+        sender.gate.set()  # type: ignore[union-attr]
+        return await task
+
+    result = asyncio.run(scenario())
+    stored = sum(len(c) for c in sender.calls)
+    assert 0 < stored < 40
+    assert result['cancelled'] is True
+    assert result['ingested'] == stored
+    assert ledger.count('claimed') == 0  # nothing stays held by a run that stopped
+    assert ledger.count('done') == stored
+    assert ledger.count('pending') == 40 - stored
+
+
+def test_a_dead_pipeline_aborts_the_run_instead_of_failing_every_image() -> None:
+    ledger = MemoryLedger(_paths(60))
+    sender = FakeSender(fail_all=True)
+    run, _ = _run(ledger, sender, batch_size=2, concurrency=1)
+    with pytest.raises(BulkRunAbortedError, match='triton down'):
+        asyncio.run(run.run())
+
+    assert len(sender.calls) == limits.MAX_CONSECUTIVE_FAILED_BATCHES
+    assert ledger.count('failed') == 2 * limits.MAX_CONSECUTIVE_FAILED_BATCHES
+    assert ledger.count('claimed') == 0
+
+
+def test_a_crashing_batch_is_recorded_and_the_run_goes_on() -> None:
+    class Crashing(FakeSender):
+        async def post_batch(self, paths: list[str], **kw: Any) -> dict[str, Any]:
+            if len(self.calls) == 0:
+                self.calls.append(list(paths))
+                raise ValueError('bad body')
+            return await super().post_batch(paths, **kw)
+
+    ledger = MemoryLedger(_paths(8))
+    run, _ = _run(ledger, Crashing(), batch_size=4, concurrency=1)
+    result = asyncio.run(run.run())
+    assert (result['ingested'], result['failed']) == (4, 4)
+    assert {e[0] for e in ledger.errors.values()} == {'bad body'}
 
 
 def test_jsonl_manifest_entries_are_read_by_their_path_field(served: Path) -> None:
-    folder = _images(served, 2)
+    folder = served / 'imgs'
+    folder.mkdir()
     manifest = served / 'list.jsonl'
     manifest.write_text(
         f'{{"path": "{folder / "000.jpg"}", "note": "x"}}\n{{"nopath": 1}}\n{folder / "001.jpg"}\n'
     )
-    assert list(iter_source_paths(BulkSource('manifest', str(manifest)))) == [
-        str(folder / '000.jpg'),
-        str(folder / '001.jpg'),
-    ]
-
-
-def test_resume_skips_what_the_ledger_holds(served: Path) -> None:
-    folder = _images(served, 8)
-    source = BulkSource('folder', str(folder))
-    first, _, run = _start(FakeSender(), source)
-    asyncio.run(run.run())
-    # Interrupt: the run only got through the first four before it died.
-    (first.directory / 'done.jsonl').write_text(
-        ''.join(f'{{"p": "{folder / f"{i:03d}.jpg"}", "o": "ingested"}}\n' for i in range(4))
-    )
-    first.job.update(status='interrupted')
-
-    sender = FakeSender()
-    store, resumed, run2 = _start(sender, source)
-    asyncio.run(run2.run())
-
-    assert resumed
-    assert store.run_id == first.run_id
-    state = store.job.read()
-    assert (state['attempts'], state['skipped'], state['ingested']) == (2, 4, 8)
-    # Totals continue across attempts: 4 images stored by the first attempt's counters
-    # (8 images x 2 crops) plus this attempt's 4 x 2.
-    assert (state['crops_indexed'], state['n_embedded']) == (16 + 8, 16 + 8)
-    assert state['status'] == 'completed'
-    assert sorted(p for call in sender.calls for p in call) == [
-        str(folder / f'{i:03d}.jpg') for i in range(4, 8)
-    ]
-
-
-def test_resume_retries_the_images_that_failed(served: Path) -> None:
-    folder = _images(served, 4)
-    source = BulkSource('folder', str(folder))
-    first, _, run = _start(FakeSender(failing={'002.jpg': 'transient'}), source)
-    asyncio.run(run.run())
-    assert first.job.read()['status'] == 'completed_with_errors'
-
-    sender = FakeSender()
-    second, resumed, run2 = _start(sender, source)
-    asyncio.run(run2.run())
-
-    assert resumed
-    assert second.run_id == first.run_id
-    assert sender.calls == [[str(folder / '002.jpg')]]
-    state = second.job.read()
-    assert (state['status'], state['ingested'], state['failed']) == ('completed', 4, 0)
-    assert second.failures(offset=0, limit=10)[1] == 0
-
-
-def test_a_completed_run_is_not_resumed_a_new_one_starts(served: Path) -> None:
-    folder = _images(served, 3)
-    source = BulkSource('folder', str(folder))
-    first, _, run = _start(FakeSender(), source)
-    asyncio.run(run.run())
-    second, resumed, _ = _start(FakeSender(), source)
-    assert not resumed
-    assert second.run_id != first.run_id
-
-
-def test_start_refuses_while_a_run_is_live_and_names_it(served: Path) -> None:
-    folder = _images(served, 3)
-    store, _, _ = _start(FakeSender(), BulkSource('folder', str(folder)))
-    with pytest.raises(runner.BulkBusyError) as exc:
-        runner.claim_run(BulkSource('folder', str(folder)), runner.BulkOptions('tag'))
-    assert exc.value.run_id == store.run_id
-
-
-def test_cancel_stops_after_in_flight_batches_and_a_start_continues(served: Path) -> None:
-    folder = _images(served, 40)
-    source = BulkSource('folder', str(folder))
-
-    async def scenario() -> tuple[BulkStore, FakeSender]:
-        sender = FakeSender()
-        sender.gate = asyncio.Event()
-        store, _, run = _start(sender, source, batch_size=4, concurrency=2)
-        task = asyncio.create_task(run.run())
-        await sender.entered.wait()
-        runner.cancel_run(store)
-        sender.gate.set()
-        await task
-        return store, sender
-
-    store, sender = asyncio.run(scenario())
-    state = store.job.read()
-    assert state['status'] == 'cancelled'
-    stored = sum(len(c) for c in sender.calls)
-    assert 0 < stored < 40
-    assert state['ingested'] == stored
-
-    sender2 = FakeSender()
-    store2, resumed, run2 = _start(sender2, source)
-    asyncio.run(run2.run())
-    assert resumed
-    assert store2.run_id == store.run_id
-    assert store2.job.read()['ingested'] == 40
-    assert sum(len(c) for c in sender2.calls) == 40 - stored
-    assert not store2.job.cancel_requested()
-
-
-def test_a_dead_pipeline_fails_the_run_instead_of_failing_every_image(served: Path) -> None:
-    folder = _images(served, 60)
-    sender = FakeSender(fail_all=True)
-    store, _, run = _start(sender, BulkSource('folder', str(folder)), batch_size=2, concurrency=1)
-    asyncio.run(run.run())
-
-    state = store.job.read()
-    assert state['status'] == 'failed'
-    assert 'triton down' in state['error']
-    assert len(sender.calls) == limits.MAX_CONSECUTIVE_FAILED_BATCHES
-    assert state['failed'] == 2 * limits.MAX_CONSECUTIVE_FAILED_BATCHES
-    assert store.done()[0] == set()
-
-
-def test_a_dead_pipeline_run_can_be_started_again_to_resume(served: Path) -> None:
-    folder = _images(served, 10)
-    source = BulkSource('folder', str(folder))
-    first, _, run = _start(FakeSender(fail_all=True), source, batch_size=2, concurrency=1)
-    asyncio.run(run.run())
-    sender = FakeSender()
-    second, resumed, run2 = _start(sender, source)
-    asyncio.run(run2.run())
-    assert resumed
-    assert second.run_id == first.run_id
-    assert second.job.read()['status'] == 'completed'
-    assert second.job.read()['ingested'] == 10
+    assert list(iter_manifest_paths(manifest)) == [str(folder / '000.jpg'), str(folder / '001.jpg')]
 
 
 def test_invalid_sources_are_refused_with_the_reason(served: Path, tmp_path: Path) -> None:
@@ -335,8 +343,3 @@ def test_invalid_sources_are_refused_with_the_reason(served: Path, tmp_path: Pat
     with pytest.raises(InvalidSourceError, match='not a file'):
         validate_source(BulkSource('manifest', str(served)))
     validate_source(BulkSource('folder', str(served)))
-
-
-def test_run_ids_are_validated_before_they_name_a_directory(served: Path) -> None:
-    assert open_store('../../etc') is None
-    assert open_store('bulk_20260101T000000_deadbeef') is None

@@ -22,14 +22,14 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.services.curation.bulk_ingest.object_queue import QueueEntry
+from src.services.curation.bulk_ingest.source_queue import QueueEntry
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from src.services.curation.bulk_ingest.object_queue import ObjectQueue
     from src.services.curation.bulk_ingest.object_store import ListedObject, ObjectStore
+    from src.services.curation.bulk_ingest.source_queue import SourceQueue
 
 WATERMARK_OVERLAP_S = 120.0
 SCAN_META = 'scan'
@@ -63,7 +63,7 @@ class _Pass:
     def __init__(
         self,
         store: ObjectStore,
-        queue: ObjectQueue,
+        queue: SourceQueue,
         bucket: str,
         extensions: frozenset[str],
         watermark: float | None,
@@ -148,7 +148,7 @@ class _Pass:
 
 def scan_s3(
     store: ObjectStore,
-    queue: ObjectQueue,
+    queue: SourceQueue,
     *,
     bucket: str,
     prefix: str,

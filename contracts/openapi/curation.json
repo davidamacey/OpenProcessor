@@ -3830,6 +3830,7 @@
             "enum": [
               "queued",
               "running",
+              "cancelling",
               "completed",
               "completed_with_errors",
               "failed",

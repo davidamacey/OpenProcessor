@@ -7,8 +7,14 @@ a request (stage 4 recipe step 3). The OpenSearch factory is injected here and n
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import time
+import uuid
 from typing import TYPE_CHECKING, Any
 
+from src.core.logging import get_logger
+from src.db.session import async_session_factory
 from src.tasks.runtime.context import JobResult
 from src.tasks.runtime.register import register_job
 
@@ -19,6 +25,7 @@ if TYPE_CHECKING:
     from src.tasks.runtime.context import JobContext
 
 OPENSEARCH_TIMEOUT_S = 60
+logger = get_logger(__name__)
 
 
 async def _opensearch() -> Any:
@@ -119,8 +126,107 @@ async def directory_ingest(ctx: JobContext) -> JobResult | dict[str, Any]:
     return JobResult(result, with_errors=result['status'] != 'success')
 
 
+async def bulk_ingest_run(ctx: JobContext) -> JobResult:
+    """Drain the source's queue through the ingest route; a resume continues the counts."""
+    from src.config import get_curation_config
+    from src.services.curation.bulk_ingest.ledger import DbLedger
+    from src.services.curation.bulk_ingest.limits import loopback_url
+    from src.services.curation.bulk_ingest.runner import BulkIngestRun, BulkOptions
+    from src.services.curation.bulk_ingest.s3_listing import ScanStoppedError
+    from src.services.curation.bulk_ingest.sender import url_sender
+    from src.services.curation.bulk_ingest.source_scan import scan_source
+    from src.services.curation.bulk_ingest.sources import load_source, source_queue
+
+    with await bound_project(ctx):
+        source = await load_source(str(ctx.params['source_id']))
+        if source is None:
+            raise LookupError(f'no ingest source {ctx.params["source_id"]!r}')
+        queue = source_queue(source)
+        if ctx.resume_from is None and ctx.params.get('fresh'):
+            await asyncio.to_thread(queue.requeue_all)
+        await asyncio.to_thread(queue.release_claims)  # the claims of a run that died
+        if ctx.params.get('scan'):
+            # a stop request ends the scan early: the files queued so far are still drained
+            with contextlib.suppress(ScanStoppedError):
+                await asyncio.to_thread(
+                    scan_source, source, should_stop=ctx.cancelled, full=source.one_shot
+                )
+        sender = url_sender(
+            loopback_url(),
+            api_prefix=get_curation_config().api_prefix,
+            project=str(ctx.project_slug),
+            objects=source.backend == 's3',
+        )
+        try:
+            run = BulkIngestRun(
+                sender=sender,
+                ledger=DbLedger(ctx.session, uuid.UUID(source.source_id), ctx.job_id),
+                reporter=ctx,
+                options=BulkOptions(**ctx.params['options']),
+                run_id=str(ctx.job_id),
+                prior=ctx.resume_from,
+                servers=[ctx.server] if ctx.server else [],
+            )
+            result = await run.run()
+        finally:
+            await sender.aclose()
+    return JobResult(result, with_errors=result['failed'] > 0)
+
+
+async def source_poll(ctx: JobContext) -> dict[str, Any]:
+    """One watcher pass over a source: scan into its queue, then start a run if rows are pending."""
+    from src.services.curation.bulk_ingest.dispatcher import backoff_s
+    from src.services.curation.bulk_ingest.object_store import (
+        ObjectStoreError,
+        S3NotAllowedError,
+        S3NotConfiguredError,
+    )
+    from src.services.curation.bulk_ingest.s3_listing import ScanStoppedError
+    from src.services.curation.bulk_ingest.source_runs import BulkBusyError, start_source_run
+    from src.services.curation.bulk_ingest.source_scan import scan_source
+    from src.services.curation.bulk_ingest.sources import load_source, source_queue
+
+    with await bound_project(ctx):
+        source = await load_source(str(ctx.params['source_id']))
+        if source is None:
+            return {'source': 'removed'}
+        queue = source_queue(source)
+        try:
+            await asyncio.to_thread(scan_source, source, should_stop=ctx.cancelled)
+        except ScanStoppedError:
+            return {'stopped': True}
+        except (ObjectStoreError, S3NotAllowedError, S3NotConfiguredError, OSError) as exc:
+            failures = int(await asyncio.to_thread(queue.meta_get, 'failures', 0) or 0) + 1
+            await asyncio.to_thread(
+                queue.meta_update,
+                {
+                    'failures': failures,
+                    'last_poll_error': f'{type(exc).__name__}: {exc}'[:300],
+                    'backoff_until': time.time() + backoff_s(failures),
+                },
+            )
+            logger.warning('ingest_source_poll_failed', source=source.source_id, error=str(exc))
+            return {'failed': True, 'failures': failures}
+        await asyncio.to_thread(
+            queue.meta_update, {'failures': 0, 'last_poll_error': None, 'backoff_until': None}
+        )
+        counts = await asyncio.to_thread(queue.counts)
+        assert ctx.project_id is not None  # a project-scoped kind
+        started = False
+        if counts['pending'] > 0:
+            async with async_session_factory()() as session:
+                try:
+                    await start_source_run(session, ctx.project_id, source, scan=False)
+                    started = True
+                except BulkBusyError:
+                    pass  # a run holds the project; it drains what the scan queued
+        return {'pending': counts['pending'], 'run_started': started}
+
+
 register_job('project_delete', project_delete, client_factories={'opensearch': _opensearch})
 register_job('open_vocab_drain', open_vocab_drain, client_factories={'opensearch': _opensearch})
 register_job(
     'directory_ingest', directory_ingest, client_factories={'opensearch_client': _search_service}
 )
+register_job('bulk_ingest_run', bulk_ingest_run)
+register_job('source_poll', source_poll)
