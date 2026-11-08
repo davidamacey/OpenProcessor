@@ -9,7 +9,6 @@ and all datasets into a model x dataset ``matrix.json``, and keeps a
 ``status.json`` the API serves to the UI.
 
 Modes:
-    --watch /eval_jobs   poll for ``*.job.json`` (same protocol as the training job runner)
     --job <file>         run one job spec and exit
 
 Job spec v2 (written by the API)::
@@ -61,7 +60,6 @@ import os
 import subprocess
 import sys
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
@@ -381,59 +379,14 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     return finish('done')
 
 
-def _pending_job_files(jobs_dir: Path) -> list[Path]:
-    """``*.job.json`` in ``jobs_dir`` plus every project's own bake-off job
-    dir (the project-isolation design §5.3).
-
-    The API writes every project's jobs, ``default`` included, to
-    ``<state_dir>/projects/<slug>/bakeoff_jobs``
-    (``src.config.projects.resources_for_new``). Those are found as
-    ``jobs_dir.parent / 'projects' / '*' / 'bakeoff_jobs'``, so the
-    evaluator's ``--watch`` dir must be ``<OP_STATE_DIR>/bakeoff_jobs`` on
-    the same path as the API's state dir (the evaluator image watches
-    ``/var/lib/openprocessor/bakeoff_jobs``, matching the default
-    ``OP_STATE_DIR``). A different watch dir finds no project's jobs.
-    Sorted by mtime across all dirs so one project's queue can't starve
-    another's (FIFO, one job at a time, matching the trainer's
-    cross-project fairness)."""
-    candidates = list(jobs_dir.glob('*.job.json')) + list(
-        (jobs_dir.parent / 'projects').glob('*/bakeoff_jobs/*.job.json')
-    )
-    return sorted(candidates, key=lambda p: p.stat().st_mtime)
-
-
-def _watch(jobs_dir: Path, poll: float) -> int:
-    jobs_dir.mkdir(parents=True, exist_ok=True)
-    done_dir = jobs_dir / 'done'
-    done_dir.mkdir(exist_ok=True)
-    print(f'bakeoff_runner watching {jobs_dir} (poll {poll}s)', flush=True)
-    while True:
-        for job_file in _pending_job_files(jobs_dir):
-            job_done_dir = job_file.parent / 'done'
-            try:
-                spec = json.loads(job_file.read_text(encoding='utf-8'))
-                print(f'running job {job_file.name}', flush=True)
-                run_job(spec)
-            except Exception as exc:  # keep the watcher alive on a bad job
-                print(f'job {job_file.name} failed: {exc}', flush=True)
-            job_done_dir.mkdir(exist_ok=True)
-            job_file.rename(job_done_dir / job_file.name)
-        time.sleep(poll)
-
-
 def main() -> int:
     # The evaluator image ships src/ next to scripts/ (PYTHONPATH=/app).
     from src.config.retired_env import reject_retired_env
 
     reject_retired_env()
     p = argparse.ArgumentParser(description='Bake-off job runner (evaluator container).')
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument('--watch', type=Path, help='Watch a dir for *.job.json')
-    g.add_argument('--job', type=Path, help='Run a single job spec and exit')
-    p.add_argument('--poll', type=float, default=5.0)
+    p.add_argument('--job', type=Path, required=True, help='Run a single job spec and exit')
     args = p.parse_args()
-    if args.watch:
-        return _watch(args.watch, args.poll)
     spec = json.loads(args.job.read_text(encoding='utf-8'))
     status = run_job(spec)
     print(json.dumps(status, indent=2))
