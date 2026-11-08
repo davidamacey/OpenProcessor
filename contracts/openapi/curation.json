@@ -38620,7 +38620,7 @@
     },
     "/curation/projects/{project}/bakeoff/run": {
       "post": {
-        "description": "Enqueue a comparison job for the evaluator container.\n\nOrder: resolve + validate (400/422) -> ``status.json`` ``queued`` -> job\nfile (atomic) -> stop GPU-resident containers. If they cannot be stopped\nthe job file is removed, the status set to ``error`` and the answer is 409.",
+        "description": "Start a comparison as a ``bakeoff`` job for the evaluator worker.\n\nOrder: resolve + validate (400/422) -> ``status.json`` ``queued`` -> ``start_job`` (the job\nrow, its ``bakeoff_runs`` row and the queue message) -> stop GPU-resident containers. If they\ncannot be stopped the job is cancelled, the status set to ``error`` and the answer is 409.",
         "operationId": "bakeoff_run_curation_projects__project__bakeoff_run_post",
         "parameters": [
           {

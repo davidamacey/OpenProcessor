@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -14,11 +16,24 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+class _Started(dict[str, dict[str, Any]]):
+    """Job spec (the job parameters) by bake-off job id, plus the ids of cancelled jobs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cancelled: list[uuid.UUID] = []
+        self.ids: dict[str, uuid.UUID] = {}
+
+
 @pytest.fixture
-def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
-    """Point every bake-off / training dir at tmp_path and stub the GPU arbiter."""
+def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
+    """Point every bake-off / training dir at tmp_path and stub the GPU arbiter and the job service.
+
+    ``env['started']`` records the ``bakeoff`` jobs the route started (their parameters are the
+    job spec v2); no database is behind the route in these tests.
+    """
     from src.routers.curation import bakeoff
-    from src.services.curation import bakeoff_resolve, eval_datasets
+    from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
     from src.services.training import gpu_arbiter_docker
 
     dirs = {
@@ -26,7 +41,6 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
         'external': tmp_path / 'bakeoff_eval',
         'train_jobs_root': tmp_path / 'train_jobs',
         'runs': tmp_path / 'runs',
-        'jobs': tmp_path / 'bakeoff_jobs',
         'out': tmp_path / 'bakeoff_out',
     }
     for key in ('exports', 'external', 'train_jobs_root', 'runs'):
@@ -36,10 +50,7 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     monkeypatch.setattr(eval_datasets, 'export_root', lambda: dirs['exports'])
     monkeypatch.setattr(eval_datasets, 'external_root', lambda: dirs['external'])
     monkeypatch.setattr(bakeoff_resolve, 'RUNS_HOST_ROOT', dirs['runs'])
-    # bakeoff.JOBS_DIR/OUT_DIR are now _jobs_dir()/_out_dir() -- resolved
-    # per-project at call time (projects_plan.md §5.3) instead of module-
-    # level constants -- so tests patch the functions themselves.
-    monkeypatch.setattr(bakeoff, '_jobs_dir', lambda: dirs['jobs'])
+    # The results dir is resolved per project at call time, so tests patch the function.
     monkeypatch.setattr(bakeoff, '_out_dir', lambda: dirs['out'])
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(dirs['train_jobs_root']))
     for key in [k for k in __import__('os').environ if k.startswith('OP_BAKEOFF_PROFILE')]:
@@ -53,6 +64,24 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
         return _Action()
 
     monkeypatch.setattr(gpu_arbiter_docker, 'stop_gpu_services', _stop)
+
+    started = _Started()
+
+    async def _start_job(_session: Any, kind: str, project: Any, **kwargs: Any) -> Any:
+        assert kind == 'bakeoff'
+        spec = kwargs['params']
+        job_id = uuid.uuid4()
+        started[spec['job_id']] = spec
+        started.ids[spec['job_id']] = job_id
+        return SimpleNamespace(created=True, job=SimpleNamespace(id=job_id))
+
+    async def _cancel_job(_session: Any, job_id: uuid.UUID, project: Any, **_kw: Any) -> None:
+        started.cancelled.append(job_id)
+
+    monkeypatch.setattr(bakeoff_jobs, 'start_job', _start_job)
+    monkeypatch.setattr(bakeoff, 'cancel_job', _cancel_job)
+    monkeypatch.setattr(bakeoff, 'current_project_id', uuid.uuid4)
+    dirs['started'] = started  # type: ignore[assignment]
     return dirs
 
 
@@ -69,6 +98,9 @@ def client() -> TestClient:
     from src.routers.curation import _raw_opensearch_dep
 
     app.dependency_overrides[_raw_opensearch_dep] = lambda: None
+    from src.core.db_session import get_db
+
+    app.dependency_overrides[get_db] = lambda: None
     # The handler create_app registers: a backing-service failure is a 503.
     from src.core.error_handlers import upstream_unavailable_response
     from src.utils.upstream_errors import UpstreamError

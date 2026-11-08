@@ -127,7 +127,7 @@ def test_run_profile_class_filter_narrows_scored_classes(
     assert r.status_code == 200, r.text
     assert r.json()['profile'] == 'two'
     assert r.json()['datasets'][0]['n_eval_classes'] == 2
-    spec = json.loads((env['jobs'] / 'jp.job.json').read_text())
+    spec = env['started']['jp']
     assert spec['profile'] == str(prof)
     assert spec['datasets'][0]['eval_class_ids'] == [37, 78]
 
@@ -196,7 +196,7 @@ def test_baseline_models_per_profile_and_run_lookup(
         },
     )
     assert r.status_code == 200, r.text
-    [m] = json.loads((env['jobs'] / 'jb.job.json').read_text())['models']
+    [m] = env['started']['jb']['models']
     assert (m['model'], m['weights'], m['training_data']) == (
         'baseline:coco-yolo11n',
         './weights/yolo11n.pt',
