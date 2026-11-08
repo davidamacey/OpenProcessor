@@ -139,8 +139,8 @@ def _build_filter(
             {
                 'bool': {
                     'should': [
-                        {'term': {'dup_is_representative': True}},
-                        {'bool': {'must_not': {'exists': {'field': 'dup_is_representative'}}}},
+                        {'term': {'near_dup_is_representative': True}},
+                        {'bool': {'must_not': {'exists': {'field': 'near_dup_is_representative'}}}},
                     ],
                     'minimum_should_match': 1,
                 }

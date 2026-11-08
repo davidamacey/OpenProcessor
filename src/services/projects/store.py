@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from src.db.repos import embedding_spaces as spaces_repo, projects as repo
 from src.db.session import async_session_factory, deployment_tx
 from src.services.embedding_spaces import spaces as embedding_spaces
+from src.services.near_duplicates.profiles import seed_default_profile
 from src.services.rejections import rejection
 
 
@@ -88,7 +89,8 @@ class DefaultEncoderMissingError(RuntimeError):
 async def create_with_default_spaces(
     session: AsyncSession, new: repo.NewProject
 ) -> repo.ProjectRow:
-    """The create transaction: every project row plus its three primary, ready default spaces.
+    """The create transaction: every project row, its three primary, ready default spaces and the
+    default near-duplicate profile, active.
 
     One transaction, so a failure in either leaves nothing behind. ``load_project`` (the upgrade)
     does not call this: the upgrade writes its own spaces, with the knn method of each live index.
@@ -102,4 +104,5 @@ async def create_with_default_spaces(
     await spaces_repo.add_spaces(
         session, embedding_spaces.default_space_rows(row.id, encoder, created_by=new.created_by)
     )
+    await seed_default_profile(session, row.id)
     return row

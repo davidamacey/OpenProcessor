@@ -45,6 +45,7 @@ from src.services.detection.geometry import (
     crop_id as _crop_id,
     crop_rect,
 )
+from src.services.near_duplicates import content_key, pending as near_dup_pending
 from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
@@ -68,7 +69,7 @@ class ImageContext:
     """One decoded image, ready for :func:`index_items`.
 
     ``created`` is False when ``ingest_image`` resolved the bytes to an
-    image doc that already exists (imohash dedup): its ``image_id`` and
+    image doc that already exists (exact-content dedup): its ``image_id`` and
     ``image_path`` are the existing doc's, and ``index_items`` writes no
     images doc for it.
     """
@@ -80,7 +81,8 @@ class ImageContext:
     """The decoded frame; ``None`` when the GPU decode decoded the image (``gpu_frame``)."""
     width: int
     height: int
-    imohash: str
+    content_sha256: str
+    content_bytes: int
     source: str
     source_identifier: str | None = None
     ingest_run_id: str | None = None
@@ -239,6 +241,63 @@ async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext)
         return None
 
 
+async def _mark_added(ctx: ImageContext, crop_ids: list[str], *, new_image: bool) -> None:
+    """Pending near-duplicate rows, written before the documents they describe (an extra row
+    costs one idempotent rescore; a missing one would be a silent stale group)."""
+    await near_dup_pending.enqueue_pending_bound('item', crop_ids, 'added')
+    if new_image:
+        await near_dup_pending.enqueue_pending_bound('image', [ctx.image_id], 'added')
+
+
+def _held_elsewhere(ctx: ImageContext, holder: str) -> IngestResult:
+    """Another copy stored this content first: nothing of this one is written."""
+    return IngestResult(
+        status='duplicate',
+        image_id=holder,
+        image_path=ctx.image_path,
+        source_identifier=ctx.source_identifier,
+        content_sha256=ctx.content_sha256,
+    )
+
+
+async def _write_documents(
+    service: CurationIngestService,
+    ctx: ImageContext,
+    crop_ids: list[str],
+    image_doc: dict[str, Any] | None,
+    crop_docs: list[dict[str, Any]],
+    created_ids: list[str],
+    *,
+    seed_region: bool,
+) -> dict[str, Any] | IngestResult:
+    """Claim the content, mark the members pending, then bulk-write; the bulk result, or the
+    terminal result when another copy holds the content or a step failed. A claim taken here is
+    released when the write fails, so a later attempt can store the content."""
+    claimed = False
+    try:
+        if image_doc is not None:
+            holder = await content_key.claim_bound(
+                ctx.content_sha256, ctx.image_id, ctx.content_bytes
+            )
+            if holder is not None:
+                return _held_elsewhere(ctx, holder)
+            claimed = True
+        await _mark_added(ctx, crop_ids, new_image=image_doc is not None)
+        return await service._bulk_index(image_doc, crop_docs, created_ids, seed_region=seed_region)
+    except Exception as exc:
+        logger.error('ingest_bulk_index_failed', path=ctx.image_path, error=str(exc))
+        if claimed:
+            await content_key.release_bound([ctx.image_id])
+        return IngestResult(
+            status='failed',
+            image_path=ctx.image_path,
+            source_identifier=ctx.source_identifier,
+            content_sha256=ctx.content_sha256,
+            error=str(exc),
+            error_kind=ERROR_KIND_BULK_INDEX,
+        )
+
+
 async def index_items(
     service: CurationIngestService,
     ctx: ImageContext,
@@ -278,7 +337,7 @@ async def index_items(
                 source=ctx.source,
                 width=full_w,
                 height=full_h,
-                imohash=ctx.imohash,
+                content_sha256=ctx.content_sha256,
                 now=now,
                 whole_frame_embedding=whole_frame_embedding,
                 source_identifier=ctx.source_identifier,
@@ -364,22 +423,12 @@ async def index_items(
         crop_docs.append(doc)
 
     created_ids: list[str] = []
-    try:
-        bulk_result = await service._bulk_index(
-            image_doc, crop_docs, created_ids, seed_region=seed_region
-        )
-    except Exception as exc:
-        logger.error('ingest_bulk_index_failed', path=image_path, error=str(exc))
-        return IndexOutcome(
-            result=IngestResult(
-                status='failed',
-                image_path=image_path,
-                source_identifier=ctx.source_identifier,
-                imohash=ctx.imohash,
-                error=str(exc),
-                error_kind=ERROR_KIND_BULK_INDEX,
-            )
-        )
+    written = await _write_documents(
+        service, ctx, cids, image_doc, crop_docs, created_ids, seed_region=seed_region
+    )
+    if isinstance(written, IngestResult):
+        return IndexOutcome(result=written)
+    bulk_result = written
     if bulk_result.get('duplicate'):
         # Another copy of this content created the images doc first (#358): this copy
         # wrote nothing, so it answers as the dedup lookup would have.
@@ -389,7 +438,7 @@ async def index_items(
                 image_id=ctx.image_id,
                 image_path=image_path,
                 source_identifier=ctx.source_identifier,
-                imohash=ctx.imohash,
+                content_sha256=ctx.content_sha256,
             )
         )
     await _cache_crops(service, cids, crop_items)
@@ -401,7 +450,7 @@ async def index_items(
             image_id=ctx.image_id,
             image_path=image_path,
             source_identifier=ctx.source_identifier,
-            imohash=ctx.imohash,
+            content_sha256=ctx.content_sha256,
             n_crops=len(crop_docs),
             n_embedded=sum(it.embedding_state == EMBEDDED for it in items),
             n_not_embedded=sum(it.embedding_state != EMBEDDED for it in items),
@@ -418,12 +467,12 @@ async def index_items(
     )
 
 
-def content_image_id(imohash: str) -> str:
-    """``sha256(imohash)[:32]``: the images-doc id every ingest path (detector
+def content_image_id(content_sha256: str) -> str:
+    """``sha256(content_sha256)[:32]``: the images-doc id every ingest path (detector
     ingest and dataset import) derives. It names the content, not the path, so
-    the ``create`` of the images doc is what keeps one image per content when
-    copies race past the imohash lookup (#358)."""
-    return hashlib.sha256(imohash.encode()).hexdigest()[:32]
+    the ``create`` of the images doc stays a second guard behind the ``image_contents``
+    unique key when copies race (#358)."""
+    return hashlib.sha256(content_sha256.encode()).hexdigest()[:32]
 
 
 __all__ = [

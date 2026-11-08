@@ -103,7 +103,7 @@ def build_image_doc(
     source: str,
     width: int,
     height: int,
-    imohash: str,
+    content_sha256: str,
     now: str,
     whole_frame_embedding: Any | None = None,
     source_identifier: str | None = None,
@@ -129,7 +129,7 @@ def build_image_doc(
         'source': source,
         'width': width,
         'height': height,
-        'imohash': imohash,
+        'content_sha256': content_sha256,
         'indexed_at': now,
         'original_resolution': f'{width}x{height}',
     }

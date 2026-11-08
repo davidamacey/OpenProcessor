@@ -21,11 +21,6 @@ from src.services.curation.strategy_flags import (
     _viz_projection_enabled,
     effective_scorer_status,
 )
-from src.services.detection.frame_dedup import (
-    DEFAULT_FRAME_DEDUP_THRESHOLD,
-    FRAME_DEDUP_THRESHOLD_MAX,
-    FRAME_DEDUP_THRESHOLD_MIN,
-)
 
 
 def _cluster_strategies(default_id: str | None) -> list[dict[str, Any]]:
@@ -217,16 +212,6 @@ def _viz_projection_strategy() -> list[dict[str, Any]]:
     ]
 
 
-# What the export request's ``dedup_threshold`` accepts, and the value a UI
-# should pre-fill when the operator turns near-duplicate collapsing on (the
-# request itself defaults to ``None`` = off).
-_DEDUP_FIELDS: dict[str, float] = {
-    'dedup_threshold_default': DEFAULT_FRAME_DEDUP_THRESHOLD,
-    'dedup_threshold_min': FRAME_DEDUP_THRESHOLD_MIN,
-    'dedup_threshold_max': FRAME_DEDUP_THRESHOLD_MAX,
-}
-
-
 def _export_strategies() -> list[dict[str, Any]]:
     """Dataset-export capability axis.
 
@@ -249,7 +234,6 @@ def _export_strategies() -> list[dict[str, Any]]:
             'label': 'YOLO detection dataset export',
             'status': 'stable',
             'default': True,
-            **_DEDUP_FIELDS,
         },
         {
             'id': 'single_class',
@@ -257,7 +241,6 @@ def _export_strategies() -> list[dict[str, Any]]:
             'label': 'Single-class / class-subset dataset export',
             'status': 'stable',
             'default': False,
-            **_DEDUP_FIELDS,
         },
     ]
 

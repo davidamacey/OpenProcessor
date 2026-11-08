@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from curation.dataset_import.harness import Harness, map_all, write_yolo
-from src.services.curation.ingest_helpers import _imohash_bytes
 from src.services.curation.ingest_index import content_image_id
+from src.services.near_duplicates.content_key import content_sha256
 
 
 if TYPE_CHECKING:
@@ -26,11 +26,11 @@ async def test_import_lands_on_the_copy_stored_after_its_lookup(
     root = tmp_path / 'ds'
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.2 0.2']})
     data = (root / 'images/train/a.jpg').read_bytes()
-    image_id = content_image_id(_imohash_bytes(data))
+    image_id = content_image_id(content_sha256(data))
     stored = {
         'image_id': image_id,
         'image_path': '/elsewhere/a.jpg',
-        'imohash': _imohash_bytes(data),
+        'content_sha256': content_sha256(data),
     }
     h.os.docs(h.cfg.images_index)[image_id] = dict(stored)
 

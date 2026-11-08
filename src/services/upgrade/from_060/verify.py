@@ -138,8 +138,18 @@ _EXACT = (
     'vlm_endpoint_probes', 'projection_states', 'jobs', 'project_indexes',
     'dataset_import_images', 'ingest_source_files', 'label_operation_members',
 )  # fmt: skip
-# The serving-profile step adds one deployment-wide document and revision.
-_STEP_EXTRA = {'config_documents': 1, 'config_revisions': 1}
+
+
+def _step_extra(parsed: Parsed) -> dict[str, int]:
+    """Rows the steps add on top of the bundle: the serving-profile step one deployment-wide
+    document and revision, the near-duplicates step each project's profile document, revision and
+    activation."""
+    n = len(parsed.projects)
+    return {
+        'config_documents': 1 + n,
+        'config_revisions': 1 + n,
+        'config_activation_events': n,
+    }
 
 
 async def _actual_counts(session: AsyncSession) -> dict[str, int]:
@@ -157,8 +167,9 @@ async def _check_counts(
 ) -> None:
     expected = expected_counts(parsed, bulk_counts(bundle, parsed))
     actual = await _actual_counts(session)
+    extra = _step_extra(parsed)
     for table in _EXACT:
-        want = expected[table] + _STEP_EXTRA.get(table, 0)
+        want = expected[table] + extra.get(table, 0)
         report.tables[table] = {'expected': want, 'actual': actual[table]}
         if want != actual[table]:
             report.problems.append(f'{table}: expected {want} rows, found {actual[table]}')

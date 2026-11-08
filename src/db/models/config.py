@@ -31,6 +31,7 @@ CONFIG_KINDS = (
     'serving_profile',
     'cluster_profile',
     'assist_loop_preset',
+    'near_dup_profile',
 )
 # Documents of these kinds are deployment-wide; every other kind belongs to a project.
 DEPLOYMENT_CONFIG_KINDS = ('vlm_endpoint', 'serving_profile')
@@ -44,6 +45,7 @@ ACTIVATION_AXES: tuple[tuple[str, str], ...] = (
     ('clustering_item', 'cluster_profile'),
     ('clustering_region_box', 'cluster_profile'),
     ('assist_loop_preset', 'assist_loop_preset'),
+    ('near_dup', 'near_dup_profile'),
 )
 ACTIVATION_REASONS = ('activate', 'rollback', 'clone', 'upgrade')
 LOCATION_POLICIES = ('drop', 'store_coarse', 'store')

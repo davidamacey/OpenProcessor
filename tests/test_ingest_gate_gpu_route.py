@@ -53,7 +53,7 @@ class _Service:
     async def _primary(self, imgs: list[Image.Image]) -> list[list]:
         return [[] for _ in imgs]
 
-    async def _check_duplicates_msearch(self, hashes: list[str]) -> dict[str, str | None]:
+    async def _check_duplicates(self, hashes: list[str]) -> dict[str, str | None]:
         return dict.fromkeys(hashes)
 
     async def ingest_one(self, _bytes: bytes, path: str, **_kw: Any) -> IngestResult:

@@ -209,9 +209,9 @@ class ItemDoc(BaseModel):
     mistakenness_version: str | None = None
     mistakenness_scored_at: str | None = None
     uniqueness_score: float | None = None
-    dup_group_id: Any = None
-    dup_group_size: int | None = None
-    dup_is_representative: bool | None = None
+    near_dup_group_id: Any = None
+    near_dup_group_size: int | None = None
+    near_dup_is_representative: bool | None = None
     updated_at: str = ''
     thumbnail_url: str = ''
     region_status: str | None = None

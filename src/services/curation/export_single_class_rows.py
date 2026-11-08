@@ -64,7 +64,7 @@ class _FrameRow:
     Structurally satisfies both
     :class:`~src.services.curation.export_split.SplittableRow` (via
     ``item_id`` / ``class_id`` / ``has_test_crop``) and
-    ``frame_dedup._DedupRow`` (via ``image_id`` / ``has_test_crop``), so
+    ``CollapsibleRow`` (via ``image_id`` / ``has_test_crop``), so
     the same objects flow through the shared splitter and the shared
     near-duplicate collapse without an adapter.
     """

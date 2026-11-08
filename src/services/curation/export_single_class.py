@@ -32,7 +32,7 @@ reimplemented: the class-balanced cap
 the group-aware deterministic splitter
 (:func:`~src.services.curation.export_split.stratified_split`), the
 near-duplicate frame collapse
-(:func:`~src.services.detection.frame_dedup.dedup_rows_by_embedding`),
+(:func:`~src.services.near_duplicates.collapse.collapse_near_duplicates`),
 the resize worker and the atomic-write primitives.
 
 **Nothing here is domain-specific.** Which classes to export, what the
@@ -95,7 +95,7 @@ from src.services.curation.export_writers import (
     write_class_registry,
     write_label_stats_from_disk,
 )
-from src.services.detection.frame_dedup import dedup_rows_by_embedding
+from src.services.near_duplicates.collapse import collapse_near_duplicates as collapse_rows
 
 
 if TYPE_CHECKING:
@@ -141,7 +141,7 @@ class SingleClassExportService:
         skip_test_split: bool = False,
         empty_bg_ratio: float = 0.1,
         max_positive_images: int | None = None,
-        dedup_threshold: float | None = None,
+        collapse_near_duplicates: bool = False,
         image_mode: ImageMode = 'whole_frame',
         img_max_side: int = 1280,
         copy_images: bool = True,
@@ -164,10 +164,10 @@ class SingleClassExportService:
             max_positive_images: Cap on positive frames, applied as an
                 even round-robin over strata so a rare stratum survives
                 the cap intact. ``None`` = every positive.
-            dedup_threshold: Cosine cut for collapsing near-duplicate
-                source frames before the split, so a burst of near-identical
-                frames neither inflates the dataset nor leaks across splits.
-                ``None`` disables.
+            collapse_near_duplicates: Keep one source frame per dedup group of
+                the project's current near-duplicate run before the split, so a
+                burst of near-identical frames neither inflates the dataset nor
+                leaks across splits. Refuses when the project has no current run.
             image_mode: ``'whole_frame'`` writes the full source frame —
                 the distribution a deployed detector actually sees.
                 ``'item_crop'`` writes the parent item's crop with the
@@ -203,10 +203,8 @@ class SingleClassExportService:
         sampling_mode = 'stratified_even' if max_positive_images is not None else 'all'
 
         dedup_stats: dict[str, Any] = {'enabled': False}
-        if dedup_threshold is not None:
-            rows, dedup_stats = await dedup_rows_by_embedding(
-                self.opensearch, rows, threshold=dedup_threshold, config=self.config
-            )
+        if collapse_near_duplicates:
+            rows, dedup_stats = await collapse_rows(rows)
 
         n_pos = sum(1 for r in rows if r.is_positive)
         n_bg = len(rows) - n_pos

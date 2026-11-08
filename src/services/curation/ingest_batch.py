@@ -9,8 +9,8 @@ of images is fanned out efficiently.
 "``ingest_one`` N times concurrently" — that would issue N single-image
 Triton round-trips and is measurably slower for identical output. It is:
 
-1. **Dedup once, for everyone** — a single ``msearch`` resolves every
-   image's imohash instead of N term queries. This ONLY resolves against
+1. **Dedup once, for everyone** — a single query resolves every
+   image's content hash against ``image_contents``. This ONLY resolves against
    the index, i.e. images already committed before this batch started —
    see :func:`run_ingest_batch` for the separate in-batch dedup pass (D3)
    that also collapses byte-identical repeats *within* one request onto a
@@ -192,7 +192,8 @@ async def run_ingest_batch(
     See that method's docstring for the argument contract.
     """
     from src.services.curation.ingest_gpu_decode import gpu_route
-    from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY, _imohash_bytes
+    from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY
+    from src.services.near_duplicates.content_key import content_sha256
 
     if len(images) != len(image_paths):
         raise ValueError('images and image_paths must be same length')
@@ -200,8 +201,8 @@ async def run_ingest_batch(
         raise ValueError('source_identifiers must match images length')
 
     summary = IngestSummary()
-    hashes = [_imohash_bytes(b) for b in images]
-    hash_to_existing = await service._check_duplicates_msearch(hashes)
+    hashes = [content_sha256(b) for b in images]
+    hash_to_existing = await service._check_duplicates(hashes)
 
     # D3: `hash_to_existing` only resolves hashes already committed to the
     # index *before* this batch started — two byte-identical files
@@ -263,7 +264,7 @@ async def run_ingest_batch(
                         status='duplicate',
                         image_id=existing_id,
                         image_path=image_path,
-                        imohash=image_hash,
+                        content_sha256=image_hash,
                         source_identifier=source_identifier,
                     )
                 )
@@ -278,7 +279,7 @@ async def run_ingest_batch(
                             status='duplicate',
                             image_id=rep_result.image_id,
                             image_path=image_path,
-                            imohash=image_hash,
+                            content_sha256=image_hash,
                             source_identifier=source_identifier,
                         )
                     )

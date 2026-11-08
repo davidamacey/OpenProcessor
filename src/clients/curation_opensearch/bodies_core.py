@@ -19,7 +19,7 @@ from src.clients.curation_opensearch.cluster_fields import (
     CLUSTER_PARTITION_MAPPING,
 )
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
-from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_ITEM_MAPPING
+from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
@@ -101,8 +101,8 @@ def _images_body() -> dict[str, Any]:
                 'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},
                 'height': {'type': 'integer'},
-                'imohash': {'type': 'keyword'},
-                'phash': {'type': 'keyword'},
+                'content_sha256': {'type': 'keyword'},
+                **NEAR_DUP_MAPPING,
                 'indexed_at': {'type': 'date'},
                 'original_resolution': {'type': 'keyword'},
                 'non_jpeg_format_skipped': {'type': 'boolean'},
@@ -412,7 +412,7 @@ def _items_body() -> dict[str, Any]:
                 'mistakenness_method': {'type': 'keyword'},
                 'mistakenness_version': {'type': 'keyword'},
                 'mistakenness_scored_at': {'type': 'date'},
-                **NEAR_DUP_ITEM_MAPPING,
+                **NEAR_DUP_MAPPING,
                 'created_at': {'type': 'date'},
                 'updated_at': {'type': 'date'},
                 # Secondary image-encoder embedding for semantic search

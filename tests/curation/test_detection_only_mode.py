@@ -85,7 +85,8 @@ def _index(policy: IngestPolicy, tmp_path: Any) -> tuple[_Encoder, list[dict[str
         pil=Image.open(io.BytesIO(buf.getvalue())).convert('RGB'),
         width=128,
         height=96,
-        imohash='h',
+        content_sha256='h',
+        content_bytes=1,
         source='t',
     )
     items = [DetectedItem(bbox_pixel=(10.0, 10.0, 60.0, 50.0), score=0.9)]

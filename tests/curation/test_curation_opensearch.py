@@ -108,12 +108,9 @@ def test_items_has_score_and_probe_fields() -> None:
         'mistakenness_method',
         'mistakenness_version',
         'mistakenness_scored_at',
-        'dup_group_id',
-        'dup_group_size',
-        'dup_is_representative',
-        'dup_threshold',
-        'dup_method',
-        'dup_scored_at',
+        'near_dup_group_id',
+        'near_dup_group_size',
+        'near_dup_is_representative',
     }
     probe_fields = {
         'probe_pred_confidence',
@@ -125,7 +122,7 @@ def test_items_has_score_and_probe_fields() -> None:
     assert score_fields.issubset(props.keys()), f'missing: {score_fields - props.keys()}'
     assert probe_fields.issubset(props.keys()), f'missing: {probe_fields - props.keys()}'
     assert props['uniqueness_score']['type'] == 'float'
-    assert props['dup_group_size']['type'] == 'integer'
+    assert props['near_dup_group_size']['type'] == 'integer'
     assert props['probe_pred_margin']['type'] == 'float'
 
 

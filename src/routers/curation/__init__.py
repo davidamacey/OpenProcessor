@@ -58,6 +58,7 @@ import src.routers.curation.label_ops
 import src.routers.curation.label_undo
 import src.routers.curation.methods
 import src.routers.curation.models
+import src.routers.curation.near_duplicates
 import src.routers.curation.open_vocab
 import src.routers.curation.open_vocab_test
 
@@ -88,6 +89,7 @@ import src.routers.curation.search
 import src.routers.curation.search_image
 import src.routers.curation.select
 import src.routers.curation.settings
+import src.routers.curation.source_backfill
 import src.routers.curation.stats
 import src.routers.curation.viz
 import src.routers.curation.vlm_activation

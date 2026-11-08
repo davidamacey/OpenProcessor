@@ -12,6 +12,7 @@ import base64
 import copy
 import json
 import os
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,14 +48,17 @@ def _iso_to_epoch(stamp: str) -> float:
 
 
 def matches(query: dict[str, Any], doc: dict[str, Any]) -> bool:
-    """The few query shapes the upgrade sends: match_all, exists, bool must / must_not."""
+    """The few query shapes the upgrade sends: match_all, exists, bool must / must_not / should."""
     if 'match_all' in query:
         return True
     if 'exists' in query:
         return doc.get(query['exists']['field']) is not None
     clause = query['bool']
-    return all(matches(q, doc) for q in clause.get('must', [])) and not any(
-        matches(q, doc) for q in clause.get('must_not', [])
+    should = clause.get('should', [])
+    return (
+        all(matches(q, doc) for q in clause.get('must', []))
+        and not any(matches(q, doc) for q in clause.get('must_not', []))
+        and (not should or any(matches(q, doc) for q in should))
     )
 
 
@@ -208,12 +212,17 @@ class FakeOpenSearch:
 
     async def update_by_query(self, index: str, body: dict[str, Any], **_: Any) -> dict[str, str]:
         self.calls.append('update_by_query')
-        assert 'embedding_state' in body['script']['source']
+        source = body['script']['source']
         n = 0
         for doc in self.docs(index).values():
-            if matches(body['query'], doc):
+            if not matches(body['query'], doc):
+                continue
+            if 'embedding_state' in source:
                 doc['embedding_state'] = 'embedded'
-                n += 1
+            else:
+                for removed in re.findall(r"remove\('([a-z_]+)'\)", source):
+                    doc.pop(removed, None)
+            n += 1
         self.last_updated = n
         return {'task': 'fake:1'}
 

@@ -148,7 +148,8 @@ def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> 
         pil=frame,
         width=128,
         height=96,
-        imohash='h',
+        content_sha256='h',
+        content_bytes=1,
         source='t',
     )
     items = [DetectedItem(bbox_pixel=(10.0, 10.0, 60.0, 50.0), score=0.9)]

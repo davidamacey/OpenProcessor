@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.db.base import Base
-from src.db.types import EMPTY_ARRAY, NOW, UUIDV7, check, in_list
+from src.db.types import EMPTY_ARRAY, EMPTY_OBJECT, NOW, UUIDV7, check, in_list
 
 
 UPLOAD_STATUSES = ('receiving', 'received', 'extracting', 'extracted', 'failed', 'expired')
@@ -93,6 +93,7 @@ class DatasetImportImage(Base):
     item_ids: Mapped[list[str]] = mapped_column(ARRAY(Text()), server_default=EMPTY_ARRAY)
     status: Mapped[str]
     error: Mapped[str | None]
+    detail: Mapped[Any] = mapped_column(JSONB, server_default=EMPTY_OBJECT)
 
 
 class CombineRun(Base):
@@ -215,3 +216,10 @@ class HoldoutFreeze(Base):
     snapshot_storage_key: Mapped[str | None]
     frozen_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     frozen_by: Mapped[str]
+    near_dup_image_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('near_dup_runs.id', ondelete='SET NULL')
+    )
+    near_dup_item_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('near_dup_runs.id', ondelete='SET NULL')
+    )
+    moved_by_near_dup: Mapped[int] = mapped_column(Integer, server_default='0')

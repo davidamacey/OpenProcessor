@@ -24,7 +24,7 @@ Safety rules kept from the per-image path:
   flush, so the second sees the first as already created.
 - An images doc is written before its items, with ``create``: its id names the content
   (:func:`~src.services.curation.ingest_index.content_image_id`), so a second copy of the
-  same content that got past the imohash lookup (the lookup cannot see an unrefreshed
+  same content that got past the content lookup (the lookup cannot see an unrefreshed
   write) is answered 409. That unit is the ``duplicate`` and none of its items are written
   (#358). Each images doc carries a fresh write id (:data:`WRITE_ID_FIELD`): a 409
   whose stored doc holds this unit's own write id answers a create an earlier attempt of the

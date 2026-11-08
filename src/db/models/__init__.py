@@ -66,6 +66,16 @@ from src.db.models.jobs import (
     StreamWorkerClaim,
     WorkerCapability,
 )
+from src.db.models.near_dup import (
+    HoldoutNearDupMove,
+    ImageContent,
+    NearDupDecision,
+    NearDupEdge,
+    NearDupGroup,
+    NearDupMember,
+    NearDupPending,
+    NearDupRun,
+)
 from src.db.models.ops import UpgradeRun
 from src.db.models.projects import (
     DeploymentCounter,
@@ -125,6 +135,8 @@ __all__ = [
     'GpuDevice',
     'GpuReservation',
     'HoldoutFreeze',
+    'HoldoutNearDupMove',
+    'ImageContent',
     'IngestSource',
     'IngestSourceFile',
     'Job',
@@ -135,6 +147,12 @@ __all__ = [
     'Model',
     'ModelEngine',
     'ModelShare',
+    'NearDupDecision',
+    'NearDupEdge',
+    'NearDupGroup',
+    'NearDupMember',
+    'NearDupPending',
+    'NearDupRun',
     'PartitionCluster',
     'Project',
     'ProjectClass',

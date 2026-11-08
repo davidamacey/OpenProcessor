@@ -13,7 +13,13 @@ pytestmark = pytest.mark.db
 
 def test_the_steps_are_discovered_in_order() -> None:
     names = [steps.step_name(m) for m in steps.discover()]
-    assert names == ['serving_profile', 'embedding_spaces', 'legacy_repair', 'clustering']
+    assert names == [
+        'serving_profile',
+        'embedding_spaces',
+        'legacy_repair',
+        'clustering',
+        'near_duplicates',
+    ]
     orders = [m.ORDER for m in steps.discover()]
     assert orders == sorted(orders)
 
@@ -44,6 +50,7 @@ async def test_the_steps_ran_in_order_and_a_second_load_adds_nothing_new(
         'embedding_spaces',
         'legacy_repair',
         'clustering',
+        'near_duplicates',
     ]
     # idempotent: the second run is refused by the gate, and the rows stay one set
     with clean_db.engine('super').connect() as conn:

@@ -52,5 +52,5 @@ def test_with_the_database_down_the_tick_fails_and_every_rule_was_tried() -> Non
 
     with pytest.raises(ReaperError):
         Reaper(session_factory=Down).tick()
-    # rules a, b, c, d, h, g and f each tried (e and i skip while their job kinds are unregistered)
-    assert len(attempts) == 7
+    # rules a, b, c, d, h, g, f and i each tried (e skips while its job kind is unregistered)
+    assert len(attempts) == 8

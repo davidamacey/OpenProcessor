@@ -54,7 +54,7 @@ class IngestResult(BaseModel):
     status: Literal['success', 'duplicate', 'failed'] = 'success'
     image_id: str = ''
     image_path: str = ''
-    imohash: str = ''
+    content_sha256: str = ''
     n_crops: int = 0
     crops_created: int = 0
     crops_updated: int = 0

@@ -218,8 +218,8 @@ def test_hide_near_duplicates_filter_is_null_safe(app_client: TestClient) -> Non
     assert {
         'bool': {
             'should': [
-                {'term': {'dup_is_representative': True}},
-                {'bool': {'must_not': {'exists': {'field': 'dup_is_representative'}}}},
+                {'term': {'near_dup_is_representative': True}},
+                {'bool': {'must_not': {'exists': {'field': 'near_dup_is_representative'}}}},
             ],
             'minimum_should_match': 1,
         }
@@ -231,7 +231,7 @@ def test_hide_near_duplicates_false_by_default(app_client: TestClient) -> None:
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
-    assert not any('dup_is_representative' in str(m) for m in must)
+    assert not any('near_dup_is_representative' in str(m) for m in must)
 
 
 def test_response_item_whitelist_includes_new_score_fields(
@@ -253,9 +253,9 @@ def test_response_item_whitelist_includes_new_score_fields(
                             'class_name': 'sedan',
                             'mistakenness_score': 0.87,
                             'uniqueness_score': 0.42,
-                            'dup_group_id': 'g1',
-                            'dup_group_size': 3,
-                            'dup_is_representative': True,
+                            'near_dup_group_id': 'g1',
+                            'near_dup_group_size': 3,
+                            'near_dup_is_representative': True,
                         },
                     }
                 ],
@@ -277,9 +277,9 @@ def test_response_item_whitelist_includes_new_score_fields(
     item = r.json()['items'][0]
     assert item['mistakenness_score'] == 0.87
     assert item['uniqueness_score'] == 0.42
-    assert item['dup_group_id'] == 'g1'
-    assert item['dup_group_size'] == 3
-    assert item['dup_is_representative'] is True
+    assert item['near_dup_group_id'] == 'g1'
+    assert item['near_dup_group_size'] == 3
+    assert item['near_dup_is_representative'] is True
 
 
 def test_test_holdout_filter_unchanged_by_sort_params(app_client: TestClient) -> None:

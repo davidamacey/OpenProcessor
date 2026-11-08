@@ -9,6 +9,7 @@ import pytest
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY
+from src.services.near_duplicates.content_key import content_sha256
 
 
 del MAX_INGEST_CONCURRENCY  # imported only to confirm the module exports it
@@ -16,46 +17,44 @@ del MAX_INGEST_CONCURRENCY  # imported only to confirm the module exports it
 
 class TestDuplicateDetection:
     @pytest.mark.asyncio
-    async def test_single_check_duplicate_hit(self) -> None:
-        os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1', 'imohash': 'HASH'}})
+    async def test_check_duplicates_names_the_holder_of_each_content(
+        self, content_rows: Any
+    ) -> None:
+        os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1'}})
+        content_rows.rows['H1'] = 'img1'
         svc, _, _ = _make_service(opensearch=os_fake)
-        assert await svc._check_duplicate('HASH') == 'img1'
+        assert await svc._check_duplicates(['H1', 'H2']) == {'H1': 'img1', 'H2': None}
 
     @pytest.mark.asyncio
-    async def test_single_check_duplicate_miss(self) -> None:
-        svc, _, _ = _make_service()
-        assert await svc._check_duplicate('NOPE') is None
+    async def test_a_content_row_without_its_images_doc_is_released(
+        self, content_rows: Any
+    ) -> None:
+        """A crash between the row and the document must not make the content
+        undeliverable: the lookup drops the row and answers as if it were new."""
+        content_rows.rows['H1'] = 'img1'
+        svc, _, _ = _make_service(opensearch=FakeIngestOpenSearch())
+        assert await svc._check_duplicates(['H1']) == {'H1': None}
+        assert content_rows.rows == {}
 
     @pytest.mark.asyncio
-    async def test_msearch_batched_dedup(self) -> None:
-        os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1', 'imohash': 'H1'}})
-        svc, _, _ = _make_service(opensearch=os_fake)
-        result = await svc._check_duplicates_msearch(['H1', 'H2'])
-        assert result == {'H1': 'img1', 'H2': None}
-
-    @pytest.mark.asyncio
-    async def test_msearch_failure_falls_back_to_per_image(self) -> None:
-        os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1', 'imohash': 'H1'}})
-
-        async def _broken_msearch(*, body: Any) -> Any:
-            raise RuntimeError('msearch unavailable')
-
-        os_fake.msearch = _broken_msearch  # type: ignore[method-assign]
-        svc, _, _ = _make_service(opensearch=os_fake)
-        result = await svc._check_duplicates_msearch(['H1', 'H2'])
-        assert result == {'H1': 'img1', 'H2': None}
-
-    @pytest.mark.asyncio
-    async def test_ingest_one_returns_duplicate_status(self) -> None:
+    async def test_ingest_one_returns_duplicate_status(self, content_rows: Any) -> None:
         data = _jpeg_bytes()
-        from src.services.curation.ingest_helpers import _imohash_bytes
-
-        h = _imohash_bytes(data)
-        os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1', 'imohash': h}})
+        os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1'}})
+        content_rows.rows[content_sha256(data)] = 'img1'
         svc, _, _ = _make_service(opensearch=os_fake)
         result = await svc.ingest_one(data, '/tmp/a.jpg')
         assert result.status == 'duplicate'
         assert result.image_id == 'img1'
+
+    @pytest.mark.asyncio
+    async def test_a_stored_image_holds_its_content_row(self, content_rows: Any) -> None:
+        data = _jpeg_bytes(seed=4)
+        svc, os_fake, _ = _make_service()
+        result = await svc.ingest_one(data, '/tmp/a.jpg')
+        assert result.status == 'success'
+        assert result.content_sha256 == content_sha256(data)
+        assert content_rows.rows == {content_sha256(data): result.image_id}
+        assert os_fake.images[result.image_id]['content_sha256'] == content_sha256(data)
 
 
 class TestIngestOne:
@@ -254,14 +253,10 @@ class TestOccUpsertHumanGuards:
 
 class TestBatchIngest:
     @pytest.mark.asyncio
-    async def test_batch_reports_success_and_duplicate(self) -> None:
+    async def test_batch_reports_success_and_duplicate(self, content_rows: Any) -> None:
         data_a = _jpeg_bytes(seed=1)
-        from src.services.curation.ingest_helpers import _imohash_bytes
-
-        existing_hash = _imohash_bytes(data_a)
-        os_fake = FakeIngestOpenSearch(
-            images={'existing': {'image_id': 'existing', 'imohash': existing_hash}}
-        )
+        os_fake = FakeIngestOpenSearch(images={'existing': {'image_id': 'existing'}})
+        content_rows.rows[content_sha256(data_a)] = 'existing'
         svc, _, _ = _make_service(opensearch=os_fake)
 
         data_b = _jpeg_bytes(seed=2)
@@ -316,16 +311,14 @@ class TestBatchIngest:
         assert second.image_id == first.image_id
 
     @pytest.mark.asyncio
-    async def test_cross_batch_duplicate_keeps_its_own_source_identifier(self) -> None:
+    async def test_cross_batch_duplicate_keeps_its_own_source_identifier(
+        self, content_rows: Any
+    ) -> None:
         """Same requirement for the cross-batch dedup path (hash already
         committed to the index before this batch started)."""
         data = _jpeg_bytes(seed=9)
-        from src.services.curation.ingest_helpers import _imohash_bytes
-
-        existing_hash = _imohash_bytes(data)
-        os_fake = FakeIngestOpenSearch(
-            images={'existing': {'image_id': 'existing', 'imohash': existing_hash}}
-        )
+        os_fake = FakeIngestOpenSearch(images={'existing': {'image_id': 'existing'}})
+        content_rows.rows[content_sha256(data)] = 'existing'
         svc, _, _ = _make_service(opensearch=os_fake)
 
         result = await svc.ingest_batch(

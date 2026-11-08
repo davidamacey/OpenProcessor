@@ -43,7 +43,7 @@ class ImportContext:
     stem_resolutions: dict[str, Any] = field(default_factory=dict)
     """OpenProcessor-export stems resolved to existing docs (per chunk)."""
     seen_images: dict[str, dict[str, Any]] = field(default_factory=dict)
-    """imohash -> the image this run already indexed (search may not see it yet)."""
+    """content hash -> the image this run already indexed (search may not see it yet)."""
     after_chunk: Callable[[int], Awaitable[None]] | None = None
     """Test hook: awaited after each finished chunk (crash injection)."""
 

@@ -1,4 +1,5 @@
-"""Bodies of the research config kinds: ``serving_profile``, ``cluster_profile``, ``assist_loop_preset``.
+"""Bodies of the research config kinds: ``serving_profile``, ``cluster_profile``,
+``assist_loop_preset`` and ``near_dup_profile``.
 
 Each is the validated body of a revisioned config document (``extra='forbid'``: a misspelt option is
 a 422, never ignored). The assist-loop preset reuses the loop request's own sub-models, so a preset
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.schemas.curation.assist_loop import LoopAudit, LoopBudget, LoopGate, LoopRecursion
 from src.schemas.curation.config_common import ActiveRef
+from src.schemas.curation.near_duplicates import NearDupProfileBody
 
 
 class _Strict(BaseModel):
@@ -110,6 +112,7 @@ RESEARCH_BODY_MODELS: dict[str, type[BaseModel]] = {
     'serving_profile': ServingProfileBody,
     'cluster_profile': ClusterProfileBody,
     'assist_loop_preset': AssistLoopPresetBody,
+    'near_dup_profile': NearDupProfileBody,
 }
 
 

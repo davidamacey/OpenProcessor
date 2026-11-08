@@ -193,6 +193,10 @@ _register_project_activation(
 _register_project_activation(
     'assist_loop_preset', 'assist_loop_presets', KIND_AXES['assist_loop_preset'], tag='Auto-label'
 )
+_register_project_activation(
+    'near_dup_profile', 'near_dup_profiles', KIND_AXES['near_dup_profile'], tag='Near-duplicates'
+)
 _register_documents('serving_profile', 'serving_profiles', tag='Serving', group=global_router)
 _register_documents('cluster_profile', 'cluster_profiles', tag='Clustering', group=router)
 _register_documents('assist_loop_preset', 'assist_loop_presets', tag='Auto-label', group=router)
+_register_documents('near_dup_profile', 'near_dup_profiles', tag='Near-duplicates', group=router)

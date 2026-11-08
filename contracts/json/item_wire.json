@@ -91,9 +91,9 @@
     "mistakenness_version",
     "mistakenness_scored_at",
     "uniqueness_score",
-    "dup_group_id",
-    "dup_group_size",
-    "dup_is_representative",
+    "near_dup_group_id",
+    "near_dup_group_size",
+    "near_dup_is_representative",
     "updated_at",
     "thumbnail_url",
     "region_status",
@@ -887,34 +887,6 @@
         "default": null,
         "title": "Detector Confidence"
       },
-      "dup_group_id": {
-        "default": null,
-        "title": "Dup Group Id"
-      },
-      "dup_group_size": {
-        "anyOf": [
-          {
-            "type": "integer"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Dup Group Size"
-      },
-      "dup_is_representative": {
-        "anyOf": [
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Dup Is Representative"
-      },
       "embedding_state": {
         "anyOf": [
           {
@@ -1089,6 +1061,34 @@
         ],
         "default": null,
         "title": "Mistakenness Version"
+      },
+      "near_dup_group_id": {
+        "default": null,
+        "title": "Near Dup Group Id"
+      },
+      "near_dup_group_size": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Near Dup Group Size"
+      },
+      "near_dup_is_representative": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Near Dup Is Representative"
       },
       "needs_new_class": {
         "default": false,

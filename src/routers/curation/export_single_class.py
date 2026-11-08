@@ -33,6 +33,7 @@ from src.services.curation.export_single_class import (
     SingleClassExportService,
     resolve_current_single_class_dir,
 )
+from src.services.near_duplicates.collapse import NoCurrentRunError
 
 
 def _profile_from_request(payload: ExportSingleClassRequest) -> SingleClassExportProfile:
@@ -73,7 +74,7 @@ async def export_single_class(
             skip_test_split=payload.skip_test_split,
             empty_bg_ratio=payload.empty_bg_ratio,
             max_positive_images=payload.max_positive_images,
-            dedup_threshold=payload.dedup_threshold,
+            collapse_near_duplicates=payload.collapse_near_duplicates,
             image_mode=payload.image_mode,
             img_max_side=payload.img_max_side,
             copy_images=payload.copy_images,
@@ -82,6 +83,9 @@ async def export_single_class(
         # Nothing matched: refused before any directory or symlink is written.
         logger.warning('single_class_export_refused_empty', reason=str(exc))
         raise HTTPException(status_code=422, detail=f'nothing to export: {exc}') from exc
+    except NoCurrentRunError as exc:
+        logger.warning('single_class_export_refused_no_near_dup_run', reason=str(exc))
+        raise HTTPException(status_code=409, detail=f'near_dup_no_run: {exc}') from exc
     except ValueError as exc:
         # Configuration the caller can fix (empty class_ids, an image_mode
         # that doesn't apply to the chosen box_source) — a 422, not a 500.

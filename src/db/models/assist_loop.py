@@ -58,6 +58,7 @@ VLM_USAGE_SOURCES = (
     'vlm_worker',
     'region_verify',
     'label_batch',
+    'open_vocab_gate',
 )
 
 _RUN_FK = 'assist_loop_runs.id'

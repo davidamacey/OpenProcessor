@@ -180,7 +180,7 @@ class GenericYoloExportService:
         version_tag: str = '',
         seed: int = 42,
         max_images: int | None = None,
-        dedup_threshold: float | None = None,
+        collapse_near_duplicates: bool = False,
         require_fully_labeled_images: bool = False,
         resize_mode: Literal['aspect'] | None = None,
         image_size: int = 640,
@@ -223,11 +223,11 @@ class GenericYoloExportService:
         ``item_filter`` (the shared item filter) narrows the validated items that
         are exported; the manifest records it.
 
-        ``dedup_threshold`` (if given) collapses whole-frame near-duplicate
-        images (cosine >= threshold on the images index's secondary
-        embedding) to one representative image, which keeps all its
-        objects, via
-        :func:`~src.services.detection.frame_dedup.dedup_rows_by_embedding`.
+        ``collapse_near_duplicates`` keeps one image per dedup group of the
+        project's current near-duplicate run (a held-out image is preferred as the
+        survivor), and the survivor keeps all its objects, via
+        :func:`~src.services.near_duplicates.collapse.collapse_near_duplicates`.
+        It refuses when the project has no current run.
 
         ``max_images`` caps the number of images via
         :func:`~src.services.curation.export_support.even_stratified_sample`
@@ -258,7 +258,7 @@ class GenericYoloExportService:
             self.config,
             rows,
             require_fully_labeled_images=require_fully_labeled_images,
-            dedup_threshold=dedup_threshold,
+            collapse_near_duplicates=collapse_near_duplicates,
             max_images=max_images,
             seed=seed,
         )

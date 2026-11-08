@@ -33,6 +33,8 @@ TASK_FAMILIES = (
     'source_backfill',
     'region_text',
 )
+# The lane that fills a module adds it here; the rest stay empty until their lane lands.
+FILLED_RESEARCH_MODULES = frozenset({'clustering', 'near_dup', 'source_backfill'})
 RESEARCH_TASK_MODULES = TASK_FAMILIES[-6:]
 RESEARCH_CONFIG_MODULES = (
     'clustering',
@@ -60,6 +62,6 @@ def test_every_research_config_module_is_in_both_aggregators(name: str) -> None:
     routes_module = importlib.import_module(f'src.config.task_routes.{name}')
     assert kinds_module in job_kinds._MODULES
     assert routes_module in task_routes._MODULES
-    if name != 'clustering':  # filled by lane 4F; each lane exempts its own module here
+    if name not in FILLED_RESEARCH_MODULES:
         assert kinds_module.KINDS == ()
         assert routes_module.ROUTES == {}

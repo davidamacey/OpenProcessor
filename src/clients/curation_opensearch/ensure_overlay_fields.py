@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
 from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING, ITEMS_VIZ_MAPPING
+from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 
 
 if TYPE_CHECKING:
@@ -71,7 +72,8 @@ async def ensure_images_upload_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
     """PUT the BA-1/BA-4 ``source_identifier`` / ``ingest_run_id`` keyword
-    fields and the ingest write id onto the existing images mapping.
+    fields, the ``content_sha256`` exact key, the near-duplicate projection fields and the
+    ingest write id onto the existing images mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
@@ -80,6 +82,8 @@ async def ensure_images_upload_fields(
         'properties': {
             'source_identifier': {'type': 'keyword'},
             'ingest_run_id': {'type': 'keyword'},
+            'content_sha256': {'type': 'keyword'},
+            **NEAR_DUP_MAPPING,
             **IMAGES_WRITE_ID_MAPPING,
         }
     }
@@ -236,12 +240,7 @@ async def ensure_items_score_fields(
         'mistakenness_method',
         'mistakenness_version',
         'mistakenness_scored_at',
-        'dup_group_id',
-        'dup_group_size',
-        'dup_is_representative',
-        'dup_threshold',
-        'dup_method',
-        'dup_scored_at',
+        *NEAR_DUP_MAPPING,
     ]
     body = {
         'properties': {
@@ -253,12 +252,7 @@ async def ensure_items_score_fields(
             'mistakenness_method': {'type': 'keyword'},
             'mistakenness_version': {'type': 'keyword'},
             'mistakenness_scored_at': {'type': 'date'},
-            'dup_group_id': {'type': 'keyword'},
-            'dup_group_size': {'type': 'integer'},
-            'dup_is_representative': {'type': 'boolean'},
-            'dup_threshold': {'type': 'float'},
-            'dup_method': {'type': 'keyword'},
-            'dup_scored_at': {'type': 'date'},
+            **NEAR_DUP_MAPPING,
         }
     }
     try:

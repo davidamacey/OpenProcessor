@@ -40,9 +40,9 @@ logger = get_logger(__name__)
 class _ExportRow:
     """One label row scrolled off the items index, en route to a label file.
 
-    Structurally satisfies ``src.services.detection.frame_dedup._DedupRow``
+    Structurally satisfies ``src.services.near_duplicates.collapse.CollapsibleRow``
     (``image_id`` + ``has_test_crop``) so the same row objects can be
-    handed straight to :func:`~src.services.detection.frame_dedup.dedup_rows_by_embedding`.
+    handed straight to :func:`~src.services.near_duplicates.collapse.collapse_near_duplicates`.
     """
 
     item_id: str
@@ -51,7 +51,7 @@ class _ExportRow:
     bbox_norm: list[float]
     class_id: int
     class_name: str
-    # Named to match frame_dedup._DedupRow's protocol attribute directly
+    # Named to match CollapsibleRow's protocol attribute directly
     # (rather than a differently-named field + an adapter property) -- this
     # is also this export's frozen ``test_holdout`` flag: a row with
     # has_test_crop=True forces its whole split group (its source image) to

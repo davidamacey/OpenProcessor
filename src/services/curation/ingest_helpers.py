@@ -1,13 +1,10 @@
-"""Ingest helpers: the image fingerprint, the upright decode and the item id.
+"""Ingest helpers: the upright decode and the item id.
 
 Split out of :mod:`src.services.curation.ingest` so the service module holds the
 orchestration only.
 """
 
 from __future__ import annotations
-
-import hashlib
-import io
 
 from src.config.env import env_int
 from src.services.curation.image_decode import DecodedImage, decode_image
@@ -20,22 +17,6 @@ from src.utils.stage_timing import stage_timer
 # pipeline from swamping Triton's queue. Override with
 # OP_MAX_INGEST_CONCURRENCY (no rebuild required).
 MAX_INGEST_CONCURRENCY = env_int('OP_MAX_INGEST_CONCURRENCY', 16)
-
-
-def _imohash_bytes(data: bytes) -> str:
-    """Compute a fingerprint for raw image bytes, used for dedup.
-
-    Uses ``imohash`` if available; otherwise falls back to a sha256
-    prefix (slim test environments only — production installs imohash).
-    """
-    with stage_timer('hash', nbytes=len(data)):
-        try:
-            import imohash
-
-            typed: str = imohash.hashfileobject(io.BytesIO(data)).hex()
-            return typed
-        except Exception:
-            return hashlib.sha256(data).hexdigest()[:32]
 
 
 def _decode_image(image_bytes: bytes) -> DecodedImage:

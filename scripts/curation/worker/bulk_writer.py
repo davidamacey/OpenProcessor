@@ -25,6 +25,7 @@ from src.services.curation.region_box_pass import (
     worker_stamps,
 )
 from src.services.curation.wire import region_event_payload
+from src.services.near_duplicates import pending as near_dup_pending
 
 
 logger = get_logger('curation_worker')
@@ -248,6 +249,10 @@ async def _bulk_update_one_project(
             written['region_run_verify'] = None
         return written
 
+    # Marked before the write: a skipped (stale) task only costs one idempotent rescore.
+    await near_dup_pending.enqueue_pending_bound(
+        'item', [t.crop_id for t in eligible if t.pending_boxes is not None], 'boxes_changed'
+    )
     result = await occ_skip_on_conflict_bulk(
         opensearch,
         doc_ids=[t.crop_id for t in eligible],

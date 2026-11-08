@@ -10946,23 +10946,15 @@
             "title": "Class Ids",
             "type": "array"
           },
+          "collapse_near_duplicates": {
+            "default": false,
+            "title": "Collapse Near Duplicates",
+            "type": "boolean"
+          },
           "copy_images": {
             "default": true,
             "title": "Copy Images",
             "type": "boolean"
-          },
-          "dedup_threshold": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold"
           },
           "empty_bg_ratio": {
             "default": 0.1,
@@ -11350,18 +11342,10 @@
       "ExportYoloRequest": {
         "additionalProperties": false,
         "properties": {
-          "dedup_threshold": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold"
+          "collapse_near_duplicates": {
+            "default": false,
+            "title": "Collapse Near Duplicates",
+            "type": "boolean"
           },
           "export_dir": {
             "anyOf": [
@@ -12042,6 +12026,11 @@
       },
       "IngestImageResponse": {
         "properties": {
+          "content_sha256": {
+            "default": "",
+            "title": "Content Sha256",
+            "type": "string"
+          },
           "error": {
             "anyOf": [
               {
@@ -12071,11 +12060,6 @@
           },
           "image_path": {
             "title": "Image Path",
-            "type": "string"
-          },
-          "imohash": {
-            "default": "",
-            "title": "Imohash",
             "type": "string"
           },
           "n_crops": {
@@ -14136,31 +14120,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -14326,6 +14285,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "needs_new_class": {
             "default": false,
@@ -18739,6 +18723,475 @@
           "project"
         ],
         "title": "ModelSharingUser",
+        "type": "object"
+      },
+      "NearDupActiveProfile": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "revision"
+        ],
+        "title": "NearDupActiveProfile",
+        "type": "object"
+      },
+      "NearDupDecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "a_id": {
+            "minLength": 1,
+            "title": "A Id",
+            "type": "string"
+          },
+          "b_id": {
+            "minLength": 1,
+            "title": "B Id",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "same",
+              "different"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "image",
+              "item"
+            ],
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "a_id",
+          "b_id",
+          "decision"
+        ],
+        "title": "NearDupDecisionIn",
+        "type": "object"
+      },
+      "NearDupDecisionView": {
+        "properties": {
+          "a_id": {
+            "title": "A Id",
+            "type": "string"
+          },
+          "b_id": {
+            "title": "B Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by": {
+            "title": "Decided By",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "same",
+              "different"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "image",
+              "item"
+            ],
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "level",
+          "a_id",
+          "b_id",
+          "decision",
+          "decided_by",
+          "decided_at"
+        ],
+        "title": "NearDupDecisionView",
+        "type": "object"
+      },
+      "NearDupGroupDetail": {
+        "properties": {
+          "group": {
+            "$ref": "#/components/schemas/NearDupGroupSummary"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/NearDupMemberView"
+            },
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "group",
+          "members"
+        ],
+        "title": "NearDupGroupDetail",
+        "type": "object"
+      },
+      "NearDupGroupPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NearDupGroupSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "NearDupGroupPage",
+        "type": "object"
+      },
+      "NearDupGroupSummary": {
+        "properties": {
+          "group_id": {
+            "description": "The lineage id: stable while the group keeps its members.",
+            "title": "Group Id",
+            "type": "string"
+          },
+          "has_holdout": {
+            "title": "Has Holdout",
+            "type": "boolean"
+          },
+          "min_cosine_to_rep": {
+            "title": "Min Cosine To Rep",
+            "type": "number"
+          },
+          "min_edge_cosine": {
+            "title": "Min Edge Cosine",
+            "type": "number"
+          },
+          "purpose": {
+            "enum": [
+              "dedup",
+              "leak"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
+          "representative_id": {
+            "title": "Representative Id",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "group_id",
+          "purpose",
+          "size",
+          "representative_id",
+          "min_edge_cosine",
+          "min_cosine_to_rep",
+          "has_holdout"
+        ],
+        "title": "NearDupGroupSummary",
+        "type": "object"
+      },
+      "NearDupLevelStatus": {
+        "properties": {
+          "current_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NearDupRunView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "level": {
+            "enum": [
+              "image",
+              "item"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "pending_count": {
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "stale_reasons": {
+            "items": {
+              "enum": [
+                "pending",
+                "rebuild_required",
+                "no_run"
+              ],
+              "type": "string"
+            },
+            "title": "Stale Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "level",
+          "current_run",
+          "pending_count",
+          "stale_reasons"
+        ],
+        "title": "NearDupLevelStatus",
+        "type": "object"
+      },
+      "NearDupMemberView": {
+        "properties": {
+          "cosine_to_rep": {
+            "title": "Cosine To Rep",
+            "type": "number"
+          },
+          "is_representative": {
+            "title": "Is Representative",
+            "type": "boolean"
+          },
+          "member_id": {
+            "title": "Member Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "member_id",
+          "is_representative",
+          "cosine_to_rep"
+        ],
+        "title": "NearDupMemberView",
+        "type": "object"
+      },
+      "NearDupRunPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NearDupRunView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "NearDupRunPage",
+        "type": "object"
+      },
+      "NearDupRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "enum": [
+              "image",
+              "item"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "mode": {
+            "default": "full",
+            "enum": [
+              "full",
+              "incremental"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level"
+        ],
+        "title": "NearDupRunRequest",
+        "type": "object"
+      },
+      "NearDupRunStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind"
+        ],
+        "title": "NearDupRunStarted",
+        "type": "object"
+      },
+      "NearDupRunView": {
+        "properties": {
+          "algorithm_version": {
+            "title": "Algorithm Version",
+            "type": "string"
+          },
+          "dedup_groups": {
+            "title": "Dedup Groups",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "grouped_members": {
+            "title": "Grouped Members",
+            "type": "integer"
+          },
+          "holdout_absorbed": {
+            "title": "Holdout Absorbed",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "largest_group": {
+            "title": "Largest Group",
+            "type": "integer"
+          },
+          "leak_groups": {
+            "title": "Leak Groups",
+            "type": "integer"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "members_scored": {
+            "title": "Members Scored",
+            "type": "integer"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "oversized_split": {
+            "title": "Oversized Split",
+            "type": "integer"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "profile_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Revision"
+          },
+          "space": {
+            "title": "Space",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "level",
+          "mode",
+          "status",
+          "space",
+          "algorithm_version",
+          "profile_revision",
+          "params",
+          "members_scored",
+          "dedup_groups",
+          "leak_groups",
+          "grouped_members",
+          "largest_group",
+          "oversized_split",
+          "holdout_absorbed",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "NearDupRunView",
+        "type": "object"
+      },
+      "NearDupStatus": {
+        "properties": {
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/NearDupLevelStatus"
+            },
+            "title": "Levels",
+            "type": "array"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NearDupActiveProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "profile",
+          "levels"
+        ],
+        "title": "NearDupStatus",
         "type": "object"
       },
       "NewClassVotes": {
@@ -25092,31 +25545,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -25282,6 +25710,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "nearest_fp_subid": {
             "anyOf": [
@@ -29134,31 +29587,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -29324,6 +29752,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "needs_new_class": {
             "default": false,
@@ -30814,31 +31267,6 @@
             ],
             "title": "Detector Confidence"
           },
-          "dup_group_id": {
-            "title": "Dup Group Id"
-          },
-          "dup_group_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Group Size"
-          },
-          "dup_is_representative": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dup Is Representative"
-          },
           "embedding_state": {
             "anyOf": [
               {
@@ -31028,6 +31456,31 @@
               }
             ],
             "title": "Mistakenness Version"
+          },
+          "near_dup_group_id": {
+            "title": "Near Dup Group Id"
+          },
+          "near_dup_group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Group Size"
+          },
+          "near_dup_is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Dup Is Representative"
           },
           "needs_new_class": {
             "default": false,
@@ -32256,6 +32709,24 @@
         "title": "SkippedCounts",
         "type": "object"
       },
+      "SourceBackfillStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind"
+        ],
+        "title": "SourceBackfillStarted",
+        "type": "object"
+      },
       "SourceBucket": {
         "properties": {
           "doc_count": {
@@ -32610,39 +33081,6 @@
           "axis": {
             "title": "Axis",
             "type": "string"
-          },
-          "dedup_threshold_default": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold Default"
-          },
-          "dedup_threshold_max": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold Max"
-          },
-          "dedup_threshold_min": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dedup Threshold Min"
           },
           "default": {
             "title": "Default",
@@ -47908,7 +48346,7 @@
     },
     "/curation/projects/{project}/ingest/upload": {
       "post": {
-        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nThe uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(imohash over the uploaded bytes) and one already in the images index\ncomes back as ``duplicate`` without re-running inference — and since\nthe persisted path is itself content-addressed by that same hash, the\nsame bytes are only ever written to disk once, so a crashed upload run\ncan simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
+        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nThe uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(SHA-256 over the uploaded bytes) and one already stored in the project\ncomes back as ``duplicate`` without re-running inference — and since\nthe persisted path is itself content-addressed by that same hash, the\nsame bytes are only ever written to disk once, so a crashed upload run\ncan simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
         "operationId": "curation_ingest_upload_curation_projects__project__ingest_upload_post",
         "parameters": [
           {
@@ -49573,6 +50011,864 @@
         "summary": "Set Model Sharing",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles": {
+      "get": {
+        "operationId": "list_near_dup_profile_curation_projects__project__near_dup_profiles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/active": {
+      "get": {
+        "operationId": "active_near_dup_profile_curation_projects__project__near_dup_profiles_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "axis",
+            "required": false,
+            "schema": {
+              "default": "near_dup",
+              "title": "Axis",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Active Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/{name}": {
+      "delete": {
+        "operationId": "delete_near_dup_profile_curation_projects__project__near_dup_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Expected Revision",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      },
+      "get": {
+        "operationId": "get_near_dup_profile_curation_projects__project__near_dup_profiles__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      },
+      "put": {
+        "operationId": "put_near_dup_profile_curation_projects__project__near_dup_profiles__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchConfigPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigDoc"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/{name}/activate": {
+      "post": {
+        "operationId": "activate_near_dup_profile_curation_projects__project__near_dup_profiles__name__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchActive"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activate Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_duplicates/decisions": {
+      "post": {
+        "description": "Pin two members together (`same`) or apart (`different`) for every later run.",
+        "operationId": "decide_near_duplicates_curation_projects__project__near_duplicates_decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NearDupDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupDecisionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Near Duplicates",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_duplicates/decisions/{decision_id}": {
+      "delete": {
+        "operationId": "undecide_near_duplicates_curation_projects__project__near_duplicates_decisions__decision_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "decision_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Decision Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undecide Near Duplicates",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_duplicates/groups": {
+      "get": {
+        "description": "The current run's groups of one level, largest first.",
+        "operationId": "list_near_duplicate_groups_curation_projects__project__near_duplicates_groups_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level",
+            "required": true,
+            "schema": {
+              "enum": [
+                "image",
+                "item"
+              ],
+              "title": "Level",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "purpose",
+            "required": false,
+            "schema": {
+              "default": "dedup",
+              "enum": [
+                "dedup",
+                "leak"
+              ],
+              "title": "Purpose",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_size",
+            "required": false,
+            "schema": {
+              "default": 2,
+              "minimum": 2,
+              "title": "Min Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_holdout",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Holdout"
+            }
+          },
+          {
+            "description": "`next_cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`next_cursor` of the previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupGroupPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Near Duplicate Groups",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_duplicates/groups/{group_id}": {
+      "get": {
+        "operationId": "get_near_duplicate_group_curation_projects__project__near_duplicates_groups__group_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level",
+            "required": true,
+            "schema": {
+              "enum": [
+                "image",
+                "item"
+              ],
+              "title": "Level",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupGroupDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Near Duplicate Group",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_duplicates/runs": {
+      "get": {
+        "operationId": "list_near_duplicate_runs_curation_projects__project__near_duplicates_runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "image",
+                    "item"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupRunPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Near Duplicate Runs",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      },
+      "post": {
+        "description": "Start a full build (`mode` full) or the incremental pass (`incremental`) of one level.",
+        "operationId": "start_near_duplicate_run_curation_projects__project__near_duplicates_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NearDupRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupRunStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Near Duplicate Run",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_duplicates/runs/{run_id}": {
+      "get": {
+        "operationId": "get_near_duplicate_run_curation_projects__project__near_duplicates_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Near Duplicate Run",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_duplicates/status": {
+      "get": {
+        "description": "Per level: the current run, the pending count and why it is stale, if it is.",
+        "operationId": "near_duplicate_status_curation_projects__project__near_duplicates_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Near Duplicate Status",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
         ]
       }
     },
@@ -58846,6 +60142,50 @@
         "summary": "Update Curation Settings Route",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/source_backfill/runs": {
+      "post": {
+        "description": "Start the pass that reads each stored image once and records its content key.",
+        "operationId": "start_source_backfill_curation_projects__project__source_backfill_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceBackfillStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Source Backfill",
+        "tags": [
+          "Curation",
+          "Source backfill"
         ]
       }
     },
