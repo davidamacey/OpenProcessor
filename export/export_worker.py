@@ -1,6 +1,6 @@
 """What an export job runs: the export subprocess command and the engines it produces.
 
-The Celery handler of the ``gpu_export`` queue is ``export/celery_tasks.py``. The two helpers
+The Celery handler of the ``gpu_export`` queue is ``export/export_tasks.py``. The two helpers
 below pick the export toolchain by the model's head kind; they are read by the handler and are
 rewritten by the engine-export rework (B3-E2).
 """

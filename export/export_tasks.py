@@ -1,6 +1,6 @@
 """The ``gpu_export`` consumer: the export image's Celery app and the ``model_export`` handler.
 
-    celery -A export.celery_tasks worker -Q gpu_export -c 1 --max-tasks-per-child=1
+    celery -A export.export_tasks worker -Q gpu_export -c 1 --max-tasks-per-child=1
 
 ``POST /models/upload`` and ``POST /models/{name}/export`` start a ``model_export`` job
 (``src/services/model_export_jobs.py``). This handler runs the export script as a subprocess,
@@ -53,9 +53,9 @@ import trt_build_settings
 from export_worker import APP_DIR, build_command, engines_to_load
 
 
-logger = logging.getLogger('export_celery_tasks')
+logger = logging.getLogger('export_tasks')
 
-app = make_app(include=['export.celery_tasks'])
+app = make_app(include=['export.export_tasks'])
 install_log_context()
 
 MODELS_DIR = Path('/app/models')

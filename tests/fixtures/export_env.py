@@ -107,7 +107,7 @@ class ExportEnv:
         return [status for (status,) in rows]
 
     def run(self, job: repo.JobRow) -> None:
-        from celery_tasks import export_model
+        from export_tasks import export_model
 
         from src.config.job_kinds import KINDS
         from src.tasks.runtime.job_task import run_job
@@ -125,18 +125,18 @@ class ExportEnv:
 def export_env(
     pg: Any, job_env: Any, wakes: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> ExportEnv:
-    import celery_tasks
     import engine_facts
+    import export_tasks
 
     models_dir = tmp_path / 'models'
     models_dir.mkdir()
     stub = tmp_path / 'stub_build.py'
     stub.write_text(STUB_BUILD)
     env = ExportEnv(models_dir=models_dir, loads=[], plan=plan_facts())
-    monkeypatch.setattr(celery_tasks, 'MODELS_DIR', models_dir)
-    monkeypatch.setattr(celery_tasks, 'APP_DIR', tmp_path)
+    monkeypatch.setattr(export_tasks, 'MODELS_DIR', models_dir)
+    monkeypatch.setattr(export_tasks, 'APP_DIR', tmp_path)
     monkeypatch.setattr(
-        celery_tasks,
+        export_tasks,
         'build_command',
         lambda job: [
             sys.executable,
@@ -151,5 +151,5 @@ def export_env(
         env.loads.append((name, keep))
         return True, env.measured
 
-    monkeypatch.setattr(celery_tasks, '_load_and_measure', load)
+    monkeypatch.setattr(export_tasks, '_load_and_measure', load)
     return env

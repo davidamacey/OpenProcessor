@@ -4,7 +4,7 @@ Model Export Service (API side): the validation and naming rules of an uploaded 
 The API image carries no TensorRT, so ``POST /models/upload`` and
 ``POST /models/{name}/export`` do not run the export themselves. They validate the model here and
 start a ``model_export`` job (``src/services/model_export_jobs.py``) that the ``gpu_export``
-consumer, the export image's ``export/celery_tasks.py``, runs. The job row is the task and its
+consumer, the export image's ``export/export_tasks.py``, runs. The job row is the task and its
 status; nothing is kept in a process or in a file.
 """
 

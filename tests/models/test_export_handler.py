@@ -88,9 +88,9 @@ def test_auto_load_off_loads_once_to_measure_and_does_not_keep_it(pg, export_env
 def test_a_cancel_between_phases_ends_cancelled_and_removes_the_partial_engine(
     pg, export_env, monkeypatch
 ) -> None:
-    import celery_tasks
+    import export_tasks
 
-    real = celery_tasks._run_build
+    real = export_tasks._run_build
 
     async def build_then_cancel(ctx, cmd, step_times):
         await real(ctx, cmd, step_times)
@@ -101,7 +101,7 @@ def test_a_cancel_between_phases_ends_cancelled_and_removes_the_partial_engine(
         )  # the write that brings the request back
         return True
 
-    monkeypatch.setattr(celery_tasks, '_run_build', build_then_cancel)
+    monkeypatch.setattr(export_tasks, '_run_build', build_then_cancel)
     job = export_env.start_job()
     export_env.run(job)
     assert export_env.job_row(pg, job)[0] == 'cancelled'
@@ -115,12 +115,12 @@ def test_a_cancel_between_phases_ends_cancelled_and_removes_the_partial_engine(
 def test_a_cancel_keeps_the_directory_of_an_engine_that_was_already_ready(
     pg, export_env, monkeypatch
 ) -> None:
-    import celery_tasks
+    import export_tasks
 
     first = export_env.start_job()
     export_env.run(first)
     assert export_env.job_row(pg, first)[0] == 'completed'
-    real = celery_tasks._run_build
+    real = export_tasks._run_build
 
     async def build_then_cancel(ctx, cmd, step_times):
         await real(ctx, cmd, step_times)
@@ -129,7 +129,7 @@ def test_a_cancel_keeps_the_directory_of_an_engine_that_was_already_ready(
         await ctx.progress(1, 100, 'exporting', force=True)
         return True
 
-    monkeypatch.setattr(celery_tasks, '_run_build', build_then_cancel)
+    monkeypatch.setattr(export_tasks, '_run_build', build_then_cancel)
     second = export_env.start_job(name=first.params['triton_name'])
     export_env.run(second)
     assert export_env.job_row(pg, second)[0] == 'cancelled'
@@ -140,12 +140,12 @@ def test_a_cancel_keeps_the_directory_of_an_engine_that_was_already_ready(
 def test_a_failing_build_fails_the_job_with_the_output_tail_and_the_engine_row(
     pg, export_env, monkeypatch, tmp_path
 ) -> None:
-    import celery_tasks
+    import export_tasks
 
     boom = tmp_path / 'boom.py'
     boom.write_text('import sys\nprint("boom: no TensorRT")\nsys.exit(3)\n')
     monkeypatch.setattr(
-        celery_tasks, 'build_command', lambda _job: [__import__('sys').executable, str(boom)]
+        export_tasks, 'build_command', lambda _job: [__import__('sys').executable, str(boom)]
     )
     job = export_env.start_job()
     export_env.run(job)
