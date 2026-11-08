@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from fixtures.job_fixtures import job_env, queue_hooks, wakes
+from fixtures.job_fixtures import job_env, kinds, producer, queue_hooks, wakes
 from sqlalchemy.orm import Session
 
 from src.services.embedding_spaces.catalog import sync_catalog
@@ -14,4 +14,4 @@ def catalog(pg):
         sync_catalog(session)
 
 
-__all__ = ['catalog', 'job_env', 'queue_hooks', 'wakes']
+__all__ = ['catalog', 'job_env', 'kinds', 'producer', 'queue_hooks', 'wakes']

@@ -5,9 +5,10 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, update
+from sqlalchemy import func, select, update
 
-from src.db.models.embeddings import EmbeddingReindexRun
+from src.db.models.embeddings import EmbeddingReindexRun, EmbeddingSpace
+from src.db.models.jobs import Job
 
 
 if TYPE_CHECKING:
@@ -71,3 +72,34 @@ async def finish_run(session: AsyncSession, job_id: uuid.UUID) -> None:
         .where(EmbeddingReindexRun.job_id == job_id)
         .values(finished_at=dt.datetime.now(dt.UTC))
     )
+
+
+async def get_run_view(session: AsyncSession, run_id: uuid.UUID) -> dict[str, Any] | None:
+    """The run with its space key and its job's status and progress (row security scopes it)."""
+    found = (
+        await session.execute(
+            select(EmbeddingReindexRun, EmbeddingSpace.space_key, Job.status, Job.progress)
+            .join(EmbeddingSpace, EmbeddingSpace.id == EmbeddingReindexRun.space_id)
+            .join(Job, Job.id == EmbeddingReindexRun.job_id)
+            .where(EmbeddingReindexRun.id == run_id)
+        )
+    ).one_or_none()
+    if found is None:
+        return None
+    run, key, status, progress = found
+    return {
+        'id': str(run.id),
+        'space_key': key,
+        'mode': run.mode,
+        'scope': run.scope,
+        'docs_total': run.docs_total,
+        'docs_done': run.docs_done,
+        'docs_failed': run.docs_failed,
+        'docs_skipped': run.docs_skipped,
+        'bytes_estimate': run.bytes_estimate,
+        'started_at': run.started_at,
+        'finished_at': run.finished_at,
+        'job_id': str(run.job_id),
+        'job_status': status,
+        'job_progress': progress or {},
+    }

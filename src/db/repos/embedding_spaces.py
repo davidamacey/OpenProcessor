@@ -172,6 +172,15 @@ def get_model_version(session: Session, model_key: str, version: int) -> ModelVe
     return None if row is None else _version_row(row)
 
 
+def list_model_versions(session: Session) -> list[ModelVersionRow]:
+    rows = session.scalars(
+        select(EmbeddingModelVersion).order_by(
+            EmbeddingModelVersion.model_key, EmbeddingModelVersion.version
+        )
+    )
+    return [_version_row(r) for r in rows]
+
+
 def insert_model_version(session: Session, new: NewModelVersion) -> ModelVersionRow:
     row = EmbeddingModelVersion(
         model_key=new.model_key,

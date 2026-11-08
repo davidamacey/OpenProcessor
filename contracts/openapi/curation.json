@@ -9727,6 +9727,29 @@
         "title": "EmbeddingBreakdown",
         "type": "object"
       },
+      "EmbeddingBuildRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_size": {
+            "default": 64,
+            "maximum": 512.0,
+            "minimum": 1.0,
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "backfill",
+            "enum": [
+              "build",
+              "backfill"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "EmbeddingBuildRequest",
+        "type": "object"
+      },
       "EmbeddingByState": {
         "description": "Items per recorded ``embedding_state``; every key is always present.",
         "properties": {
@@ -9758,6 +9781,82 @@
           }
         },
         "title": "EmbeddingByState",
+        "type": "object"
+      },
+      "EmbeddingModelEntry": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "matryoshka_dims": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Matryoshka Dims",
+            "type": "array"
+          },
+          "modalities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Modalities",
+            "type": "array"
+          },
+          "model_key": {
+            "title": "Model Key",
+            "type": "string"
+          },
+          "native_dim": {
+            "title": "Native Dim",
+            "type": "integer"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_key",
+          "version",
+          "modalities",
+          "native_dim",
+          "matryoshka_dims",
+          "licence",
+          "available"
+        ],
+        "title": "EmbeddingModelEntry",
+        "type": "object"
+      },
+      "EmbeddingModelListResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingModelEntry"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "EmbeddingModelListResponse",
         "type": "object"
       },
       "EmbeddingPolicy": {
@@ -9821,6 +9920,352 @@
           }
         },
         "title": "EmbeddingPolicy",
+        "type": "object"
+      },
+      "EmbeddingPromoteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "default": false,
+            "description": "Waive the evaluation requirement (owner call).",
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "EmbeddingPromoteRequest",
+        "type": "object"
+      },
+      "EmbeddingPromoteResponse": {
+        "properties": {
+          "config_epoch": {
+            "title": "Config Epoch",
+            "type": "integer"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmbeddingSpaceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "primary": {
+            "$ref": "#/components/schemas/EmbeddingSpaceView"
+          }
+        },
+        "required": [
+          "primary",
+          "previous",
+          "config_epoch"
+        ],
+        "title": "EmbeddingPromoteResponse",
+        "type": "object"
+      },
+      "EmbeddingReindexRunResponse": {
+        "properties": {
+          "bytes_estimate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes Estimate"
+          },
+          "docs_done": {
+            "title": "Docs Done",
+            "type": "integer"
+          },
+          "docs_failed": {
+            "title": "Docs Failed",
+            "type": "integer"
+          },
+          "docs_skipped": {
+            "title": "Docs Skipped",
+            "type": "integer"
+          },
+          "docs_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docs Total"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "job_progress": {
+            "additionalProperties": true,
+            "title": "Job Progress",
+            "type": "object"
+          },
+          "job_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Status"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "scope": {
+            "additionalProperties": true,
+            "title": "Scope",
+            "type": "object"
+          },
+          "space_key": {
+            "title": "Space Key",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          }
+        },
+        "required": [
+          "id",
+          "space_key",
+          "mode",
+          "scope",
+          "docs_total",
+          "docs_done",
+          "docs_failed",
+          "docs_skipped",
+          "bytes_estimate",
+          "started_at",
+          "finished_at",
+          "job_id",
+          "job_status",
+          "job_progress"
+        ],
+        "title": "EmbeddingReindexRunResponse",
+        "type": "object"
+      },
+      "EmbeddingSpaceListResponse": {
+        "properties": {
+          "spaces": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingSpaceView"
+            },
+            "title": "Spaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "spaces"
+        ],
+        "title": "EmbeddingSpaceListResponse",
+        "type": "object"
+      },
+      "EmbeddingSpaceRegisterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dim": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dim"
+          },
+          "model_key": {
+            "title": "Model Key",
+            "type": "string"
+          },
+          "model_version": {
+            "minimum": 1.0,
+            "title": "Model Version",
+            "type": "integer"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Target"
+          }
+        },
+        "required": [
+          "model_key",
+          "model_version",
+          "target"
+        ],
+        "title": "EmbeddingSpaceRegisterRequest",
+        "type": "object"
+      },
+      "EmbeddingSpaceStartResponse": {
+        "description": "202 of register, build and retire: the space and the job that works on it.",
+        "properties": {
+          "bytes_estimate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes Estimate"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when nothing needed a job (a never-built retire).",
+            "title": "Job Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "space_key": {
+            "title": "Space Key",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Target"
+          }
+        },
+        "required": [
+          "space_key",
+          "target",
+          "job_id",
+          "run_id",
+          "bytes_estimate"
+        ],
+        "title": "EmbeddingSpaceStartResponse",
+        "type": "object"
+      },
+      "EmbeddingSpaceView": {
+        "properties": {
+          "dim": {
+            "title": "Dim",
+            "type": "integer"
+          },
+          "docs_with_vector": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Documents holding a vector in this space; null when the index was not asked.",
+            "title": "Docs With Vector"
+          },
+          "model_key": {
+            "title": "Model Key",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "integer"
+          },
+          "ready_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ready At"
+          },
+          "role": {
+            "enum": [
+              "primary",
+              "optional",
+              "candidate"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "space_key": {
+            "title": "Space Key",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "building",
+              "ready",
+              "retiring",
+              "retired",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Target"
+          }
+        },
+        "required": [
+          "space_key",
+          "target",
+          "model_key",
+          "model_version",
+          "dim",
+          "role",
+          "status",
+          "ready_at",
+          "docs_with_vector"
+        ],
+        "title": "EmbeddingSpaceView",
         "type": "object"
       },
       "EvalClassGt": {
@@ -31914,6 +32359,16 @@
         "title": "StratumMetrics",
         "type": "object"
       },
+      "Target": {
+        "enum": [
+          "item",
+          "box",
+          "frame",
+          "item_text"
+        ],
+        "title": "Target",
+        "type": "string"
+      },
       "TestHoldoutFreezeRequest": {
         "additionalProperties": false,
         "description": "Selection is deterministic (SHA1 of each ``crop_id``, per class — see\n``src/services/curation/holdout.py``), so there is no seed: an unknown\nfield such as ``seed`` is a ``422`` rather than silently ignored.",
@@ -36039,6 +36494,49 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/curation/embedding/models": {
+      "get": {
+        "description": "The deployment's embedding catalog with whether each version can back a space now.",
+        "operationId": "list_embedding_models_curation_embedding_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingModelListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "List Embedding Models",
+        "tags": [
+          "Projects",
+          "Embedding"
+        ]
+      }
+    },
     "/curation/events": {
       "get": {
         "description": "SSE stream of global events only (``project: null``): project\nlifecycle (``project.*``) and ``combine.*`` (``GLOBAL_EVENT_PREFIXES``).\nA ``combine.*`` event names the project it builds in ``target``. No\nproject's own events are ever delivered here; a project's config\nchanges (``config.changed``) ride that project's own stream. Frames carry\n``id`` and resume through ``Last-Event-ID`` like the project stream.",
@@ -44440,6 +44938,417 @@
         "summary": "Get Detections Summary",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/embedding/reindex-runs/{run_id}": {
+      "get": {
+        "description": "The run with its job's status and progress. 404 for another project's run.",
+        "operationId": "get_embedding_reindex_run_curation_projects__project__embedding_reindex_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingReindexRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Embedding Reindex Run",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      }
+    },
+    "/curation/projects/{project}/embedding/spaces": {
+      "get": {
+        "description": "The project's spaces (live and retired), by target.",
+        "operationId": "list_embedding_spaces_curation_projects__project__embedding_spaces_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Target"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingSpaceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Embedding Spaces",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      },
+      "post": {
+        "description": "Register a candidate space and start its build. 409 `embedding_space_exists`, 422\n`embedding_model_unavailable`, 409 `embedding_insufficient_storage` when the data path is short.",
+        "operationId": "register_embedding_space_curation_projects__project__embedding_spaces_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "8-200 characters; a repeat answers the first job.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "8-200 characters; a repeat answers the first job.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingSpaceRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingSpaceStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Embedding Space",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      }
+    },
+    "/curation/projects/{project}/embedding/spaces/{space_key}/build": {
+      "post": {
+        "description": "Re-start a failed or cancelled build, or backfill documents a ready space lacks. 409\n`job_busy` while another job works on the space.",
+        "operationId": "build_embedding_space_curation_projects__project__embedding_spaces__space_key__build_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_key",
+            "required": true,
+            "schema": {
+              "title": "Space Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The target of the space (item, box, frame).",
+            "in": "query",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Target",
+              "description": "The target of the space (item, box, frame)."
+            }
+          },
+          {
+            "description": "8-200 characters; a repeat answers the first job.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "8-200 characters; a repeat answers the first job.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingBuildRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingSpaceStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Build Embedding Space",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      }
+    },
+    "/curation/projects/{project}/embedding/spaces/{space_key}/promote": {
+      "post": {
+        "description": "The fenced flip. 409 `embedding_space_not_ready` or `embedding_evaluation_missing`.",
+        "operationId": "promote_embedding_space_curation_projects__project__embedding_spaces__space_key__promote_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_key",
+            "required": true,
+            "schema": {
+              "title": "Space Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The target of the space (item, box, frame).",
+            "in": "query",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Target",
+              "description": "The target of the space (item, box, frame)."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingPromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingPromoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote Embedding Space",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      }
+    },
+    "/curation/projects/{project}/embedding/spaces/{space_key}/retire": {
+      "post": {
+        "description": "Retire an optional space and queue its `clear` run. The primary cannot be retired.",
+        "operationId": "retire_embedding_space_curation_projects__project__embedding_spaces__space_key__retire_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_key",
+            "required": true,
+            "schema": {
+              "title": "Space Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The target of the space (item, box, frame).",
+            "in": "query",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Target",
+              "description": "The target of the space (item, box, frame)."
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingSpaceStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retire Embedding Space",
+        "tags": [
+          "Curation",
+          "Embedding"
         ]
       }
     },
