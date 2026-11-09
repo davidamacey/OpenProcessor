@@ -22,7 +22,7 @@
 </script>
 
 <!-- Status bar (no scroll sentinel here — see ClustersGrid).
-     DQ-p2 (docs/design/data-quality-pass-2026-09-24.md): this always
+     DQ-p2: this always
      read off clusterPager (the cluster-grid pager) — "102 / 102 all
      loaded" under a much larger slot-gallery grid, because the gallery
      view (isSlotFilter) renders slotGallery.pager.items,
