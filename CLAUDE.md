@@ -54,8 +54,10 @@ at port 4603.
 | `src/core/` | App-wide plumbing: CORS, dependencies, error handlers, logging, metrics, request origin, upload limits |
 | `src/routers/` | Core routers; `src/routers/curation/` holds the curation routers (thin HTTP adapters) |
 | `src/services/` | Logic with no FastAPI dependency: `curation/`, `config_store/`, `projects/`, `labeling/` (VLM), `detection/`, `training/` |
-| `src/clients/` | Triton, OpenSearch (`curation_opensearch/` has the index bodies, class registry and mapping migrations), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |
-| `src/config/` | `CurationConfig`, `RegionFields`, `DetectionProfile`, `RegionStatus`, project records and context, retired-env guard |
+| `src/clients/` | Triton, OpenSearch (`curation_opensearch/` has the index bodies and mapping migrations), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |
+| `src/db/` | PostgreSQL control plane: SQLAlchemy models, Alembic migrations (`migrations/versions/`), repositories (`repos/`), the session helpers `project_tx` and `deployment_tx` (`session.py`) |
+| `src/tasks/` | Celery app, the task modules (one per job family), the beat schedule and the reaper; routes for them are in `src/config/task_routes/` |
+| `src/config/` | `CurationConfig`, `RegionFields`, `DetectionProfile`, `RegionStatus`, project records and context, job kinds, task routes, retired-env guard |
 | `src/domain/` | Pure rules and field vocabularies shared by clients and services (`region_boxes`, `history`, `embedding_state`, `item_text`, `audit_math`, `ingest_class_sources`); imports only `config` and `utils` |
 | `src/schemas/` | Wire models (`curation/`, `bakeoff/`, `embed`, `ingest`, ...); routers and services import them, they import neither |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
@@ -75,22 +77,28 @@ at port 4603.
 source mounts. `docker-compose.dev.yml` adds local builds and hot-reload mounts
 for a checkout. The Makefile, `scripts/setup.sh` and the `openprocessor` CLI
 add the dev overlay automatically when `src/main.py` exists next to the compose
-file. `docker-compose.gpu-arbiter.yml` is an opt-in overlay that mounts the
-Docker socket (read its header first).
+file. `docker-compose.gpu-arbiter.yml` is an opt-in overlay that adds the
+one-process `gpu-arbiter-worker`, the only service that mounts the Docker
+socket (read its header first). `docker-compose.pgbouncer.yml` is an opt-in
+connection pooler for PostgreSQL.
 
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
 | `api` | none | 4603 | FastAPI, all routes |
-| `opensearch` | none | 4607 | k-NN store and the curation datastore |
-| `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-assist-loop-worker`, `curation-cluster-refresh` | `curation` | | Region cascade, VLM loop, auto-label driver, cluster-sampled auto-label loop, clustering refresh |
+| `opensearch` | none | 4607 | k-NN store for items, images and vectors (control data is in PostgreSQL) |
+| `postgres`, `valkey` | none | | PostgreSQL 18 (projects, classes, configs, jobs, events, spaces, partitions) and the Valkey 9 task broker; internal only, passwords from `secrets/` |
+| `db-migrate` | none | | One-shot: Alembic upgrade and OpenSearch index migration; `api` and every worker wait for it |
+| `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | none | | Celery workers for the `jobs`, `periodic` and `open_vocab` queues, and the beat scheduler (one replica) |
+| `curation-detection-worker`, `curation-vlm-worker` | `curation` | | Region cascade and VLM loop stream workers; replicas share projects through claims in PostgreSQL |
+| `curation-auto-label-worker`, `curation-assist-loop-worker`, `cluster-worker` | `curation` | | Celery workers for the `autolabel`, `assist_loop` and `cluster` queues |
 | `model-export` | `setup` | | One-shot engine-build toolchain (TensorRT, ModelOpt, export scripts, model-repo seed); `models install`, `export` and the `make` export targets run it; never started by `up` |
-| `model-export-worker` | `export` | | Runs the engine builds the API queues for `POST /models/upload` and `POST /models/{model_name}/export` (job files under `/jobs/model_export`); the routes answer 503 while it is down |
-| `curation-evaluator` | `evaluator` | | Bake-off runner, on demand (`./openprocessor curation up curation-evaluator`) |
+| `model-export-worker` | `export` | | Celery worker (queue `gpu_export`) that builds the engines the API queues for `POST /models/upload` and `POST /models/{model_name}/export`; the routes answer 503 while it is down |
+| `curation-evaluator` | `evaluator` | | Bake-off runner (queue `gpu_eval`), on demand (`./openprocessor curation up curation-evaluator`) |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt |
 | `vlm` | `vlm` | 4612 | Local vLLM serving a catalog model |
-| `curation-trainer`, `curation-mlflow` | `training` | 4609 (MLflow) | Training jobs through a file protocol, tracking |
-| Prometheus, Grafana, Loki, Alloy, DCGM, node exporter, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4608 | Opt in: `make up-monitoring` |
+| `curation-trainer`, `curation-mlflow` | `training` | 4609 (MLflow) | Training jobs (queue `gpu_train`), tracking |
+| Prometheus, Grafana, Loki, Alloy, DCGM, node exporter, Valkey exporter, Flower, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4613, 4608 | Opt in: `make up-monitoring` |
 | `cropwright` | `cropwright` | 5184 | Static Cropwright frontend (nginx), optional basic auth |
 | `triton-sdk` | `benchmark` | | Benchmark client |
 
@@ -121,7 +129,7 @@ The management CLI works in a checkout (`./openprocessor`, or the shim
 `./scripts/openprocessor.sh`) and in an installed directory. Subcommands:
 `start`, `stop`, `restart [service]`, `logs [service] [-f]`, `status`,
 `health`, `models [status|install [--only GROUP]|repair]`, `export`,
-`download`, `profile`, `test`, `curation [up|down|logs|status]`, `faces purge [--dry-run|--yes]`,
+`download`, `profile`, `test`, `curation [up|down|logs|status]`, `db backup|restore|verify`, `faces purge [--dry-run|--yes]`,
 `ocr purge [--dry-run|--yes]`, `clean`, `update`, `sample coco [--full]`, `config show`, `cropwright password`, `gpu plan`,
 `vlm list|status|use <id>|apply|probe|key set <slug>`, `train-mode on|off`,
 `upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`
@@ -181,9 +189,26 @@ body. The core route list is in [README.md](README.md#api-endpoints).
   import-validated class or box, or an item in the frozen test holdout
   (`src/clients/occ_locks.py`). Use the OCC read/merge/write helpers, not a
   blind update.
-- **Singleton jobs.** The cross-process claim is the OpenSearch job lease
-  (`src/clients/job_lease.py`, kept alive by `services/curation/lease_heartbeat.py`), never a
-  file lock: `scripts/codegen/check_file_locks.py` ratchets the few that remain.
+- **Jobs and Celery.** A job is a row in the `jobs` table (`src/db/repos/jobs.py`)
+  run by a Celery worker; the cross-process claim is the fenced claim of that row
+  or a Postgres advisory lock (`src/config/advisory_locks.py`), never a file lock:
+  `scripts/codegen/check_file_locks.py` fails on any. Rules for a task:
+  routes live in `src/config/task_routes/` and a task decorator never sets `queue=`;
+  no I/O in `worker_process_init`; never call `revoke` (cancel and pause are database
+  writes that a worker reads when it claims a message); restart the worker after a
+  task edit (it keeps the old module); one Alembic head
+  (`tests/db/test_migrations.py`); every project query runs inside `project_tx`, which
+  sets the row-level-security scope.
+- **Control data is in PostgreSQL.** Projects, classes, config documents and
+  activations, settings, events, jobs, embedding spaces, cluster partitions,
+  near-duplicate groups and the auto-label loop record are rows; OpenSearch holds
+  items, images and vectors only. Indexes and mappings are created and migrated
+  once, by `db-migrate`.
+- **Embedding spaces and cluster partitions.** A vector field is named by the
+  space registry (`embedding_spaces`), never by a constant. A cluster is a record
+  of a versioned partition made by an assigner and carries a stable `cluster_uid`;
+  an item or box reads its cluster through the active partition, and a human
+  review state on a cluster is never overwritten by a new run.
 - **Class identity is the name.** Never carry a raw class index across a
   boundary (import, combine, export, train, promote, model sharing).
 - **Config store.** Prompt packs, region profiles and the VLM activation are
