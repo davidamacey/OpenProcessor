@@ -114,6 +114,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger('fetch_coco_subset')
 
 
+def _bench_set_size(text: str) -> int | str:
+    if text == 'all':
+        return 'all'
+    if not text.isdigit() or int(text) < 1:
+        raise argparse.ArgumentTypeError("expected a positive integer or 'all'")
+    return int(text)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -155,12 +163,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         '--bench-set',
-        type=int,
+        type=_bench_set_size,
         default=None,
-        metavar='N',
+        metavar='N|all',
         help=(
             'Throughput benchmark set: N images drawn uniformly over all classes (val2017 first, '
-            'train2017 for the rest), written as a checksum pin (--manifest, required)'
+            'train2017 for the rest), written as a checksum pin (--manifest, required). '
+            "'all' takes every val2017 + train2017 image of every license (123,287)"
+        ),
+    )
+    p.add_argument(
+        '--with-test',
+        type=Path,
+        default=None,
+        metavar='IMAGE_INFO_JSON',
+        help=(
+            'With --bench-set all: also pin test2017 from image_info_test2017.json '
+            '(extracted from image_info_test2017.zip)'
         ),
     )
     p.add_argument(
@@ -179,18 +198,36 @@ def run_bench_set(args: argparse.Namespace) -> dict[str, Any]:
     """``--bench-set N``: select, download, checksum and pin a throughput set."""
     if args.manifest is None:
         raise FetchError('--bench-set needs --manifest (the pin to write or verify)')
-    names = sorted(
-        resolve_license_names([t.strip() for t in args.licenses.split(',') if t.strip()])
-    )
+    if args.with_test is not None and args.bench_set != 'all':
+        raise FetchError('--with-test needs --bench-set all')
     val_data, train_data = ensure_annotations(args.cache_dir)
     lic = {x['id']: x['name'] for x in val_data['licenses']}
+    names = (
+        sorted(lic.values())
+        if args.bench_set == 'all'
+        else sorted(
+            resolve_license_names([t.strip() for t in args.licenses.split(',') if t.strip()])
+        )
+    )
     val_pool = bench_set.pool_rows(val_data['images'], lic, set(names), 'val2017')
     train_pool = (
         []
         if args.val_only
         else bench_set.pool_rows(train_data['images'], lic, set(names), 'train2017')
     )
-    rows = bench_set.select_uniform(val_pool, train_pool, args.bench_set, args.seed)
+    if args.bench_set == 'all':
+        test_pool = []
+        if args.with_test is not None:
+            test_info = json.loads(args.with_test.read_text(encoding='utf-8'))
+            test_pool = bench_set.pool_rows(
+                test_info['images'],
+                {x['id']: x['name'] for x in test_info['licenses']},
+                set(names),
+                'test2017',
+            )
+        rows = bench_set.select_all(val_pool, train_pool, test_pool)
+    else:
+        rows = bench_set.select_uniform(val_pool, train_pool, args.bench_set, args.seed)
     pin = bench_set.write_or_check_pin(
         args.manifest,
         rows,
