@@ -5,7 +5,7 @@ This page is a map. The user guides live in the documentation site
 page that explains it. Headings that code, compose files and scripts cite are
 kept, so those references still resolve.
 
-> **Status: experimental for v0.6.0.** The subsystem is working and tested, but its
+> **Status: experimental.** The subsystem is working and tested, but its
 > API can still change between releases. It ships opt-in, behind Docker Compose
 > profiles.
 
@@ -64,8 +64,8 @@ cheap (parent classes, the visibility check, the hit-rate gate) are in
 
 ## Projects
 
-A project owns its OpenSearch indexes, files, uploads, class registry, settings and
-config. Create, rename, archive, delete, clone settings, pause workers:
+A project owns its OpenSearch indexes, files, uploads, class registry, settings,
+config documents, jobs and embedding spaces. Create, rename, archive, delete, clone settings, pause workers:
 [Projects](../docs-site/docs/guides/projects.mdx). In Cropwright:
 [Projects](../docs-site/docs/cropwright/user-guide/projects.md).
 
@@ -108,28 +108,34 @@ decided, or an item in the frozen test holdout. Skipped items are reported as
 `locked_skipped`. See "Concurrency and the lock rule" in
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-## Singleton jobs and the job lease
+## Jobs
 
-A job that may run once per project (a reprocess, an assist run, a dataset import, a score,
-selection or projection job, a probe, a promote, a combine, an auto-label loop, a label
-operation, the region-cluster jobs) starts under a lease: an OpenSearch document in the
-project, taken create-only, renewed every 15 seconds by a thread of its own and released at
-the end. Two requests on two workers cannot both start the job; the second gets the family's
-409 busy refusal (`import_busy`, `assist_busy`, `assist_loop_busy`,
-`probe_busy`, `label_op_busy`, or a plain 409 for scores, selection and projection). If
-OpenSearch is down the start answers 503; a job never starts without its lease.
+Work that outlives a request is a **job**: a row in PostgreSQL run by a Celery worker, with a
+status (`queued`, `running`, `paused`, `cancelling`, `completed`, `completed_with_errors`,
+`failed`, `cancelled`, `interrupted`), progress and a result. These routes answer **202** with
+a job id instead of working inside the request: project create, delete and combine; batch
+label (`PUT .../crops/batch_label`), `POST .../crops/move` and `POST .../label_ops/{op_id}/undo`;
+`POST .../crops/region/undo_batch` and `POST .../review/new_class_proposals/resolve` once more
+than `OP_BATCH_SYNC_MAX` items match (default 500; below it they answer 200 as before);
+dataset upload and import; bulk ingest and ingest source runs; assist runs; the auto-label start;
+scores, probe, projection rebuild and false-positive centroid builds; promote; VLM batches;
+cluster runs and activation; embedding space create, build and retire; near-duplicate runs; and
+the source backfill. Poll `GET /curation/projects/{project}/jobs/{job_id}` (or
+`GET /curation/jobs/{job_id}` for a deployment job such as project create); the list is
+`GET /curation/projects/{project}/jobs` (newest first, `kind` and `status` filters, keyset
+pages). Another project's job answers `404 job_not_found`. Cropwright follows the job and
+refreshes when the event stream says it finished.
 
-- **Busy window after a crash.** A holder that dies stops renewing; a new start of the same
-  kind is refused for at most 120 seconds after its last renew, then takes over.
-- **Label operations.** A write or undo that died is served `interrupted` or
-  `undo_interrupted` once its lease has expired (up to 120 seconds, no longer instantly).
-- **Fencing.** A holder that finds its lease taken over, or cannot renew for 90 seconds,
-  stops writing its job state. A holder that stalls for longer than the margin between its
-  check and a write can still write once; a write takes milliseconds, so this is accepted.
-- **Probe cap.** At most two VLM endpoint probes run at a time per API worker process, not
-  across the cluster; the `429 probe_busy` text says so.
-- **Not yet leased.** The bulk-ingest runner, the source scan and the ingest dispatcher still
-  use a file lock (B2 moves them).
+- **One at a time.** A kind that may run once per project (or once per scope) is *exclusive*: a
+  second start answers `409 job_busy` naming the active job. A repeat of the same start with the
+  same `Idempotency-Key` header returns the first job.
+- **Crash recovery.** A worker that dies leaves a job the reaper (every 30 seconds) marks
+  `interrupted`; a resumable job is resumed, others can be resumed by hand. A queue whose worker
+  profile never started has its jobs failed with that reason, so they do not wait forever.
+- **Cancel and pause** are database writes the worker reads between slices of work. A project pause
+  (`POST .../pause`) stops every worker for that project and `.../resume` lifts it.
+- **A queued message needs its worker.** The `curation` profile starts the workers for the
+  cluster, auto-label and assist-loop queues; without it those jobs stay `queued`.
 
 ## Region profiles
 
@@ -149,18 +155,18 @@ The VLM prompts and vocabulary the labeler uses.
 
 ## Assist runs
 
-Send a crop, a selection, a cluster, a sub-cluster or a filter to the VLM and get
+Send a crop, a selection, a cluster or a filter to the VLM and get
 suggestions back: a class and the attributes the prompt pack declares. A representative
 sample keeps a large cluster cheap. The run never writes a label: a human- or
 import-locked, validated or holdout item keeps its class, and the answers, including a
 locked item's, are stored apart from the labels. Dry run by default.
 
-A run over a cluster or sub-cluster also returns a proposal: the class most of the sampled
+A run over a cluster also returns a proposal: the class most of the sampled
 answers agree on, shown with the distribution, once at least three answers agree past the
 gate (`min_agreement`, default 0.6). Nothing is labelled until you apply it, with a dry-run
 count first (`POST .../assist/runs/{run_id}/apply`). Apply labels the scope's current
 members as you would by hand, skips every locked or validated one, and refuses
-(`scope_changed`) when a re-refine has moved the members since the run.
+(`scope_changed`) when a new cluster partition has moved the members since the run.
 [Assist runs](design/curation_api_contract.md#assist-runs).
 
 Cropwright's **Assist…** button on a cluster page is the front end of this: pick the
@@ -174,7 +180,11 @@ To label a whole project this way, the **auto-label loop** samples every cluster
 class to the rest of a cluster only when an exact bound shows it homogeneous (a machine
 label, not validated, kept out of the training export until reviewed), splits what fails and
 leaves the rest for review, within a hard VLM budget, with an optional second-model audit and a
-rollback: [Auto-label loop](../docs-site/docs/guides/auto-label-loop.mdx) and
+rollback. Its whole record is in PostgreSQL. The budget counts crops, requests, tokens and wall
+time (charged per time slice, so a long loop yields between slices), a loop can be paused and
+resumed (`POST .../assist/loops/{loop_id}/pause` and `/resume`; a resume is refused while the project is
+paused or the VLM is unavailable, and the response says which) and its budget edited while it runs
+(`PATCH .../assist/loops/{loop_id}/budget`). Presets are `assist_loop_presets` documents: [Auto-label loop](../docs-site/docs/guides/auto-label-loop.mdx) and
 [the routes](design/curation_api_contract.md#auto-label-loops).
 
 ## Test on a crop
@@ -298,9 +308,54 @@ uploaded picture or a region of a project image. `target=box` on the three searc
 per-box vectors and returns the item with the box that matched (`matched_box_id`).
 [Cropwright review](../docs-site/docs/cropwright/user-guide/review.md),
 [clusters](../docs-site/docs/cropwright/user-guide/clusters.md),
-[item filter](../docs-site/docs/cropwright/user-guide/item-filter.md). Which worker
-schedules the cluster retrain, and when:
+[item filter](../docs-site/docs/cropwright/user-guide/item-filter.md). What starts a
+clustering run, and when:
 [Workers](../docs-site/docs/operations/workers.mdx).
+
+### Embedding spaces
+
+Search and clustering read vectors from a **space**: one vector field written by one encoder
+version for one target (`item`, `box`, `frame`, `item_text`). A project starts with one primary
+space per target (the PE-Core vectors it already has). To try another encoder without touching
+the primary: `POST /curation/projects/{project}/embedding/spaces` registers a candidate space,
+`.../spaces/{space_key}/build` fills it in the background (a reindex run, cancellable; the primary
+keeps serving), the search and cluster routes take that space as `space` so you can compare, and
+`.../spaces/{space_key}/promote` swaps it in as the primary in one step (the previous primary
+becomes optional; promote starts a new cluster run and a near-duplicate score on the new vectors).
+`.../retire` removes a space and its field. A build refuses when the storage estimate does not
+fit (`embedding_insufficient_storage`); a space that is not yet ready answers
+`embedding_space_not_ready`. `GET .../embedding/spaces` lists them and
+`GET /curation/embedding/models` lists the encoder versions the deployment can serve. Items report
+`embedding_states` per space.
+
+### Cluster runs and activation
+
+A clustering run produces a **partition**, a versioned result that never overwrites the serving
+one. `POST /curation/projects/{project}/clusters/runs` starts a run (202) for a target and level
+with a `cluster_profile` (the method, the parameters, CPU or GPU); each cluster has a stable
+`cluster_uid` that survives re-runs, and a member is `assigned`, `review` or `unassigned`.
+Read the result and compare it to the serving one with `GET .../clusters/partitions` and
+`GET .../clusters/partitions/{partition_id}`, then `PUT .../clusters/activation` (202) to serve it;
+a stale activation answers `409 partition_conflict`. Clusters you named or anchored keep their
+members in a later run. New items are placed on the serving partition as they are ingested, and a
+periodic refresh starts a full run when the project has grown enough (the profile's refresh
+rule; a running auto-label loop holds it). `GET .../clusters` pages the served clusters with
+server-side sort and filters, and `.../clusters/{cluster_uid}/facets` counts one cluster's members.
+
+### Near-duplicates
+
+Exact duplicates are caught at ingest by content. Near-duplicates are found by vector similarity
+and kept as groups, at the image level and the item level: `GET /curation/projects/{project}/near_duplicates/status`
+says whether the groups are current, `POST .../near_duplicates/runs` starts a full run (the
+service also keeps them current in the background), `GET .../near_duplicates/groups` lists them,
+and `POST .../near_duplicates/decisions` records that a pair is `same` or `different` (a decision
+survives re-runs and is removed with `DELETE .../near_duplicates/decisions/{decision_id}`). The
+cuts are a `near_dup_profile`. **The holdout rule:** a frozen test set must not contain
+look-alikes of training items. Freezing holds out every member of a leak group that has a selected
+item, and the first freeze needs a current item-level run. Before any freeze nothing is refused;
+once a holdout is frozen, a re-freeze or an export answers `409 near_dup_stale` while groups are
+stale, so run `near_duplicates/runs` first. An export can keep one representative per group
+(`collapse_near_duplicates`).
 
 ## Capture time and location
 
@@ -410,7 +465,10 @@ The HTTP API works with no workers. The asynchronous half is opt-in:
 docker compose -p <project> --profile curation up -d
 ```
 
-Six services run under the `curation` profile (the evaluator on demand): detection, VLM, auto-label, assist-loop, cluster refresh and the bake-off evaluator.
+The `curation` profile starts five services: the detection and VLM stream workers and the
+Celery workers for auto-label, the assist loop and clustering. The always-on `jobs-worker`,
+`periodic-worker`, `open-vocab-worker` and `jobs-beat` run the rest, and the bake-off evaluator
+is started on demand.
 
 Details, GPU needs and the segmenter, trainer and GPU arbiter profiles:
 [Workers](../docs-site/docs/operations/workers.mdx) and
