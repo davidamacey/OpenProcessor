@@ -97,7 +97,7 @@ across runs, never added up to wall time.
 | M-5 | **Repetitions and spread**: 1 warm-up + 3 counted repetitions per headline row; report median and min-max; **spread = (max - min) / median**. A change is adopted only if its median gain exceeds **2x the larger spread** of the two arms and the parity gate passes |
 | M-6 | **Tiers** (short tests when the gain is known): tier 1 = one repetition on a 500-image slice to screen; tier 2 = 3 repetitions on the candidate and its control only; one full confirmation per bundle. No full-factorial sweeps; one factor at a time |
 | M-7 | **Record**: commit, image digests, driver, CUDA, Triton, TensorRT, torch, Ultralytics versions, model configs (instance counts, batch, delays), env profile; per-stage report (API stage shares from `op_pipeline_stage_seconds`, Triton `nv_inference_queue_duration_us` / `compute_infer` deltas, `op_gpu_prep_stage_seconds`, GPU util mean and p50, API CPU-s per image) |
-| M-8 | **Raw data**: `artifacts_local/bench/v080/<sub>/<row>/` (gitignored, in the main checkout). Public result files that back a published number: `docs/benchmarks/v080/<sub>/` with `MANIFEST.sha256` updated |
+| M-8 | **Raw data**: `artifacts_local/bench/v080/<sub>/<row>/` (gitignored, in the main checkout). Public result files that back a published number: `docs/benchmarks/v070/<sub>/` with `MANIFEST.sha256` updated |
 | M-9 | **Where numbers go**: `docs/PERFORMANCE.md` (public rows), `docs/research/` for the notes; never a private-set number in public text |
 | M-10 | **Honesty**: never invent, round up or carry forward a number; a bar not met is reported as not met with the binding stage named |
 

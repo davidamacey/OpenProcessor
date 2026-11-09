@@ -41,6 +41,7 @@ SCHEMA = 1
 IMAGE_URL_TMPL = {
     'val2017': 'http://images.cocodataset.org/val2017/{file_name}',
     'train2017': 'http://images.cocodataset.org/train2017/{file_name}',
+    'test2017': 'http://images.cocodataset.org/test2017/{file_name}',
 }
 ROW_KEYS = (
     'image_id',
@@ -99,6 +100,17 @@ def select_uniform(
     if len(chosen) < n:
         chosen += seeded_sample(train_pool, n - len(chosen), seed + 1)
     return sorted(chosen, key=lambda r: r['image_id'])
+
+
+def select_all(*pools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every row of every pool once, ordered by pool then image id (the full-COCO set).
+
+    An image id seen in two pools stops the run: COCO ids are unique across splits.
+    """
+    rows = [r for pool in pools for r in pool]
+    if len({r['image_id'] for r in rows}) != len(rows):
+        raise FetchError('an image id occurs in more than one split')
+    return rows
 
 
 def manifest_hash(rows: list[dict[str, Any]]) -> str:

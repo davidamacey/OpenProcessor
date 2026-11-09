@@ -178,7 +178,7 @@ Not in 5a: engine build stamps for yolo, mobileclip, faces, ocr (moved to #415).
 **5a-C2 Recall run.** COCO val2017 (5,000), the B3 default detector engine, `/detect`'s default
 confidence: AP, AP50, recall and precision overall and per COCO size bucket (small < 32^2, medium,
 large) via `scripts/bench/detector_quality.py`, for both arms; plus latency per image at 1 and 16
-clients. Raw results to `docs/benchmarks/v080/5a/gpu6/`.
+clients. Raw results to `docs/benchmarks/v070/5a/gpu6/`.
 
 **D-35 (open; present with these numbers).**
 
@@ -196,7 +196,7 @@ decision and the numbers.
   contracts-check, docs check, CHANGELOG rules; frontend only if `frontend/` changed). The
   baseline is measured once, in the B5 GPU window (`decision_register.md` section 8.1); no per-branch runs.
 - Every row recorded with host load; noisy rows repeated; no default changed without its pass line.
-- `docs/PERFORMANCE.md` sections written; `docs/benchmarks/v080/5a/` with `MANIFEST.sha256`.
+- `docs/PERFORMANCE.md` sections written; `docs/benchmarks/v070/5a/` with `MANIFEST.sha256`.
 
 ## 7. Done when
 
@@ -212,7 +212,7 @@ decision and the numbers.
 
 | Fact | Target |
 |---|---|
-| the 5a-R0 headline table, ladder rows, sweep winners, GPU-6 recall table and the D-35 outcome | `docs/PERFORMANCE.md` (with `docs/benchmarks/v080/5a/MANIFEST.sha256`) |
+| the 5a-R0 headline table, ladder rows, sweep winners, GPU-6 recall table and the D-35 outcome | `docs/PERFORMANCE.md` (with `docs/benchmarks/v070/5a/MANIFEST.sha256`) |
 | the public-data and protocol text (5a-A4) | `docs/PERFORMANCE.md` "Baseline protocol" |
 | any changed profile default | `docs-site/docs/deployment/gpu-sizing.mdx`, CHANGELOG "Changed" |
 | the method note | `docs/research/` |

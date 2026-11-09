@@ -41,6 +41,8 @@ MOVED_IOU = 0.99
 GT_IOU_EPS = 0.002
 # A detection and a box of the other engine are the same object above this IoU.
 PAIR_IOU = 0.5
+# COCO area buckets (small < 32^2, medium 32^2..96^2, large > 96^2 px) in COCOeval order.
+SIZE_BUCKETS = ('small', 'medium', 'large')
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +128,7 @@ def coco_ap(gt: GroundTruth, dets: dict[int, list[Det]], cat_ids: list[int]) -> 
             'ap50': 0.0,
             'ap75': 0.0,
             'ar100': 0.0,
+            'by_size': {k: dict.fromkeys(('ap', 'ar100'), 0.0) for k in SIZE_BUCKETS},
             'per_class': dict.fromkeys(cat_ids, zero),
         }
 
@@ -177,6 +180,11 @@ def coco_ap(gt: GroundTruth, dets: dict[int, list[Det]], cat_ids: list[int]) -> 
         'ap50': float(ev.stats[1]),
         'ap75': float(ev.stats[2]),
         'ar100': float(ev.stats[8]),
+        # COCOeval.summarize: stats[3:6] = AP small/medium/large, stats[9:12] = AR@100 small/medium/large
+        'by_size': {
+            k: {'ap': float(ev.stats[3 + i]), 'ar100': float(ev.stats[9 + i])}
+            for i, k in enumerate(SIZE_BUCKETS)
+        },
         'per_class': per_class,
     }
 
@@ -389,6 +397,8 @@ def main(argv: list[str] | None = None) -> int:
             f'{name}: AP {e["ap"]["ap"]:.4f} AP50 {e["ap"]["ap50"]:.4f} '
             f'P {o["precision"]:.4f} R {o["recall"]:.4f}\n'
         )
+        for k, v in e['ap']['by_size'].items():
+            sys.stdout.write(f'  {k}: AP {v["ap"]:.4f} AR100 {v["ar100"]:.4f}\n')
     return 0
 
 
