@@ -8,6 +8,8 @@ import { apiErrorText } from '$lib/api_errors';
 import { exportStatus, exportYolo } from '$lib/api_export';
 import { splitExportClasses } from '$lib/export/exportDatasetRows';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
+import { nearDupStaleLevels } from '$lib/nearDup/staleRefusal';
+import { createNearDupRefreshController } from '$lib/nearDup/nearDupRefreshController.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type { ExportStatus } from '$lib/types_export';
 
@@ -36,6 +38,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
   let exportState = $state<ExportStatus | null>(null);
   let pollHandle: ReturnType<typeof setInterval> | null = null;
   let exportModalOpen = $state<boolean>(false);
+  const nearDup = createNearDupRefreshController();
 
   const exportClassSplit = $derived(
     splitExportClasses(exportState?.class_split_counts ?? []),
@@ -83,6 +86,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
   async function runExport(): Promise<void> {
     exportRunning = true;
     exportModalOpen = true;
+    nearDup.clear();
     try {
       const res = await exportYolo({
         version_tag: versionTag.trim() || undefined,
@@ -130,6 +134,13 @@ export function createExportRunController(loadAll: () => Promise<void>) {
       }
     } catch (e) {
       exportRunning = false;
+      // 409 near_dup_stale: only once a holdout is frozen; the panel names the stale levels.
+      const levels = nearDupStaleLevels(e);
+      if (levels) {
+        exportModalOpen = false;
+        nearDup.show(levels);
+        return;
+      }
       // 422 "nothing to export: <reason>" (e.g. require_fully_labeled_images
       // dropped every candidate image) surfaces via ApiError's detail text.
       toastStore.error(`Export failed: ${apiErrorText(e)}`);
@@ -142,6 +153,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
   }
 
   function dispose(): void {
+    nearDup.dispose();
     if (pollHandle) clearInterval(pollHandle);
     pollHandle = null;
   }
@@ -160,6 +172,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
       requireFullyLabeled = v;
     },
     exportFilter,
+    nearDup,
     get exportRunning() {
       return exportRunning;
     },

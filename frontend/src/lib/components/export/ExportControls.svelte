@@ -6,6 +6,7 @@
   import { projectHref } from '$lib/projectPaths';
   import { getClassRegistryUrl, getDataYamlUrl, getManifestUrl } from '$lib/api_export';
   import { formatCount } from '$lib/format/count';
+  import NearDupStalePanel from '$components/export/NearDupStalePanel.svelte';
   import ExportItemFilter from '$lib/components/itemFilter/ExportItemFilter.svelte';
   import {
     downloadUrl,
@@ -25,6 +26,7 @@
 <!-- Export controls + downloads + training command -->
 <section class="surface p-4">
   <h2 class="mb-3 text-sm font-semibold text-zinc-300">Export to staging</h2>
+  <NearDupStalePanel refresh={run.nearDup} />
   <div class="flex flex-wrap items-end gap-3">
     <label class="text-xs">
       <span class="mb-1 block text-zinc-400">Version tag (optional)</span>

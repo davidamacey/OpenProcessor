@@ -211,6 +211,15 @@
     {/if}
   </dd>
 
+  {#if crop.near_dup_group_id}
+    <dt class="text-zinc-500">Near-duplicates</dt>
+    <dd class="font-mono text-zinc-200" data-testid="meta-near-dup">
+      {crop.near_dup_group_size ?? '?'} in group{crop.near_dup_is_representative
+        ? ', representative'
+        : ''}
+    </dd>
+  {/if}
+
   {#if crop.class_detector}
     <dt class="text-zinc-500">Class detector</dt>
     <dd>

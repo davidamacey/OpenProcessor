@@ -69,6 +69,7 @@ const SCANNED_FILES = [
   'lib/api_ingestSources.ts',
   'lib/api_embeddingSpaces.ts',
   'lib/api_jobs.ts',
+  'lib/api_nearDup.ts',
 ] as const;
 
 /** The HTTP core (`apiFetch`, `scoped()`): composes no backend URL itself. */

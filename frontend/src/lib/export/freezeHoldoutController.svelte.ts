@@ -4,6 +4,8 @@
  */
 import { apiErrorText } from '$lib/api_errors';
 import { freezeTestHoldout } from '$lib/api_export';
+import { nearDupStaleLevels } from '$lib/nearDup/staleRefusal';
+import { createNearDupRefreshController } from '$lib/nearDup/nearDupRefreshController.svelte';
 import { toastStore } from '$stores/toast.svelte';
 
 /** `loadAll` re-reads the page's data after a successful freeze. */
@@ -11,14 +13,17 @@ export function createFreezeHoldoutController(loadAll: () => Promise<void>) {
   let freezeOpen = $state<boolean>(false);
   let freezePercent = $state<number>(10);
   let freezeBusy = $state<boolean>(false);
+  const nearDup = createNearDupRefreshController();
 
   function openFreeze(): void {
     freezePercent = 10;
+    nearDup.clear();
     freezeOpen = true;
   }
 
   function closeFreeze(): void {
     if (freezeBusy) return;
+    nearDup.dispose();
     freezeOpen = false;
   }
 
@@ -35,12 +40,17 @@ export function createFreezeHoldoutController(loadAll: () => Promise<void>) {
       const res = await freezeTestHoldout({ percent: freezePercent });
       toastStore.success(
         `Frozen: ${res.n_frozen} crops across ${res.n_classes_covered} classes via ` +
-          `${res.selection} (min ${res.min_per_class}/class).`,
+          `${res.selection} (min ${res.min_per_class}/class)` +
+          (res.moved_by_near_dup
+            ? `, ${res.moved_by_near_dup} pulled in as near-duplicates.`
+            : '.'),
       );
       freezeOpen = false;
       await loadAll();
     } catch (e) {
-      toastStore.error(`Freeze failed: ${apiErrorText(e)}`);
+      const levels = nearDupStaleLevels(e);
+      if (levels) nearDup.show(levels);
+      else toastStore.error(`Freeze failed: ${apiErrorText(e)}`);
     } finally {
       freezeBusy = false;
     }
@@ -59,6 +69,7 @@ export function createFreezeHoldoutController(loadAll: () => Promise<void>) {
     get freezeBusy() {
       return freezeBusy;
     },
+    nearDup,
     openFreeze,
     closeFreeze,
     submitFreeze,

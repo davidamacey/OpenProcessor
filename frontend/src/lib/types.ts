@@ -220,6 +220,11 @@ export interface Crop {
    *  space with no state for the item (written before the field existed, or
    *  not built yet) has no key. */
   embedding_states?: Record<string, EmbeddingState>;
+  /** Near-duplicate group of the item: the lineage id, the member count, and whether the item
+   *  represents it. All null for an item in no group. */
+  near_dup_group_id?: string | null;
+  near_dup_group_size?: number | null;
+  near_dup_is_representative?: boolean | null;
   /** v0.4.0 open vocabulary: the prompt, set and set revision that found
    *  this item, its image-normalised mask outline, and why the region
    *  gate skipped it. `null` when not served. */

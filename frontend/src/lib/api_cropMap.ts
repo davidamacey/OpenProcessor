@@ -122,6 +122,10 @@ export type RawCrop = {
   // v0.4.0 embedding state and open-vocabulary provenance (contract
   // fce17771 `ItemDoc`); a missing key maps to null.
   embedding_states?: Record<string, EmbeddingState>;
+  // Near-duplicate group of the item (untyped in the contract: a lineage id when grouped).
+  near_dup_group_id?: unknown;
+  near_dup_group_size?: number | null;
+  near_dup_is_representative?: boolean | null;
   source_prompt?: string | null;
   open_vocab_set?: string | null;
   open_vocab_revision?: number | null;
@@ -213,6 +217,9 @@ export const RAW_CROP_KEYS = [
   'combine_conflict_origins',
   'combine_merged_origins',
   'embedding_states',
+  'near_dup_group_id',
+  'near_dup_group_size',
+  'near_dup_is_representative',
   'source_prompt',
   'open_vocab_set',
   'open_vocab_revision',
@@ -329,6 +336,10 @@ export function mapRawCrop(c: RawCrop): Crop {
     combine_conflict_origins: asStringArray(c.combine_conflict_origins),
     combine_merged_origins: asStringArray(c.combine_merged_origins),
     embedding_states: c.embedding_states ?? {},
+    near_dup_group_id:
+      typeof c.near_dup_group_id === 'string' ? c.near_dup_group_id : null,
+    near_dup_group_size: c.near_dup_group_size ?? null,
+    near_dup_is_representative: c.near_dup_is_representative ?? null,
     source_prompt: c.source_prompt ?? null,
     open_vocab_set: c.open_vocab_set ?? null,
     open_vocab_revision: c.open_vocab_revision ?? null,

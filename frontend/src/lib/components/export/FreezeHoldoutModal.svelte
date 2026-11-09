@@ -1,6 +1,7 @@
 <script lang="ts">
   /** /export's confirm modal for freezing the test holdout. */
   import Modal from '$components/Modal.svelte';
+  import NearDupStalePanel from '$components/export/NearDupStalePanel.svelte';
   import type { FreezeHoldoutController } from '$lib/export/freezeHoldoutController.svelte';
 
   interface Props {
@@ -20,6 +21,7 @@
       One-shot per dataset version. Deterministic per-class selection (SHA1 of each crop
       id) — the same cohort always freezes the same set, so there's no seed to pick.
     </div>
+    <NearDupStalePanel refresh={freeze.nearDup} />
     <label class="mb-3 block text-sm">
       <span class="mb-1 block text-zinc-400">Percent of validated crops</span>
       <input

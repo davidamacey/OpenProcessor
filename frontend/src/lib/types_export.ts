@@ -235,6 +235,8 @@ export interface TestHoldoutFreezeResult {
   percent: number;
   /** Floor per class — all of a class smaller than this is frozen. */
   min_per_class: number;
+  /** Frozen items pulled in as near-duplicates of a selected item (counted in `n_frozen`). */
+  moved_by_near_dup: number;
 }
 
 /** Server response from `GET {API_PREFIX}/test_holdout/stats`. */
