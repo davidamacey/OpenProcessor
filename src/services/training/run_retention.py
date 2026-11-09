@@ -10,21 +10,25 @@ prune of them that never touches:
 * a run referenced by a queued/running bake-off job (``job_id`` appears as
   a ``models[].run_id`` (or the ``quantize.run_id``) in the params of an active ``bakeoff`` job).
 
-Runs are ordered newest first by their job's creation time. The run's artifact blobs under its
-``artifact_prefix`` and its MLflow run are not touched here.
+Runs are ordered newest first by their job's creation time. Applying a prune removes each run's
+artifact blobs under its ``artifact_prefix`` and its MLflow run before its rows.
 """
 
 from __future__ import annotations
 
 import shutil
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import httpx
+
+from src.config.env import env_str
 from src.config.project_context import current_project_id
 from src.core.logging import get_logger
 from src.db.repos import training_runs as runs_repo
 from src.db.session import sync_project_tx, sync_session_factory
 from src.domain import job_states as js
 from src.services.training.bakeoff_pins import active_bakeoff_specs
+from src.services.training.jobs import run_store
 
 
 if TYPE_CHECKING:
@@ -33,6 +37,8 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+_MLFLOW_TIMEOUT_S = 10.0
 
 
 def bakeoff_out_dir(bakeoff_results_dir: Path) -> Path:
@@ -91,16 +97,55 @@ def plan_run_prune(
     ]
 
 
-def apply_run_prune(job_ids: list[uuid.UUID]) -> dict[str, int]:
-    """Delete each planned run and its job row in one transaction of the bound project."""
+def _delete_mlflow_run(run_id: str) -> None:
+    """Soft-delete one MLflow run over the tracking server's REST API (``runs/delete``, the call
+    ``MlflowClient.delete_run`` makes; the API image carries no ``mlflow`` package). A run the
+    server no longer has counts as deleted; any other failure raises."""
+    base = env_str('MLFLOW_TRACKING_URI').rstrip('/')
+    if not base:
+        raise RuntimeError('MLFLOW_TRACKING_URI is not set')
+    response = httpx.post(
+        f'{base}/api/2.0/mlflow/runs/delete', json={'run_id': run_id}, timeout=_MLFLOW_TIMEOUT_S
+    )
+    if response.status_code == 404 or (
+        response.status_code == 400 and 'RESOURCE_DOES_NOT_EXIST' in response.text
+    ):
+        return
+    response.raise_for_status()
+
+
+def apply_run_prune(job_ids: list[uuid.UUID]) -> dict[str, Any]:
+    """Delete each planned run: its blobs, its MLflow run, then its rows.
+
+    Fail closed: a blob or MLflow error keeps that run's rows (a later prune retries) and is
+    listed under ``failed``; the other runs still go. Deleting an absent prefix or run is a no-op.
+    """
     with (
         sync_session_factory()() as session,
         sync_project_tx(session, current_project_id()),
     ):
-        removed = runs_repo.delete_runs(session, job_ids)
-    for job_id in job_ids:
+        rows = [r for r in (runs_repo.get(session, job_id) for job_id in job_ids) if r is not None]
+    store = run_store()
+    deletable: list[uuid.UUID] = []
+    failed: list[dict[str, str]] = []
+    for row in rows:
+        try:
+            store.delete_prefix(row.artifact_prefix)
+            if row.mlflow_run_id:
+                _delete_mlflow_run(row.mlflow_run_id)
+        except (OSError, httpx.HTTPError, RuntimeError) as exc:
+            logger.warning('run_prune_failed', job_id=str(row.job_id), error=str(exc))
+            failed.append({'job_id': str(row.job_id), 'error': f'{type(exc).__name__}: {exc}'})
+            continue
+        deletable.append(row.job_id)
+    with (
+        sync_session_factory()() as session,
+        sync_project_tx(session, current_project_id()),
+    ):
+        removed = runs_repo.delete_runs(session, deletable)
+    for job_id in deletable:
         logger.info('run_pruned', job_id=str(job_id))
-    return {'removed_runs': removed}
+    return {'removed_runs': removed, 'failed': failed}
 
 
 def plan_bakeoff_out_prune(out_dir: Path, keep_last: int) -> list[Path]:

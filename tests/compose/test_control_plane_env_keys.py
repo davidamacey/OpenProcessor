@@ -23,7 +23,7 @@ KEYS = {
     'OP_STOP_GRACE_JOBS': '60',
     'OP_DB_BACKUP_KEEP': '7',
     'OP_DB_BACKUP_INTERVAL_H': '',
-    'OP_DB_BACKUP_DIR': '',
+    'OP_DB_BACKUP_DIR': './backups/postgres',
     'OP_UID': '1000',
     'OP_GID': '1000',
 }
