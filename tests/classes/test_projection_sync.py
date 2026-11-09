@@ -188,3 +188,15 @@ def test_a_class_merge_writes_no_cluster_field() -> None:
     assert relabel['class_id'] == 3
     assert not {k for k in relabel if k.startswith('cluster_')}
     assert 'cluster' not in sync._MERGE_SCRIPT['source']
+
+
+def test_a_class_merge_resets_the_writer_provenance_and_keeps_validation() -> None:
+    """A merged crop must not keep reading as though its old class writer still applies; a
+    human-validated crop of the source class stays validated under the target."""
+    current = {'class_source': 'human', 'label_source': 'human', 'class_validated': True}
+    relabel = sync._merge_crop_merger(3, 'target')('c1', current)
+    assert relabel['class_name'] == 'target'
+    assert relabel['class_source'] == 'class_merge'
+    assert relabel['label_source'] == 'class_merge'
+    assert relabel['class_validated'] is True
+    assert sync._merge_crop_merger(3, 'target')('c2', {})['class_validated'] is False
