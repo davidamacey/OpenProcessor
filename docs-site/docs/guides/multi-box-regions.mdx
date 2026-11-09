@@ -22,7 +22,8 @@ item.
   `thumbnail_url`, `detected_at`, text fields (`text`, `text_raw`,
   `text_source`, `text_confidence`, `text_vlm`, `text_ocr`, `text_choice`,
   `text_disagreement`, `text_vlm_invalid`, `text_engine_version`) when the
-  profile reads text, and `cluster_id`, `cluster_subid`, `cluster_distance`.
+  profile reads text, and `cluster_partition_id`, `cluster_uid`, `cluster_state`, `cluster_score`,
+  `cluster_margin`, `cluster_assigned_by`.
 - **`box_id`.** Stable within an item. An id is never reused after a box is
   deleted. Ids are per item, so the same id on two items is two boxes.
 - **Frames.** `bbox_norm` is in the source image frame. `bbox_in_parent` is
@@ -65,8 +66,8 @@ item.
 4. The embed stage writes one embedding per accepted or false-positive box
    to `region_box_embeddings`. A box a human moved is re-embedded because
    the stored vector records the geometry it was computed from.
-5. Region clustering groups boxes, not items. `cluster_id` and
-   `cluster_subid` live on each box.
+5. Region clustering groups boxes, not items. `cluster_uid` and
+   the other `cluster_*` fields live on each box.
 
 ## Human edits
 
@@ -179,7 +180,7 @@ All box filters apply to the same box.
 
 | Call | Purpose |
 |---|---|
-| `GET /curation/projects/{project}/regions` | Browse rows. Filters: `detector`, `min_score`, `max_score`, `text`, `region_cluster_id`, `region_cluster_subid`, `box_state`, `status`, `class_id`, `verified`, `max_rank` |
+| `GET /curation/projects/{project}/regions` | Browse rows. Filters: `detector`, `min_score`, `max_score`, `text`, `cluster_uid`, `box_state`, `status`, `class_id`, `verified`, `max_rank` |
 | `GET /curation/projects/{project}/regions/statuses` | Item statuses, box states and the states each write route accepts |
 | `GET /curation/projects/{project}/regions/vocabulary` | Region vocabulary and write limits |
 | `GET /curation/projects/{project}/regions/clusters` | Cluster cards: `size` (items), `box_count` (boxes), representatives |
