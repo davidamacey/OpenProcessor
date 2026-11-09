@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import warnings
+from types import SimpleNamespace
 from typing import Any, cast
 
 import numpy as np
@@ -14,6 +15,14 @@ from fastapi.testclient import TestClient
 from src.core.dependencies import get_curation_opensearch
 from src.routers.curation import umap as curation_umap
 from src.services.curation.clustering import embedding_reduce as er, pool_size as ps
+
+
+@pytest.fixture(autouse=True)
+def _space(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def resolved(_target, _key=None):
+        return SimpleNamespace(vector_field='embedding')
+
+    monkeypatch.setattr(er, 'embedding_space', resolved)
 
 
 def _fit(n: int) -> np.ndarray:
@@ -48,7 +57,7 @@ def test_require_min_items():
 
 
 def test_rebuild_route_returns_typed_422(monkeypatch):
-    async def _fetch(_client):
+    async def _fetch(_client, *, field):
         return ['a'] * 5, np.zeros((5, 8), dtype='float32')
 
     monkeypatch.setattr(er, 'fetch_residual_embeddings', _fetch)
@@ -65,7 +74,7 @@ def test_rebuild_fits_above_floor(monkeypatch):
     n = 46
     x = np.random.RandomState(1).randn(n, 64).astype('float32')
 
-    async def _fetch(_client):
+    async def _fetch(_client, *, field):
         return [str(i) for i in range(n)], x
 
     monkeypatch.setattr(er, 'fetch_residual_embeddings', _fetch)

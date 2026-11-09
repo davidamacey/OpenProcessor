@@ -21,8 +21,6 @@ F = get_region_fields()
 def test_every_seeded_box_has_a_current_vector(region: str, global_index: int) -> None:
     vec = np.random.default_rng(0).normal(size=16)
     vec /= np.linalg.norm(vec)
-    doc = _region_fields(  # type: ignore[call-arg]
-        F, region, global_index=global_index, local_idx=0, vector=vec, now=datetime.now(UTC)
-    )
+    doc = _region_fields(F, region, global_index=global_index, vector=vec, now=datetime.now(UTC))
     joined = join_box_vectors(doc, F)
     assert [b.box_id for b, _ in joined] == [b.box_id for b in read_boxes(doc, F)]

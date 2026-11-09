@@ -80,6 +80,7 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'dcgm-exporter',
         'postgres',
         'valkey',
+        'valkey-exporter',
         'db-migrate',
         'jobs-worker',
         'jobs-beat',

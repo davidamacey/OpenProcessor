@@ -27,7 +27,7 @@ Schema produced by ``stats_dataset.rollup_class_sources`` + ``stats_dataset``:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -371,7 +371,7 @@ def test_stats_dataset_surfaces_region_stall_reason(
     }
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(return_value=pending_response)
-    app_client.app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+    cast('FastAPI', app_client.app).dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
     body = app_client.get('/curation/projects/default/stats/dataset').json()
     reason = body['in_progress']['region_stall_reason']

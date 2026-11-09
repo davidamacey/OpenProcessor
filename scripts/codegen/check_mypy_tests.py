@@ -11,13 +11,25 @@ This guard keeps that list honest against ``baselines/mypy_tests.txt`` (``module
 the pyproject list and the baseline must hold the same modules, and every listed module must still
 exist as a file. Fixing a module means deleting it from both; adding one needs a reason line in the
 baseline that review sees. ``--tighten`` drops entries whose file is gone from both places.
+
+A listed module that is already clean would stay listed forever, because ``ignore_errors`` hides
+the proof. So one mypy process re-checks only the listed modules with ``ignore_errors`` switched
+off in a temporary copy of the config (per-module options are config-file only, see
+https://mypy.readthedocs.io/en/stable/config_file.html#confval-ignore_errors) and a module with
+no error is reported as ``clean but still listed``. An empty list skips mypy altogether. When the
+list is empty the override block is absent from ``pyproject.toml``; to skip a module again add a
+``[[tool.mypy.overrides]]`` block with ``module = [...]`` and ``ignore_errors = true``.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
+import subprocess
 import sys
+import tempfile
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -43,6 +55,55 @@ def listed_modules(pyproject: Path) -> list[str]:
 
 def module_file(repo_root: Path, module: str) -> Path:
     return repo_root / (module.replace('.', '/') + '.py')
+
+
+MypyRunner = Callable[[Path, Path, list[Path]], str]
+_ERROR_LINE = re.compile(r'^(?P<path>[^:\s][^:]*\.py):\d+(?::\d+)?: error:', re.MULTILINE)
+
+
+def run_mypy(repo_root: Path, config: Path, files: list[Path]) -> str:
+    """One mypy process over ``files`` with ``config``; its own cache dir because the changed
+    config would otherwise invalidate the cache the mypy hook uses."""
+    cache = Path(tempfile.gettempdir()) / 'op_mypy_tests_ignore_cache'
+    done = subprocess.run(
+        [sys.executable, '-m', 'mypy', '--config-file', str(config), '--cache-dir', str(cache)]
+        + [str(f) for f in files],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.stdout
+
+
+def clean_but_listed(repo_root: Path, pyproject: Path, runner: MypyRunner = run_mypy) -> list[str]:
+    """Listed modules that have no mypy error once ``ignore_errors`` is off."""
+    modules = [m for m in listed_modules(pyproject) if module_file(repo_root, m).exists()]
+    if not modules:
+        return []
+    with tempfile.TemporaryDirectory() as tmp:
+        config = Path(tmp) / 'pyproject.toml'
+        config.write_text(
+            pyproject.read_text(encoding='utf-8').replace(
+                'ignore_errors = true', 'ignore_errors = false'
+            ),
+            encoding='utf-8',
+        )
+        output = runner(repo_root, config, [module_file(repo_root, m) for m in modules])
+    failing = {
+        (repo_root / m['path'])
+        .resolve()
+        .relative_to(repo_root.resolve())
+        .with_suffix('')
+        .as_posix()
+        for m in _ERROR_LINE.finditer(output)
+    }
+    return [
+        f'{m}: listed in the ignore_errors block but has no mypy error (delete it from '
+        'pyproject.toml and the baseline)'
+        for m in modules
+        if m.replace('.', '/') not in failing
+    ]
 
 
 def check(repo_root: Path, pyproject: Path, baseline_path: Path) -> list[str]:
@@ -96,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(f'dropped {tighten(REPO_ROOT, PYPROJECT, BASELINE)} entries\n')
         return 0
     errors = check(REPO_ROOT, PYPROJECT, BASELINE)
+    if not errors:
+        errors = clean_but_listed(REPO_ROOT, PYPROJECT)
     for line in errors:
         sys.stderr.write(line + '\n')
     return 1 if errors else 0

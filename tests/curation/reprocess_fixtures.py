@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import DetectionProfile, RegionStatus, get_curation_config
@@ -150,6 +151,13 @@ class FakeTriton:
     def __init__(self, detections: list[tuple[float, float, float, float, float, int]]) -> None:
         self.detections = detections
         self.calls = 0
+
+    async def is_model_ready(self, model_name: str) -> bool:  # noqa: ARG002
+        return False
+
+    async def load_model(self, model_name: str) -> None:
+        # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
+        raise InferenceServerException(f'{model_name}: not in the repository')
 
     async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
         return 'UINT8'
