@@ -140,6 +140,20 @@ class FakeOccOpenSearch:
         return make_bulk_response(items)
 
 
+class FakeIndicesApi:
+    """The ``indices`` namespace ingest refresh and export readiness call."""
+
+    def __init__(self) -> None:
+        self.refresh_calls: list[str] = []
+
+    async def refresh(self, *, index: str) -> dict[str, Any]:
+        self.refresh_calls.append(index)
+        return {'_shards': {'failed': 0}}
+
+    async def get_settings(self, *, index: str) -> dict[str, Any]:
+        return {index: {'settings': {'index': {'uuid': 'fake-uuid', 'creation_date': '0'}}}}
+
+
 class FakeIngestOpenSearch:
     """AsyncOpenSearch double covering the surface
     :func:`src.clients.occ.occ_upsert_bulk` and
@@ -166,6 +180,7 @@ class FakeIngestOpenSearch:
         # exercise occ_upsert_bulk's create-conflict -> refetch -> OCC
         # update fallback path.
         self._create_conflict_pending: set[str] = set(create_conflict_ids or set())
+        self.indices = FakeIndicesApi()
         self.bulk_calls: list[list[dict[str, Any]]] = []
         self.update_calls: list[dict[str, Any]] = []
 
