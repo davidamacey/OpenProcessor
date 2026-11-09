@@ -10,9 +10,10 @@ live in :mod:`src.services.config_store.vlm_pairing`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.config.env import env_str
+from src.services.config_store.profile_issues import issue_builder
 from src.services.labeling.vlm_catalog import catalog_entry
 from src.services.labeling.vlm_endpoint_body import FIELD_RANGES, VlmEndpointBody, VlmProbeRecord
 from src.services.labeling.vlm_endpoints import (
@@ -52,24 +53,7 @@ def external_policy() -> str:
     return raw if raw == 'ack' else 'deny'
 
 
-def issue(
-    code: str,
-    severity: str,
-    message: str,
-    *,
-    field: str | None = None,
-    detail: dict[str, Any] | None = None,
-) -> ValidationIssue:
-    from src.schemas.curation.config_common import ValidationIssue
-
-    return ValidationIssue(
-        code=code,
-        severity=severity,
-        field=field,
-        message=message,
-        detail=detail or {},
-        bypassable=code in BYPASSABLE_CODES,
-    )
+issue = issue_builder(BYPASSABLE_CODES)
 
 
 def build_report(issues: list[ValidationIssue]) -> ValidationReport:
