@@ -65,3 +65,32 @@ def test_a_declined_image_stops_the_capture() -> None:
     client = _Client({'status': np.array([b'progressive'], dtype=np.object_)})
     with pytest.raises(SystemExit, match='progressive'):
         dc.gpu_decode_row(client, 'gpu_image_prep', b'\xff\xd8\xff\xd9')
+
+
+def _content_box(chw: np.ndarray) -> tuple[int, int]:
+    mask = (chw[0] != 114).any(axis=0)
+    ys, xs = np.nonzero(mask)
+    return int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)
+
+
+def test_detect_arm_scaleup_only_changes_the_scale() -> None:
+    from PIL import Image
+
+    img = Image.new('RGB', (320, 240), (255, 255, 255))
+    chw, scale, pad = dc.detect_letterbox(img, 640, scaleup=True)
+    assert _content_box(chw) == (640, 480)
+    assert (scale, pad) == (2.0, (0.0, 80.0))
+    chw, scale, pad = dc.detect_letterbox(img, 640, scaleup=False)
+    assert _content_box(chw) == (320, 240)
+    assert (scale, pad) == (1.0, (160.0, 200.0))
+
+
+def test_ingest_arm_is_the_product_letterbox() -> None:
+    from PIL import Image
+
+    from src.services.detection.geometry import letterbox_to_square
+
+    img = Image.new('RGB', (320, 240), (255, 255, 255))
+    a, b = dc.preprocess(img, 'ingest'), letterbox_to_square(img, 640)
+    assert (a[0] == b[0]).all()
+    assert a[1:] == b[1:]
