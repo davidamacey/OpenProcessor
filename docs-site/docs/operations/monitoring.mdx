@@ -46,12 +46,10 @@ and OpenSearch Dashboards run without authentication, like the API.
 | `loki` | `loki:3100` | Loki's own health. |
 | `curation-detection-worker` | `curation-detection-worker:4609` | The detection worker's own `op_*` series (segmenter calls, stage timings, items written, VLM calls). |
 | `curation-vlm-worker` | `curation-vlm-worker:4610` | The VLM worker's `op_*` series (VLM tokens and latency, heartbeat). |
-| `curation-auto-label-worker` | `curation-auto-label-worker:4611` | The auto-label worker's heartbeat series. |
 
-The three worker jobs belong to the `curation` compose profile; each target
+The two worker jobs belong to the `curation` compose profile; each target
 shows as down whenever its worker is not running. Override the ports with
-`OP_REGION_WORKER_METRICS_PORT`, `OP_VLM_WORKER_METRICS_PORT` and
-`OP_AUTO_LABEL_WORKER_METRICS_PORT` (`0` turns the endpoint off; if you
+`OP_REGION_WORKER_METRICS_PORT`, `OP_VLM_WORKER_METRICS_PORT` (`0` turns the endpoint off; if you
 change a port, change the matching job in `prometheus.yml`).
 
 <Screenshot

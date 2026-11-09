@@ -252,8 +252,6 @@ See [Keymaps](../guides/keymaps.mdx).
 |---|---|---|
 | GET | `/clusters` | Cluster cards: `cluster_kind`, dominant class, `purity` (geometry), `label_agreement` (label share), validated count, sub-clusters, representatives |
 | GET | `/clusters/representatives` | Representatives only |
-| POST | `/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
-| POST | `/clusters/auto_promote` | Validate classifier-labelled items in high-purity clusters. Gated on the accuracy audit: `409 audit_required` / `409 audit_precision_low` (with `classes`) unless `force=true`; `promote_min_precision` defaults to 0.95; `dry_run` is never gated |
 | POST | `/cluster/umap/rebuild` | Rebuild the residual reducer |
 | GET | `/viz/projection` | Cached 2-D coordinates for plotting; never fits inline |
 | POST | `/viz/projection/rebuild` | Start the projection fit job |
@@ -308,12 +306,8 @@ is active. An item carries a **list of boxes** (`region_boxes`), each with a
 | POST | `/regions/batch_status` | Set a human-writable whole-item status on many items |
 | POST | `/crops/{crop_id}/region/undo` | Undo a region write (restores the box list) |
 | POST | `/crops/region/undo_batch` | Batch undo |
-| POST | `/regions/cluster` | Cluster region boxes (background job; a cluster card's `size` is items, `box_count` boxes) |
-| GET | `/regions/cluster/status` | Job status |
 | GET | `/regions/clusters` | Region cluster cards |
-| POST | `/regions/clusters/refine/{cluster_id}` | Refine one region cluster |
 | POST | `/regions/fp_centroids/build` | Build false-positive sub-centroids from false-positive boxes |
-| GET | `/regions/fp_centroids/status` | Build status |
 | GET | `/regions/suspected_false_positives` | Non-false-positive boxes ranked by similarity to the false-positive sub-centroids, one row per box |
 | GET | `/regions/training_candidates` | Curated cohorts for training the next region detector |
 

@@ -66,7 +66,7 @@ Do not trust its precision yet; label more crops of that class.
 
 Automatic promotion of cluster labels is gated on this audit. A class needs enough
 audited crops and a high enough detector precision before
-`POST /curation/projects/{project}/clusters/auto_promote` will validate it; otherwise
+the cluster auto-promote step will validate it; otherwise
 the backend answers `409 audit_required` or `409 audit_precision_low`. Cropwright
 has no screen for that call, so run the audit here first and let the backend
 promote. See [Clusters](./clusters.md) and the

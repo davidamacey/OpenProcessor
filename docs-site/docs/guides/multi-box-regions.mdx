@@ -182,12 +182,8 @@ All box filters apply to the same box.
 | `GET /curation/projects/{project}/regions` | Browse rows. Filters: `detector`, `min_score`, `max_score`, `text`, `region_cluster_id`, `region_cluster_subid`, `box_state`, `status`, `class_id`, `verified`, `max_rank` |
 | `GET /curation/projects/{project}/regions/statuses` | Item statuses, box states and the states each write route accepts |
 | `GET /curation/projects/{project}/regions/vocabulary` | Region vocabulary and write limits |
-| `POST /curation/projects/{project}/regions/cluster` | Cluster accepted boxes as a background job |
-| `GET /curation/projects/{project}/regions/cluster/status` | Job status |
 | `GET /curation/projects/{project}/regions/clusters` | Cluster cards: `size` (items), `box_count` (boxes), representatives |
-| `POST /curation/projects/{project}/regions/clusters/refine/{cluster_id}` | Split one cluster into sub-clusters |
 | `POST /curation/projects/{project}/regions/fp_centroids/build` | Build false-positive centroids from `false_positive` boxes |
-| `GET /curation/projects/{project}/regions/fp_centroids/status` | Build status |
 | `GET /curation/projects/{project}/regions/suspected_false_positives` | Boxes ranked by distance to a false-positive sub-centroid |
 | `GET /curation/projects/{project}/regions/training_candidates` | Training cohorts. `mode` is `detector_blind_spots`, `low_conf_correct`, `disagreement`, `human_corrected` or `false_positives` |
 
@@ -197,11 +193,9 @@ index returns per item.
 
 ```bash
 curl -s "$API/curation/projects/cars/regions?box_state=accepted&min_score=0.5&page_size=50"
-curl -s -X POST "$API/curation/projects/cars/regions/cluster?auto_fp_threshold=0.2"
-curl -s "$API/curation/projects/cars/regions/cluster/status"
 ```
 
-Clustering rebuilds false-positive sub-centroids, flips tight matches to
+A clustering run rebuilds false-positive sub-centroids, flips tight matches to
 `false_positive` (and re-derives the item status), then partitions the good
 boxes. Human-final items and locked boxes are never changed by these
 automated steps. After marking more false positives, rebuild the centroids

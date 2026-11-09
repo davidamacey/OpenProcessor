@@ -197,7 +197,7 @@ way on its first start. Every project created after that starts `off`.
 project's item count. When a project has grown by the threshold since its last refresh
 it does two things in order:
 
-1. Posts `POST /curation/projects/{project}/clusters/auto_promote`.
+1. Runs auto-promote for the project.
 2. Queues the auto-label job for the retrain (`POST .../pipeline/auto_label/start` with
    no VLM stage), which the auto-label worker runs.
 
@@ -555,8 +555,6 @@ The single steps it is built from can still be run by hand:
 | Piece | Where |
 |---|---|
 | Label only a few crops per cluster | VLM policy `scope=representatives` with `per_cluster` (mode (c), step 4) |
-| Promote whole clusters of classified items, behind the audit gate | `POST /curation/projects/{project}/clusters/auto_promote` |
-| Split a cluster into sub-clusters | `POST /curation/projects/{project}/clusters/refine/{cluster_id}` |
 
 <Screenshot
   name="cropwright/cluster-detail-1600.png"
