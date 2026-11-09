@@ -98,7 +98,10 @@ def _registry(base_dir: Path) -> InMemoryRegistry:
 
 
 def _service(tmp_path: Path, docs: list[dict[str, Any]]) -> GenericYoloExportService:
-    cfg = CurationConfig(export_root=tmp_path / 'exports', source_root=tmp_path / 'src')
+    # no keep-last prune: it reads the pins (training runs, bake-offs) from PostgreSQL
+    cfg = CurationConfig(
+        export_root=tmp_path / 'exports', export_keep_last=0, source_root=tmp_path / 'src'
+    )
     return GenericYoloExportService(
         _FilteringOpenSearch(docs), config=cfg, registry=_registry(tmp_path / 'reg')
     )
@@ -443,15 +446,20 @@ async def test_max_images_caps_images_and_keeps_every_object_on_them(tmp_path: P
 @pytest.fixture
 def status_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
+    from src.routers.curation.near_dup_gate import require_near_dup_fresh
 
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
+    opensearch = AsyncMock()
+    opensearch.count = AsyncMock(return_value={'count': 1})
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: opensearch
+
+    app.dependency_overrides[require_near_dup_fresh] = lambda: None  # the gate reads PostgreSQL
     return TestClient(app)
 
 

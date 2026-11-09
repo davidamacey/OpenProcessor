@@ -22,11 +22,19 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
+class _EmptyCoverageOpenSearch:
+    """Answers the field-coverage ``_search`` with no aggregations: every coverage is unknown,
+    which the PUT validation lets through."""
+
+    async def search(self, **_kw: object) -> dict[str, object]:
+        return {}
+
+
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = object()
+    fake_os = _EmptyCoverageOpenSearch()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -157,7 +165,7 @@ def app_client_config_store(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     ``store.activate_axis``."""
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = object()
+    fake_os = _EmptyCoverageOpenSearch()
 
     # `PUT /settings` now runs the same
     # `for_activation` validation `POST /{name}/activate` runs, so a

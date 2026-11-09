@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
 from src.services.training.preflight_checks import count_validated_and_test_per_class
 
@@ -30,7 +31,9 @@ async def test_issues_exactly_one_search() -> None:
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value=_agg_response({1: 10, 2: 3}, {1: 5, 2: 1}))
 
-    validated, test = await count_validated_and_test_per_class(os_client, [1, 2])
+    counted = await count_validated_and_test_per_class(os_client, [1, 2])
+    assert counted is not None
+    validated, test = counted
 
     os_client.search.assert_awaited_once()
     assert validated == {1: 10, 2: 3}
@@ -63,7 +66,9 @@ async def test_missing_class_defaults_to_zero_in_both_dicts() -> None:
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value=_agg_response({1: 10}, {}))
 
-    validated, test = await count_validated_and_test_per_class(os_client, [1, 2])
+    counted = await count_validated_and_test_per_class(os_client, [1, 2])
+    assert counted is not None
+    validated, test = counted
 
     assert validated == {1: 10, 2: 0}
     assert test == {1: 0, 2: 0}
@@ -72,19 +77,38 @@ async def test_missing_class_defaults_to_zero_in_both_dicts() -> None:
 @pytest.mark.asyncio
 async def test_empty_class_ids_short_circuits_without_a_query() -> None:
     os_client = AsyncMock()
-    validated, test = await count_validated_and_test_per_class(os_client, [])
+    counted = await count_validated_and_test_per_class(os_client, [])
     os_client.search.assert_not_awaited()
-    assert validated == {}
-    assert test == {}
+    assert counted == ({}, {})
 
 
 @pytest.mark.asyncio
-async def test_opensearch_failure_returns_zeros_for_every_class() -> None:
+async def test_an_opensearch_outage_is_not_a_zero_count() -> None:
     os_client = AsyncMock()
-    os_client.search = AsyncMock(side_effect=RuntimeError('boom'))
-    validated, test = await count_validated_and_test_per_class(os_client, [1, 2])
-    assert validated == {1: 0, 2: 0}
-    assert test == {1: 0, 2: 0}
+    os_client.search = AsyncMock(side_effect=OpenSearchException('boom'))
+    assert await count_validated_and_test_per_class(os_client, [1, 2]) is None
+
+
+@pytest.mark.asyncio
+async def test_a_programming_error_propagates() -> None:
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(side_effect=RuntimeError('bug'))
+    with pytest.raises(RuntimeError, match='bug'):
+        await count_validated_and_test_per_class(os_client, [1, 2])
+
+
+@pytest.mark.asyncio
+async def test_preflight_blocks_with_the_cause_when_the_crops_cannot_be_counted() -> None:
+    from src.services.training.preflight_run import _multi_class_data_checks
+
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(side_effect=OpenSearchException('boom'))
+    checks = await _multi_class_data_checks(os_client, [1, 2])
+    assert [(c.name, c.severity) for c in checks] == [
+        ('class_balance', 'block'),
+        ('test_holdout', 'block'),
+    ]
+    assert all('unreachable' in c.message for c in checks)
 
 
 if __name__ == '__main__':

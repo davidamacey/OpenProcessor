@@ -41,7 +41,6 @@ def client() -> TestClient:
                 {'key': 1, 'doc_count': 2, 'validated': {'doc_count': 0}},
             ]
         },
-        'by_cluster': {'classes': {'buckets': [{'key': 0, 'doc_count': 9}]}},
     }
     os = AsyncMock()
     os.search = AsyncMock(return_value={'aggregations': aggs})
@@ -58,7 +57,7 @@ def test_counts_come_from_one_aggregation_and_missing_buckets_are_zero(client: A
     body = client.get('/curation/projects/default/classes').json()
     by_name: dict[str, Any] = {c['class_name']: c for c in body['classes']}
     assert (by_name['sedan']['sample_count'], by_name['sedan']['validated_count']) == (7, 3)
-    assert by_name['sedan']['cluster_size'] == 9
+    assert 'cluster_size' not in by_name['sedan']
     assert by_name['sedan']['trainable'] == 2
     assert (by_name['suv']['sample_count'], by_name['suv']['validated_count']) == (2, 0)
     assert (by_name['van']['sample_count'], by_name['van']['validated_count']) == (0, 0)

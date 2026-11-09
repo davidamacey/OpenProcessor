@@ -10,6 +10,7 @@ This file also covers ``/region_profiles/schema`` and
 from __future__ import annotations
 
 import re
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -43,6 +44,14 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = object()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
+
+    async def empty_repository_index(_self: Any) -> list[dict[str, Any]]:
+        return []
+
+    monkeypatch.setattr(
+        'src.services.models.triton_control.TritonControlService.get_repository_index',
+        empty_repository_index,
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)

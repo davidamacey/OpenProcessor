@@ -120,6 +120,12 @@ def test_the_filter_reaches_the_query(
 
 @pytest.mark.parametrize('path', ['/crops', '/stats/classes', '/clusters'])
 def test_a_malformed_band_is_a_400(app: FastAPI, path: str) -> None:
+    from src.core.db_session import get_db
+
+    async def no_database() -> Any:  # the filter is refused before any session is used
+        yield None
+
+    app.dependency_overrides[get_db] = no_database
     with TestClient(app, raise_server_exceptions=False) as client:
         r = client.get(
             f'{_common.config.api_prefix}/projects/default{path}',

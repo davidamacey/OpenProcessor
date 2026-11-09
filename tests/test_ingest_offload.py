@@ -46,8 +46,8 @@ class _Service:
         self.in_detector -= len(imgs)
         return [[] for _ in imgs]
 
-    async def _check_duplicates(self, hashes: list[str]) -> dict[str, str | None]:
-        return dict.fromkeys(hashes)
+    async def _check_duplicates(self, entries: list[tuple[str, bytes]]) -> list[str | None]:
+        return [None] * len(entries)
 
     async def ingest_one(self, _bytes: bytes, path: str, **_kw) -> IngestResult:
         return IngestResult(status='success', image_id=path, image_path=path)

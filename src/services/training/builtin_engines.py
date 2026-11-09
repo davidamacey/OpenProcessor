@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
+from src.config.settings import TritonModelConfig
 from src.db.models.training import Model, ModelEngine
 from src.domain.storage_keys import make_key
 from src.schemas.models import EngineInputContract, EngineOutputContract, NormalizeSpec, SizeRange
@@ -104,7 +105,7 @@ SHIPPED: tuple[Shipped, ...] = (
         EngineOutputContract(kind='end2end_boxes', shapes=[[300, 6]], dtypes=['fp32']),
     ),
     Shipped(
-        'scrfd_10g_bnkps',
+        TritonModelConfig.FACE_DETECT_MODEL,
         'scrfd',
         'face_detect',
         'fp16',
@@ -136,7 +137,7 @@ SHIPPED: tuple[Shipped, ...] = (
         ),
     ),
     Shipped(
-        'arcface_w600k_r50',
+        TritonModelConfig.ARCFACE_MODEL,
         'arcface',
         'face_embed',
         'fp16',
@@ -153,7 +154,7 @@ SHIPPED: tuple[Shipped, ...] = (
         _embedding(512),
     ),
     Shipped(
-        'mobileclip2_s2_image_encoder',
+        TritonModelConfig.CLIP_IMAGE_MODEL,
         'mobileclip2',
         'image_embed',
         'fp16',
@@ -172,7 +173,7 @@ SHIPPED: tuple[Shipped, ...] = (
         _embedding(512),
     ),
     Shipped(
-        'mobileclip2_s2_text_encoder',
+        TritonModelConfig.CLIP_TEXT_MODEL,
         'mobileclip2',
         'text_embed',
         'fp16',
@@ -181,7 +182,7 @@ SHIPPED: tuple[Shipped, ...] = (
         _embedding(512),
     ),
     Shipped(
-        'pe_image_encoder',
+        TritonModelConfig.PE_IMAGE_MODEL,
         'pe_core',
         'image_embed',
         'fp16',
@@ -198,7 +199,7 @@ SHIPPED: tuple[Shipped, ...] = (
         _embedding(1024),
     ),
     Shipped(
-        'pe_text_encoder',
+        TritonModelConfig.PE_TEXT_MODEL,
         'pe_core',
         'text_embed',
         'fp32',

@@ -421,7 +421,15 @@ async def _multi_class_data_checks(
                 message='Cannot evaluate test holdout — no target classes resolved',
             ),
         ]
-    counts, test_counts = await count_validated_and_test_per_class(opensearch, target_classes)
+    counted = await count_validated_and_test_per_class(opensearch, target_classes)
+    if counted is None:
+        # Blocked, as zero counts were, but saying why: the crops were never counted.
+        message = 'Could not count validated crops per class: OpenSearch is unreachable'
+        return [
+            PreflightCheck(name='class_balance', severity='block', message=message),
+            PreflightCheck(name='test_holdout', severity='block', message=message),
+        ]
+    counts, test_counts = counted
     registry = await get_class_registry().snapshot()
     return [
         _class_balance_check(target_classes, counts, registry),

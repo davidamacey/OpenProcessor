@@ -129,7 +129,8 @@ def _normalize(value: Any, export_dir: str) -> Any:
 
 
 async def _run(tmp_path: Path, name: str, kwargs: dict[str, Any]) -> dict[str, Any]:
-    cfg = CurationConfig(export_root=tmp_path / name / 'exports')
+    # no keep-last prune: it reads the pins (training runs, bake-offs) from PostgreSQL
+    cfg = CurationConfig(export_root=tmp_path / name / 'exports', export_keep_last=0)
     fake = _IndexFake({cfg.items_index: _items(), cfg.images_index: _negatives()})
     service = GenericYoloExportService(
         fake, config=cfg, registry=make_registry(tmp_path / name / 'registry', ['car', 'truck'])

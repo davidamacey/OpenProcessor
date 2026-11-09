@@ -174,9 +174,9 @@ def test_region_class_is_marked_kind_region_and_keeps_real_item_counts(
 ) -> None:
     """The example license_plate profile is active (region_class_name=
     'license_plate'); a registry class of that name is marked
-    kind='region' but its sample_count/validated_count/cluster_size are
+    kind='region' but its sample_count/validated_count are
     NOT overridden with the region inventory total -- they stay whatever
-    the class/cluster aggregations reported (0 here, since no item doc
+    the class aggregation reported (0 here, since no item doc
     has that class_id)."""
     registry.add('license_plate', group='region')
     fake_opensearch.count = AsyncMock(side_effect=[{'count': 7}, {'count': 3}])
@@ -187,7 +187,7 @@ def test_region_class_is_marked_kind_region_and_keeps_real_item_counts(
     assert entry['kind'] == 'region'
     assert entry['sample_count'] == 0
     assert entry['validated_count'] == 0
-    assert entry['cluster_size'] == 0
+    assert 'cluster_size' not in entry
 
 
 def test_non_region_class_is_marked_kind_item(

@@ -56,7 +56,6 @@
 /classes/merge
 /classes/{param}
 /clusters
-/clusters/refine/{param}
 /crops
 /crops/batch_exclude
 /crops/batch_label

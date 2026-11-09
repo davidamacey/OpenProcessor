@@ -24,6 +24,8 @@ from pathlib import Path
 import numpy as np
 import requests
 
+from src.config.settings import TritonModelConfig
+
 
 # =============================================================================
 # Configuration
@@ -82,7 +84,7 @@ def check_triton_model_ready() -> bool:
     """Check if SCRFD model is loaded on Triton."""
     print('\n--- Triton Model Status ---')
 
-    models = ['scrfd_10g_bnkps', 'arcface_w600k_r50']
+    models = [TritonModelConfig.FACE_DETECT_MODEL, TritonModelConfig.ARCFACE_MODEL]
     all_ready = True
 
     for model in models:
