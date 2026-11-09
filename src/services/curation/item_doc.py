@@ -21,6 +21,7 @@ from src.utils.vectors import float_list
 
 
 if TYPE_CHECKING:
+    from src.services.clustering.assign import Placement
     from src.services.curation.class_label import ItemLabel
 
 
@@ -79,6 +80,9 @@ class DetectedItem:
     embedding_state: str | None = None
     cluster_id: int | None = None
     cluster_distance: float | None = None
+    # Where the serving partition placed the item at ingest (4F ``assign.place_new``); None when
+    # the project has no serving partition for the item target.
+    placement: Placement | None = None
     # Model name + version of whichever detector last set this item's
     # class/proposal (primary, or a secondary that overrode it).
     class_detector: str | None = None
@@ -94,6 +98,26 @@ class DetectedItem:
     # import's ``import_ids``, ``dataset_split``, ...). Written before
     # ``label``, so they can never override a class field.
     extra_fields: dict[str, Any] = field(default_factory=dict)
+
+
+def _cluster_fields(item: DetectedItem) -> dict[str, Any]:
+    """The item's cluster fields: the residual cluster and its distance, and its place in the
+    serving partition (``placement``)."""
+    fields: dict[str, Any] = {}
+    if item.cluster_id is not None:
+        fields['cluster_id'] = item.cluster_id
+        fields['cluster_distance'] = item.cluster_distance
+        if item.cluster_distance is not None:
+            fields['cluster_distance_cluster_id'] = item.cluster_id
+    placed = item.placement
+    if placed is not None:
+        fields['cluster_partition_id'] = str(placed.partition_id)
+        fields['cluster_uid'] = None if placed.cluster_uid is None else str(placed.cluster_uid)
+        fields['cluster_state'] = placed.state
+        fields['cluster_score'] = placed.score
+        fields['cluster_margin'] = placed.margin
+        fields['cluster_assigned_by'] = placed.assigned_by
+    return fields
 
 
 def build_image_doc(
@@ -212,11 +236,7 @@ def build_item_doc(
     for name in DETECTOR_FIELDS:
         if getattr(item, name) is not None:
             doc[name] = getattr(item, name)
-    if item.cluster_id is not None:
-        doc['cluster_id'] = item.cluster_id
-        doc['cluster_distance'] = item.cluster_distance
-        if item.cluster_distance is not None:
-            doc['cluster_distance_cluster_id'] = item.cluster_id
+    doc.update(_cluster_fields(item))
     if item.pe_embedding is not None:
         doc['pe_embedding'] = float_list(item.pe_embedding)
         doc['embedding_state'] = EMBEDDED

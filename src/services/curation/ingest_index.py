@@ -165,6 +165,36 @@ def residual_placement(
     return int(centroid) + RESIDUAL_CLUSTER_ID_OFFSET, distance
 
 
+async def place_in_serving_partition(items: list[DetectedItem], item_ids: list[str]) -> None:
+    """Stamp each embedded item with its place in the serving partition (4F ``assign.place_new``).
+
+    Nothing is written for an item without a vector, and for all of them when the project has no
+    serving partition for the item target (an unclustered project behaves as before). A failure
+    of the read refuses the ingest: a placement that silently vanished would leave an item
+    looking unclustered.
+    """
+    from src.db.session import async_session_factory, project_tx
+    from src.services.clustering.assign import place_new
+    from src.services.config_store.bound_project import bound_project_id
+
+    embedded = [i for i, it in enumerate(items) if it.pe_embedding is not None]
+    if not embedded:
+        return
+    project = await bound_project_id()
+    async with async_session_factory()() as session, project_tx(session, project):
+        placements = await place_new(
+            session,
+            project=project,
+            target='item',
+            item_ids=[item_ids[i] for i in embedded],
+            vectors=np.asarray([items[i].pe_embedding for i in embedded], dtype=np.float32),
+        )
+    if not placements:
+        return
+    for i, placement in zip(embedded, placements, strict=True):
+        items[i].placement = placement
+
+
 async def embed_items(
     service: CurationIngestService,
     items: list[DetectedItem],
@@ -373,6 +403,8 @@ async def index_items(
         it.class_id is None and it.pe_embedding is not None for it in items
     ):
         store = get_ivf_ingest_store()
+
+    await place_in_serving_partition(items, cids)
 
     box_vars: list[float | None]
     if frame is not None:
