@@ -39,10 +39,10 @@ def consumer(queue_env, monkeypatch):
     return bakeoff_tasks, calls
 
 
-async def start(pg, tmp_path):
+async def start(pg, tmp_path, slug=None):
     from src.db.repos import bakeoff as bakeoff_repo
 
-    project = make_project(pg)
+    project = make_project(pg, slug)
     spec, _ = spec_and_accepted(f'job{uuid.uuid4().hex[:8]}', str(tmp_path / 'out'))
 
     async def rows(session, job):
@@ -91,10 +91,10 @@ async def test_the_results_directory_is_recorded_on_the_run_row(
     pg, job_env, producer, wakes, consumer, tmp_path
 ) -> None:
     tasks, _ = consumer
-    job_id, spec = await start(pg, tmp_path)
+    job_id, spec = await start(pg, tmp_path, 'cats')
     await deliver(tasks, job_id)
     assert sql(pg, 'SELECT results_storage_key FROM bakeoff_runs WHERE job_id = %s', job_id) == [
-        (spec.out_dir,)
+        (f'bakeoff_results/cats/{spec.job_id}',)
     ]
 
 

@@ -41,4 +41,4 @@ def test_parse_key_refuses_unsafe_keys(key: str) -> None:
 
 
 def test_root_names_are_the_plan_roots() -> None:
-    assert {'source', 'projects', 'models', 'cache', 'upgrade'} == ROOT_NAMES
+    assert {'source', 'projects', 'models', 'cache', 'upgrade', 'bakeoff_results'} == ROOT_NAMES
