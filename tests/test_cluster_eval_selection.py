@@ -84,7 +84,7 @@ def _rows() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     meta = {
         k: {'split': 'test', 'license': 'by', 'author': 'a', 'original_url': 'u'} for k in boxes
     }
-    return coco, sel.openimages_images(boxes, meta)
+    return coco, sel.openimages_images(boxes, meta)  # type: ignore[arg-type]
 
 
 def test_selection_is_seeded_disjoint_and_grouped() -> None:

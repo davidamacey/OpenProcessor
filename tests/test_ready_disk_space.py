@@ -152,7 +152,7 @@ def test_every_start_route_carries_the_guard(module: str, path: str, method: str
     router = importlib.import_module(module).router
 
     def matches(r: object) -> bool:
-        if not isinstance(r, APIRoute) or method not in r.methods:
+        if not isinstance(r, APIRoute) or method not in r.methods:  # type: ignore[operator]
             return False
         return r.path == router.prefix if path == '' else r.path.endswith(path)
 

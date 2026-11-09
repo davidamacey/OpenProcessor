@@ -151,6 +151,6 @@ def test_load_index_does_not_swallow_a_bug(tmp_path: Path) -> None:
         def read_index(_path: str) -> None:
             raise TypeError('bug')
 
-    svc._faiss = _Faiss()
+    svc._faiss = _Faiss()  # type: ignore[assignment]
     with pytest.raises(TypeError):
         svc.load_index(ClusterIndex.GLOBAL)

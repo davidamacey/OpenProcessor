@@ -188,7 +188,7 @@ def _detector(pool: _IngestPool) -> WholeImageDetector:
         triton_pool=pool,
         registry=cast('Any', None),
         profile=cast('Any', profile),
-        secondary_profile=profile,
+        secondary_profile=profile,  # type: ignore[arg-type]
     )
 
 

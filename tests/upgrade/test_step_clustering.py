@@ -26,12 +26,12 @@ def test_only_candidate_clusters_become_members_and_the_uid_is_stable() -> None:
         ('d', {'cluster_id': None}),
         ('e', {'cluster_id': OFFSET + 9}),
     ]
-    members = step.members_of(project, docs)
+    members = step.members_of(project, docs)  # type: ignore[arg-type]
     assert [m.item_key for m in members] == ['a', 'b', 'e']
     assert members[0].cluster_uid == members[1].cluster_uid != members[2].cluster_uid
     assert members[0].score == pytest.approx(0.8)
     assert members[1].score is None
-    assert step.members_of(project, docs)[0].cluster_uid == members[0].cluster_uid
+    assert step.members_of(project, docs)[0].cluster_uid == members[0].cluster_uid  # type: ignore[arg-type]
 
 
 class _Reader:

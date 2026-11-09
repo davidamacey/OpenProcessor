@@ -48,7 +48,7 @@ def serve():
             class opensearch:  # noqa: N801 - attribute stand-in for the service's client
                 pass
 
-        _Service.opensearch.client = client
+        _Service.opensearch.client = client  # type: ignore[attr-defined]
         app.dependency_overrides[get_visual_search_service] = _Service
         return TestClient(app)
 

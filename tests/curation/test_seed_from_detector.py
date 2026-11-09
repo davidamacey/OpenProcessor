@@ -131,7 +131,7 @@ def test_seeding_never_touches_items(
 ) -> None:
     from src.routers.curation import _raw_opensearch_dep
 
-    fake = client.app.dependency_overrides[_raw_opensearch_dep]()
+    fake = client.app.dependency_overrides[_raw_opensearch_dep]()  # type: ignore[attr-defined]
     client.post(URL, json={'dry_run': False})
     assert [c for c in fake.method_calls if c[0] != 'get'] == []
 

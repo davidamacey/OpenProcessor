@@ -72,7 +72,7 @@ def assist_queue(
     stack.client.app.dependency_overrides.pop(get_db, None)
     # The in-memory config store's endpoint has no document row, which a usage row references.
     with psycopg.connect(job_env.conninfo('super'), autocommit=True) as conn:
-        endpoint_id = conn.execute(
+        endpoint_id = conn.execute(  # type: ignore[index]
             'INSERT INTO config_documents (project_id, kind, name, current_revision, updated_by) '
             "VALUES (NULL, 'vlm_endpoint', %s, 1, 'test') RETURNING id",
             (f'ep-{uuid.uuid4().hex[:8]}',),

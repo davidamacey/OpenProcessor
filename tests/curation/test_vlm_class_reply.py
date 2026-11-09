@@ -55,7 +55,7 @@ class TestClassCallTransport:
             preds = await labeler.label_or_propose_batch(_crops(2), ['widget'])
         else:
             preds = await labeler.label_item_batch(_crops(2), ['widget'])
-        sent = labeler._client.post.await_args.kwargs['json']
+        sent = labeler._client.post.await_args.kwargs['json']  # type: ignore[attr-defined]
         assert sent['response_format'] == {'type': 'json_object'}
         user_text = ' '.join(
             part['text'] for part in sent['messages'][1]['content'] if part['type'] == 'text'
@@ -67,7 +67,7 @@ class TestClassCallTransport:
     async def test_catalog_prompt_asks_for_results_envelope(self) -> None:
         labeler = _labeler({'content': json.dumps({'results': _entries(1)})})
         await labeler.label_or_propose_batch(_crops(1), ['widget'], class_catalog='g: widget')
-        sent = labeler._client.post.await_args.kwargs['json']
+        sent = labeler._client.post.await_args.kwargs['json']  # type: ignore[attr-defined]
         assert sent['response_format'] == {'type': 'json_object'}
         assert '"results"' in sent['messages'][1]['content'][0]['text']
 

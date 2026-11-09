@@ -378,7 +378,7 @@ class LoopEnv:
         )
         with psycopg.connect(self.pg.conninfo('super'), autocommit=True) as conn:
             run = make_loop_run(conn, self.project)
-            job = conn.execute(
+            job = conn.execute(  # type: ignore[index]
                 'SELECT job_id FROM assist_loop_runs WHERE id = %s', (run,)
             ).fetchone()[0]
             conn.execute(

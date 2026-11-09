@@ -154,7 +154,7 @@ def test_diverse_overlay_serves_the_real_k_limits(app_client: _Client) -> None:
         for s in app_client.get('/curation/projects/default/methods').json()['strategies']
         if s['id'] == 'diverse'
     )
-    schema = app_client.app.openapi()
+    schema = app_client.app.openapi()  # type: ignore[attr-defined]
     crops = next(
         p for path, ops in schema['paths'].items() if path.endswith('/crops') for p in [ops['get']]
     )
@@ -414,7 +414,7 @@ def test_writes_never_include_cluster_fields(app_client: _Client) -> None:
 def _coverage_search_count(client: _Client) -> int:
     """Coverage queries only: the config-store refreshes the route also does
     (the VLM endpoint registry) search the configs indexes, not the pool."""
-    calls = client.fake_os.search.call_args_list  # type: ignore[attr-defined]
+    calls = client.fake_os.search.call_args_list
     return sum(1 for c in calls if 'aggs' in (c.kwargs.get('body') or {}))
 
 
@@ -438,7 +438,7 @@ def test_methods_emits_field_coverage_per_entry(app_client: _Client) -> None:
     """Phase 6 (P1-2/P1-3): every entry — including ones with no
     ``requires_field`` — now carries a ``field_coverage`` key.
     Before this fix, ``/curation/methods`` never emitted the key at all."""
-    app_client.fake_os.search = _fake_field_counts(  # type: ignore[attr-defined]
+    app_client.fake_os.search = _fake_field_counts(
         total=347_837, per_field={'cluster_score': 124_921, 'crop_area_norm': 347_837}
     )
 
@@ -469,7 +469,7 @@ def test_methods_reports_zero_coverage_for_a_genuinely_inert_sort(
     """mistakenness_score/probe_pred_entropy/uniqueness_score/dup_group_id
     are 0% covered on the real pool today -- this must come through as a
     real zero (hide the control), distinct from an unknown/None."""
-    app_client.fake_os.search = _fake_field_counts(  # type: ignore[attr-defined]
+    app_client.fake_os.search = _fake_field_counts(
         total=347_837,
         per_field={
             'probe_pred_entropy': 0,
@@ -515,7 +515,7 @@ def test_methods_does_not_query_per_entry(app_client: _Client) -> None:
     probe_pred_entropy) is covered by one ``_search`` with a filter agg
     per field -- not one query per field. A second request inside the 60s
     TTL must not issue any new OpenSearch queries at all."""
-    app_client.fake_os.search = _fake_field_counts(total=1000)  # type: ignore[attr-defined]
+    app_client.fake_os.search = _fake_field_counts(total=1000)
 
     r1 = app_client.get('/curation/projects/default/methods')
     assert r1.status_code == 200
@@ -558,7 +558,7 @@ def test_every_sort_with_requires_field_has_integer_coverage(app_client: _Client
     ``axis == 'sort'`` entry with a ``requires_field`` gets a real int
     ``field_coverage`` / ``field_coverage_total``, never left null just
     because a sort happens to declare one."""
-    app_client.fake_os.search = _fake_field_counts(total=1000)  # type: ignore[attr-defined]
+    app_client.fake_os.search = _fake_field_counts(total=1000)
 
     r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
@@ -596,4 +596,4 @@ def test_export_requests_collapse_near_duplicates_is_off_by_default_and_a_cut_is
     )
     assert ExportYoloRequest(collapse_near_duplicates=True).collapse_near_duplicates is True
     with pytest.raises(ValidationError):
-        ExportYoloRequest(dedup_threshold=0.98)
+        ExportYoloRequest(dedup_threshold=0.98)  # type: ignore[call-arg]

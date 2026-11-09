@@ -66,7 +66,7 @@ class Harness:
         self.resolutions: dict[str, list[CombinedResolution]] = {}
         self.replies_for: dict[str, Any] = {}
         self.metric = MagicMock()
-        self.ctx = PipelineContext(
+        self.ctx = PipelineContext(  # type: ignore[call-arg]
             args=MagicMock(),
             stop_event=asyncio.Event(),
             opensearch=MagicMock(),
@@ -91,7 +91,7 @@ class Harness:
             combined_no_verdict=NoVerdictCounter(cap),
             crop_gate=MagicMock(),
         )
-        self.ctx.rt_for = self._rt_for  # type: ignore[method-assign]
+        self.ctx.rt_for = self._rt_for  # type: ignore[assignment]
         monkeypatch.setattr(stage_b, 'bind_task_project', lambda t: self.bound.append(t.crop_id))
         monkeypatch.setattr(stage_b, 'bound_class_catalog', self._class_catalog)
         monkeypatch.setattr(stage_b, 'resolve_combined_reply', self._resolve)
@@ -138,7 +138,7 @@ class Harness:
         written = []
         while not self.ctx.out_q.empty():
             written.append(self.ctx.out_q.get_nowait())
-        return written
+        return written  # type: ignore[return-value]
 
 
 @pytest.fixture

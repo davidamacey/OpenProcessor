@@ -135,5 +135,5 @@ def test_the_catalogued_encoders_are_available_with_the_seeded_engines(pg) -> No
         ready = spaces_repo.ready_engine_contracts(session)
     for entry in load_catalog():
         wanted = EncoderInputSpec.model_validate(entry.input_spec).image
-        assert wanted == EngineInputContract.model_validate(ready[entry.triton_image_model])
+        assert wanted == EngineInputContract.model_validate(ready[entry.triton_image_model])  # type: ignore[index]
         assert availability(cast('Any', entry), ready).available is True, entry.model_key

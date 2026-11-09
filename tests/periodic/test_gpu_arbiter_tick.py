@@ -159,7 +159,7 @@ def test_a_multi_gpu_train_claim_stops_every_service(world) -> None:
         'vlm': 'exited',
         'triton-server': 'exited',
     }
-    assert section(pg)['acknowledged'] == [str(job)]
+    assert section(pg)['acknowledged'] == [str(job)]  # type: ignore[index]
 
 
 def test_a_bakeoff_claims_every_configured_service_without_a_host_scope(world) -> None:
@@ -175,7 +175,7 @@ def test_a_bakeoff_claims_every_configured_service_without_a_host_scope(world) -
     tick()
 
     assert {c.status for c in client.all} == {'exited'}
-    assert section(pg)['acknowledged'] == [str(job)]
+    assert section(pg)['acknowledged'] == [str(job)]  # type: ignore[index]
 
 
 def test_when_the_claim_ends_only_what_the_arbiter_stopped_starts_again(world) -> None:
@@ -183,7 +183,7 @@ def test_when_the_claim_ends_only_what_the_arbiter_stopped_starts_again(world) -
     client.by('triton-server').status = 'exited'  # somebody else stopped it
     job = hold(pg, project, 'bakeoff')
     tick()
-    assert section(pg)['stopped'] == ['vlm']
+    assert section(pg)['stopped'] == ['vlm']  # type: ignore[index]
 
     sql(pg, 'DELETE FROM gpu_reservations WHERE holder_job_id = %s', job)
     tick()

@@ -48,7 +48,7 @@ class TestVerifyBatchTransport:
     async def test_requests_json_object_mode_with_results_envelope(self) -> None:
         labeler = _labeler({'content': json.dumps({'results': _entries(2)})})
         verdicts = await labeler.verify_region_batch(_crops(2))
-        sent = labeler._client.post.await_args.kwargs['json']
+        sent = labeler._client.post.await_args.kwargs['json']  # type: ignore[attr-defined]
         assert sent['response_format'] == {'type': 'json_object'}
         user_text = ' '.join(
             part['text'] for part in sent['messages'][1]['content'] if part['type'] == 'text'

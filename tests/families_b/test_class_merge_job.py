@@ -143,4 +143,4 @@ async def test_the_registered_task_merges_and_relabels_once_through_the_wrapper(
     [(status, result)] = sql(pg, 'SELECT status, result FROM jobs WHERE id = %s', uuid.UUID(job_id))
     assert status == 'completed'
     assert result['relabelled'] == 2
-    assert (await ClassRegistry(slug).snapshot()).get(a).merged_into == b
+    assert (await ClassRegistry(slug).snapshot()).get(a).merged_into == b  # type: ignore[union-attr]

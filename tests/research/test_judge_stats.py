@@ -71,16 +71,16 @@ def test_fleiss_needs_equal_rater_counts() -> None:
 def test_cluster_bootstrap_resamples_sheets_not_cells() -> None:
     sheets = {f's{k}': [1.0] * 10 for k in range(10)}
     sheets.update({f't{k}': [0.0] * 10 for k in range(10)})
-    lo, hi = st.cluster_bootstrap(sheets, seed=1)
+    lo, hi = st.cluster_bootstrap(sheets, seed=1)  # type: ignore[misc]
     assert lo < 0.5 < hi
-    assert lo == st.cluster_bootstrap(sheets, seed=1)[0]  # seeded
+    assert lo == st.cluster_bootstrap(sheets, seed=1)[0]  # type: ignore[index]  # seeded
     # cells inside a sheet are perfectly correlated: the interval is that of 20 sheets, not 200
     wilson_lo, wilson_hi = st.wilson_interval(100, 200)
     assert (hi - lo) > (wilson_hi - wilson_lo)
 
 
 def test_cluster_bootstrap_of_constant_data_is_degenerate_and_empty_is_none() -> None:
-    lo, hi = st.cluster_bootstrap({'a': [1.0, 1.0], 'b': [1.0]}, seed=0)
+    lo, hi = st.cluster_bootstrap({'a': [1.0, 1.0], 'b': [1.0]}, seed=0)  # type: ignore[misc]
     assert (lo, hi) == (1.0, 1.0)
     assert st.cluster_bootstrap({}, seed=0) is None
 

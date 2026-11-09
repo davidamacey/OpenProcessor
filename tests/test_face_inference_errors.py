@@ -41,7 +41,7 @@ def _service(monkeypatch: pytest.MonkeyPatch, face: _Face) -> inf.InferenceServi
     monkeypatch.setattr(inf, 'get_fast_face_client', lambda *_a, **_k: face)
     monkeypatch.setattr(inf, 'get_sync_triton_client', lambda *_a, **_k: _Triton())
     svc = inf.InferenceService.__new__(inf.InferenceService)
-    svc.settings = SimpleNamespace(triton_url='x')
+    svc.settings = SimpleNamespace(triton_url='x')  # type: ignore[assignment]
     return svc
 
 

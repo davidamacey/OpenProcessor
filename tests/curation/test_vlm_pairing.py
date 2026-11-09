@@ -67,7 +67,7 @@ def test_the_max_tokens_the_estimate_assumes_are_the_ones_the_labeler_sends() ->
                             and key.value == 'max_tokens'
                             and isinstance(value, ast.Constant)
                         ):
-                            sent[node.name] = int(value.value)
+                            sent[node.name] = int(value.value)  # type: ignore[arg-type]
     method_for_call = {
         'class_batch': '_label_chunk',
         'open_class_batch': '_label_chunk_open',

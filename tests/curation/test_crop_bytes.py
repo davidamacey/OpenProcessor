@@ -60,7 +60,7 @@ def test_a_cache_miss_cuts_the_crop_from_the_source_image(
 
     assert out is not None
     assert _size(out) == (100, 100)
-    red, _green, _blue = Image.open(io.BytesIO(out)).convert('RGB').getpixel((50, 50))
+    red, _green, _blue = Image.open(io.BytesIO(out)).convert('RGB').getpixel((50, 50))  # type: ignore[misc]
     assert red > 150, 'the right half of the frame was cropped'
 
 
@@ -134,7 +134,7 @@ def test_a_region_close_up_is_cut_from_the_source_at_vlm_size(
     out = crop_bytes.load_region_jpeg(str(source_image), (0.5, 0.0, 1.0, 1.0))
 
     assert max(_size(out)) <= crop_bytes.VLM_CROP_SIZE
-    red, _g, _b = Image.open(io.BytesIO(out)).convert('RGB').getpixel((10, 10))
+    red, _g, _b = Image.open(io.BytesIO(out)).convert('RGB').getpixel((10, 10))  # type: ignore[misc]
     assert red > 150
 
 
@@ -156,4 +156,4 @@ def test_a_cache_miss_cuts_the_same_rectangle_as_ingest(
     got = Image.open(io.BytesIO(out)).convert('RGB')
     assert got.size == want.size
     # A padded column is black; the frame's edge here is (200, 40, 40) or (10, 20, 30).
-    assert abs(sum(got.getpixel((0, 0))) - sum(want.getpixel((0, 0)))) < 40
+    assert abs(sum(got.getpixel((0, 0))) - sum(want.getpixel((0, 0)))) < 40  # type: ignore[arg-type]

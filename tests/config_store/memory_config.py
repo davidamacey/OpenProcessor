@@ -293,7 +293,7 @@ class MemoryConfig:
                     self.slugs[pid],
                     doc.name,
                     ref.revision or 0,
-                    doc.revisions[ref.revision]['body'],
+                    doc.revisions[ref.revision]['body'],  # type: ignore[index]
                 )
             )
         return sorted(out, key=lambda a: a.slug)

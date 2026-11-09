@@ -282,7 +282,7 @@ def test_thumbnail_cache_uses_pil_correctly(
 
     def counting_open(*args: object, **kwargs: object) -> Image.Image:
         call_count['n'] += 1
-        return real_open(*args, **kwargs)
+        return real_open(*args, **kwargs)  # type: ignore[arg-type]
 
     with patch.object(Image, 'open', side_effect=counting_open):
         fresh_cache.get_or_compute(sample_image, (0.1, 0.1, 0.6, 0.6))

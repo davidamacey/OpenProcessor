@@ -43,7 +43,7 @@ def _load(project: uuid.UUID | None, **overrides) -> jobs_load.JobLoad:
         'finished_at': FINISHED,
     }
     fields.update(overrides)
-    return jobs_load.JobLoad(**fields)
+    return jobs_load.JobLoad(**fields)  # type: ignore[arg-type]
 
 
 def test_a_loaded_job_reads_back_with_its_id_and_clocks(pg, engine) -> None:

@@ -55,7 +55,7 @@ async def _forever() -> None:
 
 
 @pytest.fixture
-def world(monkeypatch: pytest.MonkeyPatch) -> World:
+def world(monkeypatch: pytest.MonkeyPatch) -> World:  # type: ignore[misc]
     w = World()
     saved = {
         k: v for k, v in vars(AppResources).items() if not k.startswith('__') and not callable(v)

@@ -208,7 +208,7 @@ def test_the_documented_context_model_matches_what_is_served() -> None:
     assert set(served['image']) == set(CropContextImage.model_fields)
     parsed = CropContextResponse.model_validate(served)
     assert [i.crop_id for i in parsed.items] == ['a1', 'a2']
-    openapi = _client(_fake()).app.openapi()
+    openapi = _client(_fake()).app.openapi()  # type: ignore[attr-defined]
     ref = openapi['paths']['/curation/projects/{project}/crops/{crop_id}/context']['get'][
         'responses'
     ]['200']['content']['application/json']['schema']

@@ -351,7 +351,7 @@ def test_building_centroids_queues_a_job(monkeypatch: pytest.MonkeyPatch) -> Non
     async def no_db() -> object:
         return object()
 
-    client.app.dependency_overrides[get_db] = no_db
+    client.app.dependency_overrides[get_db] = no_db  # type: ignore[attr-defined]
 
     resp = client.post(f'{PREFIX}/regions/fp_centroids/build', params={'auto_fp_threshold': 0.2})
 

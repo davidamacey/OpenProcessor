@@ -73,7 +73,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with _Client(app) as c:
-        c.fake = fake  # type: ignore[attr-defined]
+        c.fake = fake
         yield c
 
 

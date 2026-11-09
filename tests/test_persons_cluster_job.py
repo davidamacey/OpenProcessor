@@ -35,7 +35,7 @@ async def client(pg, pg_env, job_env, producer, wakes, monkeypatch):  # noqa: F8
     app.dependency_overrides[require_faces] = lambda: None
     app.include_router(persons.router)
     install_database_error_handlers(app)
-    app.add_exception_handler(RequestRejectedError, request_rejected_response)
+    app.add_exception_handler(RequestRejectedError, request_rejected_response)  # type: ignore[arg-type]
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://t') as c:
         yield c
     await dispose_engines()

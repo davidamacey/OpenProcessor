@@ -247,4 +247,4 @@ def test_the_public_route_cannot_claim_a_job_is_already_resolved(stack) -> None:
 
     for route in app.routes:
         params = {p.name for p in getattr(getattr(route, 'dependant', None), 'query_params', [])}
-        assert not params & {'vlm_resolved', 'vlm_endpoint', 'vlm_endpoint_revision'}, route.path
+        assert not params & {'vlm_resolved', 'vlm_endpoint', 'vlm_endpoint_revision'}, route.path  # type: ignore[attr-defined]

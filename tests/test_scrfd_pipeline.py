@@ -172,7 +172,7 @@ def test_scrfd_decode_unit() -> bool:
 
         # Check landmarks are non-zero
         lmk_nonzero = np.any(landmarks[0] != 0)
-        p = test_result('Landmarks non-zero', lmk_nonzero, f'First landmark: {landmarks[0][0]}')
+        p = test_result('Landmarks non-zero', lmk_nonzero, f'First landmark: {landmarks[0][0]}')  # type: ignore[arg-type]
         passed = passed and p
 
     return passed
@@ -328,7 +328,9 @@ def test_api_face_recognize(image_path: Path) -> bool:
             lmk_arr = np.array(landmarks)
             in_range = (lmk_arr >= 0).all() and (lmk_arr <= 1).all()
             p = test_result(
-                'Landmarks in [0,1]', in_range, f'Range: [{lmk_arr.min():.3f}, {lmk_arr.max():.3f}]'
+                'Landmarks in [0,1]',
+                in_range,  # type: ignore[arg-type]
+                f'Range: [{lmk_arr.min():.3f}, {lmk_arr.max():.3f}]',
             )
             passed = passed and p
 
@@ -418,7 +420,7 @@ def test_scrfd_benchmark(image_path: Path, iterations: int = 20) -> bool:
     print(f'  P99:      {p99:.1f}ms')
     print(f'  RPS:      {rps:.1f} (single-client serial)')
 
-    return test_result('Mean latency < 500ms', mean_lat < 500, f'{mean_lat:.1f}ms')
+    return test_result('Mean latency < 500ms', mean_lat < 500, f'{mean_lat:.1f}ms')  # type: ignore[arg-type]
 
 
 # =============================================================================

@@ -89,7 +89,7 @@ class TestOrientedFrame:
         assert result['image_size'] == [100, 200]
         assert sent['orig_shape'].tolist() == [100, 200]
         plain = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
-        assert np.array_equal(sent['original_image'].transpose(1, 2, 0), plain)
+        assert np.array_equal(sent['original_image'].transpose(1, 2, 0), plain)  # type: ignore[arg-type]
 
 
 class TestAlpha:

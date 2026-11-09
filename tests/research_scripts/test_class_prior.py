@@ -275,7 +275,7 @@ def test_detector_keys_use_the_product_name_rule_and_mark_a_missing_class() -> N
         {'detector_class_name': None},
         {},
     ]
-    assert detector_keys(meta).tolist() == ['traffic_light', 'traffic_light', 'none', 'none']
+    assert detector_keys(meta).tolist() == ['traffic_light', 'traffic_light', 'none', 'none']  # type: ignore[arg-type]
 
 
 def test_load_bundle_reads_the_protected_flag(tmp_path: Path) -> None:

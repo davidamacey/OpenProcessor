@@ -88,7 +88,7 @@ def test_a_forked_child_gets_its_own_engine_and_leaves_the_parents_connection_al
 
 def test_the_api_pool_follows_the_plan(pg_env) -> None:
     pool = db_engine.get_async_engine().sync_engine.pool
-    assert pool.size() == 32  # 128 connections // (4 workers x 1 replica)  # type: ignore[attr-defined]
+    assert pool.size() == 32  # type: ignore[attr-defined]  # 128 connections // (4 workers x 1 replica)
     assert pool.timeout() == 5  # type: ignore[attr-defined]
     assert pool._max_overflow == 0  # type: ignore[attr-defined]
     assert pool._pre_ping is True

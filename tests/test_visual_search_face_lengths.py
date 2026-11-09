@@ -28,7 +28,11 @@ def _faces(n: int, landmarks: int) -> dict[str, Any]:
 def _build(results: list[dict]) -> tuple[list, list, list]:
     items = [(b'x', f'id-{i}', None) for i in range(len(results))]
     return build_documents(
-        results, items, [f'h{i}' for i in range(len(results))], list(range(len(results))), 't'
+        results,
+        items,  # type: ignore[arg-type]
+        [f'h{i}' for i in range(len(results))],
+        list(range(len(results))),
+        't',
     )
 
 
@@ -88,7 +92,7 @@ def _inference_service(monkeypatch: pytest.MonkeyPatch, faces: dict[str, Any]) -
     monkeypatch.setattr(inf, 'get_fast_face_client', lambda *_a, **_k: FakeFace())
     monkeypatch.setattr(inf, 'get_sync_triton_client', lambda *_a, **_k: FakeTriton())
     svc = inf.InferenceService.__new__(inf.InferenceService)
-    svc.settings = SimpleNamespace(triton_url='x')
+    svc.settings = SimpleNamespace(triton_url='x')  # type: ignore[assignment]
     return svc
 
 

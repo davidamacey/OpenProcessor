@@ -139,6 +139,6 @@ async def test_an_id_that_is_not_an_import_id_names_no_import(tmp_path: Path, mo
     write_yolo(root, names=['car'], images={'a': ['0 0.3 0.3 0.4 0.4']})
     store, _ = await h.run(h.request(root, map_all(h.registry, 'car')))
     assert store is not None
-    assert (await control.view_of(store.import_id)).import_id == store.import_id
+    assert (await control.view_of(store.import_id)).import_id == store.import_id  # type: ignore[union-attr]
     for bad in ('../evil', '..', '.', '', 'evil', 'imp_20260101T000000_aaaaaaaa', '../../x'):
         assert await control.view_of(bad) is None

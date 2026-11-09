@@ -51,7 +51,7 @@ def _labeler(content: Any, pack: Any) -> VlmLabeler:
 
 
 def _sent_text(labeler: VlmLabeler) -> str:
-    content = labeler._client.post.await_args.kwargs['json']['messages'][1]['content']
+    content = labeler._client.post.await_args.kwargs['json']['messages'][1]['content']  # type: ignore[attr-defined]
     return ' '.join(p['text'] for p in content if p['type'] == 'text')
 
 

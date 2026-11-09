@@ -151,7 +151,7 @@ async def test_a_conflicting_write_refuses_the_freeze() -> None:
 
 def _make_freeze(pg, project):
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-        return conn.execute(
+        return conn.execute(  # type: ignore[index]
             'INSERT INTO holdout_freezes (project_id, is_current, source, item_count, frozen_by) '
             "VALUES (%s, true, 'manual', 3, 'test') RETURNING id",
             (project,),

@@ -160,8 +160,8 @@ async def test_the_writer_refuses_a_second_images_doc_and_drops_its_items() -> N
     kw = {'images_index': cfg.images_index, 'items_index': cfg.items_index, 'guards': ()}
 
     first, second = await asyncio.gather(
-        writer.write(*_unit_args('img', ['a1']), **kw),
-        writer.write(*_unit_args('img', ['b1', 'b2']), **kw),
+        writer.write(*_unit_args('img', ['a1']), **kw),  # type: ignore[arg-type]
+        writer.write(*_unit_args('img', ['b1', 'b2']), **kw),  # type: ignore[arg-type]
     )
 
     assert set(os_fake.images) == {'img'}

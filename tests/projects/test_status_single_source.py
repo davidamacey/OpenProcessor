@@ -27,7 +27,7 @@ async def _guard(slug: str) -> str:
     try:
         return (await _resolve_and_bind(slug)).status
     except HTTPException as exc:
-        return exc.detail['error']
+        return exc.detail['error']  # type: ignore[index]
 
 
 async def _get_route(slug: str) -> str:
@@ -36,7 +36,7 @@ async def _get_route(slug: str) -> str:
     try:
         resp = await routes.get_project(slug)
     except HTTPException as exc:
-        return exc.detail['error']
+        return exc.detail['error']  # type: ignore[index]
     return resp.status
 
 

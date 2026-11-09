@@ -184,7 +184,7 @@ def test_get_project_missing_raises_404(monkeypatch: pytest.MonkeyPatch) -> None
 
     with pytest.raises(Exception) as excinfo:  # noqa: PT011 - HTTPException from api_error
         asyncio.run(projects_router.get_project(project='missing'))
-    detail = excinfo.value.detail
+    detail = excinfo.value.detail  # type: ignore[attr-defined]
     parsed = ConfigErrorDetail.model_validate(detail)
     assert parsed.error == 'project_not_found'
 

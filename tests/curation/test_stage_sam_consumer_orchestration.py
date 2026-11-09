@@ -104,7 +104,7 @@ class Harness:
             combined_no_verdict=NoVerdictCounter(3),
             crop_gate=self.gate,
         )
-        self.ctx.rt_for = lambda _t: self.rt  # type: ignore[method-assign]
+        self.ctx.rt_for = lambda _t: self.rt  # type: ignore[assignment]
         m = monkeypatch
         m.setattr(stage_sam, 'bind_task_project', lambda t: self.calls.append(('bind', t.crop_id)))
         m.setattr(stage_sam, 'is_region_stage_paused', lambda _p: self.paused)
@@ -366,7 +366,7 @@ async def test_text_hint_without_ocr_regions_is_a_miss(h: Harness) -> None:
 async def test_text_hint_prefers_stored_ocr_lines(h: Harness) -> None:
     h.rt.text_hint_on = True
     t = _task()
-    t.item_ocr_lines = [{'line': 1}]
+    t.item_ocr_lines = [{'line': 1}]  # type: ignore[list-item]
     await h.run(t)
     h.ocr.regions_from_lines.assert_called_once_with([{'line': 1}])
     h.ocr.detect_regions.assert_not_awaited()

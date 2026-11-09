@@ -70,7 +70,7 @@ async def test_an_embedded_item_gets_its_cluster_fields_in_the_doc(
         image_path='p',
         source='s',
         request_id='r',
-        bbox_norm=(0, 0, 0.1, 0.1),
+        bbox_norm=(0, 0, 0.1, 0.1),  # type: ignore[arg-type]
         item=item,
         now='2026-01-01T00:00:00Z',
         crop_area_norm=0.01,

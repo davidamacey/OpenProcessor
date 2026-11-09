@@ -128,7 +128,7 @@ def test_encode_text_annotates_cache_hit():
     enc._cache_lock = threading.Lock()
     enc._text_cache = OrderedDict()
     enc._cache_hits = enc._cache_misses = 0
-    enc._encode_uncached = lambda qs: np.ones((len(qs), 1024), dtype=np.float32)  # type: ignore[method-assign]
+    enc._encode_uncached = lambda qs: np.ones((len(qs), 1024), dtype=np.float32)  # type: ignore[assignment]
     with bind_search_timer('text') as timer:
         enc.encode_text(['a'])
         assert timer.annotations['encode_cache_hit'] == 0

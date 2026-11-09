@@ -64,7 +64,7 @@ def test_heavy_vector_noise_fails_the_cosine_and_knn_gates(make_capture) -> None
 
 def test_shifted_boxes_fail_the_box_gate_and_change_the_crop_rectangles(make_capture) -> None:
     def shift(a: dict[str, np.ndarray]) -> None:
-        a['item_box'] = a['item_box'] + np.float32([0.04, 0, 0.04, 0])
+        a['item_box'] = a['item_box'] + np.float32([0.04, 0, 0.04, 0])  # type: ignore[arg-type,operator]
         a['item_crop_rect'] = a['item_crop_rect'] + 4
 
     result = _evaluate(make_capture('ref'), make_capture('cand', mutate=shift))

@@ -159,5 +159,5 @@ def test_every_region_route_carries_the_gate_or_is_documented_exempt() -> None:
         if path.startswith('/region_profiles') or path in _UNGATED_REGION_ROUTES:
             continue
         if not _has_gate(route.dependant):
-            missing.append(f'{sorted(route.methods)} {path}')
+            missing.append(f'{sorted(route.methods)} {path}')  # type: ignore[arg-type]
     assert not missing, f'region routes without the no-profile gate: {missing}'

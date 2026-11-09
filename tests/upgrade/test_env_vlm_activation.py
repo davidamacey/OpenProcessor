@@ -100,7 +100,7 @@ async def test_without_a_vlm_in_the_environment_the_upgrade_stops_and_loads_noth
 
 
 def test_a_probe_of_the_current_environment_body_is_kept_on_the_stored_revision() -> None:
-    body = env_endpoint().body
+    body = env_endpoint().body  # type: ignore[union-attr]
     record = {'ok': True, 'probed_at': '2026-01-03T00:00:00+00:00'}
     kept = ProbeSrc(
         ENV_NAME,

@@ -53,7 +53,7 @@ def alpha_loop(records: dict[str, Any], producer: Any, wakes: Any) -> Iterator[s
 
     async def start() -> str:
         async with async_session_factory()() as session:
-            return (await service.start_loop(session, cast('Any', prepared))).loop_id
+            return (await service.start_loop(session, cast('Any', prepared))).loop_id  # type: ignore[return-value]
 
     with bind_project(records['alpha']):
         yield asyncio.run(start())

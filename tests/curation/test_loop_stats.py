@@ -86,7 +86,7 @@ def test_required_sample_rejects_bad_arguments() -> None:
         {'n_members': 10, 'theta': 0.9, 'alpha': 0.05, 'dissent': -1},
     ):
         with pytest.raises(ValueError, match='must'):
-            required_sample(**kwargs)
+            required_sample(**kwargs)  # type: ignore[arg-type]
 
 
 def test_lower_bound_agrees_with_the_gate() -> None:

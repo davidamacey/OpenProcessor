@@ -16,7 +16,7 @@ SRC = Path(__file__).resolve().parents[1] / 'src'
 def test_now_iso_is_fixed_width_utc_microseconds():
     stamp = now_iso()
     assert STAMP.match(stamp), stamp
-    assert datetime.fromisoformat(stamp).utcoffset().total_seconds() == 0
+    assert datetime.fromisoformat(stamp).utcoffset().total_seconds() == 0  # type: ignore[union-attr]
 
 
 def test_now_iso_stamps_sort_lexically_in_time_order():

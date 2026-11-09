@@ -122,7 +122,7 @@ class TestRenderConfig:
     )
     def test_rejects_invalid_field(self, field: str, value: object) -> None:
         with pytest.raises(ValueError, match=field.split('_', maxsplit=1)[0]):
-            pe_text_triton_config.PETextTritonConfig(**{field: value})
+            pe_text_triton_config.PETextTritonConfig(**{field: value})  # type: ignore[arg-type]
 
     def test_gpu_kind_requires_gpu_ids(self) -> None:
         with pytest.raises(ValueError, match='gpu_ids'):

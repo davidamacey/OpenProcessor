@@ -39,7 +39,7 @@ async def world(pg_env: PgDatabase, bound_async_engine: Any) -> AsyncIterator[di
     with psycopg.connect(pg_env.conninfo('super'), autocommit=True) as conn:
         project = make_project(conn, f'usage-{uuid.uuid4().hex[:6]}')
         name = f'ep-{uuid.uuid4().hex[:6]}'
-        doc = conn.execute(
+        doc = conn.execute(  # type: ignore[index]
             'INSERT INTO config_documents (project_id, kind, name, current_revision, updated_by) '
             "VALUES (NULL, 'vlm_endpoint', %s, 1, 'test') RETURNING id",
             (name,),

@@ -84,6 +84,7 @@ async def test_a_finished_run_reads_its_manifest_results(run_env) -> None:
     assert status is not None
     assert status.state == 'finished'
     assert eval is not None
+    assert status.eval is not None
     assert status.eval['map50'] == 0.61
     assert status.mlflow_run_id == 'mlflow-1'
     served = await job_manifest.read_manifest(job_id)
@@ -110,7 +111,7 @@ async def test_a_bad_id_is_a_value_error(run_env) -> None:
 async def test_cancel_ends_a_queued_run_at_once_and_an_unknown_run_is_not_found(run_env) -> None:
     job_id = await _start()
     assert await jobs.cancel_run(job_id) is True
-    assert (await jobs.read_status(job_id)).state == 'cancelled'
+    assert (await jobs.read_status(job_id)).state == 'cancelled'  # type: ignore[union-attr]
     assert await jobs.cancel_run(str(uuid.uuid4())) is False
 
 
@@ -141,8 +142,8 @@ async def test_a_stop_when_hit_skips_the_queued_siblings_and_the_wire_says_skipp
             )
         )
     assert skipped == 1
-    assert (await jobs.read_status(second)).state == 'skipped'
-    assert (await jobs.read_status(first)).state == 'queued'
+    assert (await jobs.read_status(second)).state == 'skipped'  # type: ignore[union-attr]
+    assert (await jobs.read_status(first)).state == 'queued'  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio
@@ -183,8 +184,9 @@ async def test_the_status_never_carries_a_filesystem_path(run_env) -> None:
         )
     status = await jobs.read_status(job_id)
     assert status is not None
-    assert 'confusion_matrix_path' not in status.eval
+    assert 'confusion_matrix_path' not in status.eval  # type: ignore[operator]
     assert eval is not None
+    assert status.eval is not None
     assert status.eval['confusion_matrix_url'].endswith(
         f'/train/artifacts/{job_id}/confusion_matrix.png'
     )

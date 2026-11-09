@@ -59,7 +59,7 @@ async def test_two_saves_with_one_expected_revision_one_wins(pg_env, project) ->
         doc = await repo.get_config(session, project_id=project, kind='prompt_pack', name='race')
     assert doc is not None
     assert doc.revision == 2
-    assert doc.body == winners[0].body
+    assert doc.body == winners[0].body  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio

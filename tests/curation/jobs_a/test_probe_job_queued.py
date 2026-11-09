@@ -28,7 +28,7 @@ async def start(project, **kw):
         'resume': False,
     } | kw
     async with async_session_factory()() as session:
-        return await probe_job.start(session, project, **args)
+        return await probe_job.start(session, project, **args)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

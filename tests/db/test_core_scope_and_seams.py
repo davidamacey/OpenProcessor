@@ -317,7 +317,7 @@ def test_deleting_the_document_still_cascades_to_its_revisions(pg, world, docume
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         conn.execute('DELETE FROM config_documents WHERE id = %s', (document,))
         assert (
-            conn.execute(
+            conn.execute(  # type: ignore[index]
                 'SELECT count(*) FROM config_revisions WHERE config_id = %s', (document,)
             ).fetchone()[0]
             == 0

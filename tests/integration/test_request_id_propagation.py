@@ -112,7 +112,7 @@ def test_worker_structlog_emits_request_id() -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
-            _capture,
+            _capture,  # type: ignore[list-item]
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.BoundLogger,
@@ -153,7 +153,7 @@ def test_worker_unbind_clears_request_id() -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
-            _capture,
+            _capture,  # type: ignore[list-item]
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.BoundLogger,

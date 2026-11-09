@@ -262,7 +262,7 @@ def test_search_similar_disabled_returns_400(monkeypatch: pytest.MonkeyPatch, ap
 
 
 def test_search_similar_needs_no_encoder(app_client: _Client):
-    app_client.app.state.pe_encoder = None
+    app_client.app.state.pe_encoder = None  # type: ignore[attr-defined]
     _similar_os(app_client, source=_SOURCE, knn=[_NEIGHBOR])
     assert app_client.get(SIMILAR, params={'crop_id': 'src'}).status_code == 200
 

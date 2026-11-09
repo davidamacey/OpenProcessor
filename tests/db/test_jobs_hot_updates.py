@@ -16,7 +16,7 @@ pytestmark = pytest.mark.db
 
 def test_a_thousand_progress_updates_are_almost_all_hot(pg) -> None:
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-        job = conn.execute(
+        job = conn.execute(  # type: ignore[index]
             'INSERT INTO jobs (kind, queue, status, max_queue_wait, requested_by, owner, '
             "lease_expires_at) VALUES ('noop', 'jobs', 'running', interval '1 hour', 'test', "
             "'w:1', now() + interval '2 min') RETURNING id"
@@ -38,6 +38,6 @@ def test_a_thousand_progress_updates_are_almost_all_hot(pg) -> None:
             "SELECT n_tup_upd, n_tup_hot_upd FROM pg_stat_user_tables WHERE relname = 'jobs'"
         ).fetchone()
     assert after is not None
-    updates, hot = after[0] - before[0], after[1] - before[1]
+    updates, hot = after[0] - before[0], after[1] - before[1]  # type: ignore[index]
     assert updates >= 1000
     assert hot >= 0.95 * updates, f'{hot} of {updates} updates were HOT'

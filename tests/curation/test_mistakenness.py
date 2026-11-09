@@ -163,7 +163,9 @@ async def test_scorer_skips_items_outside_the_probe_classes(
     monkeypatch.setattr(crops, 'mget_crops', fake_mget)
 
     result = await MistakennessScorer().score(
-        ['in', 'out', 'legacy'], np.zeros((3, 1), dtype=np.float32), opensearch=object()
+        ['in', 'out', 'legacy'],
+        np.zeros((3, 1), dtype=np.float32),
+        opensearch=object(),  # type: ignore[arg-type]
     )
 
     assert set(result.fields) == {'in', 'legacy'}
