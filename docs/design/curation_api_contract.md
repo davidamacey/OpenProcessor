@@ -1759,7 +1759,7 @@ cluster.
   configured secondary detector call failed; the image still ingests on the
   primary detector's output).
 - `error_kind` is one of `empty`, `unservable_path`, `unsupported_type`,
-  `decode_failed`, `detector_infer`, `bulk_index`. It is present with `error`
+  `decode_failed`, `detector_infer`, `bulk_index`, `blur_failed`. It is present with `error`
   when `status` is `failed`.
 - `BatchIngestResponse`: `status` (`success`, `partial`, `error`),
   `summary` (`successful`, `duplicates`, `failed`, `crops_indexed`,
