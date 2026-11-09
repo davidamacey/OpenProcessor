@@ -432,10 +432,10 @@ def test_single_holdout_implementation() -> None:
     This branch has no offline promotion script to cross-check against
     (that script is deployment-specific tooling, not part of the generic
     curation package), so this test pins the one binding this branch does
-    own: the holdout-freeze router's ``select_test_holdout`` is the exact same
+    own: the holdout-freeze service's ``select_test_holdout`` is the exact same
     function object as the canonical module's, not a copy.
     """
-    import src.routers.curation.holdout_freeze as holdout_module
+    import src.services.curation.holdout_freeze as holdout_module
 
     assert holdout_module.select_test_holdout is test_holdout_module.select_test_holdout
 

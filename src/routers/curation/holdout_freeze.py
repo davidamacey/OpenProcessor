@@ -2,30 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
+from dataclasses import asdict
 from typing import Any
 
 from fastapi import Depends, HTTPException, Query
 
-from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
-from src.core.exceptions import RequestRejectedError
-from src.db.session import project_tx
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, items_index, logger, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._holdout_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
 from src.routers.curation.near_dup_gate import require_near_dup_freezable
-from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
-from src.services.curation.holdout import (
-    MIN_TEST_PER_CLASS,
-    build_cohort_query,
-    compute_holdout_sha,
-    fetch_cohort_strata,
-    freeze_transaction,
-    select_test_holdout,
-    write_freeze_snapshot,
-)
-from src.services.near_duplicates.holdout import flag_held_out, leak_closure, record_closure
+from src.services.curation import holdout_freeze as svc
 
 
 @router.post(
@@ -59,127 +46,31 @@ async def freeze_test_holdout(
     inside the transaction that wraps the flagging: a database error refuses the
     freeze before any item changes, and a failed flagging rolls the row back.
     """
-    # Refuse re-run if an existing holdout exists.
-    if not force:
-        try:
-            existing = await opensearch.count(
-                index=items_index(),
-                body={'query': {'term': {'test_holdout': True}}},
-            )
-            if (existing or {}).get('count', 0) > 0:
-                raise HTTPException(
-                    status_code=409,
-                    detail='test holdout already exists; pass ?force=true to re-run',
-                )
-        except HTTPException:
-            raise
-        except Exception as exc:
-            # Without the count the "a holdout already exists" guard cannot hold: refuse.
-            logger.warning('curation_test_holdout_count_failed', error=str(exc))
-            raise HTTPException(
-                status_code=503, detail='could not check for an existing test holdout'
-            ) from exc
-
-    cohort_query = build_cohort_query()
     try:
-        strata = await fetch_cohort_strata(opensearch, items_index(), cohort_query)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise server_error(503, 'opensearch error', exc) from exc
-
-    crop_ids_by_class: dict[int, list[str]] = {}
-    for bucket in strata:
-        ids = bucket.get('crop_ids') or []
-        if not ids:
-            continue
-        crop_ids_by_class.setdefault(bucket['class_id'], []).extend(ids)
-
-    fraction = payload.percent / 100.0
-    chosen_ids, per_class = select_test_holdout(crop_ids_by_class, fraction=fraction)
-
-    if not chosen_ids:
-        cohort_size = sum(len(v) for v in crop_ids_by_class.values())
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f'zero crops selected from a cohort of {cohort_size} across '
-                f'{len(crop_ids_by_class)} classes; refusing to freeze nothing'
-            ),
+        result = await svc.freeze_test_holdout(
+            opensearch, session, percent=payload.percent, force=force
         )
-
-    # Fail closed: a database error here refuses the freeze before anything is written.
-    project_id = current_project_id()
-    async with project_tx(session, project_id):
-        closure = await leak_closure(session, project_id, chosen_ids)
-    held_ids = sorted({*chosen_ids, *closure.moved_ids})
-
-    digest = compute_holdout_sha(held_ids)
-    cohort_spec = {
-        'query': cohort_query,
-        'selection': 'sha1_per_class',
-        'percent': payload.percent,
-        'fraction': fraction,
-        'force': force,
-        'selected': len(chosen_ids),
-        'moved_by_near_dup': len(closure.moves),
-    }
-    snapshot_key = await asyncio.to_thread(
-        write_freeze_snapshot,
-        crop_ids=held_ids,
-        sha=digest,
-        cohort_spec=cohort_spec,
-        per_class_counts=per_class,
-    )
-
-    # Fail closed: the row is written first, inside the transaction that wraps the flagging.
-    # A database error refuses the freeze before any item changes; a partial flagging raises
-    # inside the block and rolls the row back, so a record always covers exactly the flagged
-    # ids. A rerun is idempotent.
-    async with freeze_transaction(
-        session, item_count=len(held_ids), snapshot_storage_key=snapshot_key
-    ) as freeze:
-        try:
-            await flag_held_out(opensearch, items_index(), held_ids)
-        except RequestRejectedError:
-            logger.error('curation_test_holdout_freeze_partial', n_ids=len(held_ids))
-            raise
-        except Exception as exc:
-            raise server_error(503, 'bulk failed', exc) from exc
-        await record_closure(session, project_id, freeze.id, closure)
-
-    return TestHoldoutFreezeResponse(
-        n_frozen=len(held_ids),
-        moved_by_near_dup=len(closure.moves),
-        n_classes_covered=len(per_class),
-        test_holdout_sha=digest,
-        per_class_counts=per_class,
-        percent=payload.percent,
-        min_per_class=MIN_TEST_PER_CLASS,
-    )
+    except svc.HoldoutExistsError as exc:
+        raise HTTPException(
+            status_code=409, detail='test holdout already exists; pass ?force=true to re-run'
+        ) from exc
+    except svc.HoldoutCheckError as exc:
+        raise HTTPException(
+            status_code=503, detail='could not check for an existing test holdout'
+        ) from exc
+    except svc.HoldoutSearchError as exc:
+        raise server_error(503, 'opensearch error', exc) from exc
+    except svc.HoldoutFlagError as exc:
+        raise server_error(503, 'bulk failed', exc) from exc
+    except svc.EmptyHoldoutCohortError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return TestHoldoutFreezeResponse(**asdict(result))
 
 
 @router.get('/test_holdout/stats')
 async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Per-class test-set counts."""
-    body = {
-        'size': 0,
-        'query': {'term': {'test_holdout': True}},
-        'aggs': {'by_class': {'terms': {'field': 'class_id', 'size': 1000}}},
-        'track_total_hits': True,
-    }
     try:
-        resp = await opensearch.search(index=items_index(), body=body)
+        return await svc.holdout_stats(opensearch)
     except Exception as exc:
         raise server_error(503, 'opensearch error', exc) from exc
-    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    buckets = (resp.get('aggregations') or {}).get('by_class', {}).get('buckets', [])
-    return {
-        'total': int(total),
-        # deficient: below the per-class test minimum preflight warns on.
-        'by_class': [
-            {**b, 'deficient': int(b.get('doc_count', 0)) < MIN_TEST_CROPS_PER_CLASS}
-            for b in buckets
-        ],
-        'min_test_per_class': MIN_TEST_CROPS_PER_CLASS,
-    }
