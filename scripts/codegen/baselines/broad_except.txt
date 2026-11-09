@@ -22,7 +22,7 @@ export/yolo_model_config.py	1	ratchet: may only go down
 models/gpu_image_prep/1/model.py	2	Triton model boundary: one failed image must not take the model down, and any decoder failure routes the image to the API's CPU path
 models/ocr_pipeline/1/model.py	1	ratchet: may only go down
 scripts/bench/gpu_decode_bench.py	2	ratchet: may only go down
-scripts/bench/gpu_decode_parity.py	1	ratchet: may only go down
+scripts/bench/gpu_decode_parity.py	1	bench harness boundary: any GPU decoder failure is recorded as a fallback row and the image continues on the CPU frame
 scripts/bench/ingest_write_path.py	1	ratchet: may only go down
 scripts/bench/vectordb/orchestrate.py	1	ratchet: may only go down
 scripts/curation/_vlm_activity.py	1	ratchet: may only go down

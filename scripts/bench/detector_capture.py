@@ -33,21 +33,28 @@ if str(_REPO_ROOT) not in sys.path:
 from src.services.detection.geometry import letterbox_to_square, undo_letterbox  # noqa: E402  # import follows the sys.path setup above
 
 
-OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
+OUTPUTS = ('output0',)
 NET = 640
 
 
+def fused_detections(rows: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The real detections of one image's fused ``[300, 6]`` tensor: boxes (letterbox pixels),
+    scores and classes; zero-score padding rows are dropped."""
+    real = rows[rows[:, 4] > 0.0]
+    return real[:, :4], real[:, 4], real[:, 5]
+
+
 def decode_row(
-    num: np.ndarray,
     boxes: np.ndarray,
     scores: np.ndarray,
     classes: np.ndarray,
     scale: float,
     pad: tuple[float, float],
 ) -> list[list[float]]:
+    """Detections in letterbox pixels mapped to the original image's pixels."""
     out: list[list[float]] = []
-    for k in range(int(num[0])):
-        x1, y1, x2, y2 = undo_letterbox(tuple(float(v) * NET for v in boxes[k]), scale, pad)  # type: ignore[arg-type]
+    for k in range(len(scores)):
+        x1, y1, x2, y2 = undo_letterbox(tuple(float(v) for v in boxes[k]), scale, pad)  # type: ignore[arg-type]
         out.append([x1, y1, x2, y2, float(scores[k]), int(classes[k])])
     return out
 
@@ -76,12 +83,7 @@ def gpu_decode_row(client: Any, model: str, data: bytes) -> list[list[float]]:
     scale, pad_w, pad_h = (float(v) for v in result.as_numpy('letterbox'))
     boxes = result.as_numpy('det_boxes').reshape(-1, 4)
     return decode_row(
-        np.array([len(boxes)]),
-        boxes,
-        result.as_numpy('det_scores'),
-        result.as_numpy('det_classes'),
-        scale,
-        (pad_w, pad_h),
+        boxes, result.as_numpy('det_scores'), result.as_numpy('det_classes'), scale, (pad_w, pad_h)
     )
 
 
@@ -118,16 +120,11 @@ def run(args: argparse.Namespace) -> int:
             res = client.infer(
                 name, [inp], outputs=[grpcclient.InferRequestedOutput(o) for o in OUTPUTS]
             )
-            o = {k: res.as_numpy(k) for k in OUTPUTS}
+            fused = res.as_numpy('output0')
             for i, r in enumerate(chunk):
                 _chw, scale, pad = lets[i]
                 results[name][str(r['image_id'])] = decode_row(
-                    o['num_dets'][i],
-                    o['det_boxes'][i],
-                    o['det_scores'][i],
-                    o['det_classes'][i],
-                    scale,
-                    pad,
+                    *fused_detections(fused[i]), scale, pad
                 )
         sys.stdout.write(f'{min(start + step, len(rows))}/{len(rows)}\n')
     out_dir = Path(args.out_dir)
