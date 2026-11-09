@@ -68,7 +68,8 @@ async def test_a_hit_becomes_a_normal_item_with_provenance(
     assert doc['bbox_norm'] == pytest.approx(list(BOX), abs=1e-6)
     assert doc['class_name'] == 'cone'
     assert doc['class_id'] == registry.entries[-1].class_id
-    assert doc['cluster_id'] == doc['class_id']
+    assert 'cluster_id' not in doc
+    assert doc.get('cluster_uid') is None
     assert doc['class_source'] == 'open_vocab_target'
     assert doc['class_detector'] == 'sam3'
     assert (doc['source_prompt'], doc['open_vocab_set'], doc['open_vocab_revision']) == (

@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
+from curation.occ_fakes import FakeIndicesApi
 
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
@@ -37,6 +38,7 @@ pytestmark = pytest.mark.integration
 class _FakeOpenSearch:
     def __init__(self, docs: list[dict[str, Any]]) -> None:
         self._docs = docs
+        self.indices = FakeIndicesApi()
 
     async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
         hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]

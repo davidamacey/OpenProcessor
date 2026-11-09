@@ -83,7 +83,6 @@ class Harness:
             args=MagicMock(),
             stop_event=asyncio.Event(),
             opensearch=MagicMock(),
-            sentinel=MagicMock(),
             started_at=0.0,
             region_embed_pe=None,
             project_registry=MagicMock(),
