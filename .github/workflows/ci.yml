@@ -249,8 +249,10 @@ jobs:
             --include onnx --imgsz 640 --device cpu --dynamic
           mv "$work/yolov5n.onnx" "$cache/yolov5n_dynamic.onnx"
 
-      - name: Run the families tests
-        run: python -m pytest tests/ -q -m families --no-cov
+      # Collects tests/export/test_family_matrix.py (the U-6.1 family matrix) with the other
+      # `families` tests; the 15-minute budget is the job's timeout, the slowest tests are listed.
+      - name: Run the families tests (family matrix included)
+        run: python -m pytest tests/ -q -m families --no-cov --durations=10
 
   pre-commit:
     name: pre-commit (all hooks)
