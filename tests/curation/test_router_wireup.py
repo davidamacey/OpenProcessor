@@ -259,7 +259,8 @@ def test_human_class_writers_replace_detector_provenance(
 ) -> None:
     """Ingest stamps the detector's class provenance on every item, so a
     human relabel (batch label / move) must overwrite it — otherwise a
-    human-validated crop keeps claiming the detector produced its class.
+    human-validated crop keeps claiming the detector produced its class. A move
+    is placement in the serving partition and must not stamp a human class.
 
     Batch label/move route through occ_update_bulk (one mget + one
     bulk call instead of one get+update round-trip per crop)."""
@@ -311,6 +312,13 @@ def test_human_class_writers_replace_detector_provenance(
     [call] = fake_opensearch.bulk.call_args_list
     bulk_body = call.kwargs['body']
     doc = bulk_body[1]['doc']
+    if method == 'post':
+        # A move is placement only: it keeps the machine suggestion's provenance and claims no
+        # human class (a human-owned class is cleared instead).
+        assert doc['cluster_assigned_by'] == 'edit'
+        assert 'class_labeler' not in doc
+        assert doc.get('class_detector') != 'human'
+        return
     assert doc['class_detector'] == 'human'
     assert doc['class_labeler'] == 'human'
     assert doc['class_labeled_at']
