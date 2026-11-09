@@ -294,6 +294,38 @@ def _run_autolabel(
         sleep(poll)
 
 
+JOB_TERMINAL = frozenset(
+    {'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted'}
+)
+
+
+def _run_cluster(
+    client: httpx.Client,
+    slug: str,
+    *,
+    poll: float,
+    timeout: float,
+    sleep: Callable[[float], None],
+    clock: Callable[[], float],
+) -> float:
+    """Start one item clustering run, wait for it, return its wall seconds."""
+    started = clock()
+    job = (
+        client.post(_scoped(slug, '/clusters/runs'), json={'target': 'item'})
+        .raise_for_status()
+        .json()
+    )
+    while True:
+        state = client.get(_scoped(slug, f'/jobs/{job["job_id"]}')).raise_for_status().json()
+        if state['status'] in JOB_TERMINAL:
+            if state['status'] != 'completed':
+                raise RuntimeError(f'cluster_run job ended {state["status"]}')
+            return clock() - started
+        if clock() - started > timeout:
+            raise TimeoutError(f'cluster_run job not finished after {timeout:.0f}s')
+        sleep(poll)
+
+
 def _settle_store_bytes(client: httpx.Client, os_url: str, slug: str) -> int:
     names = client.get(_scoped(slug, '')).raise_for_status().json()['resources']['indexes'].values()
     target = ','.join(sorted(set(names)))
@@ -422,13 +454,14 @@ def run(
         if 'region' in stages:
             stage_wall['region_drain'] = {'wall_s': _wait_region_drain(client, slug, **wait)}
         label_runs = {
-            'embed': {'embed_missing': 'true', 'train_clusters': 'false', 'run_vlm': 'false'},
-            'vlm': {'run_vlm': 'true', 'train_clusters': 'false'},
-            'cluster': {'train_clusters': 'true', 'run_vlm': 'false'},
+            'embed': {'embed_missing': 'true', 'run_vlm': 'false'},
+            'vlm': {'run_vlm': 'true'},
         }
         for name, params in label_runs.items():
             if name in stages and (name != 'embed' or args.policy == 'lazy'):
                 stage_wall[name] = {'wall_s': _run_autolabel(client, slug, params, **wait)}
+        if 'cluster' in stages:
+            stage_wall['cluster'] = {'wall_s': _run_cluster(client, slug, **wait)}
         sampler.stop()
         extra = watch.stop()
 

@@ -23,6 +23,31 @@ GT_NONE = 'none'
 GroundTruth = dict[str, tuple[np.ndarray, list[str]]]
 
 
+def _cluster_arrays(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """The served cluster of each row (``cluster`` on the wire) as the capture's cluster arrays.
+
+    The label is a dense code per ``cluster.uid`` (a compare is by agreement, never by code),
+    the similarity is ``cluster.score`` (cosine to the cluster's centroid), the distance is
+    ``1 - score`` and an item is core when its band is ``assigned``.
+    """
+    codes: dict[str, int] = {}
+    label, similarity, distance, core = [], [], [], []
+    for r in rows:
+        cluster = r.get('cluster') or {}
+        uid = cluster.get('uid')
+        score = cluster.get('score')
+        label.append(-1 if uid is None else codes.setdefault(str(uid), len(codes)))
+        similarity.append(np.nan if score is None else score)
+        distance.append(np.nan if score is None else 1.0 - score)
+        core.append(-1 if cluster.get('state') is None else int(cluster['state'] == 'assigned'))
+    return {
+        'item_cluster': np.array(label, np.int32),
+        'item_cluster_distance': np.array(distance, np.float32),
+        'item_cluster_similarity': np.array(similarity, np.float32),
+        'item_cluster_core': np.array(core, np.int8),
+    }
+
+
 def crop_rect(box_norm: list[float], width: int, height: int) -> list[int]:
     """The integer pixel rectangle a crop is cut with (the ingest crop rule: rounded, >= 1 px)."""
     x1 = max(0, round(box_norm[0] * width))
@@ -144,30 +169,7 @@ def build_arrays(
             item_crop_rect=np.array(
                 [crop_rect(list(k[1]), *image_dims[k[0]]) for k in keyed], np.int32
             ),
-            item_cluster=np.array(
-                [-1 if r.get('cluster_id') is None else r['cluster_id'] for r in rows], np.int32
-            ),
-            item_cluster_distance=np.array(
-                [
-                    np.nan if r.get('cluster_distance') is None else r['cluster_distance']
-                    for r in rows
-                ],
-                np.float32,
-            ),
-            item_cluster_similarity=np.array(
-                [
-                    np.nan if r.get('cluster_similarity') is None else r['cluster_similarity']
-                    for r in rows
-                ],
-                np.float32,
-            ),
-            item_cluster_core=np.array(
-                [
-                    -1 if r.get('cluster_is_core') is None else int(r['cluster_is_core'])
-                    for r in rows
-                ],
-                np.int8,
-            ),
+            **_cluster_arrays(rows),
             item_label=_str_array([r.get('class_name') or '' for r in rows]),
             item_label_source=_str_array([r.get('class_source') or '' for r in rows]),
             item_gt=_str_array(gt_names),

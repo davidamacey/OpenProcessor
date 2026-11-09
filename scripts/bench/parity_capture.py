@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 from scripts.bench.parity_store import CaptureError
-from scripts.bench.suite_ingest import run_autolabel
+from scripts.bench.suite_ingest import run_cluster_job
 from scripts.bench.suite_probes import label_batch_and_wait
 from src.config.curation import ITEM_EMBEDDING_FIELD
 
@@ -144,16 +144,13 @@ def mget_vectors(
 
 
 def run_clustering(client: httpx.Client, base: str, timeout: float) -> dict[str, Any]:
-    """One cluster training pass (no VLM) through the auto-label job.
+    """One item clustering run (``POST .../clusters/runs``) and its projection onto the items.
 
-    The job is claimed by the auto-label worker (compose profile ``curation``); without it
-    the job stays queued until ``timeout``.
+    The run is claimed by a job worker; without one it stays queued until ``timeout``.
     """
-    result = run_autolabel(
-        client, base, {'train_clusters': 'true', 'run_vlm': 'false'}, timeout=timeout
-    )
+    result = run_cluster_job(client, base, timeout=timeout)
     if result['status'] != 'completed':
-        raise CaptureError(f'cluster training ended {result["status"]}')
+        raise CaptureError(f'cluster run ended {result["status"]}')
     return result
 
 

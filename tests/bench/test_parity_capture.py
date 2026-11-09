@@ -52,10 +52,7 @@ class FakeStack:
                 'detector_class_name': 'cat' if k == 0 else 'dog',
                 'class_name': 'cat' if k == 0 else 'dog',
                 'class_source': 'detector',
-                'cluster_id': 10000 + k,
-                'cluster_distance': 0.1,
-                'cluster_similarity': 0.9,
-                'cluster_is_core': True,
+                'cluster': {'uid': f'uid-{k}', 'score': 0.9, 'state': 'assigned'},
             }
             self.vectors[item_id] = [float(n), float(k), 1.0, 0.5]
         return {
@@ -85,12 +82,12 @@ class FakeStack:
                 else:
                     results.append(self._ingest(filename))
             return httpx.Response(200, json={'results': results})
-        if path.endswith('/pipeline/auto_label/start'):
-            return httpx.Response(200, json={'job_id': 'j1'})
-        if '/pipeline/auto_label/status/' in path:
-            return httpx.Response(
-                200, json={'status': 'completed', 'stage_durations': {'train': 1.0}}
-            )
+        if path.endswith('/clusters/runs'):
+            return httpx.Response(202, json={'job_id': 'j1'})
+        if path.endswith('/jobs/j1'):
+            return httpx.Response(200, json={'status': 'completed', 'result': {'activated': True}})
+        if path.endswith('/jobs'):
+            return httpx.Response(200, json={'items': []})
         if path.endswith('/crops'):
             return self._crops(request)
         if path.endswith('/_mget'):
