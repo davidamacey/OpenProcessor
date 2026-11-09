@@ -45,8 +45,12 @@ def world(
     """
     from src.config.project_context import current_project
 
-    project = make_project_row(pg_env, f'default-{uuid.uuid4().hex[:8]}')
-    monkeypatch.setattr(current_project().record, 'id', project, raising=False)
+    slug = f'default-{uuid.uuid4().hex[:8]}'
+    project = make_project_row(pg_env, slug)
+    record = current_project().record
+    monkeypatch.setattr(record, 'id', project, raising=False)
+    # bound_project_id() resolves the record's slug through the projects table
+    monkeypatch.setattr(record, 'slug', slug, raising=False)
     return project
 
 
