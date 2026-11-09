@@ -24,7 +24,6 @@ class World:
     def __init__(self) -> None:
         self.events: list[str] = []
         self.fail: set[str] = set()
-        self.reload_log_events: list[str] = []
         self.arbiter_calls = 0
 
     def step(self, name: str) -> None:
@@ -99,10 +98,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         w.step('arbiter_reconcile')
         return SimpleNamespace(action='noop', detail='stub')
 
-    async def fake_reload(*, log_event: str) -> None:
-        w.reload_log_events.append(log_event)
-        w.step(f'reload:{log_event}')
-
     async def fake_ops_refresh_loop() -> None:
         w.step('ops_metrics_loop')
         await _forever()
@@ -147,7 +142,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         ),
         ('src.config', 'get_gpu_arbiter_config', fake_get_arbiter_config),
         ('src.services.training.gpu_arbiter', 'reconcile_on_startup', fake_reconcile_on_startup),
-        ('src.services.training.triton_reload', 'reload_promoted_models_best_effort', fake_reload),
         ('src.clients.pe_encoder', 'PEEncoder', FakeEncoder),
         (
             'src.services.projects.bootstrap',
@@ -196,7 +190,6 @@ EXPECTED_STARTUP = [
     'event_listener_start',
     'arbiter_config',
     'arbiter_reconcile',
-    'reload:promoted_models_reload_on_startup',
     'pe_encoder_created',
     'pe_encoder_warm',
 ]
@@ -267,7 +260,7 @@ def test_a_failing_event_listener_stop_does_not_stop_the_rest_of_shutdown(world:
     assert tail == EXPECTED_SHUTDOWN
 
 
-def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_reload(world: World) -> None:
+def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_rest_of_startup(world: World) -> None:
     world.fail = {'arbiter_reconcile'}
     seen: dict[str, Any] = {}
 
@@ -276,7 +269,6 @@ def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_reload(world: World)
 
     _run_lifespan(body)
     assert seen['arbiter'] is None
-    assert world.reload_log_events == ['promoted_models_reload_on_startup']
     assert 'pe_encoder_warm' in world.events
 
 
@@ -348,9 +340,6 @@ def test_the_arbiter_loop_reconciles_on_a_timer_and_survives_a_failing_tick(
 
     _run_lifespan(body)
     assert calls['n'] >= 4
-    # one reload at startup, one per tick (the failing tick still reloads)
-    assert world.reload_log_events[0] == 'promoted_models_reload_on_startup'
-    assert world.reload_log_events.count('promoted_models_reload_tick') >= 3
 
 
 def _app_with_nested_routers() -> FastAPI:

@@ -13,6 +13,7 @@ from src.services.periodic import (
     job_stats,
     near_dup_ticks,
     open_vocab_sweep,
+    reload_promoted,
     serving_inventory,
     upload_sweep,
 )
@@ -69,3 +70,9 @@ def cache_prune_tick() -> None:
 def serving_inventory_tick() -> None:
     """Record what each Triton server of the active serving profile reports."""
     run_periodic('serving_inventory', serving_inventory.tick())
+
+
+@app.task(name='op.periodic.reload_promoted', **_TICK)
+def reload_promoted_tick() -> None:
+    """Re-load promoted models that Triton lost in a restart."""
+    run_periodic('reload_promoted', reload_promoted.tick())

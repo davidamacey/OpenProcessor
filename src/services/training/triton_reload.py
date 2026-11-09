@@ -29,8 +29,8 @@ async def reload_promoted_models(
     at startup. A model promoted through this module stays on disk (its live
     ``promotions`` row is how it is found) but drops to UNAVAILABLE after
     any Triton restart until someone POSTs ``/load`` again. Call this
-    once at API startup (see ``src/main.py``'s lifespan) so a Triton
-    restart doesn't silently strand every previously-promoted model.
+    from ``op.periodic.reload_promoted`` (every 15 s) and from ``POST /train/reload_promoted``,
+    so a Triton restart doesn't silently strand every previously-promoted model.
 
     A model an operator unloaded on purpose (``UNLOADED_MARKER``) stays
     unloaded unless ``honor_unloaded`` is false (the explicit
@@ -38,7 +38,7 @@ async def reload_promoted_models(
 
     Best-effort throughout: a scan failure, an unreachable Triton, or a
     single model's load failure is logged and folded into the return
-    value rather than raised — this must never block API startup.
+    value rather than raised, so a tick never fails on an unreachable Triton.
     """
     p = promoter or TritonPromoter()
     try:
@@ -83,25 +83,3 @@ async def reload_promoted_models(
     if reloaded or failed:
         logger.info('reload_promoted_models_done', reloaded=reloaded, failed=failed)
     return {'status': 'ok', 'reloaded': reloaded, 'failed': failed}
-
-
-async def reload_promoted_models_best_effort(*, log_event: str) -> None:
-    """:func:`reload_promoted_models`, but never raises and logs for you.
-
-    Shared by ``src.main``'s lifespan startup, its periodic GPU-arbiter
-    reconcile tick, and (indirectly, via the plain
-    :func:`reload_promoted_models` call) ``POST
-    {api_prefix}/train/reload_promoted`` -- a scan failure or unreachable
-    Triton is logged and swallowed so it can run unattended on both
-    startup and every reconcile tick without ever taking the loop down.
-    """
-    try:
-        reload_result = await reload_promoted_models()
-        if reload_result.get('reloaded') or reload_result.get('failed'):
-            logger.info(
-                log_event,
-                reloaded=reload_result.get('reloaded'),
-                failed=reload_result.get('failed'),
-            )
-    except Exception as exc:
-        logger.warning('promoted_models_reload_skipped', error=str(exc))

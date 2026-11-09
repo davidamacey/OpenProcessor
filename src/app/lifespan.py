@@ -127,21 +127,12 @@ async def _start_event_listener() -> None:
         logger.warning('event_listener_start_skipped', error=str(exc))
 
 
-async def _arbiter_reconcile_loop(
-    reconcile_on_startup: Callable[[], Awaitable[object]],
-    reload_promoted_models_best_effort: Callable[..., Awaitable[None]],
-) -> None:
+async def _arbiter_reconcile_loop(reconcile_on_startup: Callable[[], Awaitable[object]]) -> None:
     """Re-assert the desired GPU-service state on a fixed interval.
 
-    Also re-loads any promoted Triton model that's dropped out of
-    READY (see ``reload_promoted_models_best_effort``) -- this is
-    the only periodic tick in the process, so a Triton restart
-    between startups still gets picked up without an API bounce.
-    Idempotent by construction (stop/start only act on containers
-    not already in the target state; reloading an already-READY
-    model is a no-op), so running this in every uvicorn worker is
-    safe re-enforcement rather than a race. One failing tick must
-    never kill the loop — the next one retries.
+    Idempotent by construction (stop/start only act on containers not already in the target
+    state), so running this in every uvicorn worker is safe re-enforcement rather than a race.
+    One failing tick must never kill the loop: the next one retries.
     """
     while True:
         await asyncio.sleep(ARBITER_RECONCILE_INTERVAL_SECONDS)
@@ -149,7 +140,6 @@ async def _arbiter_reconcile_loop(
             await reconcile_on_startup()
         except Exception as exc:
             logger.warning('gpu_arbiter_reconcile_loop_error', error=str(exc))
-        await reload_promoted_models_best_effort(log_event='promoted_models_reload_tick')
 
 
 async def _start_gpu_arbiter() -> None:
@@ -187,29 +177,12 @@ async def _start_gpu_arbiter() -> None:
         action = await reconcile_on_startup()
         logger.info('gpu_arbiter_reconciled', action=action.action, detail=action.detail)
 
-        from src.services.training.triton_reload import reload_promoted_models_best_effort
-
         AppResources.arbiter_task = asyncio.create_task(
-            _arbiter_reconcile_loop(reconcile_on_startup, reload_promoted_models_best_effort)
+            _arbiter_reconcile_loop(reconcile_on_startup)
         )
         logger.info('gpu_arbiter_loop_started', interval_s=ARBITER_RECONCILE_INTERVAL_SECONDS)
     except Exception as exc:
         logger.warning('gpu_arbiter_reconcile_skipped', error=str(exc))
-
-
-async def _reload_promoted_models() -> None:
-    # Triton in explicit-control mode only loads its --load-model
-    # list at startup. A model promoted through POST
-    # {api_prefix}/train/promote/{job_id} stays on disk (with a
-    # live promotion row) but drops to UNAVAILABLE after any Triton
-    # restart until something POSTs /load again -- without this, a
-    # Triton bounce silently strands every previously-promoted model.
-    # One-shot, best-effort: never blocks API startup. Also re-run on
-    # every arbiter reconcile tick above, and available on demand via
-    # POST {api_prefix}/train/reload_promoted (make reload-promoted).
-    from src.services.training.triton_reload import reload_promoted_models_best_effort
-
-    await reload_promoted_models_best_effort(log_event='promoted_models_reload_on_startup')
 
 
 def _warm_pe_encoder(app: FastAPI) -> None:
@@ -396,7 +369,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _start_background_tasks()
     await _start_event_listener()
     await _start_gpu_arbiter()
-    await _reload_promoted_models()
     _warm_pe_encoder(app)
     await _warm_routes(app)
 
