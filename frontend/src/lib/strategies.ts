@@ -1,7 +1,7 @@
 /**
  * TypeScript types mirroring the OpenProcessor `GET {API_PREFIX}/methods` capability-
  * discovery response (curation-strategy plan, Phase 0 —
- * docs/curation-strategy-plan-2026-09.md §3, §5.3, §7).
+ * curation strategy plan §3, §5.3, §7).
  *
  * CONFIRMED AGAINST THE REAL BACKEND (2026-09-10, live end-to-end check
  * after rebuilding/restarting the backend from its curation-scores branch):
@@ -122,7 +122,7 @@ export interface OverlayInfo extends MethodInfoBase {
   /** `diverse` only: the served cap on `k` of the pool selection job. */
   select_max_k?: number | null;
   /** The measured 2-d neighborhood-purity value backing `requires_banner`
-   *  (see `docs/design/curation_scores.md` in OpenProcessor for the full
+   *  (see `docs/research/curation_scores.md` in OpenProcessor for the full
    *  measurement writeup). Informational — nothing in this file
    *  re-derives a ship-tier decision from it; that's the backend's job. */
   purity?: number | null;
@@ -170,10 +170,10 @@ export interface DatasetExportInfo extends MethodInfoBase {
  * One vision-detection profile (model + config) an assisted auto-label
  * run can be pointed at (`axis: 'detection_profile'`, agreed with the
  * OpenProcessor session 2026-09-20,
- * docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md §1.3).
+ * VLM-scoped labeling assist plan §1.3).
  *
  * **Now live on OpenProcessor (corrected 2026-09-21 — see
- * docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.2).** An
+ * curation settings UI plan §1.3.2).** An
  * earlier version of this comment claimed the axis was "not yet live on
  * any backend" and absent from every `/methods` response; that was true
  * when it was written but is now stale. `strategy_registry.py` registers

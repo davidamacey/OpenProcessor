@@ -119,7 +119,7 @@ export interface ModelInfo {
   last_error: string | null;
   endpoint: string | null;
   /**
-   * Follow-up gap 2 (docs/design/audit-remediation-plan-2026-09.md
+   * Follow-up gap 2 (audit remediation plan
    * Appendix D item 3, 2026-09-11): `DELETE {API_PREFIX}/models/{name}` guard
    * flags, mirrored from the same checks the endpoint enforces
    * server-side so the UI never has to re-derive them (and can't drift

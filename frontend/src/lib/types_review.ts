@@ -84,7 +84,7 @@ export interface SearchCrop extends Crop {
 
 /**
  * `POST {API_PREFIX}/select/diverse`'s scope object (P2-10, `/review`'s diverse
- * overlay — docs/CLAUDE.md's curation-strategy-selector-bar section).
+ * overlay — the curation strategy selector bar).
  * Distinct from `/clusters/[id]`'s `GET {API_PREFIX}/crops?order=diverse&k=N` —
  * that path is a small, synchronous, cluster-scoped selection; this one
  * scopes to a review-tab cohort (`review_tab` reuses the backend's

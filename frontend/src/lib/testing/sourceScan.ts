@@ -1,6 +1,6 @@
 /**
  * Shared helpers for this repo's source-text-scan regression tests
- * (docs/design/test-audit-2026-09-24.md T1/P2-2). A scan matching exact
+ * (test audit T1/P2-2). A scan matching exact
  * whitespace/indentation is a false-positive machine: it fails on a
  * harmless prettier re-wrap and silently passes on a real behavior
  * regression that happens to keep the same words in a different shape.
