@@ -104,3 +104,7 @@ class TestSignalHandling:
         pool.close.assert_awaited()
         segmenter.aclose.assert_awaited()
         vlm.aclose.assert_awaited()
+        # The sync callers' router handle must not outlive the closed pool.
+        from src.app.resources import AppResources
+
+        assert AppResources.async_triton_pool is None
