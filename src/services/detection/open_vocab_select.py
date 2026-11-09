@@ -30,7 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from src.services.detection.geometry import iou
+from src.services.detection.geometry import box_area, iou
 from src.services.detection.region_candidates import select_region_candidates
 from src.utils.class_names import normalize_class_name
 
@@ -101,10 +101,6 @@ def hit_label(h: Hit) -> str:
     return _norm(h.class_name or h.prompt)
 
 
-def _area(box: tuple[float, float, float, float]) -> float:
-    return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
-
-
 def _per_target(
     rules: TargetRules, cands: Sequence[RegionCandidate], dedup_iou: float
 ) -> tuple[list[Hit], list[tuple[Hit, DropReason]]]:
@@ -114,7 +110,7 @@ def _per_target(
     dropped: list[tuple[Hit, DropReason]] = []
     sized: list[RegionCandidate] = []
     for c in cands:
-        area = _area(c.bbox_norm)
+        area = box_area(c.bbox_norm)
         if area < rules.min_area_frac:
             dropped.append((hit(c), 'too_small'))
         elif area > rules.max_area_frac:

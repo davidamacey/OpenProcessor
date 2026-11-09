@@ -10,16 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from src.services.detection.geometry import box_area
+
 
 if TYPE_CHECKING:
     from src.services.curation.dataset_import.scan import LabelBox
 
 
 BBox = tuple[float, float, float, float]
-
-
-def _area(box: BBox) -> float:
-    return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
 
 
 def _intersection(a: BBox, b: BBox) -> BBox | None:
@@ -32,21 +30,21 @@ def _intersection(a: BBox, b: BBox) -> BBox | None:
 
 def containment(box: BBox, parent: BBox) -> float:
     """``area(box ∩ parent) / area(box)``."""
-    box_area = _area(box)
-    if box_area <= 0:
+    own_area = box_area(box)
+    if own_area <= 0:
         return 0.0
     inter = _intersection(box, parent)
     if inter is None:
         return 0.0
-    return _area(inter) / box_area
+    return box_area(inter) / own_area
 
 
 def iou(a: BBox, b: BBox) -> float:
     inter = _intersection(a, b)
     if inter is None:
         return 0.0
-    inter_area = _area(inter)
-    union = _area(a) + _area(b) - inter_area
+    inter_area = box_area(inter)
+    union = box_area(a) + box_area(b) - inter_area
     return inter_area / union if union > 0 else 0.0
 
 
@@ -107,7 +105,7 @@ def attach_region_boxes(
                 continue
             key = (
                 -score,
-                _area(parent.bbox_norm),
+                box_area(parent.bbox_norm),
                 -iou(box.bbox_norm, parent.bbox_norm),
                 parent.key,
             )
