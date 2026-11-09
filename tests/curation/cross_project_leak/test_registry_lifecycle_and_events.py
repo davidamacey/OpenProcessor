@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -76,7 +76,23 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
     )
 
     resp = client.post(f'{API}/projects', json={'slug': 'gamma', 'display_name': 'Gamma'})
-    assert resp.status_code in (200, 201), resp.text
+    assert resp.status_code == 202, resp.text
+    assert resp.json()['project']['status'] == 'building'
+
+    from src.core.dependencies import app_state
+    from src.tasks import b4_project
+
+    class _Ctx:
+        params = {'slug': 'gamma'}
+
+        async def client(self, _name: str) -> Any:
+            assert app_state._opensearch_client is not None
+            return app_state._opensearch_client.client
+
+        async def progress(self, *_a: Any, **_k: Any) -> None:
+            return None
+
+    asyncio.run(b4_project.project_create(cast('Any', _Ctx())))
 
     from src.services.projects import registry as registry_mod
 
@@ -87,7 +103,6 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
     assert resp.status_code == 202, resp.text
     asyncio.run(registry.refresh_strict())
 
-    from src.core.dependencies import app_state
     from src.services.projects import lifecycle
 
     assert app_state._opensearch_client is not None
@@ -106,8 +121,8 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
         )
         == before_alpha_docs
     )
-    # M5: create publishes its event synchronously in the request; the completion event
-    # (project.deleted) is published by the project_delete job's handler, not by
+    # M5: the project_create job's handler publishes project.created (run above); the completion
+    # event (project.deleted) is published by the project_delete job's handler, not by
     # lifecycle.delete_project_finish (called above) -- so it is not expected here.
     # See test_delete_finish_publishes_project_deleted.
     published = [(e.get('type'), e.get('target')) for e in leak_env.events]

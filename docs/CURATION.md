@@ -69,6 +69,16 @@ config. Create, rename, archive, delete, clone settings, pause workers:
 [Projects](../docs-site/docs/guides/projects.mdx). In Cropwright:
 [Projects](../docs-site/docs/cropwright/user-guide/projects.md).
 
+Creating a project is a background job. `POST /curation/projects` checks the slug, the
+clone source and the shard budget, claims the slug and answers **202** with the project
+in status `building` and the `project_create` job in `job_id` (a repeat with the same
+`Idempotency-Key` answers 200 with the first job). The job makes the directories and
+indexes, copies the settings you asked to clone and ends the project `active`;
+`project.created` follows on the global event stream, and `GET /curation/projects/{project}`
+shows the status. A create that fails leaves the project `failed` with the reason in the
+job; delete it to free the slug. A slug that is taken or retired is refused with 409
+before anything is written.
+
 ## Settings and the config store
 
 Per-project settings are one shared document. Prompt packs, region profiles and VLM
@@ -179,6 +189,9 @@ covers the registry workflow, the URL policy, local models, `./openprocessor vlm
 per-project policy and its scopes.
 [VLM selection](../docs-site/docs/guides/vlm-selection.mdx). In Cropwright:
 [VLM models](../docs-site/docs/cropwright/user-guide/vlm-models.md).
+
+When external use is enabled, external VLM endpoints and the hosted research judge may
+receive any region kind and contact-sheet image.
 
 ## Keymaps
 

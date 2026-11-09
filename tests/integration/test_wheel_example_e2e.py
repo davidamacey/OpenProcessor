@@ -285,7 +285,12 @@ def wait_import(world: World, started: dict[str, Any]) -> dict[str, Any]:
 
 def create_project_with_classes(world: World) -> dict[str, int]:
     r = world.client.post('/curation/projects', json={'slug': SLUG, 'display_name': 'Cars'})
-    assert r.status_code == 201, r.text
+    assert r.status_code == 202, r.text
+    job_id = r.json()['job_id']
+    outcome = world.worker_app.tasks['op.b4_project.project_create'].apply(
+        args=[job_id], task_id=job_id
+    )
+    assert outcome.successful(), outcome.traceback
     for name in CLASS_ORDER:
         assert world.client.post(f'{API}/classes', json={'name': name}).status_code == 201
     listed = world.client.get(f'{API}/classes').json()['classes']

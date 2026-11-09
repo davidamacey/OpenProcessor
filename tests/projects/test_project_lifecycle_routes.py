@@ -19,7 +19,10 @@ from src.schemas.curation.projects import (
     CreateProjectRequest,
     PatchProjectRequest,
 )
+from src.services.projects import lifecycle
+from src.services.projects.records import new_project_for, record_from_row
 from src.services.projects.registry import ProjectRegistry, set_project_registry
+from src.services.projects.store import create_with_default_spaces, run_repo
 
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
@@ -49,10 +52,49 @@ def _patch_client(monkeypatch):
     return client
 
 
-def test_create_route_envelope() -> None:
-    response = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
+class _CreateContext:
+    """The members of a ``JobContext`` the ``project_create`` handler touches."""
+
+    def __init__(self, body: CreateProjectRequest, client) -> None:
+        self.params = {
+            'slug': body.slug,
+            'clone_settings_from': body.clone_settings_from,
+            'clone_axes': body.clone_axes,
+        }
+        self._client = client
+
+    async def client(self, _name: str):
+        return self._client
+
+    async def progress(self, *_args, **_kwargs) -> None:
+        return None
+
+
+async def _create(body: CreateProjectRequest):
+    """The route's claim followed by the ``project_create`` handler, in the route's envelope: the
+    other lifecycle routes below start from an ``active`` project."""
+    from src.services.projects.store import get_row
+    from src.tasks import b4_project
+
+    client = await projects_router.make_curation_opensearch()
+    await lifecycle.validate_create(
+        client,
+        slug=body.slug,
+        clone_settings_from=body.clone_settings_from,
+        clone_axes=body.clone_axes,
     )
+    await run_repo(
+        'claim a slug',
+        create_with_default_spaces,
+        new_project_for(body.slug, display_name=body.display_name),
+    )
+    done = await b4_project.project_create(cast('Any', _CreateContext(body, client)))
+    record = record_from_row(await get_row(body.slug))
+    return await projects_router._summary_response(record, done['warnings'])
+
+
+def test_create_envelope_once_the_job_has_built_the_project() -> None:
+    response = asyncio.run(_create(CreateProjectRequest(slug='cars', display_name='Cars')))
     assert response.project.slug == 'cars'
     assert response.project.status == 'active'
     assert response.project.revision >= 1
@@ -60,9 +102,7 @@ def test_create_route_envelope() -> None:
 
 
 def test_patch_route_envelope_and_revision_conflict() -> None:
-    created = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
-    )
+    created = asyncio.run(_create(CreateProjectRequest(slug='cars', display_name='Cars')))
     patched = asyncio.run(
         projects_router.patch_project(
             'cars',
@@ -85,12 +125,8 @@ def test_patch_route_envelope_and_revision_conflict() -> None:
 
 
 def test_archive_unarchive_route_envelope() -> None:
-    created = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
-    )
-    asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='keep-active', display_name='x'))
-    )
+    created = asyncio.run(_create(CreateProjectRequest(slug='cars', display_name='Cars')))
+    asyncio.run(_create(CreateProjectRequest(slug='keep-active', display_name='x')))
     archived = asyncio.run(
         projects_router.archive_project(
             'cars', ArchiveRequest(expected_revision=created.project.revision)
@@ -114,12 +150,8 @@ def test_clone_settings_route_serves_keymap_conflicts_structured(
     from src.config.project_context import try_current_project
     from src.services.curation.keymap import KeymapDoc
 
-    source = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='source', display_name='Source'))
-    )
-    target = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='target', display_name='Target'))
-    )
+    source = asyncio.run(_create(CreateProjectRequest(slug='source', display_name='Source')))
+    target = asyncio.run(_create(CreateProjectRequest(slug='target', display_name='Target')))
 
     source_doc = KeymapDoc(
         overrides={'cluster.ignore': ['i']}, revision=1, updated_at=None, is_default=False
@@ -186,9 +218,7 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
     from src.services.curation.keymap import KeymapDoc
     from src.services.projects.registry import get_project_registry
 
-    source = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='source', display_name='Source'))
-    )
+    source = asyncio.run(_create(CreateProjectRequest(slug='source', display_name='Source')))
     assert source.project.slug == 'source'
 
     registry = get_project_registry()
@@ -228,7 +258,7 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
     # validates the source's override against that just-copied class --
     # the naturally-arising create-time conflict, not a synthesized one.
     created = asyncio.run(
-        projects_router.create_project(
+        _create(
             CreateProjectRequest(
                 slug='newproj',
                 display_name='New',
@@ -262,9 +292,7 @@ def events(captured_events):
 
 
 def test_create_publishes_project_created(events) -> None:
-    created = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
-    )
+    created = asyncio.run(_create(CreateProjectRequest(slug='cars', display_name='Cars')))
     assert created.project.status == 'active'
     matches = [e for e in events if e['type'] == 'project.created']
     assert len(matches) == 1
@@ -274,12 +302,8 @@ def test_create_publishes_project_created(events) -> None:
 
 
 def test_patch_archive_unarchive_publish_their_events(events) -> None:
-    created = asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
-    )
-    asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='keep-active', display_name='x'))
-    )
+    created = asyncio.run(_create(CreateProjectRequest(slug='cars', display_name='Cars')))
+    asyncio.run(_create(CreateProjectRequest(slug='keep-active', display_name='x')))
     patched = asyncio.run(
         projects_router.patch_project(
             'cars',
@@ -333,12 +357,8 @@ def test_delete_finish_publishes_project_deleted(events, producer) -> None:
     from src.services.projects.registry import get_project_registry
     from src.tasks import jobs_c
 
-    asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='cars', display_name='Cars'))
-    )
-    asyncio.run(
-        projects_router.create_project(CreateProjectRequest(slug='keep-active', display_name='x'))
-    )
+    asyncio.run(_create(CreateProjectRequest(slug='cars', display_name='Cars')))
+    asyncio.run(_create(CreateProjectRequest(slug='keep-active', display_name='x')))
     asyncio.run(get_project_registry().ensure_fresh())
 
     async def _delete_flow():

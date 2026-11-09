@@ -13,7 +13,7 @@ only under the global router or a project's scoped prefix.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
 from src.config.projects import (
@@ -25,7 +25,9 @@ from src.config.projects import (
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.db.repos import projects as repo
+from src.services.jobs.service import StartResult, start_job
 from src.services.projects.capacity import capacity_status
+from src.services.projects.create_stages import CreateStages
 from src.services.projects.lifecycle_checks import (
     _last_active_check,
     _require_revision,
@@ -35,9 +37,14 @@ from src.services.projects.lifecycle_checks import (
 )
 from src.services.projects.records import new_project_for, record_from_row
 from src.services.projects.registry import get_project_registry
-from src.services.projects.store import create_with_default_spaces, get_row, run_repo
+from src.services.projects.store import create_with_default_spaces, get_row, rejection_for, run_repo
 from src.services.rejections import rejection
 
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 
@@ -117,6 +124,49 @@ async def _cleanup_orphaned_by_concurrent_delete(
             )
 
 
+async def validate_create(
+    client: Any,
+    *,
+    slug: str,
+    clone_settings_from: str | None = None,
+    clone_axes: list[str] | None = None,
+    stages: CreateStages | None = None,
+) -> list[dict[str, Any]]:
+    """Every refusal a create can raise before its first write; returns the capacity warnings.
+
+    A refused create burns no slug, holds no shards and leaves no dirs."""
+    stages = stages or CreateStages()
+    with stages.stage('project_create_validate'):
+        if not is_valid_slug(slug):
+            raise rejection(
+                422, 'slug_invalid', f"'{slug}' is not a valid project slug", project=slug
+            )
+
+        if clone_settings_from:
+            from src.services.projects.clone_validate import _validate_clone_source
+
+            await _validate_clone_source(
+                client, target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
+            )
+
+    with stages.stage('project_create_capacity'):
+        return await _capacity_error_or_warning(client)
+
+
+def building_row_for(
+    slug: str, *, display_name: str, description: str = '', origin: dict | None = None
+) -> Callable[[AsyncSession], Awaitable[repo.ProjectRow]]:
+    """The ``building`` project row and its default spaces, as a ``start_job(with_rows=...)``-ready
+    write. The slug claim inside the transaction is the one duplicate check: a second creator of
+    the same slug waits for the first and loses with 409 ``slug_taken`` (or ``slug_retired``)."""
+    new = new_project_for(slug, display_name=display_name, description=description, origin=origin)
+
+    async def write(session: AsyncSession) -> repo.ProjectRow:
+        return await create_with_default_spaces(session, new)
+
+    return write
+
+
 async def create_project(
     client: Any,
     *,
@@ -128,36 +178,57 @@ async def create_project(
     origin: dict | None = None,
     activate: bool = True,
 ) -> tuple[ProjectRecord, list[dict[str, Any]]]:
-    """§4 ``POST /projects``. Steps: validate, capacity, row ``building`` (Postgres first), create
-    indexes and dirs, optional clone, ``active``. A failure midway leaves the row ``failed``,
-    never partially ``active``.
+    """Validate, capacity, row ``building`` (Postgres first), then :func:`build_project`.
+
+    The create route does not call this: it queues the ``project_create`` job, whose handler runs
+    :func:`build_project`. A combine's target is created here, in its own job.
 
     ``origin`` is stored on the row (a combine's target names its job and sources).
     ``activate=False`` stops with the verified record still ``building`` for a caller that fills
     the project first and then calls :func:`finish_building`."""
-    if not is_valid_slug(slug):
-        raise rejection(422, 'slug_invalid', f"'{slug}' is not a valid project slug", project=slug)
-
-    if clone_settings_from:
-        # Every refusal a clone can raise -- unknown axis, clone into itself, a source that does
-        # not exist or is not ready -- runs BEFORE the first write: a refused clone burns no slug,
-        # holds no shards and leaves no dirs.
-        from src.services.projects.clone_validate import _validate_clone_source
-
-        await _validate_clone_source(
-            client, target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
-        )
-
-    warnings = await _capacity_error_or_warning(client)
-
-    # The slug claim inside the create transaction is the one duplicate check: a second creator of
-    # the same slug waits for the first and loses with 409 slug_taken (or slug_retired).
-    row = await run_repo(
-        'create a project',
-        create_with_default_spaces,
-        new_project_for(slug, display_name=display_name, description=description, origin=origin),
+    stages = CreateStages()
+    warnings = await validate_create(
+        client,
+        slug=slug,
+        clone_settings_from=clone_settings_from,
+        clone_axes=clone_axes,
+        stages=stages,
     )
+    with stages.stage('project_create_row'):
+        row = await run_repo(
+            'create a project',
+            building_row_for(
+                slug, display_name=display_name, description=description, origin=origin
+            ),
+        )
     record = record_from_row(row)
+    warnings += await build_project(
+        client,
+        record,
+        clone_settings_from=clone_settings_from,
+        clone_axes=clone_axes,
+        activate=activate,
+        stages=stages,
+    )
+    return record, warnings
+
+
+async def build_project(
+    client: Any,
+    record: ProjectRecord,
+    *,
+    clone_settings_from: str | None = None,
+    clone_axes: list[str] | None = None,
+    activate: bool = True,
+    stages: CreateStages | None = None,
+) -> list[dict[str, Any]]:
+    """Everything after the ``building`` row: dirs, indexes, optional clone, class seed, index
+    verification, then ``active``. Each step checks what exists, so a re-run after a crash
+    finishes the same project. A failure midway leaves the row ``failed``, never partially
+    ``active``. Returns the clone warnings."""
+    stages = stages or CreateStages()
+    slug = record.slug
+    warnings: list[dict[str, Any]] = []
     resources = record.resources
     registry = get_project_registry()
 
@@ -165,24 +236,29 @@ async def create_project(
         # refresh_strict() raises on any failure (unlike ensure_fresh's swallow-and-log), so a
         # registry that cannot see this project yet aborts the create through the handler below
         # instead of creating indexes while the guard still does not recognize the new slug.
-        await registry.refresh_strict()
+        with stages.stage('project_create_registry_refresh'):
+            await registry.refresh_strict()
 
         with bind_project(record):
             from src.services.curation.index_bootstrap import ensure_indexes
 
-            resources.upload_root.mkdir(parents=True, exist_ok=True)
-            resources.project_state_dir.mkdir(parents=True, exist_ok=True)
-            await ensure_indexes(client)
+            with stages.stage('project_create_dirs'):
+                resources.upload_root.mkdir(parents=True, exist_ok=True)
+                resources.project_state_dir.mkdir(parents=True, exist_ok=True)
+            with stages.stage('project_create_indexes'):
+                await ensure_indexes(client)
             from src.services.projects.vlm_default import pin_new_project_vlm_off
 
-            await pin_new_project_vlm_off()
+            with stages.stage('project_create_vlm_pin'):
+                await pin_new_project_vlm_off()
         if clone_settings_from:
-            clone_conflicts = await clone_settings(
-                client,
-                target_record=record,
-                from_slug=clone_settings_from,
-                axes=clone_axes,
-            )
+            with stages.stage('project_create_clone'):
+                clone_conflicts = await clone_settings(
+                    client,
+                    target_record=record,
+                    from_slug=clone_settings_from,
+                    axes=clone_axes,
+                )
             if clone_conflicts:
                 # `keymap_clone_conflicts` on the 201 response is always `[]` for a create (that
                 # field belongs to the standalone clone_settings route), so a dropped keymap
@@ -193,25 +269,25 @@ async def create_project(
                     from_slug=clone_settings_from,
                     conflicts=clone_conflicts,
                 )
-                for conflict in clone_conflicts:
-                    warnings.append(
-                        {
-                            'code': 'keymap_clone_conflict',
-                            'message': (
-                                f"keymap action '{conflict['action_id']}' combo "
-                                f"'{conflict['combo']}' collides with class "
-                                f"'{conflict['class_name']}' (id {conflict['class_id']}) "
-                                'so the keymap was not cloned'
-                            ),
-                        }
-                    )
+                warnings.extend(
+                    {
+                        'code': 'keymap_clone_conflict',
+                        'message': (
+                            f"keymap action '{conflict['action_id']}' combo "
+                            f"'{conflict['combo']}' collides with class "
+                            f"'{conflict['class_name']}' (id {conflict['class_id']}) "
+                            'so the keymap was not cloned'
+                        ),
+                    }
+                    for conflict in clone_conflicts
+                )
         # Idempotent: a clone that copied 'classes' (or _apply_clone's own
         # no-classes-copied branch) may already have seeded it, but every
         # new project gets one guaranteed call under its own binding.
         from src.services.classes.registry import get_class_registry
         from src.services.curation.region_class import ensure_region_class
 
-        with bind_project(record):
+        with bind_project(record), stages.stage('project_create_class_seed'):
             # The registry document exists from the first moment (new project, empty).
             await get_class_registry().snapshot()
             await ensure_region_class()
@@ -219,7 +295,7 @@ async def create_project(
         # ensure_indexes is itself fail-open (every create/migration failure inside it is logged
         # and swallowed): verify every index this record claims to own exists before ever calling
         # the project 'active'.
-        with bind_project(record, read_only=True):
+        with bind_project(record, read_only=True), stages.stage('project_create_verify'):
             missing_indexes = [
                 name
                 for name in sorted(set(record.resources.indexes.values()))
@@ -248,10 +324,60 @@ async def create_project(
         await registry.ensure_fresh()
         raise
 
-    if not activate:
-        return record, warnings
+    if activate:
+        with stages.stage('project_create_finish'):
+            await finish_building(client, record)
+    return warnings
 
-    return await finish_building(client, record), warnings
+
+async def start_project_create(
+    session: AsyncSession,
+    *,
+    slug: str,
+    display_name: str,
+    description: str = '',
+    clone_settings_from: str | None = None,
+    clone_axes: list[str] | None = None,
+    idempotency_key: str | None = None,
+) -> tuple[StartResult, repo.ProjectRow]:
+    """Claim the slug (the ``building`` row) and queue the ``project_create`` job in one
+    transaction (deployment-level, exclusive per slug).
+
+    A taken or retired slug is a 409 and writes nothing, the job included. A repeat with the same
+    ``idempotency_key`` and parameters answers the first job (``created`` false) and the stored
+    row. The handler is :func:`build_project`."""
+    write = building_row_for(slug, display_name=display_name, description=description)
+    claimed: list[repo.ProjectRow] = []
+
+    async def with_rows(tx: AsyncSession, _job: Any) -> None:
+        claimed.append(await write(tx))
+
+    params = {
+        'slug': slug,
+        'clone_settings_from': clone_settings_from,
+        'clone_axes': clone_axes,
+    }
+    try:
+        started = await start_job(
+            session,
+            'project_create',
+            None,
+            params=params,
+            scope=slug,
+            idempotency_key=idempotency_key,
+            requested_by='api',
+            with_rows=with_rows,
+        )
+    except repo.ProjectRepoError as exc:
+        raise rejection_for(exc) from exc
+    except RequestRejectedError as exc:
+        if exc.detail.get('error') != 'job_busy':
+            raise
+        # An active create of this slug means the slug is claimed: the same 409 a later claim gets.
+        raise rejection(
+            409, 'slug_taken', f"project slug '{slug}' is already taken", project=slug
+        ) from exc
+    return started, claimed[0] if claimed else await get_row(slug)
 
 
 async def finish_building(client: Any, record: ProjectRecord, *, ok: bool = True) -> ProjectRecord:

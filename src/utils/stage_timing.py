@@ -44,6 +44,17 @@ STAGES: tuple[str, ...] = (
     'admission_wait',
     'file_read',
     'gpu_decode',
+    'project_create_validate',
+    'project_create_capacity',
+    'project_create_row',
+    'project_create_registry_refresh',
+    'project_create_dirs',
+    'project_create_indexes',
+    'project_create_vlm_pin',
+    'project_create_clone',
+    'project_create_class_seed',
+    'project_create_verify',
+    'project_create_finish',
 )
 
 _SECONDS = Histogram(
