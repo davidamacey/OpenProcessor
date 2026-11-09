@@ -17,6 +17,7 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query, Request, Response
 
 from src.config.env import env_bool
+from src.config.settings import TritonModelConfig
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.core.wire_json import WireJSONResponse
@@ -108,14 +109,13 @@ async def search_text(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     pe_encoder = _get_pe_encoder(request)
-    if pe_encoder is None or not getattr(pe_encoder, 'text_ready', False):
+    if pe_encoder is None or not pe_encoder.ensure_text_ready():
+        model = TritonModelConfig.PE_TEXT_MODEL if pe_encoder is None else pe_encoder.text_model
         raise HTTPException(
             status_code=503,
             detail=(
-                'PE text encoder not ready (still warming, or no backend could load: '
-                'no OP_PE_TEXT_ONNX_PATH file, no ready Triton pe_text_encoder, and '
-                'perception_models/torch or the checkpoint unavailable) — see '
-                'GET /health/pe_text'
+                f"semantic search needs Triton's text model '{model}' and it is not ready: "
+                'install it with ./openprocessor models install and check GET /health/pe_text'
             ),
         )
 

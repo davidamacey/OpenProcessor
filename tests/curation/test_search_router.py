@@ -22,6 +22,8 @@ PE_DIM = 1024
 def _fake_pe_encoder(ready: bool = True) -> MagicMock:
     enc = MagicMock()
     enc.text_ready = ready
+    enc.ensure_text_ready = MagicMock(return_value=ready)
+    enc.text_model = 'pe_text_encoder'
     vec = np.zeros((1, PE_DIM), dtype=np.float32)
     vec[0, 0] = 1.0
     enc.encode_text = MagicMock(return_value=vec)
@@ -97,12 +99,12 @@ def test_search_text_explicit_off_still_returns_400(
 
 
 def test_search_text_encoder_not_ready_returns_503(app_client: TestClient):
-    app_client.fake_encoder.text_ready = False
+    app_client.fake_encoder.ensure_text_ready.return_value = False
     resp = app_client.get(
         '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
     )
     assert resp.status_code == 503
-    assert 'pe_text' in resp.json()['detail']
+    assert "text model 'pe_text_encoder'" in resp.json()['detail']
 
 
 def test_search_text_happy_path(app_client: TestClient):

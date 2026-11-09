@@ -24,6 +24,8 @@ def _parse(header: str) -> dict[str, float]:
 def _encoder(ready: bool = True) -> MagicMock:
     enc = MagicMock()
     enc.text_ready = ready
+    enc.ensure_text_ready = MagicMock(return_value=ready)
+    enc.text_model = 'pe_text_encoder'
     enc.encode_text = MagicMock(return_value=np.ones((1, 1024), dtype=np.float32))
     return enc
 
