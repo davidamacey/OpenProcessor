@@ -1,4 +1,4 @@
-"""The Triton router: fewest outstanding among ready servers, image affinity, fail closed."""
+"""The Triton router: fewest outstanding among ready servers, fail closed."""
 
 from __future__ import annotations
 
@@ -59,39 +59,6 @@ def test_a_server_that_stops_reporting_is_dropped_on_the_next_update() -> None:
     router.update_ready({'b': [MODEL]})
     with router.route(MODEL) as route:
         assert route.server == 'b'
-
-
-def test_follow_up_calls_of_one_image_stay_on_its_server_even_when_it_is_busier() -> None:
-    router = two_servers()
-    # The image-prep call is still in flight, so its server is busier than the other one.
-    with (
-        router.affinity('img-1'),
-        router.route(MODEL, affinity='img-1') as prep,
-        router.route(MODEL) as unrelated,
-        router.route(MODEL, affinity='img-1') as follow_up,
-    ):
-        assert unrelated.server != prep.server
-        assert follow_up.server == prep.server
-
-
-def test_a_pinned_server_that_loses_the_model_refuses_the_follow_up() -> None:
-    router = two_servers()
-    with router.affinity('img-1'):
-        with router.route(MODEL, affinity='img-1') as first:
-            pinned = first.server
-        router.update_ready({s: [MODEL] for s in ('a', 'b') if s != pinned})
-        with pytest.raises(NoServerError), router.route(MODEL, affinity='img-1'):
-            pass
-
-
-def test_the_pin_is_released_when_the_scope_closes() -> None:
-    router = two_servers()
-    with router.affinity('img-1'), router.route(MODEL, affinity='img-1'):
-        pass
-    with pytest.raises(ValueError, match='not open'), router.route(MODEL, affinity='img-1'):
-        pass
-    with router.affinity('img-1'):
-        pass
 
 
 def test_one_server_behaves_as_before_the_router() -> None:
