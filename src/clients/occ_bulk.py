@@ -14,6 +14,8 @@ import asyncio
 import random
 from typing import TYPE_CHECKING, Any, Literal
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
@@ -126,7 +128,7 @@ async def occ_bulk_rounds(
             call_refresh = refresh if page_idx == len(page_starts) - 1 else False
             try:
                 resp = await client.bulk(body=bulk_body, refresh=call_refresh)
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.warning('curation_occ_update_bulk_transport_error', error=str(exc))
                 for doc_id, _update_doc in pending:
                     if retry_transport and not final:

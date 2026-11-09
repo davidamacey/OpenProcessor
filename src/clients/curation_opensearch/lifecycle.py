@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.curation_opensearch.base import config, logger
 from src.clients.curation_opensearch.bodies_core import _images_body, _items_body
 from src.config import CurationConfig, IndexRole, index_name
@@ -53,7 +55,7 @@ async def _create_one(
             else:
                 raise
         return True
-    except Exception as e:
+    except OpenSearchException as e:
         logger.error('curation_index_create_failed', index=index, error=str(e))
         return False
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from opensearchpy.exceptions import RequestError
+from opensearchpy.exceptions import OpenSearchException, RequestError
 
 from src.clients.opensearch.names import IndexName
 from src.config.faces import faces_enabled
@@ -470,6 +470,6 @@ class IndexesMixin:
                 return True
             logger.error(f'Failed to create index {index_name}: {e}')
             return False
-        except Exception as e:
+        except OpenSearchException as e:
             logger.error(f'Failed to create index {index_name}: {e}')
             return False

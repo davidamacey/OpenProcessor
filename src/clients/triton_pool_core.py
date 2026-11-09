@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 import tritonclient.grpc as grpcclient
 import tritonclient.grpc.aio as grpcclient_aio
+from tritonclient.utils import InferenceServerException
 
 from src.clients.model_residency import ensure_loaded
 from src.utils.retry import is_retryable_error
@@ -462,7 +463,7 @@ class AsyncTritonPool:
         try:
             # Check first client (they all connect to same server)
             return bool(await self._clients[0].is_server_live())
-        except Exception as e:
+        except (InferenceServerException, OSError) as e:
             logger.error(f'Health check failed: {e}')
             return False
 
@@ -474,7 +475,7 @@ class AsyncTritonPool:
             return False
         try:
             return bool(await self._clients[0].is_model_ready(model_name))
-        except Exception as e:
+        except (InferenceServerException, OSError) as e:
             logger.warning(f'is_model_ready({model_name!r}) failed: {e}')
             return False
 
