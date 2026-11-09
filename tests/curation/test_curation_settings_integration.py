@@ -20,13 +20,19 @@ import pytest
 from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import OpenSearchException
+
+
+class _UnreachableOpenSearch:
+    async def search(self, **_: object) -> dict:
+        raise OpenSearchException('down')
 
 
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = object()
+    fake_os = _UnreachableOpenSearch()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )

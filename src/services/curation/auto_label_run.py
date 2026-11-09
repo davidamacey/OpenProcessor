@@ -22,6 +22,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
@@ -216,7 +218,7 @@ async def run_auto_label(
             cap=selection.cap,
             guard=guard,
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         return {**summary, 'stages_error': f'fetch unvalidated failed: {exc}'}
 
     stages['unvalidated_after_promote'] = len(unvalidated_ids)

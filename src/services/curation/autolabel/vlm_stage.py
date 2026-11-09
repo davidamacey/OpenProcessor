@@ -192,7 +192,7 @@ async def _remaining_unvalidated(run: Run) -> int:
             },
         )
         return int(cnt_resp.get('count', 0))
-    except Exception:
+    except OpenSearchException:
         return -1
 
 

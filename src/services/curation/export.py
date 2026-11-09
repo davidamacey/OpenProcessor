@@ -461,5 +461,5 @@ class GenericYoloExportService:
         # successful export.
         try:
             await asyncio.to_thread(prune_exports_after_write, self.config)
-        except Exception as exc:
+        except OSError as exc:
             logger.warning('export_retention_failed', error=str(exc))

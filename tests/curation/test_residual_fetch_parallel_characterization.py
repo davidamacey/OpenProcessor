@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
 from src.services.curation.clustering import residual_fetch
 from src.services.curation.clustering.residual_fetch import (
@@ -82,7 +83,7 @@ class _Client:
     async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self.counts.append({'index': index, 'body': body})
         if self.fail_count:
-            raise RuntimeError('count boom')
+            raise OpenSearchException('count boom')
         return {'count': len(self.docs)}
 
     async def create_pit(self, *, index: str, keep_alive: str) -> dict[str, Any]:
@@ -94,8 +95,6 @@ class _Client:
     async def delete_pit(self, *, body: dict[str, Any]) -> None:
         self.deleted.append(body)
         if self.fail_delete_pit:
-            from opensearchpy.exceptions import OpenSearchException
-
             raise OpenSearchException('delete boom')
 
     async def search(

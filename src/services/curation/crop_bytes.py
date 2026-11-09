@@ -170,7 +170,7 @@ def load_vlm_item_jpeg(
             return buf.getvalue()
         except FileNotFoundError:
             pass  # fall through to the source image
-        except Exception as exc:
+        except (OSError, Image.DecompressionBombError) as exc:
             logger.warning('vlm_crop_cache_read_failed', crop_id=crop_id, error=str(exc))
     try:
         return THUMBNAIL_CACHE.get_or_compute(

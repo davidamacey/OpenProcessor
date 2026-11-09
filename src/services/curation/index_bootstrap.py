@@ -14,6 +14,8 @@ import hashlib
 import json
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.curation_opensearch.assist_fields import ensure_assist_fields
 from src.clients.curation_opensearch.cluster_fields import ensure_items_cluster_partition_fields
 from src.clients.curation_opensearch.ensure_fields import (
@@ -144,7 +146,7 @@ async def warm_knn_indexes(opensearch: Any) -> None:
     started = _time.monotonic()
     try:
         await opensearch.transport.perform_request('GET', f'/_plugins/_knn/warmup/{indexes}')
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning(
             'curation_knn_warmup_failed',
             indexes=indexes,
@@ -216,7 +218,7 @@ async def _schema_is_current(opensearch: Any, names: list[str]) -> bool:
             ignore_unavailable=True,
             filter_path=f'*.mappings._meta.{SCHEMA_META_KEY},*.settings.index',
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('curation_schema_marker_read_failed', error=str(exc), exc_info=True)
         return False
     if not isinstance(resp, dict):
@@ -263,7 +265,7 @@ async def _stamp_schema(opensearch: Any, names: list[str]) -> None:
     try:
         for name in names:
             await opensearch.indices.put_mapping(index=name, body=marker)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('curation_schema_marker_write_failed', error=str(exc), exc_info=True)
 
 

@@ -47,6 +47,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
 from src.services.curation.latest_job import common_state
@@ -253,7 +254,7 @@ async def compute_coverage(opensearch: AsyncOpenSearch) -> dict[str, Any]:
                 index=index, body={'query': {'exists': {'field': field_name}}}
             )
             n = int(resp.get('count', 0))
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning(
                 'curation_scores_coverage_count_failed', scorer=scorer_id, error=str(exc)
             )

@@ -203,7 +203,7 @@ async def count_unvalidated_remaining(
     )
     try:
         return int((await opensearch.count(index=index, body={'query': query})).get('count', 0))
-    except Exception:
+    except OpenSearchException:
         return -1
 
 
@@ -233,7 +233,7 @@ async def explain_empty_vlm_selection(
         embedded = int(
             (await opensearch.count(index=index, body={'query': embedded_q})).get('count', 0)
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('vlm_empty_selection_explain_failed', error=str(exc))
         return 'no items selected (could not determine why: item counts unavailable)'
     if unvalidated == 0:

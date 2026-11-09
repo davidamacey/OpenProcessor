@@ -12,6 +12,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
 from src.routers.curation._common import images_index, items_index
 from src.services.curation.index_bootstrap import warm_knn_indexes
@@ -36,7 +37,7 @@ async def test_warm_knn_indexes_calls_the_warmup_endpoint() -> None:
 async def test_warm_knn_indexes_swallows_failures() -> None:
     os_client = AsyncMock()
     os_client.transport = AsyncMock()
-    os_client.transport.perform_request = AsyncMock(side_effect=RuntimeError('boom'))
+    os_client.transport.perform_request = AsyncMock(side_effect=OpenSearchException('boom'))
 
     # Must not raise.
     await warm_knn_indexes(os_client)

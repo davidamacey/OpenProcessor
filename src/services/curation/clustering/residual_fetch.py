@@ -90,7 +90,7 @@ async def _precount(client: AsyncOpenSearch, query: dict[str, Any], progress: An
             count_resp = await client.count(index=items_index(), body={'query': query})
             total_estimate = int(count_resp.get('count', 0))
             progress.update(processed=0, total=total_estimate)
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.debug('curation_embedding_count_failed', error=str(exc))
     return total_estimate
 
@@ -275,7 +275,7 @@ async def fetch_residual_embeddings_parallel(
     # slice -- PIT is the supported pattern for sliced parallel reads.
     try:
         pit_id = await _create_pit(client)
-    except Exception as exc:
+    except (OpenSearchException, RuntimeError) as exc:
         logger.warning('curation_embedding_pit_unavailable_fallback_scroll', error=str(exc))
         return await fetch_residual_embeddings(
             client, field=field, extra_must=extra_must, progress=progress
