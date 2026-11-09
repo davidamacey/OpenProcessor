@@ -193,6 +193,7 @@ describe('bulk ingest contract', () => {
     const known = [
       'queued',
       'running',
+      'cancelling',
       'completed',
       'completed_with_errors',
       'failed',

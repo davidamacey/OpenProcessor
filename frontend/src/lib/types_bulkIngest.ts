@@ -9,6 +9,7 @@ import type { S3Location } from '$lib/types_ingestSources';
 export type BulkIngestStatus =
   | 'queued'
   | 'running'
+  | 'cancelling'
   | 'completed'
   | 'completed_with_errors'
   | 'failed'

@@ -135,6 +135,8 @@ export interface KeymapCloneConflict {
  *  clone_settings, and a real delete's 202) answers this envelope. */
 export interface ProjectLifecycleResponse {
   project: ProjectSummary;
+  /** The queued job doing the lifecycle work (delete is a 202), when there is one. */
+  job_id?: string | null;
   warnings?: ProjectWarning[];
   keymap_clone_conflicts?: KeymapCloneConflict[];
 }

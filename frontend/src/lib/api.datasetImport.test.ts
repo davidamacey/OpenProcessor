@@ -4,6 +4,9 @@
  * `ConfigErrorDetail` refusal surfaces its served `message`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/api_jobs', () => ({ getJob: vi.fn() }));
+import { getJob } from '$lib/api_jobs';
 import { API_PREFIX } from '$lib/api';
 import {
   cancelDatasetImport,
@@ -142,14 +145,34 @@ describe('W10 wrappers hit the scoped routes', () => {
     });
   });
 
-  it('upload sends one multipart `file` part', async () => {
-    const sent = capture({ upload_id: 'u', dataset_path: '/up/x', bytes: 3, files: 1 });
+  it('upload sends one multipart `file` part, then follows the extraction job to its result', async () => {
+    const sent = capture({ upload_id: 'u', job_id: 'j1', status: 'queued' });
+    vi.mocked(getJob).mockResolvedValue({
+      id: 'j1',
+      status: 'completed',
+      result: { upload_id: 'u', dataset_path: '/up/x', bytes: 3, files: 1 },
+    } as never);
     const file = new File(['abc'], 'set.zip');
-    await uploadDatasetArchive(file);
+    const res = await uploadDatasetArchive(file);
     const s = sent();
     expect(s.url).toBe(`${P}/datasets/uploads`);
     expect(s.method).toBe('POST');
     expect((s.body as FormData).get('file')).toBeInstanceOf(File);
+    expect(getJob).toHaveBeenCalledWith('j1', undefined);
+    expect(res.dataset_path).toBe('/up/x');
+  });
+
+  it('a failed extraction job rejects with the job’s own message', async () => {
+    capture({ upload_id: 'u', job_id: 'j1', status: 'queued' });
+    vi.mocked(getJob).mockResolvedValue({
+      id: 'j1',
+      status: 'failed',
+      result: null,
+      error_message: 'not an archive',
+    } as never);
+    await expect(uploadDatasetArchive(new File(['x'], 'a.zip'))).rejects.toThrow(
+      'not an archive',
+    );
   });
 
   it('a served next step runs its method against its path under the prefix', async () => {

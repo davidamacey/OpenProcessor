@@ -314,6 +314,7 @@ const CASES: [string, string[]][] = [
     'DatasetImportJob',
     keys({
       project: true,
+      job_id: true,
       import_id: true,
       import_key: true,
       name: true,
@@ -366,13 +367,12 @@ const CASES: [string, string[]][] = [
     } satisfies Record<keyof T.DatasetImportEntry, true>),
   ],
   [
-    'DatasetUploadResponse',
+    'DatasetUploadAccepted',
     keys({
       upload_id: true,
-      dataset_path: true,
-      bytes: true,
-      files: true,
-    } satisfies Record<keyof T.DatasetUploadResponse, true>),
+      job_id: true,
+      status: true,
+    } satisfies Record<keyof T.DatasetUploadAccepted, true>),
   ],
   // -- Reprocess --
   [

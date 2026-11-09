@@ -332,6 +332,8 @@ export interface ImportActions {
 
 export interface DatasetImportJob {
   project: string;
+  /** The queued job running this import (`GET /jobs/{job_id}`). */
+  job_id: string;
   import_id: string;
   import_key: string;
   name: string;
@@ -387,7 +389,16 @@ export interface DatasetImportEntry {
 
 export type DatasetImportEntryPage = Page<DatasetImportEntry>;
 
-export interface DatasetUploadResponse {
+/** `DatasetUploadAccepted`: the 202 of `POST /datasets/uploads` (the archive is
+ *  stored, its extraction queued). Follow `job_id`. */
+export interface DatasetUploadAccepted {
+  upload_id: string;
+  job_id: string;
+  status: 'queued';
+}
+
+/** What the finished extraction job's `result` carries: the extracted dataset. */
+export interface DatasetUploadResult {
   upload_id: string;
   dataset_path: string;
   bytes: number;

@@ -3,6 +3,8 @@
  * cancel, resume and undo (`/datasets/*`).
  */
 import { apiFetch, qs, scoped } from '$lib/api';
+import { followJob } from '$lib/jobs/followJob';
+import { JOB_DONE_STATUSES } from '$lib/types_jobs';
 import { structuredDetail } from '$lib/api_errors';
 import type {
   DatasetErrorDetail,
@@ -16,7 +18,8 @@ import type {
   DatasetPreviewRequest,
   DatasetUndoReport,
   DatasetUndoRequest,
-  DatasetUploadResponse,
+  DatasetUploadAccepted,
+  DatasetUploadResult,
 } from '$lib/types_import';
 
 // -- labeled-dataset import and Reprocess --------------------------------
@@ -31,19 +34,33 @@ export function getDatasetFormats(signal?: AbortSignal): Promise<DatasetFormatsR
 }
 
 /** `POST /datasets/uploads` — one multipart `file` (a .zip/.tar/.tar.gz),
- *  streamed server-side; the response's `dataset_path` is what the
- *  preview then reads. */
-export function uploadDatasetArchive(
+ *  streamed server-side and answered 202: the archive is extracted by a queued
+ *  job. */
+export function queueDatasetUpload(
   file: File,
   signal?: AbortSignal,
-): Promise<DatasetUploadResponse> {
+): Promise<DatasetUploadAccepted> {
   const fd = new FormData();
   fd.append('file', file, file.name);
-  return apiFetch<DatasetUploadResponse>(
+  return apiFetch<DatasetUploadAccepted>(
     `${scoped()}/datasets/uploads`,
     { method: 'POST', body: fd },
     signal,
   );
+}
+
+/** Upload an archive and follow its extraction job: resolves with the job's
+ *  result, whose `dataset_path` is what the preview then reads. */
+export async function uploadDatasetArchive(
+  file: File,
+  signal?: AbortSignal,
+): Promise<DatasetUploadResult> {
+  const accepted = await queueDatasetUpload(file, signal);
+  const job = await followJob(accepted.job_id, { signal });
+  if (!JOB_DONE_STATUSES.includes(job.status) || !job.result) {
+    throw new Error(job.error_message ?? `The upload ${job.status.replace('_', ' ')}.`);
+  }
+  return job.result as unknown as DatasetUploadResult;
 }
 
 /** Dry run: writes nothing. Dataset problems come back as `issues`,
