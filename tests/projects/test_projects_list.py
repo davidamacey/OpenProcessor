@@ -14,6 +14,7 @@ from src.config.curation_accessors import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
 from src.routers.curation import projects as projects_router
 from src.schemas.curation.config_common import ConfigErrorDetail
+from src.services.projects import stats as stats_module
 from src.services.projects.registry import ProjectRegistry
 
 
@@ -43,19 +44,23 @@ def _record(
     )
 
 
+def _unreachable() -> OpenSearchConnectionError:
+    return OpenSearchConnectionError('N/A', 'no fake cluster wired for this test', OSError('none'))
+
+
 class _FakeClient:
-    """No index data; ``_cat/indices`` and capacity calls degrade
-    gracefully (empty counts, capacity None) without needing a live
-    cluster."""
+    """An unreachable cluster: ``_count`` and capacity calls degrade gracefully
+    (unknown counts, capacity None) without needing a live cluster."""
 
     class _Transport:
         async def perform_request(self, method, url, params=None, **kwargs):  # noqa: ARG002
-            raise OpenSearchConnectionError(
-                'N/A', 'no fake cluster wired for this test', OSError('none')
-            )
+            raise _unreachable()
 
     def __init__(self) -> None:
         self.transport = self._Transport()
+
+    async def count(self, **_: object) -> dict[str, int]:
+        raise _unreachable()
 
 
 def _registry_with(*records: ProjectRecord) -> ProjectRegistry:
@@ -77,6 +82,13 @@ def _patch_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
         return _FakeClient()
 
     monkeypatch.setattr(projects_router, 'make_curation_opensearch', _fake_make_curation_opensearch)
+
+    # These records live only in the fake registry, not as database rows, so the primary
+    # embedding space cannot be resolved for them; the embedded count only needs its field name.
+    async def _item_vector_field() -> str:
+        return 'embedding'
+
+    monkeypatch.setattr(stats_module, 'item_vector_field', _item_vector_field)
 
 
 def test_list_membership_active_always_listed(monkeypatch: pytest.MonkeyPatch) -> None:
