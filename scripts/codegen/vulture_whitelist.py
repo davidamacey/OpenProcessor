@@ -211,6 +211,5 @@ _.__qualname__  # src/tasks/runtime/register.py, Celery names the task by it
 
 # Scheduled by 6A (every 15 min); remove this line when beat_schedule names it.
 _.vlm_batch_staging_sweep  # src/tasks/trigger.py, op.periodic.vlm_batch_staging_sweep
-_.link_model  # src/db/repos/training_runs.py, called by the promote job when it records the model (5D)
 _.registry_sha  # src/services/training/jobs.py, stored in training_runs.spec and read by the trainer
 _.tb  # src/utils/stage_timing.py, the __exit__ signature

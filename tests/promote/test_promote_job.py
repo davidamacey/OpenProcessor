@@ -8,10 +8,11 @@ the registered task through the job wrapper.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from types import SimpleNamespace
 
 import pytest
-from fixtures.job_rows import make_project, sql
+from fixtures.job_rows import insert_row, make_project, sql
 from promote.conftest import make_plan
 
 from src.core.exceptions import RequestRejectedError
@@ -136,7 +137,15 @@ async def test_the_registered_task_records_the_promotion_and_completes_the_job(
     pg, job_env, producer, wakes, worker_app, monkeypatch
 ) -> None:
     project = make_project(pg, 'cars')
-    plan, payload = make_plan('cars__task')
+    run_job = insert_row(pg, project, 'completed', kind='train')
+    sql(
+        pg,
+        'INSERT INTO training_runs (project_id, job_id, spec, class_names, family, base_model, '
+        "artifact_prefix) VALUES (%s, %s, '{}', '{}', 'yolo', 'base', 'p/')",
+        project,
+        run_job,
+    )
+    plan, payload = make_plan('cars__task', run=str(run_job))
     async with async_session_factory()() as session:
         started = await promote_job.start_promote(session, project, plan, payload, requested_by='t')
     job_id = started.job.id
@@ -178,13 +187,19 @@ async def test_the_registered_task_records_the_promotion_and_completes_the_job(
         "JOIN models m ON m.id = p.model_id WHERE p.triton_model_name = 'cars__task'",
         job_id,
     ) == [(['car', 'truck'], 1, True)]
+    assert sql(
+        pg,
+        'SELECT r.job_id = %s FROM models m JOIN training_runs r ON r.id = m.training_run_id '
+        "WHERE m.name = 'cars__task'",
+        run_job,
+    ) == [(True,)]
 
 
 async def test_a_failing_promote_fails_the_job_and_leaves_no_promotion(
     pg, job_env, producer, wakes, worker_app, monkeypatch
 ) -> None:
     project = make_project(pg, 'carsbad')
-    plan, payload = make_plan('cars__bad')
+    plan, payload = make_plan('cars__bad', run=str(uuid.uuid4()))
     async with async_session_factory()() as session:
         started = await promote_job.start_promote(session, project, plan, payload, requested_by='t')
     job_id = started.job.id

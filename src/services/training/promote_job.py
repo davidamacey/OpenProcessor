@@ -14,10 +14,11 @@ written from the rows, and withdraws them when a later step fails.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.db.repos import models as repo
+from src.db.repos import models as repo, training_runs as runs_repo
 from src.db.session import project_tx
 from src.schemas.train_promote import PromoteJobStatus, PromoteRequest, PromoteResponse
 from src.services.jobs import status as job_status
@@ -29,7 +30,6 @@ from src.services.training.promote_run import PromotePlan
 
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable, Mapping
     from contextlib import AbstractAsyncContextManager
 
@@ -214,6 +214,9 @@ class DbPromotionRecorder:
                 class_remap=remap_document(self._remap, self._run_job_id),
                 job_id=self._job_id,
                 promoted_by=self._requested_by,
+            )
+            await session.run_sync(
+                lambda sync: runs_repo.link_model(sync, model.id, uuid.UUID(self._run_job_id))
             )
         self._promotion_id = promotion.id
         return Recorded(labels=model.labels, class_remap=promotion.class_remap)
