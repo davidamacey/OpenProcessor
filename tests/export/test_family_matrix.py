@@ -161,6 +161,16 @@ def test_the_served_export_is_one_output_300_by_6(row: str, exports: Callable[[s
         assert 'TopK' in ops
 
 
+@pytest.mark.parametrize('row', ROWS)
+def test_the_export_records_the_batch_it_was_exported_for(
+    row: str, exports: Callable[[str], Path], ultralytics_export: ModuleType
+) -> None:
+    """The config writer's J7 guard reads this metadata key (``export/yolo_triton_config.py``)."""
+    from yolo_triton_config import onnx_batch
+
+    assert onnx_batch(exports(row)) == MAX_BATCH
+
+
 def _iou(a: np.ndarray, b: np.ndarray) -> float:
     ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
     iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))

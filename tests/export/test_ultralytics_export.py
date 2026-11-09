@@ -29,7 +29,9 @@ if str(EXPORT_DIR) not in sys.path:
 import ultralytics_export  # noqa: E402  # follows the sys.path setup
 
 
-def _fused_onnx(path: Path, dims: list[int | str], *, outputs: int = 1) -> Path:
+def _fused_onnx(
+    path: Path, dims: list[int | str], *, outputs: int = 1, batch: int | None = None
+) -> Path:
     outs = [
         helper.make_tensor_value_info(f'output{i}', TensorProto.FLOAT, dims) for i in range(outputs)
     ]
@@ -41,6 +43,8 @@ def _fused_onnx(path: Path, dims: list[int | str], *, outputs: int = 1) -> Path:
     )
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 17)])
     model.ir_version = 9
+    if batch is not None:  # what Ultralytics writes into the ONNX metadata on export
+        model.metadata_props.add(key='batch', value=str(batch))
     onnx.save(model, str(path))
     return path
 
@@ -48,8 +52,15 @@ def _fused_onnx(path: Path, dims: list[int | str], *, outputs: int = 1) -> Path:
 class FakeYolo:
     """What ``ultralytics.YOLO`` exposes to the export: ``export``, ``names`` and the head."""
 
-    def __init__(self, pt_file: Path, head_kind: str, dims: list[int | str] | None = None) -> None:
+    def __init__(
+        self,
+        pt_file: Path,
+        head_kind: str,
+        dims: list[int | str] | None = None,
+        recorded_batch: int | None = None,
+    ) -> None:
         self.pt_file = pt_file
+        self.recorded_batch = recorded_batch
         self.names = {0: 'car', 1: 'plate'}
         head = SimpleNamespace(one2one_cv2=[]) if head_kind == ONE2ONE else SimpleNamespace()
         self.model = SimpleNamespace(model=[SimpleNamespace(), head])
@@ -58,7 +69,8 @@ class FakeYolo:
 
     def export(self, **kwargs: Any) -> str:
         self.export_calls.append(kwargs)
-        return str(_fused_onnx(self.pt_file.with_suffix('.onnx'), self.dims))
+        batch = self.recorded_batch if self.recorded_batch is not None else kwargs['batch']
+        return str(_fused_onnx(self.pt_file.with_suffix('.onnx'), self.dims, batch=batch))
 
 
 @pytest.fixture
@@ -89,12 +101,19 @@ def _export(
     formats: list[str],
     dims: list[int | str] | None = None,
     max_batch: int = 8,
+    recorded_batch: int | None = None,
+    overwrite_config: bool = False,
 ) -> tuple[dict[str, Any], FakeYolo]:
     pt = repo.weights / 'car.pt'
     pt.write_bytes(b'x' * 10)
-    fake = FakeYolo(pt, head_kind, dims)
+    fake = FakeYolo(pt, head_kind, dims, recorded_batch)
     monkeypatch.setattr(ultralytics_export, 'load_model', lambda _path: fake)
-    config = {'pt_file': str(pt), 'triton_name': 'car', 'max_batch': max_batch}
+    config = {
+        'pt_file': str(pt),
+        'triton_name': 'car',
+        'max_batch': max_batch,
+        'overwrite_config': overwrite_config,
+    }
     return ultralytics_export.export_model('car', config, formats), fake
 
 
@@ -257,3 +276,72 @@ def test_a_differing_config_is_kept_unless_overwrite_is_asked(tmp_path: Path) ->
     )
     assert replaced == config
     assert 'max_batch_size: 32' in config.read_text()
+
+
+def test_an_onnx_exported_for_another_batch_than_the_engine_is_refused(
+    repo: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """J7: the NMS is unrolled for the export batch, so the config writer reads it from the ONNX
+    metadata and refuses an engine built for a different one."""
+    result, _ = _export(repo, monkeypatch, NMS, formats=['trt'], max_batch=8, recorded_batch=4)
+
+    assert result['status'] == 'error'
+    assert 'exported for batch 4' in result['error']
+    assert repo.built == []
+    assert not (repo.models / 'car_trt_end2end' / 'config.pbtxt').exists()
+
+
+def test_an_onnx_without_the_batch_metadata_is_refused(
+    repo: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from yolo_triton_config import BatchMismatchError, check_served_batch
+
+    path = _fused_onnx(repo.weights / 'plain.onnx', ['batch', 300, 6])
+
+    with pytest.raises(BatchMismatchError, match='does not record the batch'):
+        check_served_batch(path, repo.models / 'x', 8, overwrite=False)
+
+
+def _tracked_config(repo: SimpleNamespace, max_batch: int) -> Path:
+    path = repo.models / 'car_trt_end2end' / 'config.pbtxt'
+    path.parent.mkdir(parents=True)
+    path.write_text(f'name: "tuned"\nmax_batch_size: {max_batch}\n')
+    return path
+
+
+def test_a_kept_config_past_the_export_batch_is_refused_before_the_build(
+    repo: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Silent empty images past the export batch (U-C7): a kept tracked config larger than it."""
+    kept = _tracked_config(repo, 16)
+
+    result, _ = _export(repo, monkeypatch, NMS, formats=['trt'], max_batch=8)
+
+    assert result['status'] == 'error'
+    assert 'max_batch_size 16' in result['error']
+    assert repo.built == []
+    assert kept.read_text() == 'name: "tuned"\nmax_batch_size: 16\n'
+
+
+def test_overwrite_replaces_a_config_past_the_export_batch(
+    repo: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kept = _tracked_config(repo, 16)
+
+    result, _ = _export(repo, monkeypatch, NMS, formats=['trt'], max_batch=8, overwrite_config=True)
+
+    assert result['status'] == 'success', result
+    assert 'max_batch_size: 8' in kept.read_text()
+
+
+def test_a_profile_tuned_smaller_config_is_kept(
+    repo: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The standard GPU profile tunes the tracked config below the engine batch; that is safe."""
+    kept = _tracked_config(repo, 4)
+
+    result, _ = _export(repo, monkeypatch, NMS, formats=['trt'], max_batch=8)
+
+    assert result['status'] == 'success', result
+    assert kept.read_text() == 'name: "tuned"\nmax_batch_size: 4\n'
+    assert (repo.models / 'car_trt_end2end' / 'config.pbtxt.generated').is_file()

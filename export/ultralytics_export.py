@@ -39,7 +39,7 @@ from yolo_model_config import (
     parse_custom_model,
     save_labels_file,
 )
-from yolo_triton_config import save_fused_config
+from yolo_triton_config import check_served_batch, save_fused_config
 
 from src.domain.model_families import MAX_DET, ONNX_SUFFIX, engine_name, export_kwargs, head_kind_of
 
@@ -172,6 +172,8 @@ def export_model(model_id: str, config: dict[str, Any], formats: list[str]) -> d
             engine = engine_name(triton_name, kind)
             model_dir = MODELS_DIR / engine
             plan_path = model_dir / '1' / 'model.plan'
+            overwrite = config.get('overwrite_config', False)
+            check_served_batch(onnx_path, model_dir, max_batch, overwrite=overwrite)
             if not build_fused_engine(onnx_path, plan_path, max_batch):
                 return {**result, 'status': 'error', 'error': 'Failed to build the engine'}
             save_fused_config(
@@ -180,7 +182,7 @@ def export_model(model_id: str, config: dict[str, Any], formats: list[str]) -> d
                 max_batch,
                 output_name,
                 output_dims,
-                overwrite=config.get('overwrite_config', False),
+                overwrite=overwrite,
             )
             save_labels_file(class_names, model_dir)
             result['trt'] = str(plan_path)

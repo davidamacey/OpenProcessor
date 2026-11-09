@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from config_write import write_generated_config
@@ -14,6 +15,54 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+class BatchMismatchError(ValueError):
+    """The batch an ONNX was exported for and the batch Triton would send disagree."""
+
+
+def onnx_batch(onnx_path: Path) -> int:
+    """The ``batch`` Ultralytics recorded in the ONNX metadata when it exported the graph."""
+    import onnx
+
+    meta = {
+        p.key: p.value for p in onnx.load(str(onnx_path), load_external_data=False).metadata_props
+    }
+    try:
+        return int(meta['batch'])
+    except (KeyError, ValueError) as e:
+        raise BatchMismatchError(
+            f'{onnx_path} does not record the batch it was exported for: export it again'
+        ) from e
+
+
+def check_served_batch(
+    onnx_path: Path, model_dir: Path, max_batch: int, *, overwrite: bool
+) -> None:
+    """Refuse an engine whose Triton ``max_batch_size`` could exceed the batch it was exported for.
+
+    With NMS in the graph the export ``batch`` is a hard cap: images past it come back with no
+    detections and no error (``tests/export/test_family_matrix.py``). The writer's own config is
+    ``max_batch_size == batch``. A tracked config that is kept (``overwrite`` false) may be
+    smaller, because a GPU profile tunes it down (``scripts/lib/config.sh``), and is never larger.
+    """
+    exported = onnx_batch(onnx_path)
+    if exported != max_batch:
+        raise BatchMismatchError(
+            f'{onnx_path} was exported for batch {exported}, the engine is built for {max_batch}'
+        )
+    kept = model_dir / 'config.pbtxt'
+    if overwrite or not kept.is_file():
+        return
+    found = re.search(r'^max_batch_size:\s*(\d+)', kept.read_text(), re.MULTILINE)
+    served = int(found.group(1)) if found else None
+    if served is None or served > exported:
+        raise BatchMismatchError(
+            f'{kept} serves max_batch_size {served}, past the batch {exported} the ONNX was '
+            'exported for (images beyond it would come back empty): pass --overwrite-config'
+        )
+    if served < exported:
+        logger.warning(f'{kept} serves max_batch_size {served}, below the engine batch {exported}')
 
 
 def render_fused_config(
