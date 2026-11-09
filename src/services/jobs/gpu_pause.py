@@ -7,6 +7,7 @@ The document is written by the arbiter tick and by ``openprocessor vlm use``
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.db.models import DeploymentSetting
 from src.db.session import async_session_factory, deployment_tx
@@ -28,3 +29,15 @@ async def training_claim_reason() -> str | None:
     if not claims:
         return None
     return f'GPU claim active ({len(claims)} running job{"s" if len(claims) != 1 else ""})'
+
+
+async def vlm_paused() -> bool:
+    """Whether the VLM workers must idle (a GPU claim or a model swap).
+
+    A database that cannot be read counts as paused: a worker that cannot see the claim must not
+    race a run for the card, and it cannot read its projects either.
+    """
+    try:
+        return state.is_paused(await _document())
+    except SQLAlchemyError:
+        return True

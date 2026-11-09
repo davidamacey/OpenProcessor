@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 
 from src.services.projects.script_binding import add_project_argument
 
@@ -78,25 +77,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_CLASSIFIER_CONF_SKIP,
         help='Skip the VLM for classifier-labeled crops at or above this confidence.',
     )
-    # GPU arbiter sentinel (single-project mode): pauses while the
-    # trainer holds a single-GPU run. See src/services/training/gpu_arbiter.py.
-    p.add_argument(
-        '--pause-sentinel',
-        default=os.environ.get(
-            'OP_PAUSE_SENTINEL',
-            str(
-                Path(os.environ.get('OP_STATE_DIR', '/var/lib/openprocessor'))
-                / 'vlm_worker'
-                / 'pause.sentinel'
-            ),
-        ),
-        help='File whose presence pauses the worker (GPU arbiter writes it).',
-    )
     p.add_argument(
         '--pause-poll-interval',
         type=float,
         default=10.0,
-        help='Seconds to sleep between sentinel checks while paused.',
+        help='Seconds to sleep between GPU-claim checks while paused.',
     )
     add_project_argument(p)
     # Default: every active project; --project restricts to one.

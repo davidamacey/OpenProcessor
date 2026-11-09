@@ -468,6 +468,11 @@ async def test_vlm_worker_reads_and_labels_each_project_in_its_own_scope(
         return None
 
     monkeypatch.setattr(vlm_worker, 'heartbeat_loop', _no_heartbeat)
+
+    async def _not_paused() -> bool:
+        return False
+
+    monkeypatch.setattr(vlm_worker, 'vlm_paused', _not_paused)
     rejected_before = cross_project_access_count()
     args = vlm_cli.parse_args(
         ['--until-empty', '--vlm-batch-size', '4', '--concurrency', '2', '--poll-interval', '0']

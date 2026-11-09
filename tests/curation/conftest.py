@@ -238,6 +238,19 @@ def _no_active_bakeoff(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_gpu_claim_offline(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The detection worker asks the database whether a GPU claim pauses it; the offline tier has
+    none, so nothing is claimed (a ``db`` test reads the real document)."""
+    if request.node.get_closest_marker('db') is not None:
+        return
+
+    async def _free() -> bool:
+        return False
+
+    monkeypatch.setattr('scripts.curation.worker.state.vlm_paused', _free)
+
+
+@pytest.fixture(autouse=True)
 def _no_live_loop_hold_offline(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 ) -> None:

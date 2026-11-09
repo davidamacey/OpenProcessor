@@ -158,7 +158,6 @@ async def _drive_text_hint_rescue(
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--segmenter-url=http://seg.invalid:8000',
-            f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',
             '--batch-size=4',

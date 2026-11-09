@@ -98,6 +98,11 @@ RETIRED_ENV: dict[str, str] = {
     # A model export is a jobs row on the gpu_export queue, not a task file.
     'EXPORT_TASK_DIR': f'{_REMOVED} model-export tasks are job rows; read them at GET /models/export/{{task_id}}',
     'OP_BAKEOFF_JOBS_DIR': f'{_REMOVED} bake-offs are bakeoff jobs; there is no job directory',
+    # The pause sentinel file is gone: the VLM workers read deployment_settings
+    # ('vlm_paused_for_training'), which the GPU arbiter tick and `openprocessor vlm use` write.
+    'OP_PAUSE_SENTINEL': f'{_REMOVED} the VLM workers read the GPU claim from the database',
+    'OP_WORKER_PAUSE_SENTINEL': f'{_REMOVED} the detection worker reads the GPU claim from the database',
+    'OP_PAUSE_SENTINEL_TTL_S': f'{_REMOVED} a stale `vlm use` pause expires inside the database record',
     'OP_CROP_DUP_THRESHOLD': (
         f'{_REMOVED} the bucketed near-duplicate scorer is gone; near duplicates are run-scoped '
         'groups configured by a near_dup_profile'

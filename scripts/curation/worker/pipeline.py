@@ -20,7 +20,6 @@ from src.services.detection.region_candidates import select_region_candidates
 
 if TYPE_CHECKING:
     import argparse
-    from pathlib import Path
 
     from scripts.curation.worker.crop_gate import CropGate
     from scripts.curation.worker.fairness import FairnessScheduler
@@ -52,7 +51,6 @@ class PipelineContext:
     args: argparse.Namespace
     stop_event: asyncio.Event
     opensearch: Any
-    sentinel: Path
     started_at: float
     region_embed_pe: Any
     project_registry: Any

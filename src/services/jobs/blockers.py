@@ -2,7 +2,7 @@
 
 A project pause stops its jobs until the project resumes (``projects.paused_at``); a job paused
 because the VLM was taken for training waits until ``deployment_settings('vlm_paused_for_training')``
-is cleared and a VLM endpoint answers its latest probe (02b section 4, rule h).
+holds no claim and no model swap (:mod:`src.domain.gpu_arbiter_state`) and a VLM endpoint answers its latest probe (02b section 4, rule h).
 """
 
 from __future__ import annotations
@@ -10,6 +10,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import text
+
+from src.db.repos import gpu_arbiter as arbiter_repo
+from src.domain import gpu_arbiter_state as state
 
 
 if TYPE_CHECKING:
@@ -30,10 +33,7 @@ def project_is_paused(session: Session, project_id: object) -> bool:
 
 def vlm_available(session: Session) -> bool:
     """The VLM is free (not taken for training) and at least one endpoint's latest probe is ok."""
-    taken = session.execute(
-        text("SELECT value FROM deployment_settings WHERE key = 'vlm_paused_for_training'")
-    ).scalar_one_or_none()
-    if taken in (True, 'true', 1):
+    if state.is_paused(arbiter_repo.read_value(session)):
         return False
     latest_ok = session.execute(
         text(

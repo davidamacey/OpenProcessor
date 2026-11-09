@@ -9,14 +9,14 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config, get_region_fields
+from src.config import TERMINAL_STATUSES, RegionStatus, get_region_fields
 from src.config.curation_accessors import items_index  # noqa: F401 - re-exported for the worker package
 from src.core.logging import get_logger
 from src.services.curation.crop_bytes import CROP_JPEG_QUALITY, load_item_crop_jpeg
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.jobs.gpu_pause import vlm_paused
 
 
 if TYPE_CHECKING:
@@ -34,8 +34,6 @@ logger = get_logger('curation_worker')
 # worker and the API router (region_vocabulary.py) share one source of
 # truth without a scripts -> src layering violation.
 
-_config = get_curation_config()
-
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
 DEFAULT_TRITON = os.environ.get('TRITON_URL', 'triton-server:8001')
 DEFAULT_SEGMENTER_URL = os.environ.get('OP_SEGMENTER_URL', 'http://sam3:8000')
@@ -44,14 +42,6 @@ DEFAULT_SEGMENTER_URL = os.environ.get('OP_SEGMENTER_URL', 'http://sam3:8000')
 # the parallelism across GPUs adds up. OP_SEGMENTER_URL is the
 # single-URL fallback when OP_SEGMENTER_URLS is unset.
 DEFAULT_SEGMENTER_URLS = os.environ.get('OP_SEGMENTER_URLS', '').strip()
-DEFAULT_PAUSE_SENTINEL = Path(
-    os.environ.get(
-        'OP_WORKER_PAUSE_SENTINEL',
-        # Must match CurationConfig.pause_sentinel_path -- the
-        # gpu_arbiter writer resolves through the same property.
-        str(_config.pause_sentinel_path),
-    )
-)
 JPEG_QUALITY = CROP_JPEG_QUALITY
 
 
@@ -404,22 +394,22 @@ async def _class_group(class_name: str) -> str | None:
 
 
 # =============================================================================
-# Sentinel pause helper
+# GPU claim pause helper
 # =============================================================================
 
 
-async def _wait_for_sentinel_clear(sentinel: Path, *, sleep_s: float = 10.0) -> None:
-    """Block while ``sentinel`` exists. Re-checks every ``sleep_s`` seconds.
+async def _wait_while_gpu_claimed(*, sleep_s: float = 10.0) -> None:
+    """Block while a train, probe or bake-off job holds cards or a model swap is running.
 
-    The trainer arbiter writes this file during dual-GPU runs to free a
-    shared GPU for the trainer. We honor it here because the secondary
-    segmenter and the VLM sit on GPUs the trainer needs.
+    The arbiter tick records the claim in ``deployment_settings('vlm_paused_for_training')``;
+    the secondary segmenter and the VLM sit on GPUs the run needs, so the worker idles until it
+    clears. Re-checks every ``sleep_s`` seconds.
     """
     first = True
-    while sentinel.exists():
+    while await vlm_paused():
         if first:
-            logger.info('sentinel_present_pausing', path=str(sentinel))
+            logger.info('gpu_claim_present_pausing')
             first = False
         await asyncio.sleep(sleep_s)
     if not first:
-        logger.info('sentinel_cleared_resuming', path=str(sentinel))
+        logger.info('gpu_claim_cleared_resuming')

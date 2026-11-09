@@ -131,6 +131,7 @@ class _Env:
         m.setattr(vlm_worker, 'heartbeat_loop', self._heartbeat)
         m.setattr(vlm_worker, 'project_has_item_classes', self._has_classes)
         m.setattr(vlm_worker, 'bind_project', lambda _r: __import__('contextlib').nullcontext())
+        m.setattr(vlm_worker, 'vlm_paused', self._vlm_paused)
         real_sleep = asyncio.sleep
 
         async def _sleep(seconds: float) -> None:
@@ -169,13 +170,16 @@ class _Env:
     async def _heartbeat(self, _name: str, _status: Any, _stop: Any, stall_fn: Any = None) -> None:
         self.stall_fn = stall_fn
 
+    async def _vlm_paused(self) -> bool:
+        return False
+
 
 def _args() -> Any:
     return vlm_cli.parse_args(
         [
             '--api', 'http://api.test', '--opensearch', 'http://os.test',
             '--vlm-batch-size', '2', '--concurrency', '1', '--poll-interval', '0.5',
-            '--pause-sentinel', '', '--idle-stop-after', '6',
+            '--idle-stop-after', '6',
         ]
     )  # fmt: skip
 

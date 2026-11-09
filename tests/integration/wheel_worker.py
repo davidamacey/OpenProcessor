@@ -131,13 +131,15 @@ async def run_region_worker(
     )
     monkeypatch.setattr(runner_mod, 'build_vlm_labeler', MagicMock(return_value=labeler))
     monkeypatch.setattr('scripts.curation.worker.state._class_group', _no_class_group)
+    monkeypatch.setattr(
+        'scripts.curation.worker.state.vlm_paused', AsyncMock(return_value=False)
+    )  # no database here
 
     args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--segmenter-url=http://seg.invalid:8000',
-            f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',
             '--batch-size=4',
