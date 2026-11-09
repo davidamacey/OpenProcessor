@@ -1,8 +1,8 @@
 # System Architecture
 
 How OpenProcessor is built: the services, the inference path, the curation
-data model (projects, items, region boxes, the config store) and the runtime
-topology. For the user-facing guide see [CURATION.md](CURATION.md); for the
+data model (projects, items, region boxes, the config store, embedding spaces,
+cluster partitions, near-duplicate groups) and the runtime topology. For the user-facing guide see [CURATION.md](CURATION.md); for the
 wire contract see [design/curation_api_contract.md](design/curation_api_contract.md).
 
 ---
@@ -19,13 +19,18 @@ wire contract see [design/curation_api_contract.md](design/curation_api_contract
 8. [Config store](#config-store)
 9. [VLM endpoints](#vlm-endpoints)
 10. [Datasets, reprocess and combine](#datasets-reprocess-and-combine)
-11. [Workers, jobs and events](#workers-jobs-and-events)
-12. [Concurrency and the lock rule](#concurrency-and-the-lock-rule)
-13. [Export, training and promotion](#export-training-and-promotion)
-14. [Contracts](#contracts)
-15. [Security boundary](#security-boundary)
-16. [Per-process state](#per-process-state)
-17. [Scaling notes](#scaling-notes)
+11. [Embedding spaces](#embedding-spaces)
+12. [Cluster partitions](#cluster-partitions)
+13. [Near-duplicates](#near-duplicates)
+14. [The auto-label loop record](#the-auto-label-loop-record)
+15. [Serving profile and the Triton router](#serving-profile-and-the-triton-router)
+16. [Workers, jobs and events](#workers-jobs-and-events)
+17. [Concurrency and the lock rule](#concurrency-and-the-lock-rule)
+18. [Export, training and promotion](#export-training-and-promotion)
+19. [Contracts](#contracts)
+20. [Security boundary](#security-boundary)
+21. [Per-process state](#per-process-state)
+22. [Scaling notes](#scaling-notes)
 
 ---
 
@@ -36,22 +41,28 @@ wire contract see [design/curation_api_contract.md](design/curation_api_contract
         |
         v  :4603
   +-----------+  gRPC   +----------------+
-  | api  |-------->| triton-server  |  TensorRT engines (GPU)
+  |   api     |-------->| triton-server  |  TensorRT engines (GPU)
   | (FastAPI) |         +----------------+
   |           |  HTTP   +----------------+
-  |           |-------->| opensearch     |  k-NN + curation datastore
+  |           |-------->| opensearch     |  k-NN: items, images, vectors
+  |           |  SQL    +----------------+
+  |           |-------->| postgres       |  projects, classes, configs, jobs,
+  |           |  Valkey |                |  events, spaces, partitions
+  |           |-------->| valkey         |  task broker, event wake-ups
   +-----------+         +----------------+
-        ^   files (/jobs, state volume)
-        |
+        ^                      |  tasks (Celery)
+        |                      v
   +---------------------------------------------+
-  | curation workers (profile `curation`)       |
-  |  detection, VLM, auto-label, cluster refresh|
-  |  evaluator                                  |
+  | jobs-worker, periodic-worker, jobs-beat,    |
+  | open-vocab-worker (always); profile         |
+  | `curation`: cluster, auto-label, assist     |
+  | loop, detection and VLM stream workers;     |
+  | GPU queues: trainer, evaluator, export      |
   +---------------------------------------------+
-        |  HTTP                      |  HTTP / files
+        |  HTTP                      |  HTTP
         v                            v
   segmenter (profile `segmenter`)   vlm (profile `vlm`) or any remote
-  trainer + MLflow (profile `training`)  OpenAI-compatible endpoint
+  MLflow (profile `training`)       OpenAI-compatible endpoint
 ```
 
 Two surfaces share one process:
@@ -77,33 +88,39 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | Serves the TensorRT models. Explicit model control; loads the list in the compose command; a missing engine leaves that model unloaded instead of killing the server |
-| `api` | none | 4603 | FastAPI, uvicorn with 32 worker processes, each recycled after about 10,000 requests (limit 10,000 with 1,000 jitter) |
-| `opensearch` | none | 4607 | k-NN indexes and every curation document |
-| `curation-detection-worker` | `curation` | | Region cascade over pending items, every active project in turn |
-| `curation-vlm-worker` | `curation` | | VLM class and verification loop |
-| `curation-auto-label-worker` | `curation` | | Drives the auto-label job protocol |
-| `curation-assist-loop-worker` | `curation` | | Runs auto-label loops (cluster-sampled VLM labeling), one per project |
-| `curation-cluster-refresh` | `curation` | | Schedules the residual-clustering retrain as an auto-label job, when ingest is quiet |
+| `api` | none | 4603 | FastAPI, uvicorn with `API_WORKERS` worker processes (the installer writes `min(nproc, 32)`), each recycled after about 10,000 requests (limit 10,000 with 1,000 jitter) |
+| `opensearch` | none | 4607 | k-NN indexes for items, images and vectors; the control data is not here |
+| `postgres` | none | | PostgreSQL 18: projects, classes, config documents, settings, jobs, events, embedding spaces, cluster partitions, near-duplicate groups, the auto-label loop record. Row-level security scopes every project query. Internal only |
+| `valkey` | none | | Valkey 9: the Celery broker and the event wake-ups. Internal only, password required |
+| `db-migrate` | none | | One-shot: Alembic upgrade and OpenSearch index migration; the API and every worker wait for it and refuse to start at another schema revision |
+| `jobs-worker`, `periodic-worker`, `open-vocab-worker` | none | | Celery workers for the `jobs` (default concurrency 4), `periodic` and `open_vocab` queues |
+| `jobs-beat` | none | | The beat scheduler, one replica (`src/tasks/beat_schedule.py`: reaper, ingest dispatch, open-vocabulary sweep, serving inventory, near-duplicate rescore, cluster refresh and the rest) |
+| `cluster-worker` | `curation` | | Celery worker for the `cluster` queue (clustering runs, one task per child process) |
+| `curation-detection-worker`, `curation-vlm-worker` | `curation` | | Stream workers: the region cascade over pending items and the VLM class and verification loop. Replicas share projects through claims in PostgreSQL |
+| `curation-auto-label-worker`, `curation-assist-loop-worker` | `curation` | | Celery workers for the `autolabel` and `assist_loop` queues |
 | `model-export` | `setup` | | One-shot engine-build toolchain (TensorRT, ModelOpt, the export scripts and the model-repo seed): the `export` target of the root `Dockerfile`, which shares its runtime layers with `api`. `models install`, `export` and the `make` export targets run it |
-| `model-export-worker` | `export` | | The same image as a long-running worker for `POST /models/upload` and `POST /models/{model_name}/export`: the API queues a job file, the worker builds the engine and loads it into Triton (503 from the routes while it is down) |
-| `curation-evaluator` | `evaluator` | | Runs bake-off job specs |
+| `model-export-worker` | `export` | | The same image as a long-running Celery worker (queue `gpu_export`) for `POST /models/upload` and `POST /models/{model_name}/export`: the API queues a job, the worker builds the engine and loads it into Triton (503 from the routes while it is down) |
+| `curation-evaluator` | `evaluator` | | Runs bake-off jobs (queue `gpu_eval`) |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt, `docker/segmenter/` |
-| `curation-trainer` | `training` | | Runs training jobs from `job.json` files, `docker/trainer/` |
+| `curation-trainer` | `training` | | Runs training jobs (queue `gpu_train`), `docker/trainer/` |
 | `curation-mlflow` | `training` | 4609 | Experiment tracking, optional |
 | `vlm` | `vlm` | 4612 | Local vLLM serving one catalog model |
 | `cropwright` | `cropwright` | 5184 (`OP_CROPWRIGHT_PORT`) | The Cropwright web UI (nginx serving `frontend/`); proxies the API, and with `OP_GATEWAY_SUBPATHS=true` the monitoring UIs, so that one port is the only one published beyond loopback |
-| Prometheus, Grafana, Loki, Alloy, DCGM exporter, node exporter, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4608 | Opt in only |
+| Prometheus, Grafana, Loki, Alloy, DCGM exporter, node exporter, Valkey exporter, Flower, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4613 (Flower), 4608 | Opt in only |
 | `triton-sdk` | `benchmark` | | Benchmark client |
 
-Named volumes: `openprocessor-state` (state dir, job files, events),
-`openprocessor-jobs` (training and auto-label jobs), `openprocessor-crop-cache`.
-Per-project class registries, exports and bake-off data live under
-`./data/projects/<slug>/`.
+Named volumes: the PostgreSQL data volume, `openprocessor-state` (uploads and
+other state files), `openprocessor-jobs` (training and export working
+directories), `openprocessor-crop-cache`. Per-project exports and bake-off data
+live under `./data/projects/<slug>/`. Container names are
+`<project>-<service>-<n>`; no service sets `container_name`.
 
-`docker-compose.gpu-arbiter.yml` is an opt-in overlay that mounts the Docker
-socket into `api` so the GPU arbiter can stop and restart sibling
-containers around a training run. It gives that container control of the Docker
-host; read its header before using it.
+`docker-compose.gpu-arbiter.yml` is an opt-in overlay that adds the one-process
+`gpu-arbiter-worker`, the only service that mounts the Docker socket, so the
+GPU arbiter can stop and restart sibling containers around a training run. It
+gives that container control of the Docker host and is single-host; read its
+header before using it. `docker-compose.pgbouncer.yml` is an opt-in PgBouncer
+in front of PostgreSQL.
 
 ---
 
@@ -154,20 +171,23 @@ design rationale is in
 | Config | `src/config/` | Curation config, region fields, detection profile, project records and context, retired-env guard |
 | Projects | `src/services/projects/` | Registry, lifecycle, the OpenSearch guard, clone, combine, capacity |
 | Config store | `src/services/config_store/` | Prompt packs, region profiles, activations, VLM endpoint registry |
-| OpenSearch client | `src/clients/curation_opensearch/` | Index bodies, class registry, item helpers |
+| Control plane | `src/db/`, `src/tasks/` | SQLAlchemy models and Alembic revisions, repositories, `project_tx`, the Celery app, task modules, the beat schedule |
+| OpenSearch client | `src/clients/curation_opensearch/` | Index bodies, mapping migrations, item helpers |
 | OCC | `src/clients/occ.py`, `occ_locks.py` | Optimistic-concurrency writes, the lock rule |
 | Ingest and import | `src/services/curation/ingest*.py`, `dataset_import/` | Item creation, duplicate detection, labeled-dataset import |
 | Regions | `src/services/curation/region_*.py`, `src/services/detection/` | Box list, edits, verification, text, embeddings, detector and segmenter cascade |
-| Clustering | `src/services/curation/clustering/` | IVF k-means (FAISS) and AHC item clustering, per-box clustering (sklearn `MiniBatchKMeans`), auto-promote |
+| Clustering | `src/services/clustering/`, `src/domain/clustering_vocab.py` | Partition runs (IVF k-means with FAISS, `MiniBatchKMeans` for boxes), the assigner, calibration, the served projection onto items |
+| Embedding spaces | `src/services/embedding_spaces/`, `src/domain/embedding_spaces.py` | The registry of model versions and spaces, builds, reindex runs, promotion |
+| Near-duplicates | `src/services/near_duplicates/`, `src/domain/near_dup.py` | Edges, grouping, decisions, the holdout gate |
 | Scoring, selection, search | `src/services/curation/item_scores/`, `selection/`, `semantic_search.py` | Mistakenness and uniqueness, diverse sampling, PE-Core text-to-image search |
 | Review | `src/services/curation/review_*.py`, `holdout.py` | Queue queries, sorts, the frozen test set |
 | VLM | `src/services/labeling/` | Transport, endpoints and probes, prompts, class and region labelers |
 | Reprocess | `src/services/curation/reprocess*.py` | One selection and lock rule behind every re-run |
-| Assist runs | `src/services/curation/assist/` | Scope, seeded sampling, the VLM call and the `assist` slot of an item; one file-backed run per project |
-| Auto-label loops | `src/services/curation/assist_loop/` | Pinned partition, exact sample gate, propagate or split, budgets, audit and rollback; one file-backed loop per project, run by `curation-assist-loop-worker` |
+| Assist runs | `src/services/curation/assist/` | Scope, seeded sampling, the VLM call and the `assist` slot of an item; a run is a job |
+| Auto-label loops | `src/services/curation/assist_loop/`, `src/db/repos/assist_loop*.py` | Pinned partition, exact sample gate, propagate or split, budgets, audit and rollback; the record is in PostgreSQL, run by `curation-assist-loop-worker` |
 | Export and training | `src/services/curation/export*.py`, `src/services/training/` | YOLO export, job lifecycle, preflight, promotion |
 | Routers | `src/routers/curation/` (including `images.py`, `umap.py`, `train/`) | HTTP surface |
-| Workers | `scripts/curation/` | Detection, VLM, auto-label, auto-label loop, cluster refresh, evaluator |
+| Workers | `src/tasks/`, `scripts/curation/` | Celery task modules for each job family; stream workers for detection and VLM; evaluator |
 
 The wire uses one vocabulary (`region_*`, `vlm_*`, ...) that does not change
 with storage names; one serializer, `src/services/curation/wire.py`, maps
@@ -181,11 +201,10 @@ A project is a named, isolated dataset workspace. The project records are rows i
 
 | Resource | Where |
 |---|---|
-| Indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`, default prefix `op_prj_`, roles `images` and `items` (plus `leases`, the transitional job-lease index) |
-| Settings and UMAP view state | folded into the project's `configs` index, by fixed document id |
-| Class registry, exports, bake-off eval sets | `OP_PROJECTS_DATA_ROOT/<slug>/` (default `./data/projects/<slug>/`) |
-| Uploads, bake-off jobs, pause flag | `OP_STATE_DIR/projects/<slug>/` |
-| Training and auto-label jobs | `projects/<slug>/` under the job roots |
+| Control data | PostgreSQL rows carrying the project id (classes, config documents and activations, settings, keymap, jobs, events, embedding spaces, cluster partitions, near-duplicate groups, loop records); row-level security limits a transaction to its project (`project_tx`) |
+| Indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}`, default prefix `op_prj_`, roles `images` and `items` |
+| Exports, bake-off eval sets | `OP_PROJECTS_DATA_ROOT/<slug>/` (default `./data/projects/<slug>/`) |
+| Uploads | `OP_STATE_DIR/projects/<slug>/` |
 | MLflow experiment | `openprocessor-<slug>` |
 | Promoted Triton models | prefixed `<slug>__` (the `default` project has no prefix) |
 
@@ -197,12 +216,11 @@ starting with a letter. `combine`, `new`, `all`, `none`, `projects`, `global`,
 `settings`, `vlm` and `health` are reserved, and a deleted slug cannot be reused
 (`slug_retired`).
 
-**Lifecycle.** Statuses: `building`, `active`, `archived`, `deleting`,
-`deleted`, `failed`.
+**Lifecycle.** Statuses: `building`, `active`, `archived`, `deleting`, `failed`.
 
 | Action | Route | Notes |
 |---|---|---|
-| Create | `POST /curation/projects` | Optional `clone_settings_from` and `clone_axes` copy settings in one step |
+| Create | `POST /curation/projects` | Answers 202 with the project in status `building` and the `project_create` job in `job_id`; the directories, indexes and settings clone (optional `clone_settings_from` and `clone_axes`) run in that job, which ends the project `active` (or `failed`). A repeat with the same `Idempotency-Key` answers 200 with the first job; `GET /curation/jobs/{job_id}` reads a job by id |
 | Rename, describe | `PATCH /curation/projects/{project}` | Needs `expected_revision`; the slug is immutable |
 | Archive, unarchive | `POST /curation/projects/{project}/archive`, `POST /curation/projects/{project}/unarchive` | An archived project refuses writes (`project_archived`); workers skip it |
 | Copy settings | `POST /curation/projects/{project}/clone_settings` | Axes: `settings_defaults`, `classes`, `activations`, `keymap`, `prompt_packs`, `vlm_activation` |
@@ -231,30 +249,44 @@ cancelled and resumed. Undoing a combine is deleting the target project.
 
 ## Data model
 
-| Index role | Holds | Key fields |
+Two stores, split by what they hold. **PostgreSQL** holds the control data: what
+exists and how it is configured. **OpenSearch** holds the bulk data: images,
+items, boxes and their vectors. A row in one store names the other's documents
+by id only.
+
+| PostgreSQL (`src/db/models/`) | Holds |
+|---|---|
+| `projects`, `project_slugs`, `project_indexes`, `class_registries`, `project_classes`, `project_settings`, `project_keymaps`, `project_state` | Project records and retired slugs, the class registry (classes, names, hotkeys, the next class id), shared defaults, keymaps, the pause flag |
+| `config_documents`, `config_revisions`, `config_activations` | Prompt packs, region and ingest profiles, VLM endpoints, serving, cluster, near-duplicate and loop-preset documents |
+| `jobs`, `job_attempts`, `job_items`, `events`, `stream_worker_claims` | Every job, its attempts and items, the event stream, the stream workers' project claims |
+| `embedding_model_versions`, `embedding_spaces`, `embedding_reindex_runs` | The embedding registry |
+| `cluster_partitions`, `cluster_identities`, `cluster_memberships`, `cluster_activations` | Cluster partitions and their stable identities |
+| `image_contents`, `near_dup_*` | The exact-duplicate key and near-duplicate runs, groups, edges and decisions |
+| `assist_loop_*`, `vlm_usage_hourly` | The auto-label loop record and VLM usage |
+| `privacy_purges` | Counts-only record of every purge of stored faces or text |
+| `models`, `model_shares`, `training_runs`, `bakeoff_runs`, `serving_reports` | Promoted models, sharing, training and bake-off runs, which Triton server holds which model |
+
+| OpenSearch index role | Holds | Key fields |
 |---|---|---|
-| `images` | One document per ingested source image | `image_id`, `image_path`, `imohash`, `phash`, `embedding` (512-d), `pe_embedding` (1024-d) |
+| `images` | One document per ingested source image | `image_id`, `image_path`, `imohash`, `phash`, `capture`, `embedding` (512-d), `pe_embedding` (1024-d) |
 | `items` | One document per crop (item) | see below |
-| `labels_confirmed` | Mapping kept, nothing writes it in this release | `label_id`, `crop_id`, `class_id`, `class_name`, `confirmed_at` |
-| `classes` | The class registry mirror (the registry itself is one document, below) | `class_id`, `class_name`, `group`, `deprecated`, `sample_count`, `validated_count` |
-| `umap_state` | Fitted reducer cache for clustering | `state_id`, `reducer_b64` |
-| `configs` | Config store plus folded settings and projection state | `doc_type`, `kind`, `name`, `revision`, `body` |
 
 **Items** carry the class (`class_id`, `class_name`, `class_source`,
-`class_validated`), the crop `bbox_norm` in the source frame, cluster placement
-(`cluster_id`, `cluster_subid`, distances), quality and score fields, VLM
+`class_validated`), the crop `bbox_norm` in the source frame, the served
+cluster (`cluster_partition_id`, `cluster_uid`, `cluster_state`, `cluster_score`,
+`cluster_margin`), the near-duplicate projection (`near_dup_group_id`,
+`near_dup_is_representative`, ...), quality and score fields, VLM
 provenance (`vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`), import and combine
 provenance, and the region fields described next. The exact wire keys are in
 [`contracts/json/item_wire.json`](../contracts/json/item_wire.json).
 
-**The class registry is one OpenSearch document per project** (id `class_registry` in
-the settings index), written with optimistic concurrency: every change is one versioned
-read-modify-write that re-reads and re-applies on a conflict, so two users, an import, a
-combine and the open-vocabulary pass can add classes at once without losing one or giving
-two classes one id. `ensure_class` is idempotent by name for the automated writers. A 0.6.0
-`class_registry.json` is loaded into the database by the one-step control-data upgrade
-(`scripts/db/upgrade_from_060.py`, run by `openprocessor upgrade`). The file is now only an
-export snapshot and the training pin.
+**The class registry is a PostgreSQL table per project**, written with optimistic
+concurrency: every change re-reads and re-applies on a conflict, so two users, an
+import, a combine and the open-vocabulary pass can add classes at once without
+losing one or giving two classes one id. `ensure_class` is idempotent by name for
+the automated writers. A 0.6.0 `class_registry.json` is loaded into the database
+by the one-step control-data upgrade (`scripts/db/upgrade_from_060.py`, run by
+`openprocessor upgrade`); the file is only an export snapshot and the training pin.
 See [opensearch_schema_design.md](opensearch_schema_design.md#the-class-registry).
 
 **Class identity is the name.** The class registry assigns indexes, but every boundary maps by
@@ -263,6 +295,13 @@ trained model with another project. An index is only a position inside one
 registry at one moment. The ingest secondary detector, and the primary when
 `OP_INGEST_PRIMARY_ASSIGNS_CLASS` is set, resolve the registry class named like the model's
 output, never the output index.
+
+**Schema revisions.** One Alembic head (`src/db/migrations/versions/`):
+`0001_control_plane`, `0002_research_seams`, `0003_near_duplicates`,
+`0004_privacy_purges` (the `privacy_purges` table, whose CHECK keeps it to counts)
+and `0006_model_sharing_revision` (a monotonic `sharing_revision` on `models`).
+`db-migrate` applies them; the API and workers refuse to start at another revision.
+Revision `0005_region_text` is planned for the plate-text work and not on this branch.
 
 The global indexes (`visual_search_global`, `_vehicles`, `_people`, `_faces`,
 `_ocr`) belong to the inference API and are described in
@@ -434,16 +473,164 @@ time. Single-target forms:
 
 ---
 
+## Embedding spaces
+
+An encoder build is a **model version** (`embedding_model_versions`: model key, version,
+modalities, native dimension, distance, precision, the Triton models that serve it, the engine
+parity against the reference, licence). One vector field in one project index, written by one
+model version for one target at one dimension, is a **space** (`embedding_spaces`). The registry
+stores the physical field names (`vector_field`, `state_field`, and for a box the `nested_path`);
+every reader takes them from a resolved space and never computes them (`src/domain/embedding_spaces.py`).
+A project's existing PE-Core layout is its default space under the 0.6.0 names (`pe_embedding`,
+`embedding_state`, `region_box_embeddings`), so nothing moves on upgrade.
+
+- **Targets and roles.** A space targets `item`, `box`, `frame` or `item_text`. Per target one
+  space is `primary` (always `ready`; search and clustering read it), others are `optional` or
+  `candidate`, at most three live per target. The index role is `images` or `items`.
+- **Lifecycle.** `POST /curation/projects/{project}/embedding/spaces` registers a space
+  (202), `.../spaces/{space_key}/build` fills it with a reindex run (202; a PIT scan,
+  an encoder pass, an OCC write guarded by box geometry, cancellable at
+  `.../embedding/reindex-runs/{run_id}/cancel`), `.../promote` flips it to primary and
+  `.../retire` removes it (202). The flip is one transaction fenced on the space `revision`,
+  and bumps the project's config epoch so every worker re-resolves its spaces. A promote starts
+  a fresh cluster run and a near-duplicate score on the new primary. Capacity (shards, disk) is
+  checked before a build and refused with `embedding_insufficient_storage`.
+- **Search and reads** take a `space` parameter; an item reports `embedding_states` per space.
+  A space that is not `ready` answers `embedding_space_not_ready`.
+
+---
+
+## Cluster partitions
+
+A clustering run does not overwrite cluster ids. It writes a **partition**: one versioned,
+immutable result (`cluster_partitions`) for a target (`item`, `region_box`, `face`, `image`) and
+a level (`class`, `identity`, `scene`), made by a method (IVF k-means, mini-batch k-means,
+union-find, detector class, or a human `edit`) on a named embedding field, with its parameters,
+seed, input digest, backend (`cpu` or `gpu`), counts and stage durations. Memberships
+(`cluster_memberships`) carry a state per member: `assigned`, `review` or `unassigned`, with a
+score and a margin from the calibration (`cluster_calibrations`) of that partition.
+
+- **Stable identity.** A cluster has a `cluster_uid` (`cluster_identities`) that survives re-runs:
+  a new run matches its clusters to the parent partition's by member overlap (Hungarian
+  assignment on Jaccard) and a matched cluster keeps its uid, with a transition recorded
+  (`new`, `survived`, `split`, `merged`, `absorbed`). A cluster a person named or anchored is
+  pinned: its members stay, and a run that had to override pins is kept out of auto-activation.
+- **The assigner.** New items are placed incrementally at the serving partition's nearest
+  prototype with the calibrated bands (`cluster_assigned_by: incremental`); a periodic refresh
+  (`op.periodic.cluster_refresh`) starts a full run when enough has changed. A running
+  auto-label loop holds the refresh.
+- **Activation.** A finished partition is pending; `PUT /curation/projects/{project}/clusters/activation`
+  (202) moves it to serving in one OCC transaction (409 `partition_conflict` if the caller did not
+  see the current serving partition) and a fenced projection writes the served assignment onto
+  items and boxes (`cluster_partition_id`, `cluster_uid`, `cluster_state`, `cluster_score`,
+  `cluster_margin`, `cluster_assigned_by`). `GET .../clusters`, `.../clusters/{cluster_uid}/facets`,
+  `.../clusters/partitions` and `.../clusters/partitions/{partition_id}` read it.
+  `POST .../clusters/runs` starts a run; profiles are `cluster_profiles` documents.
+- The 0.6.0 sub-cluster refine, per-item `cluster_id`/`cluster_subid` and label-purity fields are gone.
+
+---
+
+## Near-duplicates
+
+Exact and near duplicates are two levels of one service. **Exact**: ingest keys an image on its
+sampled `imohash` and confirms by SHA-256 only when a hash is already stored (`image_contents`),
+so the same bytes are one image. **Near**: a run (`near_dup_runs`, mode `full` or `incremental`,
+level `image` or `item` per project, plus `core` for the global index) finds candidate edges
+between vectors by k-NN above a cosine cut, groups them (connected components over the edges,
+human decisions applied first, a group over the size guard split by complete linkage), picks the
+most central member as the representative and carries group identity from the parent run.
+Groups, members, edges and decisions are rows (`near_dup_groups`, `near_dup_members`,
+`near_dup_edges`, `near_dup_decisions`); items carry a projection (`near_dup_group_id`,
+`near_dup_leak_group_id`, `near_dup_is_representative`, `near_dup_group_size`, `near_dup_run_id`).
+
+- **Pending rows.** Every ingest, vector change, box change or delete writes a `near_dup_pending`
+  row; `op.periodic.near_dup_rescore` (30 s) drains them into incremental runs, and a weekly full
+  build re-derives everything. Core ingest writes pending rows too; the request no longer groups.
+- **Decisions.** `POST /curation/projects/{project}/near_duplicates/decisions` records `same` or
+  `different` for a pair; a decision survives re-runs.
+- **Holdout rule.** Training leakage is the reason near-duplicates exist. Before a test holdout is
+  frozen nothing is refused. The first freeze needs a current item-level run; a freeze also holds
+  out every member of a current item-level `leak` group that holds a selected item
+  (`holdout_near_dup_moves`, counted as `moved_by_near_dup`); after a freeze, a re-freeze and an export refuse with `409 near_dup_stale`
+  while the groups are stale. An export can collapse each group to its representative
+  (`collapse_near_duplicates`).
+- **Profiles** (`near_dup_profiles`) set the cuts, `k` and the group-size guard for the image and item levels.
+
+---
+
+## The auto-label loop record
+
+The cluster-sampled auto-label loop keeps its whole record in PostgreSQL (`assist_loop_runs`,
+`_iterations`, `_nodes`, `_selections`, `_proposals`, `_reviews`, `_budgets`,
+`_budget_ledger`) instead of a state file, and runs as a job on the `assist_loop` queue.
+
+- **Budgets** are reserved before every upstream call and settled from the endpoint's `usage`:
+  images (crops), requests, completion tokens as the call's exact `max_tokens`, prompt tokens as an
+  estimate. A call that reports no usage is charged what it reserved (fail closed). Wall time is
+  charged per time slice, and the job re-enqueues itself between slices, so a loop is
+  pausable between slices. `PATCH .../assist/loops/{loop_id}/budget` edits a live budget.
+- **Control** is a pure function of the job state (`src/domain/assist_loop_control.py`): the wire
+  carries `can_pause`, `can_resume`, `can_cancel`, `can_edit_budget`, `can_rollback` and the
+  blocker of a resume (`project_paused` or `vlm_unavailable`); the client renders it. Pause,
+  resume, cancel and rollback are `POST .../assist/loops/{loop_id}/pause|resume|cancel|rollback`.
+- Presets are `assist_loop_presets` documents. Hourly VLM usage per endpoint is `vlm_usage_hourly`.
+
+---
+
+## Serving profile and the Triton router
+
+Triton can run as one server or several. The deployment-wide **serving profile** (a
+revisioned config document, `/curation/serving_profiles`: list, get, put, delete,
+activate) names the servers (one per card: `name`, `grpc_url`, `metrics_url`, the card UUIDs),
+the models each keeps resident (`load_list`), the instances per model, the GPU image-prep
+settings and the interactive and bulk priorities. With no profile active the router is the single default server
+(`OP_TRITON_URL`), exactly as before.
+
+`op.periodic.serving_inventory` (every 60 s) asks each server which models are ready and
+writes `serving_reports`; only `ready` rows count, so a server the inventory could not
+reach gets no call. `src/services/serving_router.py` builds the per-process
+`TritonRouter` from the profile and those reports; every Triton caller (the async pool, the
+sync inference, analyze, OCR, embed and visual-search paths, the detection worker) asks the
+router for a server that holds every model it needs (`src/services/sync_triton.py` for the
+synchronous callers). A change of the active profile is picked up on the next config poll:
+the old router refuses calls, a new one is built, the pool opens channels to the new servers
+and closes the dropped ones, and a rebuild that fails leaves the old router refusing until
+the next tick (fail closed). Health probes stay on the default server; readiness per routed
+server is `serving_reports`. Follow-up calls of one image are not pinned to one server yet.
+
+---
+
 ## Workers, jobs and events
 
-- **Job leases.** A singleton job is claimed by an OpenSearch lease document
-  (`lease:<kind>[:<scope>]` in the project's settings-role index), written create-only and
-  with `if_seq_no`/`if_primary_term`. A holder renews it every 15 s on a thread with its own
-  event loop and client (a blocked request loop cannot cost a live job its lease); the lease
-  expires 120 s after the last renew, and a holder stops writing state 90 s after its last
-  good renew. Startup reconcile is a lease takeover, so a sibling's live job is never marked
-  `interrupted`. No file lock guards cross-process state (`scripts/codegen/check_file_locks.py`
-  lists the few left). The trainer claims a job with create-only generation claim files.
+- **Jobs.** A job is a row in the `jobs` table (`src/db/repos/jobs.py`) with a kind
+  (`src/config/job_kinds/`), a status (`queued`, `running`, `paused`, `completed`,
+  `failed`, `cancelled`, `interrupted`, ...), attempts, items and progress. `start_job`
+  inserts the row and enqueues one Celery message that carries only the job id; the
+  task modules in `src/tasks/` load the row and run it. A kind may be *exclusive* per
+  project or per scope (a second start answers 409 `job_busy`), *resumable* and
+  *auto-resumed*. Each task route is in `src/config/task_routes/` (a decorator never sets
+  `queue=`), so an operator can see every queue in one place: `jobs`, `periodic`,
+  `open_vocab`, `cluster`, `autolabel`, `assist_loop`, `arbiter` and the GPU queues
+  `gpu_train`, `gpu_eval` and `gpu_export`. Routes that used to run work in the request
+  answer **202** with a job id: project create, delete and combine, batch relabel, move and
+  label-operation undo, region `undo_batch` and new-class resolve over `OP_BATCH_SYNC_MAX`
+  items, dataset upload and import, bulk ingest and source runs, promote, assist runs,
+  scores, probe and projection rebuilds, cluster runs and activation, embedding space
+  builds, near-duplicate runs and source backfill. `GET /curation/projects/{project}/jobs` lists a
+  project's jobs and `GET /curation/jobs/{job_id}` reads one by id.
+- **Claims, not locks.** The cross-process claim is the fenced claim of a job row or a
+  PostgreSQL advisory lock (`src/config/advisory_locks.py`). A worker that cannot renew
+  stops writing. No file lock guards cross-process state
+  (`scripts/codegen/check_file_locks.py` fails on any), and no asyncio or threading lock
+  stands in for one. Stream workers (detection, VLM) share projects through rows in
+  `stream_worker_claims`.
+- **The reaper** (`op.periodic.reaper`, every 30 s) recovers jobs whose worker died,
+  resumes interrupted resumable jobs, fails the jobs of a queue whose profile never
+  started, and prunes old events and finished jobs.
+- **Cancel and pause are database writes.** Nothing calls Celery `revoke`; a worker reads the
+  flag when it claims a message and again between slices of work, and refuses a message for
+  a cancelled or paused job. A project pause (`POST /curation/projects/{project}/pause`) is a
+  row every worker reads.
 - **Per-process caches.** Each API worker process keeps its own caches, so a rule must not
   depend on another process noticing a change. The class-name cache
   (`src/utils/class_names.py`) is keyed by the `(st_mtime_ns, st_size)` of the model's
@@ -458,16 +645,9 @@ time. Single-target forms:
   The region cascade (`ocr_det_input_size`) sizes crops to 320-960 per side. The two stay
   separate on purpose: the default detector engine profile is 32x32 to 960x960
   (`scripts/export_paddleocr.sh`), so `/ocr` cannot send a thin image the engine refuses.
-- **File protocols.** The API and the workers share the state volumes. Training
-  and auto-label jobs are JSON files the API writes and the long-lived worker
-  claims; status flows back as files. A heartbeat marks a live claim; a job
-  whose heartbeat is stale is reported `interrupted` and can be resumed.
 - **Detection worker** (package `scripts/curation/worker/`, started with
   `python -m scripts.curation.worker`): fetches pending items, runs the cascade, writes
   boxes in an OCC merge, and skips any document a human changed meanwhile.
-- **Pause and resume.** `POST /curation/projects/{project}/pause` and
-  `.../resume` write and remove a flag file; workers skip a paused project and
-  keep serving the others.
 - **Events.** `GET /curation/events` (global) and
   `GET /curation/projects/{project}/events` are Server-Sent Events. Producers
   insert a row in the PostgreSQL `events` table inside their own transaction and,
@@ -507,9 +687,10 @@ The item wire carries `label_locked`, and box elements carry `locked`.
 Reprocess, reconcile, import undo and the delete paths re-check the lock at
 write time.
 
-Cluster writes (partition, refine, false-positive sub-typing) merge into the
-live box list and retry a few times on conflict; a model fit that finished
-after a human moved a box cannot overwrite it.
+Cluster projection (the served partition written onto items and boxes) and the
+near-duplicate projection merge into the live document and retry a few times on
+conflict; a run that finished after a human moved a box or set a class cannot
+overwrite it. A cluster a person named or anchored keeps its members in a re-run.
 
 ---
 
@@ -590,11 +771,18 @@ mutable `dict`, `set` or `list`. Concurrency that must finish before the answer 
   [INSTALLATION.md](../INSTALLATION.md#api-worker-count)), so the count is a tuning knob and
   several replicas need only `API_WORKERS=1` and `OP_API_REPLICAS`.
 - OpenSearch heap is sized from RAM by the installer (half of RAM, clamped to 2-30 GB, `scripts/lib/opensearch_heap.sh`). Each
-  project adds six indexes, so watch the shard budget
+  project adds two indexes, so watch the shard budget
   ([INSTALLATION.md](../INSTALLATION.md#opensearch-heap-sizing)); creating a
   project past the capacity limit answers 409 with the capacity figures.
-- Scaling past one host is not a supported topology today: the workers and the
-  API share local volumes and the file-backed job protocol.
+- Job state, events and claims live in PostgreSQL and the broker is Valkey, so API
+  and worker replicas need no shared job directory. Several hosts also need a shared
+  POSIX volume for uploads, exports and the crop cache; the GPU-arbiter overlay is
+  single-host, and upgrades are stop-the-world (old and new processes never run
+  together). See [INSTALLATION.md](../INSTALLATION.md).
+- Workers: the Celery workers' concurrency is set per queue in `docker-compose.yml`
+  (`OP_JOBS_CONCURRENCY`, replicas through `OP_JOBS_REPLICAS`); the connection total
+  of the deployment is `API_WORKERS * OP_API_REPLICAS` API processes plus every
+  worker process, and must stay under `OP_PG_MAX_CONNECTIONS` (default 400).
 
 ---
 
