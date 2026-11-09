@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
@@ -239,7 +240,7 @@ def test_dry_run_index_count_failure_reports_docs_null_not_zero() -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
 
     async def _boom(*, index, body=None):
-        raise RuntimeError('simulated count failure')
+        raise OpenSearchConnectionError('N/A', 'simulated count failure', RuntimeError('x'))
 
     client.count = _boom  # type: ignore[method-assign]
 

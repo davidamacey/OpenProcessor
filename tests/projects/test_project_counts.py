@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.config.curation_accessors import base_curation_config
 from src.config.curation_roles import IndexRole
@@ -72,7 +73,7 @@ async def test_embedded_count_is_none_when_uncountable() -> None:
 
     class _Down:
         async def count(self, **_: Any) -> dict[str, int]:
-            raise RuntimeError('down')
+            raise OpenSearchConnectionError('N/A', 'down', RuntimeError('down'))
 
     assert await embedded_count(_Down(), 'items') is None
     assert await embedded_count(_Client({'items': 9}, validated=4), 'items') == 4
