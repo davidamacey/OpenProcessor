@@ -116,8 +116,8 @@ def test_pre_commit_path_prefixes_exist(where: str, regex: str) -> None:
 
 
 def test_literal_prefix_extraction_reads_alternations() -> None:
-    assert _literal_prefixes(r'^(src/ultralytics_patches/|tests/|frontend/)') == [
-        'src/ultralytics_patches/',
+    assert _literal_prefixes(r'^(src/domain/|tests/|frontend/)') == [
+        'src/domain/',
         'tests/',
         'frontend/',
     ]

@@ -1,4 +1,4 @@
-"""TensorRT builder helpers for the YOLO11 exporter: builder setup, optimization profile, ONNX parse and engine build."""
+"""The TensorRT engine of a fused detector ONNX: FP16 bake, uint8 input, bounded batch profile."""
 
 from __future__ import annotations
 
@@ -8,9 +8,8 @@ import os
 from pathlib import Path
 
 import tensorrt as trt
-import torch
 from trt_build_settings import workspace_bytes
-from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16
+from trt_utils import atomic_write_plan, create_explicit_network
 from uint8_input import add_uint8_input
 from yolo_export_settings import IMG_SIZE
 
@@ -21,14 +20,7 @@ logger = logging.getLogger(__name__)
 def setup_trt_builder() -> tuple[
     trt.Builder, trt.IBuilderConfig, trt.INetworkDefinition, trt.Logger
 ]:
-    """
-    Set up TensorRT builder with common configuration.
-
-    The workspace comes from trt_build_settings.
-
-    Returns:
-        Tuple of (builder, config, network, logger)
-    """
+    """A TensorRT builder, config (workspace from trt_build_settings) and explicit network."""
     # The ONNX-export step always passes device='cpu' to Ultralytics
     # (yolo_export_settings.DEVICE). Ultralytics' own select_device('cpu')
     # sets os.environ['CUDA_VISIBLE_DEVICES'] = '-1' as a side effect,
@@ -50,100 +42,67 @@ def setup_trt_builder() -> tuple[
 
     builder = trt.Builder(trt_logger)
     config = builder.create_builder_config()
-
-    # Set workspace size (TRT >= 10 memory-pool API; requirements pin TRT 11)
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes('yolo'))
-
-    network = create_explicit_network(builder)
-
-    return builder, config, network, trt_logger
+    return builder, config, create_explicit_network(builder), trt_logger
 
 
-def add_optimization_profile(
-    builder: trt.Builder,
-    config: trt.IBuilderConfig,
-    network: trt.INetworkDefinition,
-    max_batch: int,
-) -> None:
-    """Add optimization profile for dynamic batching."""
-    profile = builder.create_optimization_profile()
+def _bake_inputs(onnx_path: Path, max_batch: int) -> tuple[Path, list[Path]]:
+    """The ONNX the builder parses, and the intermediate files to remove after the build.
 
-    min_shape = (1, 3, IMG_SIZE, IMG_SIZE)
-    opt_shape = (max_batch // 2, 3, IMG_SIZE, IMG_SIZE)
-    max_shape = (max_batch, 3, IMG_SIZE, IMG_SIZE)
-
-    for i in range(network.num_inputs):
-        inp = network.get_input(i)
-        profile.set_shape(inp.name, min=min_shape, opt=opt_shape, max=max_shape)
-        logger.debug(f'  {inp.name}: min={min_shape}, opt={opt_shape}, max={max_shape}')
-
-    config.add_optimization_profile(profile)
-
-
-def enable_fp16_if_available(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
-    """Enable FP16 precision where supported (see trt_utils.enable_fp16)."""
-    if enable_fp16(builder, config):
-        logger.info('FP16 precision enabled')
-        return True
-    logger.info(
-        'Building typed precision (TRT 11 strongly-typed: FP32 weights + TF32 '
-        'tensor cores; bake FP16 into the ONNX via ModelOpt AutoCast to go faster)'
-    )
-    return False
-
-
-def parse_onnx_model(
-    parser: trt.OnnxParser,
-    onnx_path: Path,
-    *,
-    uint8_input: bool = False,
-) -> bool:
-    """Parse ONNX model and report any errors.
-
-    ``uint8_input`` puts the ``/255`` scaling in the graph so the engine takes uint8 pixels
-    (the FP16 bake runs first and keeps the I/O float32; see ``uint8_input.py``).
+    TensorRT 11 is strongly typed (no FP16 builder flag), so FP16 is baked into the ONNX first
+    by NVIDIA ModelOpt AutoCast through the Ultralytics wrapper, which feeds proper calibration
+    shapes for the dynamic axes (the plain graph rewrite of ``trt_utils.bake_fp16_onnx`` mis-types
+    this graph's Concat nodes). The engine then takes uint8 pixels and scales them itself, a
+    quarter of the bytes over gRPC.
     """
-    logger.info('Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
-    onnx_path = bake_fp16_onnx(onnx_path)
-    if uint8_input:
-        onnx_path = add_uint8_input(onnx_path, Path(onnx_path).with_suffix('.u8.onnx'))
-    if not parser.parse_from_file(str(onnx_path)):
-        logger.error('Failed to parse ONNX model:')
-        for i in range(parser.num_errors):
-            error = parser.get_error(i)
-            logger.error(f'  [{i}] {error}')
-        return False
-    return True
+    from ultralytics.utils.export.engine import modelopt_quantize_onnx
+
+    fp16_onnx = Path(
+        modelopt_quantize_onnx(
+            str(onnx_path), quantize=16, shape=(max_batch, 3, IMG_SIZE, IMG_SIZE), dynamic=True
+        )
+    )
+    u8_onnx = add_uint8_input(fp16_onnx, fp16_onnx.with_suffix('.u8.onnx'))
+    return u8_onnx, [fp16_onnx, u8_onnx]
 
 
-def build_and_save_engine(
-    builder: trt.Builder,
-    network: trt.INetworkDefinition,
-    config: trt.IBuilderConfig,
-    output_path: Path,
-) -> bool:
-    """Build TensorRT engine and save to file."""
-    # Free memory before building
-    gc.collect()
-    torch.cuda.empty_cache()
+def build_fused_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
+    """Build the FP16, uint8-input engine of ``onnx_path`` at ``plan_path``; False when it fails.
 
-    logger.info('Building TensorRT engine (this may take 5-10 minutes)...')
-
+    The optimization profile bounds EVERY dynamic axis (batch 1..``max_batch``, fixed 640x640):
+    the Ultralytics export leaves H and W dynamic, and an unbounded spatial axis makes TensorRT
+    budget for gigantic activations (12+ GB tactics) that fail on consumer GPUs. ``max_batch``
+    is the batch the ONNX was exported with (the NMS is unrolled for it).
+    """
+    u8_onnx, intermediates = _bake_inputs(onnx_path, max_batch)
     try:
-        serialized_engine = builder.build_serialized_network(network, config)
-        if serialized_engine is None:
-            logger.error('Failed to build engine - builder returned None')
+        builder, config, network, trt_logger = setup_trt_builder()
+        parser = trt.OnnxParser(network, trt_logger)
+        if not parser.parse_from_file(str(u8_onnx)):
+            for i in range(parser.num_errors):
+                logger.error(f'  ONNX parse error [{i}]: {parser.get_error(i)}')
             return False
-        with Path(output_path).open('wb') as f:
-            f.write(serialized_engine)
 
-        file_size_mb = output_path.stat().st_size / (1024 * 1024)
-        logger.info(f'Engine saved: {output_path} ({file_size_mb:.2f} MB)')
-        return True
+        profile = builder.create_optimization_profile()
+        side = (3, IMG_SIZE, IMG_SIZE)
+        shapes = {
+            'min': (1, *side),
+            'opt': (max(1, max_batch // 2), *side),
+            'max': (max_batch, *side),
+        }
+        for i in range(network.num_inputs):
+            profile.set_shape(network.get_input(i).name, **shapes)
+        config.add_optimization_profile(profile)
 
-    except (
-        RuntimeError,
-        OSError,
-    ) as e:  # the builder's error, or the plan file could not be written
-        logger.error(f'Engine build failed: {e}')
-        return False
+        gc.collect()
+        logger.info('Building TensorRT engine (this may take several minutes)...')
+        serialized = builder.build_serialized_network(network, config)
+        if serialized is None:
+            logger.error('Engine build failed - builder returned None')
+            return False
+        atomic_write_plan(bytes(serialized), plan_path)
+    finally:
+        for path in intermediates:
+            path.unlink(missing_ok=True)
+    logger.info(f'Engine saved: {plan_path} ({plan_path.stat().st_size / 1e6:.1f} MB)')
+    return True

@@ -263,11 +263,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "ERA001",  # Commented-out code (import documentation for circular dependency prevention)
 ]
 
-# Ultralytics patches are third-party code
-"src/ultralytics_patches/**/*.py" = [
-    "ALL",     # Disable all linting for third-party patches
-]
-
 # Export scripts for TensorRT plugins (third-party TRT NMS patterns)
 "export/**/*.py" = [
     "N801",    # Class names follow TensorRT plugin conventions (TRT_EfficientNMS)
@@ -376,7 +371,6 @@ omit = [
     "*/test_*.py",
     "*/__pycache__/*",
     "*/site-packages/*",
-    "src/ultralytics_patches/*",  # Third-party code
 ]
 
 [tool.coverage.report]
@@ -400,7 +394,6 @@ exclude_lines = [
 [tool.mypy]
 python_version = "3.12"
 files = ["src", "scripts", "docker", "export"]
-exclude = ["^src/ultralytics_patches/"]
 plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true

@@ -8,14 +8,13 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 
 ## Where these scripts run
 
-In the `model-export` image (the `export` target of the root `Dockerfile`), never in the API image: it carries TensorRT, ModelOpt and the isolated YOLO11 venv. `./openprocessor models install|repair` and `export`, and the `make` export targets, start it as a one-shot container (`docker compose run --rm model-export ...`; profile `setup`). The API's own upload and export routes are served by the long-running `model-export-worker` service of the same image (profile `export`: `docker compose --profile export up -d model-export-worker`); they answer 503 naming it while it is down.
+In the `model-export` image (the `export` target of the root `Dockerfile`), never in the API image: it carries TensorRT and ModelOpt. `./openprocessor models install|repair` and `export`, and the `make` export targets, start it as a one-shot container (`docker compose run --rm model-export ...`; profile `setup`). The API's own upload and export routes are served by the long-running `model-export-worker` service of the same image (profile `export`: `docker compose --profile export up -d model-export-worker`); they answer 503 naming it while it is down.
 
 ## Export Scripts
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `export_models.py` | YOLO11 object detection with end2end NMS | TensorRT engine |
-| `export_yolo26.py` | NMS-free heads (YOLO26, YOLOv10): exported with `nms=False`, one `[batch, 300, 6]` output tensor; anything else is refused | ONNX + TensorRT engine |
+| `ultralytics_export.py` | Every Ultralytics detection family (YOLOv5u, v8, v9, v10, 11, 12, 26): the documented `nms` export argument gives one `[batch, 300, 6]` output tensor (`x1, y1, x2, y2, score, class`, letterboxed input pixels); anything else is refused | fused ONNX + TensorRT engine, `config.pbtxt`, `labels.txt` |
 | `export_scrfd.py` | SCRFD-10G face detection + landmarks | TensorRT engine |
 | `export_face_recognition.py` | ArcFace face embeddings | TensorRT engine |
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
@@ -30,7 +29,7 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
 | `download_paddleocr.py` | Download PP-OCRv5 models | ONNX models |
 | `download_pytorch_models.py` | Download YOLO11 PyTorch models | PyTorch weights |
-| `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue as job files under `/jobs/model_export`, then loads the engines into Triton. It routes by head kind: a head with `one2one_cv2` (YOLO26, YOLOv10) goes to `export_yolo26.py`, every other head to `export_models.py`; a job queued by an older version has no head kind and fails with "re-upload the model" | task status files |
+| `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue as job files under `/jobs/model_export`, then loads the engines into Triton. It runs `ultralytics_export.py` for every head kind (the head kind only names the engine: `{name}_trt` for the NMS-free head of YOLO26 and YOLOv10, `{name}_trt_end2end` for an embedded-NMS head); a job queued by an older version has no head kind and fails with "re-upload the model" | task status files |
 
 ## Model Directory Structure
 
@@ -45,15 +44,16 @@ pytorch_models/
 └── pe_text_encoder.onnx                # PE-Core-L14-336 text encoder ONNX (installed into Triton by make pe-export-text-triton)
 
 models/
-├── yolov11_small_trt/                  # YOLO11 TensorRT (standard)
+├── yolov11_small_end2end/              # the fused ONNX the engine below is built from
+│   └── 1/model.onnx
+├── yolov11_small_trt_end2end/          # YOLO11 TensorRT, NMS in the engine
 │   ├── 1/model.plan
-│   └── config.pbtxt
-├── yolov11_small_trt_end2end/          # YOLO11 TensorRT with GPU NMS
+│   ├── config.pbtxt
+│   └── labels.txt
+├── yolo26_small_trt/                   # YOLO26 TensorRT (NMS-free head)
 │   ├── 1/model.plan
-│   └── config.pbtxt
-├── yolo26_small_trt/                   # YOLO26 TensorRT (NMS-free)
-│   ├── 1/model.plan
-│   └── config.pbtxt
+│   ├── config.pbtxt
+│   └── labels.txt
 ├── scrfd_10g_bnkps/                    # SCRFD-10G face detection TensorRT
 │   ├── 1/model.plan
 │   └── config.pbtxt
@@ -88,14 +88,13 @@ models/
 ### YOLO11 Object Detection
 
 ```bash
-# Export TensorRT with GPU NMS (recommended)
+# Export the default detector as a TensorRT engine
 make export-models
 
-# Or directly:
-docker compose run --rm model-export python /app/export/export_models.py \
+# Or directly (any Ultralytics detection checkpoint):
+docker compose run --rm model-export python /app/export/ultralytics_export.py \
     --models small \
-    --formats trt trt_end2end \
-    --normalize-boxes
+    --formats trt
 ```
 
 ### SCRFD Face Detection

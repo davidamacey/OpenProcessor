@@ -467,8 +467,7 @@ See [ATTRIBUTION.md](ATTRIBUTION.md) for complete licensing information.
 ## License
 
 This project is licensed under the **GNU Affero General Public License
-v3.0 or later (AGPL-3.0-or-later)** — see [LICENSE](LICENSE). It vendors an
-AGPL-3.0 Ultralytics fork (`src/ultralytics_patches/`) whose copyleft terms
-propagate to the combined work. Third-party components retain their own
+v3.0 or later (AGPL-3.0-or-later)** — see [LICENSE](LICENSE). It depends on the
+AGPL-3.0 `ultralytics` package. Third-party components retain their own
 licenses (BSD, Apache-2.0, MIT, and others) — see
 [ATTRIBUTION.md](ATTRIBUTION.md) for the full per-component table.

@@ -275,43 +275,6 @@ def test_env_template_documents_the_knobs() -> None:
     assert 'OP_TRT_WORKSPACE_GB' in text
 
 
-def test_check_gpu_memory_reports_free_not_total(monkeypatch: pytest.MonkeyPatch, caplog) -> None:
-    """The export check logged the card's total as "free"; stub the toolchain it imports."""
-    from unittest.mock import MagicMock
-
-    for name in (
-        'tensorrt',
-        'ultralytics',
-        'ultralytics.cfg',
-        'ultralytics.engine',
-        'ultralytics.engine.exporter',
-    ):
-        monkeypatch.setitem(sys.modules, name, MagicMock())
-    for name in ('yolo_formats', 'yolo_trt_build'):
-        monkeypatch.delitem(sys.modules, name, raising=False)
-    import yolo_formats
-
-    torch = yolo_formats.torch
-    monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
-    queried: list[object] = []
-
-    def mem_get_info(device: object) -> tuple[int, int]:
-        queried.append(device)
-        return 1 * GB, 48 * GB
-
-    monkeypatch.setattr(torch.cuda, 'mem_get_info', mem_get_info, raising=False)
-    monkeypatch.setattr(
-        torch.cuda,
-        'get_device_properties',
-        lambda _d: type('P', (), {'total_memory': 48 * GB})(),
-    )
-    with caplog.at_level('WARNING'):
-        assert yolo_formats.check_gpu_memory(4.0) is True
-    assert any('Low GPU memory: 1.0GB free' in r.message for r in caplog.records)
-    # the engine build's card, not the export's trace device (always the CPU)
-    assert queried == [0]
-
-
 def test_models_install_accepts_yes_like_the_other_subcommands(bash) -> None:
     out = bash(
         f'source {CLI}; cmd_models_install() {{ echo "only=$1"; }}; '

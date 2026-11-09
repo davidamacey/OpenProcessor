@@ -73,9 +73,10 @@ def verify_onnx_model(onnx_path: Path) -> dict | None:
     print('Step 1: Verify ONNX Model')
     print('=' * 60)
 
-    try:
-        import onnx
+    import onnx
+    from google.protobuf.message import DecodeError
 
+    try:
         model = onnx.load(str(onnx_path))
         onnx.checker.check_model(model)
 
@@ -109,7 +110,7 @@ def verify_onnx_model(onnx_path: Path) -> dict | None:
             'has_dynamic': has_dynamic,
         }
 
-    except Exception as e:
+    except (OSError, ValueError, IndexError, onnx.checker.ValidationError, DecodeError) as e:
         print(f'ERROR: ONNX verification failed: {e}')
         return None
 
@@ -120,9 +121,20 @@ def test_onnx_inference(onnx_path: Path) -> bool:
     print('Step 2: Test ONNX Inference')
     print('=' * 60)
 
-    try:
-        import onnxruntime as ort
+    import onnxruntime as ort
+    from onnxruntime.capi import onnxruntime_pybind11_state as ort_errors
 
+    # ONNX Runtime raises its own classes (all plain ``Exception`` subclasses)
+    ort_failures = (
+        ort_errors.Fail,
+        ort_errors.InvalidArgument,
+        ort_errors.InvalidProtobuf,
+        ort_errors.NoSuchFile,
+        ort_errors.EPFail,
+        ort_errors.NotImplemented,
+        ort_errors.RuntimeException,
+    )
+    try:
         providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
         session = ort.InferenceSession(str(onnx_path), providers=providers)
         print(f'  Provider: {session.get_providers()[0]}')
@@ -141,13 +153,13 @@ def test_onnx_inference(onnx_path: Path) -> bool:
                 test_input = np.random.randn(*shape).astype(np.float32)
                 output = session.run(None, {INPUT_NAME: test_input})[0]
                 print(f'  {shape} -> {output.shape} OK')
-            except Exception as e:
+            except ort_failures as e:
                 print(f'  {shape} FAILED: {e}')
                 return False
 
         return True
 
-    except Exception as e:
+    except (OSError, ValueError, *ort_failures) as e:
         print(f'ERROR: ONNX test failed: {e}')
         return False
 
@@ -176,7 +188,7 @@ def unload_models_for_memory() -> None:
     for model in models_to_unload:
         try:
             requests.post(f'http://localhost:4600/v2/repository/models/{model}/unload', timeout=5)
-        except Exception as e:
+        except requests.RequestException as e:
             # Silently continue if unload fails - model may not be loaded
             logger.debug('Could not unload %s: %s', model, e)
 
@@ -195,7 +207,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
     rename it's ``${COMPOSE_PROJECT_NAME}-triton``, so this always
     printed "triton-server container is not running" even with Triton
     up. api already depends on ``tensorrt-cu13`` directly (see
-    requirements.txt; ``export/export_models.py`` builds YOLO engines
+    requirements.txt; ``export/ultralytics_export.py`` builds YOLO engines
     the same way), so there's no need for Triton to be running, or even
     exist, at export time -- only the ONNX file and a GPU.
     """
@@ -242,7 +254,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         # flag lookup raised AttributeError on the image's TRT 11.1,
         # failing the build. create_explicit_network passes the
         # flag only where it still exists (TRT <= 10.x) -- same helper
-        # export_models.py uses, which already works on TRT 11.1.
+        # ultralytics_export.py uses, which already works on TRT 11.1.
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, trt_logger)
         with Path(onnx_path).open('rb') as f:
@@ -273,7 +285,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         print(f'  Engine size: {plan_path.stat().st_size / 1024 / 1024:.2f} MB')
         return plan_path
 
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError, TypeError) as e:
         print(f'\nERROR: TensorRT conversion failed: {e}')
         import traceback
 

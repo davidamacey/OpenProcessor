@@ -1,11 +1,10 @@
 """Names become files, model directories and the export script's ``pt:name:batch`` argument, so
-only a slug passes; the export command is routed by head kind and a job without one fails closed."""
+only a slug passes (the export command itself: tests/export/test_export_worker_command.py)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import export_worker
 import pytest
 from fastapi.testclient import TestClient
 
@@ -56,38 +55,3 @@ def test_triton_names_are_normalised_then_checked() -> None:
     assert model_export.generate_triton_name('x.pt', 'Shop-Cam 2') == 'shop_cam_2'
     with pytest.raises(ValueError, match='name'):
         model_export.generate_triton_name('x.pt', '../x')
-
-
-def test_build_command_routes_by_architecture() -> None:
-    job = {
-        'pt_file': '/app/pytorch_models/car.pt',
-        'triton_name': 'car',
-        'max_batch': 8,
-        'formats': ['onnx_end2end', 'trt_end2end'],
-        'normalize_boxes': True,
-        'head_kind': 'nms',
-    }
-    legacy = export_worker.build_command(job)
-    assert legacy[1].endswith('export_models.py')
-    assert legacy[legacy.index('--custom-model') + 1] == '/app/pytorch_models/car.pt:car:8'
-    assert '--normalize-boxes' in legacy
-    assert '--generate-config' in legacy
-    native = export_worker.build_command({**job, 'head_kind': 'one2one'})
-    assert native[1].endswith('export_yolo26.py')
-    assert native[native.index('--formats') + 1 :] == ['trt']
-    assert export_worker.engines_to_load({**job, 'head_kind': 'one2one'}) == ['car_trt']
-    assert export_worker.engines_to_load(job) == ['car_trt_end2end']
-
-
-def test_a_job_without_a_head_kind_fails_closed() -> None:
-    job = {
-        'pt_file': '/app/pytorch_models/car.pt',
-        'triton_name': 'car',
-        'max_batch': 8,
-        'formats': ['trt'],
-        'normalize_boxes': True,
-    }
-    with pytest.raises(ValueError, match='re-upload the model'):
-        export_worker.build_command(job)
-    with pytest.raises(ValueError, match='re-upload the model'):
-        export_worker.engines_to_load(job)

@@ -29,7 +29,6 @@ import _baseline
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = REPO_ROOT / 'scripts' / 'codegen' / 'baselines' / 'vulture.txt'
 TARGETS = ('src', 'scripts', 'export', 'docker')
-EXCLUDE = '*/ultralytics_patches/*'
 MIN_CONFIDENCE = '60'
 IGNORE_DECORATORS = (
     '@*router.*,@app.*,@application.*,@*.on_event,@field_validator,@model_validator,@validator,'
@@ -61,8 +60,6 @@ def findings(root: Path) -> dict[str, int]:
             *targets,
             '--min-confidence',
             MIN_CONFIDENCE,
-            '--exclude',
-            EXCLUDE,
             '--ignore-decorators',
             IGNORE_DECORATORS,
         ],

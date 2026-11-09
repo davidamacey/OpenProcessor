@@ -33,13 +33,10 @@ export_yolo_detection() {
     # Create output directory
     mkdir -p "$MODELS_DIR/$model_name/1"
 
-    # Run export via export_models.py (needs all formats for end2end dependency)
-    if run_in_export_container python /app/export/export_models.py \
+    # One script: the fused ONNX, the engine, config.pbtxt and labels.txt
+    if run_in_export_container python /app/export/ultralytics_export.py \
         --models small \
-        --formats onnx_end2end trt_end2end \
-        --normalize-boxes \
-        --generate-config \
-        --save-labels \
+        --formats trt \
         2>&1 | tee /tmp/export_yolo.log; then
 
         if [[ -f "$plan_path" ]] && [[ -s "$plan_path" ]]; then

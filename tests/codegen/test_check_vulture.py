@@ -89,13 +89,6 @@ def test_a_stale_entry_fails(
     )
 
 
-def test_third_party_patches_are_excluded(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
-) -> None:
-    scratch_repo.write('src/ultralytics_patches/p.py', 'def dead():\n    return 1\n')
-    assert run(scratch_repo, baseline_file('')) == 0
-
-
 def test_the_real_repo_passes() -> None:
     assert guard.main([]) == 0
 

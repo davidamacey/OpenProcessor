@@ -18,9 +18,7 @@ class ExportFormat(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and for
     """Available export formats."""
 
     TRT = 'trt'
-    TRT_END2END = 'trt_end2end'
     ONNX = 'onnx'
-    ONNX_END2END = 'onnx_end2end'
     ALL = 'all'
 
 
@@ -117,8 +115,7 @@ class ModelListResponse(BaseModel):
     )
     notes: list[str] = Field(
         default_factory=lambda: [
-            'Model names ending with _trt_end2end use GPU NMS (fastest)',
-            'Model names ending with _trt use CPU NMS',
+            'Model names ending with _trt_end2end or _trt serve the same fused output0 [300, 6]',
             'Use model_name parameter to specify which model to use',
             'Default model is yolov11_small_trt_end2end if not specified',
             'Uploaded models appear here after successful export',

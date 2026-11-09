@@ -82,7 +82,7 @@ def _on_worker_init(**_: Any) -> None:
 def _phase_of(line: str) -> tuple[float, str] | None:
     """(progress percent, step text) for an export script output line that marks a step."""
     if 'ONNX' in line and 'Export' in line:
-        return 40.0, 'Exporting ONNX End2End'
+        return 40.0, 'Exporting the fused ONNX'
     if 'TensorRT' in line or 'Building' in line:
         return 60.0, 'Building TensorRT engine (this takes 2-5 min)'
     if 'Engine saved' in line:
@@ -174,15 +174,10 @@ def _plan_path(engine_name: str) -> Path:
 
 
 def _onnx_sha256(engine_name: str) -> str | None:
-    """Hash of the ONNX the engine came from, when the export left one next to it."""
+    """Hash of the ONNX the engine came from: the file the exporter leaves for it."""
     base = engine_name.removesuffix('_trt_end2end').removesuffix('_trt')
-    for candidate in (
-        MODELS_DIR / f'{base}_end2end' / '1' / 'model.onnx',
-        APP_DIR / 'export' / f'{base}.onnx',
-    ):
-        if candidate.is_file():
-            return engine_facts.file_sha256(candidate)
-    return None
+    candidate = MODELS_DIR / f'{base}_end2end' / '1' / 'model.onnx'
+    return engine_facts.file_sha256(candidate) if candidate.is_file() else None
 
 
 async def _begin_engines(ctx: JobContext, names: list[str], max_batch: int) -> dict[str, Any]:

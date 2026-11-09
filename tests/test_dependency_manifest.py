@@ -207,8 +207,8 @@ def _collect_third_party_import_roots() -> dict[str, list[Path]]:
 
 
 def test_every_third_party_import_under_src_is_declared_or_allowlisted() -> None:
-    # src/ultralytics_patches is loaded only by export/ inside the export image, so the export
-    # extra counts as declared.
+    # The export extra counts as declared: src/ modules the export image imports (the export
+    # worker's engine facts) need its packages.
     declared = (
         _pyproject_dependencies() | _requirements_txt_dependencies() | _pyproject_export_extra()
     )

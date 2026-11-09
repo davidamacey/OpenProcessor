@@ -99,6 +99,8 @@ def fake_engines(inst: Path) -> None:
         sha = hashlib.sha256(b'onnx').hexdigest()
         ws = 8 if model in {'paddleocr_rec_trt', 'pe_image_encoder'} else 4
         flags = f'trt-python-api target=default workspace={ws}G'
+        if model == 'yolov11_small_trt_end2end':  # the detector's stamp names its export recipe
+            flags += ' recipe=fused-v1'
         rows.append(f'{model}\tfp16\t\tv110100\t{SHIM_COMPUTE_CAP}\t{sha}\t{flags}\n')
     (inst / '.install' / 'precision.tsv').write_text(''.join(rows))
 
@@ -116,7 +118,7 @@ def test_install_performs_every_step_in_order(shimmed: Shimmed) -> None:
     probe = index_of(m, 'docker run --rm --gpus device=0 --entrypoint nvidia-smi')
     triton = index_of(m, ' up -d triton-server')
     preflight = index_of(m, 'python -m export.preflight')
-    yolo = index_of(m, 'export/export_models.py')
+    yolo = index_of(m, 'export/ultralytics_export.py')
     up = index_of(m, ' up -d --remove-orphans')
     probes = index_of(m, ' exec -T api python -c')
     assert pull < probe < triton < preflight < yolo < up < probes
@@ -208,14 +210,14 @@ def test_rerun_skips_up_to_date_groups_and_repair_rebuilds_only_the_missing_one(
     again = install(shimmed)
     assert again.returncode == 0, again.stderr[-2000:]
     assert 'group yolo: up to date, skipped' in again.stdout
-    assert not [ln for ln in shimmed.mutating_docker_calls() if 'export_models.py' in ln]
+    assert not [ln for ln in shimmed.mutating_docker_calls() if 'ultralytics_export.py' in ln]
 
     (inst / 'models' / PLAN_FILES[0]).unlink()
     reset_mutations(shimmed)
     repair = shimmed.run(['--repair', '--unattended', '--dir', 'inst'], OP_HEALTH_TIMEOUT='1')
     assert repair.returncode == 0, repair.stderr[-2000:]
     m = shimmed.mutating_docker_calls()
-    assert [ln for ln in m if 'export_models.py' in ln]
+    assert [ln for ln in m if 'ultralytics_export.py' in ln]
     assert not [ln for ln in m if 'export_mobileclip' in ln or 'export_scrfd' in ln]
     assert all(f' -p {PROJECT} ' in ln for ln in m if 'docker compose' in ln)
 

@@ -107,18 +107,15 @@ IMGS_TEST/
 # manifests under scripts/datasets/manifests/ ARE committed; only the
 # downloaded imagery/CSVs under data/samples/ are ignored here.
 /data/samples/
-# F-15: export_models.py's --generate-config / --save-labels run writes
+# F-15: ultralytics_export.py's run writes
 # this every invocation, reflecting whichever models/formats *that* run
 # exported (host paths, per-model results) -- a run artifact, not source,
 # and it was previously tracked, so every export run dirtied the tree
 # even when nothing about the repo's own config changed.
 /scripts/export_results.json
-# export_models.py --generate-config never replaces a differing tracked config.pbtxt;
+# ultralytics_export.py never replaces a differing tracked config.pbtxt unless --overwrite-config;
 # it writes this beside it for a diff (export/config_write.py).
 models*/*/config.pbtxt.generated
-# The standard (non-NMS) YOLO11 TensorRT export is optional and nothing in the stack serves it;
-# `make export-models` writes its config and labels, the end2end export is the tracked one.
-/models/yolov11_*_trt/
 # A project's legacy registry file, kept until `curation migrate-registry` renames it; the
 # warehouse example data/class_registry.example.json IS committed.
 /data/class_registry.json
@@ -409,7 +406,7 @@ secrets.yml
 #
 # Files to GENERATE LOCALLY:
 # - DALI pipelines: python dali/create_dali_letterbox_pipeline.py
-# - TensorRT engines: python export/export_models.py
+# - TensorRT engines: python export/ultralytics_export.py
 # - PyTorch models: bash export/download_pytorch_models.sh
 # - Test images: Add your own to test_images/ (ignored)
 #

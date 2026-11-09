@@ -204,7 +204,7 @@ def test_models_install_runs_the_shared_library_groups(shimmed: Shimmed, inst: P
     result = cli(shimmed, inst, 'models', 'install', '--only', 'yolo')
     assert result.returncode == 0, result.stderr
     m = shimmed.mutating_docker_calls()
-    assert [ln for ln in m if 'export/export_models.py' in ln and f' -p {PROJECT} ' in ln]
+    assert [ln for ln in m if 'export/ultralytics_export.py' in ln and f' -p {PROJECT} ' in ln]
     assert not [ln for ln in m if 'export_mobileclip' in ln]
 
 

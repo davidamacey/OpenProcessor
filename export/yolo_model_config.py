@@ -1,4 +1,4 @@
-"""Model configuration for the YOLO11 exporter: config-file loading, custom-model parsing and class labels."""
+"""Model configuration of the Ultralytics detector export: config-file loading, custom-model parsing and class labels."""
 
 from __future__ import annotations
 
@@ -28,8 +28,6 @@ def load_config_file(config_path: str) -> dict[str, dict[str, Any]]:
         pt_file: /path/to/model.pt
         triton_name: my_model_name  # optional, auto-generated if not provided
         max_batch: 32  # optional, default 32
-        topk: 300  # optional, default 300
-        num_classes: 80  # optional, auto-detected from model
         class_names:  # optional, auto-detected from model
           - person
           - car
@@ -62,12 +60,9 @@ def load_config_file(config_path: str) -> dict[str, dict[str, Any]]:
             'pt_file': model_config['pt_file'],
             'triton_name': model_config.get('triton_name', _generate_triton_name(model_id)),
             'max_batch': model_config.get('max_batch', 32),
-            'topk': model_config.get('topk', 300),
         }
 
         # Optional class configuration
-        if 'num_classes' in model_config:
-            models[model_id]['num_classes'] = model_config['num_classes']
         if 'class_names' in model_config:
             models[model_id]['class_names'] = model_config['class_names']
 
@@ -116,7 +111,6 @@ def parse_custom_model(custom_model_arg: str) -> tuple[str, dict[str, Any]]:
         'pt_file': pt_file,
         'triton_name': triton_name,
         'max_batch': max_batch,
-        'topk': 300,
     }
 
     logger.info(f'Custom model: {model_id} -> {triton_name} (batch={max_batch})')
@@ -155,40 +149,14 @@ def _generate_triton_name(model_id: str) -> str:
 
 
 def extract_class_names(model: YOLO) -> list[str]:
-    """
-    Extract class names from a loaded YOLO model.
-
-    Args:
-        model: Loaded YOLO model instance
-
-    Returns:
-        List of class names in order (index = class_id)
-    """
-    try:
-        # YOLO models store class names in model.names
-        if hasattr(model, 'names'):
-            names = model.names
-            if isinstance(names, dict):
-                # Convert dict {0: 'person', 1: 'bicycle', ...} to list
-                max_idx = max(names.keys())
-                return [names.get(i, f'class_{i}') for i in range(max_idx + 1)]
-            if isinstance(names, list):
-                return names
-
-        # Fallback: check model.model.names
-        if hasattr(model, 'model') and hasattr(model.model, 'names'):
-            names = model.model.names  # type: ignore[union-attr]  # ultralytics types YOLO.model as str | Module | None
-            if isinstance(names, dict):
-                max_idx = max(names.keys())
-                return [names.get(i, f'class_{i}') for i in range(max_idx + 1)]
-            if isinstance(names, list):
-                return names
-
-        logger.warning('Could not extract class names from model')
-        return []
-    except Exception as e:
-        logger.warning(f'Error extracting class names: {e}')
-        return []
+    """The class names of a loaded model in index order (``model.names``: a dict or a list)."""
+    names = getattr(model, 'names', None)
+    if isinstance(names, dict) and names:
+        return [names.get(i, f'class_{i}') for i in range(max(names) + 1)]
+    if isinstance(names, list):
+        return names
+    logger.warning('Could not extract class names from model')
+    return []
 
 
 def save_labels_file(class_names: list[str], model_dir: Path) -> Path | None:
