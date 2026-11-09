@@ -61,7 +61,7 @@ def route_params(slug: str) -> dict[str, str]:
         # Postgres-backed ids are uuids: a well-formed one that no project owns (a 404, not a 422)
         **{
             name: str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{slug}-{name}'))
-            for name in ('partition_id', 'group_id', 'decision_id')
+            for name in ('partition_id', 'group_id', 'decision_id', 'cluster_uid')
         },
     }
 
@@ -96,7 +96,9 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('PUT', '/crops/{crop_id}/label'): {'json': {'class_id': 1}},
         ('PUT', '/crops/batch_label'): {'json': {'crop_ids': [proposal], 'class_id': 1}},
-        ('POST', '/crops/move'): {'json': {'crop_ids': [proposal], 'cluster_id': 1}},
+        ('POST', '/crops/move'): {
+            'json': {'crop_ids': [proposal], 'cluster_uid': route_params(slug)['cluster_uid']}
+        },
         ('POST', '/label_ops/{op_id}/undo'): {'json': {'dry_run': False}},
         ('POST', '/crops/flag_new_class'): {'json': {'crop_ids': [item], 'note': 'n'}},
         ('POST', '/crops/batch_exclude'): {'json': {'crop_ids': [proposal], 'reason': 'r'}},

@@ -5,7 +5,7 @@ only the confirmed-labels index while the labeler and auto-promote wrote only
 ``class_validated`` onto items — so an export after hours of labeling came
 out with zero rows. On this codebase the contract is the other way round:
 
-- every labeling path (single / batch human label, cluster move, cluster
+- every labeling path (single / batch human label, cluster
   auto-promote, dataset import) sets ``class_validated=true`` on the item;
 - :class:`~src.services.curation.export.GenericYoloExportService` selects
   ``class_validated=true`` items straight from the items index and never
@@ -72,7 +72,6 @@ def fake() -> QueryFakeOpenSearch:
         'h1': _item('h1', image='img1'),
         'b1': _item('b1', image='img2'),
         'b2': _item('b2', image='img3'),
-        'm1': _item('m1', image='img4'),
         'never': _item('never', image='img5'),
     }
     # One high-purity CANDIDATE cluster (cluster_id >= the residual
@@ -109,18 +108,13 @@ async def _export(fake: QueryFakeOpenSearch, registry: InMemoryRegistry, tmp_pat
 async def _human_label_paths(fake, registry, monkeypatch) -> None:
     from curation.queued_label import call_route
     from src.routers.curation import crops_write as crops
-    from src.routers.curation._common_models import (
-        CropBatchLabelRequest,
-        CropLabelRequest,
-        CropMoveRequest,
-    )
+    from src.routers.curation._common_models import CropBatchLabelRequest, CropLabelRequest
 
     monkeypatch.setattr(crops, 'get_class_registry', lambda: registry)
     await crops.label_crop('h1', CropLabelRequest(class_id=1), fake, registry)
     await call_route(
         crops.batch_label_crops, CropBatchLabelRequest(crop_ids=['b1', 'b2'], class_id=1), fake
     )
-    await call_route(crops.move_crops, CropMoveRequest(crop_ids=['m1'], cluster_id=0), fake)
 
 
 @pytest.mark.asyncio
@@ -133,9 +127,9 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 
     result = await _export(fake, registry, tmp_path)
 
-    assert result.image_count == 4  # h1, b1, b2, m1
+    assert result.image_count == 3  # h1, b1, b2
     labels = sorted(Path(result.export_dir).glob('labels/*/*.txt'))
-    assert len(labels) == 4
+    assert len(labels) == 3
 
 
 @pytest.mark.asyncio
@@ -186,10 +180,10 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     imported_ids = {i for i, d in items.items() if d.get('import_ids') == [import_id]}
     assert len(imported_ids) == 1
     validated = {i for i, d in items.items() if d.get('class_validated') is True}
-    assert validated == {'h1', 'b1', 'b2', 'm1', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
+    assert validated == {'h1', 'b1', 'b2', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
     assert 'never' not in validated
     result = await _export(fake, registry, tmp_path)
-    assert result.image_count == len(validated) == 9
+    assert result.image_count == len(validated) == 8
     # Items, plus the images index the imported-negative-frame scan reads.
     assert set(fake.searched_indexes) == {ITEMS, IMAGES}
 

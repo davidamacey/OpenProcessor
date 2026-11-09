@@ -138,9 +138,16 @@ class OpsEnv:
         assert resp.status_code in (200, 202), resp.text
         return self._answer(resp)
 
-    def move(self, cluster_id: int, **target: Any) -> dict[str, Any]:
+    def serve(self, n_clusters: int = 2) -> list[str]:
+        """Give the project a serving item partition; the cluster uids, in display order."""
+        from curation.serving_partition import serve_clusters
+
+        _, uids = asyncio.run(serve_clusters(n_clusters))
+        return [str(u) for u in uids]
+
+    def move(self, cluster_uid: str, **target: Any) -> dict[str, Any]:
         resp = self.client.post(
-            f'{self.prefix}/crops/move', json={'cluster_id': cluster_id, **target}
+            f'{self.prefix}/crops/move', json={'cluster_uid': cluster_uid, **target}
         )
         assert resp.status_code in (200, 202), resp.text
         return self._answer(resp)

@@ -18,12 +18,7 @@ from src.core.logging import get_logger
 from src.db.repos import job_items
 from src.db.repos.records import new_label_operation_id
 from src.db.session import async_session_factory, project_tx
-from src.services.curation.class_label import (
-    ItemLabel,
-    candidate_move_update,
-    class_label_update,
-    human_move_class_update,
-)
+from src.services.curation.class_label import ItemLabel, candidate_move_update, class_label_update
 from src.services.curation.crop_bulk import occ_bulk_human_relabel
 from src.services.curation.label_ops.store import (
     NewLabelOp,
@@ -70,14 +65,10 @@ def merger_for(spec: dict[str, Any], op_id: str) -> Merger:
         return label
 
     def move(current: dict[str, Any]) -> dict[str, Any]:
-        if spec['target_kind'] == 'candidate':
-            return candidate_move_update(
-                current, cluster_id=spec['target_id'], now=now_iso(), op_id=op_id
-            )
-        return human_move_class_update(
+        return candidate_move_update(
             current,
-            class_id=spec['target_id'],
-            class_name=spec['target_name'],
+            partition_id=spec['partition_id'],
+            cluster_uid=spec['target_uid'],
             now=now_iso(),
             op_id=op_id,
         )

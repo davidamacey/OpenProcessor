@@ -359,28 +359,23 @@ def test_unknown_malformed_or_pruned_op_id_is_404(
 
 def test_move_ops_undo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     env = _env(monkeypatch, tmp_path, n=6)
-    for crop_id in _ids(4, 5):
-        env.docs()[crop_id].update(cluster_id=10_004)
-    # Item 1 is already a human widget; the candidate move clears it, undo brings it back.
+    first, second = env.serve()
+    # Item 1 is already a human widget; the move clears it, undo brings it back.
     human = env.label('widget', crop_ids=_ids(1))
     before = {k: _state(v) for k, v in env.docs().items()}
 
-    to_class = env.move(env.class_ids['gadget'], crop_ids=_ids(0, 2))
-    assert env.docs()[_ids(0)[0]]['class_source'] == 'human_move'
-    body = _undo_ok(env, to_class['op_id'])
-    assert (body['restored'], body['kept_changed']) == (2, 0)
-
-    to_candidate = env.move(10_004, crop_ids=_ids(1, 3))
-    assert env.docs()[_ids(1)[0]]['cluster_id'] == 10_004
+    moved = env.move(first, crop_ids=_ids(0, 1, 3))
+    assert env.docs()[_ids(0)[0]]['cluster_uid'] == first
+    assert env.docs()[_ids(0)[0]]['cluster_assigned_by'] == 'edit'
     assert env.docs()[_ids(1)[0]]['class_validated'] is False
-    # A person pulls item 3 into another candidate cluster afterwards.
-    env.docs()[_ids(3)[0]]['cluster_id'] = 10_005
-    body = _undo_ok(env, to_candidate['op_id'])
-    assert (body['restored'], body['kept_changed']) == (1, 1)
+    # A person pulls item 3 into another cluster afterwards.
+    env.docs()[_ids(3)[0]]['cluster_uid'] = second
+    body = _undo_ok(env, moved['op_id'])
+    assert (body['restored'], body['kept_changed']) == (2, 1)
     assert {k: _state(v) for k, v in env.docs().items() if k != _ids(3)[0]} == {
         k: v for k, v in before.items() if k != _ids(3)[0]
     }
-    assert human['op_id'] != to_class['op_id']
+    assert human['op_id'] != moved['op_id']
 
 
 def test_the_op_record_survives_and_holds_the_passes(

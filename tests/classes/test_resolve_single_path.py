@@ -1,7 +1,7 @@
 """Every writer that puts a class on an item takes the class from the registry (D-47).
 
 An item stores the registry's id and spelling. The class fields are built by ``ItemLabel`` /
-``human_move_class_update`` / ``candidate_move_update``. A call to one of them outside
+``candidate_move_update``. A call to one of them outside
 ``src/services/classes/`` that passes a literal class name or id (a class that was made up, not
 read from or ensured in the registry) is refused. The id and the name must arrive as values, so
 they can only come from ``src.services.classes`` (``get_class_registry``, ``resolve``) or from a
@@ -16,7 +16,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ITEM_LABEL_BUILDERS = frozenset({'human', 'imported', 'propagated'})
-FUNCTION_BUILDERS = frozenset({'human_move_class_update', 'candidate_move_update'})
+FUNCTION_BUILDERS = frozenset({'candidate_move_update'})
 CLASS_ARGS = frozenset({'class_id', 'class_name'})
 
 
@@ -65,7 +65,7 @@ def test_a_planted_writer_with_made_up_names_fails(tmp_path: Path) -> None:
     planted.write_text(
         'def go():\n'
         "    a = ItemLabel.human(class_id=3, class_name='made up')\n"
-        "    b = human_move_class_update({}, class_id=1, class_name=f'x{1}', now='t')\n"
+        "    b = candidate_move_update({}, class_id=1, class_name=f'x{1}', now='t')\n"
         '    return a, b\n',
         encoding='utf-8',
     )

@@ -142,11 +142,15 @@ CLASS_STATE_FIELDS: tuple[str, ...] = (
     'class_labeler',
     'class_labeled_at',
     'class_validated',
-    'cluster_id',
-    'cluster_subid',
+    'cluster_partition_id',
+    'cluster_uid',
+    'cluster_state',
+    'cluster_score',
+    'cluster_margin',
+    'cluster_assigned_by',
     'label_op_id',
 )
-"""The item's full class/label/provenance/cluster state. A restorable
+"""The item's full class/label/provenance state and its place in the serving partition. A restorable
 history entry carries every one of these so an undo can put the item back
 exactly, rather than re-deriving provenance it never recorded."""
 
@@ -234,21 +238,14 @@ def restore_class_state(entry: dict[str, Any] | None) -> dict[str, Any]:
     remaining fields restore as ``None`` / unvalidated rather than being
     guessed.
 
-    Cluster placement mirrors the label writers' ``cluster_id = class_id``
-    rule: a restored validated class sits in its class cluster (keeping
-    the recorded sub-cluster only if it belonged to that cluster);
-    anything else returns to the cluster it was in before the label write
-    (``None`` = residual pool).
+    The item's place in the serving partition (``cluster_uid`` and the rest of the
+    ``cluster_*`` partition fields) returns exactly as recorded.
     """
     snap = entry or {}
     out: dict[str, Any] = {f: snap.get(f) for f in CLASS_STATE_FIELDS}
     out['class_validated'] = bool(out['class_validated'])
     if entry is None:
         out['label_source'] = ''
-    if out['class_validated'] and out['class_id'] is not None:
-        if out['cluster_id'] != out['class_id']:
-            out['cluster_subid'] = None
-        out['cluster_id'] = out['class_id']
     for f in (*REVIEW_DISMISS_FIELDS, *AUDIT_VERDICT_FIELDS):
         if f in snap:
             out[f] = snap[f]

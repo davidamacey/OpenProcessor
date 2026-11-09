@@ -27,8 +27,6 @@ LABEL_OP_ID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 """A label operation id is the lowercase uuid of its ``label_operations`` row; matched with
 ``fullmatch`` before any query is built from an id."""
 
-HUMAN_MOVE_CLASS_SOURCE = 'human_move'
-
 
 class UndoOutcome(str, Enum):  # noqa: UP042 -- str-valued members are serialised as the plain count keys
     RESTORE = 'restore'
@@ -48,7 +46,7 @@ class OpFingerprint:
     class_name: str | None
     class_source: str | None
     class_validated: bool
-    cluster_id: int | None
+    cluster_uid: str | None
 
 
 def label_fingerprint(*, op_id: str, writer: str, at: str, class_name: str) -> OpFingerprint:
@@ -60,14 +58,10 @@ def propagated_fingerprint(*, op_id: str, writer: str, at: str, class_name: str)
     return OpFingerprint(op_id, writer, at, class_name, PROPAGATED_CLASS_SOURCE, False, None)
 
 
-def move_fingerprint(
-    *, op_id: str, writer: str, at: str, class_name: str | None, cluster_id: int | None
-) -> OpFingerprint:
-    """A move into a class cluster (``class_name`` set) or a candidate cluster
-    (``class_name`` ``None``: only the placement and the unvalidated state are compared)."""
-    if class_name is not None:
-        return OpFingerprint(op_id, writer, at, class_name, HUMAN_MOVE_CLASS_SOURCE, True, None)
-    return OpFingerprint(op_id, writer, at, None, None, False, cluster_id)
+def move_fingerprint(*, op_id: str, writer: str, at: str, cluster_uid: str) -> OpFingerprint:
+    """A move into a cluster of the serving partition: only the placement and the unvalidated
+    state are compared."""
+    return OpFingerprint(op_id, writer, at, None, None, False, cluster_uid)
 
 
 def _excluded_after(source: dict[str, Any], fp: OpFingerprint) -> bool:
@@ -82,7 +76,7 @@ def _matches_fingerprint(source: dict[str, Any], fp: OpFingerprint) -> bool:
         return False
     if fp.class_source is not None and source.get('class_source') != fp.class_source:
         return False
-    if fp.cluster_id is not None and source.get('cluster_id') != fp.cluster_id:
+    if fp.cluster_uid is not None and source.get('cluster_uid') != fp.cluster_uid:
         return False
     if fp.class_name is not None:
         return normalize_class_name(source.get('class_name') or '') == normalize_class_name(
@@ -135,8 +129,8 @@ def current_query(fp: OpFingerprint) -> dict[str, Any]:
     ]
     if fp.class_source is not None:
         filters.append({'term': {'class_source': fp.class_source}})
-    if fp.cluster_id is not None:
-        filters.append({'term': {'cluster_id': fp.cluster_id}})
+    if fp.cluster_uid is not None:
+        filters.append({'term': {'cluster_uid': fp.cluster_uid}})
     if fp.class_name is not None:
         filters.append({'term': {'class_name': fp.class_name}})
     return {
@@ -156,7 +150,6 @@ def current_query(fp: OpFingerprint) -> dict[str, Any]:
 
 
 __all__ = [
-    'HUMAN_MOVE_CLASS_SOURCE',
     'LABEL_OP_ID_RE',
     'LabelOpKind',
     'OpFingerprint',

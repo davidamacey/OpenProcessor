@@ -113,7 +113,8 @@ def test_label_ops_list_newest_first_counts_and_limits(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
     first = env.label('widget', crop_ids=['c0', 'c1', 'c2'])['op_id']
-    second = env.move(env.class_ids['gadget'], crop_ids=['c2', 'c3'])['op_id']
+    target = env.serve()[0]
+    second = env.move(target, crop_ids=['c2', 'c3'])['op_id']
     # A person relabels c1 afterwards: the first operation no longer owns it.
     assert (
         env.client.put(
@@ -127,10 +128,10 @@ def test_label_ops_list_newest_first_counts_and_limits(
     assert body['retention'] == store.LABEL_OPS_KEEP == 200
     assert [o['op_id'] for o in body['items']] == [second, first]
     newer, older = body['items']
-    assert (newer['kind'], newer['class_name'], newer['target_kind'], newer['current']) == (
+    assert (newer['kind'], newer['class_name'], newer['target_cluster_uid'], newer['current']) == (
         'move',
-        'gadget',
-        'class',
+        None,
+        target,
         2,
     )
     # c2 moved on to the second operation, c1 to a person: only c0 still carries the first.

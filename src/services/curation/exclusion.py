@@ -154,14 +154,12 @@ def prior_candidate_ids(docs: list[dict[str, Any]]) -> set[int]:
 def park_restored_state_while_excluded(restored: dict[str, Any]) -> dict[str, Any]:
     """Redirect a class-state restore (label Undo) on an excluded item.
 
-    The item stays excluded, so its live validation/cluster fields keep
-    their excluded placeholders; the restored values become the
-    ``excluded_prior_*`` state that un-exclude will apply.
+    The item stays excluded, so its live validation field keeps its excluded placeholder; the
+    restored value becomes the ``excluded_prior_*`` state that un-exclude will apply. The
+    recorded prior cluster is untouched: a restore carries no integer cluster id.
     """
     out = dict(restored)
     out[PRIOR_VALIDATED] = bool(out.pop('class_validated'))
-    out[PRIOR_CLUSTER_ID] = out.pop('cluster_id')
-    out[PRIOR_CLUSTER_SUBID] = out.pop('cluster_subid')
     return out
 
 

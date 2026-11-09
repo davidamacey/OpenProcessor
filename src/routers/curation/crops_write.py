@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.db.session import project_tx
 from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -26,8 +27,8 @@ from src.routers.curation._common_models import (
 )
 from src.routers.curation._selection import selected_crop_ids
 from src.routers.curation._selection_write_models import LabelOpAccepted, SelectionDryRunResponse
+from src.services.clustering.serving_cluster import serving_cluster_partition
 from src.services.curation.class_label import ItemLabel, class_label_update
-from src.services.curation.cluster_ids import cluster_kind
 from src.services.curation.label_ops.record import start as start_relabel
 from src.services.curation.label_ops.store import NewLabelOp
 from src.utils.timeutil import now_iso
@@ -148,46 +149,29 @@ async def batch_label_crops(
 async def move_crops(
     payload: CropMoveRequest, opensearch: OpenSearchDep, session: DbSessionDep
 ) -> Any:
-    """Move crops to a different cluster.
+    """Move crops into a cluster of the serving item partition.
 
-    * Class cluster (``cluster_id == class_id``): also a relabel — the
-      crops get that registry class (``class_source='human_move'``,
-      ``class_validated=True``): "move this to the X cluster" means "this
-      is an X".
-    * Candidate cluster: placement only. The crops join the group; a
-      human-owned class is cleared (the human just said it isn't that
-      class), a machine suggestion is kept, and nothing is validated —
-      the group has no class until one is assigned.
-    * ``400`` for an unassigned (negative) target (use exclude/discard)
-      a class-range id that isn't in the registry, or a candidate id with
-      no current members (it doesn't exist). Nothing is written.
+    Placement only: the crops join the cluster (``cluster_assigned_by='edit'``), a human-owned
+    class is cleared (the human just said it isn't that class), a machine suggestion is kept,
+    and nothing is validated; the cluster's class comes from a label. ``400`` when
+    ``cluster_uid`` is not a cluster of the serving partition (none serving, or another
+    partition's); nothing is written.
     """
-    target_id = int(payload.cluster_id)
-    kind = cluster_kind(target_id)
-    target = None
-    if kind == 'unassigned':
+    project = current_project_id()
+    async with project_tx(session, project):
+        partition_id = await serving_cluster_partition(
+            session, project=project, target='item', cluster_uid=payload.cluster_uid
+        )
+    if partition_id is None:
         raise HTTPException(
             status_code=400,
-            detail=f'cannot move into unassigned cluster {target_id}; use exclude or discard',
+            detail=f'unknown cluster {payload.cluster_uid} in the serving partition',
         )
-    if kind == 'class':
-        target = (await get_class_registry().snapshot()).get(target_id)
-        if target is None:
-            raise HTTPException(status_code=400, detail=f'unknown class_id {target_id}')
-    if kind == 'candidate':
-        from src.services.curation.exclusion import cluster_member_count
-
-        if await cluster_member_count(opensearch, items_index(), target_id) == 0:
-            raise HTTPException(
-                status_code=400, detail=f'candidate cluster {target_id} has no members'
-            )
     ids = await selected_crop_ids(opensearch, payload)
     if payload.dry_run:
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
         return {'op_id': None, 'job_id': None, 'status': None}
-
-    target_name = target.class_name if target is not None else ''
 
     return await _queue_relabel(
         session,
@@ -195,18 +179,16 @@ async def move_crops(
         op=NewLabelOp(
             kind='move',
             writer='human:move_crops',
-            class_name=target_name if kind == 'class' else None,
-            class_id=target_id if kind == 'class' else None,
-            target_cluster_id=target_id,
-            target_kind='class' if kind == 'class' else 'candidate',
+            class_name=None,
+            class_id=None,
+            target_cluster_uid=str(payload.cluster_uid),
             target='crop_ids' if payload.crop_ids is not None else 'selection',
             selected=len(ids),
         ),
         spec={
             'kind': 'move',
-            'target_kind': 'class' if kind == 'class' else 'candidate',
-            'target_id': target_id,
-            'target_name': target_name,
+            'partition_id': str(partition_id),
+            'target_uid': str(payload.cluster_uid),
         },
     )
 
