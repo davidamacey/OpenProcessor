@@ -114,7 +114,7 @@ def test_the_automatic_vlm_paths_do_not_relabel_it() -> None:
     }
     plain = {**item, 'class_source': 'unlabeled_proposal'}
     sweep = vlm_selection_query(
-        class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.9, now=None
+        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.9, now=None
     )
     worker = _build_pending_query(0.9)
     for query in (sweep, worker):
