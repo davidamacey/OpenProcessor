@@ -14,12 +14,13 @@ proof the genericization happened rather than a rename.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
-import numpy as np
 import pytest
 from _image_helpers import make_jpeg as _make_jpeg
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE
+from fused_output import fused_tensor
 from PIL import Image
 
 from src.config import DetectionProfile
@@ -27,6 +28,10 @@ from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.ocr_recognizer import OcrRegion
 from src.services.detection.cascade_detect.preprocess import _letterbox
 from src.services.detection.cascade_detect.region_detector import RegionDetector
+
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 BOX_PROFILE = DetectionProfile(
@@ -77,17 +82,17 @@ def test_letterbox_uses_profile_input_size_and_fill() -> None:
 @pytest.mark.asyncio
 async def test_region_detector_uses_profile_model_name_and_floor() -> None:
     """``RegionDetector`` sources its Triton model name + floor from the profile."""
-    raw = np.zeros((1, 5, 10), dtype=np.float32)
-    raw[0, 0, 0] = BOX_PROFILE.input_size / 2.0
-    raw[0, 1, 0] = BOX_PROFILE.input_size / 2.0
-    raw[0, 2, 0] = 40.0
-    raw[0, 3, 0] = 38.0
-    raw[0, 4, 0] = 0.65  # clears the box profile's 0.6 floor
+
+    def fused(score: float) -> np.ndarray:
+        # One box centred in the network input, at the given score, as the engine's [300, 6].
+        return fused_tensor([(0.45, 0.45, 0.55, 0.55, score, 0)], net=BOX_PROFILE.input_size)
+
+    raw = fused(0.65)  # clears the box profile's 0.6 floor
 
     pool = MagicMock()
     pool.infer = AsyncMock(return_value=_FakeInferResult(raw))
     pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
-    pool.get_model_output_shape = AsyncMock(return_value=(-1, 5, -1))
+    pool.get_model_output_shape = AsyncMock(return_value=(-1, 300, 6))
     detector = RegionDetector(pool, BOX_PROFILE)
     assert detector.model_name == 'box_detector_v1'
     assert detector.confidence_floor == pytest.approx(0.6)
@@ -102,12 +107,11 @@ async def test_region_detector_uses_profile_model_name_and_floor() -> None:
     # A score that clears the reference detector's default floor (0.4) but not the box
     # profile's stricter 0.6 floor must be dropped — proves the floor
     # really is profile-driven, not the old hardcoded constant.
-    raw_low = raw.copy()
-    raw_low[0, 4, 0] = 0.45
+    raw_low = fused(0.45)
     pool_low = MagicMock()
     pool_low.infer = AsyncMock(return_value=_FakeInferResult(raw_low))
     pool_low.get_model_input_datatype = AsyncMock(return_value='UINT8')
-    pool_low.get_model_output_shape = AsyncMock(return_value=(-1, 5, -1))
+    pool_low.get_model_output_shape = AsyncMock(return_value=(-1, 300, 6))
     detector_low = RegionDetector(pool_low, BOX_PROFILE)
     assert await detector_low.detect(_make_jpeg()) is None
 
