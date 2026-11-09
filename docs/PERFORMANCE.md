@@ -3961,7 +3961,7 @@ validates the knob; it is not the release baseline.
 | 4 | 1 | | | | | | |
 | 1 | 2 | | | | | | |
 
-Only a disputed point is repeated. Confirmed default: _pending_.
+Pool wait is the histogram `op_db_pool_wait_seconds` (p50 and p99 from its buckets); 503s are `database_busy` log lines. Only a disputed point is repeated. Confirmed default: _pending_.
 
 ## Benchmarking
 

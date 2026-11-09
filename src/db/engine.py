@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.config.api_pools import db_pool_size
 from src.config.database import DatabaseSettings
+from src.db.pool_metrics import time_checkouts
 
 
 if TYPE_CHECKING:
@@ -118,11 +119,13 @@ def get_async_engine() -> AsyncEngine:
 
     def build() -> AsyncEngine:
         settings = DatabaseSettings.from_env()
-        return create_async_engine(
+        engine = create_async_engine(
             database_url(settings, application_name=f'op-api-{os.getpid()}'),
             connect_args=_connect_args(settings, job_limits=False),
             **_pool_options(db_pool_size(settings)),
         )
+        time_checkouts(engine.sync_engine.pool)
+        return engine
 
     return _cached('async', build)
 
