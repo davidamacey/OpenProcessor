@@ -218,7 +218,7 @@ class VisibilityOps(VlmLabelerCore):
             logger.warning(
                 'vlm_labeler.region_visible_parse_failed',
                 chunk_size=len(chunk),
-                raw_preview=raw[:200],
+                raw_len=len(raw),
             )
             return out
 

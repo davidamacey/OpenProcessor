@@ -156,7 +156,7 @@ class CombinedOps(VlmLabelerCore):
             logger.info(
                 'vlm_labeler.combined_parse_failure',
                 img_id=img_id,
-                raw_excerpt=raw[:200],
+                raw_len=len(raw),
             )
             raise CombinedParseFailure(f'invalid json: {exc}') from exc
 
@@ -347,7 +347,6 @@ class CombinedOps(VlmLabelerCore):
                 chunk_size=len(chunk),
                 finish_reason=finish_reason,
                 raw_len=len(raw),
-                raw_preview=raw[:300],
             )
         return self._parse_combined_batch_response(
             raw, chunk, self._fields, class_names=class_names, pack_attributes=self._pack.attributes
@@ -385,7 +384,6 @@ class CombinedOps(VlmLabelerCore):
                 'vlm_labeler.combined_batch_parse_failed',
                 chunk_size=len(chunk),
                 raw_len=len(raw),
-                raw_preview=raw[:400],
             )
             return {c.crop_id: None for c in chunk}
 
@@ -395,7 +393,7 @@ class CombinedOps(VlmLabelerCore):
                 'vlm_labeler.combined_batch_misaligned',
                 chunk_size=len(chunk),
                 n_entries=len(parsed),
-                raw_preview=raw[:400],
+                raw_len=len(raw),
             )
             return {c.crop_id: None for c in chunk}
 
@@ -419,8 +417,8 @@ class CombinedOps(VlmLabelerCore):
                 logger.warning(
                     'vlm_labeler.combined_batch_entry_invalid',
                     crop_id=crop.crop_id,
-                    error=str(exc),
-                    entry_preview=json.dumps(entry, default=str)[:300],
+                    error_type=type(exc).__name__,
+                    entry_type=type(entry).__name__,
                 )
                 out[crop.crop_id] = None
         return out
