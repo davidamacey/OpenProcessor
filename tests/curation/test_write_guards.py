@@ -186,32 +186,16 @@ class TestAutomatedClassWritersExcludeTestHoldout:
 
     @pytest.mark.asyncio
     async def test_classes_merge_query_has_holdout_must_not(self) -> None:
-        from _class_registry_fake import InMemoryRegistry
-
-        import src.routers.curation.classes_merge as classes_mod
-        from src.routers.curation._class_models import ClassMergeRequest
-
-        registry = InMemoryRegistry()
-        registry.add('sedan', group='vehicle')
-        registry.add('suv', group='vehicle')
-        classes = registry.load().classes
-        source_id, target_id = classes[0].class_id, classes[1].class_id
+        from src.services.classes.projection_sync import relabel_merged_items
 
         fake_os = AsyncMock()
-        fake_os.count = AsyncMock(return_value={'count': 0})
-        fake_os.update_by_query = AsyncMock(return_value={})
         fake_os.search = AsyncMock(return_value={'hits': {'hits': []}, '_scroll_id': None})
 
-        with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(classes_mod, 'get_class_registry', lambda: registry)
-            await classes_mod.merge_class(
-                ClassMergeRequest(source_id=source_id, target_id=target_id), fake_os
-            )
+        await relabel_merged_items(fake_os, 'items', 3, 4, 'suv', cancelled=lambda: False)
 
         assert fake_os.search.await_count >= 1
         query = fake_os.search.await_args_list[0].kwargs['body']['query']
-        must_not = query['bool']['must_not']
-        assert {'term': {'test_holdout': True}} in must_not
+        assert {'term': {'test_holdout': True}} in query['bool']['must_not']
 
     @pytest.mark.asyncio
     async def test_probe_inference_query_excludes_holdout(self) -> None:
@@ -269,15 +253,25 @@ class TestAutomatedClassWritersExcludeTestHoldout:
 class TestMergeClassRefusesFrozenCrops:
     @pytest.mark.asyncio
     async def test_merge_refuses_with_409_when_holdout_members_exist(self) -> None:
+        from _class_registry_fake import InMemoryRegistry
+
         import src.routers.curation.classes_merge as classes_mod
         from src.routers.curation._class_models import ClassMergeRequest
 
+        registry = InMemoryRegistry()
+        registry.add('sedan', group='vehicle')
+        registry.add('suv', group='vehicle')
+        source, target = (c.class_id for c in registry.load().classes)
         fake_os = AsyncMock()
         fake_os.count = AsyncMock(return_value={'count': 2})
         fake_os.update_by_query = AsyncMock()
 
-        with pytest.raises(HTTPException) as exc_info:
-            await classes_mod.merge_class(ClassMergeRequest(source_id=5, target_id=6), fake_os)
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(classes_mod, 'get_class_registry', lambda: registry)
+            with pytest.raises(HTTPException) as exc_info:
+                await classes_mod.merge_class(
+                    ClassMergeRequest(source_id=source, target_id=target), fake_os
+                )
         assert exc_info.value.status_code == 409
         assert '2' in exc_info.value.detail
         fake_os.update_by_query.assert_not_called()
