@@ -7,11 +7,14 @@ the files sit where the routes read them. Every row and file is named with the p
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from psycopg.types.json import Jsonb
+
+from src.domain.storage_keys import make_key
 
 
 if TYPE_CHECKING:
@@ -19,6 +22,7 @@ if TYPE_CHECKING:
 
 BAKEOFF_JOB = '{slug}-job-bakeoff'
 BAKEOFF_DATASET = 'export:sweep'
+LOOP_NODE = 'r10000'
 
 
 def finished_job(
@@ -166,7 +170,29 @@ def _loop(conn: Any, project: uuid.UUID, slug: str) -> uuid.UUID:
         (project, job, Jsonb(request.model_dump(mode='json')), Jsonb(pinned)),
     ).fetchone()
     assert row is not None
+    _loop_node(conn, row[0], slug)
     return row[0]
+
+
+def loop_node_ids(slug: str) -> list[str]:
+    return [f'{slug}-item-0001', f'{slug}-item-0002']
+
+
+def _loop_node(conn: Any, run: uuid.UUID, slug: str) -> None:
+    """A level-1 node of the loop that ran: the row names the blob that
+    ``seed_world_files`` writes under the same key (``SnapshotStore.key``)."""
+    conn.execute(
+        'INSERT INTO assist_loop_iterations (run_id, ordinal, status) VALUES (%s, 1, %s)',
+        (run, 'open'),
+    )
+    key = make_key('projects', slug, 'assist_loop', str(run), 'nodes', f'{LOOP_NODE}.json')
+    ids = loop_node_ids(slug)
+    conn.execute(
+        'INSERT INTO assist_loop_nodes (run_id, path, iteration, parent_path, level, member_count, '
+        'eligible_count, membership_digest, snapshot_storage_key, step) '
+        "VALUES (%s, %s, 1, 'r1', 1, %s, %s, 'sweep', %s, 'open')",
+        (run, LOOP_NODE, len(ids), len(ids), key),
+    )
 
 
 def _assist_run(conn: Any, project: uuid.UUID, slug: str) -> uuid.UUID:
@@ -212,6 +238,7 @@ def seed_world(conn: Any, slug: str, project: uuid.UUID, source_dir: str) -> dic
             )
         ),
         'loop_id': str(_loop(conn, project, slug)),
+        'loop_node_path': LOOP_NODE,
         'assist_run_id': str(_assist_run(conn, project, slug)),
         'partition_id': str(_partition(conn, project)),
         'import_id': str(_import(conn, project, slug)),
@@ -224,9 +251,11 @@ def seed_world(conn: Any, slug: str, project: uuid.UUID, source_dir: str) -> dic
     }
 
 
-def seed_world_files(record: Any, run_job_id: str, tmp_path: Path) -> None:
-    """The run's log and one artifact under its prefix, the project's bake-off results and the
-    current export's frozen files."""
+def seed_world_files(
+    record: Any, run_job_id: str, tmp_path: Path, loop_id: str | None = None
+) -> None:
+    """The run's log and one artifact under its prefix, the project's bake-off results, the
+    current export's frozen files and the member blob of the seeded loop node."""
     from src.config import get_curation_config
     from src.config.project_context import bind_project
     from src.services.training.run_retention import bakeoff_out_dir
@@ -238,6 +267,14 @@ def seed_world_files(record: Any, run_job_id: str, tmp_path: Path) -> None:
     (run_dir / 'results.csv').write_text(f'epoch\n1\n# {slug}\n', encoding='utf-8')
 
     with bind_project(record):
+        if loop_id is not None:
+            from src.services.curation.assist_loop.snapshots import SnapshotStore
+
+            asyncio.run(
+                SnapshotStore(slug, uuid.UUID(loop_id)).write_ids(
+                    'nodes', LOOP_NODE, loop_node_ids(slug)
+                )
+            )
         cfg = get_curation_config()
         job_dir = bakeoff_out_dir(cfg.bakeoff_results_dir) / BAKEOFF_JOB.format(slug=slug)
         export_root = cfg.export_root
