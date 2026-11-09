@@ -81,7 +81,7 @@ def test_the_jobs_alerts_are_the_owner_d83_set() -> None:
     assert {'OldestQueuedJob', 'JobFailureBurst', 'DiskLow'} <= set(by_name)
     assert '900' in by_name['OldestQueuedJob']['expr']
     assert by_name['OldestQueuedJob']['for'] == '5m'
-    assert 'op_jobs_failed_24h' in by_name['JobFailureBurst']['expr']
+    assert 'op_jobs_failed_total' in by_name['JobFailureBurst']['expr']
     assert '> 5' in by_name['JobFailureBurst']['expr']
     assert 'op_disk_free_ratio' in by_name['DiskLow']['expr']
     assert '0.10' in by_name['DiskLow']['expr']

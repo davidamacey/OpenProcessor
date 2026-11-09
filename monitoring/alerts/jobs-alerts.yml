@@ -14,14 +14,14 @@ groups:
           description: "The oldest queued {{ $labels.kind }} job is {{ $value | humanizeDuration }} old; check that its worker is running."
 
       - alert: JobFailureBurst
-        expr: max by (kind) (delta(op_jobs_failed_24h[1h])) > 5
+        expr: sum by (kind) (increase(op_jobs_failed_total[1h])) > 5
         for: 1m
         labels:
           severity: warning
           component: jobs
         annotations:
           summary: "More than 5 {{ $labels.kind }} jobs failed in 1 h"
-          description: "{{ $value }} more {{ $labels.kind }} jobs failed in the last hour than an hour ago (change of the 24 h failure gauge)."
+          description: "{{ $value }} {{ $labels.kind }} jobs failed in the last hour (increase of op_jobs_failed_total)."
 
       - alert: DiskLow
         expr: min by (volume) (op_disk_free_ratio) < 0.10

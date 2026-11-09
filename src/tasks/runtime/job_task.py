@@ -22,6 +22,7 @@ import asyncio
 import logging
 import os
 import socket
+import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -35,7 +36,7 @@ from sqlalchemy.orm import Session
 from src.db.engine import bind_async_engine, get_sync_engine, new_task_async_engine
 from src.db.repos import job_events, jobs as repo
 from src.domain import job_perf, job_states as js, job_timing
-from src.tasks.runtime import hooks
+from src.tasks.runtime import hooks, job_metrics
 from src.tasks.runtime.context import JobContext, JobResult, Paused, Yield
 from src.tasks.runtime.event_wakeup import wake
 from src.tasks.runtime.heartbeat import JobHeartbeat
@@ -88,13 +89,14 @@ def run_job(
     beat = JobHeartbeat(job_id, claim.job.project_id, claim.job.fencing_token)
     beat.start()
     ran: _Ran | None = None
+    started = time.monotonic()
     try:
         ran = _execute(kind, handler, client_factories, claim, beat)
     finally:
         beat.stop()
         if ran is None:  # something outside the handler's own failures ended the delivery
             _write_interrupted(claim)
-    _finalize(kind, claim, beat, ran)
+    _finalize(kind, claim, beat, ran, time.monotonic() - started)
     if ran.how == 'exit':
         raise ran.error  # type: ignore[misc]  # a SystemExit: Celery requeues the message
 
@@ -264,7 +266,7 @@ def _write_interrupted(claim: _Claim) -> None:
         logger.exception('interrupt_write_failed job_id=%s', claim.job.id)
 
 
-def _finalize(kind: JobKind, claim: _Claim, beat: JobHeartbeat, ran: _Ran) -> None:
+def _finalize(kind: JobKind, claim: _Claim, beat: JobHeartbeat, ran: _Ran, seconds: float) -> None:
     job = claim.job
     with Session(get_sync_engine(), expire_on_commit=False) as session:
         with job_transaction(session, job.project_id):
@@ -274,6 +276,7 @@ def _finalize(kind: JobKind, claim: _Claim, beat: JobHeartbeat, ran: _Ran) -> No
         if moved is None:
             logger.warning('lease_lost job_id=%s token=%s', job.id, job.fencing_token)
             return
+        job_metrics.observe_delivery(kind.name, moved.status, seconds)
         wake(job.project_id)
         if dispatch and moved.status == js.QUEUED:
             _dispatch_again(session, kind, claim, moved)
