@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.services.curation.job_binding import opensearch_client
 from src.tasks.runtime.register import register_job
 
 
@@ -16,17 +17,10 @@ if TYPE_CHECKING:
     from src.tasks.runtime.context import JobContext
 
 
-def _opensearch() -> Any:
-    from src.config.settings import get_settings
-    from src.services.projects.guard import make_script_opensearch
-
-    return make_script_opensearch([get_settings().opensearch_url], timeout=60)
-
-
 async def _reindex_index() -> Any:
     from src.services.embedding_spaces.reindex_opensearch import OpenSearchReindexIndex
 
-    return OpenSearchReindexIndex(_opensearch())
+    return OpenSearchReindexIndex(await opensearch_client(60))
 
 
 async def _encoder() -> Any:
@@ -39,7 +33,7 @@ async def _encoder() -> Any:
         url=get_settings().triton_url, pool_size=4, max_concurrent=64, verbose=False
     )
     await pool.initialize()
-    client = _opensearch()
+    client = await opensearch_client(60)
     return ReindexEncoder(client, PEEncoder(triton_pool=pool), owned=[client, pool])
 
 

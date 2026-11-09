@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+import functools
 
-from src.config.settings import get_settings
+from src.services.curation.job_binding import opensearch_client
 from src.services.source_backfill import job
 from src.tasks.runtime.register import register_job
 
 
-async def _opensearch() -> Any:
-    from src.services.projects.guard import make_script_opensearch
-
-    return make_script_opensearch([get_settings().opensearch_url], timeout=60)
-
-
-register_job('source_backfill', job.run, client_factories={'opensearch': _opensearch})
+register_job(
+    'source_backfill',
+    job.run,
+    client_factories={'opensearch': functools.partial(opensearch_client, 60)},
+)

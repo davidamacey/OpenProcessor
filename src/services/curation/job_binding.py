@@ -44,8 +44,12 @@ def bound_job_project(ctx: JobContext, record: ProjectRecord) -> Iterator[None]:
         yield
 
 
-async def opensearch_client() -> Any:
+async def opensearch_client(timeout: float | None = None) -> Any:
+    """The one project-guarded worker client; ``timeout`` defaults to ``opensearch_timeout``."""
     from src.config.settings import get_settings
 
     settings = get_settings()
-    return make_script_opensearch([settings.opensearch_url], timeout=settings.opensearch_timeout)
+    return make_script_opensearch(
+        [settings.opensearch_url],
+        timeout=settings.opensearch_timeout if timeout is None else timeout,
+    )

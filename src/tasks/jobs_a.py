@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.services.curation.job_binding import opensearch_client
 from src.tasks import jobs_a_support as support
 from src.tasks.runtime.context import JobResult
 from src.tasks.runtime.register import register_job
@@ -14,15 +15,11 @@ if TYPE_CHECKING:
     from src.tasks.runtime.context import JobContext
 
 
-async def _opensearch() -> Any:
-    return await support.opensearch_client()
-
-
 async def _ingest() -> Any:
     return await support.worker_ingest()
 
 
-FACTORIES = {'opensearch': _opensearch, 'ingest': _ingest}
+FACTORIES = {'opensearch': opensearch_client, 'ingest': _ingest}
 
 
 async def reprocess(ctx: JobContext) -> JobResult:
@@ -90,7 +87,7 @@ async def label_undo(ctx: JobContext) -> JobResult:
 
 
 register_job('reprocess', reprocess, client_factories=FACTORIES)
-OPENSEARCH_ONLY = {'opensearch': _opensearch}
+OPENSEARCH_ONLY = {'opensearch': opensearch_client}
 register_job('assist_run', assist_run, client_factories=OPENSEARCH_ONLY)
 register_job('probe', probe, client_factories=OPENSEARCH_ONLY)
 register_job('item_scores', item_scores, client_factories=OPENSEARCH_ONLY)

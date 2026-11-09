@@ -11,6 +11,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
+from src.services.curation.job_binding import opensearch_client
 from src.tasks.runtime.context import JobResult
 from src.tasks.runtime.register import register_job
 
@@ -19,14 +20,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from src.tasks.runtime.context import JobContext
-
-
-async def _opensearch() -> Any:
-    from src.config.settings import get_settings
-    from src.services.projects.guard import make_script_opensearch
-
-    settings = get_settings()
-    return make_script_opensearch([settings.opensearch_url], timeout=settings.opensearch_timeout)
 
 
 class ProjectUnavailableError(RuntimeError):
@@ -110,7 +103,7 @@ async def combine(ctx: JobContext) -> Any:
         return await run_combine_job(ctx, await ctx.client('opensearch'))
 
 
-_FACTORIES = {'opensearch': _opensearch}
+_FACTORIES = {'opensearch': opensearch_client}
 register_job('dataset_upload_extract', dataset_upload_extract)
 register_job('class_merge', class_merge, client_factories=_FACTORIES)
 register_job('class_projection_sync', class_projection_sync, client_factories=_FACTORIES)
