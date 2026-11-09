@@ -107,7 +107,7 @@ The recognition model uses `ppocrv5_dict.txt` with 18383 characters:
 ### Software Requirements
 
 - Docker with NVIDIA Container Toolkit
-- NVIDIA GPU with TensorRT 11 support (Triton 26.06)
+- NVIDIA GPU with TensorRT 11 support (Triton 26.10)
 - Python 3.10+ with the following packages:
   - `onnx`, `onnxruntime-gpu`
 
