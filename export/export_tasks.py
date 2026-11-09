@@ -208,15 +208,13 @@ async def _fail_building(ctx: JobContext) -> None:
         await session.run_sync(lambda sync: engine_builds.fail_building(sync, ctx.job_id))
 
 
-async def _facts_of(name: str, head_kind: str, max_batch: int) -> engine_builds.EngineFacts:
+async def _facts_of(name: str, max_batch: int) -> engine_builds.EngineFacts:
     """Read the built plan, check it against the declared contract and describe the build."""
     plan_path = _plan_path(name)
     if not plan_path.is_file():
         raise FileNotFoundError(f'the export did not leave {plan_path}')
     plan = await asyncio.to_thread(engine_facts.read_plan, plan_path)
-    input_contract, output_contract, size = engine_facts.contracts_for(
-        plan, engine_name=name, head_kind=head_kind
-    )
+    input_contract, output_contract, size = engine_facts.contracts_for(plan)
     opt = max(1, max_batch // 2)
     profile = trt_build_settings.build_target()
     flags = f'target={profile} workspace={trt_build_settings.workspace_gb(name)}G'
@@ -301,7 +299,7 @@ async def export_model(ctx: JobContext) -> dict[str, Any]:
         await _stage(ctx, 'exporting', f'Exporting: {", ".join(job["formats"])}')
         if not await _run_build(ctx, cmd, step_times) or ctx.cancelled():
             return await _cancelled(ctx, names, had_ready)
-        facts = {name: await _facts_of(name, job['head_kind'], max_batch) for name in names}
+        facts = {name: await _facts_of(name, max_batch) for name in names}
         await _stage(ctx, 'loading', 'Loading into Triton', step_times=step_times)
         t0 = perf_counter()
         loaded = await _load_all(names, facts, bool(job.get('auto_load')))
