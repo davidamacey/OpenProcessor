@@ -91,25 +91,30 @@ class OpenSearchClientFactory:
     """Factory for OpenSearch client with lazy initialization."""
 
     @staticmethod
+    def create_client() -> OpenSearchClient:
+        """A new client for the configured cluster, not yet pinged or cached."""
+        settings = get_settings()
+        logger.info(f'Initializing OpenSearch client ({settings.opensearch_url})...')
+        # OpenSearchClient installs the project guard at construction.
+        return OpenSearchClient(
+            hosts=[settings.opensearch_url], http_auth=None, timeout=settings.opensearch_timeout
+        )
+
+    @staticmethod
     async def get_client() -> OpenSearchClient:
-        """Get OpenSearch client (lazy initialization)."""
+        """Get OpenSearch client (lazy initialization); cached only once it answers a ping."""
         if app_state._opensearch_client is None:
-            settings = get_settings()
-
-            logger.info(f'Initializing OpenSearch client ({settings.opensearch_url})...')
-            client = OpenSearchClient(
-                hosts=[settings.opensearch_url], http_auth=None, timeout=settings.opensearch_timeout
-            )
-            # OpenSearchClient installs the project guard at construction.
-            app_state._opensearch_client = client
-
+            client = OpenSearchClientFactory.create_client()
             if not await client.ping():
+                await client.close()
                 # An OpenSearchException so callers that degrade on an outage (the project
                 # list shows unknown counts) catch it by the class every other failure uses.
                 raise OpenSearchConnectionError(
-                    'N/A', f'OpenSearch connection failed: {settings.opensearch_url}', None
+                    'N/A',
+                    f'OpenSearch connection failed: {get_settings().opensearch_url}',
+                    None,
                 )
-
+            app_state._opensearch_client = client
             logger.info('OpenSearch client ready')
         return app_state._opensearch_client
 

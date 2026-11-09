@@ -119,11 +119,18 @@ async def test_one_project_shows_unknown_counts_when_opensearch_is_unreachable(
 class _UnpingableClient:
     """What ``OpenSearchClient`` is when the cluster cannot be reached at creation."""
 
+    instances: list[_UnpingableClient] = []
+
     def __init__(self, **_: Any) -> None:
         self.client = object()
+        self.closed = False
+        self.instances.append(self)
 
     async def ping(self) -> bool:
         return False
+
+    async def close(self) -> None:
+        self.closed = True
 
 
 @pytest.mark.asyncio
@@ -144,3 +151,22 @@ async def test_the_project_list_shows_unknown_counts_when_the_client_cannot_conn
     (alpha,) = response.projects
     assert alpha.counts.images is None
     assert response.capacity is None
+
+
+@pytest.mark.asyncio
+async def test_a_failed_ping_is_not_cached_so_the_next_call_pings_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.core import dependencies
+
+    monkeypatch.setattr(dependencies.app_state, '_opensearch_client', None)
+    monkeypatch.setattr(dependencies, 'OpenSearchClient', _UnpingableClient)
+    _UnpingableClient.instances.clear()
+
+    for _ in range(2):
+        with pytest.raises(OpenSearchConnectionError):
+            await dependencies.OpenSearchClientFactory.get_client()
+
+    assert dependencies.app_state._opensearch_client is None
+    assert len(_UnpingableClient.instances) == 2
+    assert all(c.closed for c in _UnpingableClient.instances)
