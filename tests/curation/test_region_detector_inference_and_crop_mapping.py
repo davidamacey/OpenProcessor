@@ -7,12 +7,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _image_helpers import make_jpeg as _make_jpeg
 from _region_profile_fixture import (
     EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
     NEUTRAL_REGION_PROFILE,
 )
 
-from curation.cascade_detect_helpers import _make_jpeg, _make_mock_pool, _make_raw_output
+from curation.cascade_detect_helpers import _make_mock_pool, _make_raw_output
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
