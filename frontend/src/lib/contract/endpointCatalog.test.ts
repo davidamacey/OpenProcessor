@@ -86,6 +86,7 @@ const GLOBAL_SCANNED_FILES = [
   'lib/sse.ts',
   'lib/api_vlm.ts',
   'lib/api_combine.ts',
+  'lib/api_jobs.ts',
 ] as const;
 
 /** Every file that composes a backend URL through
