@@ -50,7 +50,8 @@ def test_the_schedule_names_exactly_the_periodic_tasks() -> None:
 def test_every_entry_is_a_registered_task_on_the_periodic_queue_that_expires(worker_app) -> None:
     for name, entry in build_schedule().items():
         task = worker_app.tasks[entry['task']]
-        assert ROUTES[entry['task']] == TaskQueues.PERIODIC, name
+        expected_queue = TaskQueues.ARBITER if name == 'gpu_arbiter' else TaskQueues.PERIODIC
+        assert ROUTES[entry['task']] == expected_queue, name
         limits = (3300, 3600) if name == 'db_backup' else (120, 150)
         assert (task.soft_time_limit, task.time_limit) == limits, name
         assert entry['options'] == {'expires': entry['schedule']}, name

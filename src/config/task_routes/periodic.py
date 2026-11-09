@@ -16,6 +16,8 @@ ROUTES: dict[str, str] = {
     'op.periodic.serving_inventory': TaskQueues.PERIODIC,
     'op.periodic.cluster_refresh': TaskQueues.PERIODIC,
     'op.periodic.db_backup': TaskQueues.PERIODIC,
+    # The one tick that runs in the process holding the Docker socket (gpu-arbiter-worker).
+    'op.periodic.gpu_arbiter': TaskQueues.ARBITER,
     'op.periodic.near_dup_rescore': TaskQueues.PERIODIC,
     'op.periodic.near_dup_full_build': TaskQueues.PERIODIC,
 }
