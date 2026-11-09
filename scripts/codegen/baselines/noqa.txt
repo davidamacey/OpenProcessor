@@ -153,7 +153,6 @@ tests/bench/test_parity_capture.py	1	suppressions recorded when the ratchet land
 tests/bench/test_run_baseline.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/clustering/_fake_opensearch.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/config_store/test_research_kinds.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-tests/config_store/test_settings_occ.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/conftest.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/activation/test_start_job_omitted_pack_and_ivf_path.py	5	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/assist_queue.py	5	suppressions recorded when the ratchet landed; fix or justify, then lower
