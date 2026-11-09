@@ -15,6 +15,8 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.core.exceptions import RequestRejectedError
 from src.db.repos import near_dup as repo
 from src.db.repos.near_dup_holdout import Move, record_moves, stamp_freeze
+from src.db.repos.records import current_holdout_freeze
+from src.services.events.publish import apublish
 from src.services.near_duplicates import status as near_dup_status
 from src.utils.timeutil import now_iso
 
@@ -119,3 +121,65 @@ async def require_fresh(session: AsyncSession, project_id: uuid.UUID) -> None:
         raise RequestRejectedError(
             status_code=409, detail={'code': 'near_dup_stale', 'levels': stale}
         )
+
+
+MGET_CHUNK = 500
+
+
+async def _held_out(client: AsyncOpenSearch, index: str, ids: list[str]) -> set[str]:
+    held: set[str] = set()
+    for start in range(0, len(ids), MGET_CHUNK):
+        resp = await client.mget(
+            index=index,
+            body={'ids': ids[start : start + MGET_CHUNK]},
+            _source_includes=['test_holdout'],
+        )
+        held.update(
+            d['_id'] for d in resp['docs'] if d.get('found') and d['_source'].get('test_holdout')
+        )
+    return held
+
+
+async def absorb(
+    session: AsyncSession,
+    client: AsyncOpenSearch,
+    *,
+    index: str,
+    project_id: uuid.UUID,
+    run_id: uuid.UUID,
+    leak: Collection[repo.GroupToWrite],
+) -> int:
+    """After a freeze: move the non-held-out members of mixed leak groups into the holdout.
+
+    Called by an item-level run before it flips current, inside its transaction. A project with no
+    frozen holdout absorbs nothing. The flag is set first (OCC writer, a failed write fails the
+    run), then the move rows and the ``holdout.near_dup_absorbed`` event are written with the
+    run's own transaction. Returns the number of items moved.
+    """
+    freeze = await current_holdout_freeze(session, project_id)
+    if freeze is None:
+        return 0
+    grouped = [g for g in leak if len(g.members) > 1]
+    held = await _held_out(client, index, sorted({m for g in grouped for m in g.members}))
+    moves: dict[str, Move] = {}
+    for group in grouped:
+        anchors = sorted(held.intersection(group.members))
+        if not anchors:
+            continue
+        for member in group.members:
+            if member not in held:
+                moves.setdefault(member, Move(member, anchors[0], group.lineage_id))
+    if not moves:
+        return 0
+    await flag_held_out(client, index, sorted(moves))
+    await record_moves(
+        session, project_id, freeze_id=freeze.id, run_id=run_id,
+        moves=sorted(moves.values(), key=lambda m: m.item_id),
+    )  # fmt: skip
+    await apublish(
+        'holdout.near_dup_absorbed',
+        {'run_id': str(run_id), 'moved': len(moves), 'freeze_id': str(freeze.id)},
+        project=project_id,
+        session=session,
+    )
+    return len(moves)

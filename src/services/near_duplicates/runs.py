@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from src.db.repos import near_dup as repo
 from src.domain import near_dup as rules
 from src.services.events.publish import apublish
+from src.services.near_duplicates.holdout import absorb
 
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ class RunSummary:
     grouped_members: int
     largest_group: int
     oversized_split: int
+    holdout_absorbed: int = 0
 
 
 def _counters(
@@ -99,6 +101,15 @@ async def write_and_flip(
         await repo.write_groups(session, run_id, 'leak', leak)
         run = await repo.get_run(session, run_id)
         assert run is not None  # inserted above
+        if env.plan.is_item:
+            counters['holdout_absorbed'] = await absorb(
+                session,
+                env.client,
+                index=env.plan.index,
+                project_id=env.project_id,
+                run_id=run_id,
+                leak=leak,
+            )
         await repo.flip_current(session, run, counters)
         await repo.prune_runs(session, env.project_id, env.plan.level, rules.KEPT_SUPERSEDED_RUNS)
         await apublish(

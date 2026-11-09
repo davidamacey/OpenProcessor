@@ -43,7 +43,11 @@ class _SeqNoOpenSearch(FakeNearDupOpenSearch):
 
     conflict: set[str] = set()
 
-    async def mget(self, *, body: dict[str, Any], **_kw: Any) -> dict[str, Any]:
+    async def mget(
+        self, *, body: dict[str, Any], index: str | None = None, **kw: Any
+    ) -> dict[str, Any]:
+        if 'ids' in body:
+            return await super().mget(index=index or '', body=body, **kw)
         out = []
         for ref in body['docs']:
             source = self.docs[ref['_index']].get(ref['_id'])
