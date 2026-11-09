@@ -73,7 +73,7 @@ def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
             classifier_confidence_skip_vlm=0.80,
             run_vlm=False,
             class_id=None,
-            cluster_id=None,
+            cluster_uid=None,
             prompt_pack=name,
             prompt_pack_revision=revision,
             # "Already resolved" is its own explicit flag, not inferred from
