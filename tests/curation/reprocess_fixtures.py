@@ -151,9 +151,11 @@ class FakeTriton:
     def __init__(self, detections: list[tuple[float, float, float, float, float, int]]) -> None:
         self.detections = detections
         self.calls = 0
+        #: Models this fake repository serves; the GPU image-prep model is not one of them.
+        self.ready: frozenset[str] = frozenset()
 
-    async def is_model_ready(self, model_name: str) -> bool:  # noqa: ARG002
-        return False
+    async def is_model_ready(self, model_name: str) -> bool:
+        return model_name in self.ready
 
     async def load_model(self, model_name: str) -> None:
         # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
