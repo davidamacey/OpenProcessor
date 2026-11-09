@@ -206,3 +206,12 @@ def test_pydantic_is_declared_explicitly_in_every_runtime_manifest() -> None:
     """fastapi only constrains pydantic loosely; the OpenAPI contract depends on the exact one."""
     for manifest, specs in _runtime_manifests().items():
         assert specs.get('pydantic', '').startswith('=='), manifest
+
+
+def test_the_image_only_pin_files_carry_the_manifest_releases() -> None:
+    """Triton's torch pair and OpenCV are the same releases as requirements.txt."""
+    runtime = _file_specs('requirements.txt')
+    for path in ('docker/triton/requirements-torch.txt', 'docker/triton/requirements.txt'):
+        for name, spec in _file_specs(path).items():
+            if _family(name) in {'torch', 'torchvision', 'opencv-python'}:
+                assert runtime[_family(name)] == spec, (path, name)

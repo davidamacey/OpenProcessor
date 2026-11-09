@@ -114,6 +114,7 @@ jobs:
               - 'frontend/package-lock.json'
             triton:
               - 'Dockerfile.triton'
+              - 'docker/triton/**'
 
       - name: Decide whether this image needs a scan
         id: gate
