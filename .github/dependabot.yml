@@ -13,9 +13,8 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    # Most requirements here are ranges (>=X) that already resolve to the latest release at
-    # build time, so raising the floor on every release only adds install risk. Widen a range
-    # only when the latest release no longer satisfies it; exact pins (==) still get PRs.
+    # Every runtime requirement is an exact pin (tests/test_requirements_contract.py rejects a
+    # floor or a bare name), so each bump is a PR; widen a range only where a manifest keeps one.
     versioning-strategy: increase-if-necessary
     labels:
       - "dependencies"
