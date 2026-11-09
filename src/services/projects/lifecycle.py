@@ -145,7 +145,7 @@ async def create_project(
         from src.services.projects.clone_validate import _validate_clone_source
 
         await _validate_clone_source(
-            client, target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
+            target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
         )
 
     warnings = await _capacity_error_or_warning(client)

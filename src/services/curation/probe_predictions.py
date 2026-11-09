@@ -147,7 +147,6 @@ async def run_probe_inference(
     opensearch: AsyncOpenSearch,
     *,
     config: CurationConfig | None = None,
-    batch_size: int = 32,  # noqa: ARG001 - kept for call-site compat; raw path is one-crop-at-a-time
     max_crops: int | None = None,
     model_version: str | None = None,
     architecture: str = 'yolo26',
@@ -169,9 +168,6 @@ async def run_probe_inference(
         config: :class:`CurationConfig` supplying ``items_index`` and the
             filesystem roots used to resolve stored ``image_path`` values
             (defaults to :func:`get_curation_config`).
-        batch_size: Unused since the class-posterior fix (raw-tensor path
-            processes one crop per forward call); kept for call-site
-            compatibility.
         max_crops: Optional cap (useful in tests + smoke runs).
         model_version: Provenance tag stamped onto ``probe_model_version``.
             Defaults to ``model_path.name``.

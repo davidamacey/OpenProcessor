@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Pre-commit guard: the number of the noqa marker comments per Python file may not grow.
+"""Pre-commit guard: the number of noqa comments per Python file may not grow.
 
-A the noqa marker is an exception, not a shortcut. Every tracked Python file with one is
+A noqa marker is an exception, not a shortcut. Every tracked Python file with one is
 listed in ``baselines/noqa.txt`` (key = path, value = count of lines carrying
 the noqa marker). A new suppression needs a baseline bump that review sees; the
 baseline can only shrink otherwise (see ``_baseline.py``); ``--tighten`` lowers it.

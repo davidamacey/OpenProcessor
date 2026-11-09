@@ -14,7 +14,6 @@ pending-fetch query, the crop/geometry helpers ``runner.py`` still calls, and th
 from __future__ import annotations
 
 # ruff: noqa: E402
-import base64  # noqa: F401  — kept for back-compat re-export surface
 import io
 from typing import TYPE_CHECKING, Any
 
