@@ -51,5 +51,6 @@ def test_cluster_regions_serves_its_request_body() -> None:
     assert next_steps.cluster_regions()['body'] == {'target': 'region_box'}
 
 
-def test_bodyless_step_serves_no_body() -> None:
-    assert next_steps.recluster_items()['body'] is None
+def test_recluster_runs_the_item_clustering_route_not_the_umap_refit() -> None:
+    step = next_steps.recluster_items()
+    assert (step['path'], step['body']) == ('/clusters/runs', {'target': 'item'})

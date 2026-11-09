@@ -195,13 +195,13 @@ describe('W10 wrappers hit the scoped routes', () => {
   it('a served next step with no body to send sends none', async () => {
     const sent = capture();
     await runServedNextStep({
-      action: 'recluster',
+      action: 'refresh',
       method: 'post',
-      path: '/cluster/umap/rebuild',
+      path: '/refresh',
       reason: 'r',
       body: null,
     });
-    expect(sent()).toMatchObject({ url: `${P}/cluster/umap/rebuild`, method: 'POST' });
+    expect(sent()).toMatchObject({ url: `${P}/refresh`, method: 'POST' });
     expect(sent().body).toBeUndefined();
   });
 

@@ -20,8 +20,9 @@ def _step(
 def recluster_items() -> dict[str, Any]:
     return _step(
         'recluster',
-        '/cluster/umap/rebuild',
+        '/clusters/runs',
         'Source clusters were not copied; recluster the combined items.',
+        {'target': 'item'},
     )
 
 
