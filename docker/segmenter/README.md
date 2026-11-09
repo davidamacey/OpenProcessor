@@ -93,7 +93,7 @@ before persisting, the same contract the primary-detector path uses.
 ## Build and run
 
 ```bash
-# Build (SAM3_SHA defaults to upstream `main`, which publishes no releases).
+# Build (SAM3_SHA defaults to a pinned upstream commit; upstream publishes no releases).
 docker compose --profile segmenter build segmenter
 
 # Pin upstream SAM 3 to a specific commit.

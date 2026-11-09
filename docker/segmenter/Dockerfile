@@ -18,11 +18,11 @@
 
 # -- Stage 1: fetch upstream SAM 3 ------------------------------------------
 # Isolated so neither git nor the clone's history reaches the runtime
-# image. Pin to a known-good upstream SHA for reproducible rebuilds;
-# `main` is the default only because upstream publishes no releases.
+# image. Pinned to an upstream commit (upstream publishes no releases);
+# pass --build-arg SAM3_SHA=<sha> to move the pin deliberately.
 FROM alpine/git:v2.54.0@sha256:ce84fd6a057b4dc5cf5009da2dd832f1c6d096c1984bf50496cf3c256402264d AS sam3-src
 
-ARG SAM3_SHA=main
+ARG SAM3_SHA=f1647e8d0c1d280991f4d1b7d974c2704537fe66
 WORKDIR /src
 RUN git clone https://github.com/facebookresearch/sam3.git sam3
 WORKDIR /src/sam3
