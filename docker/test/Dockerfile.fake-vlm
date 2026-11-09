@@ -3,7 +3,7 @@
 # harness. Standard library only — no pip install, no network at build
 # time beyond the base image.
 # =============================================================================
-FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.14-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
 WORKDIR /app
 

@@ -392,10 +392,14 @@ def test_trainer_sets_its_build_identity_after_the_big_layers() -> None:
     assert sha_pin > last_copy
 
 
-@pytest.mark.parametrize('rel', ['docker/trainer/Dockerfile', 'docker/segmenter/Dockerfile'])
-def test_runtime_stage_strips_the_base_images_pip(rel: str) -> None:
+@pytest.mark.parametrize(
+    ('rel', 'python_minor'),
+    [('docker/trainer/Dockerfile', '3.14'), ('docker/segmenter/Dockerfile', '3.12')],
+)
+def test_runtime_stage_strips_the_base_images_pip(rel: str, python_minor: str) -> None:
     runs = ' '.join(r for k, r in _stages(rel)[-1] if k == 'RUN')
-    assert re.search(r'rm -rf /usr/local/lib/python3\.12/(site|dist)-packages/pip\b', runs)
+    pattern = rf'rm -rf /usr/local/lib/python{re.escape(python_minor)}/(site|dist)-packages/pip\b'
+    assert re.search(pattern, runs)
 
 
 def test_segmenter_has_no_wget_probe_or_package() -> None:

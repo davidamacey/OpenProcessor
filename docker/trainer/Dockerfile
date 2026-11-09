@@ -32,7 +32,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build -- resolve every wheel into a relocatable --user tree
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS builder
+FROM python:3.14-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS builder
 
 WORKDIR /build
 
@@ -66,14 +66,14 @@ RUN pip install --user --no-cache-dir --no-warn-script-location \
         -r requirements.txt \
     && pip install --user --no-cache-dir --no-warn-script-location \
         "ultralytics @ git+https://github.com/ultralytics/ultralytics.git@${ULTRALYTICS_SHA}" \
-    && rm -rf /root/.local/lib/python3.12/site-packages/pip \
-        /root/.local/lib/python3.12/site-packages/pip-*.dist-info \
-        /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.12
+    && rm -rf /root/.local/lib/python3.14/site-packages/pip \
+        /root/.local/lib/python3.14/site-packages/pip-*.dist-info \
+        /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.14
 
 # -----------------------------------------------------------------------------
 # Stage 2: runtime
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.14-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
 LABEL org.opencontainers.image.title="OpenProcessor Curation Trainer" \
       org.opencontainers.image.description="YOLO training worker for the gpu_train job queue" \
@@ -96,9 +96,9 @@ RUN apt-get update && apt-get upgrade -y \
 # No package manager in the runtime image (Trivy flags the vendored libraries of even the
 # newest pip, and nothing here installs packages at run time). The builder's user-site copy is
 # stripped in the builder stage.
-RUN rm -rf /usr/local/lib/python3.12/site-packages/pip \
-        /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
-        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
+RUN rm -rf /usr/local/lib/python3.14/site-packages/pip \
+        /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14
 
 # Non-root user, uid 1000 with the video group -- same as this repo's other
 # images so bind-mounted volumes keep consistent ownership on the host.

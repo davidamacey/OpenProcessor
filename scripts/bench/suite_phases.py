@@ -56,7 +56,7 @@ ENDPOINTS = (
     ('faces_detect', '/faces/detect'),
     ('ocr_predict', '/ocr/predict'),
 )
-SDK_IMAGE = 'nvcr.io/nvidia/tritonserver:26.06-py3-sdk'
+SDK_IMAGE = 'nvcr.io/nvidia/tritonserver:26.10-py3-sdk'
 
 
 def phase_triton(args: argparse.Namespace) -> dict[str, Any]:

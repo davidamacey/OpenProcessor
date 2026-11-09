@@ -46,7 +46,7 @@ def plan_facts(input_dtype: str = 'uint8', shape: tuple[int, ...] = (-1, 3, 640,
             PlanTensor('det_scores', 'fp16', (-1, 300)),
             PlanTensor('det_classes', 'int32', (-1, 300)),
         ),
-        trt_version='11.1.0.106',
+        trt_version='11.4.0.106',
         gpu_arch='sm_86',
     )
 

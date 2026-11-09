@@ -16,7 +16,8 @@ part of this product, and that work is no longer tracked here.
 
 | Image | Base scan (CRIT/HIGH) | Hardened (CRIT/HIGH) | Functional test |
 |---|---|---|---|
-| `triton-hardened:26.06` | 16 / 214 | **0 / 0** (no VEX) | ✅ trtexec engine build + ONNX & TensorRT serving + inference on A6000 |
+| `triton-hardened:26.06` (last measured) | 16 / 214 | **0 / 0** (no VEX) | ✅ trtexec engine build + ONNX & TensorRT serving + inference on A6000 |
+| `triton-hardened:26.10` (current Dockerfile) | not yet scanned | not yet scanned | not yet run |
 
 Triton reaches 0/0 with zero waivers — every finding was fixed properly (patched, or the unused
 component removed), nothing suppressed.
@@ -25,7 +26,7 @@ component removed), nothing suppressed.
 
 ```
 docker/hardened/
-  triton/Dockerfile          # FROM tritonserver:26.06-py3
+  triton/Dockerfile          # FROM tritonserver:26.10-py3
   test/
     make_test_model.py       # tiny ONNX classifier via repo .venv (torch/onnx)
     infer_check.py           # KServe v2 HTTP inference + numeric check
@@ -52,7 +53,7 @@ docker/hardened/
 
 ```bash
 bash docker/hardened/test/build_scan.sh \
-  docker/hardened/triton/Dockerfile docker/hardened/triton triton-hardened:26.06
+  docker/hardened/triton/Dockerfile docker/hardened/triton triton-hardened:26.10
 ```
 
 > Trivy needs `--timeout 30m`+ on these 14–20 GB images (default 5 min times out).
@@ -60,14 +61,14 @@ bash docker/hardened/test/build_scan.sh \
 ## Functional test (GPU required — used A6000, `CUDA_VISIBLE_DEVICES`/`device=2`)
 
 ```bash
-bash docker/hardened/test/test_triton.sh triton-hardened:26.06 2
+bash docker/hardened/test/test_triton.sh triton-hardened:26.10 2
 ```
 
 ## Run
 
 ```bash
 docker run -d --gpus '"device=2"' -p8000:8000 -p8001:8001 \
-  -v $PWD/models:/models:ro triton-hardened:26.06 \
+  -v $PWD/models:/models:ro triton-hardened:26.10 \
   --model-repository=/models --model-control-mode=none
 ```
 

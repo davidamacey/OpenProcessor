@@ -39,7 +39,10 @@ State lives in `<dir>/.install/` (`state.json`, `install.log`, mode 600).
 ### Prerequisites
 
 - Linux with Docker Engine and Docker Compose v2.
-- An NVIDIA GPU and driver, with the
+- An NVIDIA GPU (compute capability 7.5 or newer) and driver R580 or newer (the images are
+  CUDA 13.4; CUDA 13.x runs on drivers >= 580,
+  [CUDA Toolkit release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html)),
+  with the
   [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
   The installer never installs packages or changes the Docker daemon config;
   it tells you what is missing and stops.

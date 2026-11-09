@@ -1,14 +1,17 @@
-# Migration Guide: Triton 26.06 / TensorRT 11 Upgrade
+# Migration Guide: Triton 26.10 / TensorRT 11 Upgrade
 
 This release moves the stack from Triton 25.10 (TensorRT 10.13) to
-**Triton 26.06 (CUDA 13.3, TensorRT 11.1)** and pins every container in
-`docker-compose.yml`. Existing deployments need the one-time steps below.
+**Triton 26.10 (CUDA 13.4, TensorRT 11.4)** and pins every container in
+`docker-compose.yml`. Existing deployments need the one-time steps below. An install that
+already runs Triton 26.06 (TensorRT 11.1) needs step 1 as well: a plan is only guaranteed to
+run on the TensorRT build that made it, so every engine is rebuilt (`./openprocessor models
+install` rebuilds each group because the Triton image digest changed).
 
 ## 1. Re-export ALL TensorRT engines (required)
 
 TensorRT serialized engines (`.plan`) are **not portable across TensorRT
 major versions**. Every engine built under 25.10 (TRT 10.x) fails to load
-on 26.06 (TRT 11.x) with a serialization-version error.
+on 26.10 (TRT 11.x) with a serialization-version error.
 
 `./openprocessor models repair` does this for every engine Triton refuses to load. By hand,
 from a checkout (the export scripts run in the `model-export` container, not the API
@@ -33,10 +36,11 @@ docker compose restart triton-server
 
 Notes:
 
-- The `tensorrt-cu13==11.1.0.106` pin in `requirements-export.txt` **must**
+- The `tensorrt-cu13==11.4.0.106` pin in `requirements-export.txt` **must**
   match the TRT bundled in the Triton image. Do not bump it independently;
   upgrade it together with the Triton base tag in `Dockerfile.triton`.
-- GPU requirements: driver R570+ (CUDA 13.x) and compute capability >= 7.5
+- GPU requirements: driver R580+ (CUDA 13.x minor-version compatibility; the image is CUDA
+  13.4.3, whose own branch is R615) and compute capability >= 7.5
   (Turing or newer). Volta/Pascal are no longer supported by this Triton
   release line.
 
@@ -99,7 +103,7 @@ handled transparently (adapter resolved from Triton model metadata).
 
 | Service | Image |
 |---|---|
-| triton-server | `nvcr.io/nvidia/tritonserver:26.06-py3` (via `Dockerfile.triton`) |
+| triton-server | `nvcr.io/nvidia/tritonserver:26.10-py3` (via `Dockerfile.triton`) |
 | opensearch | `opensearchproject/opensearch:3.6.0` |
 | opensearch-dashboards | `opensearchproject/opensearch-dashboards:3.6.0` |
 | prometheus | `prom/prometheus:v3.12.0` |
