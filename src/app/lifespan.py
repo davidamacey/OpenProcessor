@@ -14,6 +14,7 @@ from src.app import startup_gate
 from src.app.resources import AppResources
 from src.clients.triton_pool_core import AsyncTritonPool
 from src.config import Settings, get_settings
+from src.config.api_pools import executor_threads, triton_channels, triton_inflight
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.logging import get_logger
 from src.db.engine import dispose_engines
@@ -47,22 +48,27 @@ def _preflight() -> None:
 
 async def _start_pools(settings: Settings) -> None:
     """The shared CPU executor and the high-throughput async Triton pool."""
+    # Sizes are this process's share of the deployment totals (src/config/api_pools.py).
+    threads = executor_threads()
+    channels = triton_channels()
+    inflight = triton_inflight()
+
     # Shared ThreadPoolExecutor for CPU-bound tasks (JPEG decode, resize).
     AppResources.shared_executor = ThreadPoolExecutor(
-        max_workers=64,
+        max_workers=threads,
         thread_name_prefix='ingest-worker-',
     )
-    logger.info('executor_initialized', workers=64, type='ThreadPoolExecutor')
+    logger.info('executor_initialized', workers=threads, type='ThreadPoolExecutor')
 
-    # High-throughput async Triton pool: 4 gRPC channels = 4 TCP connections.
+    # High-throughput async Triton pool: one gRPC channel is one TCP connection.
     AppResources.async_triton_pool = AsyncTritonPool(
         url=settings.triton_url,
-        pool_size=4,
-        max_concurrent=64,
+        pool_size=channels,
+        max_concurrent=inflight,
         verbose=False,
     )
     await AppResources.async_triton_pool.initialize()
-    logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
+    logger.info('triton_pool_initialized', channels=channels, max_concurrent=inflight)
 
 
 async def _report_stored_face_data() -> None:

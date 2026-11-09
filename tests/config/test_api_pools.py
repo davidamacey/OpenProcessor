@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.config.api_pools import db_pool_size
+from src.config.api_pools import (
+    EXECUTOR_THREADS_TOTAL,
+    TRITON_CHANNELS_TOTAL,
+    TRITON_INFLIGHT_TOTAL,
+    db_pool_size,
+    executor_threads,
+    triton_channels,
+    triton_inflight,
+)
 from src.config.database import DatabaseSettings
 
 
@@ -50,3 +58,47 @@ def test_a_malformed_worker_count_refuses_naming_the_variable(
     monkeypatch.setenv('WEB_CONCURRENCY', 'many')
     with pytest.raises(ValueError, match='WEB_CONCURRENCY'):
         db_pool_size()
+
+
+def test_one_worker_gets_the_totals(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('WEB_CONCURRENCY', '1')
+    assert db_pool_size() == 128
+    assert executor_threads() == EXECUTOR_THREADS_TOTAL
+    assert triton_channels() == TRITON_CHANNELS_TOTAL
+    assert triton_inflight() == TRITON_INFLIGHT_TOTAL
+
+
+def test_the_compose_fallback_of_eight_workers(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('WEB_CONCURRENCY', '8')
+    assert db_pool_size() == 16
+    assert (executor_threads(), triton_channels(), triton_inflight()) == (256, 16, 256)
+
+
+def test_thirty_two_workers_keep_todays_per_process_sizes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('WEB_CONCURRENCY', '32')
+    assert (executor_threads(), triton_channels(), triton_inflight()) == (64, 4, 64)
+
+
+@pytest.mark.parametrize('workers', [1, 2, 3, 7, 8, 16, 32, 33, 64])
+def test_no_size_times_its_worker_count_exceeds_its_total_beyond_the_floor(
+    monkeypatch: pytest.MonkeyPatch, workers: int
+) -> None:
+    monkeypatch.setenv('WEB_CONCURRENCY', str(workers))
+    assert db_pool_size() * workers <= 128 or db_pool_size() == 1
+    for size, total, floor in (
+        (executor_threads(), EXECUTOR_THREADS_TOTAL, 4),
+        (triton_channels(), TRITON_CHANNELS_TOTAL, 1),
+        (triton_inflight(), TRITON_INFLIGHT_TOTAL, 8),
+    ):
+        assert size * workers <= total or size == floor
+
+
+@pytest.mark.parametrize('sizer', [executor_threads, triton_channels, triton_inflight])
+@pytest.mark.parametrize('value', [None, '', '0', '-1', 'many'])
+def test_the_pool_sizers_fail_closed_without_a_positive_worker_count(
+    monkeypatch: pytest.MonkeyPatch, sizer: object, value: str | None
+) -> None:
+    if value is not None:
+        monkeypatch.setenv('WEB_CONCURRENCY', value)
+    with pytest.raises(ValueError, match='WEB_CONCURRENCY'):
+        sizer()  # type: ignore[operator]

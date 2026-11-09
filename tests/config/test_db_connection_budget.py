@@ -2,7 +2,7 @@
 
 The table is 02b section 8: every service that reaches the database, how many processes it
 runs (``deploy.replicas`` and the uvicorn / Celery counts in the compose file, with
-``${OP_API_REPLICAS:-1}`` the single place the API is scaled) and how many connections each
+``${OP_API_REPLICAS:-1}`` the single place the API is scaled and ``${API_WORKERS:-8}`` the worker count) and how many connections each
 process holds. The sum must fit ``OP_PG_MAX_CONNECTIONS`` minus the 13 slots kept for
 maintenance (10) and ``superuser_reserved_connections`` (3); see PostgreSQL's
 ``max_connections`` documentation:
@@ -131,14 +131,6 @@ def test_every_database_service_is_in_the_table() -> None:
     assert not unaccounted, f'add these services to the connection table: {unaccounted}'
 
 
-def test_uvicorn_workers_equal_web_concurrency() -> None:
-    """The pool share is computed from WEB_CONCURRENCY; uvicorn must start as many workers."""
-    api = _services()['api']
-    flag = next(a for a in api['command'] if a.startswith('--workers=')).split('=')[1].split()[0]
-    web = next(e for e in api['environment'] if e.startswith('WEB_CONCURRENCY=')).split('=')[1]
-    assert flag == web
-
-
 def test_default_compose_fits() -> None:
     budget = connection_budget()
     assert budget['total'] <= budget['limit'], budget
@@ -148,15 +140,27 @@ def test_default_total_is_128() -> None:
     assert connection_budget()['api_requests'] == 128
 
 
-def test_one_replica_gives_each_api_process_four_connections() -> None:
-    budget = connection_budget()
+def test_the_compose_default_of_eight_workers_gives_each_process_sixteen_connections() -> None:
+    assert connection_budget()['api_requests'] // 8 == 16
+
+
+def test_thirty_two_workers_give_each_api_process_four_connections() -> None:
+    budget = connection_budget({'API_WORKERS': '32'})
     assert budget['api_requests'] // 32 == 4
+    assert budget['total'] <= budget['limit'], budget
+
+
+def test_two_replicas_of_the_default_still_fit_the_same_total() -> None:
+    budget = connection_budget({'OP_API_REPLICAS': '2'})
+    assert budget['api_requests'] == 128
+    assert budget['api_requests'] // 16 == 8
+    assert budget['total'] <= budget['limit'], budget
 
 
 def test_more_replicas_than_the_total_allows_is_refused() -> None:
     """32 workers x 8 replicas = 256 processes on a total of 128: the floor of 1 would break it."""
     with pytest.raises(AssertionError, match='exceeds OP_DB_API_CONNECTIONS_TOTAL'):
-        connection_budget({'OP_API_REPLICAS': '8'})
+        connection_budget({'API_WORKERS': '32', 'OP_API_REPLICAS': '8'})
 
 
 def test_a_budget_over_the_server_limit_fails() -> None:

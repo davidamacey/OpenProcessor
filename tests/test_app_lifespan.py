@@ -57,6 +57,8 @@ async def _forever() -> None:
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch) -> World:  # type: ignore[misc]
     w = World()
+    # The pool sizes are this process's share of the totals; 32 workers gives the 4x64 asserted below.
+    monkeypatch.setenv('WEB_CONCURRENCY', '32')
     saved = {
         k: v for k, v in vars(AppResources).items() if not k.startswith('__') and not callable(v)
     }
