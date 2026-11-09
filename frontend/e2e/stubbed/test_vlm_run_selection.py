@@ -15,6 +15,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from fixtures.contract import auto_label_job
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
@@ -56,20 +57,7 @@ VLM_STRATEGIES = [
     {"id": "off", "axis": "vlm", "label": "Off", "status": "stable", "settable": True},
 ]
 
-IDLE_JOB = {
-    "job_id": "job-0",
-    "status": "idle",
-    "stage": "",
-    "processed": 0,
-    "total": 0,
-    "started_at": 0,
-    "finished_at": 0,
-    "error": None,
-    "result": {},
-    "args": {},
-    "eta_seconds": None,
-    "elapsed_seconds": 0,
-}
+IDLE_JOB = auto_label_job()
 
 DATASET_STATS = {
     "as_of": "2026-09-24T00:00:00Z",
@@ -99,7 +87,7 @@ def register_dashboard(stub: Any, strategies: list[dict[str, Any]], refuse_start
 
     def start(request: Any, _m: Any):
         starts.append(request.url)
-        return (200, IDLE_JOB)
+        return (202, auto_label_job("queued"))
 
     stub.on("POST", r"/pipeline/auto_label/start", start)
     return starts
@@ -122,7 +110,7 @@ def test_dashboard_auto_label_with_a_picked_external_endpoint(stub, page, app_ur
     expect(page.get_by_test_id("vlm-run-ack")).to_contain_text(WARNING)
     page.get_by_test_id("vlm-run-ack-checkbox").check()
 
-    page.get_by_role("button", name=re.compile(r"^Recluster")).first.click()
+    page.get_by_role("button", name=re.compile(r"^Auto-label")).first.click()
     with page.expect_response(
         lambda r: r.request.method == "POST" and "/pipeline/auto_label/start" in r.url,
         timeout=ACTION_TIMEOUT_MS,
@@ -164,7 +152,7 @@ def test_settings_disables_an_unacknowledged_external_entry(stub, page, app_url)
 def test_no_picker_without_a_vlm_axis(stub, page, app_url):
     starts = register_dashboard(stub, BASE_STRATEGIES)
     page.goto(f"{app_url}/p/default/dashboard")
-    start_btn = page.get_by_role("button", name="Recluster now")
+    start_btn = page.get_by_role("button", name="Auto-label now")
     start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id("vlm-run-picker").count() == 0
