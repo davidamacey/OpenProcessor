@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import OpenSearchException
 
 from src.services.curation.export_readiness import (
     NO_VALIDATED_ITEMS_REASON,
@@ -66,7 +67,7 @@ def test_status_can_export_when_validated_items_exist(client_factory) -> None:
 
 def test_status_readiness_is_null_not_false_when_count_fails(client_factory) -> None:
     body = (
-        client_factory(_os_with_count(ConnectionError('down')))
+        client_factory(_os_with_count(OpenSearchException('down')))
         .get('/curation/projects/default/export/status')
         .json()
     )

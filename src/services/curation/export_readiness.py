@@ -34,6 +34,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.core.logging import get_logger
 from src.services.curation.dataset_thresholds import (
     MIN_TRAIN_INSTANCES_PER_CLASS,
@@ -87,7 +89,7 @@ async def export_blocking_reasons(
             index=index, body={'query': validated_export_query(item_filter)}
         )
         count = int(resp.get('count') or 0)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('export_readiness_count_failed', index=index, error=str(exc))
         return None
     return [] if count else [NO_VALIDATED_ITEMS_REASON]

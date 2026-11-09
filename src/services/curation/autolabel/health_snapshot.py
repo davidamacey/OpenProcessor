@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import not_embedded_clause
@@ -53,7 +55,7 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
                 },
             },
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('pipeline_snapshot_failed', error=str(exc))
         return {}
     aggs = resp.get('aggregations') or {}

@@ -17,6 +17,8 @@ import contextlib
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.core.logging import get_logger
 from src.services.curation.source_image_cache import crop_cache_file
@@ -101,7 +103,7 @@ async def _delete_round(
     gone, ids that hit a version conflict and need another round)``."""
     try:
         fresh = await _fresh(opensearch, index, page)
-    except Exception as exc:
+    except OpenSearchException as exc:
         errors.extend({'crop_id': cid, 'error': str(exc)} for cid in page)
         return 0, 0, []
     deleted = gone = 0

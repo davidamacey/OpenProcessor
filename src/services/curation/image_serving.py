@@ -57,13 +57,13 @@ if TYPE_CHECKING:
 # Production always takes the first branch.
 try:
     from src.core.logging import get_logger as _get_logger
-except Exception:
+except ImportError:
     try:
         import structlog as _structlog
 
         def _get_logger(name: str) -> Any:
             return _structlog.get_logger(name)
-    except Exception:
+    except ImportError:
         import logging as _stdlib_logging
 
         class _KwargLogger:

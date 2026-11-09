@@ -512,7 +512,7 @@ def _code_sha() -> str:
             timeout=5,
         )
         return out.stdout.strip()
-    except Exception:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         return 'unknown'
 
 

@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
@@ -142,7 +144,7 @@ async def scroll_box_rows(
         if scroll_id:
             try:
                 await client.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.warning('curation_clear_scroll_failed', error=str(exc))
     rows.sort(key=lambda r: (r.crop_id, r.box_id))
     return rows

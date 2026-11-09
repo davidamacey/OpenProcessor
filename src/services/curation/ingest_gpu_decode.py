@@ -84,7 +84,7 @@ def megapixels(data: bytes) -> float | None:
     try:
         with Image.open(io.BytesIO(data)) as img:
             w, h = img.size
-    except Exception:
+    except (OSError, ValueError, Image.DecompressionBombError):
         return None
     return w * h / 1e6
 
