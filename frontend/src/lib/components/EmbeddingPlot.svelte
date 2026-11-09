@@ -29,6 +29,7 @@
    *   assigns a cluster.
    */
 
+  import { jobPhase } from '$lib/jobs/jobPhase';
   import { getClusters, moveCropsToCluster } from '$lib/api_clusters';
   import { runLabelOp } from '$lib/labelOps/runLabelOp';
   import { undoStore } from '$stores/undo.svelte';
@@ -372,7 +373,7 @@
     destroyed = false;
     void getVizProjectionStatus()
       .then((st) => {
-        if (st.status === 'running') {
+        if (jobPhase(st.status) === 'active') {
           job = st;
           startJobPoll();
         }

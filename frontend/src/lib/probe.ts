@@ -6,20 +6,21 @@
  * `embeddingPlot.ts`'s `classifyRebuildPoll`.
  */
 
+import { jobPhase } from '$lib/jobs/jobPhase';
 import type { TrainJobStatus } from './types_train';
 
 export type ProbePollOutcome = 'running' | 'completed' | 'failed' | 'cancelled';
 
 /** What a poll of `GET {API_PREFIX}/probe/status` should do next, given
- *  only the job's own `status` (`running`/`completed`/`cancelled`/
- *  `failed`/`idle` — `probe_job.py`'s `_JobState`). `idle` (never
+ *  only the job's own `status` (a job-runtime status, or `idle`). `idle` (never
  *  started, or the client's own job resolved without an in-between poll
  *  catching it) is treated the same as `completed`: stop polling, no
  *  error to report. */
 export function classifyProbePoll(status: string): ProbePollOutcome {
-  if (status === 'running') return 'running';
-  if (status === 'failed') return 'failed';
-  if (status === 'cancelled') return 'cancelled';
+  const phase = jobPhase(status);
+  if (phase === 'active') return 'running';
+  if (phase === 'failed') return 'failed';
+  if (phase === 'cancelled') return 'cancelled';
   return 'completed';
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { jobPhase } from '$lib/jobs/jobPhase';
   import { apiErrorText } from '$lib/api_errors';
   /**
    * "Curation scores" card — `/settings` (docs/design/
@@ -71,7 +72,7 @@
   async function adoptInFlightJob(): Promise<void> {
     try {
       const st = await getScoresStatus();
-      if (st.status === 'running') {
+      if (jobPhase(st.status) === 'active') {
         job = st;
         startJobPoll();
       }

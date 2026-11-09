@@ -170,6 +170,14 @@ describe('classifyRebuildPoll', () => {
     expect(classifyRebuildPoll('running', false)).toBe('running');
   });
 
+  it('keeps polling a queued, paused or cancelling job', () => {
+    for (const s of ['queued', 'paused', 'cancelling']) {
+      expect(classifyRebuildPoll(s, true)).toBe('running');
+      expect(classifyRebuildPoll(s, false)).toBe('running');
+    }
+    expect(classifyRebuildPoll('interrupted', true)).toBe('failed');
+  });
+
   it('reports the terminal status of a job this plot was watching', () => {
     expect(classifyRebuildPoll('completed', true)).toBe('completed');
     expect(classifyRebuildPoll('failed', true)).toBe('failed');

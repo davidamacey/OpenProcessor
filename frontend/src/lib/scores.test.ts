@@ -59,6 +59,14 @@ describe('classifyScoresPoll', () => {
     expect(classifyScoresPoll('completed')).toBe('completed');
   });
 
+  it('a queued, paused or cancelling job keeps polling; interrupted fails', () => {
+    for (const s of ['queued', 'paused', 'cancelling'] as const) {
+      expect(classifyScoresPoll(s)).toBe('running');
+    }
+    expect(classifyScoresPoll('interrupted')).toBe('failed');
+    expect(classifyScoresPoll('completed_with_errors')).toBe('completed');
+  });
+
   it('idle (unreachable in practice) still resolves to completed, not left hanging', () => {
     expect(classifyScoresPoll('idle')).toBe('completed');
   });

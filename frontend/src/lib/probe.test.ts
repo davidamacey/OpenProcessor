@@ -20,8 +20,16 @@ describe('classifyProbePoll', () => {
     expect(classifyProbePoll('idle')).toBe('completed');
   });
 
-  it('an unknown status also resolves as completed rather than polling forever', () => {
-    expect(classifyProbePoll('some_future_status')).toBe('completed');
+  it('an unknown status ends the poll as a failure, not as a success', () => {
+    expect(classifyProbePoll('some_future_status')).toBe('failed');
+  });
+
+  it('keeps polling a queued, paused or cancelling job and reads the served end states', () => {
+    for (const s of ['queued', 'paused', 'cancelling']) {
+      expect(classifyProbePoll(s)).toBe('running');
+    }
+    expect(classifyProbePoll('completed_with_errors')).toBe('completed');
+    expect(classifyProbePoll('interrupted')).toBe('failed');
   });
 });
 

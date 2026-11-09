@@ -11,6 +11,8 @@
  * Everything here is pure: no DOM access, no `$state`, no network.
  */
 
+import { jobPhase } from '$lib/jobs/jobPhase';
+
 export interface ScreenPoint {
   x: number;
   y: number;
@@ -235,13 +237,14 @@ export type RebuildPollOutcome = 'running' | 'completed' | 'failed' | 'idle';
  * doesn't toast or reload for someone else's history.
  */
 export function classifyRebuildPoll(
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled',
+  status: string,
   wasTracking: boolean,
 ): RebuildPollOutcome {
-  if (status === 'running') return 'running';
+  const phase = jobPhase(status);
+  if (phase === 'active') return 'running';
   if (!wasTracking) return 'idle';
-  if (status === 'completed') return 'completed';
-  if (status === 'failed') return 'failed';
+  if (phase === 'completed') return 'completed';
+  if (phase === 'failed') return 'failed';
   return 'idle';
 }
 

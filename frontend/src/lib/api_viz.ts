@@ -2,6 +2,7 @@
  * The cached 2-d embedding projection (`/viz/projection*`).
  */
 import { apiFetch, isPlainObject, qs, scoped } from '$lib/api';
+import type { LatestJobStatus } from '$lib/jobs/jobPhase';
 import { ApiError, structuredDetail } from '$lib/api_errors';
 
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------
@@ -136,7 +137,7 @@ export async function getVizProjection(
  */
 export interface VizProjectionJob {
   job_id: string;
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: LatestJobStatus;
   scope: string;
   cluster_uid: string | null;
   n_pool: number;

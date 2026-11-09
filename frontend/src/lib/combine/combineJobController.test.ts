@@ -170,6 +170,8 @@ describe('actions', () => {
   it.each([
     ['queued', true, false],
     ['running', true, false],
+    ['paused', true, false],
+    ['cancelling', false, false],
     ['interrupted', false, true],
     ['cancelled', false, true],
     ['completed', false, false],

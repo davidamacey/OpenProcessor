@@ -10,6 +10,7 @@
  */
 
 import { onMount } from 'svelte';
+import { jobPhase } from '$lib/jobs/jobPhase';
 import { getCropsByIds } from '$lib/api_cropRead';
 import { apiErrorText } from '$lib/api_errors';
 import { cancelSelect, getSelectStatus, selectDiverse } from '$lib/api_select';
@@ -122,8 +123,8 @@ export function createReviewDiverseController(opts: ReviewDiverseOptions) {
     // 202 — large pool (the `all` tab always takes this path, ~320k
     // crops). Poll until done, mirroring
     // /routes/bakeoff/+page.svelte's setInterval pattern. CONFIRMED
-    // against the real backend (selection/job.py's _JobState): status is
-    // 'running' | 'completed' | 'failed' | 'cancelled', and the finished
+    // against the real backend: status is a job-runtime status (queued and
+    // running are still in flight), and the finished
     // selection is nested under `result` — not flattened onto the status
     // object.
     diverseJobId = res.job_id;
@@ -133,7 +134,7 @@ export function createReviewDiverseController(opts: ReviewDiverseOptions) {
         try {
           const st = await getSelectStatus();
           diverseJobStatus = st.status;
-          if (st.status === 'running') return;
+          if (jobPhase(st.status) === 'active') return;
           stopDiversePolling();
           if (st.status === 'completed' && st.result) {
             diverseSelection = st.result;
