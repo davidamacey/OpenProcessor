@@ -49,3 +49,16 @@ async def test_persons_are_aggregated_on_the_keyword_field(
     await svc.get_all_persons(limit=5)
 
     assert _body(search)['aggs']['persons']['terms']['field'] == 'person_id'
+
+
+@pytest.mark.asyncio
+async def test_opensearch_failure_is_not_an_empty_person_list(
+    service: tuple[FaceIdentityService, AsyncMock],
+) -> None:
+    svc, search = service
+    search.side_effect = RuntimeError('cluster down')
+
+    with pytest.raises(RuntimeError):
+        await svc.get_all_persons(limit=5)
+    with pytest.raises(RuntimeError):
+        await svc.get_person_faces('person_abc')

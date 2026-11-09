@@ -33,6 +33,7 @@ import uuid
 from typing import Any
 
 import numpy as np
+from opensearchpy.exceptions import NotFoundError
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.clients.opensearch.names import IndexName
@@ -97,8 +98,8 @@ class DuplicateDetectionService:
                 id=image_id,
                 _source=['global_embedding', 'image_path'],
             )
-        except Exception as e:
-            logger.error(f'Image not found: {image_id} - {e}')
+        except NotFoundError:
+            logger.error(f'Image not found: {image_id}')
             return []
 
         embedding = doc['_source']['global_embedding']

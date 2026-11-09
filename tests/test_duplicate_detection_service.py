@@ -8,6 +8,7 @@ from unittest import mock
 
 import numpy as np
 import pytest
+from opensearchpy.exceptions import NotFoundError
 
 from src.services.duplicate_detection.service import DuplicateDetectionService
 
@@ -101,9 +102,15 @@ async def test_find_duplicates_sends_knn_and_drops_self_and_low_scores() -> None
 
 
 async def test_find_duplicates_returns_empty_when_the_image_is_missing() -> None:
-    client = _FakeClient(get=RuntimeError('not found'))
+    client = _FakeClient(get=NotFoundError(404, 'not_found', {}))
     assert await _service(client).find_duplicates('zzz') == []
     assert [name for name, _ in client.calls] == ['get']
+
+
+async def test_find_duplicates_propagates_an_outage() -> None:
+    client = _FakeClient(get=ConnectionError('cluster down'))
+    with pytest.raises(ConnectionError):
+        await _service(client).find_duplicates('zzz')
 
 
 @pytest.mark.parametrize('as_array', [True, False])

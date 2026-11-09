@@ -43,7 +43,7 @@ class TritonControlService:
             return False, f'Timeout loading model {model_name}'
         except httpx.ConnectError:
             return False, 'Cannot connect to Triton server'
-        except Exception as e:
+        except httpx.HTTPError as e:
             return False, f'Load error: {e}'
 
     async def unload_model(self, model_name: str) -> tuple[bool, str]:
@@ -60,7 +60,7 @@ class TritonControlService:
 
                 return False, f'Unload failed: {response.text}'
 
-        except Exception as e:
+        except httpx.HTTPError as e:
             return False, f'Unload error: {e}'
 
     async def get_repository_index(self) -> list[dict[str, Any]]:
@@ -71,7 +71,7 @@ class TritonControlService:
                 if response.status_code == 200:
                     typed: list[dict[str, Any]] = response.json()
                     return typed
-        except Exception as e:
+        except (httpx.HTTPError, ValueError) as e:
             logger.warning(f'Failed to get repository index: {e}')
         return []
 
@@ -83,7 +83,7 @@ class TritonControlService:
                 if response.status_code == 200:
                     typed: dict[str, Any] | None = response.json()
                     return typed
-        except Exception as e:
+        except (httpx.HTTPError, ValueError) as e:
             # Model may not exist or Triton may be unavailable
             logger.debug('Could not get model config for %s: %s', model_name, e)
         return None
@@ -94,5 +94,5 @@ class TritonControlService:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(f'{self.http_url}/v2/health/ready')
                 return response.status_code == 200
-        except Exception:
+        except httpx.HTTPError:
             return False

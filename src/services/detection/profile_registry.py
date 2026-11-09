@@ -213,10 +213,8 @@ def _stored_profiles() -> dict[str, DetectionProfile]:
     config-store snapshot (empty until profile CRUD stores any). No I/O --
     reads whatever the last refresh cached. Malformed stored bodies are
     skipped with a logged warning."""
-    try:
-        from src.services.config_store import get_config_store
-    except Exception:  # pragma: no cover - config_store always importable
-        return {}
+    from src.services.config_store import get_config_store
+
     snapshot = get_config_store().current
     profiles: dict[str, DetectionProfile] = {}
     for name, stored in snapshot.profiles.items():
@@ -272,13 +270,10 @@ def get_active_region_profile() -> DetectionProfile | None:
     anything through the store.
     """
     ensure_env_region_profile()
-    try:
-        from src.services.config_store import get_config_store
+    from src.services.config_store import get_config_store
 
-        snapshot = get_config_store().current
-        ref = snapshot.active_profile
-    except Exception:  # pragma: no cover - config_store always importable
-        ref, snapshot = None, None
+    snapshot = get_config_store().current
+    ref = snapshot.active_profile
     if ref == 'off':
         return None
     if ref is not None:

@@ -34,29 +34,24 @@ class IdentificationMixin:
         Returns:
             List of face documents (without embeddings)
         """
-        try:
-            response = await self.opensearch.client.search(
-                index=IndexName.FACES.value,
-                body={
-                    'query': {'term': {'person_id': person_id}},
-                    'size': 1000,  # Get all faces for person
-                    'sort': [
-                        {'confidence': {'order': 'desc', 'unmapped_type': 'float'}},
-                    ],
-                    '_source': {
-                        'excludes': ['embedding'],  # Don't return large embedding
-                    },
+        response = await self.opensearch.client.search(
+            index=IndexName.FACES.value,
+            body={
+                'query': {'term': {'person_id': person_id}},
+                'size': 1000,  # Get all faces for person
+                'sort': [
+                    {'confidence': {'order': 'desc', 'unmapped_type': 'float'}},
+                ],
+                '_source': {
+                    'excludes': ['embedding'],  # Don't return large embedding
                 },
-            )
+            },
+        )
 
-            faces = []
-            for hit in response['hits']['hits']:
-                face = hit['_source']
-                face['_id'] = hit['_id']
-                faces.append(face)
+        faces = []
+        for hit in response['hits']['hits']:
+            face = hit['_source']
+            face['_id'] = hit['_id']
+            faces.append(face)
 
-            return faces
-
-        except Exception as e:
-            logger.error(f'Failed to get faces for person {person_id}: {e}')
-            return []
+        return faces
