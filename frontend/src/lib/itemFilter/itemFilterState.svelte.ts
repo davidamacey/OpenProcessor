@@ -47,6 +47,9 @@ export class ItemFilterState {
   reviewStatus = $state<ReviewStatus[]>([]);
   openVocabSet = $state<string | null>(null);
   sourcePrompt = $state<string | null>(null);
+  /** Capture days, `YYYY-MM-DD`, inclusive; `''` = unset. */
+  takenFrom = $state('');
+  takenTo = $state('');
 
   get isEmpty(): boolean {
     return (
@@ -61,7 +64,9 @@ export class ItemFilterState {
       this.embeddingState.length === 0 &&
       this.reviewStatus.length === 0 &&
       !this.openVocabSet &&
-      !this.sourcePrompt
+      !this.sourcePrompt &&
+      !this.takenFrom &&
+      !this.takenTo
     );
   }
 
@@ -88,6 +93,8 @@ export class ItemFilterState {
     put('review_status', [...this.reviewStatus], this.reviewStatus.length > 0);
     put('open_vocab_set', this.openVocabSet, !!this.openVocabSet);
     put('source_prompt', this.sourcePrompt, !!this.sourcePrompt);
+    put('taken_from', this.takenFrom, !!this.takenFrom);
+    put('taken_to', this.takenTo, !!this.takenTo);
     return q as ItemFilterQuery;
   }
 
@@ -108,6 +115,8 @@ export class ItemFilterState {
     if (this.reviewStatus.length > 0) b.review_status = [...this.reviewStatus];
     if (this.openVocabSet) b.open_vocab_set = this.openVocabSet;
     if (this.sourcePrompt) b.source_prompt = this.sourcePrompt;
+    if (this.takenFrom) b.taken_from = this.takenFrom;
+    if (this.takenTo) b.taken_to = this.takenTo;
     return b;
   }
 
@@ -135,6 +144,8 @@ export class ItemFilterState {
     this.reviewStatus = pick(params.getAll('review_status'), REVIEW_STATUSES);
     this.openVocabSet = params.get('open_vocab_set') || null;
     this.sourcePrompt = params.get('source_prompt') || null;
+    this.takenFrom = params.get('taken_from') ?? '';
+    this.takenTo = params.get('taken_to') ?? '';
   }
 
   /** Writes the state into `params`, deleting the keys that are now empty. */
@@ -177,6 +188,10 @@ export class ItemFilterState {
         return this.openVocabSet ?? '';
       case 'source_prompt':
         return this.sourcePrompt ?? '';
+      case 'taken_from':
+        return this.takenFrom;
+      case 'taken_to':
+        return this.takenTo;
       default:
         return undefined;
     }
@@ -229,6 +244,12 @@ export class ItemFilterState {
       case 'source_prompt':
         this.sourcePrompt = str || null;
         break;
+      case 'taken_from':
+        this.takenFrom = str;
+        break;
+      case 'taken_to':
+        this.takenTo = str;
+        break;
     }
   }
 
@@ -245,6 +266,8 @@ export class ItemFilterState {
     this.reviewStatus = [];
     this.openVocabSet = null;
     this.sourcePrompt = null;
+    this.takenFrom = '';
+    this.takenTo = '';
   }
 
   /** One removable chip per active value. */
@@ -325,6 +348,16 @@ export class ItemFilterState {
         clear: () => (this.sourcePrompt = null),
       });
     }
+    if (this.takenFrom || this.takenTo) {
+      out.push({
+        param: 'taken_from',
+        label: `Taken: ${this.takenFrom || '…'} to ${this.takenTo || '…'}`,
+        clear: () => {
+          this.takenFrom = '';
+          this.takenTo = '';
+        },
+      });
+    }
     return out;
   }
 }
@@ -342,4 +375,6 @@ const URL_KEYS = [
   'review_status',
   'open_vocab_set',
   'source_prompt',
+  'taken_from',
+  'taken_to',
 ] as const;

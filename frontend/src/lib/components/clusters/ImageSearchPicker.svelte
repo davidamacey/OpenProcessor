@@ -110,6 +110,8 @@
       {#if previewUrl}
         <div
           class="relative cursor-crosshair touch-none select-none"
+          role="application"
+          aria-label="Query picture: drag to mark a region to search by; without one the whole picture is searched"
           onpointerdown={down}
           onpointermove={move}
           onpointerup={up}
