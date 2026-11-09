@@ -21,7 +21,6 @@ URL is never fetched. The minimized ``JSON_MIN`` export is not read.
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -40,6 +39,7 @@ from src.services.curation.dataset_import.native_common import (
     entry_state,
     find_image,
     finish_scan,
+    finite_number,
     load_json_file,
     rel_path,
     resolve_size,
@@ -112,13 +112,6 @@ def _local_ref(ref: str) -> str | None:
     return match.group(1) if match else ref
 
 
-def _number(value: Any) -> float:
-    number = float(value)
-    if not math.isfinite(number):
-        raise ValueError(value)
-    return number
-
-
 def _rectangle(item: dict[str, Any], index: int, rel_file: str, ctx: _Ctx) -> LabelBox | None:
     value = item.get('value')
     labels = value.get('rectanglelabels') if isinstance(value, dict) else None
@@ -135,9 +128,9 @@ def _rectangle(item: dict[str, Any], index: int, rel_file: str, ctx: _Ctx) -> La
         )
         return None
     try:
-        x, y = _number(value['x']), _number(value['y'])
-        w, h = _number(value['width']), _number(value['height'])
-        rotation = _number(value.get('rotation') or 0)
+        x, y = finite_number(value['x']), finite_number(value['y'])
+        w, h = finite_number(value['width']), finite_number(value['height'])
+        rotation = finite_number(value.get('rotation') or 0)
     except (KeyError, TypeError, ValueError):
         ctx.issues.add(
             'label_row_malformed',

@@ -16,7 +16,6 @@ resolves through :func:`~src.services.curation.dataset_import.paths.resolve_ref`
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +28,7 @@ from src.services.curation.dataset_import.native_common import (
     entry_state,
     find_image,
     finish_scan,
+    finite_number,
     load_json_file,
     rel_path,
     resolve_size,
@@ -54,20 +54,13 @@ class _Ctx:
     budget: SizeBudget
 
 
-def _number(value: Any) -> float:
-    number = float(value)
-    if not math.isfinite(number):
-        raise ValueError(value)
-    return number
-
-
 def _annotation(
     ann: Any, index: int, size: tuple[int, int], rel_file: str, ctx: _Ctx
 ) -> LabelBox | None:
     try:
         coords = ann['coordinates']
-        cx, cy = _number(coords['x']), _number(coords['y'])
-        w, h = _number(coords['width']), _number(coords['height'])
+        cx, cy = finite_number(coords['x']), finite_number(coords['y'])
+        w, h = finite_number(coords['width']), finite_number(coords['height'])
         label = ann['label']
         if not isinstance(label, str):
             raise TypeError('label')

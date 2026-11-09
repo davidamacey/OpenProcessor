@@ -4,6 +4,7 @@ declared-versus-decoded size checks, split lists and the scan envelope."""
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -33,6 +34,15 @@ if TYPE_CHECKING:
 
 _SPLIT_ORDER = ('test', 'val', 'train')
 _SPLIT_WORDS = {'train': 'train', 'val': 'val', 'valid': 'val', 'validation': 'val', 'test': 'test'}
+
+
+def finite_number(value: Any) -> float:
+    """``float(value)``; ``ValueError`` for NaN and infinities, which a label file may
+    carry but a box must not."""
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(value)
+    return number
 
 
 def rel_path(path: Path, root: Path) -> str:
