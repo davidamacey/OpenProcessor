@@ -105,6 +105,13 @@ def _populate_research_pairs(conn, project: uuid.UUID) -> None:
         'UPDATE embedding_spaces SET built_by_job_id = %s WHERE id = %s',
         (make_job(conn, project, 'embedding_reindex'), space),
     )
+    near_dup_profile = make_profile(conn, project, 'near_dup_profile')
+    conn.execute(
+        'INSERT INTO near_dup_runs (project_id, level, mode, status, params, space, '
+        'algorithm_version, profile_config_id, profile_revision, finished_at) VALUES '
+        "(%s, 'image', 'full', 'current', '{}', 'pe@abc:pe_embedding', 'nd-1', %s, %s, now())",
+        (project, *near_dup_profile),
+    )
     run_job = make_job(conn, project, 'assist_loop')
     preset = make_profile(conn, project, 'assist_loop_preset')
     conn.execute(
