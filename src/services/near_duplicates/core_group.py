@@ -39,6 +39,8 @@ class CoreDrain:
     """Rows kept pending because their image has no vector in the index yet."""
     grouped_members: int
     """Members in a group in the last run written."""
+    expired: tuple[str, ...] = ()
+    """Images dropped as missing: no vector in the index within ``rescore.MISSING_MAX_AGE``."""
 
 
 def core_env(client: AsyncOpenSearch, *, scope: SessionScope, job_id: uuid.UUID | None) -> Env:
@@ -55,6 +57,7 @@ async def drain(env: Env, *, cancelled: Callable[[], bool] = lambda: False) -> C
     row that cannot be handled yet is left for the next job instead of spinning here.
     """
     claimed = runs = missing = grouped = 0
+    expired: list[str] = []
     while not cancelled():
         outcome = await rescore.rescore(env)
         if outcome.summary is None:
@@ -62,11 +65,12 @@ async def drain(env: Env, *, cancelled: Callable[[], bool] = lambda: False) -> C
         claimed += outcome.claimed
         missing = outcome.missing_vectors
         runs += 1
+        expired.extend(outcome.expired)
         grouped = outcome.summary.grouped_members
         await projection.apply_run(env, outcome.summary.run_id, None)
         if outcome.claimed == outcome.missing_vectors:
             break
-    return CoreDrain(claimed, runs, missing, grouped)
+    return CoreDrain(claimed, runs, missing, grouped, tuple(sorted(expired)))
 
 
 async def run(ctx: JobContext) -> dict[str, Any]:
@@ -79,4 +83,5 @@ async def run(ctx: JobContext) -> dict[str, Any]:
         'runs': done.runs,
         'missing_vectors': done.missing_vectors,
         'grouped_members': done.grouped_members,
+        'missing': list(done.expired),
     }

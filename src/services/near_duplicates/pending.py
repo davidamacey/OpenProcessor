@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from src.config.curation_roles import IndexRole
 from src.config.project_context import current_project
-from src.db.repos import near_dup as repo
+from src.db.repos import near_dup_pending as pending_repo
 from src.db.session import async_session_factory, project_tx
 from src.domain import near_dup as rules
 from src.services.config_store.bound_project import bound_project_id
@@ -49,7 +49,7 @@ async def enqueue_pending(
     if reason not in rules.PENDING_REASONS:
         msg = f'unknown pending reason {reason!r}'
         raise PendingError(msg)
-    return await repo.enqueue_pending(session, project, level, member_ids, reason)
+    return await pending_repo.enqueue_pending(session, project, level, member_ids, reason)
 
 
 async def enqueue_core_pending(session: AsyncSession, image_ids: Iterable[str], reason: str) -> int:
@@ -62,7 +62,7 @@ async def enqueue_core_pending(session: AsyncSession, image_ids: Iterable[str], 
     if reason not in rules.PENDING_REASONS:
         msg = f'unknown pending reason {reason!r}'
         raise PendingError(msg)
-    return await repo.enqueue_pending(session, None, rules.CORE, image_ids, reason)
+    return await pending_repo.enqueue_pending(session, None, rules.CORE, image_ids, reason)
 
 
 async def enqueue_pending_bound(level: str, member_ids: Iterable[str], reason: str) -> int:

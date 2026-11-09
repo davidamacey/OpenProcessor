@@ -7,7 +7,9 @@ incremental run equals a full build on the same state for the components it touc
 
 A pending member whose vector is gone is not an error when its reason is ``deleted``; for any
 other reason it is counted, its edges are dropped, and its pending row stays so the next tick
-retries it. The run is written only when every claimed row was handled or kept.
+retries it until its row is older than ``MISSING_MAX_AGE``: then the row is dropped and the id
+is reported in ``RescoreOutcome.expired`` (a terminal "missing", not a retry every tick forever).
+The run is written only when every claimed row was handled or kept.
 
 The core level (no project, no build step) starts from the pending rows: with no current run the
 first pass is a ``full`` run over the claimed members and what they join; a project level
@@ -16,10 +18,11 @@ refuses to start incrementally.
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.db.repos import near_dup as repo
+from src.db.repos import near_dup as repo, near_dup_pending as pending_repo
 from src.domain import near_dup as rules
 from src.services.near_duplicates import candidates
 from src.services.near_duplicates.grouping import copied, group_edges, with_lineage
@@ -31,6 +34,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 CLAIM_BATCH = 5000
+MISSING_MAX_AGE = dt.timedelta(hours=24)
 
 
 class NoCurrentRunError(RuntimeError):
@@ -44,6 +48,8 @@ class RescoreOutcome:
     missing_vectors: int
     regrouped: frozenset[str] = frozenset()
     """The members whose groups were recomputed (the claimed ones and everything joined to them)."""
+    expired: tuple[str, ...] = ()
+    """Pending members dropped for staying without a vector past ``MISSING_MAX_AGE``."""
 
 
 async def _leak_partitions(env: Env) -> dict[str, list[str]]:
@@ -152,7 +158,7 @@ async def rescore(env: Env) -> RescoreOutcome:
         if parent is None and env.plan.level != rules.CORE:
             msg = f'the {env.plan.level} level has no current run; build it in full first'
             raise NoCurrentRunError(msg)
-        claimed = await repo.claim_pending(
+        claimed = await pending_repo.claim_pending(
             session, env.project_id, env.plan.level, env.job_id, CLAIM_BATCH
         )
     if not claimed:
@@ -198,7 +204,8 @@ async def rescore(env: Env) -> RescoreOutcome:
         oversized=grouped.oversized_split,
     )
     async with env.scope() as session:
-        await repo.drain_claimed(
+        await pending_repo.drain_claimed(
             session, env.job_id, [m for m in claimed_ids if m not in set(gone)]
         )
-    return RescoreOutcome(summary, len(claimed_ids), len(gone), frozenset(affected))
+        expired = await pending_repo.expire_claimed(session, env.job_id, gone, MISSING_MAX_AGE)
+    return RescoreOutcome(summary, len(claimed_ids), len(gone), frozenset(affected), tuple(expired))
