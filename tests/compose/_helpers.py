@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -23,3 +25,19 @@ def _load_compose() -> dict[str, Any]:
 
 def _services() -> dict[str, dict[str, Any]]:
     return _load_compose()['services']
+
+
+def render(env: dict[str, str], *files: str) -> dict[str, Any]:
+    args = ['docker', 'compose', '-p', 'op-6b-check', '--profile', '*']
+    for name in files or ('docker-compose.yml',):
+        args += ['-f', str(REPO_ROOT / name)]
+    done = subprocess.run(
+        [*args, 'config', '--format', 'json'],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={'PATH': '/usr/bin:/bin:/usr/local/bin', 'HOME': '/tmp', **env},
+        cwd=REPO_ROOT,
+    )
+    return json.loads(done.stdout)['services']

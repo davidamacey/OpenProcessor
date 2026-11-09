@@ -65,7 +65,6 @@ x-gateway-wrap: &gateway_wrap |
 services:
   triton-server:
     image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-triton
     logging: *default-logging
     restart: always
     ports:
@@ -140,7 +139,6 @@ services:
 
   api:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     logging: *default-logging
     restart: always
     # CFG-5: previously the ONLY var reaching this container from .env was
@@ -500,6 +498,7 @@ services:
       start_period: 60s
       retries: 3
     deploy:
+      replicas: ${OP_JOBS_REPLICAS:-1}
       resources:
         limits:
           memory: ${OP_JOBS_MEM_LIMIT:-24g}
@@ -808,7 +807,6 @@ services:
   # ===================================================================
   model-export:
     image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export
     logging: *default-logging
     profiles:
       - setup
@@ -847,7 +845,6 @@ services:
   # ===================================================================
   model-export-worker:
     image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export-worker
     logging: *default-logging
     security_opt:
       - no-new-privileges:true
@@ -917,7 +914,6 @@ services:
     profiles: ['cropwright']
     # OP_CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over the OP_IMAGE_TAG default.
     image: ${OP_CROPWRIGHT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/cropwright:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cropwright
     # Soft scheduling floor for the static-file nginx, not a cap.
     mem_reservation: 64m
     restart: unless-stopped
@@ -991,7 +987,6 @@ services:
 
   curation-detection-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
     logging: *default-logging
     mem_reservation: 1g
     profiles:
@@ -1076,7 +1071,6 @@ services:
 
   curation-vlm-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
     logging: *default-logging
     mem_reservation: 512m
     profiles:
@@ -1134,7 +1128,6 @@ services:
 
   curation-auto-label-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-curation-auto-label-worker
     logging: *default-logging
     security_opt:
       - no-new-privileges:true
@@ -1203,7 +1196,6 @@ services:
 
   curation-assist-loop-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-curation-assist-loop-worker
     logging: *default-logging
     security_opt:
       - no-new-privileges:true
@@ -1275,7 +1267,6 @@ services:
   # reserve a GPU for it: `docker compose --profile evaluator up -d curation-evaluator`.
   curation-evaluator:
     image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
     logging: *default-logging
     security_opt:
       - no-new-privileges:true
@@ -1341,7 +1332,6 @@ services:
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
     image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
     logging: *default-logging
     profiles:
       - segmenter
@@ -1407,7 +1397,6 @@ services:
 
   curation-trainer:
     image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
     logging: *default-logging
     security_opt:
       - no-new-privileges:true
@@ -1487,7 +1476,6 @@ services:
   # unreachable, so a deployment that doesn't want it can leave it stopped.
   curation-mlflow:
     image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v3.17.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow
     logging: *default-logging
     mem_reservation: 512m
     profiles:
@@ -1552,7 +1540,6 @@ services:
     # (the gemma4 chat template + reasoning parser below ship in it). An
     # untested vLLM bump can silently change chat-template / parser behavior.
     image: ${VLM_IMAGE:-vllm/vllm-openai:gemma4-cu130@sha256:0d152595cd940ea1e0890fa190a37b7a86e3f7f0f5048ac3e2e4c14529fea833}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm
     logging: *default-logging
     profiles:
       - vlm
@@ -1623,7 +1610,6 @@ services:
 
   triton-sdk:
     image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-sdk
     logging: *default-logging
     mem_reservation: 256m
     profiles:
@@ -1636,7 +1622,6 @@ services:
 
   node-exporter:
     image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.10.2}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-node-exporter
     logging: *default-logging
     mem_reservation: 64m
     restart: always
@@ -1654,7 +1639,6 @@ services:
   # host GPUs (not just Triton's). Read-only; does not reserve compute.
   dcgm-exporter:
     image: ${DCGM_EXPORTER_IMAGE:-nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-dcgm
     logging: *default-logging
     restart: always
     profiles:
@@ -1678,7 +1662,6 @@ services:
 
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.12.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-prometheus
     logging: *default-logging
     mem_reservation: 512m
     restart: always
@@ -1707,7 +1690,6 @@ services:
 
   grafana:
     image: ${GRAFANA_IMAGE:-grafana/grafana:13.1.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-grafana
     logging: *default-logging
     mem_reservation: 256m
     restart: always
@@ -1742,7 +1724,6 @@ services:
     # root-owned loki_data volumes need a one-time chown — see
     # docs/MIGRATION_TRITON_26.md.
     image: ${LOKI_IMAGE:-grafana/loki:3.6.12}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-loki
     logging: *default-logging
     mem_reservation: 512m
     restart: always
@@ -1760,7 +1741,6 @@ services:
 # Log shipper: Grafana Alloy (Promtail reached EOL 2026-03-02).
   alloy:
     image: ${ALLOY_IMAGE:-grafana/alloy:v1.17.1}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-alloy
     logging: *default-logging
     mem_reservation: 256m
     restart: always
@@ -1788,7 +1768,6 @@ services:
   # ===================================================================
   opensearch:
     image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:3.6.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-opensearch
     logging: *default-logging
     mem_reservation: ${OPENSEARCH_HEAP:-2g}
     restart: always
@@ -1819,7 +1798,6 @@ services:
 
   opensearch-dashboards:
     image: ${OPENSEARCH_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:3.6.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-osd
     logging: *default-logging
     mem_reservation: 512m
     restart: always

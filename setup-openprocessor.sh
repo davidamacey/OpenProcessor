@@ -1471,9 +1471,10 @@ assert_container_names_free() {
 assert_compose_config() {
     local json names nets
     json="$(dc config --format json)" || die "compose config failed for ${OP_DIR}" "$EXIT_VERIFY"
+    # No service sets container_name (Compose names containers <project>-<service>-<n>), so a
+    # name is only checked when a local overlay sets one.
     mapfile -t names < <(compose_config_container_names "$json")
-    (( ${#names[@]} > 0 )) || die "compose config lists no container names" "$EXIT_VERIFY"
-    assert_container_names_free "${names[@]}"
+    (( ${#names[@]} == 0 )) || assert_container_names_free "${names[@]}"
     mapfile -t nets < <(compose_config_network_names "$json")
     if [[ "${nets[*]:-}" != "${OP_PROJECT}_triton_net" ]]; then
         die "compose network is '${nets[*]:-<none>}', expected '${OP_PROJECT}_triton_net'" "$EXIT_COLLISION"
@@ -1821,7 +1822,6 @@ setup_cropwright() {
     if [[ "$hosts" != "$OP_CROPWRIGHT_BIND" ]]; then
         die "the cropwright service would publish on '${hosts}', not ${OP_CROPWRIGHT_BIND} (its compose entry must honour OP_CROPWRIGHT_BIND_ADDRESS)" "$EXIT_VERIFY"
     fi
-    assert_container_names_free "${OP_PROJECT}-cropwright"
     log_success "Cropwright configured on ${OP_CROPWRIGHT_BIND}:${OP_CROPWRIGHT_PORT}"
 }
 

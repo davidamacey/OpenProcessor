@@ -33,7 +33,6 @@ services:
   # python3 only; it runs no application code.
   fake-segmenter:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
-    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-fake-segmenter
     volumes:
       - ./fake_segmenter.py:/opt/fake_segmenter.py:ro
     command: ["python3", "-u", "/opt/fake_segmenter.py"]
@@ -59,7 +58,6 @@ services:
       context: ../../frontend
       dockerfile: Dockerfile
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-cropwright:latest
-    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-cropwright
     environment:
       - PUBLIC_API_PREFIX=/curation
       - API_UPSTREAM=http://api:8000

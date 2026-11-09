@@ -28,6 +28,14 @@ _gpu_model_mib() {
     return 0
 }
 
+# _compose_service_running PROJECT SERVICE: a container of the service is running. Compose names
+# containers <project>-<service>-<n>, so the lookup uses its labels
+# (https://docs.docker.com/reference/compose-file/services/#labels), never a name.
+_compose_service_running() {
+    [[ -n "$(docker ps -q --filter "label=com.docker.compose.project=$1" \
+        --filter "label=com.docker.compose.service=$2" 2>/dev/null)" ]]
+}
+
 # Explain where the PE image encoder runs and refuse a TRITON_GPU_ID that this
 # host cannot honour (missing card, mixed architectures, no room).
 _gpu_plan_placement() {
@@ -42,7 +50,7 @@ _gpu_plan_placement() {
     pe_mib="${pe_mib:-1536}"
     project="$(_env_value COMPOSE_PROJECT_NAME)"
     if command -v docker &> /dev/null \
-        && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${project:-openprocessor}-triton"; then
+        && _compose_service_running "${project:-openprocessor}" triton-server; then
         running=1
     fi
     case "$(_env_value GPU_PROFILE)" in
