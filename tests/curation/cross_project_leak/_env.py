@@ -14,6 +14,7 @@ from opensearchpy import AsyncOpenSearch
 
 from curation.cross_project_leak._constants import CLASS_NAMES
 from curation.cross_project_leak._pg_rows import seed_pg_rows
+from curation.cross_project_leak._pg_world import seed_world_files
 from curation.cross_project_leak._seeded_files import _docs, _seed_files, _vec
 from curation.cross_project_leak._seeders import _seed_vlm
 from curation.cross_project_leak._transport import (
@@ -228,7 +229,9 @@ def leak_env(
     for slug in records:
         _seed_vlm(env, slug)
     env.events = captured_events
-    env.pg_ids = seed_pg_rows(pg, records)
+    env.pg_ids = seed_pg_rows(pg, records, tmp_path)
+    for slug, record in records.items():
+        seed_world_files(record, env.pg_ids[slug]['train_job_id'], tmp_path)
 
     def _no_network(*_a: Any, **_k: Any) -> Any:
         raise httpx.ConnectError('network disabled in the leak test')

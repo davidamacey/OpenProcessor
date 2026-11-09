@@ -47770,7 +47770,7 @@
     },
     "/curation/projects/{project}/images/root/{alias}": {
       "get": {
-        "description": "Stream an image from an explicitly-named ``source_path_aliases`` root.",
+        "description": "Stream an image from an explicitly-named ``source_path_aliases`` root, if the\nbound project ingested it.",
         "operationId": "serve_aliased_image_curation_projects__project__images_root__alias__get",
         "parameters": [
           {
@@ -47826,7 +47826,7 @@
     },
     "/curation/projects/{project}/images/serve": {
       "get": {
-        "description": "Stream a source image, auto-detecting its root.\n\nRoot selection: the longest matching configured root for absolute\npaths, or a ``source_path_aliases`` prefix match on the leading path\nsegment for relative paths — falls back to ``source_root``. See\n``src.services.curation.image_serving.resolve_crop_root``.",
+        "description": "Stream a source image, auto-detecting its root.\n\nRoot selection: the longest matching configured root for absolute\npaths, or a ``source_path_aliases`` prefix match on the leading path\nsegment for relative paths — falls back to ``source_root``. See\n``src.services.curation.image_serving.resolve_crop_root``. Only images\nthe bound project ingested are served (404 otherwise).",
         "operationId": "serve_image_curation_projects__project__images_serve_get",
         "parameters": [
           {

@@ -195,6 +195,35 @@ async def _reseed_config_async(record: Any, kind: str, axis: str, body: dict[str
     reset_config_stores()
 
 
+def _read_config(kind: str, body: Any) -> Any:
+    """Make sure ``<slug>-model`` exists as a ``kind`` document before a read of it, touching
+    no activation (unlike the reseed a write route gets, which a read must not do to the
+    reference profile the other routes depend on)."""
+
+    def prepare(env: Any, slug: str) -> None:
+        import asyncio
+
+        asyncio.run(_ensure_config_async(env.records[slug], kind, body))
+
+    return prepare
+
+
+async def _ensure_config_async(record: Any, kind: str, body: dict[str, Any]) -> None:
+    from src.config.project_context import bind_project
+    from src.db.repos.config_base import RevisionConflictError
+    from src.services.config_store import documents
+    from src.services.config_store.store import reset_config_stores
+
+    with bind_project(record), contextlib.suppress(RevisionConflictError):  # already stored
+        await documents.save_config(
+            kind=kind,  # type: ignore[arg-type]
+            name=f'{record.slug}-model',
+            body=body,
+            expected_revision=None,
+        )
+    reset_config_stores()
+
+
 def _clear_activations(env: Any, slug: str, *axes: str) -> None:
     """``slug`` has never activated ``axes`` (no service un-activates to "never", so the
     rows are deleted, as :func:`_reseed_config_async` does)."""
@@ -306,6 +335,7 @@ _VLM_KEYS = frozenset(
     }
 )
 NAME_FOR: dict[tuple[str, str], str] = {
+    ('GET', '/train/artifacts/{job_id}/{name}'): 'results.csv',
     ('POST', '/vlm/endpoints/{name}/activate'): _SHARED_VLM,
 }
 
@@ -401,11 +431,24 @@ def _export_with_val_split(env: Any, slug: str) -> None:
             manifest.write_text(json.dumps(data))
 
 
+_READ_BODIES = {
+    'prompt_packs': ('prompt_pack', _prompt_pack_body),
+    'region_profiles': ('region_profile', _region_profile_body),
+    'ingest_profiles': ('ingest_profile', _ingest_profile_body),
+    'open_vocab': ('open_vocab_set', _open_vocab_body),
+}
+
 PREPARE: dict[tuple[str, str], Any] = {
+    **{
+        ('GET', f'/{route}/{{name}}{suffix}'): _read_config(kind, body())
+        for route, (kind, body) in _READ_BODIES.items()
+        for suffix in ('', '/revisions', '/revisions/{revision}')
+    },
     **dict.fromkeys(
         [('POST', '/train/start'), ('POST', '/train/start_campaign')], _export_with_val_split
     ),
     **dict.fromkeys(_VLM_KEYS, _prepare_vlm),
+    ('GET', '/models/{model_name}/class_mapping'): _promoted_model,
     ('POST', '/reprocess'): _region_failed_item,
     ('POST', '/crops/{crop_id}/reprocess'): _region_failed_item,
     ('PUT', '/models/{model_name}/sharing'): _promoted_model,

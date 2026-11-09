@@ -26,6 +26,11 @@ class _FakeOSClient:
     def __init__(self, docs: dict[str, dict[str, Any]]) -> None:
         self.docs = docs
 
+    async def search(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        wanted = set(body['query']['terms']['image_path'])
+        hits = [{'_id': k} for k, d in self.docs.items() if d.get('image_path') in wanted]
+        return {'hits': {'hits': hits[:1]}}
+
     async def get(
         self,
         index: str,
@@ -87,3 +92,24 @@ def test_serve_route_reports_source_missing(
     r = client.get('/curation/projects/default/images/serve', params={'path': 'nope.jpg'})
     assert r.status_code == 404, r.text
     assert r.json()['detail']['error'] == 'source_missing'
+
+
+def test_serve_route_only_serves_an_image_the_project_holds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A file under the shared root that the project's images index does not hold answers the
+    body an absent file gets, so it can be neither read nor told apart from a missing one."""
+    from PIL import Image
+
+    Image.new('RGB', (4, 4)).save(tmp_path / 'mine.jpg')
+    Image.new('RGB', (4, 4)).save(tmp_path / 'theirs.jpg')
+    docs = {'mine': {'image_path': str(tmp_path / 'mine.jpg')}}
+    client = _client(monkeypatch, CurationConfig(source_root=tmp_path), docs)
+    base = '/curation/projects/default/images/serve'
+    assert client.get(base, params={'path': str(tmp_path / 'mine.jpg')}).status_code == 200
+    assert client.get(base, params={'path': 'mine.jpg'}).status_code == 200
+    theirs = client.get(base, params={'path': str(tmp_path / 'theirs.jpg')})
+    absent = client.get(base, params={'path': str(tmp_path / 'absent.jpg')})
+    assert theirs.status_code == absent.status_code == 404
+    assert theirs.json()['detail']['error'] == absent.json()['detail']['error'] == 'source_missing'
+    assert 'image/' not in theirs.headers['content-type']
