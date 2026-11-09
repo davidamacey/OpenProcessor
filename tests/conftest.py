@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 
+# Read by ultralytics.utils at import: no package is pip-installed from inside a test.
+os.environ.setdefault('YOLO_AUTOINSTALL', 'False')
+
 # The `db` tier's PostgreSQL fixtures (pg, two_sessions); inert unless a test asks for them.
 pytest_plugins = [
     'fixtures.postgres',

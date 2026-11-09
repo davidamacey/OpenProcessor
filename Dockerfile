@@ -86,7 +86,8 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/home/appuser/.cache/huggingface \
-    TORCH_HOME=/home/appuser/.cache/torch
+    TORCH_HOME=/home/appuser/.cache/torch \
+    YOLO_AUTOINSTALL=False
 
 # -----------------------------------------------------------------------------
 # builder: the runtime dependency set, with compilers (never reaches an image)
