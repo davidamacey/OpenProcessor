@@ -34,6 +34,7 @@ from src.db.schema_check import ProbeFailed
 from src.services.face_privacy import FaceDataCounts, stored_face_counts, stored_summary
 from src.services.model_readiness import models_not_ready, required_model_names
 from src.services.triton_control import TritonControlService
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,9 @@ async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
         )
     except TimeoutError:
         reason = f'repository index timeout after {_READY_PROBE_TIMEOUT_S}s'
+        return False, reason, [{'name': n, 'state': 'UNKNOWN', 'reason': reason} for n in required]
+    except UpstreamError as exc:
+        reason = f'repository index unreachable: {exc.reason}'
         return False, reason, [{'name': n, 'state': 'UNKNOWN', 'reason': reason} for n in required]
     bad = models_not_ready(index, required)
     if bad:

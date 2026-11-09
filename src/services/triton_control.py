@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from src.config import get_settings
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -64,16 +65,21 @@ class TritonControlService:
             return False, f'Unload error: {e}'
 
     async def get_repository_index(self) -> list[dict[str, Any]]:
-        """Get list of all models in repository."""
+        """Every model in the repository with its state.
+
+        Raises:
+            UpstreamError: Triton cannot answer (unreachable, a non-2xx reply or an unreadable
+                body). An outage is not an empty repository: callers that can degrade catch it.
+        """
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(f'{self.http_url}/v2/repository/index')
-                if response.status_code == 200:
-                    typed: list[dict[str, Any]] = response.json()
-                    return typed
+                response.raise_for_status()
+                typed: list[dict[str, Any]] = response.json()
         except (httpx.HTTPError, ValueError) as e:
             logger.warning(f'Failed to get repository index: {e}')
-        return []
+            raise UpstreamError('triton', 'triton_unavailable') from e
+        return typed
 
     async def get_model_config(self, model_name: str) -> dict[str, Any] | None:
         """Get model configuration from Triton."""

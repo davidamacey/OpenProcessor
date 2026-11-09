@@ -284,6 +284,24 @@ def test_ready_ignores_face_models_and_reports_stored_data_when_faces_off(
     assert 'faces purge' in faces['detail']
 
 
+def test_ready_is_not_ready_when_the_repository_index_is_unreachable(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services import triton_control
+    from src.utils.upstream_errors import UpstreamError
+
+    monkeypatch.delenv('OP_REQUIRED_MODELS', raising=False)
+    _patch_infra_only(monkeypatch)
+
+    async def _down(_self: object) -> list[dict[str, str]]:
+        raise UpstreamError('triton', 'triton_unavailable')
+
+    monkeypatch.setattr(triton_control.TritonControlService, 'get_repository_index', _down)
+    response = client.get('/ready')
+    assert response.status_code == 503
+    assert 'repository index unreachable' in response.json()['services']['models']['detail']
+
+
 def test_ready_requires_face_models_when_faces_on(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
