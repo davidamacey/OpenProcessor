@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.config.curation_accessors import items_index
 from src.config.project_context import current_project_id
 from src.core.exceptions import RequestRejectedError
-from src.db.session import project_tx
+from src.db.session import async_session_factory, project_tx
 from src.domain.cluster_flags import FLAG_VOCABULARY, ValidationState, card_flags, validation_state
 from src.services.clustering.partitions import display_numbers
 from src.services.curation import review_queries
@@ -289,6 +289,19 @@ async def attach_display_nos(session: AsyncSession, cards: list[ClusterCard]) ->
         numbers = await display_numbers(session, [c['cluster_uid'] for c in cards])
     for card in cards:
         card['display_no'] = numbers.get(card['cluster_uid'])
+
+
+async def attach_item_display_nos(items: list[dict[str, Any]]) -> None:
+    """Set ``display_no`` on each served item's nested cluster with one lookup for the page."""
+    refs = [i['cluster'] for i in items if i.get('cluster') and i['cluster'].get('uid')]
+    if not refs:
+        return
+    # Own session, opened only when a page has clustered items: the list routes stay free of
+    # the database otherwise.
+    async with async_session_factory()() as session, project_tx(session, current_project_id()):
+        numbers = await display_numbers(session, sorted({r['uid'] for r in refs}))
+    for ref in refs:
+        ref['display_no'] = numbers.get(ref['uid'])
 
 
 async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> ClusterListResponse:

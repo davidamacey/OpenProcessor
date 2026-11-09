@@ -122,6 +122,7 @@
           {#if crop.cluster?.uid}
             <ClusterBadge
               clusterUid={crop.cluster.uid}
+              displayNo={crop.cluster.display_no ?? null}
               dominantClassName={modes.clusterMetaMap.get(crop.cluster.uid)
                 ?.dominant_class_name ?? null}
             />

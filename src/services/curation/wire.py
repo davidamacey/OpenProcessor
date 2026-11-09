@@ -170,6 +170,7 @@ def cluster_object(src: dict[str, Any]) -> dict[str, Any] | None:
         'score': src.get('cluster_score'),
         'margin': src.get('cluster_margin'),
         'assigned_by': src.get('cluster_assigned_by'),
+        'display_no': None,
     }
 
 

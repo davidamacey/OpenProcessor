@@ -18,6 +18,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._review_params import UnsetIfEmpty
+from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_browse import crops_page
 from src.services.curation.crop_listing import (
     MAX_IDS,
@@ -219,6 +220,7 @@ async def list_crops(
         fetch_items=crops_by_ids,
     )
     if ordered is not None:
+        await attach_item_display_nos(ordered['crops'])
         return ordered
 
     hits = (resp.get('hits') or {}).get('hits') or []
@@ -227,6 +229,7 @@ async def list_crops(
         serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
         for h in hits
     ]
+    await attach_item_display_nos(crops)
     return crops_page(total=int(total), page=page, page_size=page_size, crops=crops)
 
 

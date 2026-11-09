@@ -38,6 +38,7 @@ const DEFAULT_ITEM: Required<RawCrop> = {
     score: 0.81,
     margin: 0.12,
     assigned_by: 'run',
+    display_no: 17,
   },
   label_validated: true,
   class_validated: true,

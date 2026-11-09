@@ -307,7 +307,8 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
             {
                 'action': 'recluster',
                 'method': 'POST',
-                'path': '/cluster/umap/rebuild',
+                'path': '/clusters/runs',
+                'body': {'target': 'item'},
                 'reason': 'Source clusters were not copied; recluster the combined items.',
             }
         ],
@@ -320,7 +321,7 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
         ran.append((request.method, request.post_data or ''))
         return (200, {'status': 'no_residuals', 'n_residuals': 0, 'refit': False})
 
-    stub.on('POST', r'/projects/merged/cluster/umap/rebuild$', next_step)
+    stub.on('POST', r'/projects/merged/clusters/runs$', next_step)
 
     page.goto(f'{app_url}/projects/combine/{JOB_ID}')
     expect(page.get_by_test_id('combine-job-status')).to_have_text(
@@ -344,13 +345,13 @@ def test_job_completes_and_offers_next_steps(stub, page, app_url):
 
     page.get_by_test_id('combine-next-step-recluster').click()
     with page.expect_request(
-        lambda r: r.method == 'POST' and r.url.endswith('/projects/merged/cluster/umap/rebuild')
+        lambda r: r.method == 'POST' and r.url.endswith('/projects/merged/clusters/runs')
     ):
         page.get_by_role('button', name='Run', exact=True).click()
     expect(page.get_by_role('button', name='Run', exact=True)).to_have_count(
         0, timeout=ACTION_TIMEOUT_MS
     )
-    assert ran == [('POST', '')]
+    assert ran == [('POST', '{"target":"item"}')]
     result = page.get_by_test_id('combine-step-result')
     expect(result).to_contain_text('Recluster')
     expect(page.get_by_test_id('combine-step-result-status')).to_have_text('No residuals')
@@ -368,7 +369,8 @@ def test_next_steps_wait_for_the_target_to_be_active(stub, page, app_url):
             {
                 'action': 'recluster',
                 'method': 'POST',
-                'path': '/cluster/umap/rebuild',
+                'path': '/clusters/runs',
+                'body': {'target': 'item'},
                 'reason': 'r',
             }
         ],
@@ -383,7 +385,7 @@ def test_next_steps_wait_for_the_target_to_be_active(stub, page, app_url):
             {**project(API_PREFIX, 'merged', status=state['status']), 'resources': {}},
         ),
     )
-    stub.on('POST', r'/projects/merged/cluster/umap/rebuild$', (200, {'status': 'no_residuals'}))
+    stub.on('POST', r'/projects/merged/clusters/runs$', (200, {'status': 'no_residuals'}))
 
     page.goto(f'{app_url}/projects/combine/{JOB_ID}')
     button = page.get_by_test_id('combine-next-step-recluster')
@@ -399,7 +401,7 @@ def test_next_steps_wait_for_the_target_to_be_active(stub, page, app_url):
     expect(page.get_by_test_id('combine-next-step-target-status')).to_have_count(0)
     button.click()
     with page.expect_request(
-        lambda r: r.method == 'POST' and r.url.endswith('/projects/merged/cluster/umap/rebuild')
+        lambda r: r.method == 'POST' and r.url.endswith('/projects/merged/clusters/runs')
     ):
         page.get_by_role('button', name='Run', exact=True).click()
     expect(page.get_by_test_id('combine-step-result')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
