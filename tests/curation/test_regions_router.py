@@ -32,7 +32,7 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 class _FakeRegionOS:
     """AsyncOpenSearch double covering exactly what regions.py's write
-    routes call: get/update (OCC single-doc), mget/bulk (batched
+    routes call: get/update/search (OCC single-doc), mget/bulk (batched
     OCC writes), plus indices.refresh for the batch-status endpoint."""
 
     class _Indices:
@@ -80,6 +80,18 @@ class _FakeRegionOS:
         self._docs[id].update(doc)
         self._seq[id] = self._seq.get(id, 0) + 1
         return {'result': 'updated'}
+
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        """The ``terms`` on ``crop_id`` that ``items_by_terms`` issues (the
+        post-edit box-embedding refresh), one page, sorted by id."""
+        (clause,) = body['query']['bool']['filter']
+        wanted = set(clause['terms']['crop_id'])
+        hits = [
+            {'_id': i, '_source': dict(self._docs[i]), 'sort': [i]}
+            for i in sorted(self._docs)
+            if i in wanted
+        ]
+        return {'hits': {'hits': hits}}
 
     async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
         ids = [d['_id'] for d in body['docs']]
