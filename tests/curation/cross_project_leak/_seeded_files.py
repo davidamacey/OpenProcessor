@@ -21,6 +21,11 @@ def _source_root() -> str:
     return os.environ.get('OP_SOURCE_ROOT', '/images')
 
 
+def own_image_path(slug: str) -> str:
+    """The absolute path of the image project ``slug`` ingested (its images index holds it)."""
+    return f'{_source_root()}/{slug}/{slug}-lab-0001.jpg'
+
+
 def _vec(i: int) -> list[float]:
     """A distinct unit embedding per seeded item (the same across projects,
     so both passes see the same data shapes)."""
@@ -139,7 +144,7 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             image_id: {'image_id': image_id, 'image_path': f'{slug}/{image_id}.jpg'},
             labeled_image: {
                 'image_id': labeled_image,
-                'image_path': f'{_source_root()}/{slug}/{slug}-lab-0001.jpg',
+                'image_path': own_image_path(slug),
             },
         },
     }

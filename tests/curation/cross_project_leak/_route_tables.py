@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from curation.cross_project_leak._constants import SCOPED
+from curation.cross_project_leak._seeded_files import own_image_path
 
 
 if TYPE_CHECKING:
@@ -40,8 +41,8 @@ READ_CROP_FOR: dict[tuple[str, str], str] = {
 # dict: the value gets the slug. Same role as READ_QUERIES (a 422 here is an unmapped query).
 SLUG_QUERIES: dict[tuple[str, str], Callable[[str], dict[str, dict[str, str]]]] = {
     ('GET', '/crops/{crop_id}/region_thumbnail'): lambda _slug: {'params': {'box_id': 'b1'}},
-    ('GET', '/images/serve'): lambda slug: {'params': {'path': f'{slug}/{slug}-img-0001.jpg'}},
-    ('GET', '/images/root/{alias}'): lambda slug: {'params': {'path': f'{slug}-img-0001.jpg'}},
+    ('GET', '/images/serve'): lambda slug: {'params': {'path': own_image_path(slug)}},
+    ('GET', '/images/root/{alias}'): lambda slug: {'params': {'path': f'{slug}-lab-0001.jpg'}},
     ('GET', '/near_duplicates/groups'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/near_duplicates/groups/{group_id}'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/review/{tab}/locate'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},

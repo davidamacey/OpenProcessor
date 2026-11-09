@@ -30,6 +30,16 @@ from each other inside the application (an OpenSearch request guard refuses
 cross-project access), but that is a correctness boundary, not an access
 control: any caller can address any project.
 
+Within that boundary, image bytes are authorized per object (OWASP API1:2023,
+[broken object level authorization](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)).
+`GET /curation/projects/{project}/images/serve` and `images/root/{alias}` stream a
+file only when that project's own images index holds its path; any other path under
+the shared source roots answers the same 404 as a missing file, so one project cannot
+read, or probe for, what another ingested. What stays deployment-level is the list of
+mounted source roots and the folder walk an ingest source or bulk preview does to
+choose what to ingest: they report the names and files the operator mounted and never
+return file bytes.
+
 **If you deploy this service, put it behind a reverse proxy that
 enforces authentication, and do not map its ports directly to a public
 interface.**

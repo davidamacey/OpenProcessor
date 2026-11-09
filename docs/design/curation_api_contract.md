@@ -2387,8 +2387,8 @@ items is `422`. Response: `n_frozen`, `n_classes_covered`,
 | GET | `/crops/{crop_id}/thumbnail` | JPEG, `size` 32 to 512 |
 | GET | `/crops/{crop_id}/image` | the clean source render: EXIF-transposed, RGB, optional `max_dim` (128 to 8192). It draws no overlay, so the bytes do not depend on any box. Draw boxes from `GET /crops/{crop_id}/context` |
 | GET | `/crops/{crop_id}/region_thumbnail` | see [Regions](#region-browse-clusters-and-false-positives) |
-| GET | `/images/serve` | `path` (required). Streams a source image, choosing the configured root that matches the path |
-| GET | `/images/root/{alias}` | `path` (required, relative to the alias root). `404` for an unknown alias |
+| GET | `/images/serve` | `path` (required). Streams a source image the bound project's images index holds (404 otherwise), choosing the configured root that matches the path |
+| GET | `/images/root/{alias}` | `path` (required, relative to the alias root). `404` for an unknown alias or an image the project did not ingest |
 | GET | `/images/cache/stats` | thumbnail cache counters |
 
 The server serves clean images and database metadata. A client draws boxes,
