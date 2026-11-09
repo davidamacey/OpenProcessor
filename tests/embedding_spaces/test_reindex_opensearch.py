@@ -8,10 +8,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OsConnectionError
 
 from src.db.repos import embedding_spaces as repo
 from src.domain.embedding_spaces import KnnMethodSpec, Role, Status, Target
-from src.services.embedding_spaces import reindex_opensearch as mod
+from src.services.embedding_spaces import reindex_opensearch as mod, views
 from src.services.embedding_spaces.reindex import DocRef, ReindexMode, VectorWrite
 
 
@@ -216,3 +217,14 @@ async def test_read_vectors_joins_box_ids() -> None:
     )
     got = await mod.OpenSearchReindexIndex(fake).read_vectors(_space(Target.BOX), ['i1#b1'])
     assert got == {'i1#b1': [1.0]}
+
+
+async def test_docs_with_vector_is_none_when_the_index_cannot_answer() -> None:
+    class Down:
+        async def count_with_vector(self, _space: Any) -> int:
+            raise OsConnectionError('N/A', 'down', Exception('down'))
+
+    assert await views.docs_with_vector(Down(), _space(Target.ITEM)) is None  # type: ignore[arg-type]
+    assert (
+        await views.docs_with_vector(mod.OpenSearchReindexIndex(FakeOS()), _space(Target.ITEM)) == 7
+    )

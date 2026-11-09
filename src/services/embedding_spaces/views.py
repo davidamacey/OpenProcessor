@@ -5,8 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from opensearchpy.exceptions import OpenSearchException
+
+from src.core.logging import get_logger
 from src.db.repos import embedding_spaces as repo
 from src.db.session import deployment_tx, project_tx
+from src.domain.embedding_spaces import Status
 from src.services.embedding_spaces import reindex_runs
 from src.services.embedding_spaces.catalog import Availability, availability
 
@@ -17,6 +21,10 @@ if TYPE_CHECKING:
     from typing import Any
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.services.embedding_spaces.reindex import ReindexIndex
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -48,6 +56,18 @@ async def with_models(
             if model is not None:
                 found.append(SpaceWithModel(row, model))
     return found
+
+
+async def docs_with_vector(index: ReindexIndex, space: repo.SpaceRow) -> int | None:
+    """Documents holding a vector in ``space``; ``None`` for a space with no field yet, and when
+    the index cannot answer (the list must still render; the failure is logged)."""
+    if space.status not in (Status.BUILDING, Status.READY, Status.RETIRING):
+        return None
+    try:
+        return await index.count_with_vector(space)
+    except OpenSearchException as exc:
+        logger.warning('embedding_space_count_failed', space=space.space_key, error=str(exc))
+        return None
 
 
 async def run_view(

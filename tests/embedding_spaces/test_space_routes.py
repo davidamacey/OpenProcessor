@@ -57,6 +57,13 @@ def record_for(project: uuid.UUID, slug: str) -> ProjectRecord:
     return dataclasses.replace(record, id=project)
 
 
+class FakeCountIndex:
+    """Answers the exists count of every space with 42."""
+
+    async def count_with_vector(self, _space) -> int:
+        return 42
+
+
 @pytest.fixture
 def capacity() -> FakeCapacity:
     return FakeCapacity()
@@ -66,7 +73,7 @@ def capacity() -> FakeCapacity:
 def app(pg, pg_env, catalog, capacity, producer, wakes, monkeypatch):
     from src.routers import curation as curation_package
     from src.routers.curation._project_deps import bind_path_project
-    from src.routers.curation.embedding_spaces import _capacity
+    from src.routers.curation.embedding_spaces import _capacity, _index
 
     monkeypatch.setattr(repo, 'ready_engine_contracts', lambda _session: shipped_engines())
     records: dict[str, ProjectRecord] = {}
@@ -77,6 +84,7 @@ def app(pg, pg_env, catalog, capacity, producer, wakes, monkeypatch):
 
     application.dependency_overrides[bind_path_project] = bind
     application.dependency_overrides[_capacity] = lambda: capacity
+    application.dependency_overrides[_index] = FakeCountIndex
     application.include_router(
         curation_package.router,
         prefix='/curation/projects/{project}',
@@ -270,3 +278,15 @@ async def test_cancel_of_another_projects_run_is_404(app, pg, client) -> None:
     r = await client.post(url(beta, f'/reindex-runs/{_run_of(pg, alpha)}/cancel'))
     assert r.status_code == 404
     assert r.json()['detail']['error'] == 'embedding_run_not_found'
+
+
+async def test_docs_with_vector_comes_from_the_index_for_spaces_that_have_a_field(
+    app, pg, client
+) -> None:
+    alpha = project(app, pg, 'alpha')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    pending = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
+    assert (pending['status'], pending['docs_with_vector']) == ('pending', None)
+    _set_space_status(pg, alpha, 'building')
+    building = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
+    assert (building['status'], building['docs_with_vector']) == ('building', 42)

@@ -38,7 +38,8 @@ from src.routers.curation.projects import global_router
 from src.services.embedding_spaces import flip, spaces, start, views
 from src.services.embedding_spaces.capacity import OpenSearchCapacity, SpaceCapacity
 from src.services.embedding_spaces.dependents import queue_dependents
-from src.services.embedding_spaces.reindex import ReindexMode
+from src.services.embedding_spaces.reindex import ReindexIndex, ReindexMode
+from src.services.embedding_spaces.reindex_opensearch import OpenSearchReindexIndex
 from src.services.jobs.service import rejection
 
 
@@ -71,7 +72,14 @@ async def _capacity() -> SpaceCapacity:
 CapacityDep = Annotated[SpaceCapacity, Depends(_capacity)]
 
 
-def _view(found: views.SpaceWithModel) -> EmbeddingSpaceView:
+async def _index() -> ReindexIndex:
+    return OpenSearchReindexIndex(await get_curation_opensearch())
+
+
+IndexDep = Annotated[ReindexIndex, Depends(_index)]
+
+
+def _view(found: views.SpaceWithModel, docs: int | None = None) -> EmbeddingSpaceView:
     row, model = found.space, found.model
     return EmbeddingSpaceView(
         space_key=row.space_key,
@@ -82,7 +90,7 @@ def _view(found: views.SpaceWithModel) -> EmbeddingSpaceView:
         role=row.role.value,
         status=row.status.value,
         ready_at=row.ready_at,
-        docs_with_vector=None,
+        docs_with_vector=docs,
     )
 
 
@@ -110,13 +118,15 @@ async def list_embedding_models(session: DbSessionDep) -> EmbeddingModelListResp
 
 @router.get('/embedding/spaces', response_model=EmbeddingSpaceListResponse, tags=['Embedding'])
 async def list_embedding_spaces(
-    session: DbSessionDep, target: Annotated[Target | None, Query()] = None
+    session: DbSessionDep, index: IndexDep, target: Annotated[Target | None, Query()] = None
 ) -> EmbeddingSpaceListResponse:
     """The project's spaces (live and retired), by target."""
     project = current_project_id()
     rows = await spaces.list_project_spaces(session, project, target)
     found = await views.with_models(session, project, rows)
-    return EmbeddingSpaceListResponse(spaces=[_view(f) for f in found])
+    return EmbeddingSpaceListResponse(
+        spaces=[_view(f, await views.docs_with_vector(index, f.space)) for f in found]
+    )
 
 
 def _started(result: start.Started) -> EmbeddingSpaceStartResponse:
