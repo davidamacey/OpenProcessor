@@ -208,7 +208,7 @@ class VerifyOps(VlmLabelerCore):
             logger.info(
                 'vlm_labeler.region_batch_reply_from_reasoning',
                 chunk_size=len(chunk),
-                content_preview=content[:80],
+                content_len=len(content),
             )
             return from_reasoning
         return verdicts
@@ -250,7 +250,7 @@ class VerifyOps(VlmLabelerCore):
                 logger.warning(
                     'vlm_labeler.region_batch_parse_failed',
                     chunk_size=len(chunk),
-                    raw_preview=raw[:200],
+                    raw_len=len(raw),
                 )
             return []
 
@@ -261,7 +261,7 @@ class VerifyOps(VlmLabelerCore):
                     'vlm_labeler.region_batch_misaligned',
                     chunk_size=len(chunk),
                     n_entries=len(parsed),
-                    raw_preview=raw[:200],
+                    raw_len=len(raw),
                 )
             return []
 
@@ -334,7 +334,7 @@ class VerifyOps(VlmLabelerCore):
             logger.warning(
                 'vlm_labeler.region_parse_failed',
                 crop_id=crop.crop_id,
-                raw_preview=raw[:200],
+                raw_len=len(raw),
             )
             return None
         if not isinstance(parsed, dict):

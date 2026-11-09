@@ -183,6 +183,46 @@ index (person ids and names are fields on its documents), a face link on
   `data/`, container or Loki logs written by older versions (a person rename used to log the
   name), and copies a client already downloaded.
 
+## External model endpoints and the research judge
+
+When external use is enabled, an external VLM endpoint (a registered
+endpoint with `allow_external`, under `OP_VLM_EXTERNAL_POLICY`) and the hosted
+research judge may receive **any region kind** (including face, person and
+registration-plate regions) and any contact-sheet image the labeling or
+research job builds. Nothing filters a region by kind before it leaves the
+host. Keep external use off, or use a local endpoint, for data you may not
+send to a third party.
+
+## Stored recognized text
+
+Recognized text (OCR lines, region text, registration plates) is ordinary,
+searchable label data. Any caller that can reach the API can read and search
+it. Curation projects keep it in their own indexes and project delete removes
+it. The core `/search/ocr` index is deployment-wide and outside project
+isolation; empty it with `python -m scripts.purge_ocr_data --dry-run` (counts)
+and `--yes` (delete), run inside the `api` container. It appends a counts-only
+record to `data/audit/ocr_purge.jsonl`. There is no purge route, because the
+API has no authentication. Parse-failure logs of the labelers record reply
+lengths, never reply text.
+
+## Capture metadata and location
+
+From v0.7.0 ingest records capture time and GPS coordinates under the
+project's `location_policy`, default `store`. `store_coarse` rounds
+coordinates to about 1 km and `drop` stores none; a switch to `drop` clears the
+project's stored coordinates. Coordinates live only in the images index, never
+on items or labels. Exports keep the GPS embedded in the original files, as
+today, unless the project's policy is `drop`, in which case the export copy
+strips it.
+
+## Monitoring profile and the container runtime socket
+
+The opt-in `monitoring` profile mounts the container runtime socket
+(`/var/run/docker.sock`) read-only into its collectors. A read-only mount does
+not restrict the socket's API: whoever controls such a container can still
+issue any runtime request, including starting containers. Enable the profile
+only on hosts where that is acceptable.
+
 ## Reporting a vulnerability
 
 If you find a security issue that is **not** one of the known gaps

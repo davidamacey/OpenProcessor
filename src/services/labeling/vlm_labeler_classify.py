@@ -148,7 +148,7 @@ class ClassifyOps(VlmLabelerCore):
             logger.info(
                 'vlm_labeler.class_reply_from_reasoning',
                 chunk_size=len(chunk),
-                content_preview=content[:80],
+                content_len=len(content),
             )
             return from_reasoning
         return preds
@@ -194,7 +194,7 @@ class ClassifyOps(VlmLabelerCore):
             if log_failures:
                 logger.warning(
                     'vlm_labeler.parse_failed',
-                    raw_preview=raw[:200],
+                    raw_len=len(raw),
                     chunk_size=len(chunk),
                 )
             return fallback
