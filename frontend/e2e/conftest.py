@@ -45,7 +45,7 @@ no SSR.
 """
 
 pytest_plugins = [
-    "harness.server",
-    "harness.stub",
-    "harness.page_log",
+    'harness.server',
+    'harness.stub',
+    'harness.page_log',
 ]

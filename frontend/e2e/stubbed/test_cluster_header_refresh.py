@@ -13,30 +13,36 @@ picks up the server's new count with no navigation/reload.
 
 from __future__ import annotations
 
-from harness.constants import ACTION_TIMEOUT_MS
-from harness.label_ops import stub_label_op
-
-from playwright.sync_api import expect
-
 from fixtures.contract import cluster_card, cluster_list
 from fixtures.wire import make_item
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.label_ops import stub_label_op
+from playwright.sync_api import expect
+
 
 CLASS_ID = 44
 
-CLUSTER_UID = "cl-fixture-0044"
-CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=2, dominant_class_name="mustang"))
+CLUSTER_UID = 'cl-fixture-0044'
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=2, dominant_class_name='mustang'))
 
 
 def crop(i: int) -> dict:
     return make_item(
-        crop_id=f"crop-{i}",
-        image_id=f"img-{i}",
+        crop_id=f'crop-{i}',
+        image_id=f'img-{i}',
         class_id=CLASS_ID,
-        class_name="mustang",
-        cluster={"partition_id": "p1", "uid": CLUSTER_UID, "state": "assigned", "score": 0.9, "margin": 0.1, "assigned_by": "run"},
+        class_name='mustang',
+        cluster={
+            'partition_id': 'p1',
+            'uid': CLUSTER_UID,
+            'state': 'assigned',
+            'score': 0.9,
+            'margin': 0.1,
+            'assigned_by': 'run',
+        },
         label_validated=False,
-        label_source="model_suggestion",
-        thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
+        label_source='model_suggestion',
+        thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
     )
 
 
@@ -52,62 +58,64 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
         return (
             200,
             {
-                "classes": [
+                'classes': [
                     {
-                        "class_id": CLASS_ID,
-                        "class_name": "mustang",
-                        "kind": "item",
-                        "group": "car",
-                        "hotkey_letter": "q",
-                        "sample_count": 161,
-                        "validated_count": validated,
-                        "cluster_size": 161,
-                        "deprecated": False,
+                        'class_id': CLASS_ID,
+                        'class_name': 'mustang',
+                        'kind': 'item',
+                        'group': 'car',
+                        'hotkey_letter': 'q',
+                        'sample_count': 161,
+                        'validated_count': validated,
+                        'cluster_size': 161,
+                        'deprecated': False,
                     }
                 ],
-                "thresholds": {
-                    "block_below": 0,
-                    "warn_below": 5,
-                    "min_test_per_class": 5,
-                    "aug_target_min": 500,
-                    "aug_target_max": 500,
+                'thresholds': {
+                    'block_below': 0,
+                    'warn_below': 5,
+                    'min_test_per_class': 5,
+                    'aug_target_min': 500,
+                    'aug_target_max': 500,
                 },
-                "reserved_hotkeys": ["g", "n", "d", "z", "x", "u", "a", "m", "/"],
+                'reserved_hotkeys': ['g', 'n', 'd', 'z', 'x', 'u', 'a', 'm', '/'],
             },
         )
 
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", classes_handler)
-    stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', classes_handler)
+    stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
     stub.on(
-        "GET",
-        r"/crops(\?|$)",
-        {"total": 2, "page": 1, "page_size": 60, "crops": [crop(0), crop(1)]},
+        'GET',
+        r'/crops(\?|$)',
+        {'total': 2, 'page': 1, 'page_size': 60, 'crops': [crop(0), crop(1)]},
     )
 
-    stub_label_op(stub, r"/crops/batch_label$", "op-label-1", method="PUT")
+    stub_label_op(stub, r'/crops/batch_label$', 'op-label-1', method='PUT')
 
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
-    page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
 
-    header = page.get_by_title("validated · labeled · cluster total")
+    header = page.get_by_title('validated · labeled · cluster total')
     header.wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert "0" in header.inner_text(), f"expected the pre-label count first: {header.inner_text()!r}"
+    assert '0' in header.inner_text(), (
+        f'expected the pre-label count first: {header.inner_text()!r}'
+    )
 
-    page.locator("img").first.click()
-    expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.locator('img').first.click()
+    expect(page.get_by_text('1 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     # 'q' is this class's own hotkey_letter (not one of the reserved
     # single-char action keys — g n d z x u a m /), routed by the
     # layout's class-letter keydown listener.
     with page.expect_response(
-        lambda r: r.request.method == "PUT" and r.url.endswith("/batch_label"),
+        lambda r: r.request.method == 'PUT' and r.url.endswith('/batch_label'),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.keyboard.press("q")
+        page.keyboard.press('q')
 
     # The header text only updates once the post-label GET /classes
     # refetch lands, so waiting on it first (a retrying expect) also
     # guarantees classes_calls has already been incremented below.
-    expect(header).to_contain_text("34", timeout=ACTION_TIMEOUT_MS)
+    expect(header).to_contain_text('34', timeout=ACTION_TIMEOUT_MS)
     assert len(classes_calls) >= 2, (
         "labeling a crop must re-fetch GET /classes so the header picks up the server's new count"
     )
@@ -115,12 +123,12 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
     # labeled) and the cluster's own size (2) are different scopes; each
     # must say which one it is, so "labeled" can't read as a share of
     # "in cluster".
-    text = " ".join(header.inner_text().split())
-    assert "class-wide: 34 validated · 161 labeled" in text, text
-    assert "2 in this cluster" in text, text
+    text = ' '.join(header.inner_text().split())
+    assert 'class-wide: 34 validated · 161 labeled' in text, text
+    assert '2 in this cluster' in text, text
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected in the label/header-refresh flow: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected in the label/header-refresh flow: {errors[:3]}'
 
 
 def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
@@ -128,27 +136,27 @@ def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
     "Cluster #N" with no sign that anything was wrong; the served reason is
     shown instead of a silent unlabeled identity."""
     stub.on(
-        "GET",
-        r"(?<!/stats)/classes(\?|$)",
+        'GET',
+        r'(?<!/stats)/classes(\?|$)',
         {
-            "classes": [],
-            "thresholds": {
-                "block_below": 0,
-                "warn_below": 5,
-                "min_test_per_class": 5,
-                "aug_target_min": 500,
-                "aug_target_max": 500,
+            'classes': [],
+            'thresholds': {
+                'block_below': 0,
+                'warn_below': 5,
+                'min_test_per_class': 5,
+                'aug_target_min': 500,
+                'aug_target_max': 500,
             },
-            "reserved_hotkeys": [],
+            'reserved_hotkeys': [],
         },
     )
-    stub.on("GET", r"/clusters(\?|$)", (400, {"detail": "aggregation unavailable"}))
+    stub.on('GET', r'/clusters(\?|$)', (400, {'detail': 'aggregation unavailable'}))
     stub.on(
-        "GET",
-        r"/crops(\?|$)",
-        {"total": 1, "page": 1, "page_size": 60, "crops": [crop(0)]},
+        'GET',
+        r'/crops(\?|$)',
+        {'total': 1, 'page': 1, 'page_size': 60, 'crops': [crop(0)]},
     )
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
-    expect(page.get_by_test_id("cluster-card-error")).to_contain_text(
-        "aggregation unavailable", timeout=ACTION_TIMEOUT_MS
+    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    expect(page.get_by_test_id('cluster-card-error')).to_contain_text(
+        'aggregation unavailable', timeout=ACTION_TIMEOUT_MS
     )

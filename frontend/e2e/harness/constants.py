@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[2]
 
-API_PREFIX = "/curation"
+API_PREFIX = '/curation'
 
 # Single, documented action-timeout budget for the whole stubbed suite.
 #
@@ -26,5 +27,5 @@ ACTION_TIMEOUT_MS = 45000
 
 # 1x1 transparent GIF — grids only need the <img> to resolve, not real pixels.
 TRANSPARENT_GIF = bytes.fromhex(
-    "47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b"
+    '47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b'
 )

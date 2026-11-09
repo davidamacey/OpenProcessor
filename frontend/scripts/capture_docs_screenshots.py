@@ -59,9 +59,10 @@ from docs_screenshots.guard import _read_only
 from docs_screenshots.registry import SEEDED_STATES, STATE_HEIGHT, STATES
 from playwright.sync_api import sync_playwright
 
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ROUTES_FILE = REPO_ROOT / "scripts" / "screenshot_routes.json"
-OUT_DIR = REPO_ROOT.parent / "docs-site" / "static" / "img" / "screenshots" / "cropwright"
+ROUTES_FILE = REPO_ROOT / 'scripts' / 'screenshot_routes.json'
+OUT_DIR = REPO_ROOT.parent / 'docs-site' / 'static' / 'img' / 'screenshots' / 'cropwright'
 
 WIDTHS = (1600, 800)
 VIEWPORT_HEIGHT = 1000
@@ -69,65 +70,66 @@ VIEWPORT_HEIGHT = 1000
 
 def load_routes() -> list[dict]:
     if not ROUTES_FILE.exists():
-        sys.exit(f"missing route list: {ROUTES_FILE}")
+        sys.exit(f'missing route list: {ROUTES_FILE}')
     return json.loads(ROUTES_FILE.read_text())
 
 
 def scoped_route(route: str, project: str | None) -> str:
     """Bare per-project paths get the `/p/<project>` prefix; `/projects*` is global."""
-    if project is None or route.startswith("/projects"):
+    if project is None or route.startswith('/projects'):
         return route
-    return f"/p/{project}{route}"
+    return f'/p/{project}{route}'
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--base-url",
-        default=os.environ.get("OP_CROPWRIGHT_URL"),
-        required="OP_CROPWRIGHT_URL" not in os.environ,
-        help="Base URL of a Cropwright instance pointed at a PUBLIC-sample-data "
-        "OpenProcessor backend only. Never a real deployment.",
+        '--base-url',
+        default=os.environ.get('OP_CROPWRIGHT_URL'),
+        required='OP_CROPWRIGHT_URL' not in os.environ,
+        help='Base URL of a Cropwright instance pointed at a PUBLIC-sample-data '
+        'OpenProcessor backend only. Never a real deployment.',
     )
     parser.add_argument(
-        "--project",
-        default=os.environ.get("OP_CROPWRIGHT_PROJECT"),
-        help="Project slug holding the public sample data. Without it bare routes "
-        "redirect to the default project.",
+        '--project',
+        default=os.environ.get('OP_CROPWRIGHT_PROJECT'),
+        help='Project slug holding the public sample data. Without it bare routes '
+        'redirect to the default project.',
     )
     parser.add_argument(
-        "--public-projects",
-        default=os.environ.get("OP_CROPWRIGHT_PUBLIC_PROJECTS"),
-        help="Required. Comma-separated slugs of every project on the backend that is public. "
-        "--project must be one of them, and the pages that list all projects are refused "
-        "while the backend holds any project outside this list.",
+        '--public-projects',
+        default=os.environ.get('OP_CROPWRIGHT_PUBLIC_PROJECTS'),
+        help='Required. Comma-separated slugs of every project on the backend that is public. '
+        '--project must be one of them, and the pages that list all projects are refused '
+        'while the backend holds any project outside this list.',
     )
-    parser.add_argument("--out", type=Path, default=OUT_DIR)
+    parser.add_argument('--out', type=Path, default=OUT_DIR)
     parser.add_argument(
-        "--only",
-        nargs="*",
+        '--only',
+        nargs='*',
         default=None,
-        help="Capture only these route/state `name`s, for a quick re-run.",
+        help='Capture only these route/state `name`s, for a quick re-run.',
     )
     parser.add_argument(
-        "--seeded",
-        action="store_true",
-        help="Seed an isolated, empty stack (docker/test/compose.docs-shots.yml) with its own public "
-        "projects, then capture exactly the SEEDED_STATES. Needs --container; --project and "
-        "--public-projects are set for you.",
+        '--seeded',
+        action='store_true',
+        help='Seed an isolated, empty stack (docker/test/compose.docs-shots.yml) with its own public '
+        'projects, then capture exactly the SEEDED_STATES. Needs --container; --project and '
+        '--public-projects are set for you.',
     )
     parser.add_argument(
-        "--container", help="--seeded: name of the stack's API container (the detection worker runs in it)"
+        '--container',
+        help="--seeded: name of the stack's API container (the detection worker runs in it)",
     )
     parser.add_argument(
-        "--widths",
-        nargs="*",
+        '--widths',
+        nargs='*',
         type=int,
         default=list(WIDTHS),
-        help="Viewport widths for the route captures (states are always 1600).",
+        help='Viewport widths for the route captures (states are always 1600).',
     )
     parser.add_argument(
-        "--skip-routes", action="store_true", help="Capture only the scripted states."
+        '--skip-routes', action='store_true', help='Capture only the scripted states.'
     )
     args = parser.parse_args()
     args.out = args.out.resolve()
@@ -135,11 +137,11 @@ def main() -> int:
         if not args.container:
             sys.exit("--seeded needs --container <the stack's API container>")
         if args.skip_routes:
-            sys.exit("--seeded captures only states; drop --skip-routes")
+            sys.exit('--seeded captures only states; drop --skip-routes')
         args.project = MAIN_PROJECT
-        args.public_projects = ",".join(("default", *SEEDED_PROJECTS))
+        args.public_projects = ','.join(('default', *SEEDED_PROJECTS))
         args.skip_routes = True
-        print("Seeding the isolated stack...")
+        print('Seeding the isolated stack...')
         try:
             seed.seed(args.base_url, args.container)
         except seed.SeedError as e:
@@ -151,17 +153,19 @@ def main() -> int:
         sys.exit(str(e))
 
     routes = [] if args.skip_routes else load_routes()
-    states = {k: v for k, v in STATES.items() if k in SEEDED_STATES} if args.seeded else dict(STATES)
+    states = (
+        {k: v for k, v in STATES.items() if k in SEEDED_STATES} if args.seeded else dict(STATES)
+    )
     if args.only:
-        routes = [r for r in routes if r["name"] in args.only]
+        routes = [r for r in routes if r['name'] in args.only]
         states = {k: v for k, v in states.items() if k in args.only}
         if not routes and not states:
-            sys.exit(f"no matching routes or states for --only {args.only}")
+            sys.exit(f'no matching routes or states for --only {args.only}')
 
-    listing = api_get(args.base_url, "/curation/projects?include_archived=true")
+    listing = api_get(args.base_url, '/curation/projects?include_archived=true')
     refused = public_data.listing_pages_to_refuse(
-        [r["name"] for r in routes if r["route"].startswith("/projects")]
-        + [r["name"] for r in routes]
+        [r['name'] for r in routes if r['route'].startswith('/projects')]
+        + [r['name'] for r in routes]
         + list(states),
         listing,
         allowed,
@@ -169,67 +173,71 @@ def main() -> int:
     if refused:
         foreign = public_data.foreign_projects(listing, allowed)
         print(
-            f"  refusing pages that list every project ({sorted(set(refused))}): the backend also "
-            f"holds {len(foreign)} project(s) outside the public allowlist."
+            f'  refusing pages that list every project ({sorted(set(refused))}): the backend also '
+            f'holds {len(foreign)} project(s) outside the public allowlist.'
         )
-        routes = [r for r in routes if r["name"] not in refused and not r["route"].startswith("/projects")]
+        routes = [
+            r for r in routes if r['name'] not in refused and not r['route'].startswith('/projects')
+        ]
         states = {k: v for k, v in states.items() if k not in refused}
 
     args.out.mkdir(parents=True, exist_ok=True)
 
-    print(f"Capturing against {args.base_url} — confirm this is a PUBLIC-sample-data instance.")
+    print(f'Capturing against {args.base_url} — confirm this is a PUBLIC-sample-data instance.')
 
     def finish(page, name: str, width: int, clip=None) -> None:
-        out_path = args.out / f"{name}-{width}.png"
+        out_path = args.out / f'{name}-{width}.png'
         if clip is not None:  # a state may return a locator to crop to
             clip.screenshot(path=str(out_path))
         else:
             page.screenshot(path=str(out_path), full_page=True)
-        print(f"  wrote {out_path}")
+        print(f'  wrote {out_path}')
 
     failed: list[str] = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--disable-gpu"])
+        browser = p.chromium.launch(args=['--disable-gpu'])
         try:
             for route in routes:
                 for width in args.widths:
-                    page = browser.new_page(viewport={"width": width, "height": VIEWPORT_HEIGHT})
-                    page.route("**/*", _read_only)
-                    url = args.base_url.rstrip("/") + scoped_route(route["route"], args.project)
-                    page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                    wait_for = route.get("wait_for")
+                    page = browser.new_page(viewport={'width': width, 'height': VIEWPORT_HEIGHT})
+                    page.route('**/*', _read_only)
+                    url = args.base_url.rstrip('/') + scoped_route(route['route'], args.project)
+                    page.goto(url, wait_until='domcontentloaded', timeout=30_000)
+                    wait_for = route.get('wait_for')
                     if wait_for:
                         try:
                             page.wait_for_selector(wait_for, timeout=10_000)
                         except Exception:
-                            print(f"  warning: selector {wait_for!r} not found for {route['route']} @ {width}px")
+                            print(
+                                f'  warning: selector {wait_for!r} not found for {route["route"]} @ {width}px'
+                            )
                     _settle(page)
-                    finish(page, route["name"], width)
+                    finish(page, route['name'], width)
                     page.close()
-            ctx = Ctx(args.base_url, args.project or "")
+            ctx = Ctx(args.base_url, args.project or '')
             for name, fn in states.items():
                 page = browser.new_page(
-                    viewport={"width": 1600, "height": STATE_HEIGHT.get(name, VIEWPORT_HEIGHT)}
+                    viewport={'width': 1600, 'height': STATE_HEIGHT.get(name, VIEWPORT_HEIGHT)}
                 )
-                page.route("**/*", _read_only)
+                page.route('**/*', _read_only)
                 try:
                     finish(page, name, 1600, fn(page, ctx))
                 except Exception as e:  # keep going; a failed state is reported, not faked
                     failed.append(name)
-                    print(f"  FAILED state {name}: {type(e).__name__}: {str(e)[:300]}")
+                    print(f'  FAILED state {name}: {type(e).__name__}: {str(e)[:300]}')
                 page.close()
         finally:
             browser.close()
     if failed:
-        print(f"\nFAILED states: {failed}")
+        print(f'\nFAILED states: {failed}')
         return 1
 
     print(
-        "\nDone. Review every PNG for leaked hostnames/paths before committing, "
-        "then commit under docs-site/static/img/screenshots/cropwright/."
+        '\nDone. Review every PNG for leaked hostnames/paths before committing, '
+        'then commit under docs-site/static/img/screenshots/cropwright/.'
     )
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())

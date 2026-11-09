@@ -15,27 +15,27 @@ from __future__ import annotations
 
 import re
 
+from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled, wait_for_paint
 from playwright.sync_api import expect
 
-from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
     {
-        "class_id": 1,
-        "class_name": REGION_CLASS,
-        "kind": "region",
-        "group": "widgets",
-        "hotkey_letter": "l",
-        "sample_count": 40,
-        "validated_count": 12,
-        "cluster_size": 44,
-        "deprecated": False,
+        'class_id': 1,
+        'class_name': REGION_CLASS,
+        'kind': 'region',
+        'group': 'widgets',
+        'hotkey_letter': 'l',
+        'sample_count': 40,
+        'validated_count': 12,
+        'cluster_size': 44,
+        'deprecated': False,
     },
 ]
 
-METHODS = {"strategies": [], "flags": {}}
+METHODS = {'strategies': [], 'flags': {}}
 
 _BOX_A = [0.1, 0.1, 0.3, 0.3]
 _BOX_B = [0.5, 0.5, 0.7, 0.7]
@@ -43,72 +43,70 @@ _BOX_B = [0.5, 0.5, 0.7, 0.7]
 
 def _box(box_id: str, state: str, bbox: list[float]) -> dict:
     return {
-        "box_id": box_id,
-        "state": state,
-        "bbox_norm": bbox,
-        "bbox_in_parent": bbox,
-        "score": 0.8,
-        "detector": "tag_detector_v1",
-        "detector_version": "1",
-        "source": "detector",
-        "bbox_correct": None,
-        "confidence": None,
-        "rejection_reason": "verifier_no_verdict" if state == "rejected" else None,
-        "text": None,
-        "text_raw": None,
-        "text_confidence": None,
-        "text_source": None,
-        "text_engine_version": None,
-        "text_vlm": None,
-        "text_ocr": None,
-        "text_disagreement": None,
-        "text_choice": None,
-        "text_vlm_invalid": None,
-        "cluster_partition_id": None,
-        "cluster_uid": None,
-        "cluster_state": None,
-        "cluster_score": None,
-        "cluster_margin": None,
-        "cluster_assigned_by": None,
-        "detected_at": "2026-05-06T07:08:09Z",
-        "thumbnail_url": f"/curation/crops/tag-mb-1/region_thumbnail?box_id={box_id}",
+        'box_id': box_id,
+        'state': state,
+        'bbox_norm': bbox,
+        'bbox_in_parent': bbox,
+        'score': 0.8,
+        'detector': 'tag_detector_v1',
+        'detector_version': '1',
+        'source': 'detector',
+        'bbox_correct': None,
+        'confidence': None,
+        'rejection_reason': 'verifier_no_verdict' if state == 'rejected' else None,
+        'text': None,
+        'text_raw': None,
+        'text_confidence': None,
+        'text_source': None,
+        'text_engine_version': None,
+        'text_vlm': None,
+        'text_ocr': None,
+        'text_disagreement': None,
+        'text_choice': None,
+        'text_vlm_invalid': None,
+        'cluster_partition_id': None,
+        'cluster_uid': None,
+        'cluster_state': None,
+        'cluster_score': None,
+        'cluster_margin': None,
+        'cluster_assigned_by': None,
+        'detected_at': '2026-05-06T07:08:09Z',
+        'thumbnail_url': f'/curation/crops/tag-mb-1/region_thumbnail?box_id={box_id}',
     }
 
 
-def multibox_item(boxes: list[dict], region_status: str = "pending_verification") -> dict:
+def multibox_item(boxes: list[dict], region_status: str = 'pending_verification') -> dict:
     return make_item(
-        crop_id="tag-mb-1",
-        image_id="img-1",
+        crop_id='tag-mb-1',
+        image_id='img-1',
         class_id=1,
         class_name=REGION_CLASS,
-        thumbnail_url="/curation/crops/tag-mb-1/thumbnail",
+        thumbnail_url='/curation/crops/tag-mb-1/thumbnail',
         region_status=region_status,
         region_boxes=boxes,
     )
 
 
 def _setup(stub, items_provider):
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
-    stub.on("GET", r"/methods(\?|$)", METHODS)
-    stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/methods(\?|$)', METHODS)
+    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
     stub.on(
-        "GET",
-        r"/review/(?!tabs)",
+        'GET',
+        r'/review/(?!tabs)',
         lambda _r, _m: (
             200,
-            {"items": [items_provider()], "total": 1, "page": 1, "page_size": 30},
+            {'items': [items_provider()], 'total': 1, 'page': 1, 'page_size': 30},
         ),
     )
 
 
-def test_enter_confirms_only_proposed_boxes_and_leaves_rejected_untouched(
-    stub, page, app_url
-):
+def test_enter_confirms_only_proposed_boxes_and_leaves_rejected_untouched(stub, page, app_url):
     puts: list[dict] = []
 
     _setup(
         stub,
-        lambda: multibox_item([_box("b1", "proposed", _BOX_A), _box("b2", "rejected", _BOX_B)]),
+        lambda: multibox_item([_box('b1', 'proposed', _BOX_A), _box('b2', 'rejected', _BOX_B)]),
     )
 
     def region_put(request, _match):
@@ -117,36 +115,36 @@ def test_enter_confirms_only_proposed_boxes_and_leaves_rejected_untouched(
         return (
             200,
             {
-                "item": multibox_item(
-                    [_box("b1", "accepted", _BOX_A), _box("b2", "rejected", _BOX_B)],
-                    region_status="detected",
+                'item': multibox_item(
+                    [_box('b1', 'accepted', _BOX_A), _box('b2', 'rejected', _BOX_B)],
+                    region_status='detected',
                 )
             },
         )
 
-    stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
+    stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
 
     with page.expect_response(
-        lambda r: r.request.method == "PUT" and r.url.endswith("/regions"),
+        lambda r: r.request.method == 'PUT' and r.url.endswith('/regions'),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.keyboard.press("Enter")
+        page.keyboard.press('Enter')
 
     assert len(puts) == 1, puts
     body = puts[0]
-    assert body["region_status"] == "detected", body
-    assert body["boxes"] == [
-        {"box_id": "b1", "state": "accepted"},
-        {"box_id": "b2"},
+    assert body['region_status'] == 'detected', body
+    assert body['boxes'] == [
+        {'box_id': 'b1', 'state': 'accepted'},
+        {'box_id': 'b2'},
     ], body
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected: {errors[:3]}'
 
 
 def test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_queue(
@@ -156,7 +154,7 @@ def test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_
 
     _setup(
         stub,
-        lambda: multibox_item([_box("b1", "proposed", _BOX_A), _box("b2", "proposed", _BOX_B)]),
+        lambda: multibox_item([_box('b1', 'proposed', _BOX_A), _box('b2', 'proposed', _BOX_B)]),
     )
 
     def region_patch(request, match):
@@ -164,45 +162,51 @@ def test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_
         body = request.post_data_json or {}
         patches.append((box_id, body))
         boxes = [
-            _box("b1", body.get("state", "proposed") if box_id == "b1" else "proposed", _BOX_A),
-            _box("b2", body.get("state", "proposed") if box_id == "b2" else "proposed", _BOX_B),
+            _box('b1', body.get('state', 'proposed') if box_id == 'b1' else 'proposed', _BOX_A),
+            _box('b2', body.get('state', 'proposed') if box_id == 'b2' else 'proposed', _BOX_B),
         ]
-        return (200, {"crop_id": "tag-mb-1", "box": boxes[0], "updated_fields": ["state"], "item": multibox_item(boxes)})
+        return (
+            200,
+            {
+                'crop_id': 'tag-mb-1',
+                'box': boxes[0],
+                'updated_fields': ['state'],
+                'item': multibox_item(boxes),
+            },
+        )
 
-    stub.on("PATCH", r"/crops/([^/]+)/regions/([^/]+)$", region_patch)
+    stub.on('PATCH', r'/crops/([^/]+)/regions/([^/]+)$', region_patch)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
-    counter = page.get_by_test_id("queue-counter").first
-    expect(counter).to_have_text(re.compile(r"#\d+"), timeout=ACTION_TIMEOUT_MS)
+    counter = page.get_by_test_id('queue-counter').first
+    expect(counter).to_have_text(re.compile(r'#\d+'), timeout=ACTION_TIMEOUT_MS)
     counter_before = counter.inner_text()
 
     def is_box_patch(box_id):
-        return lambda r: r.method == "PATCH" and r.url.endswith(f"/regions/{box_id}")
+        return lambda r: r.method == 'PATCH' and r.url.endswith(f'/regions/{box_id}')
 
     # b1 (selected by default, position 1) rejected via 'r'.
-    with expect_handled(page, is_box_patch("b1"), timeout=ACTION_TIMEOUT_MS):
-        page.keyboard.press("r")
+    with expect_handled(page, is_box_patch('b1'), timeout=ACTION_TIMEOUT_MS):
+        page.keyboard.press('r')
     # Tab to b2, accept via 'y'. Key events are handled in order on the page's
     # main thread, so Tab has moved the selection before 'y' is dispatched.
-    page.keyboard.press("Tab")
-    with expect_handled(page, is_box_patch("b2"), timeout=ACTION_TIMEOUT_MS):
-        page.keyboard.press("y")
+    page.keyboard.press('Tab')
+    with expect_handled(page, is_box_patch('b2'), timeout=ACTION_TIMEOUT_MS):
+        page.keyboard.press('y')
 
-    assert [p[0] for p in patches] == ["b1", "b2"], patches
-    assert patches[0][1]["state"] == "rejected", patches[0]
-    assert patches[1][1]["state"] == "accepted", patches[1]
+    assert [p[0] for p in patches] == ['b1', 'b2'], patches
+    assert patches[0][1]['state'] == 'rejected', patches[0]
+    assert patches[1][1]['state'] == 'accepted', patches[1]
     # A per-box PATCH is not a whole-item confirm — the crop stays in view.
-    assert page.get_by_test_id("queue-counter").first.inner_text() == counter_before
+    assert page.get_by_test_id('queue-counter').first.inner_text() == counter_before
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected: {errors[:3]}'
 
 
-def test_keys_pressed_while_a_box_write_is_in_flight_are_applied_in_order(
-    stub, page, app_url
-):
+def test_keys_pressed_while_a_box_write_is_in_flight_are_applied_in_order(stub, page, app_url):
     """The write for the first key is held in the browser, so the next keys
     land while it is in flight (what a loaded CI runner does by chance). They
     must queue, not be dropped."""
@@ -219,7 +223,7 @@ def test_keys_pressed_while_a_box_write_is_in_flight_are_applied_in_order(
     )
     _setup(
         stub,
-        lambda: multibox_item([_box("b1", "proposed", _BOX_A), _box("b2", "proposed", _BOX_B)]),
+        lambda: multibox_item([_box('b1', 'proposed', _BOX_A), _box('b2', 'proposed', _BOX_B)]),
     )
 
     def region_patch(request, match):
@@ -227,34 +231,46 @@ def test_keys_pressed_while_a_box_write_is_in_flight_are_applied_in_order(
         body = request.post_data_json or {}
         patches.append((box_id, body))
         boxes = [
-            _box("b1", body.get("state", "proposed") if box_id == "b1" else "rejected", _BOX_A),
-            _box("b2", body.get("state", "proposed") if box_id == "b2" else "proposed", _BOX_B),
+            _box('b1', body.get('state', 'proposed') if box_id == 'b1' else 'rejected', _BOX_A),
+            _box('b2', body.get('state', 'proposed') if box_id == 'b2' else 'proposed', _BOX_B),
         ]
-        return (200, {"crop_id": "tag-mb-1", "box": boxes[0], "updated_fields": ["state"], "item": multibox_item(boxes)})
+        return (
+            200,
+            {
+                'crop_id': 'tag-mb-1',
+                'box': boxes[0],
+                'updated_fields': ['state'],
+                'item': multibox_item(boxes),
+            },
+        )
 
-    stub.on("PATCH", r"/crops/([^/]+)/regions/([^/]+)$", region_patch)
+    stub.on('PATCH', r'/crops/([^/]+)/regions/([^/]+)$', region_patch)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
-    expect(page.get_by_test_id("queue-counter").first).to_have_text(
-        re.compile(r"#\d+"), timeout=ACTION_TIMEOUT_MS
+    expect(page.get_by_test_id('queue-counter').first).to_have_text(
+        re.compile(r'#\d+'), timeout=ACTION_TIMEOUT_MS
     )
 
-    with expect_handled(page, lambda r: r.method == "PATCH" and r.url.endswith("/regions/b2"), timeout=ACTION_TIMEOUT_MS):
-        page.keyboard.press("r")
-        page.keyboard.press("Tab")
-        page.keyboard.press("y")
+    with expect_handled(
+        page,
+        lambda r: r.method == 'PATCH' and r.url.endswith('/regions/b2'),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press('r')
+        page.keyboard.press('Tab')
+        page.keyboard.press('y')
 
-    assert [(p[0], p[1]["state"]) for p in patches] == [("b1", "rejected"), ("b2", "accepted")], patches
+    assert [(p[0], p[1]['state']) for p in patches] == [('b1', 'rejected'), ('b2', 'accepted')], (
+        patches
+    )
 
 
-def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(
-    stub, page, app_url
-):
+def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(stub, page, app_url):
     puts: list[dict] = []
 
-    _setup(stub, lambda: multibox_item([_box("b1", "proposed", _BOX_A)]))
+    _setup(stub, lambda: multibox_item([_box('b1', 'proposed', _BOX_A)]))
 
     def region_put(request, _match):
         body = request.post_data_json or {}
@@ -262,29 +278,29 @@ def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(
         return (
             200,
             {
-                "item": multibox_item(
-                    [_box("b1", "accepted", _BOX_A), _box("b2", "accepted", [0.6, 0.6, 0.8, 0.8])],
-                    region_status="detected",
+                'item': multibox_item(
+                    [_box('b1', 'accepted', _BOX_A), _box('b2', 'accepted', [0.6, 0.6, 0.8, 0.8])],
+                    region_status='detected',
                 )
             },
         )
 
-    stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
+    stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    canvas = page.get_by_test_id("multibox-canvas").first
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    canvas = page.get_by_test_id('multibox-canvas').first
     canvas.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
 
     # Enter edit mode, then drag out a new box in an empty area of the canvas.
-    page.keyboard.press("e")
+    page.keyboard.press('e')
     wait_for_paint(page)
     box = canvas.bounding_box()
     assert box is not None
-    x0 = box["x"] + box["width"] * 0.6
-    y0 = box["y"] + box["height"] * 0.6
-    x1 = box["x"] + box["width"] * 0.85
-    y1 = box["y"] + box["height"] * 0.85
+    x0 = box['x'] + box['width'] * 0.6
+    y0 = box['y'] + box['height'] * 0.6
+    x1 = box['x'] + box['width'] * 0.85
+    y1 = box['y'] + box['height'] * 0.85
     page.mouse.move(x0, y0)
     page.mouse.down()
     page.mouse.move(x1, y1, steps=5)
@@ -293,36 +309,34 @@ def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(
 
     with expect_handled(
         page,
-        lambda r: r.method == "PUT" and r.url.endswith("/regions"),
+        lambda r: r.method == 'PUT' and r.url.endswith('/regions'),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.keyboard.press("Enter")
+        page.keyboard.press('Enter')
 
     assert len(puts) == 1, puts
     body = puts[0]
-    boxes = body["boxes"]
+    boxes = body['boxes']
     assert len(boxes) == 2, boxes
-    confirmed = next(b for b in boxes if b.get("box_id") == "b1")
-    added = next(b for b in boxes if b.get("box_id") is None)
+    confirmed = next(b for b in boxes if b.get('box_id') == 'b1')
+    added = next(b for b in boxes if b.get('box_id') is None)
     # b1 was `proposed` -> Enter's confirm settles it to accepted (no
     # geometry change, so no bbox_norm on this element).
-    assert confirmed == {"box_id": "b1", "state": "accepted"}, confirmed
-    assert "bbox_norm" in added, added
-    assert "state" not in added, added  # relies on the server's new_box_default
+    assert confirmed == {'box_id': 'b1', 'state': 'accepted'}, confirmed
+    assert 'bbox_norm' in added, added
+    assert 'state' not in added, added  # relies on the server's new_box_default
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected: {errors[:3]}'
 
 
-def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
-    stub, page, app_url
-):
+def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(stub, page, app_url):
     puts: list[dict] = []
     undo_calls: list[str] = []
 
     _setup(
         stub,
-        lambda: multibox_item([_box("b1", "proposed", _BOX_A), _box("b2", "rejected", _BOX_B)]),
+        lambda: multibox_item([_box('b1', 'proposed', _BOX_A), _box('b2', 'rejected', _BOX_B)]),
     )
 
     def region_put(request, _match):
@@ -330,14 +344,14 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
         return (
             200,
             {
-                "item": multibox_item(
-                    [_box("b1", "accepted", _BOX_A), _box("b2", "rejected", _BOX_B)],
-                    region_status="detected",
+                'item': multibox_item(
+                    [_box('b1', 'accepted', _BOX_A), _box('b2', 'rejected', _BOX_B)],
+                    region_status='detected',
                 )
             },
         )
 
-    stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
+    stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
     def region_undo(request, match):
         undo_calls.append(match.string)
@@ -346,39 +360,39 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
         return (
             200,
             multibox_item(
-                [_box("b1", "proposed", _BOX_A), _box("b2", "rejected", _BOX_B)],
-                region_status="pending_verification",
+                [_box('b1', 'proposed', _BOX_A), _box('b2', 'rejected', _BOX_B)],
+                region_status='pending_verification',
             ),
         )
 
-    stub.on("POST", r"/crops/([^/]+)/region/undo$", region_undo)
+    stub.on('POST', r'/crops/([^/]+)/region/undo$', region_undo)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
 
     with expect_handled(
         page,
-        lambda r: r.method == "PUT" and r.url.endswith("/regions"),
+        lambda r: r.method == 'PUT' and r.url.endswith('/regions'),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.keyboard.press("Enter")
+        page.keyboard.press('Enter')
     assert len(puts) == 1, puts
     # The undo entry is recorded after the response is processed.
     wait_for_paint(page)
 
     with expect_handled(
         page,
-        lambda r: r.method == "POST" and r.url.endswith("/region/undo"),
+        lambda r: r.method == 'POST' and r.url.endswith('/region/undo'),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.keyboard.press("z")
+        page.keyboard.press('z')
 
     assert len(undo_calls) == 1, undo_calls
-    assert "tag-mb-1" in undo_calls[0], undo_calls
+    assert 'tag-mb-1' in undo_calls[0], undo_calls
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected: {errors[:3]}'
 
 
 def test_on_screen_confirm_button_uses_the_multibox_write_too(stub, page, app_url):
@@ -392,31 +406,31 @@ def test_on_screen_confirm_button_uses_the_multibox_write_too(stub, page, app_ur
 
     _setup(
         stub,
-        lambda: multibox_item([_box("b1", "proposed", _BOX_A)]),
+        lambda: multibox_item([_box('b1', 'proposed', _BOX_A)]),
     )
 
     def region_put(request, _match):
         puts.append(request.post_data_json or {})
         return (
             200,
-            {"item": multibox_item([_box("b1", "accepted", _BOX_A)], region_status="detected")},
+            {'item': multibox_item([_box('b1', 'accepted', _BOX_A)], region_status='detected')},
         )
 
-    stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
+    stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
 
     with expect_handled(
         page,
-        lambda r: r.method == "PUT" and r.url.endswith("/regions"),
+        lambda r: r.method == 'PUT' and r.url.endswith('/regions'),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.get_by_role("button", name="Confirm", exact=False).first.click()
+        page.get_by_role('button', name='Confirm', exact=False).first.click()
 
     assert len(puts) == 1, puts
-    assert puts[0]["region_status"] == "detected", puts[0]
+    assert puts[0]['region_status'] == 'detected', puts[0]
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected: {errors[:3]}'

@@ -20,93 +20,92 @@ from __future__ import annotations
 
 import time
 
+from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID, make_item
 from harness.constants import ACTION_TIMEOUT_MS
-
 from playwright.sync_api import expect
 
-from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID
 
 CLASSES = [
     {
-        "class_id": 1,
-        "class_name": REGION_CLASS,
-        "kind": "region",
-        "group": "widgets",
-        "hotkey_letter": "l",
-        "sample_count": 40,
-        "validated_count": 12,
-        "cluster_size": 44,
-        "deprecated": False,
+        'class_id': 1,
+        'class_name': REGION_CLASS,
+        'kind': 'region',
+        'group': 'widgets',
+        'hotkey_letter': 'l',
+        'sample_count': 40,
+        'validated_count': 12,
+        'cluster_size': 44,
+        'deprecated': False,
     },
 ]
 
 REVIEW_TABS = {
-    "empty_state": {"has_probe_predictions": True, "has_item_scores": True},
-    "tabs": [
+    'empty_state': {'has_probe_predictions': True, 'has_item_scores': True},
+    'tabs': [
         {
-            "id": "regions",
-            "label": REGION_TAB_LABEL,
-            "description": "",
-            "filters": ["text", "region_status"],
-            "filter_defaults": {"region_status": "all"},
-            "filter_specs": [
+            'id': 'regions',
+            'label': REGION_TAB_LABEL,
+            'description': '',
+            'filters': ['text', 'region_status'],
+            'filter_defaults': {'region_status': 'all'},
+            'filter_specs': [
                 {
-                    "param": "region_status",
-                    "kind": "enum",
-                    "label": "Status",
-                    "options": [
-                        {"value": "all", "label": "All (accepted + rejected candidates)"},
-                        {"value": "detected", "label": "Detected only"},
+                    'param': 'region_status',
+                    'kind': 'enum',
+                    'label': 'Status',
+                    'options': [
+                        {'value': 'all', 'label': 'All (accepted + rejected candidates)'},
+                        {'value': 'detected', 'label': 'Detected only'},
                         {
-                            "value": "verify_rejected",
-                            "label": "Verifier-rejected candidates only",
+                            'value': 'verify_rejected',
+                            'label': 'Verifier-rejected candidates only',
                         },
                     ],
-                    "min": None,
-                    "max": None,
-                    "description": "",
-                    "default": "all",
-                    "allows_unset": False,
+                    'min': None,
+                    'max': None,
+                    'description': '',
+                    'default': 'all',
+                    'allows_unset': False,
                 },
             ],
         },
-    ]
+    ],
 }
 
 # Labeled region_rejection_reason vocabulary.
 REJECTION_REASONS = [
     {
-        "id": "region_visible_elsewhere",
-        "label": "Verifier: the box is wrong (region is elsewhere)",
-        "kind": "model_verdict",
-        "match": "exact",
-        "label_template": None,
+        'id': 'region_visible_elsewhere',
+        'label': 'Verifier: the box is wrong (region is elsewhere)',
+        'kind': 'model_verdict',
+        'match': 'exact',
+        'label_template': None,
     },
     {
-        "id": "sanity_reject:",
-        "label": "Box failed the geometry check",
-        "kind": "automatic",
-        "match": "prefix",
-        "label_template": "Box failed the geometry check ({detail})",
+        'id': 'sanity_reject:',
+        'label': 'Box failed the geometry check',
+        'kind': 'automatic',
+        'match': 'prefix',
+        'label_template': 'Box failed the geometry check ({detail})',
     },
     {
-        "id": "verifier_no_verdict",
-        "label": "Verifier gave no verdict — needs human review",
-        "kind": "needs_human",
-        "match": "exact",
-        "label_template": None,
+        'id': 'verifier_no_verdict',
+        'label': 'Verifier gave no verdict — needs human review',
+        'kind': 'needs_human',
+        'match': 'exact',
+        'label_template': None,
     },
 ]
 
 VOCABULARY = {
-    "detectors": [
-        {"id": "sam3", "label": "SAM3", "role": "segmenter", "filterable": True},
+    'detectors': [
+        {'id': 'sam3', 'label': 'SAM3', 'role': 'segmenter', 'filterable': True},
     ],
-    "region_sources": [],
-    "chain_actors": [],
-    "text_choices": [],
-    "text_rules": None,
-    "rejection_reasons": REJECTION_REASONS,
+    'region_sources': [],
+    'chain_actors': [],
+    'text_choices': [],
+    'text_rules': None,
+    'rejection_reasons': REJECTION_REASONS,
 }
 
 _CANDIDATE_BBOX = [0.15, 0.25, 0.55, 0.75]
@@ -120,46 +119,46 @@ def needs_human_item() -> dict:
     # against (18 total under region_status=verify_rejected: 13
     # model_verdict + 5 verifier_no_verdict).
     item = make_item(
-        crop_id="tag-needs-human-1",
-        image_id="img-1",
+        crop_id='tag-needs-human-1',
+        image_id='img-1',
         class_id=1,
         class_name=REGION_CLASS,
-        thumbnail_url="/curation/crops/tag-needs-human-1/thumbnail",
-        region_status="verify_rejected",
+        thumbnail_url='/curation/crops/tag-needs-human-1/thumbnail',
+        region_status='verify_rejected',
         region_verified=False,
         region_validated=False,
         region_auto_confirmed=False,
         region_boxes=[
             {
-                "box_id": "b1",
-                "state": "rejected",
-                "bbox_norm": _CANDIDATE_BBOX,
-                "bbox_in_parent": _CANDIDATE_BBOX,
-                "score": 0.42,
-                "detector": "sam3",
-                "detector_version": "3.0.0",
-                "source": "segmenter",
-                "bbox_correct": None,
-                "confidence": None,
-                "rejection_reason": "verifier_no_verdict",
-                "text": None,
-                "text_raw": None,
-                "text_confidence": None,
-                "text_source": None,
-                "text_engine_version": None,
-                "text_vlm": None,
-                "text_ocr": None,
-                "text_disagreement": None,
-                "text_choice": None,
-                "text_vlm_invalid": None,
-                "cluster_partition_id": None,
-                "cluster_uid": None,
-                "cluster_state": None,
-                "cluster_score": None,
-                "cluster_margin": None,
-                "cluster_assigned_by": None,
-                "detected_at": "2026-05-06T07:08:09Z",
-                "thumbnail_url": "/curation/crops/tag-needs-human-1/region_thumbnail?box_id=b1",
+                'box_id': 'b1',
+                'state': 'rejected',
+                'bbox_norm': _CANDIDATE_BBOX,
+                'bbox_in_parent': _CANDIDATE_BBOX,
+                'score': 0.42,
+                'detector': 'sam3',
+                'detector_version': '3.0.0',
+                'source': 'segmenter',
+                'bbox_correct': None,
+                'confidence': None,
+                'rejection_reason': 'verifier_no_verdict',
+                'text': None,
+                'text_raw': None,
+                'text_confidence': None,
+                'text_source': None,
+                'text_engine_version': None,
+                'text_vlm': None,
+                'text_ocr': None,
+                'text_disagreement': None,
+                'text_choice': None,
+                'text_vlm_invalid': None,
+                'cluster_partition_id': None,
+                'cluster_uid': None,
+                'cluster_state': None,
+                'cluster_score': None,
+                'cluster_margin': None,
+                'cluster_assigned_by': None,
+                'detected_at': '2026-05-06T07:08:09Z',
+                'thumbnail_url': '/curation/crops/tag-needs-human-1/region_thumbnail?box_id=b1',
             }
         ],
     )
@@ -168,7 +167,7 @@ def needs_human_item() -> dict:
     # "verifier rejected this candidate (...)" even for a needs_human
     # item, so the frontend must not render it verbatim once the box's
     # own rejection reason is present.
-    item["reason"] = "verifier rejected this candidate (verifier_no_verdict) — needs human review"
+    item['reason'] = 'verifier rejected this candidate (verifier_no_verdict) — needs human review'
     return item
 
 
@@ -177,52 +176,56 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
 ):
     region_calls: list[str] = []
 
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
-    stub.on("GET", r"/review/tabs(\?|$)", REVIEW_TABS)
-    stub.on("GET", r"/regions/vocabulary(\?|$)", VOCABULARY)
-    stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/review/tabs(\?|$)', REVIEW_TABS)
+    stub.on('GET', r'/regions/vocabulary(\?|$)', VOCABULARY)
+    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
 
     def review_handler(request, _match):
         region_calls.append(request.url)
         return (
             200,
-            {"items": [needs_human_item()], "total": 1, "page": 1, "page_size": 30},
+            {'items': [needs_human_item()], 'total': 1, 'page': 1, 'page_size': 30},
         )
 
-    stub.on("GET", r"/review/regions(\?|$)", review_handler)
+    stub.on('GET', r'/review/regions(\?|$)', review_handler)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    counter = page.get_by_test_id("queue-counter")
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     # The served label renders (not a raw param name), and the label
     # ("Needs review") is never worded as a rejection for this
     # needs_human item — the raw `reason` string ("verifier rejected
     # this candidate (...)") must not appear anywhere on the page.
-    page.get_by_text("Needs review", exact=False).first.wait_for(timeout=10000)
-    assert "candidate · needs review" in page.content()
-    assert "verifier rejected this candidate" not in page.content()
-    page.get_by_text("Verifier gave no verdict", exact=False).first.wait_for(timeout=10000)
+    page.get_by_text('Needs review', exact=False).first.wait_for(timeout=10000)
+    assert 'candidate · needs review' in page.content()
+    assert 'verifier rejected this candidate' not in page.content()
+    page.get_by_text('Verifier gave no verdict', exact=False).first.wait_for(timeout=10000)
 
     select = page.locator('label:has-text("Status") select')
     select.wait_for(timeout=10000)
-    option_values = select.locator("option").evaluate_all("opts => opts.map(o => o.value)")
-    assert option_values == ["all", "detected", "verify_rejected"], option_values
+    option_values = select.locator('option').evaluate_all('opts => opts.map(o => o.value)')
+    assert option_values == ['all', 'detected', 'verify_rejected'], option_values
 
     region_calls.clear()
     with page.expect_response(
-        lambda r: r.request.method == "GET"
-        and "/review/regions" in r.url
-        and "region_status=verify_rejected" in r.url,
+        lambda r: (
+            r.request.method == 'GET'
+            and '/review/regions' in r.url
+            and 'region_status=verify_rejected' in r.url
+        ),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        select.select_option("verify_rejected")
+        select.select_option('verify_rejected')
 
-    assert region_calls, "picking a status must trigger a fresh GET {API_PREFIX}/review/regions call"
-    assert any("region_status=verify_rejected" in url for url in region_calls), region_calls
+    assert region_calls, (
+        'picking a status must trigger a fresh GET {API_PREFIX}/review/regions call'
+    )
+    assert any('region_status=verify_rejected' in url for url in region_calls), region_calls
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected in the region_status filter flow: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected in the region_status filter flow: {errors[:3]}'
 
 
 def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_url):
@@ -233,22 +236,22 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
     # after the first queue fetch nothing refetched with the param.
     region_calls: list[str] = []
 
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
-    stub.on("GET", r"/review/tabs(\?|$)", REVIEW_TABS)
-    stub.on("GET", r"/regions/vocabulary(\?|$)", VOCABULARY)
-    stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/review/tabs(\?|$)', REVIEW_TABS)
+    stub.on('GET', r'/regions/vocabulary(\?|$)', VOCABULARY)
+    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
 
     def review_handler(request, _match):
         region_calls.append(request.url)
         return (
             200,
-            {"items": [needs_human_item()], "total": 1, "page": 1, "page_size": 30},
+            {'items': [needs_human_item()], 'total': 1, 'page': 1, 'page_size': 30},
         )
 
-    stub.on("GET", r"/review/regions(\?|$)", review_handler)
+    stub.on('GET', r'/review/regions(\?|$)', review_handler)
 
-    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected")
-    page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected')
+    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     # The URL-seeded filter reaches the queue only once /review/tabs lands
     # and the refetch effect re-runs — poll the stub's own call log (real
@@ -256,11 +259,11 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
     # of a fixed sleep.
     deadline = time.monotonic() + ACTION_TIMEOUT_MS / 1000
     while time.monotonic() < deadline and not (
-        region_calls and "region_status=verify_rejected" in region_calls[-1]
+        region_calls and 'region_status=verify_rejected' in region_calls[-1]
     ):
         page.wait_for_timeout(50)
 
-    assert region_calls, "the region queue must be fetched"
-    assert "region_status=verify_rejected" in region_calls[-1], region_calls
+    assert region_calls, 'the region queue must be fetched'
+    assert 'region_status=verify_rejected' in region_calls[-1], region_calls
     select = page.locator('label:has-text("Status") select')
-    expect(select).to_have_value("verify_rejected", timeout=ACTION_TIMEOUT_MS)
+    expect(select).to_have_value('verify_rejected', timeout=ACTION_TIMEOUT_MS)
