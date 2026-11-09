@@ -21,7 +21,7 @@ BAKEOFF_JOB = '{slug}-job-bakeoff'
 BAKEOFF_DATASET = 'export:sweep'
 
 
-def _job(
+def finished_job(
     conn: Any,
     project: uuid.UUID,
     kind: str,
@@ -73,7 +73,7 @@ def _partition(conn: Any, project: uuid.UUID) -> uuid.UUID:
 
 
 def _import(conn: Any, project: uuid.UUID, slug: str) -> uuid.UUID:
-    job = _job(conn, project, 'dataset_import')
+    job = finished_job(conn, project, 'dataset_import')
     row = conn.execute(
         'INSERT INTO dataset_imports (project_id, job_id, format, mapping, options, source_key, '
         'scan, report) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id',
@@ -109,7 +109,7 @@ def _source(conn: Any, project: uuid.UUID, slug: str, path: str) -> uuid.UUID:
 
 def _train(conn: Any, project: uuid.UUID, slug: str) -> tuple[uuid.UUID, uuid.UUID]:
     """A finished training run (with a manifest) and the promote job that failed on it."""
-    job = _job(conn, project, 'train', queue='gpu_train')
+    job = finished_job(conn, project, 'train', queue='gpu_train')
     conn.execute(
         'INSERT INTO training_runs (project_id, job_id, spec, class_names, family, base_model, '
         'artifact_prefix, manifest) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
@@ -124,7 +124,7 @@ def _train(conn: Any, project: uuid.UUID, slug: str) -> tuple[uuid.UUID, uuid.UU
             Jsonb({'results': {}}),
         ),
     )
-    promote = _job(
+    promote = finished_job(
         conn,
         project,
         'promote',
@@ -159,7 +159,7 @@ def _loop(conn: Any, project: uuid.UUID, slug: str) -> uuid.UUID:
         estimated_vlm_crops_root_level=0,
         estimated_vlm_requests_root_level=0,
     ).model_dump(mode='json')
-    job = _job(conn, project, 'assist_loop')
+    job = finished_job(conn, project, 'assist_loop')
     row = conn.execute(
         'INSERT INTO assist_loop_runs (project_id, job_id, request, strategy, seed, pinned, '
         "created_by) VALUES (%s, %s, %s, 'cluster_sampled', 7, %s, 'test') RETURNING id",
@@ -176,7 +176,7 @@ def _assist_run(conn: Any, project: uuid.UUID, slug: str) -> uuid.UUID:
         target=CropsTarget(kind='crops', crop_ids=[f'{slug}-item-0001']), actions=['classify']
     )
     resolved = ResolvedScope(scope_count=1, scope_digest='x', sampled=1, sample_seed=0)
-    return _job(
+    return finished_job(
         conn,
         project,
         'assist_run',
@@ -197,10 +197,10 @@ def seed_world(conn: Any, slug: str, project: uuid.UUID, source_dir: str) -> dic
         (project,),
     )
     return {
-        'reprocess_job_id': str(_job(conn, project, 'reprocess')),
-        'autolabel_job_id': str(_job(conn, project, 'autolabel')),
+        'reprocess_job_id': str(finished_job(conn, project, 'reprocess')),
+        'autolabel_job_id': str(finished_job(conn, project, 'autolabel')),
         'bulk_run_id': str(
-            _job(
+            finished_job(
                 conn,
                 project,
                 'bulk_ingest_run',
