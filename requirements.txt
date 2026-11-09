@@ -12,8 +12,8 @@ tritonclient[all]==2.74.0
 
 # ONNX runtime stack. The engine-build toolchain (TensorRT, ModelOpt, onnxsim, ...) is NOT here:
 # it ships only in the export image (requirements-export.txt).
-onnx>=1.12.0,<1.22  # scripts/curation/seed_class_registry.py; upper bound tracks nvidia-modelopt in the export image
-onnxruntime-gpu>=1.24.2,<1.25  # nvidia-modelopt (export image) requires ~=1.24.2; the runtime and export images must resolve one version
+onnx==1.21.0  # scripts/curation/seed_class_registry.py; nvidia-modelopt 0.48 requires onnx~=1.21.0 (export image)
+onnxruntime-gpu==1.30.0  # nvidia-modelopt 0.48 requires onnxruntime-gpu>=1.29,<1.31; the runtime and export images must resolve one version
 
 # PyTorch
 torch==2.15.0
@@ -76,10 +76,10 @@ open-clip-torch==4.2.1  # OpenCLIP; MobileCLIP2-S2 configs need >=3.2
 
 # GPU clustering backend (src/services/curation/clustering/backend.py); it used to arrive only
 # through nvidia-modelopt, which the runtime image no longer installs.
-cupy-cuda12x>=14.2,<15
+cupy-cuda12x==14.2.0
 
 # FAISS Clustering (GPU-accelerated vector clustering)
-faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)
+faiss-gpu-cu12==1.14.1.post1  # FAISS GPU for billion-scale clustering (CUDA 12)
 
 # Duplicate Detection
 imohash==1.1.0  # Fast constant-time image hashing (48KB sampled, ~1ms for any file size)

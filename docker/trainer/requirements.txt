@@ -30,9 +30,9 @@ tqdm>=4.66
 # running container* at export time -- which fails on a non-root user with no
 # network policy and silently drops every run back to "ONNX export failed",
 # leaving nothing for POST {api_prefix}/train/promote/{job_id} to pick up.
-onnx>=1.16,<2
-onnxslim>=0.1.71
-onnxruntime-gpu>=1.19
+onnx==1.21.0
+onnxslim==0.1.99
+onnxruntime-gpu==1.30.0
 
 # Stage-1 on-disk augmentation (docker/trainer/augment.py).
 albumentations>=2.0,<3
