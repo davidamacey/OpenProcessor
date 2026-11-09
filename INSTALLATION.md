@@ -218,8 +218,8 @@ for the state directory, the crop cache, exports and `data/projects`. The GPU-ar
 single-host (it needs the local Docker socket).
 
 **Upgrades are stop-the-world in 0.7.0:** old and new processes never run together, and
-`./openprocessor upgrade` stops everything first. From v0.8.0 a migration follows
-expand-then-contract so a rolling upgrade becomes possible. A PostgreSQL major version moves only
+`./openprocessor upgrade` stops everything first. A later release is planned to write its migrations as
+expand-then-contract so that a rolling upgrade becomes possible. A PostgreSQL major version moves only
 with a release, through `db backup` and `db restore`.
 
 **Things to know.** Messages for a queue whose profile never started stay in Valkey after the
