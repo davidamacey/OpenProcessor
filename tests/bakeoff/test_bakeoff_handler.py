@@ -23,7 +23,8 @@ def consumer(queue_env, monkeypatch):
 
     calls: list[dict[str, Any]] = []
 
-    def fake(spec: dict[str, Any]) -> dict[str, Any]:
+    def fake(spec: dict[str, Any], cancelled: Any) -> dict[str, Any]:
+        assert callable(cancelled)
         calls.append(spec)
         return {
             'state': 'done',
@@ -103,7 +104,9 @@ async def test_an_evaluation_that_ends_in_error_fails_the_job(
 ) -> None:
     tasks, _ = consumer
     monkeypatch.setattr(
-        tasks, 'evaluate', lambda _spec: {'state': 'error', 'error': 'no dataset could be scored'}
+        tasks,
+        'evaluate',
+        lambda _spec, _cancelled: {'state': 'error', 'error': 'no dataset could be scored'},
     )
     job_id, _ = await start(pg, tmp_path)
     await deliver(tasks, job_id)
@@ -113,3 +116,16 @@ async def test_an_evaluation_that_ends_in_error_fails_the_job(
     assert status == 'failed'
     assert 'no dataset could be scored' in message
     assert code
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_evaluation_ends_the_job_without_an_error(
+    pg, job_env, producer, wakes, consumer, tmp_path, monkeypatch
+) -> None:
+    tasks, _ = consumer
+    monkeypatch.setattr(tasks, 'evaluate', lambda _spec, _cancelled: {'state': 'cancelled'})
+    job_id, spec = await start(pg, tmp_path)
+    await deliver(tasks, job_id)
+    [(status, result)] = sql(pg, 'SELECT status, result FROM jobs WHERE id = %s', job_id)
+    assert status != 'failed'
+    assert result == {'out_dir': spec.out_dir, 'cancelled': True}

@@ -26,19 +26,22 @@ from .bakeoff_runner import run_job
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.tasks.runtime.context import JobContext
 
 
 app = make_app(['scripts.curation.bakeoff.bakeoff_tasks'])
 
 
-def evaluate(spec: dict[str, Any]) -> dict[str, Any]:
+def evaluate(spec: dict[str, Any], cancelled: Callable[[], bool]) -> dict[str, Any]:
     """Score the spec's models on its datasets and return the final ``status.json`` content.
 
     The seam the tests replace with a fake; the real run drives one subprocess per
-    (dataset, model) pair on the evaluator's GPUs.
+    (dataset, model) pair on the evaluator's GPUs. ``cancelled`` is the job's cancel check, polled
+    between pairs.
     """
-    return run_job(spec)
+    return run_job(spec, cancelled)
 
 
 async def bakeoff(ctx: JobContext) -> JobResult:
@@ -50,10 +53,12 @@ async def bakeoff(ctx: JobContext) -> JobResult:
     """
     spec = dict(ctx.params)
     await ctx.progress(0, None, 'evaluating')
-    status = await asyncio.to_thread(evaluate, spec)
+    status = await asyncio.to_thread(evaluate, spec, ctx.cancelled)
     out_dir = str(spec['out_dir'])
     async with ctx.session() as session:
         await session.run_sync(lambda sync: bakeoff_repo.set_results_key(sync, ctx.job_id, out_dir))
+    if status.get('state') == 'cancelled':
+        return JobResult({'out_dir': out_dir, 'cancelled': True})
     if status.get('state') != 'done':
         raise RuntimeError(
             f'bake-off {spec["job_id"]} ended {status.get("state")}: {status.get("error")}'

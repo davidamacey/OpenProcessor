@@ -59,17 +59,20 @@ import json
 import os
 import subprocess
 import sys
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import quant_stage
 from .compare import build_comparison, build_matrix, to_markdown
 from .freeze import test_sha
 from .profile import resolve_profile
 from .quant_stage import COREML_UNAVAILABLE
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 SCHEMA_VERSION = 2
@@ -222,8 +225,65 @@ def _check_test_splits(
     return valid
 
 
-def run_job(spec: dict[str, Any]) -> dict[str, Any]:
-    """Execute one job spec v2; return (and write) its final status."""
+def _score_grid(
+    valid: list[dict[str, Any]],
+    models: list[dict[str, Any]],
+    out_dir: Path,
+    status: dict[str, Any],
+    model_failures: dict[str, list[dict[str, Any]]],
+    *,
+    done: int,
+    cancelled: Callable[[], bool],
+) -> bool:
+    """Score every (dataset, model) pair on the GPU pool; True when a cancel stopped it early.
+
+    Each task is pinned to one GPU (round-robin); tiny detectors plus parallel image I/O turn a
+    long sequential sweep into a saturated one. At most ``_CONCURRENCY`` pairs are in flight and
+    ``cancelled`` is polled before each submit, so a cancel leaves the rest of the grid unscored.
+    """
+    gpus = itertools.cycle(_GPUS)
+    grid = iter([(ds, model) for ds in valid for model in models])
+    total = status['progress']['total']
+    stopped = False
+    with ThreadPoolExecutor(max_workers=_CONCURRENCY) as pool:
+        running: dict[Future[tuple[str, bool, str | None]], str] = {}
+        while True:
+            while not stopped and len(running) < _CONCURRENCY:
+                if cancelled():
+                    stopped = True
+                    break
+                pair = next(grid, None)
+                if pair is None:
+                    break
+                ds, model = pair
+                task = pool.submit(
+                    _run_task, Path(ds['path']), out_dir / ds['dir_name'], ds['id'], model,
+                    next(gpus),
+                )  # fmt: skip
+                running[task] = ds['id']
+            if not running:
+                return stopped
+            finished, _ = wait(running, return_when=FIRST_COMPLETED)
+            for fut in finished:
+                ds_id = running.pop(fut)
+                key, ok, err = fut.result()
+                if ok:
+                    status['completed'].append({'dataset': ds_id, 'model': key})
+                else:
+                    status['failed'].append(_failure(str(err), dataset=ds_id, model=key))
+                    model_failures[ds_id].append({'model': key, 'error': err})
+                done += 1
+                status['progress'] = {'done': done, 'total': total}
+                _write_json(out_dir / 'status.json', status)
+
+
+def run_job(spec: dict[str, Any], cancelled: Callable[[], bool] = lambda: False) -> dict[str, Any]:
+    """Execute one job spec v2; return (and write) its final status.
+
+    ``cancelled`` is polled between pairs: once it answers true no further pair is submitted, the
+    pairs already running finish, and the job ends in the ``cancelled`` state without aggregating
+    a comparison over a partial grid.
+    """
     job_id = str(spec.get('job_id') or datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ'))
     out_dir = Path(spec.get('out_dir') or f'/data/bakeoff/{job_id}')
     if spec.get('schema_version') != SCHEMA_VERSION:
@@ -305,37 +365,12 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     if not valid:
         return finish('error', 'no dataset could be scored: ' + failed[-1]['error'])
 
-    # Run the (dataset x model) grid in parallel across the GPU pool. Each task
-    # is pinned to one GPU (round-robin); tiny detectors + parallel image I/O
-    # turn a long sequential sweep into a saturated one.
-    gpus = itertools.cycle(_GPUS)
-    lock = threading.Lock()
     model_failures: dict[str, list[dict[str, Any]]] = {d['id']: [] for d in valid}
-    with ThreadPoolExecutor(max_workers=_CONCURRENCY) as pool:
-        futs = {
-            pool.submit(
-                _run_task,
-                Path(ds['path']),
-                out_dir / ds['dir_name'],
-                ds['id'],
-                model,
-                next(gpus),
-            ): ds['id']
-            for ds in valid
-            for model in models
-        }
-        for fut in as_completed(futs):
-            ds_id = futs[fut]
-            key, ok, err = fut.result()
-            with lock:
-                if ok:
-                    status['completed'].append({'dataset': ds_id, 'model': key})
-                else:
-                    status['failed'].append(_failure(str(err), dataset=ds_id, model=key))
-                    model_failures[ds_id].append({'model': key, 'error': err})
-                done += 1
-                status['progress'] = {'done': done, 'total': total}
-                _write_json(out_dir / 'status.json', status)
+    stopped = _score_grid(
+        valid, models, out_dir, status, model_failures, done=done, cancelled=cancelled
+    )
+    if stopped:
+        return finish('cancelled')
 
     # Aggregate each dataset's per-model reports into its comparison.
     thresholds = {
