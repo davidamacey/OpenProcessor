@@ -35,7 +35,7 @@ RUN git checkout "$SAM3_SHA" && rm -rf .git
 # This base is Ubuntu 24.04 with a PEP 668 system Python (older bases used conda), so pip
 # refuses to install without PIP_BREAK_SYSTEM_PACKAGES. Its torch lives in the system
 # site-packages, which a --user install resolves against.
-FROM pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime@sha256:1262abc856a428933c0477b4be87079173a0b087b7691c47fcb396b7b5775c56 AS builder
+FROM pytorch/pytorch:2.15.0-cuda13.2-cudnn9-runtime@sha256:924707fa828f821c9a82d987b405675df6369eee5ce368aece6757b025ffcde5 AS builder
 
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
@@ -56,7 +56,7 @@ RUN pip install --user --no-cache-dir --no-warn-script-location -r /tmp/requirem
 # -- Stage 3: runtime --------------------------------------------------------
 # No -slim base is available for a CUDA + cuDNN + PyTorch runtime; this
 # is the smallest official image that carries the stack the model needs.
-FROM pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime@sha256:1262abc856a428933c0477b4be87079173a0b087b7691c47fcb396b7b5775c56
+FROM pytorch/pytorch:2.15.0-cuda13.2-cudnn9-runtime@sha256:924707fa828f821c9a82d987b405675df6369eee5ce368aece6757b025ffcde5
 
 LABEL org.opencontainers.image.title="OpenProcessor Segmenter" \
       org.opencontainers.image.description="Promptable segmentation (SAM 3) for the detection cascade" \
