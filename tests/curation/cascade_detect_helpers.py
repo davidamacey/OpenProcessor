@@ -1,4 +1,4 @@
-"""Synthetic JPEGs, raw YOLO outputs and a mocked Triton pool for the region detector tests."""
+"""Synthetic JPEGs, fused detector outputs and a mocked Triton pool for the region detector tests."""
 
 from __future__ import annotations
 
@@ -31,40 +31,31 @@ def _make_raw_output(
     w_norm: float,
     h_norm: float,
     score: float,
-    n_anchors: int = 8400,
-    pixel_space: bool = True,
-    extra: tuple[float, float, float, float, float] | None = None,
 ) -> np.ndarray:
-    """Build a synthetic ``[1, 5, N]`` raw YOLOv11-shaped output.
+    """Build a synthetic fused ``[1, 300, 6]`` detector output.
 
-    ``cx_norm`` etc are in fraction-of-network-input (so ``cx_norm=0.5``
-    is the center of the 640x640 letterbox). When ``pixel_space=True``
-    we multiply by 640 to match the actual model export. When False we
-    leave normalized to exercise the decoder's "looks normalized?"
-    fallback branch.
+    The box is given as center and size in fraction-of-network-input
+    (so ``cx_norm=0.5`` is the center of the 640x640 letterbox) and written as
+    ``x1, y1, x2, y2`` rows in network pixels, as the engine emits them.
     """
-    arr = np.zeros((5, n_anchors), dtype=np.float32)
-    multiplier = float(REFERENCE_LICENSE_PLATE_PROFILE.input_size) if pixel_space else 1.0
-    # Anchor 0 = our planted detection at the requested score.
-    arr[0, 0] = cx_norm * multiplier
-    arr[1, 0] = cy_norm * multiplier
-    arr[2, 0] = w_norm * multiplier
-    arr[3, 0] = h_norm * multiplier
-    arr[4, 0] = score
-    # Anchor 1 = a low-score distractor so argmax has work to do.
-    if n_anchors > 1:
-        arr[0, 1] = 0.5 * multiplier
-        arr[1, 1] = 0.5 * multiplier
-        arr[2, 1] = 0.05 * multiplier
-        arr[3, 1] = 0.02 * multiplier
-        arr[4, 1] = 0.01
-    if extra is not None and n_anchors > 2:
-        arr[0, 2] = extra[0] * multiplier
-        arr[1, 2] = extra[1] * multiplier
-        arr[2, 2] = extra[2] * multiplier
-        arr[3, 2] = extra[3] * multiplier
-        arr[4, 2] = extra[4]
-    return arr[None, ...]  # add batch dim → [1, 5, N]
+    arr = np.zeros((300, 6), dtype=np.float32)
+    multiplier = float(REFERENCE_LICENSE_PLATE_PROFILE.input_size)
+
+    def row(cx: float, cy: float, w: float, h: float, conf: float) -> list[float]:
+        return [
+            (cx - w / 2) * multiplier,
+            (cy - h / 2) * multiplier,
+            (cx + w / 2) * multiplier,
+            (cy + h / 2) * multiplier,
+            conf,
+            0.0,
+        ]
+
+    # Row 0 = our planted detection at the requested score.
+    arr[0] = row(cx_norm, cy_norm, w_norm, h_norm, score)
+    # Row 1 = a low-score distractor so argmax has work to do.
+    arr[1] = row(0.5, 0.5, 0.05, 0.02, 0.01)
+    return arr[None, ...]
 
 
 class _FakeInferResult:
@@ -89,7 +80,7 @@ def _make_mock_pool(
     """
     pool = MagicMock()
     pool.get_model_input_datatype = AsyncMock(return_value=input_datatype)
-    pool.get_model_output_shape = AsyncMock(return_value=(-1, 5, -1))
+    pool.get_model_output_shape = AsyncMock(return_value=(-1, 300, 6))
     if raises is not None:
         pool.infer = AsyncMock(side_effect=raises)
     else:

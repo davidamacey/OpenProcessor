@@ -396,7 +396,7 @@ def _detector_config_is_usable(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.services.triton_control import TritonControlService
 
     async def _config(_self: object, _model: str) -> dict[str, object]:
-        return {'output': [{'name': 'output0'}]}
+        return {'output': [{'name': 'output0', 'dims': ['300', '6']}]}
 
     monkeypatch.setattr(TritonControlService, 'get_model_config', _config)
 
