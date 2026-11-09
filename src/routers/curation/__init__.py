@@ -35,7 +35,10 @@ import src.routers.curation.config_vocabulary
 import src.routers.curation.crop_context
 import src.routers.curation.datasets
 import src.routers.curation.detections
-import src.routers.curation.edit_undo
+
+
+import src.routers.curation.label_undo  # isort: skip
+import src.routers.curation.edit_undo  # isort: skip
 import src.routers.curation.embedding_spaces
 import src.routers.curation.events
 import src.routers.curation.export
@@ -56,7 +59,6 @@ import src.routers.curation.ingest_upload
 import src.routers.curation.jobs
 import src.routers.curation.keymap
 import src.routers.curation.label_ops
-import src.routers.curation.label_undo
 import src.routers.curation.methods
 import src.routers.curation.models
 import src.routers.curation.near_duplicates
@@ -111,7 +113,9 @@ from src.services.classes.registry import get_class_registry
 # imports `stats.stats_dataset` and `autolabel.service` inside its generator
 # function body (not at module load time) to avoid a load-order
 # dependency. `settings` registers `GET,PUT /curation/settings` on this
-# same shared `router`.
+# same shared `router`. `label_undo` registers before `edit_undo` (it used to be
+# pulled in by `edit_undo`'s import): the route table lists `vlm_dismiss` ahead of
+# `vlm_dismiss/undo`, the order the isolation sweep needs to have something to undo.
 
 
 __all__ = [
