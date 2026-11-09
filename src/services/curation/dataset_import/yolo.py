@@ -291,6 +291,65 @@ def label_path_for(image: Path) -> Path:
     return image.with_suffix('.txt')
 
 
+def _clamp_bbox(bbox: list[float]) -> tuple[bool, bool]:
+    """Clamp near-edge coordinates in place; return ``(clamped, out_of_range)``."""
+    clamped = False
+    out_of_range = False
+    for i, v in enumerate(bbox):
+        if -_CLAMP_TOLERANCE <= v < 0.0 or 1.0 < v <= 1.0 + _CLAMP_TOLERANCE:
+            bbox[i] = max(0.0, min(1.0, v))
+            clamped = True
+        elif v < -_CLAMP_TOLERANCE or v > 1.0 + _CLAMP_TOLERANCE:
+            out_of_range = True
+    return clamped, out_of_range
+
+
+def _parse_label_row(
+    parts: list[str], names: dict[int, str], rel_file: str, lineno: int, issues: IssueCollector
+) -> LabelBox | None:
+    """One non-blank label row -> a box, or None after recording why it was skipped."""
+    n = len(parts)
+    is_polygon = n >= 7 and n % 2 == 1
+    if n != 5 and not is_polygon:
+        issues.add('label_row_malformed', file=rel_file, line=lineno)
+        return None
+    try:
+        cls_id = int(parts[0])
+        coords = [float(x) for x in parts[1:]]
+    except ValueError:
+        issues.add('label_row_malformed', file=rel_file, line=lineno)
+        return None
+    if not all(math.isfinite(c) for c in coords):
+        issues.add('label_row_malformed', file=rel_file, line=lineno)
+        return None
+    if cls_id not in names:
+        issues.add('label_class_out_of_range', file=rel_file, line=lineno, detail={'cls': cls_id})
+        return None
+    class_name = names[cls_id]
+
+    if is_polygon:
+        xs = coords[0::2]
+        ys = coords[1::2]
+        bbox = [min(xs), min(ys), max(xs), max(ys)]
+        issues.add('yolo_polygon_to_box', file=rel_file, line=lineno)
+    else:
+        cx, cy, bw, bh = coords
+        bbox = [cx - bw / 2.0, cy - bh / 2.0, cx + bw / 2.0, cy + bh / 2.0]
+
+    clamped, out_of_range = _clamp_bbox(bbox)
+    if out_of_range:
+        issues.add('label_coords_out_of_range', file=rel_file, line=lineno)
+        return None
+    if clamped:
+        issues.add('label_coords_clamped', file=rel_file, line=lineno)
+
+    if bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
+        issues.add('label_box_degenerate', file=rel_file, line=lineno)
+        return None
+
+    return LabelBox(dataset_class=class_name, bbox_norm=(bbox[0], bbox[1], bbox[2], bbox[3]))
+
+
 def read_yolo_labels(
     txt_path: Path, *, names: dict[int, str], rel_file: str, issues: IssueCollector
 ) -> tuple[list[LabelBox], bool]:
@@ -317,58 +376,9 @@ def read_yolo_labels(
         line = raw_line.strip()
         if not line or line.startswith('#'):
             continue
-        parts = line.split()
-        n = len(parts)
-        is_polygon = n >= 7 and n % 2 == 1
-        if n != 5 and not is_polygon:
-            issues.add('label_row_malformed', file=rel_file, line=lineno)
-            continue
-        try:
-            cls_id = int(parts[0])
-            coords = [float(x) for x in parts[1:]]
-        except ValueError:
-            issues.add('label_row_malformed', file=rel_file, line=lineno)
-            continue
-        if not all(math.isfinite(c) for c in coords):
-            issues.add('label_row_malformed', file=rel_file, line=lineno)
-            continue
-        if cls_id not in names:
-            issues.add(
-                'label_class_out_of_range', file=rel_file, line=lineno, detail={'cls': cls_id}
-            )
-            continue
-        class_name = names[cls_id]
-
-        if is_polygon:
-            xs = coords[0::2]
-            ys = coords[1::2]
-            bbox = [min(xs), min(ys), max(xs), max(ys)]
-            issues.add('yolo_polygon_to_box', file=rel_file, line=lineno)
-        else:
-            cx, cy, bw, bh = coords
-            bbox = [cx - bw / 2.0, cy - bh / 2.0, cx + bw / 2.0, cy + bh / 2.0]
-
-        clamped = False
-        out_of_range = False
-        for i, v in enumerate(bbox):
-            if -_CLAMP_TOLERANCE <= v < 0.0 or 1.0 < v <= 1.0 + _CLAMP_TOLERANCE:
-                bbox[i] = max(0.0, min(1.0, v))
-                clamped = True
-            elif v < -_CLAMP_TOLERANCE or v > 1.0 + _CLAMP_TOLERANCE:
-                out_of_range = True
-        if out_of_range:
-            issues.add('label_coords_out_of_range', file=rel_file, line=lineno)
-            continue
-        if clamped:
-            issues.add('label_coords_clamped', file=rel_file, line=lineno)
-
-        if bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
-            issues.add('label_box_degenerate', file=rel_file, line=lineno)
-            continue
-
-        boxes.append(
-            LabelBox(dataset_class=class_name, bbox_norm=(bbox[0], bbox[1], bbox[2], bbox[3]))
-        )
+        box = _parse_label_row(line.split(), names, rel_file, lineno, issues)
+        if box is not None:
+            boxes.append(box)
     return boxes, True
 
 

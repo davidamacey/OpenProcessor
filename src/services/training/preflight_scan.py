@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_int
 
@@ -118,6 +118,55 @@ def _box_center_inside(
     )
 
 
+def _read_registry(export_dir: Path) -> tuple[dict[str, Any], dict[int, int]]:
+    """The export's ``class_registry.json`` payload and its registry-id -> dense-id map."""
+    registry_path = export_dir / 'class_registry.json'
+    try:
+        registry_payload = json.loads(registry_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        registry_payload = {}
+    export_id_map_raw = registry_payload.get('export_id_map')
+    export_id_map: dict[int, int] = (
+        {int(k): int(v) for k, v in export_id_map_raw.items()}
+        if isinstance(export_id_map_raw, dict)
+        else {}
+    )
+    return registry_payload, export_id_map
+
+
+def _label_rows(
+    lines: list[str], keep_dense_ids: set[int] | None
+) -> list[tuple[int, tuple[float, float, float, float]]]:
+    """Parse ``(dense class id, box)`` rows, skipping malformed rows and filtered classes."""
+    rows: list[tuple[int, tuple[float, float, float, float]]] = []
+    for line in lines:
+        parts = line.split()
+        if not parts:
+            continue
+        try:
+            cid = int(parts[0])
+            box = (float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4]))
+        except (ValueError, IndexError):
+            continue
+        if keep_dense_ids is not None and cid not in keep_dense_ids:
+            continue
+        rows.append((cid, box))
+    return rows
+
+
+def _count_region_boxes(
+    rows: list[tuple[int, tuple[float, float, float, float]]], region_export_id: int
+) -> tuple[int, int]:
+    """``(region boxes, region boxes whose centre sits in no parent box)`` for one file."""
+    regions = [box for cid, box in rows if cid == region_export_id]
+    parents = [box for cid, box in rows if cid != region_export_id]
+    unpaired = 0
+    for rcx, rcy, _rw, _rh in regions:
+        if not any(_box_center_inside(pb, rcx, rcy) for pb in parents):
+            unpaired += 1
+    return len(regions), unpaired
+
+
 def scan_export_labels(
     export_dir: Path,
     *,
@@ -156,17 +205,7 @@ def scan_export_labels(
         _scan_cache[cache_key] = result
         return result
 
-    registry_path = export_dir / 'class_registry.json'
-    try:
-        registry_payload = json.loads(registry_path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        registry_payload = {}
-    export_id_map_raw = registry_payload.get('export_id_map')
-    export_id_map: dict[int, int] = (
-        {int(k): int(v) for k, v in export_id_map_raw.items()}
-        if isinstance(export_id_map_raw, dict)
-        else {}
-    )
+    registry_payload, export_id_map = _read_registry(export_dir)
     from src.services.detection.profile_registry import get_active_region_profile
 
     active_profile = get_active_region_profile()
@@ -187,31 +226,14 @@ def scan_export_labels(
             lines = txt.read_text(encoding='utf-8').splitlines()
         except OSError:
             continue
-        rows: list[tuple[int, tuple[float, float, float, float]]] = []
-        for line in lines:
-            parts = line.split()
-            if not parts:
-                continue
-            try:
-                cid = int(parts[0])
-                box = (float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4]))
-            except (ValueError, IndexError):
-                continue
-            if keep_dense_ids is not None and cid not in keep_dense_ids:
-                continue
-            rows.append((cid, box))
-
+        rows = _label_rows(lines, keep_dense_ids)
         if not rows:
             empty += 1
             continue
-
         if region_export_id is not None:
-            regions = [box for cid, box in rows if cid == region_export_id]
-            parents = [box for cid, box in rows if cid != region_export_id]
-            region_boxes += len(regions)
-            for rcx, rcy, _rw, _rh in regions:
-                if not any(_box_center_inside(pb, rcx, rcy) for pb in parents):
-                    unpaired += 1
+            file_regions, file_unpaired = _count_region_boxes(rows, region_export_id)
+            region_boxes += file_regions
+            unpaired += file_unpaired
 
     result = ScanResult(
         'ok',

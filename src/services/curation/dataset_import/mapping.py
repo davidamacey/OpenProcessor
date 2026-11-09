@@ -156,21 +156,10 @@ def suggest_mapping(
     return MappingSuggestion('create', 'none', None, dataset_class)
 
 
-def resolve_mapping(
-    dataset_classes: list[str],
-    entries: list[ClassMappingEntry],
-    *,
-    registry_classes: list[RegistryClassView],
-    accept_suggestions: bool = False,
-    suggestions: dict[str, MappingSuggestion] | None = None,
-) -> ResolvedMapping:
-    """Resolve every dataset class (with >=1 box) to a :class:`MapTarget`.
-
-    ``suggestions`` (precomputed per dataset class, e.g. from a prior
-    ``suggest_mapping`` pass) is required for ``accept_suggestions`` to
-    fill in anything; entries always take precedence over a suggestion.
-    """
-    result = ResolvedMapping()
+def _index_entries(
+    dataset_classes: list[str], entries: list[ClassMappingEntry], result: ResolvedMapping
+) -> dict[str, ClassMappingEntry]:
+    """Entries by dataset class; unknown and duplicate rows become errors."""
     by_class: dict[str, ClassMappingEntry] = {}
     known = set(dataset_classes)
     for e in entries:
@@ -192,6 +181,85 @@ def resolve_mapping(
             )
         else:
             by_class[e.dataset_class] = e
+    return by_class
+
+
+def _accepted_suggestion(
+    dataset_class: str, suggestion: MappingSuggestion | None
+) -> ClassMappingEntry | None:
+    """The entry an auto-acceptable suggestion stands for, else None."""
+    if suggestion is None or suggestion.match not in _AUTO_ACCEPTABLE_MATCHES:
+        return None
+    if suggestion.action == 'map':
+        return ClassMappingEntry(
+            dataset_class=dataset_class, action='map', class_id=suggestion.class_id
+        )
+    if suggestion.action == 'region':
+        return ClassMappingEntry(dataset_class=dataset_class, action='region')
+    return None
+
+
+def _resolve_map(
+    dataset_class: str,
+    entry: ClassMappingEntry,
+    by_id: dict[int, RegistryClassView],
+    result: ResolvedMapping,
+) -> None:
+    target = by_id.get(entry.class_id) if entry.class_id is not None else None
+    if target is None:
+        result.errors.append(
+            MappingError(
+                'class_mapping_invalid',
+                dataset_class,
+                f'action map needs the class_id of an existing project class; got {entry.class_id!r}',
+            )
+        )
+        return
+    if target.deprecated:
+        result.errors.append(MappingError('class_mapped_to_deprecated', dataset_class))
+        return
+    result.targets[dataset_class] = MapTarget(
+        kind='item', class_id=target.class_id, class_name=target.class_name
+    )
+    result.merged_from.setdefault(target.class_id, []).append(dataset_class)
+
+
+def _resolve_create(
+    dataset_class: str,
+    entry: ClassMappingEntry,
+    by_norm_name: dict[str, RegistryClassView],
+    created_norm_names: set[str],
+    result: ResolvedMapping,
+) -> None:
+    new_name = (entry.new_class_name or dataset_class).strip()
+    norm_new = norm_class_name(new_name)
+    if norm_new in by_norm_name:
+        result.errors.append(MappingError('class_name_exists', dataset_class, new_name))
+        return
+    if norm_new in created_norm_names:
+        result.errors.append(MappingError('class_mapping_conflict', dataset_class, new_name))
+        return
+    created_norm_names.add(norm_new)
+    result.created_classes[dataset_class] = -1  # resolved to a real id at job start
+    result.targets[dataset_class] = MapTarget(kind='item', class_id=None, class_name=new_name)
+
+
+def resolve_mapping(
+    dataset_classes: list[str],
+    entries: list[ClassMappingEntry],
+    *,
+    registry_classes: list[RegistryClassView],
+    accept_suggestions: bool = False,
+    suggestions: dict[str, MappingSuggestion] | None = None,
+) -> ResolvedMapping:
+    """Resolve every dataset class (with >=1 box) to a :class:`MapTarget`.
+
+    ``suggestions`` (precomputed per dataset class, e.g. from a prior
+    ``suggest_mapping`` pass) is required for ``accept_suggestions`` to
+    fill in anything; entries always take precedence over a suggestion.
+    """
+    result = ResolvedMapping()
+    by_class = _index_entries(dataset_classes, entries, result)
     by_id = {c.class_id: c for c in registry_classes}
     by_norm_name = {norm_class_name(c.class_name): c for c in registry_classes if not c.deprecated}
     created_norm_names: set[str] = set()
@@ -199,72 +267,26 @@ def resolve_mapping(
     for dataset_class in dataset_classes:
         entry = by_class.get(dataset_class)
         if entry is None and accept_suggestions and suggestions is not None:
-            suggestion = suggestions.get(dataset_class)
-            if suggestion is not None and suggestion.match in _AUTO_ACCEPTABLE_MATCHES:
-                if suggestion.action == 'map':
-                    entry = ClassMappingEntry(
-                        dataset_class=dataset_class, action='map', class_id=suggestion.class_id
-                    )
-                elif suggestion.action == 'region':
-                    entry = ClassMappingEntry(dataset_class=dataset_class, action='region')
+            entry = _accepted_suggestion(dataset_class, suggestions.get(dataset_class))
 
         if entry is None:
             result.errors.append(MappingError('class_mapping_incomplete', dataset_class))
-            continue
-
-        if entry.action == 'skip':
+        elif entry.action == 'skip':
             result.targets[dataset_class] = MapTarget(kind='skip')
-            continue
-
-        if entry.action == 'region':
+        elif entry.action == 'region':
             result.targets[dataset_class] = MapTarget(kind='region')
-            continue
-
-        if entry.action == 'map':
-            target = by_id.get(entry.class_id) if entry.class_id is not None else None
-            if target is None:
-                result.errors.append(
-                    MappingError(
-                        'class_mapping_invalid',
-                        dataset_class,
-                        f'action map needs the class_id of an existing project class; got {entry.class_id!r}',
-                    )
+        elif entry.action == 'map':
+            _resolve_map(dataset_class, entry, by_id, result)
+        elif entry.action == 'create':
+            _resolve_create(dataset_class, entry, by_norm_name, created_norm_names, result)
+        else:
+            result.errors.append(
+                MappingError(
+                    'class_mapping_invalid',
+                    dataset_class,
+                    f'unknown action {entry.action!r}; use map, create, skip or region',
                 )
-                continue
-            if target.deprecated:
-                result.errors.append(MappingError('class_mapped_to_deprecated', dataset_class))
-                continue
-            result.targets[dataset_class] = MapTarget(
-                kind='item', class_id=target.class_id, class_name=target.class_name
             )
-            result.merged_from.setdefault(target.class_id, []).append(dataset_class)
-            continue
-
-        if entry.action == 'create':
-            new_name = (entry.new_class_name or dataset_class).strip()
-            norm_new = norm_class_name(new_name)
-            if norm_new in by_norm_name:
-                result.errors.append(MappingError('class_name_exists', dataset_class, new_name))
-                continue
-            if norm_new in created_norm_names:
-                result.errors.append(
-                    MappingError('class_mapping_conflict', dataset_class, new_name)
-                )
-                continue
-            created_norm_names.add(norm_new)
-            result.created_classes[dataset_class] = -1  # resolved to a real id at job start
-            result.targets[dataset_class] = MapTarget(
-                kind='item', class_id=None, class_name=new_name
-            )
-            continue
-
-        result.errors.append(
-            MappingError(
-                'class_mapping_invalid',
-                dataset_class,
-                f'unknown action {entry.action!r}; use map, create, skip or region',
-            )
-        )
 
     return result
 

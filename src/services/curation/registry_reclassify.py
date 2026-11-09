@@ -43,6 +43,8 @@ from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, C
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from opensearchpy import AsyncOpenSearch
 
     from src.clients.curation_opensearch import ClassRegistryFile
@@ -131,6 +133,79 @@ def unmatched_query(source: UnmatchedLabelSource) -> dict[str, Any]:
     }
 
 
+def _make_resolver(
+    source: UnmatchedLabelSource, name_to_id: dict[str, int], pack: PromptPack
+) -> Callable[[dict[str, Any]], str | None]:
+    """A function resolving an item's raw label to a registry class name (or None)."""
+    from src.services.labeling.vlm_class_names import resolve_class_name
+
+    def _resolve(src: dict[str, Any]) -> str | None:
+        raw = src.get(source.raw_label_field)
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        conf = src.get(source.confidence_field)
+        return resolve_class_name(
+            raw.strip(),
+            name_to_id,
+            confidence=conf if conf in _CONFIDENCE_LEVELS else None,
+            pack=pack,
+        )
+
+    return _resolve
+
+
+def _page_body(
+    source: UnmatchedLabelSource, page_size: int, cursor: list[Any] | None
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        'size': page_size,
+        '_source': [
+            'crop_id',
+            source.raw_label_field,
+            source.confidence_field,
+            *CLASS_GUARD_SOURCE_FIELDS,
+        ],
+        'query': unmatched_query(source),
+        'sort': [{'crop_id': 'asc'}],
+    }
+    if cursor is not None:
+        body['search_after'] = cursor
+    return body
+
+
+def _make_merger(
+    source: UnmatchedLabelSource,
+    name_to_id: dict[str, int],
+    resolve: Callable[[dict[str, Any]], str | None],
+    guard: ClassWriteGuard,
+    now: str,
+) -> Callable[[str, dict[str, Any]], dict[str, Any]]:
+    """The OCC merger that converts one still-unmatched item, or leaves it unchanged."""
+
+    def _merge(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+        if (
+            current.get('class_source') != source.unmatched_source
+            or current.get('test_holdout')
+            or current.get('class_excluded')
+            or not guard.allows(doc_id, current)
+        ):
+            return {}
+        resolved = resolve(current)
+        if resolved is None:
+            return {}
+        return {
+            'class_id': name_to_id[resolved],
+            'class_name': resolved,
+            'class_source': source.reclassified_source,
+            'class_id_history': record_class_history(
+                current, writer='registry_reclassify', now=now
+            ),
+            'updated_at': now,
+        }
+
+    return _merge
+
+
 async def reclassify_unmatched(
     opensearch: AsyncOpenSearch,
     *,
@@ -160,7 +235,6 @@ async def reclassify_unmatched(
         A :class:`ReclassifyResult` summary (``last_cursor`` is the resume
         point).
     """
-    from src.services.labeling.vlm_class_names import resolve_class_name
     from src.services.labeling.vlm_prompts import active_prompt_pack
 
     cfg = config or get_curation_config()
@@ -175,33 +249,11 @@ async def reclassify_unmatched(
         logger.warning('registry_reclassify_no_active_classes')
         return result
 
-    def _resolve(src: dict[str, Any]) -> str | None:
-        raw = src.get(source.raw_label_field)
-        if not isinstance(raw, str) or not raw.strip():
-            return None
-        conf = src.get(source.confidence_field)
-        return resolve_class_name(
-            raw.strip(),
-            name_to_id,
-            confidence=conf if conf in _CONFIDENCE_LEVELS else None,
-            pack=active_pack,
-        )
+    _resolve = _make_resolver(source, name_to_id, active_pack)
 
     cursor = search_after
     while True:
-        body: dict[str, Any] = {
-            'size': page_size,
-            '_source': [
-                'crop_id',
-                source.raw_label_field,
-                source.confidence_field,
-                *CLASS_GUARD_SOURCE_FIELDS,
-            ],
-            'query': unmatched_query(source),
-            'sort': [{'crop_id': 'asc'}],
-        }
-        if cursor is not None:
-            body['search_after'] = cursor
+        body = _page_body(source, page_size, cursor)
         resp = await opensearch.search(index=cfg.items_index, body=body)
         hits = (resp.get('hits') or {}).get('hits') or []
         if not hits:
@@ -223,32 +275,7 @@ async def reclassify_unmatched(
         if targets and not dry_run:
             now = datetime.now(UTC).isoformat()
 
-            def _merge(
-                doc_id: str,
-                current: dict[str, Any],
-                _now: str = now,
-                _guard: ClassWriteGuard = guard,
-            ) -> dict[str, Any]:
-                if (
-                    current.get('class_source') != source.unmatched_source
-                    or current.get('test_holdout')
-                    or current.get('class_excluded')
-                    or not _guard.allows(doc_id, current)
-                ):
-                    return {}
-                resolved = _resolve(current)
-                if resolved is None:
-                    return {}
-                cid = name_to_id[resolved]
-                return {
-                    'class_id': cid,
-                    'class_name': resolved,
-                    'class_source': source.reclassified_source,
-                    'class_id_history': record_class_history(
-                        current, writer='registry_reclassify', now=_now
-                    ),
-                    'updated_at': _now,
-                }
+            _merge = _make_merger(source, name_to_id, _resolve, guard, now)
 
             written = await occ_skip_on_conflict_bulk(
                 opensearch,

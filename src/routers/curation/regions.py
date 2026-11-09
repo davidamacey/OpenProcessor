@@ -57,6 +57,87 @@ def _box_clause(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
     return {'bool': {'filter': parts}} if parts else None
 
 
+def _box_filter_parts(
+    *,
+    status: str | None,
+    box_state: str | None,
+    cluster_uid: str | None,
+    min_score: float | None,
+    max_score: float | None,
+    detector: str | None,
+    text: str | None,
+) -> list[dict[str, Any]]:
+    """The nested-box predicates that must all hold on the SAME box."""
+    F = get_region_fields()
+    parts: list[dict[str, Any]] = []
+    if box_state is not None:
+        parts.append({'term': {f'{F.boxes}.{F.boxes_state}': box_state}})
+    elif status is None:
+        # No status and no explicit box state: the boxes a region browse is
+        # about -- accepted, or false_positive (kept for FP analysis).
+        parts.append(
+            {
+                'terms': {
+                    f'{F.boxes}.{F.boxes_state}': ['accepted', RegionStatus.FALSE_POSITIVE.value]
+                }
+            }
+        )
+    if cluster_uid is not None:
+        parts.append({'term': {f'{F.boxes}.cluster_uid': cluster_uid}})
+    if min_score is not None or max_score is not None:
+        rng: dict[str, float] = {}
+        if min_score is not None:
+            rng['gte'] = min_score
+        if max_score is not None:
+            rng['lte'] = max_score
+        parts.append({'range': {f'{F.boxes}.score': rng}})
+    if detector is not None:
+        parts.append({'term': {f'{F.boxes}.detector': detector}})
+    if text:
+        parts.append(region_text_clause(f'{F.boxes}.text', text))
+    return parts
+
+
+def _region_sort(cluster_uid: str | None) -> list[dict[str, Any]]:
+    F = get_region_fields()
+    # In a cluster, float the regions least like its centre (outliers) first. The sort reads the
+    # boxes of the cluster only (the nested filter), so an item with a box in another cluster
+    # doesn't sort by that box.
+    sort: list[dict[str, Any]]
+    if cluster_uid is not None:
+        sort = [
+            {
+                f'{F.boxes}.cluster_score': {
+                    'order': 'asc',
+                    'mode': 'min',
+                    'missing': '_last',
+                    'unmapped_type': 'float',
+                    'nested': {
+                        'path': F.boxes,
+                        'filter': {'term': {f'{F.boxes}.cluster_uid': cluster_uid}},
+                    },
+                }
+            }
+        ]
+    else:
+        # Items order by their most recently detected box: a nested sort
+        # with mode='max' (region_boxes carries detected_at per box).
+        sort = [
+            {
+                f'{F.boxes}.detected_at': {
+                    'order': 'desc',
+                    'missing': '_last',
+                    'unmapped_type': 'date',
+                    'nested': {'path': F.boxes},
+                    'mode': 'max',
+                }
+            }
+        ]
+    sort.append({'crop_id': {'order': 'asc'}})
+    sort.append({'crop_id': {'order': 'asc'}})
+    return sort
+
+
 @router.get(
     '/regions',
     response_model=None,
@@ -115,32 +196,15 @@ async def list_regions(
             detail=f'box_state must be one of {sorted(BOX_STATES)}; got {box_state!r}',
         )
 
-    parts: list[dict[str, Any]] = []
-    if box_state is not None:
-        parts.append({'term': {f'{F.boxes}.{F.boxes_state}': box_state}})
-    elif status is None:
-        # No status and no explicit box state: the boxes a region browse is
-        # about -- accepted, or false_positive (kept for FP analysis).
-        parts.append(
-            {
-                'terms': {
-                    f'{F.boxes}.{F.boxes_state}': ['accepted', RegionStatus.FALSE_POSITIVE.value]
-                }
-            }
-        )
-    if cluster_uid is not None:
-        parts.append({'term': {f'{F.boxes}.cluster_uid': cluster_uid}})
-    if min_score is not None or max_score is not None:
-        rng: dict[str, float] = {}
-        if min_score is not None:
-            rng['gte'] = min_score
-        if max_score is not None:
-            rng['lte'] = max_score
-        parts.append({'range': {f'{F.boxes}.score': rng}})
-    if detector is not None:
-        parts.append({'term': {f'{F.boxes}.detector': detector}})
-    if text:
-        parts.append(region_text_clause(f'{F.boxes}.text', text))
+    parts = _box_filter_parts(
+        status=status,
+        box_state=box_state,
+        cluster_uid=cluster_uid,
+        min_score=min_score,
+        max_score=max_score,
+        detector=detector,
+        text=text,
+    )
 
     filt: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = []
@@ -155,40 +219,7 @@ async def list_regions(
     if verified is not None:
         filt.append({'term': {F.verified: verified}})
 
-    # In a cluster, float the regions least like its centre (outliers) first. The sort reads the
-    # boxes of the cluster only (the nested filter), so an item with a box in another cluster
-    # doesn't sort by that box.
-    sort: list[dict[str, Any]]
-    if cluster_uid is not None:
-        sort = [
-            {
-                f'{F.boxes}.cluster_score': {
-                    'order': 'asc',
-                    'mode': 'min',
-                    'missing': '_last',
-                    'unmapped_type': 'float',
-                    'nested': {
-                        'path': F.boxes,
-                        'filter': {'term': {f'{F.boxes}.cluster_uid': cluster_uid}},
-                    },
-                }
-            }
-        ]
-    else:
-        # Items order by their most recently detected box: a nested sort
-        # with mode='max' (region_boxes carries detected_at per box).
-        sort = [
-            {
-                f'{F.boxes}.detected_at': {
-                    'order': 'desc',
-                    'missing': '_last',
-                    'unmapped_type': 'date',
-                    'nested': {'path': F.boxes},
-                    'mode': 'max',
-                }
-            }
-        ]
-    sort.append({'crop_id': {'order': 'asc'}})
+    sort = _region_sort(cluster_uid)
     guard_page_depth(page, page_size)
     try:
         return await search_region_rows(

@@ -285,6 +285,43 @@ def _request_failed(chunk: list[ItemCrop]) -> list[VlmClassPrediction]:
     ]
 
 
+def _extract_batch_array(raw: str) -> Any:
+    """The JSON array a batch reply carries, or ``None`` when it never resolves to one.
+
+    Tries the bare reply first, then every balanced ``[...]`` span embedded in reasoning
+    prose; a ``{"results"|"predictions"|"data": [...]}`` envelope is unwrapped.
+    """
+    candidates: list[str] = [raw]
+    depth = 0
+    start = -1
+    for i, ch in enumerate(raw):
+        if ch == '[':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == ']' and depth > 0:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                candidates.append(raw[start : i + 1])
+                start = -1
+
+    parsed: Any = None
+    for c in candidates:
+        try:
+            parsed = json.loads(c)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            for key in ('results', 'predictions', 'data'):
+                if key in parsed and isinstance(parsed[key], list):
+                    parsed = parsed[key]
+                    break
+        if isinstance(parsed, list):
+            break
+        parsed = None
+    return parsed
+
+
 def _align_batch_entries(parsed: list[Any], n: int) -> list[dict[str, Any] | None] | None:
     """Map a batch reply's entries onto input positions ``0..n-1``.
 
