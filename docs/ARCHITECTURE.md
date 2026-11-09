@@ -148,9 +148,9 @@ in front of PostgreSQL.
 - **Thread safety.** Ultralytics model objects keep internal state. The code
   creates a thin client wrapper per request rather than sharing one instance
   across threads. The wrapper is only a gRPC front, not a loaded model.
-- **PE-Core text** embeddings (`OP_PE_TEXT_BACKEND`, default `auto`) prefer the
-  Triton `pe_text_encoder` so all uvicorn workers share one CPU instance, then
-  fall back to an in-process PyTorch load. See
+- **PE-Core text** embeddings come from the Triton `pe_text_encoder` only, so
+  every uvicorn worker shares one instance; there is no in-process fallback, and
+  a search answers 503 naming the Triton model when it is not ready. See
   [export/README.md](../export/README.md#pe-core-encoders-curation-embeddings).
 
 ---
