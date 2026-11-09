@@ -170,3 +170,40 @@ async def test_a_failed_ping_is_not_cached_so_the_next_call_pings_again(
     assert dependencies.app_state._opensearch_client is None
     assert len(_UnpingableClient.instances) == 2
     assert all(c.closed for c in _UnpingableClient.instances)
+
+
+@pytest.mark.asyncio
+async def test_a_project_without_a_primary_space_lists_with_an_unknown_embedded_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A registry refusal on one project's embedded count must not fail the whole list."""
+    from src.domain.embedding_spaces import EmbeddingSpaceError
+    from src.routers.curation import projects as router
+    from src.services.projects import stats
+
+    class _Transport:
+        async def perform_request(self, *_: Any, **__: Any) -> Any:
+            raise OpenSearchConnectionError('N/A', 'no cluster facts here', Exception('none'))
+
+    class _Seven:
+        transport = _Transport()
+
+        async def count(self, **_: Any) -> dict[str, int]:
+            return {'count': 7}
+
+    async def _no_space() -> str:
+        raise EmbeddingSpaceError('embedding_space_not_found', 'alpha has no primary item space')
+
+    async def _client() -> Any:
+        return _Seven()
+
+    monkeypatch.setattr(router, 'get_project_registry', lambda: _Registry(_record('alpha')))
+    monkeypatch.setattr(router, 'make_curation_opensearch', _client)
+    monkeypatch.setattr(stats, 'item_vector_field', _no_space)
+
+    response = await router.list_projects()
+
+    (alpha,) = response.projects
+    assert alpha.counts.images == 7
+    assert alpha.counts.items == 7
+    assert alpha.counts.items_embedded is None
