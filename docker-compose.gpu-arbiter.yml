@@ -1,36 +1,85 @@
-# Opt-in overlay: mounts the host Docker socket into api so the GPU
-# arbiter (src/services/training/gpu_arbiter.py) can stop/restart
-# GPU-resident sibling containers around a training run
-# (OP_GPU_ARBITER_CONTAINERS, OP_GPU_ARBITER_TRAINER_CONTAINER -- see
-# env.template). Without this overlay, OP_GPU_ARBITER_CONTAINERS still
-# works as *config* but every stop/start call fails open (logs one
-# `arbiter_docker_unavailable` warning per process, then no-ops) because
-# the API container has no way to reach the docker daemon.
+# Opt-in overlay: adds the one-process `gpu-arbiter-worker`, the only service that mounts the
+# host Docker socket. The arbiter tick (queue `arbiter`) stops and restarts the GPU-resident
+# sibling containers around a training run (OP_GPU_ARBITER_CONTAINERS, see env.template). Beat
+# schedules that tick only when OP_GPU_ARBITER_CONTAINERS is set, so the queue never receives
+# messages without this consumer.
 #
-# Security tradeoff (read before enabling): mounting
-# /var/run/docker.sock into any container gives that container's process
-# root-equivalent control over the whole Docker host -- it can start,
-# stop or inspect *any* container, not just the ones this project owns,
-# and a container-escape bug in api's dependency stack becomes a
-# host-level compromise. This is why it's a separate, explicitly opt-in
-# file instead of a default mount. Only enable it on a host you trust
-# api's dependency stack on, and prefer scoping
-# OP_GPU_ARBITER_CONTAINERS to the smallest container list a deployment
-# actually needs coordinated.
+# OP_GPU_ARBITER_CONTAINERS names Compose services (`vlm`, `triton-server`, ...), optionally
+# `service@gpu-ids`; the worker resolves each to its containers by the Compose labels
+# `com.docker.compose.project` and `com.docker.compose.service`. No service has a
+# container_name.
+#
+# Security tradeoff (read before enabling): mounting /var/run/docker.sock into any container
+# gives that container's process root-equivalent control over the whole Docker host -- it can
+# start, stop or inspect *any* container, not just the ones this project owns, and a
+# container-escape bug in the worker's dependency stack becomes a host-level compromise. This is
+# why it is a separate, explicitly opt-in file, and why the socket goes into this one-process
+# worker alone: the API, the periodic worker and every other service never get it. Only enable it
+# on a host you trust the application image's dependency stack on, and scope
+# OP_GPU_ARBITER_CONTAINERS to the smallest service list a deployment needs coordinated.
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.gpu-arbiter.yml \
 #     --profile training up -d
 #
 # Then set in .env:
-#   OP_GPU_ARBITER_CONTAINERS=<container-name-or-name@ids>,...
-#   OP_GPU_ARBITER_TRAINER_CONTAINER=<container-name>
+#   OP_GPU_ARBITER_CONTAINERS=<service>,<service@ids>,...
 
 services:
-  api:
+  gpu-arbiter-worker:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    command: celery -A src.tasks.app worker -Q arbiter -c 1 --max-tasks-per-child=200 --hostname arbiter@%h -E
+    stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
+      - OPENSEARCH_URL=http://opensearch:9200
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
     volumes:
-      # NOT :ro -- stop/start calls over the socket need write access;
-      # a read-only bind only restricts the mount point, not what the
-      # daemon will accept over it, so :ro buys no real safety here and
-      # would just break the stop/start calls this exists for.
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      # NOT :ro -- stop/start calls over the socket need write access; a read-only bind only
+      # restricts the mount point, not what the daemon accepts over it.
       - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "arbiter"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 128m
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks:
+      - triton_net
