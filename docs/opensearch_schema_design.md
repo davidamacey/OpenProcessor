@@ -131,21 +131,20 @@ read with `GET /query/duplicates`, `GET /query/duplicates/stats` and
 ## 2. Per-project curation indexes
 
 Each project owns the indexes `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` (default prefix
-`op_prj_`) for the roles `images` and `items`, plus `leases`, the job lease documents that stay
-until the B1 leases are deleted. For project `cars`: `op_prj_cars__images`, `op_prj_cars__items`,
-`op_prj_cars__leases`. Every other control record (projects, classes, configs, settings, UMAP
-state) is in PostgreSQL. Bodies are in `src/clients/curation_opensearch/` (`bodies_core.py` for
-images and items, with the cluster and near-duplicate field groups in `cluster_fields.py` and
-`near_dup_fields.py`; `bodies_other.py` for the lease index). Indexes are created and migrated
-once by the `db-migrate` step (`scripts/opensearch/migrate.py`); the API only checks the schema
-stamp of each mapping and refuses to start with `opensearch_mapping_not_current`.
+`op_prj_`) for the roles `images` and `items` only. For project `cars`: `op_prj_cars__images` and
+`op_prj_cars__items`. Every other control record (projects, classes, configs, settings, jobs,
+embedding spaces, cluster partitions, near-duplicate groups) is in PostgreSQL. Bodies are in
+`src/clients/curation_opensearch/` (`bodies_core.py` for images and items, with the field groups in
+`cluster_fields.py`, `near_dup_fields.py`, `capture_fields.py`, `assist_fields.py` and
+`open_vocab_fields.py`). Indexes are created and migrated once by the `db-migrate` step
+(`scripts/opensearch/migrate.py`); the API only checks the schema stamp of each mapping and refuses
+to start with `opensearch_mapping_not_current`.
 
 An index created before a field existed gets it from an additive `PUT _mapping`
-migration (`src/services/curation/index_bootstrap.py`), run by each API worker the
-first time it serves a project. After a full run every index's mapping `_meta` holds
-`op_schema`, a fingerprint of the bodies and the migration list; a later worker reads
-the markers in one request and skips the migrations when all are current. A new body
-field or migration changes the fingerprint, so every project migrates once more.
+migration (`src/services/curation/index_bootstrap.py`), run by `db-migrate`. After a full run every
+index's mapping `_meta` holds `op_schema`, a fingerprint of the bodies and the migration list; the
+API and the workers read the markers in one request and refuse to start unless all are current. A
+new body field or migration changes the fingerprint, so every project migrates once more.
 
 A removed field is dropped from the bodies and the writers only; OpenSearch cannot unmap a
 field, so an index created earlier keeps the dead mapping (and any stored values) until it is
@@ -155,6 +154,16 @@ is a retired env var.
 
 Embedding dimensions: `embedding` 512, `pe_embedding` 1024 (PE-Core). HNSW on the Lucene engine (new projects; earlier projects keep faiss), defaults `ef_construction` 128 and `m` 16
 (`OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M`).
+
+**Vector fields are named by the registry.** A vector field in `images` or `items` belongs to an
+embedding **space** (`embedding_spaces` in PostgreSQL): the row stores the physical field name
+(`vector_field`), the optional state field (`state_field`, the per-item `embedded` / `not_selected` /
+`deferred` / `failed` keyword), the nested path for a box space and the k-NN method. Code takes the
+names from a resolved space and never builds them. A project's default spaces keep the 0.6.0 names
+(`pe_embedding`, `embedding_state`, `region_box_embeddings` with the leaf `embedding`), so nothing
+moves on upgrade; a candidate space adds a field with a registry-generated name by an additive
+`PUT _mapping`, and retiring it leaves the unmapped values until the index is rebuilt. At most
+three live spaces per target.
 
 ### `images`
 
@@ -190,13 +199,14 @@ One document per crop. Field groups:
 | Identity and geometry | `crop_id`, `image_id`, `image_path`, `source`, `request_id`, `bbox_norm` (4 floats, the crop in the source image), `crop_area_norm`, `crop_rank_in_image`, blur fields |
 | Class | `class_id`, `class_name`, `class_source`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeler`, `class_labeled_at`, `confidence`, `proposal_name`, `detector_class_name` (keyword), `detector_class_id` (integer), `detector_confidence` (float), `label_source`, `label_op_id` (keyword: the bulk label or move operation that wrote the current label), `class_id_history` (stored, not indexed; entries carry `op_id`) |
 | VLM | `vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`, `vlm_confidence`, `vlm_raw_class`, `vlm_proposed_class`, `needs_new_class`, `vlm_raw_label*`, label-cluster fields |
-| Clusters | `cluster_id`, `cluster_subid`, `cluster_distance`, `cluster_nearest_id`, `cluster_auto_suggest` |
-| Embeddings | `pe_embedding` (1024-d), `embedding_state` (keyword: `embedded`, `not_selected`, `deferred`, `failed`; absent on older items, so "has a vector" is always the `exists` test on the vector field) |
+| Clusters (the served partition) | `cluster_partition_id` (keyword), `cluster_uid` (keyword), `cluster_state` (`assigned`, `review`, `unassigned`), `cluster_score`, `cluster_margin` (float), `cluster_assigned_by` (keyword: the run or `incremental`). One projection writer owns them; a box element carries the same keys |
+| Near-duplicates (also on `images`) | `near_dup_group_id`, `near_dup_leak_group_id` (keyword), `near_dup_is_representative` (boolean), `near_dup_group_size` (integer), `near_dup_run_id` (keyword). `hide_near_duplicates` reads `near_dup_is_representative` and keeps an item without the field |
+| Embeddings | `pe_embedding` (1024-d) and `embedding_state` for the default space, or the fields of each registered space (keyword states: `embedded`, `not_selected`, `deferred`, `failed`; absent on older items, so "has a vector" is always the `exists` test on the vector field) |
 | Region summary | `region_status`, `region_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verifier`, `region_verifier_version`, `region_verified_at`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify`, `region_rejection_reason` |
 | Region boxes | `region_boxes` (nested), `region_box_embeddings` (nested), `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision`, `region_box_seq` |
 | Item text | OCR lines read on the crop and their search tokens (`item_text_lines`) |
 | Review state | `test_holdout`, `class_excluded` and `excluded_*`, `review_dismissed_*`, `vlm_dismissed_*`, `edit_history` (stored, not indexed) |
-| Probe and scores | `probe_pred_*`, `probe_disagreement`, `probe_model_version`, `uniqueness_*`, `mistakenness_*`, `dup_*` |
+| Probe and scores | `probe_pred_*`, `probe_disagreement`, `probe_model_version`, `uniqueness_*`, `mistakenness_*` |
 | Import and combine | `dataset_split`, `import_ids`, `imported_at`, `import_dataset_name`, `import_dataset_sha`, `proposed_by_import`, `on_negative_frame`, `import_standalone_region`, `proposal_chain`, `origin_project`, `origin_item_id`, `origin_image_id`, `origin_split`, `combine_conflict`, `combine_conflict_origins`, `combine_merged_origins` |
 | Timestamps | `created_at`, `updated_at` |
 
@@ -225,7 +235,7 @@ to the same box. Element keys are fixed strings:
 | `text`, `text_raw` | keyword | the read text, and the text before normalization |
 | `text_source`, `text_engine_version`, `text_confidence` | keyword, keyword, float | where the text came from |
 | `text_vlm`, `text_ocr`, `text_choice`, `text_vlm_invalid`, `text_disagreement` | keyword, keyword, keyword, keyword, boolean | per-reader outputs and which was chosen |
-| `cluster_id`, `cluster_subid`, `cluster_distance` | integer, keyword, float | the box's own cluster placement |
+| `cluster_partition_id`, `cluster_uid`, `cluster_state`, `cluster_score`, `cluster_margin`, `cluster_assigned_by` | keyword, keyword, keyword, float, float, keyword | the box's own served cluster placement |
 | `detected_at` | date | when the box was written |
 
 `region_box_embeddings` is a sibling nested field with `box_id`, `bbox_norm` (the
@@ -253,40 +263,25 @@ Routes: `GET /curation/projects/{project}/regions` lists one row per box;
 Clustering of boxes by their own embeddings runs through
 `POST /curation/projects/{project}/clusters/runs`.
 
-### `labels_confirmed`
+### Retired roles and fields
 
-The mapping is kept (`label_id`, `crop_id`, `image_path`, `bbox_norm`,
-`class_id`, `class_name`, `label_source`, `class_source`, `confirmed_at`,
-mismatch fields) but nothing writes to it in this release. Dataset imports keep
-their own ledger on disk.
+The `classes`, `configs`, `settings`, `umap_state`, `umap_viz_state`, `labels_confirmed` and `leases`
+index roles, the `op_projects` and `op_global_configs` indexes are gone: their data is in PostgreSQL
+(the class registry in `class_registries` and `project_classes`, the config store in
+`config_documents`, `config_revisions` and `config_activations`, settings in `project_settings`,
+jobs and their leases in `jobs`). A project index created by 0.6.0 keeps the old roles only until
+`./openprocessor upgrade` has moved and verified the data, and then they are deleted. OpenSearch
+cannot unmap a field, so an index created earlier keeps these field mappings (and any values) until
+it is rebuilt, and nothing reads or writes them:
 
-### `classes`
+| Retired field | Replaced by |
+|---|---|
+| `cluster_id`, `cluster_subid`, `cluster_distance`, `cluster_nearest_id`, `cluster_auto_suggest` (items and boxes); the label-cluster fields | `cluster_partition_id`, `cluster_uid`, `cluster_state`, `cluster_score`, `cluster_margin`, `cluster_assigned_by` |
+| `backbone_embedding` | nothing; `OP_BACKBONE_EMBEDDING_DIM` is a retired env var |
+| `dup_group_id`, `dup_group_size`, `dup_is_representative`, `dup_threshold`, `dup_method`, `dup_scored_at` (items) | the `near_dup_*` projection; the upgrade clears them |
 
-The class registry no longer has an OpenSearch mirror: the registry is in PostgreSQL
-(`class_registries`, `project_classes`), and the class list route joins its counts from one terms
-aggregation on `items.class_id`. Class identity across datasets is the name, not `class_id`.
-
-### `umap_state`
-
-The clustering reducer cache: `state_id`, `reducer_b64` (binary), `n_components`,
-`metric`. Mapped with `dynamic: false`.
-
-### `configs`
-
-The config store, one document per row, discriminated by `doc_type`
-(`config`, `revision`, `activation`, `activation_event`, `meta`, `runtime`):
-`kind` (`prompt_pack`, `region_profile`, ...), `name`, `revision`, `body`
-(stored, not indexed), `description`, `created_at`, `updated_at`, `updated_by`,
-`cloned_from`, `axis`, `previous`, `config_revision`, `process`, `applied_at`.
-Two object keys with `enabled: false` (stored, never indexed) share this index by fixed id,
-on a legacy project's separate settings index as well: `lease` (a job lease document, id
-`lease:<kind>` or `lease:<kind>:<scope>`, with `kind`, `scope`, `job_id`, `owner`,
-`generation`, `acquired_at`, `heartbeat_at`, `ttl_s`, `state` (`held` or `released`)) and
-`class_registry`. Leases are read by id with a realtime `get`, never searched.
-The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `clustering` parts and a revision counter; the detector is an ingest profile in the config store, not a policy part, addressed by id `default`; the cluster-refresh daemon's growth state sits beside it under `cluster_refresh`) and the
-UMAP projection state (id `current`: `projection_version`, `scope`, `n_points`,
-`fitted_at`, ...) are stored in this same index, by fixed id and never searched,
-so a project needs six indexes rather than eight.
+The class list route joins its counts from one terms aggregation on `items.class_id`. Class
+identity across datasets is the name, not `class_id`.
 
 #### The class registry
 
@@ -307,15 +302,14 @@ make opensearch-indices         # list indexes
 ```
 
 `make opensearch-reset` sends a delete-all-indexes request straight to OpenSearch: it removes
-**every** index, including every project's indexes and the project registry. It
+**every** index, including every project's indexes. It
 bypasses the project guard because it does not go through the API. Delete a
 single project with `DELETE /curation/projects/{project}` instead.
 
-Shard budget: every project adds six indexes (`classes`, `configs`, `images`, `items`,
-`labels_confirmed`, `umap_state`), each with one primary shard and no replicas, so six
-shards. `active_shards` on `GET /curation/projects` counts every index in the cluster
-(the other projects, the `default` project's indexes, the project registry, the global
-config index and the legacy search indexes), not only the projects you made. The installer sets
+Shard budget: every project adds two indexes (`images` and `items`), each with one primary shard
+and no replicas, so two shards. `active_shards` on `GET /curation/projects` counts every index in
+the cluster (the other projects, the `default` project's indexes and the legacy search
+indexes), not only the projects you made. The installer sets
 the OpenSearch heap from host RAM and a soft shard budget of 20 shards per heap
 GB (`OP_SHARDS_PER_HEAP_GB`); creating a project past the hard limit (`cluster.max_shards_per_node` times
 the data nodes) is refused with `shard_budget_exceeded`; past the soft budget it succeeds with a
