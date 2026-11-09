@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import Any
 
 
 SRC = Path(__file__).resolve().parents[1] / 'src'
@@ -21,7 +22,7 @@ ALLOWED: set[tuple[str, str]] = set()
 
 
 def _module_level_primitives(path: Path) -> list[str]:
-    found = []
+    found: list[Any] = []
     for node in ast.parse(path.read_text(encoding='utf-8')).body:
         if not isinstance(node, ast.Assign | ast.AnnAssign):
             continue

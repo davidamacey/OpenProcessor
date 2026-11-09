@@ -6,6 +6,7 @@ Also the per-crop answers the assist chunk now reports.
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 
@@ -25,7 +26,7 @@ N = 2000
 
 
 def _answers(**counts: int) -> list[ClassAnswer]:
-    out = []
+    out: list[Any] = []
     for name, count in counts.items():
         out.extend(ClassAnswer(class_name=name) for _ in range(count))
     return out

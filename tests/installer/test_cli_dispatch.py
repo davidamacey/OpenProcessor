@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -20,7 +21,7 @@ def _cli_sources() -> list[Path]:
 
 
 def test_every_repo_path_a_subcommand_runs_exists() -> None:
-    missing = []
+    missing: list[Any] = []
     for source in _cli_sources():
         lines = source.read_text().splitlines()
         for number, line in enumerate(lines, 1):

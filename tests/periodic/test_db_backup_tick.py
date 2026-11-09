@@ -23,7 +23,8 @@ pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_env')]
 
 class FakeDump:
     def __init__(self, content: bytes = b'PGDMP', fail: bool = False) -> None:
-        self.content, self.fail, self.calls = content, fail, []
+        self.content, self.fail = content, fail
+        self.calls: list[Any] = []
 
     def __call__(self, argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
         self.calls.append((argv, kwargs))

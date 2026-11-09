@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 import yaml
 
@@ -95,7 +96,7 @@ def test_the_jobs_queue_dashboard_reads_the_job_gauges() -> None:
 
 
 def test_no_dashboard_query_selects_by_container_or_instance() -> None:
-    offenders = []
+    offenders: list[Any] = []
     for path in sorted((MONITORING / 'dashboards').glob('*.json')):
         dashboard = json.loads(path.read_text())
         panels = [

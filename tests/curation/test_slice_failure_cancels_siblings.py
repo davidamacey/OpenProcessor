@@ -81,7 +81,7 @@ async def test_a_clean_scan_yields_every_page_once() -> None:
             return await super().search(body=body, **kw)
 
     client = Finite(fail_slice=None)
-    ids = []
+    ids: list[Any] = []
     async for page in iter_pages(client, index='i', query={}, source=['x'], n_slices=3):  # type: ignore[arg-type]
         ids.extend(h['_id'] for h in page)
     assert sorted(ids) == sorted(f'{s}-{n}' for s in range(3) for n in (1, 2))
