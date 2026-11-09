@@ -42,6 +42,7 @@ def registry(tmp_path: Any) -> InMemoryRegistry:
 
 
 def _client(fake: Any, registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from src.core.db_session import get_db
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr(
@@ -53,6 +54,7 @@ def _client(fake: Any, registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPat
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    app.dependency_overrides[get_db] = lambda: None  # no job is queued below 500 ids
     return TestClient(app)
 
 
@@ -306,17 +308,15 @@ def test_resolve_skips_item_whose_state_changed_before_write(
     }
     fake = QueryFakeOpenSearch({ITEMS: docs})
 
-    real_get = fake.get
+    real_mget = fake.mget
 
-    async def _get_and_flip(*, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
-        if id == 'p2':
-            # Simulate a concurrent write that resolved p2 to something
-            # else between selection and this item's write — flip before
-            # the OCC merger's own read so it observes the changed state.
-            fake.docs(ITEMS)['p2']['class_validated'] = True
-        return await real_get(index=index, id=id, **kw)
+    async def _mget_and_flip(**kw: Any) -> dict[str, Any]:
+        # Simulate a concurrent write that resolved p2 to something else between selection
+        # and the write: flip it before the bulk loop's own read so it observes the new state.
+        fake.docs(ITEMS)['p2']['class_validated'] = True
+        return await real_mget(**kw)
 
-    fake.get = _get_and_flip  # type: ignore[method-assign]
+    fake.mget = _mget_and_flip  # type: ignore[method-assign]
     client = _client(fake, registry, monkeypatch)
 
     r = client.post(

@@ -3228,6 +3228,26 @@
         "title": "BatchIngestSummaryResponse",
         "type": "object"
       },
+      "BatchJobAccepted": {
+        "description": "The queued job; read its outcome at ``GET /jobs/{job_id}``.",
+        "properties": {
+          "job_id": {
+            "description": "The queued job; poll GET /jobs/{job_id}.",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "BatchJobAccepted",
+        "type": "object"
+      },
       "BatchUnexcludeResponse": {
         "description": "``POST /crops/batch_unexclude``.",
         "properties": {
@@ -7681,6 +7701,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
@@ -7961,6 +7982,9 @@
             "title": "Updated By"
           }
         },
+        "required": [
+          "resource_links"
+        ],
         "title": "CurationSettingsResponse",
         "type": "object"
       },
@@ -43386,7 +43410,7 @@
     },
     "/curation/projects/{project}/crops/region/undo_batch": {
       "post": {
-        "description": "Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk\nregion write by passing the same ``crop_ids``. Each crop is restored\nindependently. Returns ``items`` (restored wire items), ``undone``, and\nper-crop ``nothing_to_undo`` / ``conflicts`` / ``not_found`` id lists.\n``409`` when no crop had anything to undo.",
+        "description": "Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk\nregion write by passing the same ``crop_ids``. Each crop is restored\nindependently, through the paged bulk OCC loop (one read and one\nconditional write per 500 ids). Returns ``items`` (restored wire items),\n``undone``, and per-crop ``nothing_to_undo`` / ``conflicts`` /\n``not_found`` id lists. ``409`` when no crop had anything to undo.\n\nMore than ``OP_BATCH_SYNC_MAX`` crops (default 500) are queued instead:\n``202`` with ``job_id``; the job's ``result`` at ``GET /jobs/{job_id}``\ncarries the same id lists without ``items``.",
         "operationId": "undo_crop_regions_curation_projects__project__crops_region_undo_batch_post",
         "parameters": [
           {
@@ -43414,13 +43438,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Undo Crop Regions Curation Projects  Project  Crops Region Undo Batch Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CropUndoBatchResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchJobAccepted"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "409": {
             "content": {
@@ -56045,7 +56077,7 @@
     },
     "/curation/projects/{project}/review/new_class_proposals/resolve": {
       "post": {
-        "description": "Bulk-resolve every new-class queue item proposing ``label`` — the\nsame selection ``GET /review/new_class_proposals`` and its summary use\n(``vlm_new_class_pending`` rows and ``needs_new_class`` flags, never a\nvalidated, dismissed, excluded or test-holdout item), so ``matched``\nequals the summary's ``count`` for the term.\n\nUnlike relabeling ``GET /review/new_class_proposals/summary``'s\n``sample_crop_ids`` (capped at 20) one at a time, this selects and\nwrites **every** matching, still-pending item for the term in one\ncall — the backend owns the \"resolve this term\" decision, not the\nclient re-issuing ``PUT /crops/batch_label`` per page of samples.\n\nExactly one of ``class_id`` (map to an existing registry class) /\n``create`` (register a new one first, through the same path as\n``POST /classes``) must be set — ``422`` otherwise. An unknown\n``class_id`` is ``400``; a duplicate ``create.class_name`` is ``409``\nand writes nothing. ``create`` happens before any item write — if\nnothing matches, the class is still created (the operator asked for\nit) and ``matched`` reports ``0``.\n\nEach matching item is written independently via ``occ_update_one``\n(bounded concurrency), re-checking at write time that it is still\npending this exact proposal; an item whose state changed in the\nmeantime is reported in ``skipped``, not written. Every write records\na restorable ``class_id_history`` snapshot, so\n``POST /crops/label/undo_batch`` on ``updated_ids`` puts the item\nback exactly as a pending proposal.\n\n``?dry_run=true`` reports ``matched`` / ``matched_ids`` and writes or\ncreates nothing (``class_id`` is ``null`` when ``create`` was given).",
+        "description": "Bulk-resolve every new-class queue item proposing ``label`` — the\nsame selection ``GET /review/new_class_proposals`` and its summary use\n(``vlm_new_class_pending`` rows and ``needs_new_class`` flags, never a\nvalidated, dismissed, excluded or test-holdout item), so ``matched``\nequals the summary's ``count`` for the term.\n\nUnlike relabeling ``GET /review/new_class_proposals/summary``'s\n``sample_crop_ids`` (capped at 20) one at a time, this selects and\nwrites **every** matching, still-pending item for the term in one\ncall — the backend owns the \"resolve this term\" decision, not the\nclient re-issuing ``PUT /crops/batch_label`` per page of samples.\n\nExactly one of ``class_id`` (map to an existing registry class) /\n``create`` (register a new one first, through the same path as\n``POST /classes``) must be set — ``422`` otherwise. An unknown\n``class_id`` is ``400``; a duplicate ``create.class_name`` is ``409``\nand writes nothing. ``create`` happens before any item write — if\nnothing matches, the class is still created (the operator asked for\nit) and ``matched`` reports ``0``.\n\nItems are written through the paged bulk OCC loop (one read and one\nconditional write per 500 ids), re-checking at write time that each is\nstill pending this exact proposal; an item whose state changed in the\nmeantime is reported in ``skipped``, not written. Above\n``OP_BATCH_SYNC_MAX`` matching items (default 500) the write is queued\ninstead: ``202`` with ``job_id``, and the same body is the job's\n``result`` at ``GET /jobs/{job_id}`` (without ``matched_ids``). Every write records\na restorable ``class_id_history`` snapshot, so\n``POST /crops/label/undo_batch`` on ``updated_ids`` puts the item\nback exactly as a pending proposal.\n\n``?dry_run=true`` reports ``matched`` / ``matched_ids`` and writes or\ncreates nothing (``class_id`` is ``null`` when ``create`` was given).",
         "operationId": "resolve_new_class_proposal_curation_projects__project__review_new_class_proposals_resolve_post",
         "parameters": [
           {
@@ -56090,6 +56122,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchJobAccepted"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {

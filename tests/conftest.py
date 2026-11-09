@@ -90,6 +90,16 @@ def _control_plane_ready(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _reachability_valkey(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The settings routes read the published service reachability from Valkey; the Docker-free
+    suite has none, so they read an empty one (every service ``unknown``). A test about the
+    store replaces ``valkey_client`` again with its own."""
+    from fixtures.fake_valkey import FakeValkey
+
+    monkeypatch.setattr('src.services.resource_links.valkey_client', FakeValkey)
+
+
+@pytest.fixture(autouse=True)
 def _projects_data_root(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

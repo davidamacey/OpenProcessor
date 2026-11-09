@@ -20,7 +20,7 @@ from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import confident_class_sources
 from src.services.curation.clustering.page_rows import hits_to_rows, stack_pages
-from src.services.curation.clustering.slice_group import run_slices
+from src.utils.task_group import run_all
 
 
 if TYPE_CHECKING:
@@ -283,7 +283,7 @@ async def fetch_residual_embeddings_parallel(
 
     emit_progress = _SliceProgress(progress, total_estimate)
     try:
-        slice_results = await run_slices(
+        slice_results = await run_all(
             [
                 _fetch_one_slice(
                     client,

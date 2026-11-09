@@ -23,6 +23,7 @@ EXPECTED = {
     'cache_prune',
     'reload_promoted',
     'serving_inventory',
+    'resource_reachability',
     'cluster_refresh',
     'db_backup',
     'near_dup_rescore',

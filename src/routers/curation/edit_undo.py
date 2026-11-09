@@ -16,29 +16,26 @@ dismissed suggestion back.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
-from src.routers.curation._common import OpenSearchDep, RegionProfileDep, logger, router
+from src.config.batch_sync import batch_sync_max
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.routers.curation._batch_job_models import BatchJobAccepted
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, is_not_found, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation.label_undo import _items_by_ids
-from src.services.curation.edit_history import (
-    EDIT_HISTORY_FIELD,
-    REGION_UNDO_WRITER,
-    VLM_DISMISS_UNDO_WRITER,
-    EditKind,
-    find_edit_undo,
-    record_edit,
-    restore_edit_state,
-)
-from src.utils.timeutil import now_iso
+from src.schemas.curation.label_ops import CropUndoBatchResponse
+from src.services.curation.edit_history import REGION_UNDO_WRITER, VLM_DISMISS_UNDO_WRITER, EditKind
+from src.services.curation.edit_undo import edit_undo_update, queue_edit_undo_job, undo_edit_writes
 
 
-_REGION_UNDO_CONCURRENCY = 32
+UNDO_BATCH_MAX_IDS = 5000
 
 
 class CropRegionUndoBatchRequest(BaseModel):
@@ -46,7 +43,7 @@ class CropRegionUndoBatchRequest(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
 
-    crop_ids: list[str] = Field(..., min_length=1)
+    crop_ids: list[str] = Field(..., min_length=1, max_length=UNDO_BATCH_MAX_IDS)
 
 
 class NothingToUndoError(Exception):
@@ -58,15 +55,10 @@ def edit_undo_merger(kind: EditKind, writer: str) -> Any:
     edit and recording the replaced state (``restorable=False``)."""
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        entry = find_edit_undo(current.get(EDIT_HISTORY_FIELD), kind)
-        if entry is None:
+        update = edit_undo_update(current, kind, writer)
+        if update is None:
             raise NothingToUndoError
-        history = record_edit(current, kind=kind, writer=writer, restorable=False)
-        return {
-            **restore_edit_state(entry, kind, current=current),
-            EDIT_HISTORY_FIELD: history,
-            'updated_at': now_iso(),
-        }
+        return update
 
     return _merge
 
@@ -85,6 +77,8 @@ async def undo_edit(opensearch: Any, crop_id: str, kind: EditKind, writer: str) 
     except (NothingToUndoError, OCCFinalConflictError):
         raise
     except Exception as exc:
+        if not is_not_found(exc):
+            raise
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
 
 
@@ -109,55 +103,46 @@ async def undo_crop_region(
     return items[0]
 
 
-@router.post('/crops/region/undo_batch', responses=REGION_PROFILE_RESPONSES)
+@router.post(
+    '/crops/region/undo_batch',
+    response_model=None,
+    responses={
+        **REGION_PROFILE_RESPONSES,
+        200: {'model': CropUndoBatchResponse},
+        202: {'model': BatchJobAccepted},
+    },
+)
 async def undo_crop_regions(
-    payload: CropRegionUndoBatchRequest, opensearch: OpenSearchDep, _profile: RegionProfileDep
-) -> dict[str, Any]:
+    payload: CropRegionUndoBatchRequest,
+    opensearch: OpenSearchDep,
+    session: DbSessionDep,
+    _profile: RegionProfileDep,
+) -> CropUndoBatchResponse | JSONResponse:
     """Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk
     region write by passing the same ``crop_ids``. Each crop is restored
-    independently. Returns ``items`` (restored wire items), ``undone``, and
-    per-crop ``nothing_to_undo`` / ``conflicts`` / ``not_found`` id lists.
-    ``409`` when no crop had anything to undo."""
+    independently, through the paged bulk OCC loop (one read and one
+    conditional write per 500 ids). Returns ``items`` (restored wire items),
+    ``undone``, and per-crop ``nothing_to_undo`` / ``conflicts`` /
+    ``not_found`` id lists. ``409`` when no crop had anything to undo.
+
+    More than ``OP_BATCH_SYNC_MAX`` crops (default 500) are queued instead:
+    ``202`` with ``job_id``; the job's ``result`` at ``GET /jobs/{job_id}``
+    carries the same id lists without ``items``."""
     crop_ids = list(dict.fromkeys(payload.crop_ids))
-    if not crop_ids:
-        return {'items': [], 'undone': 0, 'nothing_to_undo': [], 'conflicts': [], 'not_found': []}
-
-    # Edit history has no bulk merger yet: bound the per-item undos instead.
-    gate = asyncio.Semaphore(_REGION_UNDO_CONCURRENCY)
-
-    async def _one(crop_id: str) -> str:
-        try:
-            async with gate:
-                await undo_edit(opensearch, crop_id, EditKind.REGION, REGION_UNDO_WRITER)
-        except NothingToUndoError:
-            return 'nothing_to_undo'
-        except OCCFinalConflictError:
-            return 'conflicts'
-        except HTTPException:
-            return 'not_found'
-        except Exception as exc:
-            logger.warning('undo_region_failed', crop_id=crop_id, error=str(exc))
-            return 'conflicts'
-        return 'undone'
-
-    outcomes = await asyncio.gather(*(_one(cid) for cid in crop_ids))
-    by: dict[str, list[str]] = {
-        'undone': [],
-        'nothing_to_undo': [],
-        'conflicts': [],
-        'not_found': [],
-    }
-    for crop_id, outcome in zip(crop_ids, outcomes, strict=True):
-        by[outcome].append(crop_id)
+    if len(crop_ids) > batch_sync_max():
+        job = await queue_edit_undo_job(session, current_project_id(), crop_ids)
+        accepted = BatchJobAccepted(job_id=str(job.id), status=job.status)
+        return JSONResponse(status_code=202, content=accepted.model_dump())
+    by = await undo_edit_writes(opensearch, crop_ids, EditKind.REGION, REGION_UNDO_WRITER)
     if not by['undone'] and by['nothing_to_undo'] and not (by['conflicts'] or by['not_found']):
         raise HTTPException(status_code=409, detail='nothing to undo for any crop region')
-    return {
-        'items': await _items_by_ids(opensearch, by['undone']),
-        'undone': len(by['undone']),
-        'nothing_to_undo': by['nothing_to_undo'],
-        'conflicts': by['conflicts'],
-        'not_found': by['not_found'],
-    }
+    return CropUndoBatchResponse(
+        items=await _items_by_ids(opensearch, by['undone']),
+        undone=len(by['undone']),
+        nothing_to_undo=by['nothing_to_undo'],
+        conflicts=by['conflicts'],
+        not_found=by['not_found'],
+    )
 
 
 @router.post('/crops/{crop_id}/vlm_dismiss/undo')

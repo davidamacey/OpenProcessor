@@ -52,9 +52,12 @@ from src.services.curation.ingest_models import BatchIngestResult, IngestResult,
 from src.services.curation.ops_metrics import record_ingest_result
 from src.utils.cpu_pool import encoded_nbytes, ingest_gate, mib, run_cpu
 from src.utils.stage_timing import observe_stage, stage_timer
+from src.utils.task_group import run_all, run_settled
 
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from PIL import Image
 
     from src.services.curation.image_decode import DecodedImage
@@ -90,7 +93,7 @@ async def _prefill_gpu_decode(
         with stage_timer('gpu_decode'):
             return await run_gpu_decode(service, images[idx], embed_crops=embed_crops)
 
-    outcomes = await asyncio.gather(*(timed(idx) for idx in taken))
+    outcomes = await run_all([timed(idx) for idx in taken])
     for idx, outcome in zip(taken, outcomes, strict=True):
         if isinstance(outcome, str):
             count_route(f'cpu_{outcome}')
@@ -132,17 +135,13 @@ async def _prefill_detections(
 
     valid_imgs: list[Image.Image] = []
     valid_indices: list[int] = []
-    decoded = await asyncio.gather(
-        *(run_cpu(_decode_image, images[idx], nbytes=sizes[idx]) for idx in indices),
-        return_exceptions=True,
+    decoded = await run_settled(
+        [run_cpu(_decode_image, images[idx], nbytes=sizes[idx]) for idx in indices]
     )
     for idx, outcome in zip(indices, decoded, strict=True):
-        if isinstance(outcome, BaseException):
-            # Broad catch: ingest_one re-decodes this byte slice and
-            # produces a structured IngestResult with the right
-            # error_kind, so just skip prefilling it here.
-            if not isinstance(outcome, Exception):
-                raise outcome
+        if isinstance(outcome, Exception):
+            # ingest_one re-decodes this byte slice and produces a structured IngestResult
+            # with the right error_kind, so just skip prefilling it here.
             logger.warning('ingest_batch_decode_failed', path=image_paths[idx], error=str(outcome))
             continue
         prefilled_imgs[idx] = outcome
@@ -156,11 +155,11 @@ async def _prefill_detections(
     secondary_per: list[SecondaryOutput | None]
     try:
         if detector.secondary_profile is not None:
-            items_per, secondary_batch = await asyncio.gather(
-                detector.run_primary_batch(valid_imgs),
-                detector.run_secondary_raw_batch(valid_imgs),
-            )
-            secondary_per = [*secondary_batch]
+            async with asyncio.TaskGroup() as group:
+                primary_task = group.create_task(detector.run_primary_batch(valid_imgs))
+                secondary_task = group.create_task(detector.run_secondary_raw_batch(valid_imgs))
+            items_per = primary_task.result()
+            secondary_per = [*secondary_task.result()]
         else:
             items_per = await detector.run_primary_batch(valid_imgs)
             secondary_per = [None] * len(valid_imgs)
@@ -212,6 +211,24 @@ def _group_batch(
         peers.append(i)
         non_dup.append(i)
     return batch_dup_of, after_peer, non_dup
+
+
+async def _publish_result(
+    future: asyncio.Future[IngestResult] | None, ingest: Awaitable[IngestResult]
+) -> IngestResult:
+    """Await ``ingest`` and hand its result to the byte-identical copies waiting on ``future``.
+
+    A failure cancels ``future`` so a copy never waits on a result that will not come (the group
+    is cancelling the copies anyway)."""
+    try:
+        result = await ingest
+    except BaseException:
+        if future is not None:
+            future.cancel()
+        raise
+    if future is not None:
+        future.set_result(result)
+    return result
 
 
 async def run_ingest_batch(
@@ -308,28 +325,26 @@ async def run_ingest_batch(
             if peer is not None:
                 await rep_futures[peer]
             async with sem:
-                result = await service.ingest_one(
-                    image_bytes,
-                    image_path,
-                    source=source,
-                    prefilled_image=prefilled_imgs.get(i),
-                    prefilled_items=prefilled_items.get(i),
-                    prefilled_secondary=prefilled_secondary.get(i),
-                    prefilled_frame=frames.get(i),
-                    source_identifier=source_identifier,
-                    ingest_run_id=ingest_run_id,
+                return await _publish_result(
+                    rep_futures.get(i),
+                    service.ingest_one(
+                        image_bytes,
+                        image_path,
+                        source=source,
+                        prefilled_image=prefilled_imgs.get(i),
+                        prefilled_items=prefilled_items.get(i),
+                        prefilled_secondary=prefilled_secondary.get(i),
+                        prefilled_frame=frames.get(i),
+                        source_identifier=source_identifier,
+                        ingest_run_id=ingest_run_id,
+                    ),
                 )
-            if i in rep_futures:
-                rep_futures[i].set_result(result)
-            return result
 
-        results = list(
-            await asyncio.gather(
-                *[
-                    _one(i, b, p, h)
-                    for i, (b, p, h) in enumerate(zip(images, image_paths, hashes, strict=False))
-                ]
-            )
+        results = await run_all(
+            [
+                _one(i, b, p, h)
+                for i, (b, p, h) in enumerate(zip(images, image_paths, hashes, strict=False))
+            ]
         )
 
     await service.refresh_indexes()
