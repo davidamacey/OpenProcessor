@@ -14,7 +14,7 @@
  * We never fire when the active element is an input, textarea, contenteditable,
  * or select.
  *
- * Action ids (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
+ * Action ids (configurable keyboard shortcuts plan
  * §5.2): `registerAction('review.queue.discard', fn, scope)` stores the id,
  * not a combo — dispatch resolves the id's keys through `keymapStore` at
  * keypress time, so a rebind applies with no re-registration. The legacy

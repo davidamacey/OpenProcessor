@@ -126,7 +126,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   let suspectedFpView = $state<boolean>(false);
   let suspectedFpThreshold = $state<number>(0.35);
 
-  // M3 (docs/design/interactive-pass-2026-09-24.md): the bucket-card grid
+  // M3 (interactive pass): the bucket-card grid
   // below only ever showed real AHC region clusters — when the only
   // cluster is the permanent false-positive bucket (the common case
   // before "Cluster regions" has been run over the good regions), every

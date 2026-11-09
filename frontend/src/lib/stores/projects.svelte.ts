@@ -1,6 +1,6 @@
 /**
  * ProjectsStore — the served project list and the active project
- * (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+ * (any-domain rev3 and projects contract review
  * §7). The active project lives in the URL path ONLY (`/p/<slug>/...`,
  * owner decision): nothing is persisted. `load()` reads the global
  * `GET {globalApi()}/projects` once at boot; the `/p/[project]` layout

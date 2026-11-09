@@ -1,6 +1,6 @@
 /**
  * The predicate behind Finding C.2's "class letters are inert on a slot
- * tab" invariant (docs/genericization-plan-2026-09-13.md), pulled out of
+ * tab" invariant (genericization plan), pulled out of
  * an inline slot-tab guard in `review/+page.svelte`'s class-drop
  * `$effect` so it has one, testable
  * definition instead of being re-derived by reading a `return` statement.

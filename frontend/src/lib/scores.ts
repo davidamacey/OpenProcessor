@@ -1,6 +1,6 @@
 /**
  * Pure helpers for the `/settings` "Curation scores" card
- * (docs/design/frontend-coverage-audit-2026-09-24.md §G10). Split out of
+ * (frontend coverage audit §G10). Split out of
  * `ScoresCard.svelte` so the null→"—" formatting and the compute-job
  * status classification are unit-testable without mounting a component,
  * same convention as `trainResults.ts`'s `formatMetric`/`formatScalar`
