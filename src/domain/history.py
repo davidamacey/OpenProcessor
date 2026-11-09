@@ -131,6 +131,16 @@ entry that carries them, so an undo returns the item to the audit queue."""
 
 HUMAN_UNLABEL_WRITER = 'human:unlabel_crop'
 
+PLACEMENT_FIELDS: tuple[str, ...] = (
+    'cluster_partition_id',
+    'cluster_uid',
+    'cluster_state',
+    'cluster_score',
+    'cluster_margin',
+    'cluster_assigned_by',
+)
+"""The item's place in the serving partition; clustering owns it."""
+
 CLASS_STATE_FIELDS: tuple[str, ...] = (
     'class_id',
     'class_name',
@@ -231,7 +241,8 @@ def restore_class_state(entry: dict[str, Any] | None) -> dict[str, Any]:
     """Update-doc fields restoring the class state recorded in ``entry``.
 
     ``None`` (no human label write on record) restores an unlabeled item:
-    class and every provenance field cleared, nothing invented.
+    class and every provenance field cleared, nothing invented. The serving-partition
+    placement is not written at all: it belongs to clustering, not to labels.
 
     Entries written before full snapshots existed carry only
     class_id/class_name/class_source/label_source/confidence; the
@@ -246,6 +257,8 @@ def restore_class_state(entry: dict[str, Any] | None) -> dict[str, Any]:
     out['class_validated'] = bool(out['class_validated'])
     if entry is None:
         out['label_source'] = ''
+        for f in PLACEMENT_FIELDS:
+            del out[f]
     for f in (*REVIEW_DISMISS_FIELDS, *AUDIT_VERDICT_FIELDS):
         if f in snap:
             out[f] = snap[f]
