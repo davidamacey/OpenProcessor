@@ -245,14 +245,14 @@ def seed_vehicles(call: Call, container: str, source: str) -> None:
     run_worker(container, slug)
 
 
-def seed_import(call: Call, container: str, source: str, jobs_root: Path) -> None:
+def seed_import(call: Call, container: str, source: str) -> None:
     slug = IMPORT_PROJECT
     create_project(call, slug, "COCO import")
     ids = create_classes(call, slug, list(VEHICLE_CLASSES), "vehicle")
     preview = _ok(call, "POST", f"/projects/{slug}/datasets/preview", {"source": {"path": source}})
     run_import(call, slug, {"path": source}, import_mapping(preview, ids, YOLO_TO_CLASS), "coco_import_88")
     embed_stand_in(container, slug)
-    seed_training_run(call, container, slug, jobs_root)
+    seed_training_run(call, container, slug)
 
 
 def seed_editors(call: Call) -> None:
@@ -273,7 +273,7 @@ def seed_main(call: Call, container: str, coco_source: dict[str, Any]) -> None:
     activate_vlm(call, slug)
 
 
-def seed_training_run(call: Call, container: str, slug: str, jobs_root: Path) -> None:
+def seed_training_run(call: Call, container: str, slug: str) -> None:
     """Export, start a run on the stand-in trainer, wait for it to finish, then fill in its
     illustrative results (see ``scripts/curation/seed_docs_run_results.py``)."""
     export = _ok(call, "POST", f"/projects/{slug}/export/yolo", {"version_tag": "docs-v1", "seed": 42})
@@ -292,7 +292,7 @@ def seed_training_run(call: Call, container: str, slug: str, jobs_root: Path) ->
     args = [f"--class={name}={count}" for name, count in support.items() if count]
     subprocess.run(  # noqa: S603  # argv list, container name from the operator
         ["docker", "exec", container, "python", "scripts/curation/seed_docs_run_results.py",
-         "--project", slug, "--jobs-dir", str(jobs_root / "projects" / slug), "--job-id", job_id, *args],
+         "--project", slug, "--job-id", job_id, *args],
         check=True, capture_output=True, text=True, timeout=120,
     )
 
@@ -302,10 +302,9 @@ def seed_vlm_off(call: Call) -> None:
     _ok(call, "POST", f"/projects/{VLM_OFF_PROJECT}/vlm/endpoints/deactivate", {})
 
 
-def seed(base: str, container: str, samples: Path = DEFAULT_SAMPLES, source: Path = DEFAULT_SOURCE,
-         jobs_root: Path = Path("/jobs")) -> bool:
+def seed(base: str, container: str, samples: Path = DEFAULT_SAMPLES, source: Path = DEFAULT_SOURCE) -> bool:
     """Seed the stack at ``base`` (the Cropwright or API origin). Returns False when it was
-    already seeded. ``jobs_root`` is the trainer's jobs directory inside the API container."""
+    already seeded."""
     call = make_call(base)
     state = stack_state(_ok(call, "GET", "/projects?include_archived=true"))
     if state == "seeded":
@@ -323,7 +322,7 @@ def seed(base: str, container: str, samples: Path = DEFAULT_SAMPLES, source: Pat
     for step, run in (
         ("coco-vlm-off", lambda: seed_vlm_off(call)),
         ("coco-editors", lambda: seed_editors(call)),
-        ("coco-import", lambda: seed_import(call, container, yolo, jobs_root)),
+        ("coco-import", lambda: seed_import(call, container, yolo)),
         ("coco-vehicles", lambda: seed_vehicles(call, container, yolo)),
         ("coco-sample", lambda: seed_main(call, container, coco)),
     ):

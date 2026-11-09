@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -144,7 +145,7 @@ def test_the_seed_scripts_take_a_project_defaulting_to_the_environment(
     from scripts.curation import seed_docs_embeddings as embeddings
 
     monkeypatch.setenv('OP_CURATION_PROJECT', 'from-env')
-    run = ['--jobs-dir', 'j', '--job-id', 'x', '--class', 'a=1']
+    run = ['--job-id', str(uuid.uuid4()), '--class', 'a=1']
     assert embeddings.build_parser().parse_args([]).project == 'from-env'
     assert results.build_parser().parse_args(run).project == 'from-env'
     assert results.build_parser().parse_args([*run, '--project', 'p']).project == 'p'
