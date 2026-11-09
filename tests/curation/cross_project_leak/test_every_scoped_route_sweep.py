@@ -55,6 +55,7 @@ from curation.cross_project_leak._route_tables import (
     EXPECTED_5XX,
     NO_WRITE,
     POSTGRES_BACKED_PREFIXES,
+    READ_QUERIES,
     STREAMING_ROUTES,
     UNBOUND_BY_DESIGN,
     UNSEEDED_WRITES,
@@ -201,7 +202,9 @@ def _sweep(
         if key in PREPARE:
             PREPARE[key](env, slug)
         tree_before = _dir_digest([env.root]) if method != 'GET' else {}
-        kwargs = bodies.get(key, {} if method in ('GET', 'DELETE') else {'json': {}})
+        kwargs = bodies.get(key) or READ_QUERIES.get(key)
+        if kwargs is None:
+            kwargs = {} if method in ('GET', 'DELETE') else {'json': {}}
         response = client.request(method, url, **kwargs)
         route_accesses = env.accesses[before_access:]
         route_writes = env.transport.writes[before_write:]
@@ -237,6 +240,8 @@ def _sweep(
             )
         if response.status_code >= 500 and key not in EXPECTED_5XX:
             leaks.append(f'{tag}: unexpected {response.status_code} {body[:300]}')
+        if key in READ_QUERIES and response.status_code == 422:
+            leaks.append(f'{tag}: unmapped query (422 {body[:200]})')
         if method != 'GET':
             if response.status_code == 422 and key not in NO_WRITE:
                 leaks.append(f'{tag}: unmapped body (422 {body[:200]})')
@@ -294,7 +299,9 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     mutating = {(m, p[len(SCOPED) :]) for m, p in routes if m != 'GET'}
     every = {(m, p[len(SCOPED) :]) for m, p in routes}
     mapped = set(NO_WRITE) | set(route_bodies('x', Path('/unused'))) | set(CROP_FOR) | set(PREPARE)
-    stale = sorted((mapped - mutating) | (set(UNSEEDED_WRITES) - every))
+    stale = sorted(
+        (mapped - mutating) | (set(UNSEEDED_WRITES) - every) | (set(READ_QUERIES) - every)
+    )
     assert not stale, f'entries for routes that no longer exist: {stale}'
 
     leaks_first, _, roles_first = _sweep(leak_env, first)

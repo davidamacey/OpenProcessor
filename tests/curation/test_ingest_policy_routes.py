@@ -10,7 +10,7 @@ from config_store.memory_settings import current
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation.query_fakes import SettingsFakeOpenSearch
+from curation.settings_fakes import SettingsFakeOpenSearch
 from src.config import get_curation_config
 
 

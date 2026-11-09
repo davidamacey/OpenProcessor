@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from curation.query_fakes import SettingsFakeOpenSearch
+from curation.settings_fakes import SettingsFakeOpenSearch
 from scripts.curation.vlm_pending import _build_pending_query
 from src.config.curation_accessors import base_curation_config
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD

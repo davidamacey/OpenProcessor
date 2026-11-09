@@ -39,6 +39,7 @@ indexes nulls (``exists`` is false for them).
 from __future__ import annotations
 
 import copy
+import math
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -247,6 +248,29 @@ def _sorted_by(
     return [*absent, *present] if missing_first else [*present, *absent]
 
 
+def _geotile_grid(docs: list[dict[str, Any]], spec: dict[str, Any]) -> dict[str, Any]:
+    """``geotile_grid`` (z/x/y web-mercator cells) over ``{lat, lon}`` points, each cell carrying
+    the ``geo_centroid`` sub-aggregation the map asks for. Bounds are not applied."""
+    grid = spec['geotile_grid']
+    zoom = grid['precision']
+    cells: dict[str, list[dict[str, float]]] = {}
+    for doc in docs:
+        for point in _values(doc, grid['field']):
+            lat, lon = float(point['lat']), float(point['lon'])
+            x = int((lon + 180.0) / 360.0 * 2**zoom)
+            lat_rad = math.radians(lat)
+            y = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * 2**zoom)
+            cells.setdefault(f'{zoom}/{x}/{y}', []).append({'lat': lat, 'lon': lon})
+    buckets = []
+    for key, points in sorted(cells.items(), key=lambda kv: (-len(kv[1]), kv[0]))[: grid['size']]:
+        centre = {
+            'lat': sum(p['lat'] for p in points) / len(points),
+            'lon': sum(p['lon'] for p in points) / len(points),
+        }
+        buckets.append({'key': key, 'doc_count': len(points), 'centre': {'location': centre}})
+    return {'buckets': buckets}
+
+
 def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, spec in aggs.items():
@@ -347,6 +371,9 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
             if spec.get('aggs'):
                 nested_bucket.update(_aggregate(flattened, spec['aggs']))
             out[name] = nested_bucket
+            continue
+        if 'geotile_grid' in spec:
+            out[name] = _geotile_grid(docs, spec)
             continue
         if 'terms' not in spec:
             raise NotImplementedError(f'agg not supported by fake: {spec}')
@@ -651,48 +678,3 @@ class _Indices:
         if value is not None:
             self.parent.max_inner_result_window = int(value)
         return {'acknowledged': True}
-
-
-class SettingsFakeOpenSearch(QueryFakeOpenSearch):
-    """``QueryFakeOpenSearch`` plus what the ingest-policy store needs: a real
-    ``NotFoundError`` for a missing document (the plain double raises a
-    ``KeyError``, which the config-store tests read as "OpenSearch unavailable"),
-    an OCC-guarded ``index`` (create / ``if_seq_no``) and upserting ``update``."""
-
-    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:
-        if id not in self.docs(index):
-            from opensearchpy.exceptions import NotFoundError
-
-            raise NotFoundError(404, f'[404] not found: {index}/{id}', {})
-        return await super().get(index=index, id=id, **kw)
-
-    async def index(
-        self,
-        *,
-        index: str,
-        id: str,
-        body: dict[str, Any],
-        op_type: str | None = None,
-        if_seq_no: int | None = None,
-        **_: Any,
-    ) -> dict[str, Any]:
-        if (op_type == 'create' and id in self.docs(index)) or (
-            if_seq_no is not None and if_seq_no != self.seq.get((index, id), 1)
-        ):
-            raise RuntimeError('409 version_conflict')
-        self.docs(index)[id] = body
-        self._bump(index, id)
-        self.write_calls += 1
-        return {'result': 'created'}
-
-    async def update(
-        self,
-        *,
-        index: str,
-        id: str,
-        body: dict[str, Any],
-        **kw: Any,
-    ) -> dict[str, Any]:
-        if id not in self.docs(index) and body.get('doc_as_upsert'):
-            self.docs(index)[id] = {}
-        return await super().update(index=index, id=id, body=body, **kw)

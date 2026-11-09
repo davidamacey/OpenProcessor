@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, get_args
 
 import pytest
 from curation.dataset_import.harness import write_yolo
-from curation.query_fakes import SettingsFakeOpenSearch
+from curation.settings_fakes import SettingsFakeOpenSearch
 
 from integration.ingest_fakes import FakeTritonPool, curation_app
 

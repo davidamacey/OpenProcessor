@@ -18,6 +18,13 @@ POSTGRES_BACKED_PREFIXES: tuple[str, ...] = (
     '/location_policy',
 )
 
+# Reads that need a query parameter to get past validation. Without it the sweep would only see a
+# 422 and prove nothing about the route. The cell key is `z/x/y`.
+READ_QUERIES: dict[tuple[str, str], dict[str, dict[str, str]]] = {
+    ('GET', '/map/cells'): {'params': {'zoom': '4'}},
+    ('GET', '/map/images'): {'params': {'tile': '4/8/8'}},
+}
+
 # Mutating routes that write nothing by design (read-only work under POST,
 # or an event with no data write), and why. Every other mutating route must
 # really write in the sweep.

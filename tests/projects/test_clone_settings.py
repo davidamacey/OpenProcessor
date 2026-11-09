@@ -342,7 +342,7 @@ def test_clone_keymap_with_an_invalid_source_keymap_writes_nothing_and_says_so(
 
 
 def test_clone_settings_copies_the_ingest_policy_and_leaves_the_source_alone() -> None:
-    from curation.query_fakes import SettingsFakeOpenSearch
+    from curation.settings_fakes import SettingsFakeOpenSearch
 
     from src.config.project_context import bind_project
     from src.services.curation.ingest_policy import EmbeddingPolicy, IngestPolicyBody
@@ -374,7 +374,7 @@ def test_clone_settings_copies_the_ingest_policy_and_leaves_the_source_alone() -
 
 
 def test_clone_settings_copies_the_vlm_policy_and_leaves_the_source_alone() -> None:
-    from curation.query_fakes import SettingsFakeOpenSearch
+    from curation.settings_fakes import SettingsFakeOpenSearch
 
     from src.config.project_context import bind_project
     from src.services.curation.vlm_policy import VlmPolicyBody
