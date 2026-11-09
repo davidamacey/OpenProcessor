@@ -3,7 +3,7 @@ docker/trainer/augment.py	2	per-item boundary: a bad augment override or image i
 docker/trainer/incumbent_compare.py	1	per-image boundary: one failed incumbent inference is logged, the sweep continues
 docker/trainer/job_manifest.py	1	terminal-write boundary: manifest build must never block the job status write
 docker/trainer/job_status.py	3	optional telemetry boundary: NVML and MLflow errors are logged, never fail the job
-docker/trainer/mlflow_callbacks.py	9	training-loop boundary: tracking callbacks must never break training, errors logged with traceback
+docker/trainer/mlflow_callbacks.py	7	training-loop boundary: Ultralytics callbacks, the optional mlflow import and cosmetic tracking calls must never break training; failures are logged (with traceback in the epoch hooks)
 docker/trainer/trainer.py	1	optional metrics boundary: per-class val failure is logged, the run result stands
 docker/trainer/trainer_callbacks.py	3	training-loop boundary: metric capture and optional mlflow wiring never kill an epoch
 docker/trainer/trainer_eval.py	1	optional comparison boundary: a missing Triton must not fail the run
@@ -32,7 +32,6 @@ scripts/bench/ingest_write_path.py	1	bench boundary: a failed request is counted
 scripts/bench/vectordb/orchestrate.py	1	readiness poll: any connect error means not ready yet, retried then raises
 scripts/curation/_vlm_activity.py	1	per-project boundary: an unreadable VLM state skips that project, logged
 scripts/curation/bakeoff/bakeoff_runner.py	2	job boundary: a failed quantize/throughput step is recorded, scoring continues
-scripts/curation/bakeoff/report.py	2	optional boundary: MLflow logging failure must not fail the report
 scripts/curation/cluster_raw_labels.py	1	backend probe: any embedder load failure tries the next backend, logged
 scripts/curation/ingest_upload.py	1	task boundary: a crashed batch is counted and logged so the bounded queue cannot deadlock
 scripts/curation/vlm_worker.py	2	worker-loop boundary: one project fetch or consumer error must not stop the loop

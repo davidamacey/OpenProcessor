@@ -92,6 +92,7 @@ def log_mlflow(report: dict[str, Any], args: argparse.Namespace) -> None:
     """
     try:
         import mlflow
+        from mlflow.exceptions import MlflowException
     except ImportError:
         print('mlflow not installed; skipping (.venv/bin/pip install mlflow)')
         return
@@ -122,10 +123,10 @@ def log_mlflow(report: dict[str, Any], args: argparse.Namespace) -> None:
             # without invalidating the (already-committed) metrics.
             try:
                 mlflow.log_dict(report, f'{_metric_key(report["model"])}.json')
-            except Exception as art_exc:
+            except (MlflowException, OSError) as art_exc:
                 print(f'mlflow artifact upload skipped: {art_exc}')
         print(f'logged to mlflow: {args.mlflow_uri} (experiment={args.mlflow_experiment})')
-    except Exception as exc:  # server unreachable / transient — don't fail the run
+    except (MlflowException, OSError) as exc:  # server unreachable / transient — don't fail the run
         print(f'mlflow logging skipped: {exc}')
 
 
