@@ -128,15 +128,11 @@ def world(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[World]:
-    from families_b.ledger_detail import ensure_detail_column, stand_in_enqueue_pending
-
     import src.config.curation_accessors as curation_mod
     from src.services.curation import index_bootstrap
     from src.services.projects import capacity as capacity_mod
     from src.services.projects.bootstrap import bootstrap_default_project
 
-    ensure_detail_column(pg_env)  # depends on the ND-A merge (the ledger's detail column)
-    stand_in_enqueue_pending(monkeypatch)  # and on its enqueue_pending
     monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
     monkeypatch.setattr(curation_mod, '_default_curation_config', None)
     capacity_mod._cache = None
