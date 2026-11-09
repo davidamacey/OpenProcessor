@@ -7701,6 +7701,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "minItems": 1,
             "title": "Crop Ids",
             "type": "array"
@@ -43406,7 +43407,7 @@
     },
     "/curation/projects/{project}/crops/region/undo_batch": {
       "post": {
-        "description": "Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk\nregion write by passing the same ``crop_ids``. Each crop is restored\nindependently. Returns ``items`` (restored wire items), ``undone``, and\nper-crop ``nothing_to_undo`` / ``conflicts`` / ``not_found`` id lists.\n``409`` when no crop had anything to undo.",
+        "description": "Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk\nregion write by passing the same ``crop_ids``. Each crop is restored\nindependently, through the paged bulk OCC loop (one read and one\nconditional write per 500 ids). Returns ``items`` (restored wire items),\n``undone``, and per-crop ``nothing_to_undo`` / ``conflicts`` /\n``not_found`` id lists. ``409`` when no crop had anything to undo.\n\nMore than ``OP_BATCH_SYNC_MAX`` crops (default 500) are queued instead:\n``202`` with ``job_id``; the job's ``result`` at ``GET /jobs/{job_id}``\ncarries the same id lists without ``items``.",
         "operationId": "undo_crop_regions_curation_projects__project__crops_region_undo_batch_post",
         "parameters": [
           {
@@ -43434,13 +43435,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Undo Crop Regions Curation Projects  Project  Crops Region Undo Batch Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CropUndoBatchResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchJobAccepted"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "409": {
             "content": {

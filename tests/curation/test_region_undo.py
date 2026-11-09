@@ -44,8 +44,6 @@ def _detected(crop_id: str, **extra: Any) -> dict[str, Any]:
         detector='det_model',
         detector_version='3',
         source='detector',
-        cluster_id=5,
-        cluster_subid='5a',
         detected_at='2026-09-24T03:08:19+00:00',
     )
     return {
@@ -99,6 +97,7 @@ def fake_os() -> QueryFakeOpenSearch:
 
 @pytest.fixture
 def client(fake_os: QueryFakeOpenSearch) -> Any:
+    from src.core.db_session import get_db
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
@@ -106,6 +105,7 @@ def client(fake_os: QueryFakeOpenSearch) -> Any:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+    app.dependency_overrides[get_db] = lambda: None  # no job is queued below 500 ids
     with TestClient(app) as c:
         yield c
 
@@ -325,28 +325,3 @@ def test_vlm_dismiss_undo_restores_suggestion(
 
 def test_vlm_dismiss_undo_without_dismissal_is_409(client: TestClient) -> None:
     assert client.post('/curation/projects/default/crops/vlm-1/vlm_dismiss/undo').status_code == 409
-
-
-def test_region_undo_batch_in_flight_at_most_32(
-    client: TestClient, fake_os: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import asyncio
-
-    from src.routers.curation import edit_undo
-
-    live = 0
-    peak = 0
-
-    async def slow_undo(*_a: Any, **_k: Any) -> None:
-        nonlocal live, peak
-        live += 1
-        peak = max(peak, live)
-        await asyncio.sleep(0.005)
-        live -= 1
-
-    monkeypatch.setattr(edit_undo, 'undo_edit', slow_undo)
-    ids = [f'r{i}' for i in range(100)]
-    resp = client.post('/curation/projects/default/crops/region/undo_batch', json={'crop_ids': ids})
-    assert resp.status_code == 200, resp.text
-    assert resp.json()['undone'] == 100
-    assert 1 < peak <= 32
