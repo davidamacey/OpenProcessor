@@ -28,6 +28,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.domain.history import record_class_snapshot
 from src.services.curation.class_write_guard import class_write_locked
@@ -137,7 +139,7 @@ async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> 
         except (_StaleError, OCCFinalConflictError):
             counts['skipped_changed'] += 1
             continue
-        except Exception:
+        except OpenSearchException:
             counts['errors'] += 1
             continue
         counts['repaired'] += 1

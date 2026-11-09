@@ -133,7 +133,7 @@ def _crop_and_predict(
             w, h = rgb.size
             x1, y1, x2, y2 = bbox
             crop = rgb.crop((round(x1 * w), round(y1 * h), round(x2 * w), round(y2 * h)))
-    except Exception as exc:
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as exc:
         logger.warning('probe_crop_failed', crop_id=crop_id, err=repr(exc))
         return None
     pred_cls, pred_conf, entropy, margin = predict_fn(crop)
