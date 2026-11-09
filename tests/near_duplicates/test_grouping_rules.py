@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import uuid
+
 import numpy as np
 import pytest
 
+from src.db.repos.near_dup import StoredGroup
 from src.domain import near_dup as rules
+from src.services.near_duplicates.grouping import with_lineage
 
 
 def _edges(*pairs: tuple[str, str, float]) -> list[tuple[str, str, float]]:
@@ -72,11 +76,20 @@ def test_the_representative_is_the_most_central_and_ties_go_to_the_smaller_id() 
     assert group.min_cosine_to_rep < 1.0
 
 
+def _group(*members: str) -> rules.Group:
+    return rules.Group(tuple(members), members[0], dict.fromkeys(members, 1.0), 1.0, 1.0)
+
+
 def test_lineage_is_carried_at_jaccard_one_half_and_used_once() -> None:
-    parent = {'p1': ('L1', {'a', 'b', 'c', 'd'}), 'p2': ('L2', {'x', 'y'})}
-    new = {'n1': {'a', 'b', 'c'}, 'n2': {'a', 'q'}, 'n3': {'x', 'y', 'z'}, 'n4': {'m', 'n'}}
-    carried = rules.assign_lineage(new, parent)
-    assert carried['n1'] == 'L1'  # 3/4
-    assert carried['n2'] is None  # 1/5, and L1 is taken
-    assert carried['n3'] == 'L2'  # 2/3
-    assert carried['n4'] is None
+    l1, l2 = uuid.uuid4(), uuid.uuid4()
+    parent = [
+        StoredGroup(l1, 'a', ('a', 'b', 'c', 'd'), {}, 1.0, 1.0),
+        StoredGroup(l2, 'x', ('x', 'y'), {}, 1.0, 1.0),
+    ]
+    new = [_group('a', 'b', 'c'), _group('a', 'q'), _group('x', 'y', 'z'), _group('m', 'n')]
+    fresh = [uuid.uuid4() for _ in new]
+    written = with_lineage(new, parent, fresh)
+    assert written[0].lineage_id == l1  # 3/4
+    assert written[1].lineage_id == fresh[1]  # 1/5, and L1 is taken
+    assert written[2].lineage_id == l2  # 2/3
+    assert written[3].lineage_id == fresh[3]

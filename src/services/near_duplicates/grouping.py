@@ -15,6 +15,7 @@ import numpy as np
 
 from src.db.repos.near_dup import GroupToWrite
 from src.domain import near_dup as rules
+from src.domain.group_lineage import match_groups
 from src.services.near_duplicates.vectors import MemberDoc, fetch_members
 
 
@@ -100,11 +101,12 @@ def with_lineage(
     """Rows to write: a group overlapping a parent group (Jaccard >= 0.5) keeps its lineage id,
     the others take one of the ``fresh`` ids (at least ``len(groups)`` of them)."""
     new = {str(i): g.members for i, g in enumerate(groups)}
-    old = {str(i): (str(g.lineage_id), g.members) for i, g in enumerate(parent)}
-    carried = rules.assign_lineage(new, old)
+    old = {str(i): g.members for i, g in enumerate(parent)}
+    matched = match_groups(old, new).by_new
     out: list[GroupToWrite] = []
     for i, group in enumerate(groups):
-        carried_id = carried[str(i)]
+        inherited = matched[str(i)].inherited
+        carried_id = str(parent[int(inherited)].lineage_id) if inherited is not None else None
         out.append(
             GroupToWrite(
                 lineage_id=uuid.UUID(carried_id) if carried_id else fresh[i],

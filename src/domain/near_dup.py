@@ -46,7 +46,6 @@ MIN_K = 8
 MAX_K = 256
 MIN_LEAK_COSINE = 0.5
 MIN_GROUP_SIZE_GUARD = 2
-LINEAGE_MIN_JACCARD = 0.5
 # Runs kept per (project, level) besides the current one.
 KEPT_SUPERSEDED_RUNS = 2
 
@@ -233,34 +232,3 @@ def describe_group(
         min_edge_cosine=min(inner) if inner else 1.0,
         min_cosine_to_rep=min(c for m, c in to_rep.items() if m != ordered[rep_index]),
     )
-
-
-def assign_lineage(
-    new_groups: Mapping[str, Iterable[str]],
-    parent_groups: Mapping[str, tuple[str, Iterable[str]]],
-) -> dict[str, str | None]:
-    """Carry a parent group's lineage onto the new group it overlaps most (Jaccard >= 0.5).
-
-    ``new_groups`` maps a new group id to its members; ``parent_groups`` maps a parent group id
-    to ``(lineage_id, members)``. A parent lineage goes to at most one new group; the answer
-    maps each new group id to the carried lineage id, or ``None`` when it starts its own.
-    """
-    new_sets = {gid: frozenset(m) for gid, m in new_groups.items()}
-    parent_sets = {gid: (lin, frozenset(m)) for gid, (lin, m) in parent_groups.items()}
-    candidates: list[tuple[float, str, str]] = []
-    for new_id, new_members in new_sets.items():
-        for parent_id, (_lineage, parent_members) in parent_sets.items():
-            overlap = len(new_members & parent_members)
-            if not overlap:
-                continue
-            jaccard = overlap / len(new_members | parent_members)
-            if jaccard >= LINEAGE_MIN_JACCARD:
-                candidates.append((jaccard, new_id, parent_id))
-    carried: dict[str, str | None] = dict.fromkeys(new_sets)
-    used: set[str] = set()
-    for _jaccard, new_id, parent_id in sorted(candidates, key=lambda c: (-c[0], c[1], c[2])):
-        lineage = parent_sets[parent_id][0]
-        if carried[new_id] is None and lineage not in used:
-            carried[new_id] = lineage
-            used.add(lineage)
-    return carried
