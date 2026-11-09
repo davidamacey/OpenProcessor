@@ -280,6 +280,16 @@ def leak_env(
             raise ConnectionError('triton disabled in the leak test')
 
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', _LeakTritonPool)
+
+    # The repository index is the server's own list of models; with no server the control
+    # service fails closed (503 triton_unavailable), so the sweep serves an empty repository.
+    async def _empty_repository(_self: Any) -> list[dict[str, Any]]:
+        return []
+
+    monkeypatch.setattr(
+        'src.services.models.triton_control.TritonControlService.get_repository_index',
+        _empty_repository,
+    )
     had_encoder = hasattr(app.state, 'pe_encoder')
     previous_encoder = getattr(app.state, 'pe_encoder', None)
     app.state.pe_encoder = _LeakPEEncoder()
