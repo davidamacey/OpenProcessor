@@ -24,6 +24,7 @@ from src.services.labeling.vlm_models import (
 from src.services.labeling.vlm_reply_parse import (
     _align_batch_entries,
     _combined_reply_from_entry,
+    _extract_batch_array,
     _strip_markdown_fences,
 )
 from src.utils.upstream_errors import describe_upstream_error
@@ -377,34 +378,7 @@ class CombinedOps(VlmLabelerCore):
             logger.warning('vlm_labeler.combined_batch_parse_empty', chunk_size=len(chunk))
             return {c.crop_id: None for c in chunk}
 
-        candidates: list[str] = [raw]
-        depth = 0
-        start = -1
-        for i, ch in enumerate(raw):
-            if ch == '[':
-                if depth == 0:
-                    start = i
-                depth += 1
-            elif ch == ']' and depth > 0:
-                depth -= 1
-                if depth == 0 and start >= 0:
-                    candidates.append(raw[start : i + 1])
-                    start = -1
-
-        parsed: Any = None
-        for c in candidates:
-            try:
-                parsed = json.loads(c)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(parsed, dict):
-                for key in ('results', 'predictions', 'data'):
-                    if key in parsed and isinstance(parsed[key], list):
-                        parsed = parsed[key]
-                        break
-            if isinstance(parsed, list):
-                break
-            parsed = None
+        parsed = _extract_batch_array(raw)
 
         if not isinstance(parsed, list):
             logger.warning(

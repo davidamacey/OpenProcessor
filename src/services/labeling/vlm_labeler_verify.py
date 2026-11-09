@@ -16,6 +16,7 @@ from src.services.labeling.vlm_models import RegionCrop, VlmRegionVerdict, VlmTr
 from src.services.labeling.vlm_reply_parse import (
     _align_batch_entries,
     _coerce_bool,
+    _extract_batch_array,
     _extract_region_text,
     _normalize_confidence,
     _strip_markdown_fences,
@@ -237,36 +238,7 @@ class VerifyOps(VlmLabelerCore):
                 logger.warning('vlm_labeler.region_batch_parse_empty', chunk_size=len(chunk))
             return []
 
-        # Try the bare reply first; fall back to scanning for the first
-        # balanced JSON array embedded in any preamble.
-        candidates: list[str] = [raw]
-        depth = 0
-        start = -1
-        for i, ch in enumerate(raw):
-            if ch == '[':
-                if depth == 0:
-                    start = i
-                depth += 1
-            elif ch == ']' and depth > 0:
-                depth -= 1
-                if depth == 0 and start >= 0:
-                    candidates.append(raw[start : i + 1])
-                    start = -1
-
-        parsed: Any = None
-        for c in candidates:
-            try:
-                parsed = json.loads(c)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(parsed, dict):
-                for key in ('results', 'predictions', 'data'):
-                    if key in parsed and isinstance(parsed[key], list):
-                        parsed = parsed[key]
-                        break
-            if isinstance(parsed, list):
-                break
-            parsed = None
+        parsed = _extract_batch_array(raw)
 
         if not isinstance(parsed, list):
             if log_failures:
