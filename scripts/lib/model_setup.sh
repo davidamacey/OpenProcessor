@@ -403,8 +403,8 @@ _ms_run_group_steps() {
             "$runner" base_weights _ms_export bash -c 'source scripts/lib/download.sh && download_essential_models' || return 1
             ;;
         yolo)
-            "$runner" yolo_export _ms_export python /app/export/export_models.py --models small \
-                --formats trt_end2end --normalize-boxes --save-labels --generate-config || return 1
+            "$runner" yolo_export _ms_export python /app/export/ultralytics_export.py --models small \
+                --formats trt || return 1
             "$runner" yolo_stamp _ms_record_group_stamps yolo || return 1
             ;;
         mobileclip)

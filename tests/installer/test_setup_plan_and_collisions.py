@@ -30,7 +30,7 @@ def test_dry_run_makes_no_mutating_docker_call_and_plans_every_step(shimmed: Shi
         'up -d triton-server',
         'model-export python -m export.preflight',
         '--entrypoint python model-export /app/export/sync_model_seed.py /opt/openprocessor/model_repo_seed /app/models',
-        'export/export_models.py',
+        'export/ultralytics_export.py',
         'export_paddleocr_rec.py',
         'up -d --remove-orphans',
     ):

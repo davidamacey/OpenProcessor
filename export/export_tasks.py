@@ -82,7 +82,7 @@ def _on_worker_init(**_: Any) -> None:
 def _phase_of(line: str) -> tuple[float, str] | None:
     """(progress percent, step text) for an export script output line that marks a step."""
     if 'ONNX' in line and 'Export' in line:
-        return 40.0, 'Exporting ONNX End2End'
+        return 40.0, 'Exporting the fused ONNX'
     if 'TensorRT' in line or 'Building' in line:
         return 60.0, 'Building TensorRT engine (this takes 2-5 min)'
     if 'Engine saved' in line:
