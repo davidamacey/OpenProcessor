@@ -17,6 +17,10 @@ from src.config.env import env_int, env_str
 
 
 POOLERS = ('none', 'pgbouncer')
+# Seconds a new connection may take to be established, for every engine and direct connection: a
+# stalled connect (a host that drops packets) fails with a connection timeout instead of holding a
+# request or a worker. libpq ``connect_timeout``, which psycopg applies to sync and async connects.
+CONNECT_TIMEOUT_S = 10
 SSLMODES = ('disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full')
 ROLES = ('app', 'owner', 'super')
 

@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from scripts.opensearch.migrate import run as opensearch_run
 from src.config.advisory_locks import MIGRATE
-from src.config.database import SUPER_USER, DatabaseSettings
+from src.config.database import CONNECT_TIMEOUT_S, SUPER_USER, DatabaseSettings
 from src.db import roles
 from src.db.engine import one_off_connection, run_with_engine
 from src.db.session import sync_deployment_tx
@@ -64,6 +64,7 @@ def _conninfo(
         password=password,
         sslmode=settings.sslmode,
         application_name='op-migrate',
+        connect_timeout=CONNECT_TIMEOUT_S,
     )
 
 
@@ -77,7 +78,9 @@ def _owner_connection(settings: DatabaseSettings) -> Connection:
         database=settings.name,
         query={'sslmode': settings.sslmode, 'application_name': 'op-migrate'},
     )
-    return create_engine(url, poolclass=pool.NullPool).connect()
+    return create_engine(
+        url, connect_args={'connect_timeout': CONNECT_TIMEOUT_S}, poolclass=pool.NullPool
+    ).connect()
 
 
 def upgrade(settings: DatabaseSettings, *, super_user: str = SUPER_USER) -> None:

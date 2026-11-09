@@ -112,12 +112,13 @@ def test_the_task_engine_does_not_pool(pg_env) -> None:
 def test_a_pgbouncer_deployment_turns_prepared_statements_off(pg_env) -> None:
     from dataclasses import replace
 
-    from src.config.database import DatabaseSettings
+    from src.config.database import CONNECT_TIMEOUT_S, DatabaseSettings
 
     settings = DatabaseSettings.from_env()
-    assert db_engine._connect_args(settings, job_limits=False) == {}
+    bound = {'connect_timeout': CONNECT_TIMEOUT_S}
+    assert db_engine._connect_args(settings, job_limits=False) == bound
     pooled = replace(settings, pooler='pgbouncer')
-    assert db_engine._connect_args(pooled, job_limits=False) == {'prepare_threshold': None}
+    assert db_engine._connect_args(pooled, job_limits=False) == {**bound, 'prepare_threshold': None}
 
 
 def test_one_off_connection_uses_the_direct_host_and_no_pool(pg_env) -> None:
