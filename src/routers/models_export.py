@@ -7,29 +7,35 @@ Model upload and export routes.
 - GET /models/exports - List all export tasks
 
 The engine build runs in the model-export worker (the export image), not in the API: these
-routes queue a job file for it and answer 503 when no worker is running. See
-``src.services.model_export``.
+routes start a ``model_export`` job for it and answer 503 when no worker consumes the
+``gpu_export`` queue, 409 while the same model is being built. See
+``src.services.model_export_jobs``.
 """
 
+import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.core.disk_space import DISK_GUARD
+from src.db.session import async_session_factory
 from src.schemas.model_admin import ExportRequest
-from src.schemas.models import ExportFormat, ExportTaskResponse, ExportTaskStatus
+from src.schemas.models import ExportFormat, ExportStatus, ExportTaskResponse, ExportTaskStatus
 from src.services.model_export import (
     PYTORCH_MODELS_DIR,
     ExportWorkerUnavailableError,
     check_triton_name,
-    create_export_task,
-    enqueue_export_job,
     generate_triton_name,
+    stage_uploaded_file,
+    validate_pytorch_model,
+)
+from src.services.model_export_jobs import (
+    ensure_not_building,
     get_export_task,
     list_export_tasks,
-    require_export_worker,
-    save_uploaded_file,
-    validate_pytorch_model,
+    require_export_consumer,
+    start_export,
 )
 
 
@@ -39,16 +45,28 @@ router = APIRouter()
 MAX_FILE_SIZE_MB = 500
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
-_WORKER_DOWN: dict[int | str, dict[str, Any]] = {
-    503: {'description': 'The model-export worker service is not running'}
+_REFUSED: dict[int | str, dict[str, Any]] = {
+    409: {'description': 'An export of this model name is already active'},
+    503: {'description': 'The model-export worker service is not running'},
 }
 
 
-def _require_worker() -> None:
+async def _require_worker() -> None:
     try:
-        require_export_worker()
+        await require_export_consumer()
     except ExportWorkerUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _started(job_id: uuid.UUID, params: dict[str, Any], created_at: datetime) -> ExportTaskResponse:
+    return ExportTaskResponse(
+        task_id=str(job_id),
+        model_name=params['model_name'],
+        triton_name=params['triton_name'],
+        status=ExportStatus.PENDING,
+        message='Export started',
+        created_at=created_at,
+    )
 
 
 # =============================================================================
@@ -57,7 +75,7 @@ def _require_worker() -> None:
 
 
 @router.post(
-    '/upload', dependencies=[DISK_GUARD], response_model=ExportTaskResponse, responses=_WORKER_DOWN
+    '/upload', dependencies=[DISK_GUARD], response_model=ExportTaskResponse, responses=_REFUSED
 )
 async def upload_model(
     file: UploadFile = File(..., description='YOLO11 .pt model file'),
@@ -71,7 +89,7 @@ async def upload_model(
     Upload a YOLO11 model and start export to TensorRT.
 
     The export runs in the model-export worker. Use /models/export/{task_id} to check status.
-    Answers 503 when that worker service is not running.
+    Answers 503 when that worker service is not running and 409 while this model is being built.
 
     **File Requirements:**
     - Must be a .pt file (PyTorch checkpoint)
@@ -81,7 +99,7 @@ async def upload_model(
     **Export Process:**
     1. File is validated as a valid YOLO detection model
     2. Saved to pytorch_models/ directory
-    3. The export job is queued for the model-export worker
+    3. A model_export job is started for the model-export worker
     4. The worker loads the model into Triton (if auto_load=True)
 
     Returns task_id for status polling.
@@ -104,15 +122,18 @@ async def upload_model(
         raise HTTPException(status_code=400, detail='File too small to be a valid model')
 
     # Before anything is saved or queued: nothing would ever run the job.
-    _require_worker()
+    await _require_worker()
 
     try:
         name = generate_triton_name(file.filename, triton_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    # Before the weights are replaced: a running build of this name is reading them.
+    async with async_session_factory()() as session:
+        await ensure_not_building(session, name)
 
     try:
-        pt_file, model_info = await save_uploaded_file(content, name)
+        staged = await stage_uploaded_file(content, name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -122,30 +143,22 @@ async def upload_model(
     if 'trt_end2end' in format_strs and 'onnx_end2end' not in format_strs:
         format_strs.insert(0, 'onnx_end2end')
 
-    task_id = create_export_task(file.filename, name, model_info, format_strs)
-
-    enqueue_export_job(
-        task_id,
-        pt_file=pt_file,
-        triton_name=name,
-        max_batch=max_batch,
-        formats=format_strs,
-        normalize_boxes=normalize_boxes,
-        auto_load=auto_load,
-    )
-
-    task = get_export_task(task_id)
-    if task is None:
-        msg = f'Failed to retrieve task {task_id} after creation'
-        raise RuntimeError(msg)
-    return ExportTaskResponse(
-        task_id=task_id,
-        model_name=task['model_name'],
-        triton_name=task['triton_name'],
-        status=task['status'],
-        message='Export started',
-        created_at=task['created_at'],
-    )
+    try:
+        started = await start_export(
+            triton_name=name,
+            pt_file=staged.final_path,
+            max_batch=max_batch,
+            formats=format_strs,
+            normalize_boxes=normalize_boxes,
+            auto_load=auto_load,
+            model_info=staged.model_info,
+            new_version=True,
+            staged=staged,
+        )
+    except BaseException:
+        staged.discard()
+        raise
+    return _started(started.job.id, started.job.params, started.job.created_at)
 
 
 # =============================================================================
@@ -153,7 +166,7 @@ async def upload_model(
 # =============================================================================
 
 
-@router.post('/{model_name}/export', response_model=ExportTaskResponse, responses=_WORKER_DOWN)
+@router.post('/{model_name}/export', response_model=ExportTaskResponse, responses=_REFUSED)
 async def export_model(
     model_name: str,
     request: ExportRequest,
@@ -178,7 +191,7 @@ async def export_model(
         check_triton_name(model_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    _require_worker()
+    await _require_worker()
 
     # Find the PyTorch model file
     pt_file = PYTORCH_MODELS_DIR / f'{model_name}.pt'
@@ -205,43 +218,29 @@ async def export_model(
     if 'trt_end2end' in format_strs and 'onnx_end2end' not in format_strs:
         format_strs.insert(0, 'onnx_end2end')
 
-    task_id = create_export_task(pt_file.name, model_name, model_info, format_strs)
-
-    enqueue_export_job(
-        task_id,
-        pt_file=pt_file,
+    started = await start_export(
         triton_name=model_name,
+        pt_file=pt_file,
         max_batch=request.max_batch,
         formats=format_strs,
         normalize_boxes=request.normalize_boxes,
         auto_load=request.auto_load,
+        model_info=model_info,
+        new_version=False,
     )
-
-    task = get_export_task(task_id)
-    if task is None:
-        msg = f'Failed to retrieve task {task_id} after creation'
-        raise RuntimeError(msg)
-    return ExportTaskResponse(
-        task_id=task_id,
-        model_name=task['model_name'],
-        triton_name=task['triton_name'],
-        status=task['status'],
-        message='Export started',
-        created_at=task['created_at'],
-    )
+    return _started(started.job.id, started.job.params, started.job.created_at)
 
 
 @router.get('/export/{task_id}', response_model=ExportTaskStatus)
 async def get_export_status(task_id: str) -> ExportTaskStatus:
     """Get detailed status of an export task."""
-    task = get_export_task(task_id)
-    if not task:
+    task = await get_export_task(task_id)
+    if task is None:
         raise HTTPException(status_code=404, detail=f'Export task {task_id} not found')
-
-    return ExportTaskStatus(**task)
+    return task
 
 
 @router.get('/exports', response_model=list[ExportTaskStatus])
 async def list_exports() -> list[ExportTaskStatus]:
     """List all export tasks."""
-    return [ExportTaskStatus(**t) for t in list_export_tasks()]
+    return await list_export_tasks()

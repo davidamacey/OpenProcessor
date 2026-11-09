@@ -23,7 +23,8 @@ from src.schemas.models import (
     ModelListResponse,
     ModelLoadResponse,
 )
-from src.services.model_export import PYTORCH_MODELS_DIR, list_export_tasks
+from src.services.model_export import PYTORCH_MODELS_DIR
+from src.services.model_export_jobs import list_export_tasks
 from src.services.model_repository import (
     checked_model_name,
     inside_repository,
@@ -37,6 +38,8 @@ from src.services.triton_control import TritonControlService
 
 
 logger = logging.getLogger(__name__)
+
+_FINISHED = (ExportStatus.COMPLETED, ExportStatus.FAILED, ExportStatus.CANCELLED)
 
 router = APIRouter()
 
@@ -102,13 +105,10 @@ async def get_model_status(model_name: str) -> ModelStatusResponse:
     # Check for active export task
     export_status = None
     export_task_id = None
-    for task in list_export_tasks():
-        if task['triton_name'] == model_name and task['status'] not in [
-            ExportStatus.COMPLETED,
-            ExportStatus.FAILED,
-        ]:
-            export_status = task['status']
-            export_task_id = task['task_id']
+    for task in await list_export_tasks():
+        if task.triton_name == model_name and task.status not in _FINISHED:
+            export_status = task.status
+            export_task_id = task.task_id
             break
 
     exists = has_pytorch or triton_trt or triton_trt_end2end

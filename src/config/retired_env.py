@@ -83,6 +83,8 @@ RETIRED_ENV: dict[str, str] = {
     'OP_GPU_ARBITER_TRAINER_CONTAINER': (
         f'{_REMOVED} the API finds the trainer as a consumer of the gpu_train queue'
     ),
+    # A model export is a jobs row on the gpu_export queue, not a task file.
+    'EXPORT_TASK_DIR': f'{_REMOVED} model-export tasks are job rows; read them at GET /models/export/{{task_id}}',
 }
 
 

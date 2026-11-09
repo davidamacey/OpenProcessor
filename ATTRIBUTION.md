@@ -398,6 +398,7 @@ propagates to the combined work.
 | OpenCLIP | MIT | ✓ Yes |
 | cachetools (bounded per-process TTL and LRU caches) | MIT | ✓ Yes |
 | pyclipper (Clipper polygon offset, OCR box unclip) | MIT (Clipper: Boost Software License 1.0) | ✓ Yes (this file) |
+| nvidia-ml-py (NVML GPU inventory in the export worker, `requirements-export.txt`) | BSD 3-Clause (NVIDIA) | ✓ Yes |
 | Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | COCO 2017 (annotations) | CC BY 4.0 (COCO Consortium) | ✓ Yes (this file) |

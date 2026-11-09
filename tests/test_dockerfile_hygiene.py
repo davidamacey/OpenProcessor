@@ -386,3 +386,48 @@ def test_segmenter_has_no_wget_probe_or_package() -> None:
     compose = (REPO_ROOT / 'docker-compose.yml').read_text()
     segmenter = compose[compose.index('\n  segmenter:') :].split('\n  curation-trainer:')[0]
     assert 'wget' not in segmenter
+
+
+def _stage_chain(target: str) -> list[str]:
+    named = _named_stages()
+    chain = [target]
+    while True:
+        first = named[chain[-1]][0][1].split()
+        parent = next(w for w in first if not w.startswith('--'))
+        if parent not in named:
+            return chain
+        chain.append(parent)
+
+
+def _apt_packages(stage: str) -> set[str]:
+    text = ' '.join(rest for kind, rest in _named_stages()[stage] if kind == 'RUN')
+    return set(re.findall(r'[a-z][a-z0-9+.-]+', text))
+
+
+@pytest.mark.parametrize('target', ['export', 'evaluator'])
+def test_psycopg_c_has_a_compiler_and_libpq_in_the_image_chain(target: str) -> None:
+    """psycopg[c] compiles in the builder and links libpq5 at run time (R-27)."""
+    text = (REPO_ROOT / 'requirements.txt').read_text(encoding='utf-8')
+    requirement = re.search(r'^psycopg\[([^\]]+)\]', text, re.M)
+    assert requirement is not None
+    assert requirement.group(1) == 'c', 'requirements.txt must install psycopg[c]'
+    assert 'runtime-base' in _stage_chain(target)
+    # The compiled site comes from `builder` through runtime-base; libpq5 is in `base`.
+    assert any(k == 'COPY' and '--from=builder ' in r for k, r in _named_stages()['runtime-base'])
+    assert {'build-essential', 'gcc', 'libpq-dev'} <= _apt_packages('builder')
+    assert 'libpq5' in _apt_packages('base')
+
+
+def test_psycopg_c_is_the_loaded_implementation_where_it_is_installed() -> None:
+    import importlib.util
+    import sys
+
+    if importlib.util.find_spec('psycopg_c') is None:
+        pytest.skip('psycopg_c is not installed in this interpreter (CI uses the binary wheel)')
+    out = subprocess.run(
+        [sys.executable, '-I', '-c', 'import psycopg; print(psycopg.pq.__impl__)'],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.strip() == 'c'
