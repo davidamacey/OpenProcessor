@@ -6,19 +6,31 @@ global:
 rule_files:
   - '/etc/prometheus/alerts/*.yml'
 
+# Scaled services (`docker compose up --scale api=3`) are scraped with dns_sd_configs, type A:
+# Docker's embedded DNS answers the service name with every replica's address, so each replica is
+# its own target. https://prometheus.io/docs/prometheus/latest/configuration/configuration/#dns_sd_config
+# A replica's `instance` is a container IP that changes when the container is recreated, so the
+# `service` label (the compose service name, set below from the DNS name) is the stable key:
+# dashboards and alerts aggregate by `service` or `job`, never by `instance` or `container`.
 scrape_configs:
   - job_name: 'triton'
-    static_configs:
-      - targets: ['triton-server:8002']
-        labels:
-          group: 'triton_inference_server'
+    dns_sd_configs:
+      - names: ['triton-server']
+        type: A
+        port: 8002
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: service
 
   - job_name: 'api'
     metrics_path: /metrics
-    static_configs:
-      - targets: ['api:8000']
-        labels:
-          group: 'api'
+    dns_sd_configs:
+      - names: ['api']
+        type: A
+        port: 8000
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: service
 
   # Background workers (compose profile `curation`). Each serves its own
   # registry; a target is down whenever that worker is not running.
@@ -27,18 +39,28 @@ scrape_configs:
       - targets: ['curation-detection-worker:4609']
         labels:
           group: 'worker'
+          service: 'curation-detection-worker'
 
   - job_name: 'curation-vlm-worker'
     static_configs:
       - targets: ['curation-vlm-worker:4610']
         labels:
           group: 'worker'
+          service: 'curation-vlm-worker'
 
   - job_name: 'curation-auto-label-worker'
     static_configs:
       - targets: ['curation-auto-label-worker:4611']
         labels:
           group: 'worker'
+          service: 'curation-auto-label-worker'
+
+  - job_name: 'valkey'
+    static_configs:
+      - targets: ['valkey-exporter:9121']
+        labels:
+          group: 'queue'
+          service: 'valkey'
 
   - job_name: 'node'
     static_configs:

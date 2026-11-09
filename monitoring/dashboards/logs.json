@@ -1,7 +1,7 @@
 {
   "uid": "op-logs",
   "title": "OpenProcessor / Logs",
-  "description": "Loki log volume, errors and warnings for the API and Triton containers.",
+  "description": "Loki log volume, errors and warnings for the API and Triton services.",
   "tags": [
     "openprocessor",
     "logs"
@@ -94,14 +94,14 @@
       },
       {
         "type": "query",
-        "name": "container",
-        "label": "Container",
+        "name": "service",
+        "label": "Service",
         "datasource": {
           "type": "loki",
           "uid": "${lds}"
         },
         "query": {
-          "label": "container",
+          "label": "service",
           "refId": "c",
           "stream": "",
           "type": 1
@@ -153,13 +153,13 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Container logs shipped by Alloy to Loki. Spikes in the error series are the first thing to look at."
+        "content": "Service logs shipped by Alloy to Loki. Spikes in the error series are the first thing to look at."
       },
       "transparent": true
     },
     {
       "type": "timeseries",
-      "title": "Log lines / s by container",
+      "title": "Log lines / s by service",
       "description": "",
       "datasource": {
         "type": "loki",
@@ -171,8 +171,8 @@
             "type": "loki",
             "uid": "${lds}"
           },
-          "expr": "sum by (container) (rate({job=~\"$job\", container=~\"$container\"}[$__auto]))",
-          "legendFormat": "{{container}}",
+          "expr": "sum by (service) (rate({job=~\"$job\", service=~\"$service\"}[$__auto]))",
+          "legendFormat": "{{service}}",
           "refId": "A"
         }
       ],
@@ -219,7 +219,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Errors / s by container",
+      "title": "Errors / s by service",
       "description": "",
       "datasource": {
         "type": "loki",
@@ -231,8 +231,8 @@
             "type": "loki",
             "uid": "${lds}"
           },
-          "expr": "sum by (container) (rate({job=~\"$job\", container=~\"$container\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" [$__auto]))",
-          "legendFormat": "{{container}}",
+          "expr": "sum by (service) (rate({job=~\"$job\", service=~\"$service\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" [$__auto]))",
+          "legendFormat": "{{service}}",
           "refId": "A"
         }
       ],
@@ -304,7 +304,7 @@
             "type": "loki",
             "uid": "${lds}"
           },
-          "expr": "sum(count_over_time({job=~\"$job\", container=~\"$container\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" [$__range]))",
+          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" [$__range]))",
           "refId": "A",
           "queryType": "instant"
         }
@@ -365,7 +365,7 @@
             "type": "loki",
             "uid": "${lds}"
           },
-          "expr": "sum(count_over_time({job=~\"$job\", container=~\"$container\"} |~ \"(?i)warn\" [$__range]))",
+          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\"} |~ \"(?i)warn\" [$__range]))",
           "refId": "A",
           "queryType": "instant"
         }
@@ -455,7 +455,7 @@
             "type": "loki",
             "uid": "${lds}"
           },
-          "expr": "{job=~\"$job\", container=~\"$container\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" |~ \"(?i)$search\"",
+          "expr": "{job=~\"$job\", service=~\"$service\"} |~ \"(?i)(error|exception|traceback|critical|fatal)\" |~ \"(?i)$search\"",
           "refId": "A",
           "queryType": "range"
         }
@@ -489,7 +489,7 @@
             "type": "loki",
             "uid": "${lds}"
           },
-          "expr": "{job=~\"$job\", container=~\"$container\"} |~ \"(?i)warn\" |~ \"(?i)$search\"",
+          "expr": "{job=~\"$job\", service=~\"$service\"} |~ \"(?i)warn\" |~ \"(?i)$search\"",
           "refId": "A",
           "queryType": "range"
         }
@@ -534,7 +534,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Everything from the selected containers."
+        "content": "Everything from the selected services."
       },
       "transparent": true
     },
@@ -552,7 +552,7 @@
             "type": "loki",
             "uid": "${lds}"
           },
-          "expr": "{job=~\"$job\", container=~\"$container\"} |~ \"(?i)$search\"",
+          "expr": "{job=~\"$job\", service=~\"$service\"} |~ \"(?i)$search\"",
           "refId": "A",
           "queryType": "range"
         }

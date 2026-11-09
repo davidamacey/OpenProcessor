@@ -42,6 +42,10 @@ discovery.relabel "triton" {
     target_label = "job"
     replacement  = "triton"
   }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
 }
 
 // FastAPI logs
@@ -70,6 +74,10 @@ discovery.relabel "fastapi" {
     target_label = "job"
     replacement  = "fastapi"
   }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
 }
 
 // Background worker + segmenter logs (compose profile `curation`; absent
@@ -84,7 +92,7 @@ discovery.relabel "workers" {
   }
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    regex         = "curation-detection-worker|curation-vlm-worker|curation-auto-label-worker|segmenter"
+    regex         = "jobs-worker|periodic-worker|jobs-beat|open-vocab-worker|cluster-worker|gpu-arbiter-worker|curation-detection-worker|curation-vlm-worker|curation-auto-label-worker|curation-assist-loop-worker|curation-trainer|curation-evaluator|model-export-worker|segmenter|postgres|valkey"
     action        = "keep"
   }
   rule {
@@ -98,6 +106,11 @@ discovery.relabel "workers" {
   rule {
     target_label = "job"
     replacement  = "worker"
+  }
+  // The stable key for scaled services: the Compose service name, never the container name.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
   }
 }
 
