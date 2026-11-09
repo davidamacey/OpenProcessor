@@ -113,15 +113,27 @@ def exports(
     return get
 
 
-def _images(count: int) -> np.ndarray:
-    """``count`` letterboxed 640 RGB images from the two sample images Ultralytics ships."""
+@pytest.fixture(scope='module')
+def frames(tmp_path_factory: pytest.TempPathFactory) -> list[np.ndarray]:
+    """The two public COCO val2017 sample images (``scripts/datasets/fetch_test_images.py``) as BGR."""
     import cv2
+
+    from scripts.datasets.fetch_test_images import fetch
+
+    return [
+        cast('np.ndarray', cv2.imread(str(path))) for path in fetch(tmp_path_factory.mktemp('coco'))
+    ]
+
+
+def _images(frames: list[np.ndarray], count: int) -> np.ndarray:
+    """``count`` letterboxed 640 RGB images cycling through ``frames``."""
     from ultralytics.data.augment import LetterBox
-    from ultralytics.utils import ASSETS
 
     letterbox = LetterBox((IMGSZ, IMGSZ), auto=False)
-    frames = [cv2.imread(str(ASSETS / name)) for name in ('bus.jpg', 'zidane.jpg')]
-    batch = [cast('np.ndarray', letterbox(image=frames[i % 2]))[..., ::-1] for i in range(count)]
+    batch = [
+        cast('np.ndarray', letterbox(image=frames[i % len(frames)]))[..., ::-1]
+        for i in range(count)
+    ]
     return np.ascontiguousarray(np.stack(batch).transpose(0, 3, 1, 2), dtype=np.float32) / 255.0
 
 
@@ -181,7 +193,11 @@ def _iou(a: np.ndarray, b: np.ndarray) -> float:
 
 @pytest.mark.parametrize('row', NMS_ROWS)
 def test_the_embedded_nms_equals_a_torchvision_oracle_over_the_raw_head(
-    row: str, exports: Callable[[str], Path], load: Callable[[str], Any], tmp_path: Path
+    row: str,
+    exports: Callable[[str], Path],
+    load: Callable[[str], Any],
+    frames: list[np.ndarray],
+    tmp_path: Path,
 ) -> None:
     import torch
     import torchvision
@@ -195,7 +211,7 @@ def test_the_embedded_nms_equals_a_torchvision_oracle_over_the_raw_head(
             device='cpu',
         )
     )
-    images = _images(2)
+    images = _images(frames, 2)
     (served,) = _run(exports(row), images)
     (raw,) = _run(raw_path, images)
 
@@ -225,10 +241,10 @@ def test_the_embedded_nms_equals_a_torchvision_oracle_over_the_raw_head(
 
 @pytest.mark.parametrize('row', NMS_ROWS)
 def test_images_past_the_export_batch_come_back_empty(
-    row: str, exports: Callable[[str], Path]
+    row: str, exports: Callable[[str], Path], frames: list[np.ndarray]
 ) -> None:
     """Documents that the ONNX ``batch`` is a hard cap: rows past it carry no detections."""
-    (out,) = _run(exports(row), _images(MAX_BATCH + 2))
+    (out,) = _run(exports(row), _images(frames, MAX_BATCH + 2))
 
     assert out.shape[0] == MAX_BATCH + 2
     assert (out[:MAX_BATCH, :, 4] > 0).any(axis=1).all()
@@ -242,6 +258,7 @@ def test_yolo26_gives_the_nms_free_tensor_whether_or_not_it_is_simplified(
     simplify: bool,
     load: Callable[[str], Any],
     ultralytics_export: ModuleType,
+    frames: list[np.ndarray],
     tmp_path: Path,
 ) -> None:
     """Discrepancy rows: ``nms=False`` with ``simplify`` on and off; a raw head is refused."""
@@ -256,7 +273,7 @@ def test_yolo26_gives_the_nms_free_tensor_whether_or_not_it_is_simplified(
         )
     )
 
-    (out,) = _run(path, _images(2))
+    (out,) = _run(path, _images(frames, 2))
     assert out.shape == (2, 300, 6)
     assert 'TopK' in _graph_ops(path)
     if simplify:
