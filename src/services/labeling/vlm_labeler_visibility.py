@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 from src.services.labeling.vlm_client import extract_message_content
-from src.services.labeling.vlm_labeler_core import VlmLabelerCore, _b64_jpeg
+from src.services.labeling.vlm_labeler_core import CHAT_CALL_ERRORS, VlmLabelerCore, _b64_jpeg
 from src.services.labeling.vlm_reply_parse import (
     _align_batch_entries,
     _coerce_bool,
@@ -70,7 +70,7 @@ class VisibilityOps(VlmLabelerCore):
         try:
             response = await self._post_chat(payload)
             parsed = json.loads(_strip_markdown_fences(extract_message_content(response)))
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.warning(
                 'vlm_labeler.prompt_visible_failed', error=str(exc), error_type=type(exc).__name__
             )
@@ -162,7 +162,7 @@ class VisibilityOps(VlmLabelerCore):
 
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.region_visible_chunk_failed',
                 chunk_size=len(chunk),

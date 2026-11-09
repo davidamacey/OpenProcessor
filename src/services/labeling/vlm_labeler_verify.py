@@ -11,7 +11,12 @@ from typing import Any
 from src.core.logging import get_logger
 from src.services.labeling.vlm_chunks import run_chunks
 from src.services.labeling.vlm_client import extract_message_content, extract_reasoning_content
-from src.services.labeling.vlm_labeler_core import _RESULTS_ENVELOPE, VlmLabelerCore, _b64_jpeg
+from src.services.labeling.vlm_labeler_core import (
+    _RESULTS_ENVELOPE,
+    CHAT_CALL_ERRORS,
+    VlmLabelerCore,
+    _b64_jpeg,
+)
 from src.services.labeling.vlm_models import RegionCrop, VlmRegionVerdict, VlmTransportError
 from src.services.labeling.vlm_reply_parse import (
     _align_batch_entries,
@@ -73,7 +78,7 @@ class VerifyOps(VlmLabelerCore):
 
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.verify_region_failed',
                 crop_id=crop.crop_id,
@@ -179,7 +184,7 @@ class VerifyOps(VlmLabelerCore):
 
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.verify_region_chunk_failed',
                 chunk_size=len(chunk),

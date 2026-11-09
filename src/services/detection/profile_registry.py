@@ -220,7 +220,7 @@ def _stored_profiles() -> dict[str, DetectionProfile]:
     for name, stored in snapshot.profiles.items():
         try:
             profiles[name] = region_profile_from_dict({**stored.body, 'name': name}, source=name)
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             logger.warning('stored_region_profile_invalid', name=name, error=str(exc))
     return profiles
 
@@ -291,7 +291,7 @@ def get_active_region_profile() -> DetectionProfile | None:
                 return region_profile_from_dict(
                     {**snapshot.active_profile_body.body, 'name': name}, source=name
                 )
-            except Exception as exc:
+            except (TypeError, ValueError) as exc:
                 logger.warning(
                     'active_region_profile_pinned_body_invalid', name=name, error=str(exc)
                 )

@@ -63,7 +63,6 @@ src/routers/curation/datasets.py	1	route boundary: a class-creation failure is m
 src/routers/curation/edit_undo.py	1	route boundary: a failed undo is reported as a conflict, logged
 src/routers/curation/global_status.py	1	health boundary: the probe error text is returned as detail
 src/routers/curation/health.py	3	health boundary: the probe error text is returned as detail
-src/routers/curation/methods.py	1	registry boundary: falls back to the unscoped registry, logged
 src/routers/curation/pipeline_events.py	1	stats boundary: the error is cached and returned as the payload
 src/routers/curation/projects.py	2	listing boundary: unavailable counts are logged, the list still serves
 src/routers/curation/review_resolve.py	1	per-crop boundary: a failed update is reported as a conflict, logged
@@ -72,7 +71,6 @@ src/routers/detect.py	2	route boundary: mapped to a 500 or a per-file failure en
 src/routers/embed.py	1	route boundary: mapped to a 500 or a per-file failure entry
 src/routers/health.py	1	readiness boundary: a probe that cannot run reports not ready
 src/routers/ocr.py	1	route boundary: mapped to a 500 or a per-file failure entry
-src/services/visual_search/clustering_persist.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/open_vocab_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/profile_dependency_checks.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/store.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -108,17 +106,10 @@ src/services/curation/strategy_defaults.py	1	stays broad: GET methods must never
 src/services/curation/strategy_registry.py	2	stays broad: GET /curation/methods must never fail or block: settings/coverage failures degrade to defaults
 src/services/curation/vlm_strategies.py	1	stays broad: GET methods boundary: a VLM refresh failure degrades to the cached endpoint state
 src/services/curation/worker_liveness.py	1	stays broad: heartbeat loop boundary: one failed write must not stop the worker
-src/services/detection/profile_registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/detection/segmenter_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/face_identity/person_management.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/inference.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/labeling/region_overlay.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/labeling/vlm_factory.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/labeling/vlm_labeler_classify.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/labeling/vlm_labeler_core.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/labeling/vlm_labeler_verify.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/labeling/vlm_labeler_visibility.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/labeling/vlm_prompt_resolution.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/model_export.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/bootstrap.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/combine/execute.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -126,8 +117,6 @@ src/services/projects/delete.py	2	triage every return-empty handler in PR 3; rat
 src/services/projects/delete_models.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/lifecycle.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/training/lineage.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/training/promote_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/ingest_batch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/ingest_single.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/utils/image_processing.py	1	decoder fallback: OpenCV failure tries PIL, both failing raises ValueError
