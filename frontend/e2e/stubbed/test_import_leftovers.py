@@ -25,8 +25,9 @@ from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
 from playwright.sync_api import expect
 
+from fixtures.contract import item_cluster
 from fixtures.wire import make_item, review_tab, review_tabs
-from test_dataset_import import FORMATS, serve_cluster
+from test_dataset_import import CLUSTER_UID, FORMATS, serve_cluster
 
 CLASSES = [
     {
@@ -191,7 +192,7 @@ def serve_locked_cluster(stub: Any, locked_ids: set[str]) -> None:
             image_id=f"img-{i}",
             class_id=2,
             class_name="widget",
-            cluster_id=2,
+            cluster=item_cluster(CLUSTER_UID),
             label_validated=False,
             label_source="model_suggestion",
             label_locked=f"crop-{i}" in locked_ids,
@@ -204,7 +205,7 @@ def serve_locked_cluster(stub: Any, locked_ids: set[str]) -> None:
 
 def test_lock_badge_only_on_a_locked_label(stub, page, app_url):
     serve_locked_cluster(stub, {"crop-1"})
-    page.goto(f"{app_url}/p/default/clusters/2")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     badges = page.get_by_test_id("label-locked-badge")
     expect(badges).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
@@ -227,7 +228,7 @@ def test_image_reprocess_from_a_cluster_card(stub, page, app_url):
             image_id="img-0",
             class_id=5,
             class_name="gadget",
-            cluster_id=2,
+            cluster=item_cluster(CLUSTER_UID),
             label_validated=False,
             label_source="model_suggestion",
             thumbnail_url="/curation/crops/crop-0/thumbnail",
@@ -244,7 +245,7 @@ def test_image_reprocess_from_a_cluster_card(stub, page, app_url):
 
     stub.on("POST", r"/images/img-0/reprocess$", reprocess)
 
-    page.goto(f"{app_url}/p/default/clusters/2")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     names = page.get_by_test_id("class-name")
     expect(names).to_have_text(["widget", "widget", "widget"], timeout=ACTION_TIMEOUT_MS)
@@ -277,7 +278,7 @@ def test_import_provenance_rows_in_details(stub, page, app_url):
         image_id="img-0",
         class_id=2,
         class_name="widget",
-        cluster_id=2,
+        cluster=item_cluster(CLUSTER_UID),
         label_validated=True,
         label_source="import",
         label_locked=True,
@@ -294,14 +295,14 @@ def test_import_provenance_rows_in_details(stub, page, app_url):
             image_id=f"img-{i}",
             class_id=2,
             class_name="widget",
-            cluster_id=2,
+            cluster=item_cluster(CLUSTER_UID),
             thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
         )
         for i in (1, 2)
     ]
     stub.on("GET", r"/crops(\?|$)", {"total": 3, "page": 1, "page_size": 60, "crops": [imported, *others]})
 
-    page.goto(f"{app_url}/p/default/clusters/2")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     card = page.locator("div.group").filter(has=page.locator("button[aria-pressed]")).first
     card.hover()

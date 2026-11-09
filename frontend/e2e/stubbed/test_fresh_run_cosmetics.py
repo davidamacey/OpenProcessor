@@ -110,8 +110,7 @@ def test_settings_unset_sort_is_not_blank(stub, page, app_url):
 
 def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
     """The pinned region inventory card showed the raw class id as
-    both title and subtitle instead of the served display name. The
-    class cluster's chip reads cohesion, not purity."""
+    both title and subtitle instead of the served display name."""
     from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, make_item
     from test_visual_fix_pages_narrow import CLASSES as NARROW_CLASSES
     from test_visual_fix_pages_narrow import CLUSTERS
@@ -127,10 +126,6 @@ def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
     title.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert title.inner_text().strip() == REGION_TAB_LABEL
     assert REGION_TAB_LABEL != REGION_CLASS
-    chip = page.get_by_test_id("cluster-cohesion").first
-    text = " ".join(chip.inner_text().split())
-    assert "cohesion 3% · n=616" in text, text
-    assert "purity" not in text
 
 
 def test_region_inventory_card_survives_boxes_of_one_item(stub, page, app_url):

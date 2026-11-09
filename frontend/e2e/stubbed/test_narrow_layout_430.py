@@ -8,15 +8,16 @@ from __future__ import annotations
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
 
+from fixtures.contract import cluster_list
 from fixtures.wire import make_item
 from test_train_gpus import register_train_mount
 from test_train_results import FINISHED_STATUS
 
 NARROW = {"width": 430, "height": 900}
-CLUSTER_ID = 64
+CLASS_ID = 64
 
 CLASSES = [
-    {"class_id": CLUSTER_ID, "class_name": "class_b", "kind": "item", "group": "moto", "hotkey_letter": None,
+    {"class_id": CLASS_ID, "class_name": "class_b", "kind": "item", "group": "moto", "hotkey_letter": None,
      "sample_count": 641, "validated_count": 0, "cluster_size": 616, "deprecated": False},
 ]
 
@@ -25,13 +26,12 @@ def _crop(i: int) -> dict:
     return make_item(
         crop_id=f"crop-{i}",
         image_id=f"img-{i}",
-        class_id=CLUSTER_ID,
+        class_id=CLASS_ID,
         class_name="class_b",
         class_source="vlm",
         label_source="vlm",
         label_validated=False,
         class_validated=False,
-        cluster_id=CLUSTER_ID,
         thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
     )
 
@@ -41,10 +41,9 @@ def test_ignore_reason_menu_stays_inside_the_viewport_at_430(stub, page, app_url
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/crops(\?|$)",
             {"total": 3, "page": 1, "page_size": 60, "crops": [_crop(i) for i in range(3)]})
-    stub.on("GET", r"/clusters(\?|$)", {"items": [], "total": 0, "total_class_clusters": 0,
-                                       "total_candidate_clusters": 0, "cluster_id_offset": 10000})
+    stub.on("GET", r"/clusters(\?|$)", cluster_list())
 
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/cl-fixture-0064")
     page.locator('[data-testid="class-name"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_role("button", name="Choose ignore reason").click()
     wait_for_paint(page)

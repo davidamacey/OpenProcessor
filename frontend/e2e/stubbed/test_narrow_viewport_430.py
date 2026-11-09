@@ -13,6 +13,7 @@ import pytest
 from harness.constants import ACTION_TIMEOUT_MS, API_PREFIX
 from harness.waits import wait_for_paint
 
+from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item, project, projects_response
 
 NARROW = {"width": 430, "height": 900}
@@ -35,7 +36,7 @@ ROUTES: list[tuple[str, str]] = [
     ("/dashboard", "h1"),
     ("/ingest", "h1"),
     ("/clusters", "h1"),
-    ("/clusters/64", "[data-testid='class-name']"),
+    ("/clusters/cl-fixture-0064", "[data-testid='class-name']"),
     ("/review?tab=all", "[data-testid='queue-counter']"),
     ("/review?tab=uncertainty", "[data-testid='queue-counter']"),
     ("/review?tab=model_disagreements", "[data-testid='queue-counter']"),
@@ -96,7 +97,7 @@ def _crop(i: int) -> dict:
         class_name="class_b",
         class_source="model",
         confidence=0.9,
-        cluster_id=64,
+        cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         label_source="model_suggestion",
         proposed_class_id=64,
@@ -107,22 +108,10 @@ def _crop(i: int) -> dict:
     return item
 
 
-CLUSTERS = {
-    "items": [
-        {"cluster_id": 64, "cluster_kind": "class", "size": 3, "validated_count": 0,
-         "dominant_class_id": 64, "dominant_class_name": "class_b", "purity": 1.0,
-         "is_unlabeled": False, "representatives": [{"crop_id": "crop-0"}],
-         "n_subclusters": 0, "updated_at": None},
-    ],
-    "total": 1, "total_class_clusters": 1, "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0064"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=3, dominant_class_name="class_b"))
 
-IDLE_JOB = {
-    "job_id": "job-0", "status": "idle", "stage": "", "processed": 0, "total": 0,
-    "started_at": 0, "finished_at": 0, "error": None, "result": {}, "args": {},
-    "eta_seconds": None, "elapsed_seconds": 0,
-}
+IDLE_JOB = auto_label_job()
 
 
 def _stub_common(stub) -> None:

@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from fixtures.contract import cluster_facets
+from fixtures.contract import cluster_facets, embedding_spaces, fill
 from fixtures.wire import (
     REGION_PROFILE,
     REGION_TAB_LABEL,
@@ -124,6 +124,10 @@ class Stub:
         self.on("GET", r"/assist/runs(\?|$)", {"runs": []})
         # The clusters page probes the auto-label loop panel on every visit.
         self.on("GET", r"/assist/loops(\?|$)", {"loops": []})
+        # The dashboard and /ingest cluster-run panel list the serving partition;
+        # the search box lists the project's ready embedding spaces (one: no picker).
+        self.on("GET", r"/clusters/partitions(\?|$)", fill("ClusterPartitionList", partitions=[]))
+        self.on("GET", r"/embedding/spaces(\?|$)", embedding_spaces())
         # ...and reads its facet counts; a test that checks chips overrides this.
         self.on("GET", r"/clusters/([^/]+)/facets$", self._empty_facets)
         # S1 fix (visual audit 2026-09-24): `/review` now reads the

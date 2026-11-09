@@ -9,22 +9,23 @@ from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
 from playwright.sync_api import expect
 
+from fixtures.contract import cluster_facets
 from fixtures.wire import make_item
 from test_cluster_list_filters import CLASSES, METHODS, clusters_handler
 
-FACETS = {
-    "cluster_id": 2,
-    "total": 40,
-    "detector_classes": [{"value": "widget_x", "count": 31}, {"value": "widget_y", "count": 0}],
-    "class_sources": [],
-    "validation": {"validated": 4, "unvalidated": 36},
-    "review_tabs": {"outliers": 3, "detector_disagreements": 0},
-    "detector_confidence": [
+FACET_UID = "bbbb0002"
+FACETS = cluster_facets(
+    FACET_UID,
+    total=40,
+    detector_classes=[{"value": "widget_x", "count": 31}, {"value": "widget_y", "count": 0}],
+    validation={"validated": 4, "unvalidated": 36},
+    review_tabs={"outliers": 3, "detector_disagreements": 0},
+    detector_confidence=[
         {"min": 0.0, "max": 0.1, "count": 0},
         {"min": 0.9, "max": None, "count": 25},
     ],
-    "detector_confidence_missing": 2,
-}
+    detector_confidence_missing=2,
+)
 
 
 def crop(i: int) -> dict:
@@ -33,7 +34,7 @@ def crop(i: int) -> dict:
         image_id=f"img-{i}",
         class_id=None,
         class_name=None,
-        cluster_id=2,
+        cluster={"partition_id": "p1", "uid": FACET_UID, "state": "assigned", "score": 0.9, "margin": 0.1, "assigned_by": "run"},
         label_validated=False,
         label_source="model_suggestion",
         thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
@@ -44,7 +45,7 @@ def serve_cluster(stub, crop_queries: list[dict]) -> None:
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/methods(\?|$)", METHODS)
     stub.on("GET", r"/clusters(\?|$)", clusters_handler([]))
-    stub.on("GET", r"/clusters/2/facets$", FACETS)
+    stub.on("GET", rf"/clusters/{FACET_UID}/facets$", FACETS)
 
     def crops(request, _match):
         crop_queries.append(parse_qs(urlparse(request.url).query))
@@ -56,7 +57,7 @@ def serve_cluster(stub, crop_queries: list[dict]) -> None:
 def test_facet_chips_show_served_counts_and_send_the_served_filters(stub, page, app_url):
     queries: list[dict] = []
     serve_cluster(stub, queries)
-    page.goto(f"{app_url}/p/default/clusters/2")
+    page.goto(f"{app_url}/p/default/clusters/{FACET_UID}")
     facets = page.get_by_test_id("cluster-facets")
     expect(facets).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(facets.get_by_test_id("facet-detector-class")).to_have_text(["widget_x 31", "widget_y 0"])

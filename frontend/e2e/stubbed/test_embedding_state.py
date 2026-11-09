@@ -22,6 +22,7 @@ from typing import Any
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
+from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
 from test_dataset_import import FORMATS
 
@@ -41,27 +42,8 @@ CLASSES = [
     },
 ]
 
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": 1,
-            "cluster_kind": "class",
-            "size": 2,
-            "validated_count": 0,
-            "dominant_class_id": 1,
-            "dominant_class_name": "widget",
-            "purity": 1.0,
-            "is_unlabeled": False,
-            "representatives": [{"crop_id": "crop-0"}],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0001"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=2, dominant_class_name="widget"))
 
 SUGGESTED = {
     "targets": {"filter": {"embedding_state": ["not_selected", "failed"]}},
@@ -104,20 +86,7 @@ SUMMARY = {
     "suggested_reprocess": SUGGESTED,
 }
 
-IDLE_JOB = {
-    "job_id": "job-0",
-    "status": "idle",
-    "stage": "",
-    "processed": 0,
-    "total": 0,
-    "started_at": 0,
-    "finished_at": 0,
-    "error": None,
-    "result": {},
-    "args": {},
-    "eta_seconds": None,
-    "elapsed_seconds": 0,
-}
+IDLE_JOB = auto_label_job()
 
 
 DATASET_STATS = {
@@ -165,7 +134,7 @@ def _crop(i: int, state: str | None) -> dict:
         image_id=f"img-{i}",
         class_id=1,
         class_name="widget",
-        cluster_id=1,
+        cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         label_source="model_suggestion",
         embedding_state=state,
@@ -189,7 +158,7 @@ def test_failed_badge_on_a_card(stub, page, app_url):
             "crops": [_crop(0, "failed"), _crop(1, "embedded")],
         },
     )
-    page.goto(f"{app_url}/p/default/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     badges = page.get_by_test_id("embedding-state-badge")
     expect(badges).to_have_count(1)
@@ -211,7 +180,7 @@ def test_unembedded_banner_on_an_ordered_cluster_view(stub, page, app_url):
             "suggested_reprocess": SUGGESTED,
         },
     )
-    page.goto(f"{app_url}/p/default/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     banner = page.get_by_test_id("unembedded-banner")
     banner.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(banner).to_contain_text("1 items in scope have no vector and are not ranked")
@@ -298,7 +267,7 @@ def test_reprocess_embed_options_and_served_detail(stub, page, app_url):
         }
 
     stub.on("POST", r"/reprocess$", reprocess)
-    page.goto(f"{app_url}/p/default/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.keyboard.press("a")
     page.get_by_test_id("reprocess-open").first.click()

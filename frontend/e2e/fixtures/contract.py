@@ -26,7 +26,8 @@ def _default(spec: dict[str, Any]) -> Any:
     if "const" in spec:
         return spec["const"]
     if "$ref" in spec:
-        return fill(spec["$ref"].rsplit("/", 1)[-1])
+        target = _SCHEMAS[spec["$ref"].rsplit("/", 1)[-1]]
+        return fill(spec["$ref"].rsplit("/", 1)[-1]) if "properties" in target else _default(target)
     if "enum" in spec:
         return spec["enum"][0]
     for branch in spec.get("anyOf", []):
@@ -111,3 +112,27 @@ def cluster_list(*cards: dict[str, Any], **over: Any) -> dict[str, Any]:
 
 def cluster_facets(uid: str, **over: Any) -> dict[str, Any]:
     return fill("ClusterFacets", cluster_uid=uid, **over)
+
+
+def item_cluster(uid: str, **over: Any) -> dict[str, Any]:
+    """An item's nested ``cluster`` (``ClusterRef``): the serving partition's assignment."""
+    base = {"partition_id": "part-fixture-1", "state": "assigned", "score": 0.9, "margin": 0.1, "assigned_by": "run"}
+    base.update(over)
+    return fill("ClusterRef", uid=uid, **base)
+
+
+def auto_label_job(status: str = "idle", **over: Any) -> dict[str, Any]:
+    """``GET /pipeline/auto_label/status`` and the 202 of ``/start`` (``AutoLabelJobState``)."""
+    base = {"job_id": "job-0", "pipeline": "auto_label", "queue_max_age_seconds": 3600.0}
+    base.update(over)
+    return fill("AutoLabelJobState", status=status, **base)
+
+
+def embedding_space(space_key: str = "pe_core", **over: Any) -> dict[str, Any]:
+    base = {"role": "primary", "status": "ready", "model_key": "pe-core", "model_version": "1"}
+    base.update(over)
+    return fill("EmbeddingSpaceView", space_key=space_key, **base)
+
+
+def embedding_spaces(*spaces: dict[str, Any]) -> dict[str, Any]:
+    return fill("EmbeddingSpaceListResponse", spaces=list(spaces) or [embedding_space()])
