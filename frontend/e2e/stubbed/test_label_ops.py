@@ -9,72 +9,72 @@ import json
 import os
 from urllib.parse import parse_qs, urlparse
 
+from fixtures.contract import fill, job, label_op_accepted, undo_response
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
+UNDO_PASS = {
+    "at": "2026-10-29T09:00:00+00:00",
+    "restored": 3,
+    "already_undone": 0,
+    "kept_changed": 0,
+    "kept_holdout": 0,
+    "kept_stale_class": 0,
+    "conflicts": 0,
+}
+
 OPS = [
-    {
-        "op_id": "op-2",
-        "kind": "label",
-        "at": "2026-10-30T10:00:00+00:00",
-        "finished_at": "2026-10-30T10:00:05+00:00",
-        "class_name": "widget_a",
-        "target_cluster_id": None,
-        "target_kind": None,
-        "label_source": "human",
-        "target": "selection",
-        "selected": 12,
-        "count": 12,
-        "conflicts": 0,
-        "current": 12,
-        "status": "written",
-        "undone": False,
-        "undoable": True,
-        "last_undo": None,
-    },
-    {
-        "op_id": "op-1",
-        "kind": "move",
-        "at": "2026-10-29T08:30:00+00:00",
-        "finished_at": "2026-10-29T08:30:02+00:00",
-        "class_name": "widget_b",
-        "target_cluster_id": 7,
-        "target_kind": "class",
-        "label_source": "human",
-        "target": "crop_ids",
-        "selected": 3,
-        "count": 3,
-        "conflicts": 0,
-        "current": 0,
-        "status": "undone",
-        "undone": True,
-        "undoable": False,
-        "last_undo": {
-            "at": "2026-10-29T09:00:00+00:00",
-            "restored": 3,
-            "already_undone": 0,
-            "kept_changed": 0,
-            "kept_holdout": 0,
-            "kept_stale_class": 0,
-            "conflicts": 0,
-        },
-    },
+    fill(
+        "LabelOp",
+        op_id="op-2",
+        kind="label",
+        at="2026-10-30T10:00:00+00:00",
+        finished_at="2026-10-30T10:00:05+00:00",
+        class_name="widget_a",
+        label_source="human",
+        target="selection",
+        selected=12,
+        count=12,
+        conflicts=0,
+        current=12,
+        status="written",
+        undone=False,
+        undoable=True,
+        last_undo=None,
+    ),
+    fill(
+        "LabelOp",
+        op_id="op-1",
+        kind="move",
+        at="2026-10-29T08:30:00+00:00",
+        finished_at="2026-10-29T08:30:02+00:00",
+        class_name="widget_b",
+        target_cluster_uid="cl-fixture-0007",
+        label_source="human",
+        target="crop_ids",
+        selected=3,
+        count=3,
+        conflicts=0,
+        current=0,
+        status="undone",
+        undone=True,
+        undoable=False,
+        last_undo=UNDO_PASS,
+    ),
 ]
 
-DRY = {
-    "op_id": "op-2",
-    "dry_run": True,
-    "status": "written",
-    "members_known": True,
-    "matched": 12,
-    "restored": 9,
-    "already_undone": 0,
-    "kept_changed": 1,
-    "kept_holdout": 1,
-    "kept_stale_class": 0,
-    "conflicts": 1,
-    "conflict_ids": ["crop-conflict-1"],
-}
+# What a dry run answers at once, and what the queued `label_undo` job carries as its result.
+DRY = undo_response(
+    "op-2",
+    dry_run=True,
+    status="written",
+    matched=12,
+    restored=9,
+    kept_changed=1,
+    kept_holdout=1,
+    conflicts=1,
+    conflict_ids=["crop-conflict-1"],
+)
 
 
 def many_ops(n):
@@ -115,9 +115,14 @@ def serve(stub, ops=None, queries=None):
         bodies.append(body)
         if body["dry_run"]:
             return dict(DRY)
-        rows[0] = {**rows[0], "status": "undone", "undone": True, "undoable": False, "current": 0}
-        return {**DRY, "dry_run": False}
+        # A real undo is queued; the client follows the job and reads its result.
+        return (202, label_op_accepted("op-2", "job-undo-op-2"))
 
+    def undo_job(_request, _m):
+        rows[0] = {**rows[0], "status": "undone", "undone": True, "undoable": False, "current": 0}
+        return job("job-undo-op-2", kind="label_undo", result={**DRY, "dry_run": False})
+
+    stub.on("GET", r"/jobs/job-undo-op-2$", undo_job)
     stub.on("POST", r"/label_ops/op-2/undo$", undo)
     return bodies
 
