@@ -27,6 +27,7 @@ def engine(job_env, wakes):
 
 def test_a_handler_and_a_task_it_spawns_publish_through_the_task_engine(pg, engine, kinds) -> None:
     job = start(engine, make_project(pg), 't_plain')
+    test_engine = db_engine.current_async_engine()  # the fixture's binding, outside any task
     used: list[object] = []
 
     async def spawned() -> None:
@@ -49,5 +50,5 @@ def test_a_handler_and_a_task_it_spawns_publish_through_the_task_engine(pg, engi
     )
     assert types == [('project.handler_probe',), ('project.spawned_probe',)]
     assert len({id(e) for e in used}) == 1  # both saw the one task engine
-    with pytest.raises(Exception, match='WEB_CONCURRENCY'):
-        db_engine.current_async_engine()  # and the binding ended with the task
+    assert used[0] is not test_engine  # the task's own, not the engine the test binds
+    assert db_engine.current_async_engine() is test_engine  # and its binding ended with the task
