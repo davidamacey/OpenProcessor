@@ -15,24 +15,39 @@ used>:<service host port>`` from the request (``Host`` /
 ``kind: 'docs'`` URL is PATH-RELATIVE to the API origin (``/docs``).
 
 ``reachable`` means "the service answers FROM THE SERVER" (probed at its
-compose-internal address, 1 s timeout, background task cached ``_TTL_S``),
-not "your browser can reach it". ``null`` = not probed yet / no URL.
+compose-internal address, 1 s timeout), not "your browser can reach it". The probe is the beat
+task ``op.periodic.resource_reachability`` (:mod:`src.services.periodic.resource_reachability`):
+it writes the answer to the Valkey key :data:`REACHABILITY_KEY` with a 90 s expiry and every API
+process only reads it, so all processes serve the same answer. ``null`` = no answer (the tick has
+not run, the key expired, Valkey is down) or no URL; never "down" by default.
 """
 
 from __future__ import annotations
 
-import asyncio
-import time
-from typing import Literal, NamedTuple
+import json
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import httpx
+import redis
+import redis.asyncio as aioredis
 from pydantic import BaseModel
 
+from src.config.queue import QueueSettings
+from src.core.logging import get_logger
 from src.core.request_origin import current_origin
+from src.tasks.runtime.event_wakeup import client_kwargs
 
 
-_TTL_S = 15.0
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+logger = get_logger(__name__)
+
 _PROBE_TIMEOUT_S = 1.0
+REACHABILITY_KEY = 'op:resource_reachability'
+REACHABILITY_TTL_S = 90
+"""Three beat ticks (30 s): one missed tick keeps the answer, a dead beat lets it expire."""
+_VALKEY_TIMEOUT_S = 1.0
 
 
 class ResourceLink(BaseModel):
@@ -87,20 +102,6 @@ _SERVICES = (
 )
 
 
-class _Cache:
-    def __init__(self) -> None:
-        self.reachable: dict[str, bool] = {}
-        self.checked_at = 0.0
-        self.inflight: asyncio.Task[None] | None = None
-
-
-_cache = _Cache()
-
-
-def reset_reachability_cache() -> None:
-    _cache.__init__()  # type: ignore[misc]
-
-
 async def _probe(url: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT_S) as client:
@@ -150,28 +151,48 @@ def _enabled(spec: _Service) -> bool:
     return bool(getattr(cfg, _url_attr(spec)) or getattr(cfg, f'{spec.name}_port'))
 
 
-async def refresh_reachability() -> None:
-    targets = [s for s in _SERVICES if _enabled(s)]
-    results = await asyncio.gather(*(_probe(s.probe_url) for s in targets))
-    _cache.reachable = {s.id: ok for s, ok in zip(targets, results, strict=True)}
-    _cache.checked_at = time.monotonic()
+def valkey_client() -> aioredis.Redis:
+    """A Valkey client for one read or write (the caller closes it)."""
+    settings = QueueSettings.from_env()
+    return aioredis.Redis.from_url(
+        settings.url,
+        socket_timeout=_VALKEY_TIMEOUT_S,
+        socket_connect_timeout=_VALKEY_TIMEOUT_S,
+        **client_kwargs(settings),
+    )
 
 
-def schedule_reachability_refresh() -> None:
-    """Kick a background refresh when the cache is stale; never awaits."""
-    if _cache.inflight is not None and not _cache.inflight.done():
-        return
-    if _cache.checked_at and time.monotonic() - _cache.checked_at < _TTL_S:
-        return
-    _cache.inflight = asyncio.get_running_loop().create_task(refresh_reachability())
+async def probe_enabled() -> dict[str, bool]:
+    """Probe each enabled service once, one after the other (a beat task, not a request)."""
+    return {s.id: await _probe(s.probe_url) for s in _SERVICES if _enabled(s)}
 
 
-async def wait_for_inflight_refresh() -> None:
-    if _cache.inflight is not None:
-        await _cache.inflight
+async def publish_reachability(reachable: Mapping[str, bool], *, valkey: Any = None) -> None:
+    """``SET op:resource_reachability <json> EX 90`` (https://valkey.io/commands/set/)."""
+    client = valkey_client() if valkey is None else valkey
+    try:
+        await client.set(REACHABILITY_KEY, json.dumps(dict(reachable)), ex=REACHABILITY_TTL_S)
+    finally:
+        await client.aclose()
 
 
-def resource_links_from_config() -> list[ResourceLink]:
+async def read_reachability() -> dict[str, bool]:
+    """The last published answer; ``{}`` (unknown) when there is none or Valkey does not answer."""
+    client = valkey_client()
+    try:
+        raw = await client.get(REACHABILITY_KEY)
+    except (redis.RedisError, OSError) as exc:
+        logger.warning('resource_reachability_unreadable', error=str(exc))
+        return {}
+    finally:
+        await client.aclose()
+    if raw is None:
+        return {}
+    answer = json.loads(raw)
+    return {str(k): bool(v) for k, v in answer.items()}
+
+
+def resource_links_from_config(reachable: Mapping[str, bool]) -> list[ResourceLink]:
     from src.config import get_curation_config
 
     gateway = get_curation_config().gateway_subpaths
@@ -195,7 +216,7 @@ def resource_links_from_config() -> list[ResourceLink]:
                     if url
                     else f'Set OP_{s.env}_PORT (0 disables) or {_url_env(s)}.'
                 ),
-                reachable=_cache.reachable.get(s.id) if url else None,
+                reachable=reachable.get(s.id) if url else None,
             )
         )
     return links

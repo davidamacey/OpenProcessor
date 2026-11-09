@@ -37,7 +37,7 @@ from src.routers.curation._common_models import (
     CurationSettingsResponse,
     CurationSettingsUpdateRequest,
 )
-from src.services.resource_links import schedule_reachability_refresh
+from src.services.resource_links import read_reachability, resource_links_from_config
 
 
 logger = get_logger(__name__)
@@ -168,12 +168,13 @@ async def get_curation_settings_route() -> CurationSettingsResponse:
     """
     from src.services.curation.settings_store import get_curation_settings
 
-    schedule_reachability_refresh()
     doc = await get_curation_settings(fresh=True)
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
         await _config_store_axis_defaults()
     )
-    return CurationSettingsResponse(**doc)
+    return CurationSettingsResponse(
+        **doc, resource_links=resource_links_from_config(await read_reachability())
+    )
 
 
 @router.put('/settings', response_model=CurationSettingsResponse)
@@ -284,7 +285,9 @@ async def update_curation_settings_route(
         await _config_store_axis_defaults()
     )
     logger.info('curation_settings_updated', axes=sorted(body.defaults))
-    return CurationSettingsResponse(**doc)
+    return CurationSettingsResponse(
+        **doc, resource_links=resource_links_from_config(await read_reachability())
+    )
 
 
 class _AxisActivationPlan(NamedTuple):

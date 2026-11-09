@@ -27,6 +27,7 @@ RELOAD_PROMOTED_INTERVAL_S = 15
 SERVING_INVENTORY_INTERVAL_S = 60
 NEAR_DUP_FULL_BUILD_INTERVAL_S = 7 * 24 * 60 * 60
 GPU_ARBITER_INTERVAL_S = 15
+RESOURCE_REACHABILITY_INTERVAL_S = 30
 
 
 def _every(task: str, seconds: float) -> dict[str, Any]:
@@ -51,6 +52,9 @@ def build_schedule() -> dict[str, dict[str, Any]]:
     )
     schedule['reload_promoted'] = _every('op.periodic.reload_promoted', RELOAD_PROMOTED_INTERVAL_S)
     schedule['cache_prune'] = _every('op.periodic.cache_prune', CACHE_PRUNE_INTERVAL_S)
+    schedule['resource_reachability'] = _every(
+        'op.periodic.resource_reachability', RESOURCE_REACHABILITY_INTERVAL_S
+    )
     refresh = env_int(REFRESH_INTERVAL_ENV, DEFAULT_REFRESH_INTERVAL_S, minimum=0)
     if refresh > 0:
         schedule['cluster_refresh'] = _every('op.periodic.cluster_refresh', refresh)

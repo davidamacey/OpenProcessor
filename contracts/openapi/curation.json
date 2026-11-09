@@ -7982,6 +7982,9 @@
             "title": "Updated By"
           }
         },
+        "required": [
+          "resource_links"
+        ],
         "title": "CurationSettingsResponse",
         "type": "object"
       },

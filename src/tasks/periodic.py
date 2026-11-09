@@ -17,6 +17,7 @@ from src.services.periodic import (
     near_dup_ticks,
     open_vocab_sweep,
     reload_promoted,
+    resource_reachability,
     serving_inventory,
     upload_sweep,
 )
@@ -81,6 +82,12 @@ def serving_inventory_tick() -> None:
 def reload_promoted_tick() -> None:
     """Re-load promoted models that Triton lost in a restart."""
     run_periodic('reload_promoted', reload_promoted.tick())
+
+
+@app.task(name='op.periodic.resource_reachability', **_TICK)
+def resource_reachability_tick() -> None:
+    """Probe the monitoring services and publish the answer the API serves."""
+    run_periodic('resource_reachability', resource_reachability.tick())
 
 
 @app.task(name='op.periodic.cluster_refresh', **_TICK)

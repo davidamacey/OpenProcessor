@@ -21,7 +21,7 @@ from src.routers.curation._selection import SelectionTargets
 from src.services.curation.class_sources import HumanLabelSource
 from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_filter import ItemFilter
-from src.services.resource_links import ResourceLink, resource_links_from_config
+from src.services.resource_links import ResourceLink
 
 
 # =============================================================================
@@ -489,7 +489,7 @@ class CurationSettingsResponse(BaseModel):
         default=0,
         description='Send it back as `expected_revision` on the next PUT; 0 while never written.',
     )
-    resource_links: list[ResourceLink] = Field(default_factory=resource_links_from_config)
+    resource_links: list[ResourceLink]
 
 
 class CurationSettingsUpdateRequest(BaseModel):
