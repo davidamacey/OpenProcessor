@@ -24,7 +24,8 @@ wire contract see [design/curation_api_contract.md](design/curation_api_contract
 13. [Export, training and promotion](#export-training-and-promotion)
 14. [Contracts](#contracts)
 15. [Security boundary](#security-boundary)
-16. [Scaling notes](#scaling-notes)
+16. [Per-process state](#per-process-state)
+17. [Scaling notes](#scaling-notes)
 
 ---
 
@@ -557,14 +558,37 @@ project isolation against code bugs, not against a caller of the API.
 
 ---
 
+## Per-process state
+
+Any request may reach any worker of any replica, so the API holds no state that another process
+would have to see. What is left is per process on purpose, and
+`scripts/codegen/check_process_state.py` (baseline `scripts/codegen/baselines/process_state.txt`,
+one reason per entry) fails on a new `asyncio` task spawned in a router, service or app module, on
+a new module-level `asyncio`/`threading` lock, semaphore or event, and on a new module-level
+mutable `dict`, `set` or `list`. Concurrency that must finish before the answer uses
+`asyncio.TaskGroup`; work that outlives the request is a job.
+
+| Kind | Examples | Why it is correct per process |
+|---|---|---|
+| Caches with a revision check | class names, class registry, config-store handles, embedding spaces, eval datasets, prompt packs | The stored revision (or file mtime) is compared on read, so a change made through another process is seen on the next request |
+| Caches with a staleness window | pipeline stats, project disk stats, field coverage, URL locality, labeler precheck | A TTL bounds the stale answer, and the value is advisory |
+| Local throttles | fetch gates, thread and CPU pools, concurrent config tests, segmenter latency average | They cap this process's own concurrency; the pools are sized per process from totals |
+| Process handles | database engines, Valkey clients, object-store clients, tokenizer | A connection or client must not cross a fork or an event loop |
+| Process loops | event listener, registry and config pollers, ops-metrics refresh | Every worker must hear every event and refresh its own caches |
+| Request-scoped tasks | disconnect watcher, page prefetcher, ingest writer drain, reprocess read-ahead | Created and awaited or cancelled inside one request or job |
+
+---
+
 ## Scaling notes
 
 - One GPU runs Triton, the segmenter and a local VLM only when VRAM allows;
   `.env` GPU keys place each service. Instance counts per Triton model are in
   the `config.pbtxt` files; raise them for hot paths when VRAM is free.
-- The API scales by uvicorn workers (`--workers`, default 32) within one host.
-  All workers share the Triton pool settings per process and the file-backed
-  event bus.
+- The API scales by uvicorn workers within one host: `API_WORKERS` in `.env` feeds
+  `WEB_CONCURRENCY` (the installer writes `min(nproc, 32)`). The database, thread and Triton pools
+  are split from deployment totals per process (`src/config/api_pools.py`, formulas in
+  [INSTALLATION.md](../INSTALLATION.md#api-worker-count)), so the count is a tuning knob and
+  several replicas need only `API_WORKERS=1` and `OP_API_REPLICAS`.
 - OpenSearch heap is sized from RAM by the installer (half of RAM, clamped to 2-30 GB, `scripts/lib/opensearch_heap.sh`). Each
   project adds six indexes, so watch the shard budget
   ([INSTALLATION.md](../INSTALLATION.md#opensearch-heap-sizing)); creating a
