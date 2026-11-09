@@ -1500,8 +1500,8 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
 - `/pipeline/auto_label` and `/start` take: `train_clusters`,
   `promote_min_purity`, `promote_min_members`, `vlm_batch_size`,
   `vlm_concurrency`, `max_vlm_crops`, `classifier_confidence_skip_vlm`,
-  `clustering_method`, `run_vlm`, `recluster_unvalidated`, `reassign_only`,
-  `run_auto_promote`, `gate_max_rank`, `gate_min_blur_ratio`, `n_clusters`,
+  `run_vlm`, `recluster_unvalidated`, `reassign_only`,
+  `run_auto_promote`, `n_clusters`,
   `class_id`, `cluster_id`, `prompt_pack` (`<name>` or `<name>@<revision>`),
   `vlm`, `acknowledge_external` and `vlm_attributes` (with `run_vlm`, store the pack's item
   attributes in each item's `assist` slot through the combined `assist` call; `422

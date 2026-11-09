@@ -1,7 +1,6 @@
 """Registry of curation-score overlays.
 
-Mirrors ``cluster_methods/__init__.py``'s ``get_method``/``available_methods``
-pattern, but for the *score* axis — see ``base.py`` for why this is a
+A ``get_method``/``available_methods``-style registry for the *score* axis — see ``base.py`` for why this is a
 distinct registry (overlays never write ``cluster_id``).
 """
 

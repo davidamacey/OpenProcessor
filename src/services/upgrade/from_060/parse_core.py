@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 
 # 0.6.0's vlm_scope_reps claims name integer cluster ids; the next run claims again by cluster_uid.
 POLICY_KEYS = ('ingest_policy', 'vlm_policy')
+# Strategy axes 0.7.0 removed (clustering takes its method per run): a stored default is dropped.
+RETIRED_DEFAULT_AXES = frozenset({'cluster'})
 _AXIS_KIND = dict(ACTIVATION_AXES)
 _REVISION_ID = re.compile(r'^(?P<prefix>[a-z]+):(?P<name>.+)@(?P<rev>\d+)$')
 _CURRENT_ID = re.compile(r'^(?P<prefix>[a-z]+):(?P<name>[^@]+)$')
@@ -299,7 +301,11 @@ def parse_settings(
     doc = snap.index_docs(index or '').get(legacy.SETTINGS_DOC_ID) if index else None
     if doc is None:
         return None, None
-    defaults = {k: v for k, v in (doc.get('defaults') or {}).items() if v is not None}
+    defaults = {
+        k: v
+        for k, v in (doc.get('defaults') or {}).items()
+        if v is not None and k not in RETIRED_DEFAULT_AXES
+    }
     policies = {key: dict(doc[key]) for key in POLICY_KEYS if doc.get(key)}
     settings = SettingsSrc(
         defaults=defaults,

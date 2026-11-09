@@ -1,7 +1,6 @@
 """Curation-score scorer interface.
 
-Mirrors ``cluster_methods/base.py``'s ``ClusterMethod`` Protocol, but for the
-*overlay* axis: a :class:`CropScorer` never assigns a crop to a cluster — it
+A Protocol for the *overlay* axis: a :class:`CropScorer` never assigns a crop to a cluster — it
 only writes scalar/keyword score fields onto the crop doc it was asked to
 score. ``writes`` is a ``ClassVar`` tuple of the exact OpenSearch field names
 a scorer may write; :func:`crop_scores.job.run_scoring_job` uses it to build
