@@ -141,7 +141,7 @@ def wakes(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Any]]:
 
 
 @pytest_asyncio.fixture
-async def job_env(pg_env) -> AsyncIterator[Any]:
+async def job_env(pg_env, bound_async_engine) -> AsyncIterator[Any]:
     yield pg_env
     await dispose_engines()
 

@@ -16,6 +16,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
+import psycopg
 import pytest
 
 from curation.jobs_a.optin_queue import job_env, kinds, producer, wakes  # noqa: F401
@@ -44,6 +45,7 @@ def assist_queue(
     producer: Any,  # noqa: F811 - the fixture is requested by name
     wakes: Any,  # noqa: F811 - the fixture is requested by name
     stack: Any,
+    api_async_engine: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[list[threading.Thread]]:
     from _records_world import make_project_row
@@ -64,6 +66,23 @@ def assist_queue(
             yield
 
     monkeypatch.setattr(jobs_a_support, 'bound_project', bound)
+    # The shared curation app answers sessions with None; a queued start writes the job row.
+    from src.core.db_session import get_db
+
+    stack.client.app.dependency_overrides.pop(get_db, None)
+    # The in-memory config store's endpoint has no document row, which a usage row references.
+    with psycopg.connect(job_env.conninfo('super'), autocommit=True) as conn:
+        endpoint_id = conn.execute(
+            'INSERT INTO config_documents (project_id, kind, name, current_revision, updated_by) '
+            "VALUES (NULL, 'vlm_endpoint', %s, 1, 'test') RETURNING id",
+            (f'ep-{uuid.uuid4().hex[:8]}',),
+        ).fetchone()[0]
+
+    async def registered(_name: str) -> uuid.UUID:
+        return endpoint_id  # type: ignore[no-any-return]
+
+    monkeypatch.setattr('src.services.config_store.vlm_endpoints.endpoint_config_id', registered)
+    setattr(stack, 'usage_endpoint_id', endpoint_id)  # noqa: B010 - read by the usage test
     threads: list[threading.Thread] = []
 
     def on_send(_task: str, job_id: str) -> None:
