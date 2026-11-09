@@ -165,13 +165,13 @@ class MemorySettings:
             raise ProjectionNotBuiltError
         return dict(self._row.projection)
 
-    async def save_run_metadata(self, *, scope, cluster_id, n_points, fitted_at):
+    async def save_run_metadata(self, *, scope, cluster_uid, n_points, fitted_at):
         from src.services.curation import embedding_viz
 
         self._row.projection = {
             'projection_version': embedding_viz.VIZ_PROJECTION_VERSION,
             'scope': scope,
-            'cluster_id': cluster_id,
+            'cluster_uid': cluster_uid,
             'n_points': n_points,
             'fitted_at': fitted_at,
         }

@@ -73,7 +73,7 @@ def plan_repair(crop_id: str, doc: dict[str, Any]) -> RepairPlan | None:
     all (not ``vlm_unmatched``, or already has no ``class_id``)."""
     if doc.get('class_source') != VLM_UNMATCHED_CLASS_SOURCE or doc.get('class_id') is None:
         return None
-    current = {f: doc.get(f) for f in ('class_id', 'class_name', 'class_source', 'cluster_id')}
+    current = {f: doc.get(f) for f in ('class_id', 'class_name', 'class_source')}
     if class_write_locked(doc):
         return RepairPlan(
             crop_id, False, current, {}, note='human-owned or class-validated -- skipped'

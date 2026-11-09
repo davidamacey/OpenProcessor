@@ -177,7 +177,6 @@ def test_excluded_after_the_op_is_kept_and_before_the_op_is_restored_parked(
     parked = env.docs()[before_op]
     assert parked['class_excluded'] is True, 'still excluded'
     assert parked['excluded_prior_class_validated'] is False
-    assert parked['excluded_prior_cluster_id'] == 10_003, 'un-exclude brings the old cluster back'
 
 
 def test_merged_or_renamed_class_is_kept(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

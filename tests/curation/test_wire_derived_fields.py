@@ -14,11 +14,7 @@ from typing import Any
 
 import pytest
 
-from src.services.curation.cluster_ids import (
-    CORE_SIMILARITY_MIN,
-    RESIDUAL_CLUSTER_ID_OFFSET,
-    cluster_kind,
-)
+from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN
 from src.services.curation.wire import ITEM_WIRE_KEYS, REVIEW_EXTRA_KEYS, serialize_item
 
 
@@ -61,29 +57,22 @@ def test_proposed_class_is_no_longer_a_review_only_extra() -> None:
 # --------------------------------------------------------------- cluster facts
 
 
-@pytest.mark.parametrize(
-    ('cid', 'kind'),
-    [
-        (None, None),
-        (-2, 'unassigned'),
-        (0, 'class'),
-        (RESIDUAL_CLUSTER_ID_OFFSET - 1, 'class'),
-        (RESIDUAL_CLUSTER_ID_OFFSET, 'candidate'),
-    ],
-)
-def test_cluster_kind(cid: int | None, kind: str | None) -> None:
-    assert cluster_kind(cid) == kind
-    assert _item(cluster_id=cid)['cluster_kind'] == kind
+def test_the_retired_integer_cluster_keys_are_not_served() -> None:
+    item = _item(cluster_id=3, cluster_subid='3a', cluster_nearest_id=4)
+    assert not {'cluster_id', 'cluster_kind', 'cluster_subid', 'cluster_nearest_id'} & item.keys()
+    assert (
+        not {'cluster_id', 'cluster_kind', 'cluster_subid', 'cluster_nearest_id'} & ITEM_WIRE_KEYS
+    )
 
 
 def test_cluster_similarity_and_core_flag() -> None:
-    near = _item(cluster_id=3, cluster_distance=0.2)
+    near = _item(cluster_distance=0.2)
     assert near['cluster_similarity'] == pytest.approx(0.8)
     assert near['cluster_is_core'] is (CORE_SIMILARITY_MIN <= 0.8)
-    far = _item(cluster_id=3, cluster_distance=1.5)
+    far = _item(cluster_distance=1.5)
     assert far['cluster_similarity'] == 0.0
     assert far['cluster_is_core'] is False
-    none = _item(cluster_id=3)
+    none = _item()
     assert none['cluster_similarity'] is None
     assert none['cluster_is_core'] is None
 

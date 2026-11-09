@@ -71,7 +71,7 @@ def _fake_os_paged(candidates: list[dict]) -> AsyncMock:
 def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
     filt = semantic_search._build_filter(
         tab=None,
-        cluster_id=None,
+        cluster_uid=None,
         date_from=None,
         date_to=None,
         max_rank=None,
@@ -91,7 +91,7 @@ def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
 def test_build_filter_include_test_keeps_holdout_crops():
     filt = semantic_search._build_filter(
         tab=None,
-        cluster_id=None,
+        cluster_uid=None,
         date_from=None,
         date_to=None,
         max_rank=None,
@@ -104,10 +104,10 @@ def test_build_filter_include_test_keeps_holdout_crops():
     assert {'term': {'test_holdout': True}} not in must_not
 
 
-def test_build_filter_cluster_id():
+def test_build_filter_cluster_uid():
     filt = semantic_search._build_filter(
         tab=None,
-        cluster_id=42,
+        cluster_uid='6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
         date_from=None,
         date_to=None,
         max_rank=None,
@@ -115,13 +115,13 @@ def test_build_filter_cluster_id():
         hide_near_duplicates=False,
         include_test=False,
     )
-    assert {'term': {'cluster_id': 42}} in filt
+    assert {'term': {'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'}} in filt
 
 
 def test_build_filter_date_range():
     filt = semantic_search._build_filter(
         tab=None,
-        cluster_id=None,
+        cluster_uid=None,
         date_from='2026-01-01',
         date_to='2026-06-01',
         max_rank=None,
@@ -135,7 +135,7 @@ def test_build_filter_date_range():
 def test_build_filter_reuses_tab_query():
     filt = semantic_search._build_filter(
         tab='uncertainty',
-        cluster_id=None,
+        cluster_uid=None,
         date_from=None,
         date_to=None,
         max_rank=None,
@@ -154,7 +154,7 @@ def test_build_filter_unknown_tab_raises_400():
     with pytest.raises(RequestRejectedError):
         semantic_search._build_filter(
             tab='not_a_real_tab',
-            cluster_id=None,
+            cluster_uid=None,
             date_from=None,
             date_to=None,
             max_rank=None,
@@ -167,7 +167,7 @@ def test_build_filter_unknown_tab_raises_400():
 def test_build_filter_hide_near_duplicates():
     filt = semantic_search._build_filter(
         tab=None,
-        cluster_id=None,
+        cluster_uid=None,
         date_from=None,
         date_to=None,
         max_rank=None,
@@ -549,7 +549,11 @@ async def test_similar_keeps_self_when_exclude_self_false():
 @pytest.mark.asyncio
 async def test_similar_applies_the_text_search_filters():
     item_filter = ItemFilter(class_names=['car'])
-    kwargs = {'cluster_id': 7, 'include_test': False, 'item_filter': item_filter}
+    kwargs = {
+        'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
+        'include_test': False,
+        'item_filter': item_filter,
+    }
     fake = _fake_os_similar()
     await semantic_search.semantic_similar_search(
         opensearch=fake, crop_id='c1', page=1, page_size=10, **kwargs
@@ -568,7 +572,7 @@ async def test_similar_applies_the_text_search_filters():
         'bool'
     ]['filter']
     assert _knn_filter(fake) == [*text, SELF_EXCLUSION]
-    assert {'term': {'cluster_id': 7}} in text
+    assert {'term': {'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'}} in text
 
 
 @pytest.mark.asyncio

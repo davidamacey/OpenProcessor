@@ -20,14 +20,13 @@ Non-negotiable design rules:
    :func:`get_cached_projection`, a plain OpenSearch ``search`` over
    already-written ``viz_x``/``viz_y`` fields — enforced by
    ``tests/curation/test_embedding_viz.py::test_get_cached_projection_never_triggers_a_fit``.
-3. **Color comes from the real ``cluster_id`` field, computed by FAISS
-   IVF elsewhere** — this module doesn't invent a second cluster concept
-   and never assigns or writes ``cluster_id``; it only reads it verbatim
-   off the crop doc for the consumer to color by.
+3. **Color comes from the served ``cluster_uid`` of the serving partition** — this module
+   doesn't invent a second cluster concept and never assigns or writes it; it only reads it
+   verbatim off the crop doc for the consumer to color by.
 4. **Only writes ``viz_x`` / ``viz_y`` / ``viz_projection_version``**
    (the three fields declared by
    :func:`src.clients.curation_opensearch.ensure_overlay_fields.ensure_items_viz_fields`).
-   Never ``cluster_id`` / ``cluster_subid`` / ``cluster_distance`` (guarded
+   Never a ``cluster_*`` field (guarded
    by
    ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``).
 
@@ -38,7 +37,7 @@ delegates to
 (same pool + ``CONFIDENT_CLASS_SOURCES``/``class_excluded`` gate
 ``item_scores.job`` uses); ``scope='cluster'`` delegates to
 :func:`src.services.curation.selection.pool_fetch.fetch_pool_embeddings`
-with a ``cluster_id`` term filter (same building block the select router
+with a ``cluster_uid`` term filter (same building block the select router
 uses). Both paths already exclude ``test_holdout=true`` crops.
 
 The job is a queued ``embedding_viz`` job (one at a time per project); a Celery worker runs
@@ -50,6 +49,7 @@ reducer is for provenance only, not a functional requirement.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -70,8 +70,6 @@ from src.services.jobs.service import start_job
 
 
 if TYPE_CHECKING:
-    import uuid
-
     from opensearchpy import AsyncOpenSearch
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -91,7 +89,7 @@ VIZ_REDUCER_STATE_ID = 'viz'
 # Viz-only UMAP hyperparameters. min_dist is higher than the clustering
 # reducer's 0.0 (UMAP_MIN_DIST in pool_size.py) -- a viz scatter
 # benefits from a bit more visual spread between points; this has zero
-# effect on clustering since nothing here ever feeds cluster_id.
+# effect on clustering since nothing here ever feeds the clustering.
 VIZ_N_COMPONENTS = 2
 VIZ_N_NEIGHBORS = 15
 VIZ_MIN_DIST = 0.1
@@ -121,20 +119,24 @@ async def start(
     project: uuid.UUID,
     *,
     scope: str,
-    cluster_id: int | None = None,
+    cluster_uid: uuid.UUID | None = None,
     max_n: int = DEFAULT_MAX_N,
 ) -> JobRow:
     """Queue the projection fit (409 ``job_busy`` while one is active; ``ValueError`` for a bad
     ``scope``)."""
     if scope not in {'residual', 'cluster'}:
         raise ValueError(f"scope must be 'residual' or 'cluster', got {scope!r}")
-    if scope == 'cluster' and cluster_id is None:
-        raise ValueError("cluster_id is required when scope='cluster'")
+    if scope == 'cluster' and cluster_uid is None:
+        raise ValueError("cluster_uid is required when scope='cluster'")
     started = await start_job(
         session,
         KIND,
         project,
-        params={'scope': scope, 'cluster_id': cluster_id, 'max_n': max_n},
+        params={
+            'scope': scope,
+            'cluster_uid': None if cluster_uid is None else str(cluster_uid),
+            'max_n': max_n,
+        },
         requested_by='api',
     )
     return started.job
@@ -148,7 +150,7 @@ def state_dict(view: JobView | None) -> dict[str, Any]:
     return {
         **common_state(view),
         'scope': params.get('scope', ''),
-        'cluster_id': params.get('cluster_id'),
+        'cluster_uid': params.get('cluster_uid'),
         'n_pool': int(progress.get('total') or 0),
         'n_written': int(result.get('n_written') or 0),
         'projection_version': result.get('projection_version'),
@@ -180,7 +182,7 @@ async def _fetch_pool(
     opensearch: AsyncOpenSearch,
     *,
     scope: str,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     max_n: int,
     embedding_field: str,
 ) -> tuple[list[str], np.ndarray]:
@@ -193,7 +195,7 @@ async def _fetch_pool(
             'bool': {
                 'filter': [
                     embedded_clause(embedding_field),
-                    {'term': {'cluster_id': cluster_id}},
+                    {'term': {'cluster_uid': str(cluster_uid)}},
                 ],
                 'must_not': [{'term': {'test_holdout': True}}],
             }
@@ -258,7 +260,7 @@ def _save_reducer(reducer: Any) -> None:
 
 
 async def _save_run_metadata(
-    *, scope: str, cluster_id: int | None, n_points: int, fitted_at: str
+    *, scope: str, cluster_uid: uuid.UUID | None, n_points: int, fitted_at: str
 ) -> None:
     """The project's current view state (one ``projection_states`` row): metadata only, the
     reducer blob is behind the storage seam and the row names its key."""
@@ -270,7 +272,7 @@ async def _save_run_metadata(
                 project_id,
                 projection_version=VIZ_PROJECTION_NUMBER,
                 scope=scope,
-                cluster_id=cluster_id,
+                cluster_uid=cluster_uid,
                 n_points=n_points,
                 n_components=VIZ_N_COMPONENTS,
                 metric=VIZ_METRIC,
@@ -289,7 +291,7 @@ async def _bulk_write_coordinates(
     chunk_size: int = 500,
 ) -> int:
     """Write ``viz_x``/``viz_y``/``viz_projection_version`` only -- never
-    ``cluster_id``/``cluster_subid``/``cluster_distance`` (guarded by
+    a ``cluster_*`` field (guarded by
     ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``)."""
     from src.clients.opensearch.bulk import failed_bulk_items
 
@@ -344,7 +346,7 @@ async def run_projection_job(ctx: JobContext, opensearch: AsyncOpenSearch) -> di
     ids, embeddings = await _fetch_pool(
         opensearch,
         scope=params['scope'],
-        cluster_id=params['cluster_id'],
+        cluster_uid=None if params['cluster_uid'] is None else uuid.UUID(params['cluster_uid']),
         max_n=params['max_n'],
         embedding_field=embedding_field,
     )
@@ -359,7 +361,7 @@ async def run_projection_job(ctx: JobContext, opensearch: AsyncOpenSearch) -> di
     n_written = await _bulk_write_coordinates(opensearch, ids, xy)
     await _save_run_metadata(
         scope=params['scope'],
-        cluster_id=params['cluster_id'],
+        cluster_uid=None if params['cluster_uid'] is None else uuid.UUID(params['cluster_uid']),
         n_points=n_written,
         fitted_at=fitted_at,
     )

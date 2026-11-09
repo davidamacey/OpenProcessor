@@ -10,8 +10,6 @@ synonyms in the active :class:`~src.services.labeling.vlm_prompts.PromptPack`
 labeler uses and promotes the hits to::
 
     class_id / class_name = <resolved class>
-    cluster_id            = class_id   (class buckets mirror class ids)
-    cluster_subid         = cleared    (sub-clusters are cluster-local)
     class_source          = '<prefix>_reclassified'
     class_id_history      = appended
 
@@ -246,8 +244,6 @@ async def reclassify_unmatched(
                     'class_id': cid,
                     'class_name': resolved,
                     'class_source': source.reclassified_source,
-                    'cluster_id': cid,
-                    'cluster_subid': None,
                     'class_id_history': record_class_history(
                         current, writer='registry_reclassify', now=_now
                     ),

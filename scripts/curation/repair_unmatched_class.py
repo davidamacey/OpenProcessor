@@ -4,7 +4,7 @@
 Finds items with ``class_source='vlm_unmatched'`` and a ``class_id`` still
 set -- a write from before the fix in
 ``src/services/curation/class_sources.py`` (``unmatched_class_clear``) --
-and clears the class fields (plus a class-range ``cluster_id``) the same way
+and clears the class fields the same way
 the fixed writers now do at write time. A restorable ``class_id_history``
 snapshot precedes every write.
 
@@ -34,7 +34,6 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src.config import get_curation_config
 from src.db.engine import run_with_engine
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.unmatched_class_repair import RepairPlan, apply_repairs, plan_repairs
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
@@ -46,7 +45,6 @@ DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
 def format_plan(plan: RepairPlan) -> str:
     line = (
         f'{plan.crop_id}  class_id={plan.current.get("class_id")!r}  '
-        f'cluster_id={plan.current.get("cluster_id")!r}  '
         f'{"clear" if plan.applicable else "(skipped)"}'
     )
     return f'{line}  [{plan.note}]' if plan.note else line
@@ -60,16 +58,9 @@ async def run(args: argparse.Namespace, client: object) -> int:
         for plan in plans:
             print(format_plan(plan))
     applicable = sum(1 for p in plans if p.applicable)
-    class_range = sum(
-        1
-        for p in plans
-        if p.applicable
-        and isinstance(p.current.get('cluster_id'), int)
-        and 0 <= p.current['cluster_id'] < RESIDUAL_CLUSTER_ID_OFFSET
-    )
     print(
-        f'{len(plans)} candidate(s); {applicable} repairable '
-        f'({class_range} in a class-range cluster), {len(plans) - applicable} skipped (locked)'
+        f'{len(plans)} candidate(s); {applicable} repairable'
+        f', {len(plans) - applicable} skipped (locked)'
     )
     for plan in (p for p in plans if not p.applicable):
         print(f'  skipped: {format_plan(plan)}')

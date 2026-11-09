@@ -28,7 +28,6 @@ from src.domain.ingest_class_sources import (
     VLM_CLASS_SOURCE,
     is_classifier_class_source,
 )
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.ingest_detector import project_ingest_profiles
 from src.services.detection.region_text import VLM_TEXT_CONFIDENCE
 
@@ -226,14 +225,6 @@ def unmatched_class_clear(current: dict[str, Any]) -> dict[str, Any]:
     (:func:`src.services.curation.class_write_guard.class_write_locked`) --
     an unmatched VLM answer must never reset a locked item's class out from
     under a human decision.
-
-    When ``current``'s ``cluster_id`` is a *class* cluster (``0 <=
-    cluster_id < RESIDUAL_CLUSTER_ID_OFFSET``, i.e. it mirrored the class
-    that's being cleared), also resets ``cluster_id=-1`` and
-    ``cluster_subid=None`` so the residual clustering pass re-clusters the
-    item instead of leaving it parked in a class cluster it no longer
-    belongs to. A candidate cluster (``>= RESIDUAL_CLUSTER_ID_OFFSET``) is
-    left alone -- the item's residual grouping isn't a class-cluster fact.
     """
     from src.services.curation.class_write_guard import class_write_locked
 
@@ -247,14 +238,6 @@ def unmatched_class_clear(current: dict[str, Any]) -> dict[str, Any]:
         'class_labeler': None,
         'class_labeled_at': None,
     }
-    cluster_id = current.get('cluster_id')
-    if (
-        isinstance(cluster_id, int)
-        and not isinstance(cluster_id, bool)
-        and 0 <= cluster_id < RESIDUAL_CLUSTER_ID_OFFSET
-    ):
-        out['cluster_id'] = -1
-        out['cluster_subid'] = None
     return out
 
 

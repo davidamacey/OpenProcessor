@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 from src.clients.curation_opensearch.assist_fields import ensure_assist_fields
 from src.clients.curation_opensearch.cluster_fields import ensure_items_cluster_partition_fields
 from src.clients.curation_opensearch.ensure_fields import (
-    ensure_items_cluster_geometry_fields,
     ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
     ensure_items_history_fields,
@@ -196,7 +195,6 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
         ('viz_fields', ensure_items_viz_fields),
         ('history_fields', ensure_items_history_fields),
         ('exclusion_fields', ensure_items_exclusion_fields),
-        ('cluster_geometry_fields', ensure_items_cluster_geometry_fields),
         ('audit_fields', ensure_items_audit_fields),
         ('detector_fields', ensure_items_detector_fields),
         ('text_reader_fields', ensure_items_text_fields),

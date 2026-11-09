@@ -16,7 +16,7 @@ from src.services.curation.assist import runner
 pytest_plugins = ['curation.assist_queue']
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('readable_crops')]
 
-CLUSTER = 10000
+CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 CROPS = 10
 
 
@@ -28,8 +28,7 @@ def _queue(assist_queue: Any) -> None:
 def _seed(stack: Any, crop_id: str) -> None:
     stack.seed(
         crop_id,
-        cluster_id=CLUSTER,
-        cluster_subid=f'{CLUSTER}a',
+        cluster_uid=CLUSTER,
         class_source='item_model',
         updated_at='2026-10-01T00:00:00+00:00',
     )
@@ -66,7 +65,7 @@ def test_ten_crops_of_an_assist_run_add_ten_crops_under_assist_run(
     with stack.client:
         started = stack.post(
             '/assist/runs',
-            target={'kind': 'cluster', 'cluster_id': CLUSTER},
+            target={'kind': 'cluster', 'cluster_uid': CLUSTER},
             actions=['classify'],
             dry_run=False,
         )

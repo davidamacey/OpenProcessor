@@ -1,6 +1,5 @@
 """Assist run scopes: what a target resolves to, what is skipped, and how the
-sample is drawn. Method independent: only stored ``cluster_id`` /
-``cluster_subid`` fields are read."""
+sample is drawn. Method independent: only the stored ``cluster_uid`` is read."""
 
 from __future__ import annotations
 
@@ -17,27 +16,27 @@ from src.services.curation.assist.scope import membership_digest, membership_ove
 
 
 ITEMS = base_curation_config().items_index
-CLUSTER = 10000
+CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
+OTHER = '0c9a9f5e-3b7d-4a6f-8f0e-5d1b2c3d4e5f'
 
 
-def _doc(crop_id: str, subid: str | None = None, **extra: Any) -> dict[str, Any]:
+def _doc(crop_id: str, **extra: Any) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
         'image_id': f'img-{crop_id}',
-        'cluster_id': CLUSTER,
-        'cluster_subid': subid,
+        'cluster_uid': CLUSTER,
         'class_source': 'unlabeled_proposal',
         **extra,
     }
 
 
 def _world() -> QueryFakeOpenSearch:
-    docs = {f'a{i:02d}': _doc(f'a{i:02d}', f'{CLUSTER}a') for i in range(30)}
-    docs.update({f'b{i:02d}': _doc(f'b{i:02d}', f'{CLUSTER}b') for i in range(10)})
-    docs['hold'] = _doc('hold', f'{CLUSTER}a', test_holdout=True)
-    docs['excl'] = _doc('excl', f'{CLUSTER}a', class_excluded=True)
-    docs['human'] = _doc('human', f'{CLUSTER}a', class_source='human', class_validated=True)
-    docs['elsewhere'] = {**_doc('elsewhere'), 'cluster_id': 3}
+    docs = {f'a{i:02d}': _doc(f'a{i:02d}') for i in range(30)}
+    docs.update({f'b{i:02d}': _doc(f'b{i:02d}') for i in range(10)})
+    docs['hold'] = _doc('hold', test_holdout=True)
+    docs['excl'] = _doc('excl', class_excluded=True)
+    docs['human'] = _doc('human', class_source='human', class_validated=True)
+    docs['elsewhere'] = {**_doc('elsewhere'), 'cluster_uid': OTHER}
     return QueryFakeOpenSearch({ITEMS: docs})
 
 
@@ -45,8 +44,8 @@ def _request(target: dict[str, Any], **over: Any) -> AssistRunRequest:
     return AssistRunRequest.model_validate({'target': target, 'actions': ['classify'], **over})
 
 
-def _cluster(subid: str | None = None) -> dict[str, Any]:
-    return {'kind': 'cluster', 'cluster_id': CLUSTER, 'cluster_subid': subid}
+def _cluster() -> dict[str, Any]:
+    return {'kind': 'cluster', 'cluster_uid': CLUSTER}
 
 
 async def _code(coro: Any) -> tuple[int, str]:
@@ -76,14 +75,13 @@ async def test_a_cluster_resolves_visible_members_and_counts_the_skipped() -> No
 
 
 @pytest.mark.asyncio
-async def test_a_sub_cluster_resolves_by_its_stored_subid() -> None:
-    scope = await resolve_scope(_world(), _request(_cluster(f'{CLUSTER}b')))
-    assert sorted(scope.members) == [f'b{i:02d}' for i in range(10)]
-
-
-@pytest.mark.asyncio
 async def test_an_unknown_cluster_is_a_404() -> None:
-    assert await _code(resolve_scope(_world(), _request({**_cluster(), 'cluster_id': 99}))) == (
+    assert await _code(
+        resolve_scope(
+            _world(),
+            _request({**_cluster(), 'cluster_uid': '9d2b7e44-1c3a-4e8b-a7d6-0b5f4c3e2a10'}),
+        )
+    ) == (
         404,
         'not_found',
     )
@@ -105,29 +103,16 @@ def test_overlap_reports_how_much_membership_survived() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_representative_sample_is_stratified_by_subid_and_reproducible() -> None:
+async def test_a_representative_sample_is_reproducible() -> None:
     request = _request(_cluster(), sample={'mode': 'representative', 'seed': 4})
     scope = await resolve_scope(_world(), request)
     assert len(scope.sampled_ids) == 13  # ceil(2 * sqrt(41)) = 13
-    by_key = {s.key: s for s in scope.strata}
-    assert set(by_key) == {f'{CLUSTER}a', f'{CLUSTER}b'}
-    assert by_key[f'{CLUSTER}a'].size == 31
-    assert by_key[f'{CLUSTER}b'].sampled >= 1
-    assert sum(s.sampled for s in scope.strata) == 13
     again = await resolve_scope(_world(), request)
     assert again.sampled_ids == scope.sampled_ids
     other = await resolve_scope(
         _world(), _request(_cluster(), sample={'mode': 'representative', 'seed': 5})
     )
     assert other.sampled_ids != scope.sampled_ids
-
-
-@pytest.mark.asyncio
-async def test_one_sub_cluster_is_not_stratified() -> None:
-    request = _request(_cluster(f'{CLUSTER}b'), sample={'mode': 'representative', 'size': 4})
-    scope = await resolve_scope(_world(), request)
-    assert len(scope.sampled_ids) == 4
-    assert scope.strata == []
 
 
 @pytest.mark.asyncio
@@ -140,9 +125,9 @@ async def test_a_crops_target_keeps_the_callers_order_and_skips_holdout_and_miss
 
 @pytest.mark.asyncio
 async def test_a_filter_target_selects_by_the_item_filter() -> None:
-    target = {'kind': 'filter', 'filter': {'cluster_subid': f'{CLUSTER}b'}}
+    target = {'kind': 'filter', 'filter': {'class_source': 'human'}}
     scope = await resolve_scope(_world(), _request(target))
-    assert len(scope.members) == 10
+    assert scope.members == ['human']
 
 
 def test_a_crops_target_with_a_representative_sample_is_refused() -> None:

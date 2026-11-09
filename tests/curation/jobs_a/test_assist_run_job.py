@@ -19,7 +19,11 @@ from src.services.curation.assist.prepare import prepare_queued
 
 
 REQUEST = AssistRunRequest.model_validate(
-    {'target': {'kind': 'cluster', 'cluster_id': 10000}, 'actions': ['classify'], 'dry_run': False}
+    {
+        'target': {'kind': 'cluster', 'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'},
+        'actions': ['classify'],
+        'dry_run': False,
+    }
 )
 RESOLVED = ResolvedScope(
     scope_count=4,

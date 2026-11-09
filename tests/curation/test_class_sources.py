@@ -229,7 +229,7 @@ def test_scan_finds_the_known_writers() -> None:
         for _, _, w in _class_source_writes()
         if isinstance(w, ast.Constant) and isinstance(w.value, str)
     }
-    assert {'vlm', 'vlm_unmatched', 'vlm_new_class_pending', 'human_move'} <= literals
+    assert {'vlm', 'vlm_unmatched', 'vlm_new_class_pending'} <= literals
 
 
 def test_every_written_class_source_is_in_the_catalog(clean_env: pytest.MonkeyPatch) -> None:

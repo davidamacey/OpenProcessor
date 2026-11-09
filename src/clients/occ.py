@@ -349,8 +349,6 @@ CLASS_WRITE_FIELDS = frozenset(
         'class_source',
         'label_source',
         'class_validated',
-        'cluster_id',
-        'cluster_subid',
         'vlm_confidence',
         'vlm_raw_class',
         'vlm_raw_label',

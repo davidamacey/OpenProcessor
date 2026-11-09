@@ -207,9 +207,9 @@ def test_an_ordering_with_nothing_unranked_suggests_nothing() -> None:
     from src.services.curation.item_filter import ItemFilter
 
     assert _embed_suggestion(ItemFilter(), 0) is None
-    request = _embed_suggestion(ItemFilter(cluster_id=7), 2)
+    request = _embed_suggestion(ItemFilter(class_id=7), 2)
     assert request is not None
-    assert request['targets']['filter']['cluster_id'] == 7
+    assert request['targets']['filter']['class_id'] == 7
 
 
 def test_the_crops_page_contract_publishes_the_suggestion() -> None:

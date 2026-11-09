@@ -13,14 +13,13 @@ intent (Opus review 2026-09-28, lock-rule call-site m1/exclusion.py:93).
 
 from __future__ import annotations
 
-from src.services.curation.exclusion import EXCLUDED_CLUSTER_ID, unexclusion_update
+from src.services.curation.exclusion import unexclusion_update
 
 
 def _excluded_doc(**extra):
     return {
         'class_excluded': True,
         'class_id': 7,
-        'cluster_id': EXCLUDED_CLUSTER_ID,
         **extra,
     }
 
@@ -53,3 +52,16 @@ def test_recorded_prior_validated_still_wins_over_the_legacy_branch():
     doc = _excluded_doc(class_source='vlm', excluded_prior_class_validated=True, test_holdout=False)
     update = unexclusion_update(doc, now='2026-09-28T00:00:00+00:00')
     assert update['class_validated'] is True
+
+
+def test_exclusion_keeps_the_item_in_its_cluster_and_unexclusion_restores_validation():
+    from src.services.curation.exclusion import exclusion_update
+
+    cur = {'class_id': 7, 'class_validated': True, 'cluster_uid': 'u1', 'cluster_state': 'assigned'}
+    out = exclusion_update(cur, reason='ignore', now='t')
+    assert out['class_validated'] is False
+    assert out['excluded_prior_class_validated'] is True
+    assert not any(k.startswith('cluster_') for k in out), 'placement is left alone'
+    back = unexclusion_update({**cur, **out}, now='t2')
+    assert back['class_validated'] is True
+    assert not any(k.startswith('cluster_') for k in back)

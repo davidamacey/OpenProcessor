@@ -9,6 +9,7 @@ Mount the real curation router with OpenSearch stubbed and the job seam (``embed
 
 from __future__ import annotations
 
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -88,7 +89,7 @@ def test_status_and_cancel_are_not_gated_by_the_flag(
 # =============================================================================
 
 
-def test_rebuild_cluster_scope_without_cluster_id_400(
+def test_rebuild_cluster_scope_without_cluster_uid_400(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
@@ -96,7 +97,7 @@ def test_rebuild_cluster_scope_without_cluster_id_400(
         '/curation/projects/default/viz/projection/rebuild', params={'scope': 'cluster'}
     )
     assert r.status_code == 400
-    assert 'cluster_id' in r.json()['detail']
+    assert 'cluster_uid' in r.json()['detail']
 
 
 def test_rebuild_unknown_scope_422(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -107,14 +108,14 @@ def test_rebuild_unknown_scope_422(app_client: TestClient, monkeypatch: pytest.M
     assert r.status_code == 422  # FastAPI Query(pattern=...) rejects before the handler runs
 
 
-def _queued_view(scope: str = 'residual', cluster_id: int | None = None) -> SimpleNamespace:
+def _queued_view(scope: str = 'residual', cluster_uid: str | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         id='j1',
         status='queued',
         started_at=None,
         finished_at=None,
         error_message=None,
-        params={'scope': scope, 'cluster_id': cluster_id},
+        params={'scope': scope, 'cluster_uid': cluster_uid},
         progress={},
         result=None,
     )
@@ -142,18 +143,23 @@ def test_rebuild_queues_the_job_and_answers_202_with_its_state(
     assert start.await_args.kwargs['scope'] == 'residual'
 
 
-def test_rebuild_cluster_scope_passes_cluster_id_through(
+def test_rebuild_cluster_scope_passes_cluster_uid_through(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-    start = _job_seam(monkeypatch, _queued_view('cluster', 10173))
+    start = _job_seam(monkeypatch, _queued_view('cluster', '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'))
     r = app_client.post(
         '/curation/projects/default/viz/projection/rebuild',
-        params={'scope': 'cluster', 'cluster_id': 10173},
+        params={'scope': 'cluster', 'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'},
     )
     assert r.status_code == 202
-    assert (r.json()['scope'], r.json()['cluster_id']) == ('cluster', 10173)
-    assert start.await_args.kwargs['cluster_id'] == 10173
+    assert (r.json()['scope'], r.json()['cluster_uid']) == (
+        'cluster',
+        '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
+    )
+    assert start.await_args.kwargs['cluster_uid'] == uuid.UUID(
+        '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
+    )
 
 
 def test_cancel_reports_whether_a_job_was_cancelled(
@@ -215,7 +221,7 @@ def test_get_projection_serves_cached_points(
                         '_source': {
                             'viz_x': 0.5,
                             'viz_y': -0.5,
-                            'cluster_id': 42,
+                            'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
                             'class_name': 'sedan',
                             'class_source': 'item_model',
                         },
@@ -236,7 +242,7 @@ def test_get_projection_serves_cached_points(
             'crop_id': 'crop-a',
             'x': 0.5,
             'y': -0.5,
-            'cluster_id': 42,
+            'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
             'class_name': 'sedan',
             'class_source': 'item_model',
         }

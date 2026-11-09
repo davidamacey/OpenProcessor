@@ -194,8 +194,10 @@ def test_an_unknown_box_or_crop_is_counted_not_sent(world: Any) -> None:
     [
         _boxes_target_body(('c1', 'b1'), actions=['classify']),
         _body(_boxes_target(('c1', 'b1')), ['verify'], sample={'mode': 'representative'}),
-        _body({'kind': 'cluster', 'cluster_id': 1}, ['verify']),
-        _body({'kind': 'filter', 'filter': {'cluster_id': 1}}, ['verify']),
+        _body(
+            {'kind': 'cluster', 'cluster_uid': '0c9a9f5e-3b7d-4a6f-8f0e-5d1b2c3d4e5f'}, ['verify']
+        ),
+        _body({'kind': 'filter', 'filter': {'class_id': 1}}, ['verify']),
     ],
 )
 def test_requests_that_make_no_sense_are_refused(world: Any, body: dict[str, Any]) -> None:

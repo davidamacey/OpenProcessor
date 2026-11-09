@@ -39,7 +39,7 @@ async def batch_exclude_crops(
     it's un-excluded.
 
     Non-destructive: the crop document stays in OpenSearch for audit and
-    provenance, and the pre-exclusion validation + cluster placement are
+    provenance, and the pre-exclusion validation is
     recorded (``excluded_prior_*``) so un-exclude can restore them.
     ``reason`` defaults to ``'ignore'``; pass a tag like
     ``'blurry'`` to record why (e.g. a whole cluster of blurry items).
@@ -105,11 +105,7 @@ async def batch_unexclude_crops(
     """Reverse an exclusion (Undo path for Ignore).
 
     Clears ``class_excluded`` + provenance and restores the validation
-    recorded at exclude time. A validated crop goes straight back to its
-    class cluster (``cluster_id == class_id``); an unvalidated one returns
-    to the candidate cluster it was excluded from while that cluster still
-    has members, else drops to the residual pool (``cluster_id=null``) for
-    a fresh assignment on the next recluster. Crops that aren't excluded
+    recorded at exclude time; the crop never left its cluster. Crops that aren't excluded
     are left untouched.
     """
     ids = await selected_crop_ids(opensearch, payload)
@@ -117,17 +113,13 @@ async def batch_unexclude_crops(
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
         return {'unexcluded': 0, 'updated_ids': [], 'errors': 0}
-    from src.services.curation.exclusion import live_candidate_ids, unexclusion_update
+    from src.services.curation.exclusion import unexclusion_update
 
-    try:
-        live = await live_candidate_ids(opensearch, items_index(), ids)
-    except Exception as exc:
-        raise server_error(503, 'opensearch error', exc) from exc
     now = now_iso()
     updated_ids, n_errors = await _occ_bulk_human_write(
         opensearch,
         ids,
-        lambda _id, cur: unexclusion_update(cur, now=now, live_candidate_ids=live),
+        lambda _id, cur: unexclusion_update(cur, now=now),
         writer_id='human:batch_unexclude_crops',
     )
     return {'unexcluded': len(updated_ids), 'updated_ids': updated_ids, 'errors': n_errors}

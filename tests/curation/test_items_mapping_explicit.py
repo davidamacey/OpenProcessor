@@ -76,9 +76,9 @@ def test_box_text_and_detector_are_keywords_inside_the_nested_box_mapping() -> N
     detector with a term filter, both on the nested box element."""
     boxes = _PROPS[RegionFields().boxes]
     assert boxes['type'] == 'nested'
-    for key in ('text', 'detector', 'state', 'source', 'confidence', 'cluster_subid'):
+    for key in ('text', 'detector', 'state', 'source', 'confidence'):
         assert boxes['properties'][key]['type'] == 'keyword', key
-    assert boxes['properties']['cluster_id']['type'] == 'integer'
+    assert 'cluster_id' not in boxes['properties']
 
 
 def test_no_query_targets_a_dynamic_keyword_subfield_of_a_region_field() -> None:
@@ -115,8 +115,6 @@ def test_class_history_is_an_unindexed_object() -> None:
         ('excluded_by', 'keyword'),
         ('excluded_reason', 'keyword'),
         ('excluded_prior_class_validated', 'boolean'),
-        ('excluded_prior_cluster_id', 'integer'),
-        ('excluded_prior_cluster_subid', 'keyword'),
     ],
 )
 def test_exclusion_fields_are_mapped(field: str, expected: str) -> None:

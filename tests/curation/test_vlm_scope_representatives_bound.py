@@ -1,9 +1,8 @@
 """Scope ``representatives`` is bounded: the VLM is asked about at most
-``per_cluster`` crops of each ORIGINAL cluster, however often the reps refresh.
+``per_cluster`` crops of each served cluster, however often the reps refresh.
 
-A VLM class write moves the labelled crop out of its candidate cluster into the
-class cluster, so a ranking that only looks at the cluster's *current* members
-picks the next K on every refresh and drains the whole cluster (issue #192).
+Reps are claimed per ``cluster_uid`` and the claim is persisted, so ranking the cluster's members
+again after some were labelled never hands out the next K (issue #192).
 """
 
 from __future__ import annotations
@@ -23,11 +22,17 @@ from src.services.curation.vlm_scope import ScopeCache, representative_ids
 
 
 ITEMS = base_curation_config().items_index
-CAND = 10000  # candidate cluster ids start here
-CLASS_CLUSTER = 3  # a VLM answer moves the crop to cluster_id == class_id
+CLASS_ID = 3
 
 
-def _doc(crop_id: str, cluster_id: int, dist: float, **extra: Any) -> dict[str, Any]:
+def _uid(n: int) -> str:
+    return f'uid-{n:04d}'
+
+
+CAND = 0
+
+
+def _doc(crop_id: str, cluster: int | None, score: float, **extra: Any) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
         'class_id': None,
@@ -36,9 +41,11 @@ def _doc(crop_id: str, cluster_id: int, dist: float, **extra: Any) -> dict[str, 
         'class_validated': False,
         'confidence': 0.5,
         'pe_embedding': [0.1],
-        'cluster_id': cluster_id,
-        'cluster_distance': dist,
-        'cluster_distance_cluster_id': cluster_id,
+        **(
+            {'cluster_uid': _uid(cluster), 'cluster_state': 'assigned', 'cluster_score': score}
+            if cluster is not None
+            else {'cluster_state': 'unassigned'}
+        ),
         **extra,
     }
 
@@ -48,7 +55,7 @@ def _clusters(sizes: dict[int, int]) -> dict[str, dict[str, Any]]:
     for cid, size in sizes.items():
         for n in range(size):
             crop_id = f'k{cid}_{n:02d}'
-            docs[crop_id] = _doc(crop_id, cid, n / 100)
+            docs[crop_id] = _doc(crop_id, cid, 1 - n / 100)
     return docs
 
 
@@ -63,16 +70,14 @@ class _Fake(SettingsFakeOpenSearch):
 
 
 def _label(fake: _Fake, crop_ids: list[str]) -> None:
-    """What a successful VLM class write does to an item (``set_cluster=True``):
-    class set, moved to the class cluster, the distance reference left behind."""
+    """What a successful VLM class write does to an item: the class is set, the cluster is not."""
     now = datetime.now(UTC).isoformat()
     for crop_id in crop_ids:
         doc = fake.docs(ITEMS)[crop_id]
         doc.update(
-            class_id=CLASS_CLUSTER,
+            class_id=CLASS_ID,
             class_name='car',
             class_source='vlm',
-            cluster_id=CLASS_CLUSTER,
             **{VLM_CLASS_ATTEMPTED_AT_FIELD: now},
         )
 
@@ -155,12 +160,11 @@ async def test_raising_per_cluster_claims_only_the_difference() -> None:
 
 
 def _regroup(fake: _Fake, new_ids: list[int]) -> None:
-    """A re-cluster: every still-unlabelled crop gets a new candidate cluster id."""
-    rest = [d for d in fake.docs(ITEMS).values() if d['cluster_id'] >= CAND]
+    """A new partition: every still-unlabelled crop gets a new cluster uid."""
+    rest = [d for d in fake.docs(ITEMS).values() if d.get('class_id') is None]
     for n, doc in enumerate(rest):
-        doc['cluster_id'] = new_ids[n % len(new_ids)]
-        doc['cluster_distance_cluster_id'] = doc['cluster_id']
-        doc['cluster_distance'] = n / 100
+        doc['cluster_uid'] = _uid(new_ids[n % len(new_ids)])
+        doc['cluster_score'] = 1 - n / 100
 
 
 @pytest.mark.asyncio
@@ -168,37 +172,14 @@ async def test_a_recluster_gives_the_new_clusters_a_fresh_k() -> None:
     fake = _Fake({ITEMS: _clusters({CAND: 10, CAND + 1: 10})})
     policy = VlmPolicy(scope='representatives', per_cluster=2)
     assert len(await _run_rounds(fake, policy, 3)) == 4
-    _regroup(fake, [CAND + 5, CAND + 6])  # the old ids are gone
+    _regroup(fake, [CAND + 5, CAND + 6])  # the old uids are gone
     assert len(await _run_rounds(fake, policy, 4)) == 4  # K per NEW cluster, no cascade
-
-
-@pytest.mark.asyncio
-async def test_a_recluster_reusing_an_id_with_pending_reps_elsewhere_re_picks() -> None:
-    fake = _Fake({ITEMS: _clusters({CAND: 10})})
-    policy = VlmPolicy(scope='representatives', per_cluster=2)
-    claimed = await representative_ids(fake, per_cluster=2)  # claimed, never attempted
-    assert claimed == {f'k{CAND}_00', f'k{CAND}_01'}
-    _regroup(fake, [CAND + 1, CAND])  # CAND is reused for different members
-    reps = await representative_ids(fake, per_cluster=2)
-    # CAND's old reps now sit in another cluster: its claim is stale, so CAND is
-    # ranked afresh (and CAND+1 is new): two reps each.
-    assert len(reps) == 4
-    assert len(await _pending(fake, reps, policy)) == 4
-
-
-@pytest.mark.asyncio
-async def test_a_recluster_reusing_an_id_whose_reps_were_all_labelled_fails_closed() -> None:
-    fake = _Fake({ITEMS: _clusters({CAND: 10})})
-    policy = VlmPolicy(scope='representatives', per_cluster=2)
-    assert len(await _run_rounds(fake, policy, 2)) == 2
-    _regroup(fake, [CAND])  # same id, no way to tell it is a different cluster
-    assert await _run_rounds(fake, policy, 3) == set()
 
 
 @pytest.mark.asyncio
 async def test_unassigned_crops_stay_in_scope() -> None:
     docs = _clusters({CAND: 4})
-    docs['u1'] = _doc('u1', -1, 0.0)
+    docs['u1'] = _doc('u1', None, 0.0)
     fake = _Fake({ITEMS: docs})
     policy = VlmPolicy(scope='representatives', per_cluster=1)
     attempted = await _run_rounds(fake, policy, 3)

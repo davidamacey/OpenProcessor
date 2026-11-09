@@ -1,10 +1,8 @@
 """Resolve an assist run's target to members, then to the sample the VLM sees.
 
-A cluster or sub-cluster target is a filter on stored fields (``cluster_id``,
-``cluster_subid``); nothing here depends on how items were clustered. The
-run records the resolved member ids and a digest, so staleness is measured as
-membership overlap (:func:`membership_overlap`), never by trusting a sub-id
-string across a re-refine.
+A cluster target is a filter on the stored ``cluster_uid`` of the serving partition. The
+run records the resolved member ids and a digest, so staleness is measured as membership
+overlap (:func:`membership_overlap`), never by trusting the cluster across a new partition.
 """
 
 from __future__ import annotations
@@ -23,7 +21,6 @@ from src.services.curation.assist.models import (
     CropsTarget,
     FilterTarget,
     SkippedCounts,
-    StratumInfo,
 )
 from src.services.curation.class_write_guard import class_write_locked
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
@@ -35,7 +32,7 @@ from src.services.rejections import rejection
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-_INCLUDES = ['test_holdout', 'class_excluded', 'cluster_subid', 'class_source', 'class_validated']
+_INCLUDES = ['test_holdout', 'class_excluded', 'class_source', 'class_validated']
 
 
 @dataclass
@@ -45,7 +42,6 @@ class ScopeResolution:
     digest: str
     skipped: SkippedCounts
     sampled_ids: list[str]
-    strata: list[StratumInfo]
     seed: int
     box_ids: dict[str, list[str]] | None = None
     """For a boxes target: the valid named box ids per item."""
@@ -74,19 +70,17 @@ def membership_overlap(before: list[str], now: list[str]) -> dict[str, Any]:
 
 def scope_filter(target: ClusterTarget | FilterTarget) -> ItemFilter:
     if isinstance(target, ClusterTarget):
-        return ItemFilter(cluster_id=target.cluster_id, cluster_subid=target.cluster_subid)
+        return ItemFilter(cluster_uid=target.cluster_uid)
     return target.filter
 
 
 def proposal_scope(target: AssistTarget) -> ItemFilter | None:
-    """The (sub-)cluster a run's proposal is about: the cluster target itself, or the
+    """The cluster a run's proposal is about: the cluster target itself, or the
     context a selection of crops was made in; ``None`` for a bare selection or a filter."""
     if isinstance(target, ClusterTarget):
         return scope_filter(target)
     if isinstance(target, CropsTarget) and target.context is not None:
-        return ItemFilter(
-            cluster_id=target.context.cluster_id, cluster_subid=target.context.cluster_subid
-        )
+        return ItemFilter(cluster_uid=target.context.cluster_uid)
     return None
 
 
@@ -197,13 +191,7 @@ async def _box_members(
     return members, skipped, valid
 
 
-def _stratum(source: dict[str, Any]) -> str:
-    return str(source.get('cluster_subid') or '')
-
-
-def _sample(
-    request: AssistRunRequest, members: list[tuple[str, dict[str, Any]]]
-) -> tuple[list[str], list[StratumInfo]]:
+def _sample(request: AssistRunRequest, members: list[tuple[str, dict[str, Any]]]) -> list[str]:
     sample = request.sample
     ids = [cid for cid, _ in members]
     if sample.mode == 'all':
@@ -215,23 +203,9 @@ def _sample(
                 'use a representative sample, a narrower scope, or the auto-label job',
                 limit=MAX_ASSIST_ITEMS,
             )
-        return ids, []
+        return ids
     k = representative_size(len(ids), size=sample.size)
-    by_stratum: dict[str, list[str]] = {}
-    for cid, source in members:
-        by_stratum.setdefault(_stratum(source), []).append(cid)
-    stratify = sample.stratify_by == 'cluster_subid' or (
-        sample.stratify_by == 'auto' and len(by_stratum) > 1
-    )
-    if not stratify:
-        return stratified_sample({'': ids}, k, seed=sample.seed), []
-    picked = stratified_sample(by_stratum, k, seed=sample.seed)
-    picked_set = set(picked)
-    strata = [
-        StratumInfo(key=key, size=len(group), sampled=sum(1 for i in group if i in picked_set))
-        for key, group in sorted(by_stratum.items())
-    ]
-    return picked, strata
+    return stratified_sample({'': ids}, k, seed=sample.seed)
 
 
 async def resolve_scope(opensearch: AsyncOpenSearch, request: AssistRunRequest) -> ScopeResolution:
@@ -246,13 +220,10 @@ async def resolve_scope(opensearch: AsyncOpenSearch, request: AssistRunRequest) 
         members, skipped = await _crop_members(opensearch, target)
     else:
         label = (
-            f'cluster {target.cluster_id}'
-            + (f' sub-cluster {target.cluster_subid}' if target.cluster_subid else '')
-            if isinstance(target, ClusterTarget)
-            else 'the filter'
+            f'cluster {target.cluster_uid}' if isinstance(target, ClusterTarget) else 'the filter'
         )
         members, skipped = await filter_members(opensearch, scope_filter(target), label=label)
-    sampled, strata = _sample(request, members)
+    sampled = _sample(request, members)
     sampled_set = set(sampled)
     locked = {cid for cid, s in members if cid in sampled_set and class_write_locked(s)}
     skipped.class_locked = len(locked)
@@ -262,7 +233,6 @@ async def resolve_scope(opensearch: AsyncOpenSearch, request: AssistRunRequest) 
         digest=membership_digest(ids),
         skipped=skipped,
         sampled_ids=sampled,
-        strata=strata,
         seed=request.sample.seed,
         box_ids=box_ids,
         class_locked_ids=locked,

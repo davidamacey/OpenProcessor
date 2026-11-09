@@ -121,15 +121,13 @@ def prediction_class_update(
     now: str,
     provenance: dict[str, Any],
     extras: dict[str, Any] | None = None,
-    set_cluster: bool = False,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """The item update for one open-vocabulary class prediction.
 
     Returns ``(update, new_class_proposal)``; ``update`` is ``None`` when
     nothing may be written (the call never completed). ``resolve(raw,
     confidence=...)`` maps an answer onto a registry name. ``extras``
-    (region-visible hints) ride on every written update;
-    ``set_cluster`` also moves a resolved item into its class cluster. An
+    (region-visible hints) ride on every written update. An
     empty answer records no raw label: a reply excerpt such as ``"]"`` is
     not a label and would pollute the raw-label aggregation.
     """
@@ -174,8 +172,6 @@ def prediction_class_update(
     }
     if is_new:
         update['vlm_raw_class'] = pred.proposed_class
-    if set_cluster:
-        update['cluster_id'] = cid
     return update, None
 
 
@@ -190,8 +186,6 @@ _CLASS_STATE_FIELDS = frozenset(
         'class_detector_version',
         'class_labeler',
         'class_labeled_at',
-        'cluster_id',
-        'cluster_subid',
         'label_source',
         'needs_new_class',
         'vlm_raw_class',

@@ -46,7 +46,6 @@ class PreparedRun:
             scope_digest=self.scope.digest,
             sampled=n,
             sample_seed=self.scope.seed,
-            strata=self.scope.strata,
             skipped=self.scope.skipped,
             vlm={
                 'name': self.vlm.name,
@@ -196,7 +195,6 @@ async def prepare_queued(
         digest=resolved.scope_digest,
         skipped=resolved.skipped,
         sampled_ids=sampled_ids,
-        strata=resolved.strata,
         seed=resolved.sample_seed,
         box_ids=box_ids,
     )

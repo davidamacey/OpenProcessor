@@ -19,6 +19,8 @@ from src.services.embedding_spaces.resolve import embedding_space
 
 
 if TYPE_CHECKING:
+    import uuid
+
     from opensearchpy import AsyncOpenSearch
 
 logger = get_logger(__name__)
@@ -53,7 +55,7 @@ async def _load_run_metadata() -> dict[str, Any]:
     return {
         'projection_version': f'umap_viz_v{row.projection_version}',
         'scope': row.scope,
-        'cluster_id': row.cluster_id,
+        'cluster_uid': None if row.cluster_uid is None else str(row.cluster_uid),
         'n_points': row.n_points,
         'fitted_at': row.fitted_at.isoformat(),
         'n_components': row.n_components,
@@ -67,7 +69,7 @@ def _point_from_hit(h: dict[str, Any]) -> dict[str, Any]:
         'crop_id': h['_id'],
         'x': src.get('viz_x'),
         'y': src.get('viz_y'),
-        'cluster_id': src.get('cluster_id'),
+        'cluster_uid': src.get('cluster_uid'),
         'class_name': src.get('class_name'),
         'class_source': src.get('class_source'),
     }
@@ -76,7 +78,7 @@ def _point_from_hit(h: dict[str, Any]) -> dict[str, Any]:
 async def get_cached_projection(
     opensearch: AsyncOpenSearch,
     *,
-    cluster_id: int | None = None,
+    cluster_uid: uuid.UUID | None = None,
     class_id: int | None = None,
     max_points: int = 50_000,
 ) -> dict[str, Any]:
@@ -99,8 +101,8 @@ async def get_cached_projection(
     embedding_field = (await embedding_space(Target.ITEM)).vector_field
     scope_must: list[dict[str, Any]] = [embedded_clause(embedding_field)]
     scope_must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
-    if cluster_id is not None:
-        scope_must.append({'term': {'cluster_id': cluster_id}})
+    if cluster_uid is not None:
+        scope_must.append({'term': {'cluster_uid': str(cluster_uid)}})
     if class_id is not None:
         scope_must.append({'term': {'class_id': class_id}})
 
@@ -117,7 +119,7 @@ async def get_cached_projection(
         body: dict[str, Any] = {
             'size': page_size,
             'query': points_query,
-            '_source': ['viz_x', 'viz_y', 'cluster_id', 'class_name', 'class_source'],
+            '_source': ['viz_x', 'viz_y', 'cluster_uid', 'class_name', 'class_source'],
             'sort': [{'crop_id': 'asc'}],
             'track_total_hits': False,
         }

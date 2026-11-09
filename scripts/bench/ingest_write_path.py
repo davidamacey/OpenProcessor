@@ -129,7 +129,7 @@ async def run_arm(
     query_vectors = [it['pe_embedding'] for s in sources[:200] for it in s['items'][:1]]
     flt = _build_filter(
         tab=None,
-        cluster_id=None,
+        cluster_uid=None,
         date_from=None,
         date_to=None,
         max_rank=None,

@@ -142,20 +142,16 @@ async def read_members(session: AsyncSession, view: JobView) -> list[str] | None
         return await job_items.read_items(session, uuid.UUID(view.id), limit=int(total))
 
 
-def _names_scope(state: AssistRunState, cluster_id: int | None, subid: str | None) -> bool:
+def _names_scope(state: AssistRunState, cluster_uid: uuid.UUID | None) -> bool:
     target = state.request.target
     scope = getattr(target, 'context', None) or target
-    got_id = getattr(scope, 'cluster_id', None)
-    got_subid = getattr(scope, 'cluster_subid', None)
-    if cluster_id is None:
-        return True
-    return got_id == cluster_id and (subid is None or got_subid == subid)
+    return cluster_uid is None or getattr(scope, 'cluster_uid', None) == cluster_uid
 
 
 async def list_runs(
-    session: AsyncSession, *, cluster_id: int | None, cluster_subid: str | None, limit: int
+    session: AsyncSession, *, cluster_uid: uuid.UUID | None, limit: int
 ) -> list[tuple[AssistRunState, list[str] | None]]:
-    """The newest runs, newest first, whose target or context names that scope, each with the
+    """The newest runs, newest first, whose target or context names that cluster, each with the
     member ids it kept (``None`` when it kept none)."""
     page = await job_status.list_jobs(
         session, project=current_project_id(), kinds=[KIND], limit=KEEP_RUNS
@@ -166,7 +162,7 @@ async def list_runs(
         if view is None:
             continue
         state = state_from_view(view)
-        if _names_scope(state, cluster_id, cluster_subid):
+        if _names_scope(state, cluster_uid):
             out.append((state, await read_members(session, view)))
             if len(out) >= limit:
                 break

@@ -104,7 +104,7 @@ async def test_projection_state_is_replaced_in_place(pg_env, project) -> None:
                 project,
                 projection_version=version,
                 scope='all',
-                cluster_id=None,
+                cluster_uid=None,
                 n_points=10,
                 n_components=2,
                 metric='cosine',

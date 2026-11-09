@@ -42,8 +42,7 @@ def _vlm_item() -> dict[str, Any]:
         'class_source': 'vlm',
         'label_source': 'vlm',
         'class_validated': False,
-        'cluster_id': 10004,
-        'cluster_subid': '10004a',
+        'cluster_uid': 'u1',
         'embedding_state': 'ready',
         'pe_embedding': [0.1],
     }
@@ -63,8 +62,6 @@ def test_fields_for_a_new_item() -> None:
         'class_source': 'assist_propagated',
         'class_validated': False,
         'label_source': 'assist_loop',
-        'cluster_id': 4,
-        'cluster_subid': None,
         'class_detector': 'assist_loop',
         'class_detector_version': RUN,
         'class_labeler': 'assist_loop',

@@ -25,7 +25,7 @@ def _doc(crop_id: str, **kw: Any) -> dict[str, Any]:
         'class_detector_version': '1',
         'class_labeler': 'coco_yolo11',
         'class_labeled_at': '2026-01-01T00:00:00Z',
-        'cluster_id': 5,
+        'cluster_uid': 'u1',
         'class_validated': False,
         **kw,
     }
@@ -33,8 +33,8 @@ def _doc(crop_id: str, **kw: Any) -> dict[str, Any]:
 
 def _docs() -> dict[str, dict[str, Any]]:
     return {
-        'a_class_range': _doc('a_class_range', cluster_id=5),
-        'b_candidate_cluster': _doc('b_candidate_cluster', cluster_id=10042),
+        'a_class_range': _doc('a_class_range'),
+        'b_candidate_cluster': _doc('b_candidate_cluster', cluster_uid='u2'),
         # class_write_locked() is validated-OR-human-owned; a doc can only
         # be BOTH class_source='vlm_unmatched' (the query filter) AND
         # locked via the validated flag -- class_source being itself a
@@ -52,14 +52,12 @@ async def test_plans_pick_exactly_the_unlocked_rows() -> None:
 
     assert set(plans) == {'a_class_range', 'b_candidate_cluster', 'c_validated'}
     assert plans['a_class_range'].applicable is True
-    assert plans['a_class_range'].restore['cluster_id'] == -1
     assert plans['b_candidate_cluster'].applicable is True
-    assert 'cluster_id' not in plans['b_candidate_cluster'].restore
     assert plans['c_validated'].applicable is False
 
 
 @pytest.mark.asyncio
-async def test_apply_clears_class_and_resets_class_range_cluster() -> None:
+async def test_apply_clears_class_and_leaves_the_cluster() -> None:
     fake = QueryFakeOpenSearch({INDEX: _docs()})
     plans = await repair.plan_repairs(fake, index=INDEX)
     counts = await repair.apply_repairs(fake, plans, index=INDEX)
@@ -70,8 +68,7 @@ async def test_apply_clears_class_and_resets_class_range_cluster() -> None:
     assert a['class_id'] is None
     assert a['class_name'] is None
     assert a['class_detector'] is None
-    assert a['cluster_id'] == -1
-    assert a['cluster_subid'] is None
+    assert a['cluster_uid'] == 'u1'
     snap = a['class_id_history'][-1]
     assert (snap['class_source'], snap['restorable'], snap['writer']) == (
         'vlm_unmatched',
@@ -81,7 +78,7 @@ async def test_apply_clears_class_and_resets_class_range_cluster() -> None:
 
     b = docs['b_candidate_cluster']
     assert b['class_id'] is None
-    assert b['cluster_id'] == 10042  # candidate cluster untouched
+    assert b['cluster_uid'] == 'u2'  # the cluster is untouched
 
     # A locked (validated) row is never written.
     assert 'class_id_history' not in docs['c_validated']
@@ -110,7 +107,7 @@ async def test_script_dry_run_writes_nothing(capsys: pytest.CaptureFixture[str])
     assert await run(args, fake) == 0
     assert fake.docs(INDEX) == before
     out = capsys.readouterr().out
-    assert '3 candidate(s); 2 repairable (1 in a class-range cluster), 1 skipped (locked)' in out
+    assert '3 candidate(s); 2 repairable, 1 skipped (locked)' in out
     assert 'Dry-run only' in out
 
 

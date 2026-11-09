@@ -15,8 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.curation_accessors import items_index
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET, cluster_kind
-from src.services.curation.cluster_representatives import representatives_msearch_body
+from src.services.curation.cluster_representatives import partition_representatives_body
 from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.vlm_policy_store import get_vlm_policy
 from src.services.curation.vlm_rep_claims import (
@@ -42,7 +41,6 @@ _SAMPLE_SOURCE = (
 
 _MAX_CLUSTERS = 5000
 _MSEARCH_CHUNK = 200
-_LOOKUP_CHUNK = 1000
 _CLAIM_WRITE_ATTEMPTS = 3
 
 
@@ -95,8 +93,8 @@ def vlm_scope_clauses(
                 'bool': {
                     'should': [
                         {'terms': {'crop_id': sorted(representative_ids)}},
-                        {'range': {'cluster_id': {'lt': 0}}},
-                        {'bool': {'must_not': [{'exists': {'field': 'cluster_id'}}]}},
+                        {'term': {'cluster_state': 'unassigned'}},
+                        {'bool': {'must_not': [{'exists': {'field': 'cluster_uid'}}]}},
                     ],
                     'minimum_should_match': 1,
                 }
@@ -117,94 +115,61 @@ def vlm_scope_clauses(
     return ScopeClauses(filter=filters, must_not=list(OUT_OF_PIPELINE))
 
 
-async def _ranked_by_cluster(opensearch: Any, per_cluster: int) -> dict[int, list[str]]:
-    """Each assigned cluster's ``per_cluster`` nearest members, nearest first
-    (the ranking the cluster cards show), excluded items left out."""
+async def _ranked_by_cluster(opensearch: Any, per_cluster: int) -> dict[str, list[str]]:
+    """Each served cluster's ``per_cluster`` best-scored members, best first (the ranking the
+    cluster cards show), excluded items left out."""
     resp = await opensearch.search(
         index=items_index(),
         body={
             'size': 0,
             'query': {
                 'bool': {
-                    'filter': [{'range': {'cluster_id': {'gte': 0}}}],
-                    'must_not': [{'term': {'class_excluded': True}}],
+                    'filter': [{'exists': {'field': 'cluster_uid'}}],
+                    'must_not': [
+                        {'term': {'class_excluded': True}},
+                        {'term': {'cluster_state': 'unassigned'}},
+                    ],
                 }
             },
-            'aggs': {'clusters': {'terms': {'field': 'cluster_id', 'size': _MAX_CLUSTERS}}},
+            'aggs': {'clusters': {'terms': {'field': 'cluster_uid', 'size': _MAX_CLUSTERS}}},
         },
     )
-    cluster_ids = [
-        int(b['key']) for b in resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])
+    uids = [
+        str(b['key']) for b in resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])
     ]
-    ranked: dict[int, list[str]] = {}
-    for start in range(0, len(cluster_ids), _MSEARCH_CHUNK):
-        chunk = cluster_ids[start : start + _MSEARCH_CHUNK]
+    ranked: dict[str, list[str]] = {}
+    for start in range(0, len(uids), _MSEARCH_CHUNK):
+        chunk = uids[start : start + _MSEARCH_CHUNK]
         lines: list[dict[str, Any]] = []
-        for cid in chunk:
+        for uid in chunk:
             lines.append({'index': items_index()})
-            lines.append(representatives_msearch_body(cid, per_cluster))
+            lines.append(partition_representatives_body(uid, per_cluster))
         out = await opensearch.msearch(body=lines)
-        for cid, sub in zip(chunk, out.get('responses', []), strict=True):
+        for uid, sub in zip(chunk, out.get('responses', []), strict=True):
             hits = ((sub or {}).get('hits') or {}).get('hits') or []
-            ranked[cid] = [h.get('_source', {}).get('crop_id') or h['_id'] for h in hits]
+            ranked[uid] = [h.get('_source', {}).get('crop_id') or h['_id'] for h in hits]
     return ranked
 
 
-async def _current_cluster_of(opensearch: Any, crop_ids: list[str]) -> dict[str, Any]:
-    """``crop_id -> cluster_id`` for the crops that still exist."""
-    found: dict[str, Any] = {}
-    for start in range(0, len(crop_ids), _LOOKUP_CHUNK):
-        chunk = crop_ids[start : start + _LOOKUP_CHUNK]
-        resp = await opensearch.search(
-            index=items_index(),
-            body={
-                'size': len(chunk),
-                '_source': ['crop_id', 'cluster_id'],
-                'query': {'terms': {'crop_id': chunk}},
-            },
-        )
-        for hit in resp.get('hits', {}).get('hits', []):
-            src = hit.get('_source') or {}
-            found[src.get('crop_id') or hit['_id']] = src.get('cluster_id')
-    return found
-
-
-async def _reconcile_claims(
-    opensearch: Any, stored: RepClaims, ranked: dict[int, list[str]], per_cluster: int
+def _reconcile_claims(
+    stored: RepClaims, ranked: dict[str, list[str]], per_cluster: int
 ) -> RepClaims:
-    """``stored`` brought up to date with the current clusters.
+    """``stored`` brought up to date with the served clusters.
 
-    A cluster keeps the reps it claimed (topped up to ``per_cluster`` from its
-    current ranking when it claimed fewer); only a cluster with no valid claim is
-    ranked afresh. A claim is stale, and its cluster id taken to be a different
-    cluster after a re-cluster reused the id, when a claimed crop now sits in
-    another candidate cluster. If every claimed crop has left for a class cluster
-    (labelled) nothing contradicts the claim, so it stands: a reused id then
-    under-labels rather than re-opening the pool. Claims of clusters that no
-    longer exist are dropped.
+    A cluster keeps the reps it claimed (topped up to ``per_cluster`` from its current ranking
+    when it claimed fewer); only a cluster with no claim is ranked afresh, so labelling a rep
+    never opens the pool for the next ones. A ``cluster_uid`` is never reused, so a claim needs
+    no staleness check; claims of clusters that no longer exist are dropped.
     """
-    by_cluster = {c.cluster_id: c.crop_ids for c in stored.claims}
-    candidate_claimed = sorted(
-        {
-            i
-            for cid, ids in by_cluster.items()
-            if cid in ranked and cid >= RESIDUAL_CLUSTER_ID_OFFSET
-            for i in ids
-        }
-    )
-    now_in = await _current_cluster_of(opensearch, candidate_claimed)
+    by_cluster = {c.cluster_uid: c.crop_ids for c in stored.claims}
     claims: list[RepClaim] = []
-    for cid, fresh in ranked.items():
-        ids = by_cluster.get(cid)
-        if ids is not None and any(
-            cluster_kind(now_in.get(i)) == 'candidate' and now_in[i] != cid for i in ids
-        ):
-            ids = None
+    for uid, fresh in ranked.items():
+        ids = by_cluster.get(uid)
         if ids is None:
             ids = list(fresh)
         elif len(ids) < per_cluster:
             ids = [*ids, *(i for i in fresh if i not in ids)][:per_cluster]
-        claims.append(RepClaim(cluster_id=cid, crop_ids=ids))
+        claims.append(RepClaim(cluster_uid=uid, crop_ids=ids))
     return RepClaims(revision=stored.revision, claims=claims)
 
 
@@ -216,7 +181,7 @@ async def representative_ids(opensearch: Any, *, per_cluster: int) -> set[str]:
     ranked = await _ranked_by_cluster(opensearch, per_cluster)
     for _ in range(_CLAIM_WRITE_ATTEMPTS):
         stored, row_revision = await read_rep_claims()
-        updated = await _reconcile_claims(opensearch, stored, ranked, per_cluster)
+        updated = _reconcile_claims(stored, ranked, per_cluster)
         if updated.claims != stored.claims:
             try:
                 await write_rep_claims(

@@ -48,13 +48,9 @@
     "needs_new_class",
     "needs_new_class_note",
     "cluster",
-    "cluster_id",
-    "cluster_kind",
     "cluster_distance",
     "cluster_similarity",
     "cluster_is_core",
-    "cluster_nearest_id",
-    "cluster_subid",
     "class_excluded",
     "excluded_reason",
     "excluded_at",
@@ -710,18 +706,6 @@
         "default": null,
         "title": "Cluster Distance"
       },
-      "cluster_id": {
-        "anyOf": [
-          {
-            "type": "integer"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Cluster Id"
-      },
       "cluster_is_core": {
         "anyOf": [
           {
@@ -734,35 +718,6 @@
         "default": null,
         "title": "Cluster Is Core"
       },
-      "cluster_kind": {
-        "anyOf": [
-          {
-            "enum": [
-              "class",
-              "candidate",
-              "unassigned"
-            ],
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Cluster Kind"
-      },
-      "cluster_nearest_id": {
-        "anyOf": [
-          {
-            "type": "integer"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Cluster Nearest Id"
-      },
       "cluster_similarity": {
         "anyOf": [
           {
@@ -774,18 +729,6 @@
         ],
         "default": null,
         "title": "Cluster Similarity"
-      },
-      "cluster_subid": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Cluster Subid"
       },
       "combine_conflict": {
         "default": false,

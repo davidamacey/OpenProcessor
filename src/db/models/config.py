@@ -253,7 +253,7 @@ class ProjectionState(Base):
     )
     projection_version: Mapped[int] = mapped_column(Integer)
     scope: Mapped[str]
-    cluster_id: Mapped[int | None] = mapped_column(Integer)
+    cluster_uid: Mapped[uuid.UUID | None]
     n_points: Mapped[int] = mapped_column(Integer)
     n_components: Mapped[int] = mapped_column(Integer)
     metric: Mapped[str]

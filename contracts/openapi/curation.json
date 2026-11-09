@@ -623,26 +623,16 @@
       },
       "AssistContext": {
         "additionalProperties": false,
-        "description": "The (sub-)cluster a selection of crops belongs to, so the run's result\nis listed with that scope.",
+        "description": "The cluster of the serving partition a selection of crops belongs to, so the run's\nresult is listed with that scope.",
         "properties": {
-          "cluster_id": {
-            "title": "Cluster Id",
-            "type": "integer"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
+          "cluster_uid": {
+            "format": "uuid",
+            "title": "Cluster Uid",
+            "type": "string"
           }
         },
         "required": [
-          "cluster_id"
+          "cluster_uid"
         ],
         "title": "AssistContext",
         "type": "object"
@@ -1343,7 +1333,7 @@
       },
       "AssistSample": {
         "additionalProperties": false,
-        "description": "What the VLM sees. ``all``: every member of the scope. ``representative``:\na seeded sample whose size grows with the scope (``size`` overrides), stratified\nby sub-cluster when the scope has several.",
+        "description": "What the VLM sees. ``all``: every member of the scope. ``representative``:\na seeded sample whose size grows with the scope (``size`` overrides).",
         "properties": {
           "mode": {
             "default": "all",
@@ -1371,16 +1361,6 @@
               }
             ],
             "title": "Size"
-          },
-          "stratify_by": {
-            "default": "auto",
-            "enum": [
-              "auto",
-              "cluster_subid",
-              "none"
-            ],
-            "title": "Stratify By",
-            "type": "string"
           }
         },
         "title": "AssistSample",
@@ -5651,22 +5631,12 @@
       },
       "ClusterTarget": {
         "additionalProperties": false,
-        "description": "A cluster, or one sub-cluster of it, addressed by the stored ids.",
+        "description": "A cluster of the serving partition, addressed by its ``cluster_uid``.",
         "properties": {
-          "cluster_id": {
-            "title": "Cluster Id",
-            "type": "integer"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
+          "cluster_uid": {
+            "format": "uuid",
+            "title": "Cluster Uid",
+            "type": "string"
           },
           "kind": {
             "const": "cluster",
@@ -5676,7 +5646,7 @@
         },
         "required": [
           "kind",
-          "cluster_id"
+          "cluster_uid"
         ],
         "title": "ClusterTarget",
         "type": "object"
@@ -14150,17 +14120,6 @@
             ],
             "title": "Cluster Distance"
           },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Id"
-          },
           "cluster_is_core": {
             "anyOf": [
               {
@@ -14172,33 +14131,6 @@
             ],
             "title": "Cluster Is Core"
           },
-          "cluster_kind": {
-            "anyOf": [
-              {
-                "enum": [
-                  "class",
-                  "candidate",
-                  "unassigned"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Kind"
-          },
-          "cluster_nearest_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Nearest Id"
-          },
           "cluster_similarity": {
             "anyOf": [
               {
@@ -14209,17 +14141,6 @@
               }
             ],
             "title": "Cluster Similarity"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
           },
           "combine_conflict": {
             "default": false,
@@ -15166,28 +15087,6 @@
               }
             ],
             "title": "Classifier Conf Lt"
-          },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Id"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
           },
           "cluster_uid": {
             "anyOf": [
@@ -22561,16 +22460,16 @@
             ],
             "title": "Class Source"
           },
-          "cluster_id": {
+          "cluster_uid": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Cluster Id"
+            "title": "Cluster Uid"
           },
           "crop_id": {
             "anyOf": [
@@ -25599,17 +25498,6 @@
             ],
             "title": "Cluster Distance"
           },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Id"
-          },
           "cluster_is_core": {
             "anyOf": [
               {
@@ -25621,33 +25509,6 @@
             ],
             "title": "Cluster Is Core"
           },
-          "cluster_kind": {
-            "anyOf": [
-              {
-                "enum": [
-                  "class",
-                  "candidate",
-                  "unassigned"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Kind"
-          },
-          "cluster_nearest_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Nearest Id"
-          },
           "cluster_similarity": {
             "anyOf": [
               {
@@ -25658,17 +25519,6 @@
               }
             ],
             "title": "Cluster Similarity"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
           },
           "combine_conflict": {
             "default": false,
@@ -26868,28 +26718,6 @@
             ],
             "title": "Cluster Assigned By"
           },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Id"
-          },
           "cluster_margin": {
             "anyOf": [
               {
@@ -26933,17 +26761,6 @@
               }
             ],
             "title": "Cluster State"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
           },
           "cluster_uid": {
             "anyOf": [
@@ -27250,9 +27067,6 @@
           "text_choice",
           "text_vlm_invalid",
           "text_disagreement",
-          "cluster_id",
-          "cluster_subid",
-          "cluster_distance",
           "cluster_partition_id",
           "cluster_uid",
           "cluster_state",
@@ -27843,28 +27657,6 @@
               }
             ],
             "title": "Classifier Conf Lt"
-          },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Id"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
           },
           "cluster_uid": {
             "anyOf": [
@@ -29149,13 +28941,6 @@
           "skipped": {
             "$ref": "#/components/schemas/SkippedCounts"
           },
-          "strata": {
-            "items": {
-              "$ref": "#/components/schemas/StratumInfo"
-            },
-            "title": "Strata",
-            "type": "array"
-          },
           "vlm": {
             "anyOf": [
               {
@@ -29653,17 +29438,6 @@
             ],
             "title": "Cluster Distance"
           },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Id"
-          },
           "cluster_is_core": {
             "anyOf": [
               {
@@ -29675,33 +29449,6 @@
             ],
             "title": "Cluster Is Core"
           },
-          "cluster_kind": {
-            "anyOf": [
-              {
-                "enum": [
-                  "class",
-                  "candidate",
-                  "unassigned"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Kind"
-          },
-          "cluster_nearest_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Nearest Id"
-          },
           "cluster_similarity": {
             "anyOf": [
               {
@@ -29712,17 +29459,6 @@
               }
             ],
             "title": "Cluster Similarity"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
           },
           "combine_conflict": {
             "default": false,
@@ -31333,17 +31069,6 @@
             ],
             "title": "Cluster Distance"
           },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Id"
-          },
           "cluster_is_core": {
             "anyOf": [
               {
@@ -31355,33 +31080,6 @@
             ],
             "title": "Cluster Is Core"
           },
-          "cluster_kind": {
-            "anyOf": [
-              {
-                "enum": [
-                  "class",
-                  "candidate",
-                  "unassigned"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Kind"
-          },
-          "cluster_nearest_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Nearest Id"
-          },
           "cluster_similarity": {
             "anyOf": [
               {
@@ -31392,17 +31090,6 @@
               }
             ],
             "title": "Cluster Similarity"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
           },
           "combine_conflict": {
             "default": false,
@@ -33482,29 +33169,6 @@
           "default"
         ],
         "title": "StrategyEntry",
-        "type": "object"
-      },
-      "StratumInfo": {
-        "properties": {
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
-          "sampled": {
-            "title": "Sampled",
-            "type": "integer"
-          },
-          "size": {
-            "title": "Size",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "key",
-          "size",
-          "sampled"
-        ],
-        "title": "StratumInfo",
         "type": "object"
       },
       "StratumMetrics": {
@@ -39238,7 +38902,7 @@
     },
     "/curation/projects/{project}/assist/runs": {
       "get": {
-        "description": "The newest runs, newest first, whose target or context names that cluster (and\nsub-cluster); all runs without ``cluster_id``. Each carries ``scope_now``, so a\nclient can mark a proposal stale after a re-refine. The newest 100 runs are scanned.",
+        "description": "The newest runs, newest first, whose target or context names that cluster;\nall runs without ``cluster_uid``. Each carries ``scope_now``, so a client can mark a\nproposal stale after the cluster changed. The newest 100 runs are scanned.",
         "operationId": "list_assist_runs_curation_projects__project__assist_runs_get",
         "parameters": [
           {
@@ -39252,34 +38916,19 @@
           },
           {
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cluster Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cluster_subid",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
+                  "format": "uuid",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cluster Subid"
+              "title": "Cluster Uid"
             }
           },
           {
@@ -42753,22 +42402,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "cluster_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cluster Id"
-            }
-          },
-          {
             "description": "Members of this cluster of the served partition.",
             "in": "query",
             "name": "cluster_uid",
@@ -42785,24 +42418,6 @@
               ],
               "description": "Members of this cluster of the served partition.",
               "title": "Cluster Uid"
-            }
-          },
-          {
-            "description": "One AHC sub-cluster of a cluster, e.g. '10000b'.",
-            "in": "query",
-            "name": "cluster_subid",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "One AHC sub-cluster of a cluster, e.g. '10000b'.",
-              "title": "Cluster Subid"
             }
           },
           {
@@ -43106,13 +42721,13 @@
             }
           },
           {
-            "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' nearest-first, with each item's cluster_distance / cluster_similarity / cluster_is_core recomputed against the same live centroid (both need cluster_id). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+            "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
             "in": "query",
             "name": "order",
             "required": false,
             "schema": {
               "default": "default",
-              "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' nearest-first, with each item's cluster_distance / cluster_similarity / cluster_is_core recomputed against the same live centroid (both need cluster_id). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+              "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
               "title": "Order",
               "type": "string"
             }
@@ -43469,7 +43084,7 @@
     },
     "/curation/projects/{project}/crops/batch_exclude": {
       "post": {
-        "description": "Exclude crops from training + clustering (reversible).\n\nSets ``class_excluded=true`` plus provenance (``excluded_at``,\n``excluded_by``, ``excluded_reason``) and moves the crop out of its\ncandidate bucket (``cluster_id=-2``, the excluded sentinel). The\nresidual-pool fetch, the trainer export, the cluster listing, and\nthe default crop browse all filter ``class_excluded=true`` out, so\nan excluded crop never re-appears in a cluster or training set until\nit's un-excluded.\n\nNon-destructive: the crop document stays in OpenSearch for audit and\nprovenance, and the pre-exclusion validation + cluster placement are\nrecorded (``excluded_prior_*``) so un-exclude can restore them.\n``reason`` defaults to ``'ignore'``; pass a tag like\n``'blurry'`` to record why (e.g. a whole cluster of blurry items).",
+        "description": "Exclude crops from training + clustering (reversible).\n\nSets ``class_excluded=true`` plus provenance (``excluded_at``,\n``excluded_by``, ``excluded_reason``) and moves the crop out of its\ncandidate bucket (``cluster_id=-2``, the excluded sentinel). The\nresidual-pool fetch, the trainer export, the cluster listing, and\nthe default crop browse all filter ``class_excluded=true`` out, so\nan excluded crop never re-appears in a cluster or training set until\nit's un-excluded.\n\nNon-destructive: the crop document stays in OpenSearch for audit and\nprovenance, and the pre-exclusion validation is\nrecorded (``excluded_prior_*``) so un-exclude can restore them.\n``reason`` defaults to ``'ignore'``; pass a tag like\n``'blurry'`` to record why (e.g. a whole cluster of blurry items).",
         "operationId": "batch_exclude_crops_curation_projects__project__crops_batch_exclude_post",
         "parameters": [
           {
@@ -43656,7 +43271,7 @@
     },
     "/curation/projects/{project}/crops/batch_unexclude": {
       "post": {
-        "description": "Reverse an exclusion (Undo path for Ignore).\n\nClears ``class_excluded`` + provenance and restores the validation\nrecorded at exclude time. A validated crop goes straight back to its\nclass cluster (``cluster_id == class_id``); an unvalidated one returns\nto the candidate cluster it was excluded from while that cluster still\nhas members, else drops to the residual pool (``cluster_id=null``) for\na fresh assignment on the next recluster. Crops that aren't excluded\nare left untouched.",
+        "description": "Reverse an exclusion (Undo path for Ignore).\n\nClears ``class_excluded`` + provenance and restores the validation\nrecorded at exclude time; the crop never left its cluster. Crops that aren't excluded\nare left untouched.",
         "operationId": "batch_unexclude_crops_curation_projects__project__crops_batch_unexclude_post",
         "parameters": [
           {
@@ -58292,18 +57907,19 @@
           },
           {
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cluster Id"
+              "title": "Cluster Uid"
             }
           },
           {
@@ -58876,18 +58492,19 @@
           },
           {
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cluster Id"
+              "title": "Cluster Uid"
             }
           },
           {
@@ -59413,18 +59030,19 @@
           },
           {
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cluster Id"
+              "title": "Cluster Uid"
             }
           },
           {
@@ -62170,18 +61788,19 @@
           },
           {
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cluster Id"
+              "title": "Cluster Uid"
             }
           },
           {
@@ -62332,18 +61951,19 @@
           },
           {
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cluster Id"
+              "title": "Cluster Uid"
             }
           }
         ],

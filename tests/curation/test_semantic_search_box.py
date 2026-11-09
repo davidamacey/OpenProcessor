@@ -84,7 +84,7 @@ async def _text(fake, **kw):
 @pytest.mark.asyncio
 async def test_box_target_builds_a_nested_knn_with_the_parent_filter_outside():
     fake = _fake_os([])
-    await _text(fake, target=SearchTarget.BOX, cluster_id=7)
+    await _text(fake, target=SearchTarget.BOX, cluster_uid='6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11')
     query = _knn_body(fake)['query']
     nested = query['bool']['must'][0]['nested']
     assert nested['path'] == PATH
@@ -93,9 +93,11 @@ async def test_box_target_builds_a_nested_knn_with_the_parent_filter_outside():
     assert knn['vector'] == pytest.approx(VEC)
     assert 'inner_hits' in nested
     # the parent filter is outside the nested clause, and never inside it
-    assert {'term': {'cluster_id': 7}} in query['bool']['filter']
+    assert {'term': {'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'}} in query['bool'][
+        'filter'
+    ]
     assert 'filter' not in knn
-    assert 'cluster_id' not in str(nested)
+    assert 'cluster_uid' not in str(nested)
 
 
 @pytest.mark.asyncio

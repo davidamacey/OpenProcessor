@@ -85,7 +85,7 @@ def cluster_agreement(ref: list[dict[str, Any]], cand: list[dict[str, Any]]) -> 
 def review_default_filter(extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
     base = _build_filter(
         tab=None,
-        cluster_id=None,
+        cluster_uid=None,
         date_from=None,
         date_to=None,
         max_rank=None,

@@ -1,29 +1,28 @@
 """``order=core_first`` must not scan the whole cluster per request.
 
-The first request for a cluster without stored geometry computes live
-and lazily writes the distances back; every later page is a native
-``cluster_distance`` sort that touches one page of documents.
+Every page is a native ``cluster_score`` sort (best-scored member first) of the cluster's members
+in the serving partition: one page of documents, never the whole cluster.
 """
 
 from __future__ import annotations
 
-import asyncio
 import copy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import numpy as np
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch, matches
 from src.config.curation_accessors import base_curation_config
-from src.services.curation import crop_orders
-from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN
 
+
+if TYPE_CHECKING:
+    import pytest
 
 ITEMS = base_curation_config().items_index
+UID = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 N = 4221
 DIM = 8
 
@@ -62,14 +61,6 @@ class _CountingFake(QueryFakeOpenSearch):
             }
         }
 
-    async def bulk(self, *, body: list[dict[str, Any]], **_kw: Any) -> dict[str, Any]:
-        for action, payload in zip(body[::2], body[1::2], strict=True):
-            doc = self.docs(action['update']['_index'])[action['update']['_id']]
-            params = payload['script']['params']
-            if doc.get('cluster_id') == params['cid']:
-                doc.update(params['fields'])
-        return {'errors': False, 'items': []}
-
 
 def _docs(n: int = N) -> dict[str, dict[str, Any]]:
     rng = np.random.default_rng(0)
@@ -80,8 +71,18 @@ def _docs(n: int = N) -> dict[str, dict[str, Any]]:
         v[1:] = rng.normal(0, 0.3 if i % 5 else 1.5, DIM - 1)
         v /= np.linalg.norm(v)
         cid = f'c{i:05d}'
-        docs[cid] = {'crop_id': cid, 'cluster_id': 5, 'pe_embedding': v.tolist()}
-    docs['other'] = {'crop_id': 'other', 'cluster_id': 6, 'pe_embedding': [1.0] + [0.0] * 7}
+        docs[cid] = {
+            'crop_id': cid,
+            'cluster_uid': UID,
+            'cluster_score': float(v[0]),
+            'pe_embedding': v.tolist(),
+        }
+    docs['other'] = {
+        'crop_id': 'other',
+        'cluster_uid': 'someone-else',
+        'cluster_score': 2.0,
+        'pe_embedding': [1.0] + [0.0] * 7,
+    }
     return docs
 
 
@@ -90,7 +91,6 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.services.curation.clustering import outliers
 
     outliers._CACHE.clear()
-    crop_orders._BACKFILLING.clear()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -105,121 +105,28 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def _get(client: TestClient, page: int, size: int = 60) -> dict[str, Any]:
     r = client.get(
         '/curation/projects/default/crops',
-        params={'cluster_id': 5, 'order': 'core_first', 'page': page, 'page_size': size},
+        params={'cluster_uid': UID, 'order': 'core_first', 'page': page, 'page_size': size},
     )
     assert r.status_code == 200, r.text
     return r.json()
 
 
-async def _drain() -> None:
-    while crop_orders._TASKS:
-        await asyncio.gather(*list(crop_orders._TASKS))
-
-
-def test_stored_distances_serve_pages_without_a_cluster_scan(
+def test_core_first_pages_best_scored_members_without_a_cluster_scan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     docs = _docs()
-    # Pre-measured cluster (as the lazy backfill leaves it).
-    ids = [i for i, d in docs.items() if d['cluster_id'] == 5]
-    x = np.asarray([docs[i]['pe_embedding'] for i in ids], dtype=np.float32)
-    x /= np.linalg.norm(x, axis=1, keepdims=True)
-    centroid = x.mean(axis=0)
-    centroid /= np.linalg.norm(centroid)
-    dist = np.clip(1.0 - x @ centroid, 0.0, 2.0)
-    for i, dv in zip(ids, dist.tolist(), strict=True):
-        docs[i]['cluster_distance'] = dv
-        docs[i]['cluster_distance_cluster_id'] = 5
     fake = _CountingFake(docs)
     client = _client(fake, monkeypatch)
 
     p1 = _get(client, 1)
-    # Bounded work: a page of docs, not the 4k-member cluster.
-    assert fake.scanned <= 120  # router page + ordered page
+    assert fake.scanned <= 120  # router page + ordered page, not the 4k-member cluster
     assert fake.search_calls == 2
     assert p1['total'] == N
 
-    want = sorted(ids, key=lambda i: (docs[i]['cluster_distance'], i))
+    ids = [i for i, d in docs.items() if d['cluster_uid'] == UID]
+    want = sorted(ids, key=lambda i: (-docs[i]['cluster_score'], i))
     got: list[str] = [c['crop_id'] for c in p1['crops']]
     for page in (2, 3):
         got += [c['crop_id'] for c in _get(client, page)['crops']]
     assert got == want[:180]
-    flags = [c['cluster_is_core'] for c in p1['crops']]
-    assert all(flags[: flags.index(False)] if False in flags else flags)
-
-
-async def _page(fake: Any, page: int, size: int = 60) -> dict[str, Any]:
-    from src.services.curation.item_filter import ItemFilter
-
-    async def fetch(os_: Any, ids: list[str]) -> list[dict[str, Any]]:
-        from src.services.curation.wire import serialize_item
-
-        resp = await os_.mget(index=ITEMS, body={'ids': ids})
-        return [serialize_item(d['_source'], d['_id']) for d in resp['docs']]
-
-    clause = {'bool': {'filter': [{'term': {'cluster_id': 5}}]}}
-    out = await crop_orders.ordered_crops_page(
-        fake,
-        index=ITEMS,
-        order='core_first',
-        query_clause=clause,
-        cluster_id=5,
-        item_filter=ItemFilter(),
-        page=page,
-        page_size=size,
-        k=None,
-        n_pool=len(fake.docs(ITEMS)),
-        fetch_items=fetch,
-    )
-    assert out is not None
-    return out
-
-
-@pytest.mark.asyncio
-async def test_unmeasured_cluster_computes_once_then_backfills() -> None:
-    from src.services.curation.clustering import outliers
-
-    outliers._CACHE.clear()
-    crop_orders._BACKFILLING.clear()
-    fake = _CountingFake(_docs(600))
-    docs = fake.docs(ITEMS)
-
-    first = await _page(fake, 1)
-    d = [c['cluster_distance'] for c in first['crops']]
-    assert d == sorted(d)
-    assert all(
-        c['cluster_is_core'] == (c['cluster_similarity'] >= CORE_SIMILARITY_MIN)
-        for c in first['crops']
-    )
-    await _drain()
-    measured = [
-        i
-        for i, x in docs.items()
-        if x.get('cluster_distance_cluster_id') == 5 and 'cluster_distance' in x
-    ]
-    assert len(measured) == 600
-    assert 'cluster_distance' not in docs['other']
-
-    fake.scanned = 0
-    second = await _page(fake, 1)
-    assert fake.scanned <= 60
-    assert [c['crop_id'] for c in second['crops']] == [c['crop_id'] for c in first['crops']]
-    page2 = await _page(fake, 2)
-    assert page2['crops'][0]['crop_id'] not in {c['crop_id'] for c in second['crops']}
-
-
-@pytest.mark.asyncio
-async def test_member_moved_in_falls_back_to_live_order() -> None:
-    from src.services.curation.clustering import outliers
-
-    outliers._CACHE.clear()
-    crop_orders._BACKFILLING.clear()
-    fake = _CountingFake(_docs(200))
-    await _page(fake, 1)
-    await _drain()
-    fake.docs(ITEMS)['other']['cluster_id'] = 5  # unmeasured newcomer
-    out = await _page(fake, 1, 500)
-    assert out['total'] == 201
-    assert 'other' in {c['crop_id'] for c in out['crops']}
-    d = [c['cluster_distance'] for c in out['crops']]
-    assert d == sorted(d)
+    assert 'other' not in got

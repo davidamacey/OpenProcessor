@@ -135,17 +135,11 @@ class ItemDoc(BaseModel):
     needs_new_class: bool = False
     needs_new_class_note: str | None = None
     cluster: ClusterRef | None = None
-    cluster_id: int | None = None
-    cluster_kind: Literal['class', 'candidate', 'unassigned'] | None = None
     cluster_distance: float | None = None
     # Similarity to the centroid (one minus the cosine distance, clamped);
     # core when at or above GET /clusters core_similarity_min.
     cluster_similarity: float | None = None
     cluster_is_core: bool | None = None
-    # Cluster whose centroid is nearest this item (cluster-geometry pass).
-    cluster_nearest_id: int | None = None
-    # AHC sub-cluster id (e.g. "47a"); cleared whenever cluster_id changes.
-    cluster_subid: str | None = None
     class_excluded: bool = False
     excluded_reason: str | None = None
     excluded_at: str | None = None

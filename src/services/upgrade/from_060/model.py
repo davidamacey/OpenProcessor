@@ -109,7 +109,7 @@ class ActivationSrc:
 @dataclass(frozen=True)
 class SettingsSrc:
     defaults: dict[str, Any]
-    policies: dict[str, dict[str, Any]]  # ingest_policy, vlm_policy, vlm_scope_reps
+    policies: dict[str, dict[str, Any]]  # ingest_policy, vlm_policy
     updated_at: dt.datetime | None
     updated_by: str | None
 
