@@ -29610,7 +29610,8 @@
               "bool",
               "number",
               "integer",
-              "text"
+              "text",
+              "date"
             ],
             "title": "Kind",
             "type": "string"

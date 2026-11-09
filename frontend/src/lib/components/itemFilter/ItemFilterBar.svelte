@@ -48,9 +48,6 @@
   );
   const inlineControls = $derived(controls.filter((c) => inline.includes(c.param)));
   const moreControls = $derived(controls.filter((c) => !inline.includes(c.param)));
-  // The capture days are not a served-spec kind (the contract pins those), so
-  // they are two date inputs drawn here; the route's `visible` still gates them.
-  const showTaken = $derived(visible('taken_from') && visible('taken_to'));
   const moreActive = $derived(
     filter.chips().filter((c) => !inline.includes(c.param) && visible(c.param)).length,
   );
@@ -78,7 +75,7 @@
     <ServedFilterField {spec} value={filter.valueOf(spec.param)} onchange={set} />
   {/each}
 
-  {#if moreControls.length > 0 || showTaken}
+  {#if moreControls.length > 0}
     <details
       class="shrink-0 open:basis-full"
       data-testid="item-filter-more"
@@ -91,26 +88,6 @@
         {#each moreControls as spec (spec.param)}
           <ServedFilterField {spec} value={filter.valueOf(spec.param)} onchange={set} />
         {/each}
-        {#if showTaken}
-          <label class="flex items-center gap-1.5" data-testid="served-filter-taken_from">
-            <span class="text-zinc-400">Taken from</span>
-            <input
-              type="date"
-              class="input-sm"
-              value={filter.takenFrom}
-              onchange={(e) => set('taken_from', e.currentTarget.value)}
-            />
-          </label>
-          <label class="flex items-center gap-1.5" data-testid="served-filter-taken_to">
-            <span class="text-zinc-400">to</span>
-            <input
-              type="date"
-              class="input-sm"
-              value={filter.takenTo}
-              onchange={(e) => set('taken_to', e.currentTarget.value)}
-            />
-          </label>
-        {/if}
       </div>
     </details>
   {/if}

@@ -4,7 +4,7 @@
    * `kind` and nothing else: `enum` (one `<select>`), `multi_enum` (toggle
    * chips), `class_names` (an add-a-class `<select>` over the registry),
    * `bool` (any / yes / no), `number` / `integer` (a bounded input) and
-   * `text`. The label, the options, the bounds and the help text are the
+   * `date` (an ISO day) and `text`. The label, the options, the bounds and the help text are the
    * served ones; no param name is read here.
    *
    * Values are strings (a list for `multi_enum` / `class_names`); `''` and
@@ -116,6 +116,14 @@
       placeholder="any"
       onchange={(e) => onchange(spec.param, e.currentTarget.value)}
       class="input-sm w-20"
+    />
+  {:else if spec.kind === 'date'}
+    <input
+      type="date"
+      value={text}
+      {disabled}
+      onchange={(e) => onchange(spec.param, e.currentTarget.value)}
+      class="input-sm"
     />
   {:else}
     <input

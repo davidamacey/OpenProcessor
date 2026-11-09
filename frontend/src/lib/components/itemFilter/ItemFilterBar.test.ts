@@ -339,6 +339,15 @@ describe('ServedFilterField kinds', () => {
     expect(onchange).toHaveBeenCalledWith('p', 'blue widget');
   });
 
+  it('date: a date input that emits the ISO day', () => {
+    const onchange = field({ param: 'taken_from', kind: 'date' });
+    const input = target.querySelector('input')!;
+    expect(input.type).toBe('date');
+    input.value = '2024-03-05';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(onchange).toHaveBeenCalledWith('taken_from', '2024-03-05');
+  });
+
   it('class_names: adds the picked class to the list', () => {
     const onchange = field({ param: 'p', kind: 'class_names' }, ['widget']);
     const sel = target.querySelector('select')!;

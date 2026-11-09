@@ -34,6 +34,7 @@ export const REVIEW_FILTER_KINDS = [
   'number',
   'integer',
   'text',
+  'date',
 ] as const;
 export type ReviewFilterKind = (typeof REVIEW_FILTER_KINDS)[number];
 
