@@ -37,7 +37,7 @@ einops==0.8.2
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
 torch==2.15.0
 torchvision==0.29.1
-ultralytics==8.4.197
+ultralytics==8.4.208
 
 # transformers import site: src/utils/cache.py (CLIP tokenizer)
 transformers==5.22.2

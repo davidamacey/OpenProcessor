@@ -7,7 +7,7 @@ pydantic==2.14.3  # same pin as requirements-test.txt: fastapi only floors it an
 pydantic-settings==2.16.2  # Pydantic v2 settings management
 
 # YOLO and Triton
-ultralytics==8.4.197  # exact: the export head changed inside 8.4.x (#447), so a range lets builds differ; 8.4.174+ is needed for torch_safe_load(safe_only=True) on uploads. Keep requirements-test.txt and pyproject.toml on the same pin. The YOLO11 EfficientNMS export toolchain stays isolated in /opt/venv-y11 (requirements-export-y11.txt) until the single-version move in docs/design/model_family_versions_plan.md.
+ultralytics==8.4.208  # exact, and the same release in every image (API, export, trainer): the export head changed inside 8.4.x (#447), so a range lets builds differ; keep requirements-test.txt, pyproject.toml and docker/trainer/Dockerfile (ULTRALYTICS_VERSION) on it (tests/test_requirements_contract.py)
 tritonclient[all]==2.74.0
 
 # ONNX runtime stack. The engine-build toolchain (TensorRT, ModelOpt, onnxsim, ...) is NOT here:
