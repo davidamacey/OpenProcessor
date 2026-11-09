@@ -74,7 +74,6 @@ class JobContext:
         beat: JobHeartbeat,
         engine: AsyncEngine,
         client_factories: Mapping[str, ClientFactory] | None = None,
-        server: str | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.job_id: uuid.UUID = job.id
@@ -86,7 +85,6 @@ class JobContext:
         """The cursor the previous attempt last wrote with :meth:`checkpoint`, or ``None``."""
         self.attempt = job.attempt
         self.fencing_token = job.fencing_token
-        self.server = server
         self._job = job
         self._spec = kind
         self._beat = beat

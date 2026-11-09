@@ -121,7 +121,6 @@ async def directory_ingest(ctx: JobContext) -> JobResult | dict[str, Any]:
         resume_batch=resume,
         should_stop=ctx.cancelled,
         on_batch=batch_done,
-        servers=[ctx.server] if ctx.server else None,
     )
     return JobResult(result, with_errors=result['status'] != 'success')
 
@@ -165,7 +164,6 @@ async def bulk_ingest_run(ctx: JobContext) -> JobResult:
                 options=BulkOptions(**ctx.params['options']),
                 run_id=str(ctx.job_id),
                 prior=ctx.resume_from,
-                servers=[ctx.server] if ctx.server else [],
             )
             result = await run.run()
         finally:

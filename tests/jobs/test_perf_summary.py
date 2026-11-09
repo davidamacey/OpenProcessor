@@ -9,7 +9,6 @@ from pydantic import ValidationError
 from src.config.job_kinds.kind import JobKind
 from src.db.engine import get_sync_engine
 from src.schemas.jobs import JobPerfSummary
-from src.tasks.runtime import hooks
 from src.tasks.runtime.job_task import run_job
 
 
@@ -110,24 +109,3 @@ def test_other_kinds_need_no_summary(pg, job_env, wakes, kinds) -> None:
 
     run_job(kinds['t_plain'], handler, {}, str(job.id))
     assert sql(pg, 'SELECT status FROM jobs WHERE id = %s', job.id) == [('completed',)]
-
-
-@pytest.mark.db
-def test_an_any_card_kind_gets_the_routers_server_and_others_none(
-    pg, job_env, wakes, throughput_kind, kinds
-) -> None:
-    engine = get_sync_engine()
-    project = make_project(pg)
-    seen: dict[str, str | None] = {}
-    hooks.install_server_chooser(lambda kind: f'triton-for-{kind}')
-    try:
-
-        async def handler(ctx):
-            seen[ctx.kind] = ctx.server
-            return {'perf_summary': GOOD} if ctx.kind == 'reprocess' else {}
-
-        run_job(throughput_kind, handler, {}, str(start(engine, project, 'reprocess').id))
-        run_job(kinds['t_plain'], handler, {}, str(start(engine, project, 't_plain').id))
-    finally:
-        hooks.install_server_chooser(None)
-    assert seen == {'reprocess': 'triton-for-reprocess', 't_plain': None}
