@@ -61,7 +61,7 @@ class _Service(SearchMixin):
 
 def _app(service: _Service, monkeypatch: pytest.MonkeyPatch, class_id: int) -> FastAPI:
     monkeypatch.setattr(
-        'src.clients.triton_client.get_sync_triton_client', lambda _url: _SlowTriton(class_id)
+        'src.services.sync_triton.routed_triton_client', lambda *_a: _SlowTriton(class_id)
     )
     app = FastAPI()
     app.include_router(router)

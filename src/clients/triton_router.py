@@ -88,20 +88,22 @@ class TritonRouter:
         """Refuse every call until a new router replaces this one (the profile changed)."""
         self._rebuilding = True
 
-    def _pick(self, model: str) -> str:
+    def _pick(self, model: str, *with_models: str) -> str:
         if self._rebuilding:
             msg = 'the serving profile changed and the router is being rebuilt'
             raise NoServerError(msg)
-        candidates = [s for s in self._servers if self._eligible(s, model)]
+        needed = (model, *with_models)
+        candidates = [s for s in self._servers if all(self._eligible(s, m) for m in needed)]
         if not candidates:
-            msg = f'no server reports {model!r} ready'
+            msg = f'no server reports {" and ".join(map(repr, needed))} ready'
             raise NoServerError(msg)
         return min(candidates, key=lambda s: self._outstanding[s])
 
-    def choose(self, model: str) -> Route:
+    def choose(self, model: str, *with_models: str) -> Route:
         """The server a call would go to, without counting it: for a synchronous client that runs
-        on a worker thread (the counts belong to the event loop's callers)."""
-        server = self._pick(model)
+        on a worker thread (the counts belong to the event loop's callers). A call that uses several
+        models (``with_models``) goes to a server that holds all of them."""
+        server = self._pick(model, *with_models)
         return Route(server, self._servers[server])
 
     @contextmanager

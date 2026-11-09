@@ -449,17 +449,3 @@ class TritonClient:
             all_embeddings.append(embeddings)
 
         return np.vstack(all_embeddings) if all_embeddings else np.empty((0, 512), dtype=np.float32)
-
-
-# =============================================================================
-# Singleton Instance
-# =============================================================================
-_client_instance: TritonClient | None = None
-
-
-def get_sync_triton_client(triton_url: str = 'triton-server:8001') -> TritonClient:
-    """Get singleton Triton client instance."""
-    global _client_instance  # noqa: PLW0603  # module-level cache set lazily
-    if _client_instance is None:
-        _client_instance = TritonClient(triton_url)
-    return _client_instance

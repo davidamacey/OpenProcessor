@@ -17,10 +17,9 @@ logger = logging.getLogger(__name__)
 def _detect_and_embed(image_bytes: bytes) -> dict[str, Any]:
     """YOLO detection plus per-box MobileCLIP vectors on the sync Triton client (blocking;
     callers run it off the event loop)."""
-    from src.clients.triton_client import get_sync_triton_client
-    from src.config import get_settings
+    from src.services.sync_triton import YOLO_CLIP, routed_triton_client
 
-    client = get_sync_triton_client(get_settings().triton_url)
+    client = routed_triton_client(*YOLO_CLIP)
     return client.infer_yolo_clip_cpu(image_bytes)
 
 

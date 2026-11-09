@@ -37,8 +37,8 @@ class _Triton:
 
 
 def _service(monkeypatch: pytest.MonkeyPatch, face: _Face) -> inf.InferenceService:
-    monkeypatch.setattr(inf, 'get_fast_face_client', lambda *_a, **_k: face)
-    monkeypatch.setattr(inf, 'get_sync_triton_client', lambda *_a, **_k: _Triton())
+    monkeypatch.setattr(inf, 'routed_face_client', lambda *_a, **_k: face)
+    monkeypatch.setattr(inf, 'routed_triton_client', lambda *_a, **_k: _Triton())
     svc = inf.InferenceService.__new__(inf.InferenceService)
     svc.settings = SimpleNamespace(triton_url='x')  # type: ignore[assignment]
     return svc
@@ -90,7 +90,7 @@ def test_the_face_routes_map_the_typed_errors(
 ) -> None:
     from src.main import app
 
-    monkeypatch.setattr(inf, 'get_fast_face_client', lambda *_a, **_k: face)
+    monkeypatch.setattr(inf, 'routed_face_client', lambda *_a, **_k: face)
     client = TestClient(app)
     for path in ('/faces/detect', '/faces/recognize'):
         response = client.post(path, files={'image': ('t.jpg', _jpeg(), 'image/jpeg')})

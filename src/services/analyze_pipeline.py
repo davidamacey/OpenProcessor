@@ -148,11 +148,9 @@ def crop_batch_tensor(
 
 def _run_yolo_and_clip(image_bytes: bytes, timing: dict[str, float]) -> dict[str, Any]:
     t0 = time.perf_counter()
-    from src.clients.triton_client import get_sync_triton_client
-    from src.config import get_settings
+    from src.services.sync_triton import YOLO_CLIP, routed_triton_client
 
-    settings = get_settings()
-    client = get_sync_triton_client(settings.triton_url)
+    client = routed_triton_client(*YOLO_CLIP)
     result = client.infer_yolo_clip_cpu(image_bytes)
     timing['yolo_clip_ms'] = (time.perf_counter() - t0) * 1000
     return result
@@ -196,14 +194,13 @@ def _run_crop_embeddings(
     if not detections or img_w <= 0 or img_h <= 0:
         return None
     t0 = time.perf_counter()
-    from src.clients.triton_client import get_sync_triton_client
-    from src.config import get_settings
+    from src.config.settings import TritonModelConfig
+    from src.services.sync_triton import routed_triton_client
 
     batch_tensor = crop_batch_tensor(image_bytes, detections, img_w, img_h)
 
     # Single batched Triton inference call
-    settings = get_settings()
-    client = get_sync_triton_client(settings.triton_url)
+    client = routed_triton_client(TritonModelConfig.CLIP_IMAGE_MODEL)
     embeddings = client.infer_mobileclip_batch(batch_tensor)
     timing['crop_embeddings_ms'] = (time.perf_counter() - t0) * 1000
     return embeddings  # [N, 512]
@@ -385,11 +382,9 @@ def analyze_batch_item(
     confidence: float,
 ) -> BatchAnalyzeResult:
     """Run the pipeline on one image of a batch, adding its counts to ``totals``."""
-    from src.clients.triton_client import get_sync_triton_client
-    from src.config import get_settings
+    from src.services.sync_triton import YOLO_CLIP, routed_triton_client
 
-    settings = get_settings()
-    client = get_sync_triton_client(settings.triton_url)
+    client = routed_triton_client(*YOLO_CLIP)
 
     # Run YOLO + CLIP with CPU preprocessing
     yolo_clip_result = client.infer_yolo_clip_cpu(image_bytes)

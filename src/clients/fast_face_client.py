@@ -14,7 +14,6 @@ Industry-standard pipeline matching InsightFace/Apple/Google.
 """
 
 import logging
-from functools import lru_cache
 from typing import Any
 
 import cv2
@@ -24,7 +23,6 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from src.clients.model_residency import ensure_loaded_sync
 from src.clients.triton_client_manager import TritonClientManager
 from src.clients.triton_deadline import infer_with_deadline
-from src.config.faces import require_faces
 from src.config.settings import TritonModelConfig
 from src.utils.face_align import align_faces_batch, preprocess_for_arcface
 from src.utils.retry import retry_sync
@@ -223,15 +221,3 @@ class FastFaceClient:
             'face_quality': quality.tolist(),
             'orig_shape': (true_orig_h, true_orig_w),
         }
-
-
-@lru_cache(maxsize=4)
-def _cached_face_client(triton_url: str) -> FastFaceClient:
-    return FastFaceClient(triton_url=triton_url)
-
-
-def get_fast_face_client(triton_url: str = 'triton-server:8001') -> FastFaceClient:
-    """The cached FastFaceClient. The one entry to SCRFD and ArcFace, so it refuses when
-    faces are off (#379)."""
-    require_faces()
-    return _cached_face_client(triton_url)

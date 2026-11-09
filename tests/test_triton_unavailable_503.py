@@ -117,14 +117,13 @@ def test_analyze_returns_503_when_triton_unavailable(
     in parallel -- any of the three raising ``RetryExhaustedError`` must
     surface as 503, not get swallowed into a per-component 'status': 'error'
     dict (the pre-fix behavior in ``src/services/inference.py``)."""
-    from src.clients import triton_client as triton_client_mod
 
     class _BoomClient:
         def infer_yolo_clip_cpu(self, *_a, **_k):
             raise RetryExhaustedError('triton unavailable: all retries exhausted')
 
     monkeypatch.setattr(
-        triton_client_mod, 'get_sync_triton_client', lambda *_a, **_k: _BoomClient()
+        'src.services.sync_triton.routed_triton_client', lambda *_a, **_k: _BoomClient()
     )
     response = client.post('/analyze', files={'image': ('t.jpg', tiny_jpeg_bytes, 'image/jpeg')})
     _assert_503(response)

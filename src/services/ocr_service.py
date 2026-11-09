@@ -30,8 +30,9 @@ import logging
 from functools import lru_cache
 from typing import Any, Literal
 
-from src.clients.triton_client import get_sync_triton_client
 from src.config import get_settings
+from src.config.settings import TritonModelConfig
+from src.services.sync_triton import routed_triton_client
 from src.utils.image_processing import decode_ocr_image, validate_image
 from src.utils.retry import RetryExhaustedError
 
@@ -97,7 +98,7 @@ class OcrService:
             img_h, img_w = image.shape[:2]
 
             # Call Triton OCR pipeline
-            client = get_sync_triton_client(self.settings.triton_url)
+            client = routed_triton_client(TritonModelConfig.OCR_PIPELINE_MODEL)
             result = client.infer_ocr(image)
 
             if result is None:

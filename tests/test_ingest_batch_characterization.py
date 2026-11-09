@@ -229,8 +229,8 @@ async def run_scenario(
         content_rows.core_rows[image_hash] = (image_id, path, None)
     for taken in sc.get('taken_ids', []):
         content_rows.core_rows[f'taken-{taken}'] = (taken, '/taken', b'other bytes')
-    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)
-    monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)
+    monkeypatch.setattr('src.services.sync_triton.routed_triton_client', lambda *_a: triton)
+    monkeypatch.setattr('src.services.sync_triton.routed_face_client', lambda *_a: face)
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', lambda: ocr)
     if 'jpeg_dims' in sc:
 

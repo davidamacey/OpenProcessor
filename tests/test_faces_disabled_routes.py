@@ -73,12 +73,12 @@ def test_non_face_cluster_index_is_not_refused(
 
 
 def test_face_client_factory_refuses_when_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.clients.fast_face_client import get_fast_face_client
     from src.config.faces import FacesDisabledError
+    from src.services.sync_triton import routed_face_client
 
     monkeypatch.setenv('OP_FACES_ENABLED', 'false')
     with pytest.raises(FacesDisabledError):
-        get_fast_face_client()
+        routed_face_client()
 
 
 def test_malformed_switch_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:

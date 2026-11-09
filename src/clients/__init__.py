@@ -20,13 +20,12 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.clients.opensearch.client import OpenSearchClient
-    from src.clients.triton_client import TritonClient, get_sync_triton_client
+    from src.clients.triton_client import TritonClient
     from src.clients.triton_client_manager import TritonClientManager
 
 _LAZY = {
     'OpenSearchClient': 'src.clients.opensearch.client',
     'TritonClient': 'src.clients.triton_client',
-    'get_sync_triton_client': 'src.clients.triton_client',
     'TritonClientManager': 'src.clients.triton_client_manager',
 }
 
@@ -45,5 +44,4 @@ __all__ = [
     # Unified Triton client (NEW)
     'TritonClient',
     'TritonClientManager',
-    'get_sync_triton_client',
 ]
