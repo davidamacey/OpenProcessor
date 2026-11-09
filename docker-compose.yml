@@ -553,10 +553,19 @@ services:
       - OP_TRITON_MODEL_REPO=/models
       - OP_TRITON_HTTP_URL=http://triton-server:8000
       - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
+      # db_backup tick: pg_dump as the owner role, straight to Postgres (never a pooler), into a
+      # mounted directory that does not share the Postgres volume.
+      - OP_DB_DIRECT_HOST=${OP_DB_DIRECT_HOST:-postgres}
+      - OP_DB_OWNER_USER=${OP_DB_OWNER_USER:-op_owner}
+      - OP_DB_OWNER_PASSWORD_FILE=/run/secrets/op_pg/owner_password
+      - OP_DB_BACKUP_DIR=/backups/postgres
+      - OP_DB_BACKUP_KEEP=${OP_DB_BACKUP_KEEP:-7}
     tmpfs:
       - /run/op-prom-worker:mode=1777
     volumes:
       - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/postgres/owner_password:/run/secrets/op_pg/owner_password:ro
+      - ${OP_DB_BACKUP_DIR:-./backups/postgres}:/backups/postgres
       - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       - openprocessor-state:/var/lib/openprocessor
       # cache_prune prunes the same crop cache that ingest fills.
@@ -1647,6 +1656,10 @@ services:
       - SYS_ADMIN
     environment:
       - DCGM_EXPORTER_LISTEN=:9400
+      # The field list (profiling fields included) lives in monitoring/dcgm-counters.csv.
+      - DCGM_EXPORTER_COLLECTORS=/etc/dcgm-exporter/counters.csv
+    volumes:
+      - ./monitoring/dcgm-counters.csv:/etc/dcgm-exporter/counters.csv:ro
     ports:
       - "${OP_BIND_ADDRESS:-127.0.0.1}:${DCGM_PORT:-4610}:9400"  # DCGM GPU metrics
     deploy:
@@ -1659,6 +1672,30 @@ services:
               capabilities: [gpu, utility]
     networks:
       - triton_net
+
+  # Valkey has no /metrics of its own; this exporter turns INFO into Prometheus series for the
+  # memory alert (monitoring/alerts/jobs-alerts.yml).
+  valkey-exporter:
+    image: ${VALKEY_EXPORTER_IMAGE:-oliver006/redis_exporter:v1.84.0-alpine@sha256:9f382eef9bff285d41d03c15c1dc9c889ab75687bea248d5fa0318efa08069d9}
+    logging: *default-logging
+    mem_reservation: 32m
+    restart: always
+    profiles:
+      - monitoring
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - REDIS_ADDR=redis://valkey:6379
+      - REDIS_PASSWORD_FILE=/run/secrets/op_valkey/password
+    volumes:
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+    networks:
+      - triton_net
+    depends_on:
+      valkey:
+        condition: service_healthy
 
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.12.0}

@@ -33,6 +33,7 @@ FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6
 # security fixes.
 # procps -> pgrep, used by the curation worker services' healthchecks
 # (docker-compose.yml `profiles: [curation]`) -- the api image is shared with those workers.
+# postgresql-client -> pg_dump, used by the periodic worker's db_backup tick (src/services/periodic/db_backup.py)
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     curl \
@@ -42,6 +43,18 @@ RUN apt-get update && apt-get upgrade -y \
     libglib2.0-0t64 \
     libgomp1 \
     libpq5 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# pg_dump must be the server's major version (it refuses a newer server): Debian trixie ships 17,
+# the compose Postgres is 18, so the client comes from the PGDG apt repository
+# (https://www.postgresql.org/download/linux/debian/; apt reads the .asc key directly).
+RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/keyrings/pgdg.asc \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
