@@ -106,26 +106,10 @@ async def _models_other_projects_run() -> frozenset[str]:
         ) from exc
 
 
-@router.get('/models/status')
-async def models_status(
-    include_other_projects: Annotated[
-        bool,
-        Query(description="Also list other projects' promoted models their owners shared"),
-    ] = False,
-) -> dict[str, Any]:
-    """Status + usage stats for the models that drive the curation labeling pipeline.
-
-    Returns a single ``{"models": [...]}`` object describing each Triton model
-    the labeler depends on, plus the external VLM and segmenter services.
-    Each entry carries enough metadata for the labeler ``/models`` page to
-    render a self-explanatory card without requiring access to
-    Triton/Prometheus directly. Every Triton entry also carries
-    ``project``, ``shared`` and ``class_mapping`` (§5.5: its classes
-    matched by name onto this project's registry).
-    """
-    triton_http = resolve_triton_http_url()
-    triton_metrics_url = env_str('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
-
+async def _probe_triton(
+    triton_http: str, triton_metrics_url: str
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, float]], bool]:
+    """Triton repository index by model name, per-model metrics, and whether Triton answered."""
     state_by_name: dict[str, dict[str, Any]] = {}
     metrics_by_model: dict[str, dict[str, float]] = {}
     triton_reachable = False
@@ -146,6 +130,52 @@ async def models_status(
                 metrics_by_model = _parse_triton_metrics(r.text)
         except httpx.HTTPError as exc:
             logger.warning('models_status_metrics_failed', error=str(exc))
+    return state_by_name, metrics_by_model, triton_reachable
+
+
+async def _attach_listing_fields(models: list[dict[str, Any]]) -> None:
+    """Add the project / sharing / class-mapping fields to every row, in place."""
+    # External services (segmenter, VLM) belong to no project and have no
+    # class list of their own.
+    registry = await bound_registry()
+    for entry in models:
+        if entry['kind'] == 'triton':
+            entry.update(await listing_fields(entry['name'], registry))
+        else:
+            entry.update(
+                {
+                    'project': None,
+                    'shared': False,
+                    'class_mapping': None,
+                    'owned': False,
+                    'sharing_revision': None,
+                }
+            )
+
+
+@router.get('/models/status')
+async def models_status(
+    include_other_projects: Annotated[
+        bool,
+        Query(description="Also list other projects' promoted models their owners shared"),
+    ] = False,
+) -> dict[str, Any]:
+    """Status + usage stats for the models that drive the curation labeling pipeline.
+
+    Returns a single ``{"models": [...]}`` object describing each Triton model
+    the labeler depends on, plus the external VLM and segmenter services.
+    Each entry carries enough metadata for the labeler ``/models`` page to
+    render a self-explanatory card without requiring access to
+    Triton/Prometheus directly. Every Triton entry also carries
+    ``project``, ``shared`` and ``class_mapping`` (§5.5: its classes
+    matched by name onto this project's registry).
+    """
+    triton_http = resolve_triton_http_url()
+    triton_metrics_url = env_str('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
+
+    state_by_name, metrics_by_model, triton_reachable = await _probe_triton(
+        triton_http, triton_metrics_url
+    )
 
     used_elsewhere = await _models_other_projects_run()
 
@@ -277,22 +307,7 @@ async def models_status(
     models = dedupe_triton_rows(models)
     models.extend(await vlm_status_rows())
 
-    # External services (segmenter, VLM) belong to no project and have no
-    # class list of their own.
-    registry = await bound_registry()
-    for entry in models:
-        if entry['kind'] == 'triton':
-            entry.update(await listing_fields(entry['name'], registry))
-        else:
-            entry.update(
-                {
-                    'project': None,
-                    'shared': False,
-                    'class_mapping': None,
-                    'owned': False,
-                    'sharing_revision': None,
-                }
-            )
+    await _attach_listing_fields(models)
     return {'models': models}
 
 
