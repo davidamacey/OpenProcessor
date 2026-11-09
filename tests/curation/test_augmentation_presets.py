@@ -20,6 +20,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -36,7 +37,7 @@ BAD = {'enabled': True, 'preset': 'no_such_preset'}
 
 @pytest.fixture
 def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
+    runs = install_run_fakes(monkeypatch)  # the active-run check reads PostgreSQL otherwise
     from src.services.training import gpu_arbiter_policy
 
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
@@ -61,6 +62,7 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     fake.search = AsyncMock(return_value={'hits': {'hits': [], 'total': {'value': 0}}})
     fake.count = AsyncMock(return_value={'count': 0})
 
+    from src.core.db_session import get_db
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation.train import router as train_router
 
@@ -69,7 +71,9 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
 
     mount_curation_routers(app, train_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    app.dependency_overrides[get_db] = lambda: None  # the run fakes never touch a session
     with TestClient(app) as client:
+        client.runs = runs  # type: ignore[attr-defined]
         yield client
 
 
@@ -164,7 +168,7 @@ def test_start_refuses_an_unknown_preset_before_claiming_the_gpu(
     assert r.status_code == 422, r.text
     assert 'no_such_preset' in r.text
     claim.assert_not_called()
-    assert list(tmp_path.glob('*.job.json')) == []
+    assert app_client.runs.started == []  # type: ignore[attr-defined]
 
 
 def test_start_campaign_refuses_an_unknown_preset_before_claiming_the_gpu(
@@ -186,7 +190,7 @@ def test_start_campaign_refuses_an_unknown_preset_before_claiming_the_gpu(
     assert r.status_code == 422, r.text
     assert 'no_such_preset' in r.text
     claim.assert_not_called()
-    assert list(tmp_path.glob('*.job.json')) == []
+    assert app_client.runs.started == []  # type: ignore[attr-defined]
 
 
 # ------------------------------------------- one source of truth, both sides

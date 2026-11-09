@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
+from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -114,7 +115,7 @@ def test_class_split_check_ok_when_every_class_is_covered() -> None:
 
 @pytest.fixture
 def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
+    install_run_fakes(monkeypatch)  # the active-run check reads PostgreSQL otherwise
     from src.services.training import gpu_arbiter_policy
 
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)

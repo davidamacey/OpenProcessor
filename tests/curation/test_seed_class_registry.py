@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import onnx
 import pytest
@@ -53,6 +53,11 @@ def _main(
 ) -> int:
     """Run the script's CLI against ``reg`` (an in-memory registry stands in for PostgreSQL)."""
     monkeypatch.setattr(mod, 'get_class_registry', lambda: reg)
+
+    async def without_engine(awaitable: Any, _name: str, **_: Any) -> Any:
+        return await awaitable  # the in-memory registry needs no database engine
+
+    monkeypatch.setattr(mod, 'run_with_engine', without_engine)
     return mod.main(list(argv))
 
 
