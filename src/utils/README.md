@@ -22,7 +22,6 @@ for its functions.
 | `scrfd_decode.py` | SCRFD face detector pre- and post-processing (CPU numpy) |
 | `face_align.py` | ArcFace alignment by similarity transform (Umeyama) |
 | `face_response.py` | Consistency check on a face-recognition response |
-| `pytorch_utils.py` | PyTorch model loading, GPU logging and detection formatting helpers |
 | `uint8_input.py` | Turn a float image input of an ONNX graph into a uint8 input with the `/255` scaling inside the graph (used when promoting a model) |
 | `atomic_write.py` | `atomic_write_bytes`, `atomic_write_json`: a temp file unique to each writer, then an atomic replace |
 | `retry.py` | `retry_sync` and `is_retryable_error` |
