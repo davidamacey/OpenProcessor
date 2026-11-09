@@ -116,3 +116,6 @@ _.ServerReady  # docker/test/fake_triton.py; called by gRPC by Triton's method n
 _.__qualname__  # src/tasks/runtime/register.py; assigned so Celery names the task by it
 _.registry_sha  # src/services/training/jobs.py; stored in training_runs.spec, read by name in docker/trainer/job_manifest.py
 _.tb  # src/utils/stage_timing.py; the __exit__ signature of the context manager protocol
+_.update_ready  # src/clients/triton_router.py; the router is fed by src/services/serving_router.py; the callers (the pool and the encoders choosing a server per call) land with the post-tag two-card wave, docs/design/v070_rebuild/09g_research_gpu_pipeline.md
+_.configure_router  # src/clients/triton_client_manager.py; the process start-up that builds the router from src/services/serving_router.py lands with the post-tag two-card wave, docs/design/v070_rebuild/09g_research_gpu_pipeline.md
+_.build_router  # src/services/serving_router.py; see configure_router above

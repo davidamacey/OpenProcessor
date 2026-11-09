@@ -21,12 +21,15 @@ Usage:
 import asyncio
 import logging
 import threading
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import tritonclient.grpc as grpcclient
 import tritonclient.grpc.aio as grpcclient_aio
 
 from src.clients.triton_pool_core import GRPC_CHANNEL_OPTIONS
+from src.clients.triton_router import TritonRouter
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +58,30 @@ class TritonClientManager:
     # Dictionary maps triton_url -> AsyncInferenceServerClient instance
     _async_clients: dict[str, Any] = {}
     _async_lock: asyncio.Lock | None = None
+
+    # Per-process router (research GPU S-15): which server each call uses. Unset until the
+    # process configures it, so a caller that routes before that fails loudly.
+    _router: TritonRouter | None = None
+
+    @classmethod
+    def configure_router(cls, router: TritonRouter) -> None:
+        cls._router = router
+
+    @classmethod
+    @asynccontextmanager
+    async def routed_async_client(
+        cls, model: str, *, affinity: str | None = None
+    ) -> AsyncIterator[grpcclient_aio.InferenceServerClient]:
+        """The async client of the server the router picks for ``model``, counted while in use.
+
+        ``affinity`` names an open ``TritonRouter.affinity`` scope: the image-prep call and the
+        follow-ups for one image all land on the same server.
+        """
+        if cls._router is None:
+            msg = 'the Triton router is not configured in this process'
+            raise RuntimeError(msg)
+        with cls._router.route(model, affinity=affinity) as route:
+            yield await cls.get_async_client(route.url)
 
     @classmethod
     def _get_async_lock(cls) -> asyncio.Lock:
