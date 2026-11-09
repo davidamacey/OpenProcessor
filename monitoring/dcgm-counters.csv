@@ -1,0 +1,23 @@
+# dcgm-exporter field list (monitoring profile). Format: field, Prometheus type, help.
+# Every field a dashboard or alert reads is listed; the DCGM_FI_PROF_* block is the profiling set
+# (SM activity and occupancy, tensor pipe, DRAM, PCIe) shown beside utilization in the GPU dashboard.
+# Reference: https://github.com/NVIDIA/dcgm-exporter (default-counters.csv) and
+# https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics
+DCGM_FI_DEV_SM_CLOCK, gauge, SM clock frequency (MHz).
+DCGM_FI_DEV_GPU_UTIL, gauge, GPU utilization (%).
+DCGM_FI_DEV_MEM_COPY_UTIL, gauge, Memory utilization (%).
+DCGM_FI_DEV_ENC_UTIL, gauge, Encoder utilization (%).
+DCGM_FI_DEV_DEC_UTIL, gauge, Decoder utilization (%).
+DCGM_FI_DEV_FB_FREE, gauge, Framebuffer memory free (MiB).
+DCGM_FI_DEV_FB_USED, gauge, Framebuffer memory used (MiB).
+DCGM_FI_DEV_GPU_TEMP, gauge, GPU temperature (C).
+DCGM_FI_DEV_MEMORY_TEMP, gauge, Memory temperature (C).
+DCGM_FI_DEV_POWER_USAGE, gauge, Power draw (W).
+DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION, counter, Total energy since boot (mJ).
+DCGM_FI_DEV_XID_ERRORS, gauge, Value of the last XID error encountered.
+DCGM_FI_PROF_SM_ACTIVE, gauge, Fraction of time at least one warp was resident on an SM.
+DCGM_FI_PROF_SM_OCCUPANCY, gauge, Fraction of resident warps against the SM maximum.
+DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, gauge, Fraction of cycles the tensor pipe was active.
+DCGM_FI_PROF_DRAM_ACTIVE, gauge, Fraction of cycles the device memory interface was active.
+DCGM_FI_PROF_PCIE_TX_BYTES, counter, PCIe bytes transmitted.
+DCGM_FI_PROF_PCIE_RX_BYTES, counter, PCIe bytes received.

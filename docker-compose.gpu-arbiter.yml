@@ -18,6 +18,8 @@
 # on a host you trust the application image's dependency stack on, and scope
 # OP_GPU_ARBITER_CONTAINERS to the smallest service list a deployment needs coordinated.
 #
+# Set OP_DOCKER_GID in .env (default 999): stat -c %g /var/run/docker.sock
+#
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.gpu-arbiter.yml \
 #     --profile training up -d
@@ -37,6 +39,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # The socket is owned by the host's docker group; appuser needs that gid to use it.
+    # OP_DOCKER_GID is the host value (`stat -c %g /var/run/docker.sock`); 999 is the usual
+    # Debian/Ubuntu gid. A wrong value shows as "permission denied" on the socket in the tick.
+    group_add:
+      - "${OP_DOCKER_GID:-999}"
     restart: unless-stopped
     command: celery -A src.tasks.app worker -Q arbiter -c 1 --max-tasks-per-child=200 --hostname arbiter@%h -E
     stop_grace_period: ${OP_STOP_GRACE_JOBS:-60}s

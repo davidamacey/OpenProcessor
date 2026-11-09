@@ -1,0 +1,44 @@
+groups:
+  - name: jobs_alerts
+    interval: 30s
+    rules:
+      # op_jobs_* come from the periodic job_stats tick (src/services/periodic/job_stats.py).
+      - alert: OldestQueuedJob
+        expr: max by (kind) (op_jobs_oldest_queued_seconds) > 900
+        for: 5m
+        labels:
+          severity: warning
+          component: jobs
+        annotations:
+          summary: "A {{ $labels.kind }} job has waited over 15 minutes"
+          description: "The oldest queued {{ $labels.kind }} job is {{ $value | humanizeDuration }} old; check that its worker is running."
+
+      - alert: JobFailureBurst
+        expr: max by (kind) (delta(op_jobs_failed_24h[1h])) > 5
+        for: 1m
+        labels:
+          severity: warning
+          component: jobs
+        annotations:
+          summary: "More than 5 {{ $labels.kind }} jobs failed in 1 h"
+          description: "{{ $value }} more {{ $labels.kind }} jobs failed in the last hour than an hour ago (change of the 24 h failure gauge)."
+
+      - alert: DiskLow
+        expr: min by (volume) (op_disk_free_ratio) < 0.10
+        for: 5m
+        labels:
+          severity: critical
+          component: disk
+        annotations:
+          summary: "Volume {{ $labels.volume }} has under 10% free"
+          description: "Free fraction of {{ $labels.volume }} is {{ $value | humanizePercentage }}."
+
+      - alert: ValkeyMemoryNearMax
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9 and redis_memory_max_bytes > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: queue
+        annotations:
+          summary: "Valkey memory is above 90% of maxmemory"
+          description: "Valkey used_memory is {{ $value | humanizePercentage }} of maxmemory; the queue may start refusing writes."

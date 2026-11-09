@@ -89,6 +89,14 @@ _DCGM_METRICS = frozenset(
         'DCGM_FI_DEV_SM_CLOCK',
         'DCGM_FI_DEV_XID_ERRORS',
         'DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION',
+        # Profiling fields enabled by monitoring/dcgm-counters.csv (DCGM user guide, profiling
+        # metrics); not yet re-captured from a live exporter.
+        'DCGM_FI_PROF_SM_ACTIVE',
+        'DCGM_FI_PROF_SM_OCCUPANCY',
+        'DCGM_FI_PROF_PIPE_TENSOR_ACTIVE',
+        'DCGM_FI_PROF_DRAM_ACTIVE',
+        'DCGM_FI_PROF_PCIE_TX_BYTES',
+        'DCGM_FI_PROF_PCIE_RX_BYTES',
     }
 )
 
@@ -110,6 +118,11 @@ _NODE_EXPORTER_METRICS = frozenset(
 # ALERTS series. Captured 2026-10-03 from the live Prometheus label values.
 _API_METRICS = frozenset(
     {
+        # Defined in src/services/periodic/job_stats.py and src/core/metrics.py.
+        'op_jobs',
+        'op_jobs_oldest_queued_seconds',
+        'op_jobs_failed_24h',
+        'op_disk_free_ratio',
         'http_request_duration_seconds_count',
         'http_request_duration_seconds_bucket',
         'op_pipeline_stage_seconds_count',

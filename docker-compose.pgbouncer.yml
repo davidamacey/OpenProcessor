@@ -13,7 +13,8 @@
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.pgbouncer.yml up -d
 #
-# The image tag below is a floating tag: pin it by digest before a release (images.lock rules).
+# The image is pinned by the index digest of v1.24.1-p1 (docker buildx imagetools inspect
+# edoburu/pgbouncer:v1.24.1-p1); re-run that and update both tag and digest to upgrade.
 
 x-pooled-db: &pooled-db
   - OP_DB_HOST=pgbouncer
@@ -28,7 +29,7 @@ x-pooled: &pooled
 
 services:
   pgbouncer:
-    image: ${OP_PGBOUNCER_IMAGE:-edoburu/pgbouncer:v1.24.1-p1}
+    image: ${OP_PGBOUNCER_IMAGE:-edoburu/pgbouncer:v1.24.1-p1@sha256:3db3d7223e93af52b4116f642951a1a5fa44702a88c2a59cf7562cac19320c9e}
     logging:
       driver: json-file
       options:

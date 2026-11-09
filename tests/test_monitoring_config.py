@@ -190,6 +190,7 @@ def test_prometheus_scrapes_each_worker_on_the_port_it_serves() -> None:
         for j in yaml.safe_load((REPO_ROOT / 'monitoring' / 'prometheus.yml').read_text())[
             'scrape_configs'
         ]
+        if 'static_configs' in j  # api and triton are dns_sd (test_monitoring_targets)
     }
     compose = (REPO_ROOT / 'docker-compose.yml').read_text()
     expected = {
