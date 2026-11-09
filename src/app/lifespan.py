@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import inspect
+import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -18,6 +19,7 @@ from src.core.logging import get_logger
 from src.db.engine import dispose_engines
 from src.utils.cpu_pool import shutdown_cpu_executor
 from src.utils.file_read import shutdown_read_executor
+from src.utils.metrics_processes import forget_process
 
 
 logger = get_logger(__name__)
@@ -326,6 +328,7 @@ async def _run_shutdown() -> None:
         ('triton_clients', TritonClientFactory.close_all),
         ('opensearch_clients', OpenSearchClientFactory.close),
         ('database', dispose_engines),
+        ('metrics_files', lambda: forget_process(os.getpid())),
     ]
     for step, run in steps:
         await _shutdown_step(step, run)
