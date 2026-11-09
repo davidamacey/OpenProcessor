@@ -360,3 +360,21 @@ def test_no_faces_writes_the_switch_and_drops_the_face_models(shimmed: Shimmed) 
 def test_without_no_faces_the_env_does_not_carry_the_switch(shimmed: Shimmed) -> None:
     assert configure(shimmed).returncode == 0
     assert 'OP_FACES_ENABLED' not in env_file(shimmed)
+
+
+@pytest.mark.parametrize(
+    ('cpus', 'workers'), [('1', '1'), ('12', '12'), ('32', '32'), ('96', '32')]
+)
+def test_api_workers_is_min_of_nproc_and_32(shimmed: Shimmed, cpus: str, workers: str) -> None:
+    result = configure(shimmed, OP_MEMINFO_PATH=_meminfo(shimmed, 16), OP_NPROC=cpus)
+    assert result.returncode == 0, result.stderr
+    assert env_file(shimmed)['API_WORKERS'] == workers
+
+
+def test_api_workers_the_user_set_is_kept_on_rerun(shimmed: Shimmed) -> None:
+    mem = _meminfo(shimmed, 16)
+    assert configure(shimmed, OP_MEMINFO_PATH=mem, OP_NPROC='12').returncode == 0
+    env_path = shimmed.root / 'inst' / '.env'
+    env_path.write_text(env_path.read_text().replace('API_WORKERS=12', 'API_WORKERS=3', 1))
+    assert configure(shimmed, OP_MEMINFO_PATH=mem, OP_NPROC='12').returncode == 0
+    assert env_file(shimmed)['API_WORKERS'] == '3'

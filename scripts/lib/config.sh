@@ -277,6 +277,11 @@ generate_env_file() {
         heap="$(opensearch_heap_for_host)" || { log_error "could not read host memory to size the OpenSearch heap"; return 1; }
     fi
 
+    # A worker count the user already set survives a forced regeneration (D-33: default min(nproc, 32)).
+    local workers=""
+    [[ -f "$env_file" ]] && workers="$(sed -n 's/^API_WORKERS=//p' "$env_file" | tail -n1)"
+    [[ -n "$workers" ]] || workers="$(api_workers_for_host)" || { log_error "could not read the CPU count to size API_WORKERS"; return 1; }
+
     # An explicit GPU decode choice survives a forced regeneration too.
     local gpu_decode="$PROFILE_INGEST_GPU_DECODE" kept_gpu_decode=""
     [[ -f "$env_file" ]] && kept_gpu_decode="$(sed -n 's/^OP_INGEST_GPU_DECODE=//p' "$env_file" | tail -n1)"
@@ -289,7 +294,8 @@ generate_env_file() {
     env_set_key "$env_file" GPU_PROFILE "$profile" \
         && env_set_key "$env_file" GPU_ID "$gpu_id" \
         && env_set_key "$env_file" OP_INGEST_GPU_DECODE "$gpu_decode" \
-        && env_set_key "$env_file" OPENSEARCH_HEAP "$heap" || return 1
+        && env_set_key "$env_file" OPENSEARCH_HEAP "$heap" \
+        && env_set_key "$env_file" API_WORKERS "$workers" || return 1
 
     log_success ".env file created: $env_file"
     return 0
