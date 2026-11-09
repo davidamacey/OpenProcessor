@@ -126,9 +126,9 @@ export interface SlotBox {
   textChoice: string | null;
   /** Why the VLM's own reading was rejected as not text, when it was. */
   textVlmInvalid: string | null;
-  clusterId: number | null;
-  clusterSubid: string | null;
-  clusterDistance: number | null;
+  /** The box's cluster in the serving region partition, and its score. */
+  clusterUid: string | null;
+  clusterScore: number | null;
   detectedAt: string | null;
   /** Served per-box thumbnail path (already carries `box_id`). */
   thumbnailUrl: string | null;

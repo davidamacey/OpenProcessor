@@ -18,9 +18,8 @@ function render(): HTMLElement {
   target = document.createElement('div');
   document.body.appendChild(target);
   const c = {
-    id: 7,
+    uid: '0b9f9a38-0000-4000-8000-000000000007',
     size: 3,
-    purity_tier: 'pure',
     representative_crop_ids: ['a', 'b'],
   } as unknown as Cluster;
   instance = mount(ClusterGridCard, { target, props: { c, flagVocabulary: [] } });

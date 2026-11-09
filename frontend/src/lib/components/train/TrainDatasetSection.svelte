@@ -253,18 +253,15 @@
           class="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
         />
       </label>
-      {#if exporter.singleClassDedupThreshold != null}
-        <label class="flex items-center gap-2 pb-1.5">
-          <input
-            type="checkbox"
-            bind:checked={exporter.singleClassDedup}
-            disabled={exporter.singleClassExporting}
-          />
-          <span class="text-xs text-zinc-400"
-            >dedup near-dup frames (cos ≥ {exporter.singleClassDedupThreshold})</span
-          >
-        </label>
-      {/if}
+      <label class="flex items-center gap-2 pb-1.5">
+        <input
+          type="checkbox"
+          data-testid="single-class-collapse"
+          bind:checked={exporter.singleClassCollapse}
+          disabled={exporter.singleClassExporting}
+        />
+        <span class="text-xs text-zinc-400">collapse near-duplicate frames</span>
+      </label>
     </div>
     <p class="mt-2 text-[11px] text-zinc-500">
       N samples positives spread <em>evenly across clusters</em> — build a small set first,

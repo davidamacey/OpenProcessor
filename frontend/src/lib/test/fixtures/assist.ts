@@ -7,8 +7,8 @@ import type {
 } from '$lib/types_assist';
 
 export const CLUSTER_REQUEST: AssistRunRequest = {
-  target: { kind: 'cluster', cluster_id: 10000, cluster_subid: '10000b' },
-  sample: { mode: 'representative', size: null, seed: 0, stratify_by: 'auto' },
+  target: { kind: 'cluster', cluster_uid: '0b9f9a38-0000-4000-8000-000000010000' },
+  sample: { mode: 'representative', size: null, seed: 0 },
   actions: ['classify'],
   dry_run: true,
 };
@@ -53,10 +53,6 @@ export function assistRun(
       scope_digest: 'sha256:abc',
       sampled: 41,
       sample_seed: 0,
-      strata: [
-        { key: '10000a', size: 120, sampled: 12 },
-        { key: '10000b', size: 292, sampled: 29 },
-      ],
       skipped: { holdout: 3, excluded: 1, class_locked: 27 },
       vlm: { name: 'env', revision: 3, model: 'vlm-model' },
       prompt_pack: { name: 'generic', revision: 7 },

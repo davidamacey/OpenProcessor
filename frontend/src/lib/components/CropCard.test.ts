@@ -273,15 +273,31 @@ describe('CropCard — v0.4.0 embedding state badge', () => {
     el.querySelector('[data-testid="embedding-state-badge"]');
 
   it('shows the badge for a served failed state only', () => {
-    const el = renderCard({ crop: baseCrop({ embedding_state: 'failed' }) });
+    const el = renderCard({
+      crop: baseCrop({ embedding_states: { primary: 'failed' } }),
+    });
     // The card chip is the compact form; the full wording is its tooltip.
     expect(badge(el)?.textContent).toBe('Embed failed');
     expect(badge(el)?.getAttribute('title')).toContain('No vector: encoder failed');
     unmount(instance as never);
     instance = undefined;
     target.remove();
-    const embedded = renderCard({ crop: baseCrop({ embedding_state: 'embedded' }) });
+    const embedded = renderCard({
+      crop: baseCrop({ embedding_states: { primary: 'embedded' } }),
+    });
     expect(badge(embedded)).toBeNull();
+  });
+
+  it('names the space of each no-vector badge and shows nothing for a space with no state', () => {
+    const el = renderCard({
+      crop: baseCrop({
+        embedding_states: { primary: 'embedded', optional_space: 'deferred' },
+      }),
+    });
+    const badges = el.querySelectorAll('[data-testid="embedding-state-badge"]');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.getAttribute('data-space')).toBe('optional_space');
+    expect(badges[0]?.getAttribute('title')).toContain('optional_space:');
   });
 });
 

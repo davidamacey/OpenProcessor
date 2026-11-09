@@ -4,7 +4,7 @@
  *
  * The served job is the only source. The backend serves no
  * `poll_after_s` and no `actions` (plan question P4-4), so the controller
- * re-reads every 2 s while `status` is `queued` or `running` and stops at
+ * re-reads every 2 s while `status` is `queued`, `running`, `paused` or `cancelling` and stops at
  * any other status; a global `combine.progress` event carrying this
  * `job_id` only wakes an immediate re-read. Which actions are offered is
  * a reading of the spec's own 409 rules: Cancel while queued/running,
@@ -30,7 +30,7 @@ import type { CombineJobResponse, CombineNextStep } from '$lib/types_combine';
 
 export const COMBINE_POLL_MS = 2000;
 
-const ACTIVE = new Set(['queued', 'running']);
+const ACTIVE = new Set(['queued', 'running', 'paused', 'cancelling']);
 const RESUMABLE = new Set(['interrupted', 'cancelled']);
 const COMPLETED = new Set(['completed', 'completed_with_errors']);
 
@@ -92,7 +92,7 @@ export class CombineJob {
     return this.status != null && ACTIVE.has(this.status);
   }
   get canCancel(): boolean {
-    return this.active;
+    return this.active && this.status !== 'cancelling';
   }
   get canResume(): boolean {
     return this.status != null && RESUMABLE.has(this.status);

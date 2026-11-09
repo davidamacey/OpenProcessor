@@ -28,10 +28,8 @@ function render(extra: Partial<Cluster> = {}): HTMLElement {
   target = document.createElement('div');
   document.body.appendChild(target);
   const c = {
-    id: 7,
+    uid: '0b9f9a38-0000-4000-8000-000000000007',
     size: 40,
-    purity_tier: 'mixed',
-    purity: 0.5,
     label_agreement: 0.75,
     dominant_pct: 0.75,
     dominant_class_name: 'class_a',

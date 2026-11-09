@@ -11,6 +11,8 @@
  * Everything here is pure: no DOM access, no `$state`, no network.
  */
 
+import { jobPhase } from '$lib/jobs/jobPhase';
+
 export interface ScreenPoint {
   x: number;
   y: number;
@@ -126,8 +128,8 @@ export function selectIdsInLasso(
 }
 
 /**
- * Deterministic color for a `cluster_id`. The plot DECORATES an existing
- * assignment (curation-strategy plan §2.7 — "color from cluster_id...
+ * Deterministic color for a `cluster_uid`. The plot DECORATES an existing
+ * assignment (curation-strategy plan §2.7 — "color from the served cluster...
  * decorates, doesn't decide") — never compute/guess a cluster from this
  * color or feed it back into any assignment logic.
  *
@@ -152,16 +154,25 @@ const PALETTE: readonly string[] = [
 ];
 const UNASSIGNED_COLOR = '#71717a'; // zinc-500
 
-export function colorForCluster(clusterId: number | null): string {
-  if (clusterId == null || !Number.isFinite(clusterId)) return UNASSIGNED_COLOR;
-  const idx = Math.abs(Math.trunc(clusterId)) % PALETTE.length;
-  return PALETTE[idx]!;
+/** FNV-1a over the uid's characters: a stable palette slot per uid. */
+function slotOf(uid: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < uid.length; i++) {
+    h ^= uid.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h % PALETTE.length;
+}
+
+export function colorForCluster(clusterUid: string | null): string {
+  if (clusterUid == null || clusterUid === '') return UNASSIGNED_COLOR;
+  return PALETTE[slotOf(clusterUid)]!;
 }
 
 export const PALETTE_SIZE = PALETTE.length;
 
 export interface LegendEntry {
-  clusterId: number | null;
+  clusterUid: string | null;
   color: string;
   /** Points of this cluster in the served projection. */
   count: number;
@@ -176,24 +187,24 @@ export interface LegendEntry {
  * most often. Display only: nothing here assigns anything.
  */
 export function legendEntries(
-  points: readonly { cluster_id: number | null; class_name: string | null }[],
+  points: readonly { cluster_uid: string | null; class_name: string | null }[],
   max = 8,
 ): LegendEntry[] {
   const byCluster = new Map<
-    number | null,
+    string | null,
     { count: number; names: Map<string, number> }
   >();
   for (const p of points) {
-    let e = byCluster.get(p.cluster_id);
+    let e = byCluster.get(p.cluster_uid);
     if (!e) {
       e = { count: 0, names: new Map() };
-      byCluster.set(p.cluster_id, e);
+      byCluster.set(p.cluster_uid, e);
     }
     e.count += 1;
     if (p.class_name) e.names.set(p.class_name, (e.names.get(p.class_name) ?? 0) + 1);
   }
   return [...byCluster.entries()]
-    .map(([clusterId, e]) => {
+    .map(([clusterUid, e]) => {
       let className: string | null = null;
       let best = 0;
       for (const [n, c] of e.names) {
@@ -202,9 +213,17 @@ export function legendEntries(
           className = n;
         }
       }
-      return { clusterId, color: colorForCluster(clusterId), count: e.count, className };
+      return {
+        clusterUid,
+        color: colorForCluster(clusterUid),
+        count: e.count,
+        className,
+      };
     })
-    .sort((a, b) => b.count - a.count || (a.clusterId ?? -1) - (b.clusterId ?? -1))
+    .sort(
+      (a, b) =>
+        b.count - a.count || (a.clusterUid ?? '').localeCompare(b.clusterUid ?? ''),
+    )
     .slice(0, max);
 }
 
@@ -218,13 +237,14 @@ export type RebuildPollOutcome = 'running' | 'completed' | 'failed' | 'idle';
  * doesn't toast or reload for someone else's history.
  */
 export function classifyRebuildPoll(
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled',
+  status: string,
   wasTracking: boolean,
 ): RebuildPollOutcome {
-  if (status === 'running') return 'running';
+  const phase = jobPhase(status);
+  if (phase === 'active') return 'running';
   if (!wasTracking) return 'idle';
-  if (status === 'completed') return 'completed';
-  if (status === 'failed') return 'failed';
+  if (phase === 'completed') return 'completed';
+  if (phase === 'failed') return 'failed';
   return 'idle';
 }
 

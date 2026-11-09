@@ -11,7 +11,7 @@ let instance: ReturnType<typeof mount> | null = null;
 let target: HTMLDivElement;
 
 const FACETS: ClusterFacets = {
-  cluster_id: 7,
+  cluster_uid: 'uid-7',
   total: 30,
   detector_classes: [
     { value: 'widget_x', count: 20 },

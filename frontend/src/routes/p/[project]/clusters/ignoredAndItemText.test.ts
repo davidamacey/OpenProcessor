@@ -47,7 +47,9 @@ describe('/clusters Ignored bucket (W7)', () => {
     const fnEnd = src.indexOf('\n  }', fnStart);
     const body = src.slice(fnStart, fnEnd);
     expect(body).toMatch(/include_excluded:\s*true/);
-    expect(body).toMatch(/cluster_id:\s*-2/);
+    // Excluded items keep their cluster: the bucket is the excluded review status.
+    expect(body).toMatch(/review_status:\s*\['excluded'\]/);
+    expect(body).not.toMatch(/cluster_id/);
   });
 
   it('the ignoredModeActive grid branch renders before showEmbeddingViz (searchModeActive precedent)', () => {

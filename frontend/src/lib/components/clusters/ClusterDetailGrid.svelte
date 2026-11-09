@@ -1,7 +1,6 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import CropCard from '$components/CropCard.svelte';
-  import CutLine from '$components/CutLine.svelte';
   import ScoreChip from '$components/ScoreChip.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { firstLoadHint, listedText, statusBarText } from '$lib/clusters/firstLoad';
@@ -11,7 +10,7 @@
   import type { ClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
   import type { ClusterDetailLive } from '$lib/clusters/clusterDetailLive.svelte';
 
-  // The crop grid (one dndzone per sub-cluster group), its live-refresh pill
+  // The crop grid (one dndzone), its live-refresh pill
   // and infinite-scroll sentinel, and the status bar.
   let {
     view,
@@ -58,53 +57,25 @@
     {:else if view.filteredCrops.length === 0}
       <p class="text-sm text-zinc-500">No crops in this cluster yet.</p>
     {:else}
-      <!-- One dndzone per sub-cluster group. Headers sit BETWEEN zones
-           (not inside any) so each zone's children map 1:1 to its
-           items — keeping drag-and-drop intact. All zones share
-           type='crop-card' so a card drags out to the ClassSidebar (or
-           across groups) exactly as before. -->
+      <!-- One dndzone. A card drags out to the ClassSidebar exactly as
+           before (type='crop-card'). -->
       {#each view.gridGroups as group (group.key)}
-        {#if view.groupBySubcluster}
-          <div
-            class="mt-3 flex items-center gap-2 pt-1 text-xs font-medium text-zinc-300 first:mt-0"
-          >
-            <span class="rounded bg-zinc-800 px-2 py-0.5 text-zinc-100"
-              >{group.label}</span
-            >
-            <span class="text-zinc-500">
-              {group.items.length} crop{group.items.length === 1 ? '' : 's'}
-            </span>
-            <span class="h-px flex-1 bg-zinc-800"></span>
-          </div>
-        {/if}
         <div
-          class="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3 {view.groupBySubcluster
-            ? 'mt-2'
-            : ''}"
+          class="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3"
           use:dndzone={{
             items: group.items,
             type: 'crop-card',
             flipDurationMs: 150,
             dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.6)' },
             dragDisabled: false,
-            // Reject foreign items. After AHC refine the grid is split
-            // into one zone per sub-cluster; without this a sibling
-            // sub-cluster zone steals a drop meant for the ClassSidebar
-            // (it's geometrically larger than the narrow sidebar rows),
-            // so the card snaps back into the AHC grouping instead of
-            // being labeled. Cross-group grid drops have no meaning
-            // anyway (onGroupFinalize rebuilds them), so disabling
-            // foreign drops only removes the drop-stealing — drag-out to
-            // the sidebar is unaffected.
+            // Reject foreign items so a drop meant for the ClassSidebar is not
+            // stolen by the grid itself; drag-out to the sidebar is unaffected.
             dropFromOthersDisabled: true,
           }}
           onconsider={(e) => actions.onGroupConsider(group.key, e)}
           onfinalize={(e) => actions.onGroupFinalize(group.key, e)}
         >
-          {#each group.items as crop, i (crop.id)}
-            {#if !view.groupBySubcluster && view.cutLineVisible && i === view.cutLineIndex}
-              <CutLine />
-            {/if}
+          {#each group.items as crop (crop.id)}
             <div class="relative">
               <CropCard
                 {crop}
@@ -147,8 +118,8 @@
   </div>
 
   <!-- Right move-target rail removed — class assignment moved to the
-       left ClassFolderSidebar. The 'Move to cluster #N' affordance is
-       still available via M-key (typing a destination cluster id). -->
+       left ClassFolderSidebar. The 'Move to cluster' affordance is
+       still available via M-key (picking a destination cluster). -->
 </div>
 
 <!-- Status bar (sentinel lives inside the scroll container, see above) -->

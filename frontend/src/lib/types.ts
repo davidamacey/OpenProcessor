@@ -7,6 +7,7 @@
  * server-side schema bump won't break the app.
  */
 
+import type { ClusterRef } from '$contracts/ts/itemWire';
 import type { SlotData, SlotKey } from '$lib/annotations/types';
 import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 import type { ReprocessRequest } from '$lib/types_import';
@@ -102,26 +103,9 @@ export interface Crop {
   vlm_suggested_class_name?: string | null;
   /** The VLM's categorical confidence: `high` | `medium` | `low`. */
   vlm_confidence?: string | null;
-  /** Cluster + similarity-to-centroid (0..1), served verbatim as
-   *  `cluster_similarity` — no client 1−cosine-distance computation. */
-  cluster_id: number | null;
-  similarity_to_centroid: number | null;
-  /** Distance to this crop's cluster centroid, null when the item has
-   *  left the cluster it's measured against (dq-queues cutover). */
-  cluster_distance?: number | null;
-  /** Nearest cluster centroid id, only meaningful together with
-   *  cluster_distance/similarity_to_centroid/cluster_is_core. */
-  cluster_nearest_id?: number | null;
-  /** Server-computed: this crop's `cluster_similarity` is at/above the
-   *  cluster response's `core_similarity_min`. Null when the backend
-   *  hasn't computed a similarity for this crop yet. Drives the
-   *  cluster-detail "core" cut line — never a client-side 0.75 constant. */
-  cluster_is_core?: boolean | null;
-  /** AHC sub-cluster id (string, e.g. "47a"), populated only after
-   *  refine ran. Cleared by the backend whenever cluster_id changes
-   *  (move / batch_label / class_merge / residual recluster) — the
-   *  subid is meaningful only inside its origin cluster. */
-  cluster_subid: string | null;
+  /** The item's cluster in the serving partition, served verbatim (uid, state, score,
+   *  margin, who assigned it); null when it has none. */
+  cluster: ClusterRef | null;
   /** Per-slot capability data, keyed by SlotKey, produced by mapRawCrop
    *  via mapCropSlots(). Only slots with actual evidence on the row
    *  appear (slotIsPresent). Optional because many test fixtures
@@ -147,7 +131,7 @@ export interface Crop {
   test_holdout: boolean;
   // -- Exclude / Ignore (G7) ----------------------------------------------
   /** True when the crop is in the excluded/"Ignored" bucket
-   *  (`cluster_id=-2`) — set by `POST /crops/batch_exclude`, cleared by
+   *  (the item keeps its cluster) — set by `POST /crops/batch_exclude`, cleared by
    *  `POST /crops/batch_unexclude`. */
   class_excluded?: boolean;
   /** Free-text tag recorded at exclude time (`'ignore'`, `'blurry'`, …). */
@@ -232,9 +216,15 @@ export interface Crop {
   combine_conflict?: boolean;
   combine_conflict_origins?: string[];
   combine_merged_origins?: string[];
-  /** v0.4.0: whether the item has a vector; `null` on an item written
-   *  before the field existed. */
-  embedding_state?: EmbeddingState | null;
+  /** Per embedding space: whether the item has a vector in it and why not. A
+   *  space with no state for the item (written before the field existed, or
+   *  not built yet) has no key. */
+  embedding_states?: Record<string, EmbeddingState>;
+  /** Near-duplicate group of the item: the lineage id, the member count, and whether the item
+   *  represents it. All null for an item in no group. */
+  near_dup_group_id?: string | null;
+  near_dup_group_size?: number | null;
+  near_dup_is_representative?: boolean | null;
   /** v0.4.0 open vocabulary: the prompt, set and set revision that found
    *  this item, its image-normalised mask outline, and why the region
    *  gate skipped it. `null` when not served. */
@@ -246,20 +236,9 @@ export interface Crop {
   updated_at: string;
 }
 
-/** Class clusters mirror class_id (0..80); candidate clusters land at
- *  10000+ from the residual AHC pass; unassigned is < 0. The region view
- *  also emits "false_positive" for the permanent FP bucket (-100). The
- *  backend derives this from cluster_id; the frontend NEVER recomputes it. */
-export type ClusterKind = 'class' | 'candidate' | 'unassigned' | 'false_positive';
-
-/** Backend's purity banding (`purity_thresholds`: pure_min 0.85 / mixed_min
- *  0.6) — served per cluster, never recomputed against a client constant. */
-export type PurityTier = 'pure' | 'mixed' | 'noisy';
-
 export interface Cluster {
-  id: number;
-  /** Backend-derived: "class" | "candidate" | "unassigned". */
-  cluster_kind: ClusterKind;
+  /** The cluster's identity in the serving partition (`cluster_uid`). */
+  uid: string;
   /** Items with >=1 box in the cluster. For a region cluster, this
    *  is DISTINCT from `box_count` below — an item can have more than one
    *  box in the same cluster. */
@@ -270,33 +249,16 @@ export interface Cluster {
   box_count?: number | null;
   /** class_validated=true count. */
   validated_count: number;
-  dominant_class_id: number | null;
   dominant_class_name: string | null;
   /** Served `label_agreement` — the dominant class's share of the
-   *  LABELLED members. Not the geometry `purity`. */
+   *  LABELLED members. */
   dominant_pct: number | null;
   /** Served member counts behind `dominant_pct` (cluster-scoped, include
    *  any test-holdout members). */
   dominant_count?: number | null;
   labelled_count?: number | null;
-  /** DQ-M2 fix (dq-queues cutover, 2026-09-24): nearest-centroid geometry
-   *  purity — the share of `purity_n` measured members whose nearest
-   *  cluster centroid is this cluster's own. Independent of labels, so a
-   *  class cluster is no longer 1.0 by construction. 0..1, null when no
-   *  member has been measured. */
-  purity: number | null;
-  /** How many members `purity` was measured over — show alongside
-   *  `purity` (it's noisy at low n). */
-  purity_n?: number | null;
-  /** Always `'nearest_centroid'` today — served, never hardcoded. */
-  purity_basis?: string | null;
-  /** Server-banded purity — drives the card's pure/mixed/noisy badge and
-   *  border color. Null only for the client-only "cluster card lookup
-   *  failed" stub in `getCluster`. */
-  purity_tier: PurityTier | null;
   /** Served `label_agreement`: the top class's share of the labelled
-   *  members. What the UI reads for label quality; `purity` stays
-   *  geometry-only. */
+   *  members. What the UI reads for label quality. */
   label_agreement?: number | null;
   /** The detector's most common class among the members, and its share of
    *  the members that have a detector class. */
@@ -314,15 +276,6 @@ export interface Cluster {
   flags?: string[];
   /** Share of this cluster's members that carry any label at all. */
   labelled_share?: number | null;
-  /** Server's auto-promote eligibility for this cluster (purity +
-   *  member-count + labelled-share gate — `purity_thresholds` on the
-   *  `{API_PREFIX}/clusters` response). */
-  promotable: boolean;
-  /** `{API_PREFIX}/clusters`' `core_similarity_min` (0.75), copied onto every
-   *  cluster in that response so a consumer doesn't need the raw list
-   *  response's top-level field. Null when the lookup that would have
-   *  supplied it failed (see `getCluster`'s stub). */
-  core_similarity_min: number | null;
   /** True when no member has a class_name — pure candidate. */
   is_unlabeled: boolean;
   representative_crop_ids: string[]; // up to 4
@@ -332,23 +285,14 @@ export interface Cluster {
   // than the default item-crop thumbnail. Regular clusters leave
   // this undefined; the grid then falls back to getThumbUrl().
   representative_thumb_urls?: string[];
-  has_subclusters: boolean;
-  /** Distinct cluster_subid count from the backend. */
-  n_subclusters: number;
-  /** The cluster's sub-cluster ids (e.g. "47a"), sorted, served by the backend;
-   *  the sub-cluster tabs are exactly these. */
-  subcluster_ids: string[];
-  centroid_sha?: string;
   updated_at: string | null;
   /** Set only on the client-built region inventory entry pinned
    *  atop `/clusters` (M4, interactive pass) —
-   *  it is not a real cluster (no purity, no cluster_kind), so the grid
-   *  must not draw a pure/mixed/noisy badge for it or key it against a
-   *  real cluster id. Absent (not false) on every server-served Cluster. */
+   *  it is not a real cluster, so the grid must not key it against a
+   *  real cluster uid. Absent (not false) on every server-served Cluster. */
   isSlotCard?: boolean;
   /** The slot's served display name (e.g. its tab label), set only on
-   *  that inventory entry (F8 D7): the card is titled by it, not by the
-   *  raw class id. */
+   *  that inventory entry (F8 D7): the card is titled by it. */
   slotDisplayName?: string;
 }
 
@@ -357,6 +301,10 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   page_size: number;
+  /** Search routes: the space key searched, and the extra keys fused in by
+   *  reciprocal rank fusion. */
+  space?: string;
+  fuse?: string[];
   /** Set by `{API_PREFIX}/review/{tab}` when the requested `?sort=` couldn't be
    *  honored (e.g. the field isn't backfilled yet) and the server fell
    *  back to the default ordering. Rendered as an inline note, never a
@@ -387,12 +335,6 @@ export interface PaginatedResponse<T> {
   order_method?: string | null;
   order_version?: string | null;
   n_pool?: number | null;
-  /** m7 (2026-09-24 interactive pass): `{API_PREFIX}/clusters`' own
-   *  `purity_thresholds` — the border-color legend on `/clusters` used
-   *  to hardcode "≥80% / ≥60% / <60%", which drifted from the server's
-   *  real `pure_min`/`mixed_min` (0.85/0.6). Absent on every other
-   *  endpoint. */
-  purity_thresholds?: { pure_min: number; mixed_min: number } | null;
   /** v0.4.0 `GET {API_PREFIX}/crops`: matching items with no vector (null
    *  when the route did not compute it). Absent on every other endpoint. */
   n_unembedded?: number | null;
@@ -408,7 +350,8 @@ export interface PaginatedResponse<T> {
  *  (`ItemFilterQuery`: class names, confidence and area bands, `max_rank`,
  *  origin, embedding and review state) plus this route's own keys. */
 export interface CropFilter extends ItemFilterQuery {
-  cluster_id?: number | null;
+  /** Members of one cluster in the serving partition. */
+  cluster_uid?: string | null;
   label_source?: LabelSource;
   /** Original label source (where the class came from). Matches the
    *  {API_PREFIX}/crops?class_source= query param. */
@@ -452,8 +395,12 @@ export interface CropHistoryEntry {
   class_labeler?: string | null;
   class_labeled_at?: string | null;
   class_validated?: boolean | null;
-  cluster_id?: number | null;
-  cluster_subid?: string | null;
+  cluster_partition_id?: string | null;
+  cluster_uid?: string | null;
+  cluster_state?: string | null;
+  cluster_score?: number | null;
+  cluster_margin?: number | null;
+  cluster_assigned_by?: string | null;
   review_dismissed_at?: string | null;
   review_dismissed_by?: string | null;
 }
@@ -484,7 +431,7 @@ export interface ClusterFilter
     Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>,
     Partial<ClusterListFilter> {
   /** Restrict to exactly one cluster (its own card). */
-  cluster_id?: number | null;
+  cluster_uid?: string | null;
   /** Representative crops per card. `0` skips them; the representatives
    *  window (`offset`/`limit`) rejects 0 (the contract's minimum is 1). */
   per_cluster?: number;
@@ -507,17 +454,6 @@ export interface ClusterFilter
 export interface BulkLabelConflict {
   crop_id: string;
   current_source: string | null;
-}
-
-export interface BulkLabelResult {
-  // Matches the FastAPI handler at src/routers/curation/crops.py:
-  //   batch_label_crops -> { updated: int, updated_ids: [...], conflicts: [...], op_id }.
-  // `move` (POST {API_PREFIX}/crops/move) returns the same shape.
-  updated: number;
-  updated_ids: string[];
-  conflicts: BulkLabelConflict[];
-  /** Label-operation id recorded for undo; null when nothing was written. */
-  op_id: string | null;
 }
 
 /** `POST {API_PREFIX}/crops/label/undo_batch` response — batch form of
@@ -573,5 +509,8 @@ export interface UndoEntry {
    * thing on purpose: it's bound to its own `X`/`U` keys, never `Z`, so
    * there's no ordering question to get right by sharing a stack.
    */
-  kind?: 'label' | 'region' | 'vlm_dismiss' | 'exclude' | 'unexclude';
+  kind?: 'label' | 'label_op' | 'region' | 'vlm_dismiss' | 'exclude' | 'unexclude';
+  /** `kind: 'label_op'`: the recorded operation Z undoes by id
+   *  (`POST /label_ops/{op_id}/undo`, queued as a job). */
+  op_id?: string;
 }

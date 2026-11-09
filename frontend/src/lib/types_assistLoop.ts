@@ -8,7 +8,9 @@ export type AssistLoopStatus =
   | 'queued'
   | 'running'
   | 'paused'
+  | 'cancelling'
   | 'completed'
+  | 'completed_with_errors'
   | 'cancelled'
   | 'failed'
   | 'interrupted';
@@ -17,7 +19,7 @@ export type AssistLoopDecision =
   'pass' | 'split' | 'review_leaf' | 'review_small' | 'stale' | 'unvisited';
 
 export interface AssistLoopRequest {
-  scope: { cluster_ids: number[] | null; min_root_size: number };
+  scope: { cluster_uids: string[] | null; min_root_size: number };
   vlm: string | null;
   prompt_pack: string | null;
   acknowledge_external: boolean;
@@ -38,6 +40,7 @@ export interface AssistLoopRequest {
     floor: number;
     on_fail: 'pause' | 'rollback';
   };
+  on_budget: 'pause' | 'complete';
   vlm_concurrency: number;
   node_concurrency: number;
   dry_run: boolean;
@@ -63,6 +66,12 @@ export interface LoopPlan {
   fits_budget: boolean | null;
 }
 
+export interface LoopUnitBudget {
+  limit: number | null;
+  spent: number;
+  reserved: number;
+}
+
 export interface LoopPoolBudget {
   max_crops: number;
   max_requests: number;
@@ -70,6 +79,39 @@ export interface LoopPoolBudget {
   crops_reserved: number;
   requests_spent: number;
   requests_reserved: number;
+  prompt_tokens?: LoopUnitBudget | null;
+  completion_tokens?: LoopUnitBudget | null;
+}
+
+/** Why a loop is paused; the server names it. */
+export type AssistLoopPauseReason =
+  'user' | 'audit' | 'budget' | 'project_paused' | 'vlm_unavailable';
+
+/** What may be done with the loop now. The backend decides; the buttons print it. */
+export interface AssistLoopControl {
+  state:
+    | 'queued'
+    | 'running'
+    | 'pausing'
+    | 'paused'
+    | 'cancelling'
+    | 'completed'
+    | 'completed_with_errors'
+    | 'failed'
+    | 'cancelled'
+    | 'interrupted';
+  can_pause: boolean;
+  can_resume: boolean;
+  can_cancel: boolean;
+  can_edit_budget: boolean;
+  can_rollback: boolean;
+  resume_blocked_reason?: 'project_paused' | 'vlm_unavailable' | null;
+}
+
+export interface LoopBudgetLimit {
+  pool: 'vlm' | 'audit';
+  unit: 'crops' | 'requests' | 'prompt_tokens' | 'completion_tokens' | 'wall_s';
+  limit_value: number | null;
 }
 
 export interface LoopLevel {
@@ -107,7 +149,11 @@ export interface AssistLoopState {
   loop_id: string | null;
   status: AssistLoopStatus;
   stop_reason: string | null;
-  pause_reason: string | null;
+  pause_reason: AssistLoopPauseReason | null;
+  /** Absent on a dry run. */
+  control?: AssistLoopControl | null;
+  iteration?: number;
+  slices?: number;
   created_at: string | null;
   started_at: string | null;
   finished_at: string | null;
@@ -127,7 +173,13 @@ export interface AssistLoopState {
     roots: number;
     eligible_items: number;
   } | null;
-  budget: { vlm: LoopPoolBudget; audit: LoopPoolBudget | null; wall_s: number } | null;
+  budget: {
+    vlm: LoopPoolBudget;
+    audit: LoopPoolBudget | null;
+    wall_s: number;
+    max_wall_s?: number | null;
+    usage_missing?: number;
+  } | null;
   levels: LoopLevel[];
   totals: LoopTotals | null;
   audit: LoopAuditView | null;
@@ -169,5 +221,5 @@ export interface LoopRollbackResponse {
   conflicts: number;
 }
 
-/** The loop holds the project's cluster training and the refresh daemon while in these. */
-export const LIVE_LOOP_STATUSES: AssistLoopStatus[] = ['queued', 'running'];
+/** The worker owns the loop (or is stopping it) in these: poll until it leaves them. */
+export const LIVE_LOOP_STATUSES: AssistLoopStatus[] = ['queued', 'running', 'cancelling'];

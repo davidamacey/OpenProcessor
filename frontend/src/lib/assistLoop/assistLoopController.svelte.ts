@@ -10,10 +10,12 @@
 import {
   cancelAssistLoop,
   createAssistLoop,
+  editAssistLoopBudget,
   getAssistLoop,
   listAssistLoops,
   listLoopNodeMembers,
   listLoopNodes,
+  pauseAssistLoop,
   resumeAssistLoop,
   rollbackAssistLoop,
 } from '$lib/api_assistLoop';
@@ -21,9 +23,11 @@ import { ApiError } from '$lib/api_errors';
 import { vlmRunErrorText } from '$lib/vlm/runErrors';
 import {
   LIVE_LOOP_STATUSES,
+  type AssistLoopControl,
   type AssistLoopRequest,
   type AssistLoopState,
   type AssistLoopStatus,
+  type LoopBudgetLimit,
   type LoopNode,
   type LoopRollbackResponse,
 } from '$lib/types_assistLoop';
@@ -35,6 +39,8 @@ export interface AssistLoopDeps {
   nodes: typeof listLoopNodes;
   members: typeof listLoopNodeMembers;
   cancel: typeof cancelAssistLoop;
+  pause: typeof pauseAssistLoop;
+  editBudget: typeof editAssistLoopBudget;
   resume: typeof resumeAssistLoop;
   rollback: typeof rollbackAssistLoop;
   debounceMs: number;
@@ -48,6 +54,8 @@ const DEFAULT_DEPS: AssistLoopDeps = {
   nodes: listLoopNodes,
   members: listLoopNodeMembers,
   cancel: cancelAssistLoop,
+  pause: pauseAssistLoop,
+  editBudget: editAssistLoopBudget,
   resume: resumeAssistLoop,
   rollback: rollbackAssistLoop,
   debounceMs: 300,
@@ -59,19 +67,6 @@ const NODE_PAGE = 100;
 /** True while the worker owns the loop (it holds cluster training meanwhile). */
 export function isLiveLoop(status: AssistLoopStatus | undefined): boolean {
   return status !== undefined && LIVE_LOOP_STATUSES.includes(status);
-}
-
-/** A loop that stopped and the server will queue again. */
-export function isResumableLoop(
-  status: AssistLoopStatus | undefined,
-  stopReason?: string | null,
-): boolean {
-  return (
-    status === 'paused' ||
-    status === 'interrupted' ||
-    status === 'cancelled' ||
-    (status === 'failed' && stopReason === 'vlm_failed')
-  );
 }
 
 export class AssistLoopController {
@@ -131,9 +126,14 @@ export class AssistLoopController {
     return isLiveLoop(this.loop?.status);
   }
 
+  /** What the server allows now; absent on a dry run. */
+  get control(): AssistLoopControl | null {
+    return this.loop?.control ?? null;
+  }
+
   get request(): AssistLoopRequest {
     return {
-      scope: { cluster_ids: null, min_root_size: this.minRootSize },
+      scope: { cluster_uids: null, min_root_size: this.minRootSize },
       vlm: this.vlm,
       prompt_pack: null,
       acknowledge_external: this.acknowledgeExternal,
@@ -153,6 +153,7 @@ export class AssistLoopController {
         floor: 0.85,
         on_fail: this.auditOnFail,
       },
+      on_budget: 'pause',
       vlm_concurrency: 16,
       node_concurrency: 8,
       dry_run: true,
@@ -249,6 +250,16 @@ export class AssistLoopController {
 
   async resume(): Promise<void> {
     await this.#act((id) => this.#deps.resume(id));
+  }
+
+  async pause(): Promise<void> {
+    await this.#act((id) => this.#deps.pause(id));
+  }
+
+  /** Send the limits the person set; the server refuses one below what is spent (409). */
+  async editBudget(limits: LoopBudgetLimit[]): Promise<boolean> {
+    await this.#act((id) => this.#deps.editBudget(id, limits));
+    return this.actionError === null;
   }
 
   async #act(call: (loopId: string) => Promise<AssistLoopState>): Promise<void> {

@@ -208,9 +208,9 @@ describe('actions', () => {
   it('a served next step runs as served', async () => {
     const { job, deps } = make([jobFixture()]);
     const step = {
-      action: 'cluster',
+      action: 'cluster_regions',
       method: 'POST',
-      path: '/regions/cluster',
+      path: '/clusters/runs',
       reason: 'r',
     };
     expect(await job.runNextStep(step)).toBe(true);

@@ -46,12 +46,8 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.class_validated).toBe(true);
     // confidence -> label_confidence (the field is renamed on the wire).
     expect(crop.label_confidence).toBe(raw.confidence);
-    expect(crop.cluster_id).toBe(raw.cluster_id);
-    // similarity_to_centroid is served verbatim as cluster_similarity — no
-    // client 1-cluster_distance computation.
-    expect(crop.similarity_to_centroid).toBe(raw.cluster_similarity);
-    expect(crop.cluster_is_core).toBe(raw.cluster_is_core);
-    expect(crop.cluster_subid).toBe(raw.cluster_subid);
+    // The cluster is served as one nested object and kept whole.
+    expect(crop.cluster).toEqual(raw.cluster);
     expect(crop.class_detector).toBe(raw.class_detector);
     expect(crop.class_detector_version).toBe(raw.class_detector_version);
     expect(crop.class_labeled_at).toBe(raw.class_labeled_at);
@@ -106,8 +102,14 @@ describe('mapRawCrop full field mapping', () => {
       class_validated: false,
       test_holdout: false,
       confidence: 0,
-      cluster_similarity: 0,
-      cluster_is_core: false,
+      cluster: {
+        uid: 'u',
+        partition_id: 'p',
+        state: 'assigned',
+        score: 0,
+        margin: 0,
+        assigned_by: 'run',
+      },
       crop_rank_in_image: 0,
       mistakenness_score: 0,
       class_excluded: false,
@@ -120,8 +122,8 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.class_validated).toBe(false);
     expect(crop.test_holdout).toBe(false);
     expect(crop.label_confidence).toBe(0);
-    expect(crop.similarity_to_centroid).toBe(0);
-    expect(crop.cluster_is_core).toBe(false);
+    expect(crop.cluster?.score).toBe(0);
+    expect(crop.cluster?.margin).toBe(0);
     expect(crop.crop_rank_in_image).toBe(0);
     expect(crop.mistakenness_score).toBe(0);
     expect(crop.class_excluded).toBe(false);
@@ -156,14 +158,15 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.item_text_lines).toEqual([]);
   });
 
-  it('leaves similarity_to_centroid/cluster_is_core null when the backend has not computed them, rather than deriving them from cluster_distance', async () => {
-    const raw = makeItem({ cluster_similarity: null, cluster_is_core: null });
+  it('leaves cluster null when the item has none, rather than deriving one', async () => {
+    const raw = makeItem({ cluster: null });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
 
     const crop = await getCrop(raw.crop_id);
 
-    expect(crop.similarity_to_centroid).toBeNull();
-    expect(crop.cluster_is_core).toBeNull();
+    expect(crop.cluster).toBeNull();
+    expect(crop).not.toHaveProperty('similarity_to_centroid');
+    expect(crop).not.toHaveProperty('cluster_is_core');
   });
 
   it("falls back updated_at to '' when the wire omits it, rather than the string cast leaking a non-string", async () => {
@@ -236,7 +239,7 @@ describe('mapRawCrop full field mapping', () => {
     it('maps all six verbatim when served', () => {
       const raw = makeItem();
       const crop = mapRawCrop(raw);
-      expect(crop.embedding_state).toBe('deferred');
+      expect(crop.embedding_states).toEqual({ primary: 'deferred' });
       expect(crop.source_prompt).toBe('red widget');
       expect(crop.open_vocab_set).toBe('widget_set');
       expect(crop.open_vocab_revision).toBe(4);
@@ -256,7 +259,7 @@ describe('mapRawCrop full field mapping', () => {
 
     it('maps every missing key to null', () => {
       const {
-        embedding_state: _a,
+        embedding_states: _a,
         source_prompt: _b,
         open_vocab_set: _c,
         open_vocab_revision: _d,
@@ -266,7 +269,7 @@ describe('mapRawCrop full field mapping', () => {
       } = makeItem();
       void [_a, _b, _c, _d, _e, _f];
       const crop = mapRawCrop(raw);
-      expect(crop.embedding_state).toBeNull();
+      expect(crop.embedding_states).toEqual({});
       expect(crop.source_prompt).toBeNull();
       expect(crop.open_vocab_set).toBeNull();
       expect(crop.open_vocab_revision).toBeNull();

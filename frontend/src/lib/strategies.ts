@@ -159,11 +159,6 @@ export interface ScoreInfo extends MethodInfoBase {
 export interface DatasetExportInfo extends MethodInfoBase {
   /** True on the kind the backend treats as its primary export. */
   default?: boolean;
-  /** `yolo` / `single_class`: the served near-duplicate threshold default and
-   *  its bounds; absent when the kind serves none. */
-  dedup_threshold_default?: number | null;
-  dedup_threshold_min?: number | null;
-  dedup_threshold_max?: number | null;
 }
 
 /**
@@ -397,9 +392,6 @@ export function parseMethodsResponse(raw: unknown): MethodsResponse {
       (base, e) => ({
         ...base,
         default: optBool(e.default),
-        dedup_threshold_default: optNumber(e.dedup_threshold_default),
-        dedup_threshold_min: optNumber(e.dedup_threshold_min),
-        dedup_threshold_max: optNumber(e.dedup_threshold_max),
       }),
     ),
     detection_profiles: normalizeAxis<DetectionProfileInfo>(
@@ -538,15 +530,6 @@ export function isDatasetExportAvailable(
   return datasetExports.some(
     (e) => e.id === kind && (e.status === 'stable' || e.status === 'experimental'),
   );
-}
-
-/** The served near-duplicate threshold default of an export kind, or `null`
- *  when the kind is absent or serves none (the option is then not offered). */
-export function exportDedupDefault(
-  datasetExports: DatasetExportInfo[],
-  kind: string | undefined,
-): number | null {
-  return datasetExports.find((e) => e.id === kind)?.dedup_threshold_default ?? null;
 }
 
 /**

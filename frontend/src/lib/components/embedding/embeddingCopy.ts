@@ -1,7 +1,7 @@
 /**
- * Frontend copy for the contract's `embedding_state` values (the backend
- * serves no labels for them). `embedded` and `null` (written before the
- * field existed) get no badge; only the three states that mean "no vector"
+ * Frontend copy for the contract's embedding state values (the backend
+ * serves no labels for them). `embedded` and an unserved state (the item has no
+ * key for the space) get no badge; only the three states that mean "no vector"
  * are named here.
  */
 import type { EmbeddingState } from '$lib/types_itemFilter';
@@ -37,6 +37,26 @@ export function noVectorCopy(
 ): (typeof EMBEDDING_STATE_COPY)[NoVectorState] | null {
   if (state == null || state === 'embedded') return null;
   return EMBEDDING_STATE_COPY[state] ?? null;
+}
+
+/** The spaces an item has no vector in, as served (`embedding_states`), with the
+ *  state that says why. A space the item has no state in is not listed. */
+export function noVectorEntries(
+  states: Record<string, EmbeddingState> | null | undefined,
+): [string, NoVectorState][] {
+  return Object.entries(states ?? {}).filter(
+    (e): e is [string, NoVectorState] => noVectorCopy(e[1]) !== null,
+  );
+}
+
+/** Copy for an item with nothing to compare: it has a served state in at least one
+ *  space and none of them holds a vector. Null when any space has one, or none is served. */
+export function noVectorAnywhereCopy(
+  states: Record<string, EmbeddingState> | null | undefined,
+): (typeof EMBEDDING_STATE_COPY)[NoVectorState] | null {
+  const all = Object.values(states ?? {});
+  if (all.length === 0 || all.includes('embedded')) return null;
+  return noVectorCopy(all[0]);
 }
 
 export interface EmbeddingStateChip {

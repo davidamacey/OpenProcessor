@@ -5,7 +5,6 @@
   import ClusterDetailGrid from '$lib/components/clusters/ClusterDetailGrid.svelte';
   import ClusterDetailToolbar from '$lib/components/clusters/ClusterDetailToolbar.svelte';
   import MoveClusterPicker from '$lib/components/clusters/MoveClusterPicker.svelte';
-  import SubClusterTabs from '$lib/components/clusters/SubClusterTabs.svelte';
   import { createClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
   import { createClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
   import { createClusterDetailLive } from '$lib/clusters/clusterDetailLive.svelte';
@@ -19,10 +18,9 @@
   const live = createClusterDetailLive(view);
   const clusterAssist = createClusterAssist(view);
 
-  // The proposal on screen belongs to the cluster or sub-cluster being viewed.
+  // The proposal on screen belongs to the cluster being viewed.
   $effect(() => {
-    void view.clusterId;
-    void view.subTab;
+    void view.clusterUid;
     void clusterAssist.load();
   });
 
@@ -34,7 +32,6 @@
   <ClusterDetailToolbar {view} {actions} {clusterAssist} />
   <ClusterDetailFilters {view} />
   <ClusterFacetBar {view} />
-  <SubClusterTabs {view} />
   {#if clusterAssist.loadError}
     <p
       class="border-b border-zinc-800 px-4 py-1.5 text-xs text-amber-300"

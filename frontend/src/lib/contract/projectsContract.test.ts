@@ -111,10 +111,12 @@ const CASES: [string, string[]][] = [
   ['ProjectLabels', keys({ status: true } satisfies Record<keyof T.ProjectLabels, true>)],
   [
     'ProjectLifecycleResponse',
-    keys({ project: true, warnings: true, keymap_clone_conflicts: true } satisfies Record<
-      keyof T.ProjectLifecycleResponse,
-      true
-    >),
+    keys({
+      project: true,
+      job_id: true,
+      warnings: true,
+      keymap_clone_conflicts: true,
+    } satisfies Record<keyof T.ProjectLifecycleResponse, true>),
   ],
   [
     'KeymapCloneConflictWire',

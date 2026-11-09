@@ -58,8 +58,7 @@ export interface ItemFilter {
   class_names?: string[];
   class_source?: string | null;
   classifier_conf_lt?: number | null;
-  cluster_id?: number | null;
-  cluster_subid?: string | null;
+  cluster_uid?: string | null;
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;

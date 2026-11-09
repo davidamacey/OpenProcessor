@@ -81,8 +81,8 @@
           void modes.ensureClusterMeta([
             ...new Set(
               res.items
-                .map((it) => it.cluster_id)
-                .filter((id): id is number => id != null),
+                .map((it) => it.cluster?.uid)
+                .filter((uid): uid is string => uid != null),
             ),
           ]);
         }}
@@ -165,41 +165,9 @@
   <span class="grow"></span>
 
   <!-- C5 (visual audit 2026-09-24): the cluster-grid controls below
-       (purity legend, embedding plot, subject, clarity) don't apply to the Ignored bucket's crop list, so they
+       (embedding plot, subject, clarity) don't apply to the Ignored bucket's crop list, so they
        are hidden in that mode rather than left live and inert. -->
   {#if !modes.ignoredModeActive}
-    <!-- Color legend for the card border. The cluster grid uses border
-       color to encode purity at a glance; without this strip the user
-       has to mouse over each card to figure out what the colors mean. -->
-    <div
-      class="flex items-center gap-2 text-[10px] text-zinc-500"
-      title="Card border color encodes cluster cohesion (the served bands): share of measured members whose nearest cluster centre is this one — not label agreement. See each card's cohesion chip tooltip for n, label agreement and labelled share."
-    >
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"></span>
-        {list.purityThresholds
-          ? `≥${Math.round(list.purityThresholds.pure_min * 100)}%`
-          : 'pure'}
-      </span>
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-orange-500/60"
-        ></span>
-        {list.purityThresholds
-          ? `≥${Math.round(list.purityThresholds.mixed_min * 100)}%`
-          : 'mixed'}
-      </span>
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-red-500/60"></span>
-        {list.purityThresholds
-          ? `<${Math.round(list.purityThresholds.mixed_min * 100)}%`
-          : 'noisy'}
-      </span>
-      <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-blue-500/60"></span>
-        sub-clustered
-      </span>
-    </div>
-
     <!-- Embedding-plot toggle (curation-strategy plan §5.6): fully absent
        unless {API_PREFIX}/methods actually reports the overlay, same convention
        as the diverse overlay in <StrategyBar>. Replaces the card grid

@@ -29,9 +29,8 @@ describe('multi-box mapping (region_boxes)', () => {
       text_disagreement: true,
       text_choice: 'vlm_preferred',
       text_vlm_invalid: 'sequence',
-      cluster_id: 12,
-      cluster_subid: '12a',
-      cluster_distance: 0.2,
+      cluster_uid: '0b9f9a38-0000-4000-8000-00000000000c',
+      cluster_score: 0.8,
       detected_at: '2026-10-01T00:00:00Z',
       thumbnail_url: '/curation/crops/c_123/region_thumbnail?box_id=b1',
     });
@@ -52,9 +51,8 @@ describe('multi-box mapping (region_boxes)', () => {
     expect(box?.textVlmInvalid).toBe('sequence');
     expect(box?.locked).toBe(true);
     expect(box?.bboxCorrect).toBe(true);
-    expect(box?.clusterId).toBe(12);
-    expect(box?.clusterSubid).toBe('12a');
-    expect(box?.clusterDistance).toBeCloseTo(0.2);
+    expect(box?.clusterUid).toBe('0b9f9a38-0000-4000-8000-00000000000c');
+    expect(box?.clusterScore).toBeCloseTo(0.8);
     expect(box?.detectedAt).toBe('2026-10-01T00:00:00Z');
     expect(box?.thumbnailUrl).toBe('/curation/crops/c_123/region_thumbnail?box_id=b1');
   });
@@ -108,7 +106,7 @@ describe('readSlot / widgetTagSlot', () => {
       confidence: null,
       rejection_reason: null,
       text: null,
-      cluster_id: null,
+      cluster_uid: null,
       thumbnail_url: null,
       ...overrides,
     };
@@ -228,7 +226,7 @@ describe('readSlot — rejected box / auto-confirm', () => {
           confidence: null,
           rejection_reason: 'sanity_reject:aspect_ratio',
           text: null,
-          cluster_id: null,
+          cluster_uid: null,
           thumbnail_url: null,
         },
       ],

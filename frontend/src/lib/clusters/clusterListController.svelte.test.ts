@@ -18,24 +18,15 @@ import { filterPersistKey } from './persistedFilter';
 import { CLUSTER_SORT_IDS } from '$lib/types_clusterList';
 import type { Cluster } from '$lib/types';
 
-function card(id: number, extra: Partial<Cluster> = {}): Cluster {
+function card(id: number | string, extra: Partial<Cluster> = {}): Cluster {
   return {
-    id,
-    cluster_kind: 'candidate',
+    uid: `uid-${id}`,
     size: 10,
     validated_count: 0,
-    dominant_class_id: null,
     dominant_class_name: null,
     dominant_pct: null,
-    purity: 0.5,
-    purity_tier: 'mixed',
-    promotable: false,
-    core_similarity_min: null,
     is_unlabeled: true,
     representative_crop_ids: [],
-    has_subclusters: false,
-    n_subclusters: 0,
-    subcluster_ids: [],
     updated_at: null,
     ...extra,
   };
@@ -50,7 +41,6 @@ function response(
     total: items.length,
     page: 1,
     page_size: items.length,
-    purity_thresholds: null,
     representatives_offset: 0,
     representatives_limit: 24,
     sort: 'size_desc',
@@ -63,7 +53,7 @@ function response(
 
 const withReps = (c: Cluster): Cluster => ({
   ...c,
-  representative_crop_ids: [`crop-${c.id}`],
+  representative_crop_ids: [`crop-${c.uid}`],
 });
 
 let cleanup: (() => void) | undefined;
@@ -201,7 +191,14 @@ describe('cluster list rendering', () => {
     const list = wire();
     await settle();
     await settle();
-    expect(list.gridItems.map((c) => c.id)).toEqual([5, 1, 9, 3, 7, 2]);
+    expect(list.gridItems.map((c) => c.uid)).toEqual([
+      'uid-5',
+      'uid-1',
+      'uid-9',
+      'uid-3',
+      'uid-7',
+      'uid-2',
+    ]);
   });
 
   it('shows the next window and merges its thumbnails by cluster id', async () => {
@@ -224,17 +221,17 @@ describe('cluster list rendering', () => {
     list.loadMore();
     await settle();
     expect(list.gridItems).toHaveLength(48);
-    expect(list.gridItems[30]!.representative_crop_ids).toEqual(['crop-31']);
-    expect(list.gridItems[3]!.representative_crop_ids).toEqual(['crop-4']);
+    expect(list.gridItems[30]!.representative_crop_ids).toEqual(['crop-uid-31']);
+    expect(list.gridItems[3]!.representative_crop_ids).toEqual(['crop-uid-4']);
   });
 
   it('exposes the served sort, options, flag vocabulary, truncation and total', async () => {
     vi.mocked(getClusters).mockResolvedValue(
-      response([card(1)], { truncated: true, total: 2000, sort: 'purity_asc' }),
+      response([card(1)], { truncated: true, total: 2000, sort: 'label_agreement_asc' }),
     );
     const list = wire();
     await settle();
-    expect(list.appliedSort).toBe('purity_asc');
+    expect(list.appliedSort).toBe('label_agreement_asc');
     expect(list.sortOptions).toEqual([{ id: 'size_desc', label: 'Largest first' }]);
     expect(list.flagVocabulary.map((f) => f.id)).toEqual(['unvalidated']);
     expect(list.truncated).toBe(true);
@@ -264,11 +261,11 @@ describe('cluster list rendering', () => {
     vi.mocked(getClusters).mockResolvedValue(response([card(1)]));
     const list = wire();
     await settle();
-    expect(list.gridItems.map((c) => c.id)).toEqual([900, 1]);
+    expect(list.gridItems.map((c) => c.uid)).toEqual(['uid-900', 'uid-1']);
     list.setFilter({ ...EMPTY_CLUSTER_FILTER, needs_review: true });
     flushSync();
     await settle();
-    expect(list.gridItems.map((c) => c.id)).toEqual([1]);
+    expect(list.gridItems.map((c) => c.uid)).toEqual(['uid-1']);
   });
 });
 
@@ -295,9 +292,9 @@ describe('persistence', () => {
       filterPersistKey('default'),
       JSON.stringify({ sort: 'size_asc', filter: { min_size: 9 } }),
     );
-    wire({ params: 'sort=purity_desc&flag=unvalidated' });
+    wire({ params: 'sort=size_asc&flag=unvalidated' });
     await settle();
-    expect(lastQuery()).toMatchObject({ sort: 'purity_desc', flag: ['unvalidated'] });
+    expect(lastQuery()).toMatchObject({ sort: 'size_asc', flag: ['unvalidated'] });
     expect(lastQuery().min_size).toBeUndefined();
   });
 

@@ -58,22 +58,34 @@ describe('EmbeddingStateBadge', () => {
 });
 
 describe('EmbeddingRows', () => {
-  function rows(embedding_state: EmbeddingState | null) {
+  function rows(embedding_states: Record<string, EmbeddingState>) {
     target = document.createElement('dl');
     document.body.appendChild(target);
     instance = mount(EmbeddingRows, {
       target,
-      props: { crop: mapRawCrop(makeItem({ embedding_state })) },
+      props: { crop: mapRawCrop(makeItem({ embedding_states })) },
     });
     flushSync();
-    return target.querySelector('[data-testid="embedding-row"]')!.textContent!.trim();
+    const row = target.querySelector('[data-testid="embedding-row"]')!;
+    return [...row.querySelectorAll('[data-testid="embedding-row-space"]')].map((e) =>
+      e.textContent!.replace(/\s+/g, ' ').trim(),
+    );
   }
 
-  it('reads embedded, the named state, or unknown for null', () => {
-    expect(rows('embedded')).toBe('embedded');
-    expect(rows('failed')).toBe('No vector: encoder failed');
+  it('reads one line per space from the served embedding_states', () => {
+    expect(rows({ primary: 'embedded' })).toEqual(['primary embedded']);
     target.remove();
     unmount(instance!);
-    expect(rows(null)).toBe('unknown (written before v0.4.0)');
+    expect(rows({ primary: 'failed', optional_space: 'embedded' })).toEqual([
+      'primary No vector: encoder failed',
+      'optional_space embedded',
+    ]);
+  });
+
+  it('says no state is served when the item has no key in any space', () => {
+    rows({});
+    expect(
+      target.querySelector('[data-testid="embedding-row"]')!.textContent!.trim(),
+    ).toBe('no state served');
   });
 });

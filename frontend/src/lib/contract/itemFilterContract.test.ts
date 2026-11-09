@@ -55,8 +55,12 @@ describe('shared item-filter enums equal the contract enums', () => {
     expect([...EMBEDDING_STATES].sort()).toEqual(
       enumOf(prop('ItemFilter', 'embedding_state')),
     );
+    // The item wire reports one state per embedding space: a map of these states.
+    const perSpace = prop('ItemDoc', 'embedding_states') as {
+      additionalProperties?: { enum?: string[] };
+    };
     expect([...EMBEDDING_STATES].sort()).toEqual(
-      enumOf(prop('ItemDoc', 'embedding_state')),
+      [...(perSpace.additionalProperties?.enum ?? [])].sort(),
     );
   });
 
@@ -87,8 +91,7 @@ describe('item-filter body schemas', () => {
       class_names: true,
       class_source: true,
       classifier_conf_lt: true,
-      cluster_id: true,
-      cluster_subid: true,
+      cluster_uid: true,
       conf_max: true,
       conf_min: true,
       dataset_split: true,
@@ -180,7 +183,7 @@ describe('CropFilter (getCrops spreads every key into the query)', () => {
       review_status: true,
       open_vocab_set: true,
       source_prompt: true,
-      cluster_id: true,
+      cluster_uid: true,
       label_source: true,
       class_source: true,
       label_validated: true,

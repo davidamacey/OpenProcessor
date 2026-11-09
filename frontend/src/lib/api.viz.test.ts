@@ -24,8 +24,14 @@ describe('getVizProjection', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         points: [
-          { crop_id: 'a', x: 1.5, y: -2.3, cluster_id: 17, class_name: 'widget_a' },
-          { crop_id: 'b', x: 0, y: 0, cluster_id: null, class_name: null },
+          {
+            crop_id: 'a',
+            x: 1.5,
+            y: -2.3,
+            cluster_uid: 'uid-17',
+            class_name: 'widget_a',
+          },
+          { crop_id: 'b', x: 0, y: 0, cluster_uid: null, class_name: null },
           // Malformed entries — must be dropped, not crash the whole parse.
           { crop_id: '', x: 1, y: 1 },
           { x: 1, y: 1 },
@@ -48,7 +54,7 @@ describe('getVizProjection', () => {
         crop_id: 'a',
         x: 1.5,
         y: -2.3,
-        cluster_id: 17,
+        cluster_uid: 'uid-17',
         class_name: 'widget_a',
         class_source: null,
       },
@@ -56,7 +62,7 @@ describe('getVizProjection', () => {
         crop_id: 'b',
         x: 0,
         y: 0,
-        cluster_id: null,
+        cluster_uid: null,
         class_name: null,
         class_source: null,
       },
@@ -71,7 +77,7 @@ describe('getVizProjection', () => {
     expect(url).toContain('max_points=100');
   });
 
-  it('forwards cluster_id/class_id and omits unset params', async () => {
+  it('forwards cluster_uid/class_id and omits unset params', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         points: [],
@@ -82,10 +88,10 @@ describe('getVizProjection', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await getVizProjection({ cluster_id: 42 });
+    await getVizProjection({ cluster_uid: 'uid-42' });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
-    expect(url).toContain('cluster_id=42');
+    expect(url).toContain('cluster_uid=uid-42');
     expect(url).not.toContain('class_id');
     expect(url).not.toContain('max_points');
   });
@@ -203,7 +209,7 @@ describe('rebuildVizProjection', () => {
         job_id: 'viz-rebuild-1',
         status: 'running',
         scope: 'all',
-        cluster_id: null,
+        cluster_uid: null,
         n_pool: 1200,
         n_written: 0,
         started_at: 1757462400,

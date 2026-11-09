@@ -5,8 +5,6 @@
  */
 import { apiErrorText } from '$lib/api_errors';
 import { exportSingleClass, exportSingleClassStatus } from '$lib/api_export';
-import { exportDedupDefault } from '$lib/strategies';
-import { strategiesStore } from '$stores/strategies.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type { TrainDatasetController } from './trainDatasetController.svelte';
 
@@ -25,14 +23,10 @@ export function createTrainSingleClassExport(dataset: TrainDatasetController) {
   let singleClassExportMessage = $state<string | null>(null);
   // Export options. whole_frame = full source frame (deployment distribution);
   // item_crop = parent item crop with the region re-projected. 640 for a
-  // fast pass, 1280 for the full run. dedup collapses near-dup frames at the served threshold.
+  // fast pass, 1280 for the full run. collapse keeps one frame per near-duplicate group.
   let singleClassImageMode = $state<'whole_frame' | 'item_crop'>('whole_frame');
   let singleClassImgSize = $state<640 | 1280>(1280);
-  let singleClassDedup = $state<boolean>(true);
-  // The served threshold of this export kind; none = no dedup option.
-  const singleClassDedupThreshold = $derived(
-    exportDedupDefault(strategiesStore.methods.dataset_exports, datasetExportSpec?.kind),
-  );
+  let singleClassCollapse = $state<boolean>(false);
   // Optional N: sample at most this many positive (region-bearing) frames,
   // spread EVENLY across region clusters. Blank/0 == every positive. Lets us
   // build progressively larger dataset versions from the same labeled pool.
@@ -72,7 +66,7 @@ export function createTrainSingleClassExport(dataset: TrainDatasetController) {
       const r = await exportSingleClass(spec, {
         image_mode: singleClassImageMode,
         img_max_side: singleClassImgSize,
-        dedup_threshold: singleClassDedup ? singleClassDedupThreshold : null,
+        collapse_near_duplicates: singleClassCollapse,
         max_positive_images:
           singleClassMaxPositives && singleClassMaxPositives > 0
             ? singleClassMaxPositives
@@ -83,7 +77,7 @@ export function createTrainSingleClassExport(dataset: TrainDatasetController) {
       void dataset.refreshDataset();
       const pos = r.positive_images ?? '?';
       const bg = r.background_images ?? '?';
-      singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${bg} backgrounds), ${singleClassImageMode} @ ${singleClassImgSize}px${singleClassDedup && singleClassDedupThreshold != null ? `, dedup ${singleClassDedupThreshold}` : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
+      singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${bg} backgrounds), ${singleClassImageMode} @ ${singleClassImgSize}px${singleClassCollapse ? ', near-duplicates collapsed' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
       if (r.positives_zero_warning) {
         singleClassExportMessage +=
           ' Warning: zero positives — check labeling for this slot.';
@@ -116,14 +110,11 @@ export function createTrainSingleClassExport(dataset: TrainDatasetController) {
     set singleClassImgSize(v: 640 | 1280) {
       singleClassImgSize = v;
     },
-    get singleClassDedup() {
-      return singleClassDedup;
+    get singleClassCollapse() {
+      return singleClassCollapse;
     },
-    set singleClassDedup(v: boolean) {
-      singleClassDedup = v;
-    },
-    get singleClassDedupThreshold() {
-      return singleClassDedupThreshold;
+    set singleClassCollapse(v: boolean) {
+      singleClassCollapse = v;
     },
     get singleClassMaxPositives() {
       return singleClassMaxPositives;

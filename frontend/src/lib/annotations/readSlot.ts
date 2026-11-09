@@ -106,9 +106,8 @@ export function mapRegionBoxWire(el: unknown): SlotBox | null {
     textDisagreement: asBoolean(r.text_disagreement),
     textChoice: asString(r.text_choice),
     textVlmInvalid: asString(r.text_vlm_invalid),
-    clusterId: asNumber(r.cluster_id),
-    clusterSubid: asString(r.cluster_subid),
-    clusterDistance: asNumber(r.cluster_distance),
+    clusterUid: asString(r.cluster_uid),
+    clusterScore: asNumber(r.cluster_score),
     detectedAt: asString(r.detected_at),
     thumbnailUrl: asString(r.thumbnail_url),
   };

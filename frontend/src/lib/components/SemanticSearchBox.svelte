@@ -22,12 +22,13 @@
   import type { SemanticSearchResult } from '$lib/searchBox.svelte';
   import { onMount } from 'svelte';
   import UnembeddedBanner from '$components/embedding/UnembeddedBanner.svelte';
+  import SearchSpacePicker from '$components/SearchSpacePicker.svelte';
 
   interface Props {
     /** Extra query params threaded to `GET {API_PREFIX}/search/text` — e.g.
-     *  `{cluster_id}` on `/clusters/[id]`, or the effective tab + live
+     *  `{cluster_uid}` on `/clusters/[id]`, or the effective tab + live
      *  filter object on `/review`. Omitting any scoping key (e.g. no
-     *  `cluster_id`) means "search everything" — the global `/clusters`
+     *  `cluster_uid`) means "search everything" — the global `/clusters`
      *  search deliberately passes no cluster/tab scope. */
     filter?: Record<string, unknown>;
     pageSize?: number;
@@ -62,15 +63,29 @@
   let lastTotal = $state(0);
   let lastQuery = $state('');
   let lastUnembedded = $state<number | null>(null);
+  let lastSpace = $state<string | null>(null);
+  let lastFuse = $state<string[]>([]);
+  // Null searches the target's primary space; set by the space picker.
+  let space = $state<string | null>(null);
+  let fuse = $state<string[]>([]);
 
   const box = createSemanticSearchBox({
     debounceMs: 300,
-    search: (q, signal) => searchCrops(q, 1, pageSize, filter, signal),
+    search: (q, signal) =>
+      searchCrops(
+        q,
+        1,
+        pageSize,
+        { ...filter, space, fuse: fuse.length ? fuse : null },
+        signal,
+      ),
     onResults: (res) => {
       lastShown = res.items.length;
       lastTotal = res.total;
       lastQuery = box.query.trim();
       lastUnembedded = res.unembedded_in_scope ?? null;
+      lastSpace = res.space ?? null;
+      lastFuse = res.fuse ?? [];
       onResults?.(res);
     },
     onClear: () => onClear?.(),
@@ -137,6 +152,14 @@
     {/if}
   </div>
 
+  <SearchSpacePicker
+    onChange={(choice) => {
+      space = choice.space;
+      fuse = choice.fuse;
+      box.submit();
+    }}
+  />
+
   {#if box.loading}
     <span class="text-zinc-500">searching…</span>
   {:else if box.error}
@@ -149,6 +172,11 @@
     <span class="text-zinc-400">
       Showing {lastShown} of {lastTotal} result{lastTotal === 1 ? '' : 's'} for “{lastQuery}”
     </span>
+    {#if lastSpace}
+      <span class="text-zinc-500" data-testid="search-space-echo">
+        in {lastSpace}{lastFuse.length ? ` + ${lastFuse.join(', ')}` : ''}
+      </span>
+    {/if}
     <UnembeddedBanner count={lastUnembedded} context="search" />
   {/if}
 </div>

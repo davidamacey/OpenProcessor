@@ -10,6 +10,7 @@ vi.mock('$lib/api_clusters', async () => {
     await vi.importActual<typeof import('$lib/api_clusters')>('$lib/api_clusters');
   return { ...actual, moveCropsToCluster: vi.fn() };
 });
+vi.mock('$lib/api_jobs', () => ({ getJob: vi.fn() }));
 vi.mock('$lib/api_cropWrites', async () => {
   const actual =
     await vi.importActual<typeof import('$lib/api_cropWrites')>('$lib/api_cropWrites');
@@ -31,7 +32,7 @@ import { bulkLabel, putCropLabel } from '$lib/api_cropWrites';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';
-import { crop, setup } from './clusterControllerTestKit';
+import { crop, mockLabelOp, setup } from './clusterControllerTestKit';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -74,15 +75,10 @@ describe('assignClassToSelected', () => {
     expect(successSpy).toHaveBeenCalledWith('Labeled 1 crop.');
   });
 
-  it('uses bulkLabel and records undo off the server updated_ids for a multi-crop selection', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 2,
-      updated_ids: ['a', 'b'],
-      conflicts: [],
-      op_id: null,
-    });
+  it('uses bulkLabel, follows the job and records the operation for undo for a multi-crop selection', async () => {
+    mockLabelOp(bulkLabel, { updated: 2, conflicts: 0 });
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
-    const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
+    const recordSpy = vi.spyOn(undoStore, 'recordLabelOp');
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
     const b = crop('b');
@@ -92,7 +88,7 @@ describe('assignClassToSelected', () => {
     await controller.assignClassToSelected(3);
 
     expect(bulkLabel).toHaveBeenCalledWith(['a', 'b'], 3);
-    expect(recordWritesSpy).toHaveBeenCalledWith(['a', 'b']);
+    expect(recordSpy).toHaveBeenCalledWith('op1', ['a', 'b']);
     // Plural wording -- kills the ids.length === 1 ternary collapsing to
     // always-singular (a single-crop success elsewhere already covers
     // the singular branch producing the same string either way).
@@ -100,12 +96,7 @@ describe('assignClassToSelected', () => {
   });
 
   it("re-reads the served first page after a successful assign, so the footer count is the server's", async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 2,
-      updated_ids: ['a', 'b'],
-      conflicts: [],
-      op_id: null,
-    });
+    mockLabelOp(bulkLabel, { updated: 2, conflicts: 0 });
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const { sel, controller, loadFirst } = setup([crop('a'), crop('b')]);
     sel.ids = new Set(['a', 'b']);
@@ -207,12 +198,7 @@ describe('handleClassDrop', () => {
   const cls: RegistryClass = { id: 7, name: 'truck' } as RegistryClass;
 
   it('prefers dragIds over droppedIds and the selection, and clears dragIds after reading it', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 1,
-      updated_ids: ['a'],
-      conflicts: [],
-      op_id: null,
-    });
+    mockLabelOp(bulkLabel, { updated: 1, conflicts: 0 });
     const a = crop('a');
     const b = crop('b');
     const { sel, controller, setDragIds, getDragIds } = setup([a, b]);
@@ -226,12 +212,7 @@ describe('handleClassDrop', () => {
   });
 
   it('falls back to droppedIds when no drag is in flight', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 1,
-      updated_ids: ['b'],
-      conflicts: [],
-      op_id: null,
-    });
+    mockLabelOp(bulkLabel, { updated: 1, conflicts: 0 });
     const b = crop('b');
     const { controller } = setup([b]);
 
@@ -241,12 +222,7 @@ describe('handleClassDrop', () => {
   });
 
   it('falls back to the selection when there is no drag and no dropped id (class-hotkey path)', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 1,
-      updated_ids: ['a'],
-      conflicts: [],
-      op_id: null,
-    });
+    mockLabelOp(bulkLabel, { updated: 1, conflicts: 0 });
     const a = crop('a');
     const { sel, controller } = setup([a]);
     sel.ids = new Set(['a']);
@@ -268,76 +244,59 @@ describe('handleClassDrop', () => {
     expect(bulkLabel).not.toHaveBeenCalled();
   });
 
-  it('claims dropped ids in the exclusion guard before the request settles, and resets the grid', async () => {
-    let resolveBulk!: (v: {
-      updated: number;
-      updated_ids: string[];
-      conflicts: never[];
-      op_id: null;
-    }) => void;
+  it('resets the grid override before the request settles and keeps the dropped crops in place', async () => {
+    let resolveBulk!: (v: unknown) => void;
     vi.mocked(bulkLabel).mockReturnValue(
       new Promise((resolve) => {
         resolveBulk = resolve;
-      }),
+      }) as never,
     );
     const a = crop('a');
-    const { exclusionGuard, resetGrid, controller } = setup([a]);
+    const { cropPager, exclusionGuard, resetGrid, controller } = setup([a]);
 
     const p = controller.handleClassDrop(cls, ['a']);
-    // Synchronously (before the request resolves) the id must already be
-    // claimed and the grid override dropped -- this is what closes the
-    // stale-fetch race a concurrent GET could otherwise win.
-    expect(exclusionGuard.accept(a)).toBe(false);
+    // Synchronously (before the request resolves) the drag-local grid
+    // override is dropped; a label does not move the crop out of its
+    // cluster, so it stays in the grid and is not claimed by the guard.
     expect(resetGrid).toHaveBeenCalledTimes(1);
-    resolveBulk({ updated: 1, updated_ids: ['a'], conflicts: [], op_id: null });
+    expect(cropPager.items.map((c) => c.id)).toEqual(['a']);
+    expect(exclusionGuard.accept(a)).toBe(true);
+    mockLabelOp(bulkLabel, { updated: 1 });
+    resolveBulk({ op_id: 'op1', job_id: 'job1', status: 'queued' });
     await p;
   });
 
-  it('removes only the dropped crop from the grid (not the whole list) and decrements total by exactly ids.length', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 1,
-      updated_ids: ['a'],
-      conflicts: [],
-      op_id: null,
-    });
+  it('labels the dropped crop in place: new class shown, total unchanged', async () => {
+    mockLabelOp(bulkLabel, { updated: 1 });
     const a = crop('a');
     const b = crop('b');
     const { cropPager, controller } = setup([a, b]);
-    cropPager.total = 1; // deliberately desynced from items.length (2)
+    cropPager.total = 2;
 
     await controller.handleClassDrop(cls, ['a']);
 
-    expect(cropPager.items.map((c) => c.id)).toEqual(['b']);
-    // Math.max(0, 1 - 1) === 0 -- without the clamp (or with -/+ flipped)
-    // this would go negative or increase instead.
-    expect(cropPager.total).toBe(0);
+    expect(cropPager.items.map((c) => c.id)).toEqual(['a', 'b']);
+    expect(cropPager.items[0]!.class_id).toBe(7);
+    expect(cropPager.items[0]!.class_name).toBe('truck');
+    expect(cropPager.items[0]!.class_validated).toBe(true);
+    expect(cropPager.items[1]!.class_id).toBeNull();
+    expect(cropPager.total).toBe(2);
   });
 
-  it('decrements total by exactly ids.length in the ordinary (well above zero) case, not clamping it to 0', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 1,
-      updated_ids: ['a'],
-      conflicts: [],
-      op_id: null,
-    });
-    const a = crop('a');
+  it('rolls the drop back and keeps the crop when the label write fails', async () => {
+    vi.mocked(bulkLabel).mockRejectedValue(new Error('network down'));
+    vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
+    const a = crop('a', { class_id: 1, class_name: 'widget_e' });
     const { cropPager, controller } = setup([a]);
-    cropPager.total = 5; // well above ids.length -- Math.max(0, x) === x here,
-    // so Math.min(0, x) (a survived mutant) would wrongly clamp to 0.
 
     await controller.handleClassDrop(cls, ['a']);
 
-    expect(cropPager.total).toBe(4);
+    expect(cropPager.items.map((c) => c.class_id)).toEqual([1]);
   });
 
-  it('records undo off the server updated_ids and toasts the plain success message on a clean (no-conflict) label', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: undefined as unknown as number,
-      updated_ids: ['a'],
-      conflicts: [],
-      op_id: null,
-    });
-    const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
+  it('records the operation for undo and toasts the plain success message on a clean (no-conflict) label', async () => {
+    mockLabelOp(bulkLabel, { updated: 1 });
+    const recordSpy = vi.spyOn(undoStore, 'recordLabelOp');
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const warnSpy = vi.spyOn(toastStore, 'warn').mockImplementation(() => 'x');
     const a = crop('a');
@@ -345,64 +304,24 @@ describe('handleClassDrop', () => {
 
     await controller.handleClassDrop(cls, ['a']);
 
-    expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
-    // res.updated ?? ids.length -- res.updated is undefined here, so the
-    // fallback (ids.length === 1) must be used.
+    expect(recordSpy).toHaveBeenCalledWith('op1', ['a']);
     expect(successSpy).toHaveBeenCalledWith('Labeled 1 → truck.');
     expect(warnSpy).not.toHaveBeenCalled();
     expect(loadFirst).not.toHaveBeenCalled();
   });
 
-  it('treats a missing `conflicts` array as zero conflicts rather than throwing', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 1,
-      updated_ids: ['a'],
-      conflicts: undefined as unknown as never[],
-      op_id: null,
-    });
-    const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
-    const a = crop('a');
-    const { controller } = setup([a]);
-
-    await expect(controller.handleClassDrop(cls, ['a'])).resolves.toBeUndefined();
-
-    expect(successSpy).toHaveBeenCalledWith('Labeled 1 → truck.');
-  });
-
-  it('releases conflicted ids (they never actually left) and reloads instead of toasting plain success', async () => {
-    vi.mocked(bulkLabel).mockResolvedValue({
-      updated: 1,
-      updated_ids: ['a'],
-      conflicts: [{ crop_id: 'b', current_source: 'vlm' }],
-      op_id: null,
-    });
+  it('reloads and warns with the served counts when a worker blocked some of the drop', async () => {
+    mockLabelOp(bulkLabel, { updated: 1, conflicts: 1 });
     const warnSpy = vi.spyOn(toastStore, 'warn').mockImplementation(() => 'x');
     const a = crop('a');
     const b = crop('b');
-    const { exclusionGuard, loadFirst, controller } = setup([a, b]);
+    const { loadFirst, controller } = setup([a, b]);
 
     await controller.handleClassDrop(cls, ['a', 'b']);
 
-    expect(exclusionGuard.accept(b)).toBe(true); // released
-    expect(exclusionGuard.accept(a)).toBe(false); // stays claimed
     expect(loadFirst).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(
       'Labeled 1 of 2 → truck (1 blocked by worker). Reloading.',
     );
-  });
-
-  it('reverts the optimistic removal and releases claimed ids when the request fails outright', async () => {
-    vi.mocked(bulkLabel).mockRejectedValue(new Error('boom'));
-    const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
-    const a = crop('a');
-    const b = crop('b');
-    const { cropPager, exclusionGuard, controller } = setup([a, b]);
-
-    await controller.handleClassDrop(cls, ['a']);
-
-    expect(cropPager.items.map((c) => c.id)).toEqual(['a', 'b']);
-    expect(cropPager.total).toBe(2);
-    expect(exclusionGuard.accept(a)).toBe(true);
-    expect(errorSpy).toHaveBeenCalledWith('Label failed: boom');
   });
 });

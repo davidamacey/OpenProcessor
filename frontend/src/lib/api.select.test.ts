@@ -115,10 +115,10 @@ describe('selectDiverse', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await selectDiverse({ cluster_id: 5 }, 10, 'seed-crop-1');
+    await selectDiverse({ cluster_uid: 'uid-5' }, 10, 'seed-crop-1');
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(init.body as string)).toEqual({
-      scope: { cluster_id: 5 },
+      scope: { cluster_uid: 'uid-5' },
       k: 10,
       seed_crop_id: 'seed-crop-1',
     });

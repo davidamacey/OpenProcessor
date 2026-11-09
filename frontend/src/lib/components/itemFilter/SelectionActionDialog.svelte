@@ -75,17 +75,23 @@
       </label>
     {:else if c.action === 'move'}
       <label class="flex items-center gap-2">
-        <span class="text-zinc-400">Cluster id</span>
-        <input
-          type="number"
-          class="input-sm w-28"
+        <span class="text-zinc-400">Cluster</span>
+        <select
+          class="select-sm"
           data-testid="selection-cluster"
-          value={c.clusterId ?? ''}
+          value={c.clusterUid ?? ''}
           onchange={(e) => {
-            c.clusterId = intOrNull(e.currentTarget.value);
+            c.clusterUid = e.currentTarget.value || null;
             void c.refresh();
           }}
-        />
+        >
+          <option value="">choose…</option>
+          {#each c.clusterOptions as cl (cl.uid)}
+            <option value={cl.uid}>
+              {cl.uid.slice(0, 8)} · {cl.dominant_class_name ?? 'unlabeled'} · {cl.size.toLocaleString()}
+            </option>
+          {/each}
+        </select>
       </label>
     {/if}
 

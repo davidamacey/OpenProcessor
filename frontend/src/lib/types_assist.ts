@@ -27,8 +27,7 @@ export type AssistStatus = (typeof ASSIST_STATUSES)[number];
 export type AssistConfidence = 'high' | 'medium' | 'low';
 
 export interface AssistContext {
-  cluster_id: number;
-  cluster_subid?: string | null;
+  cluster_uid: string;
 }
 
 export interface BoxRef {
@@ -49,8 +48,7 @@ export interface AssistBoxesTarget {
 
 export interface AssistClusterTarget {
   kind: 'cluster';
-  cluster_id: number;
-  cluster_subid?: string | null;
+  cluster_uid: string;
 }
 
 export interface AssistFilterTarget {
@@ -66,13 +64,11 @@ export type AssistTarget =
 export const MIN_AGREEMENT_RANGE = { min: 0.5, max: 1 } as const;
 
 export type AssistSampleMode = 'all' | 'representative';
-export type AssistStratifyBy = 'auto' | 'cluster_subid' | 'none';
 
 export interface AssistSample {
   mode?: AssistSampleMode;
   size?: number | null;
   seed?: number;
-  stratify_by?: AssistStratifyBy;
 }
 
 export interface AssistSegmentSpec {
@@ -89,12 +85,6 @@ export interface AssistRunRequest {
   segment?: AssistSegmentSpec | null;
   min_agreement?: number;
   dry_run?: boolean;
-}
-
-export interface AssistStratum {
-  key: string;
-  size: number;
-  sampled: number;
 }
 
 export interface AssistSkipped {
@@ -114,7 +104,6 @@ export interface AssistResolved {
   scope_digest: string;
   sampled: number;
   sample_seed: number;
-  strata?: AssistStratum[];
   skipped?: AssistSkipped;
   vlm?: AssistPinned | null;
   prompt_pack?: AssistPinned | null;

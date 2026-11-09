@@ -16,7 +16,7 @@
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import EmbeddingStateBadge from './embedding/EmbeddingStateBadge.svelte';
-  import { noVectorCopy } from './embedding/embeddingCopy';
+  import { noVectorAnywhereCopy, noVectorEntries } from './embedding/embeddingCopy';
   import DetectorClass from './labelConfirmation/DetectorClass.svelte';
   import Modal from '$components/Modal.svelte';
   import AssistSuggestions from './assistRun/AssistSuggestions.svelte';
@@ -349,7 +349,7 @@
       {/if}
 
       {#if onsimilar}
-        {@const noVector = noVectorCopy(crop.embedding_state)}
+        {@const noVector = noVectorAnywhereCopy(crop.embedding_states)}
         <button
           type="button"
           class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white disabled:opacity-50"
@@ -418,7 +418,9 @@
         </svg>
       </span>
     {/if}
-    <EmbeddingStateBadge state={crop.embedding_state ?? null} compact />
+    {#each noVectorEntries(crop.embedding_states) as [space, state] (space)}
+      <EmbeddingStateBadge {state} {space} compact />
+    {/each}
     {#if hasClass}
       <span
         class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-[10px] font-medium {badge.cls}"

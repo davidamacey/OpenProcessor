@@ -27,6 +27,7 @@
   const STATUS_TONE: Record<BulkIngestStatus, string> = {
     queued: 'text-zinc-300',
     running: 'text-blue-300',
+    cancelling: 'text-amber-300',
     completed: 'text-emerald-300',
     completed_with_errors: 'text-amber-300',
     failed: 'text-red-300',

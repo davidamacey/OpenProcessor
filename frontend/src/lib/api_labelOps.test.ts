@@ -1,7 +1,7 @@
 /** Label-operation wrappers: method, project-scoped URL, query and body through the real `apiFetch`. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX, setScopedPrefix } from '$lib/api';
-import { getLabelOps, undoLabelOp } from '$lib/api_labelOps';
+import { getLabelOps, previewLabelOpUndo, queueLabelOpUndo } from '$lib/api_labelOps';
 
 const PROJECT = `${API_PREFIX}/projects/alpha`;
 
@@ -46,17 +46,18 @@ describe('label ops wrappers', () => {
     });
   });
 
-  it('sends dry_run explicitly, true then false', async () => {
+  it('sends dry_run explicitly: the preview true, the queued undo false', async () => {
     setScopedPrefix(PROJECT);
     let last = capture();
-    await undoLabelOp('op 1', true);
+    await previewLabelOpUndo('op 1');
     expect(last()).toEqual({
       url: `${PROJECT}/label_ops/op%201/undo`,
       method: 'POST',
       body: { dry_run: true },
     });
-    last = capture();
-    await undoLabelOp('op 1', false);
+    last = capture({ op_id: 'op 1', job_id: 'j1', status: 'queued' });
+    const accepted = await queueLabelOpUndo('op 1');
     expect(last().body).toEqual({ dry_run: false });
+    expect(accepted.job_id).toBe('j1');
   });
 });

@@ -36,7 +36,7 @@ describe('the synthetic slot inventory card invents nothing and never hides a re
     expect(fn).not.toBeUndefined();
     expect(fn).not.toMatch(/as Cluster/);
     expect(fn).toMatch(/isSlotCard: true/);
-    expect(fn).toMatch(/purity_tier: null/);
+    expect(fn).toMatch(/uid: `slot:\$\{slot\.key\}`/);
   });
 
   it('re-runs whenever classesStore.classes changes, not just once after the first loadFirst (the ~1-in-8 race)', () => {
@@ -60,14 +60,14 @@ describe('the synthetic slot inventory card invents nothing and never hides a re
 
   it('keys the #each off isSlotCard so the synthetic card can never collide with a real cluster’s key', () => {
     expect(gridSrc).toMatch(
-      /\{#each list\.gridItems as c \(c\.isSlotCard \? `slot-\$\{c\.id\}` : c\.id\)\}/,
+      /\{#each list\.gridItems as c \(c\.isSlotCard \? `slot-\$\{c\.uid\}` : c\.uid\)\}/,
     );
   });
 
-  it('purityBadge renders no badge at all for the synthetic card (never an invented "noisy 0%")', () => {
-    const fn = cardSrc.match(/function purityBadge\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
+  it('the border helper gives the synthetic card its own neutral border', () => {
+    const fn = cardSrc.match(/function borderColor\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
     expect(fn).not.toBeUndefined();
-    expect(fn).toMatch(/if \(c\.isSlotCard\) return null;/);
+    expect(fn).toMatch(/if \(c\.isSlotCard\) return 'border-purple-500\/60';/);
   });
 
   it('the subtitle row skips the invented dominant_pct "· 0%" for the synthetic card too', () => {

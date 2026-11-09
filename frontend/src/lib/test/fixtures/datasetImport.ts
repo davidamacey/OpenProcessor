@@ -178,6 +178,7 @@ export function importActionsFixture(over: Partial<ImportActions> = {}): ImportA
 export function jobFixture(over: Partial<DatasetImportJob> = {}): DatasetImportJob {
   return {
     project: 'default',
+    job_id: 'job_import_1',
     import_id: 'imp_20260927T120000_1a2b3c4d',
     import_key: 'k'.repeat(64),
     name: 'widgets_v1',

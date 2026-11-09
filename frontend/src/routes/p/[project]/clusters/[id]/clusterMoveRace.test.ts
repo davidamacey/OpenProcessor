@@ -125,19 +125,14 @@ describe('mechanism: exclusion set survives a stale in-flight fetch (executable,
  */
 interface Crop {
   id: string;
-  cluster_subid: string | null;
 }
-const crops = (...specs: string[]): Crop[] =>
-  specs.map((s) => {
-    const [id, sub] = s.split(':');
-    return { id: id!, cluster_subid: sub ?? null };
-  });
+const crops = (...ids: string[]): Crop[] => ids.map((id) => ({ id }));
 
 describe('mechanism: the grid can never render a crop the pager no longer holds', () => {
   // Wired the same way the page is: the real `createPager` owns the crop
   // buffer (its `items` is the reactive source of truth) and the real
   // `createGridGroups` derives the rendered grid off it.
-  async function harness(initial: Crop[], grouped = false) {
+  async function harness(initial: Crop[]) {
     const pager = createPager<Crop>({
       fetchPage: async () => ({ items: initial, total: initial.length }),
       keyOf: (c) => c.id,
@@ -145,9 +140,7 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
     await pager.loadFirst();
     const grid = createGridGroups<Crop>({
       source: () => pager.items,
-      grouped: () => grouped,
       keyOf: (c) => c.id,
-      subidOf: (c) => c.cluster_subid,
       liveIds: () => new Set(pager.items.map((c) => c.id)),
     });
     return {
@@ -221,15 +214,12 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
     expect(h.rendered).toEqual(['a', 'b']);
   });
 
-  it('sub-cluster grouping keeps contiguous runs and unique keys', () => {
-    const groups = buildGroups(
-      crops('a:15b', 'b:15a', 'c:15b', 'd'),
-      true,
-      (c) => c.cluster_subid,
-    );
-    expect(groups.map((g) => g.key)).toEqual(['15a#0', '15b#1', '__none__#2']);
-    expect(new Set(groups.map((g) => g.key)).size).toBe(groups.length);
-    expect(groups.at(-1)!.label).toBe('unrefined');
+  it('renders one flat group holding a copy of the list (never the caller’s array)', () => {
+    const source = crops('a', 'b');
+    const groups = buildGroups(source);
+    expect(groups.map((g) => g.key)).toEqual(['__all__']);
+    expect(groups[0]!.items).toEqual(source);
+    expect(groups[0]!.items).not.toBe(source);
   });
 
   it('the OLD snapshot mechanism does resurrect (proves this is a real bug, not a tautology)', () => {
@@ -237,12 +227,12 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
     // rebuild effect only runs when the source list changes, and the dnd
     // handlers assign their own payload into it.
     const source = crops('a', 'b', 'c', 'd');
-    let snapshot = buildGroups(source, false, (c) => c.cluster_subid);
+    let snapshot = buildGroups(source);
     const preDrop = [...snapshot[0]!.items];
 
     // Drop handler removes b + c from the pager; the effect reruns.
     const afterDrop = source.filter((c) => c.id !== 'b' && c.id !== 'c');
-    snapshot = buildGroups(afterDrop, false, (c) => c.cluster_subid);
+    snapshot = buildGroups(afterDrop);
     expect(snapshot.flatMap((g) => g.items.map((c) => c.id))).toEqual(['a', 'd']);
 
     // Then a dnd event lands with the library's stale list and wins, with no

@@ -1,7 +1,7 @@
 /**
  * /clusters/[id] reads the served cluster shape instead of guessing: the
- * class for a cluster comes from `cluster_kind`/`dominant_class_id`, and the
- * core cut line from `cluster_is_core`. Static source scan (no
+ * class for a cluster comes from its `dominant_class_name`, and the retired
+ * geometry (core cut line, sub-clusters) is gone. Static source scan (no
  * component-mount harness; see clusterMoveRace.test.ts's doc comment).
  */
 import { readFileSync } from 'node:fs';
@@ -16,27 +16,27 @@ const src = readFileSync(
   'utf-8',
 );
 
-describe('class-for-cluster lookup uses the served cluster_kind, not an id-equality guess', () => {
-  it('clsForCluster reads cluster.cluster_kind and cluster.dominant_class_id', () => {
+describe('class-for-cluster lookup reads the served class name, not an id guess', () => {
+  it('clsForCluster matches the registry class by the card’s dominant_class_name', () => {
     const clsBlock = src.match(/const clsForCluster = \$derived\(([\s\S]*?)\);/)?.[0];
     expect(clsBlock).not.toBeUndefined();
-    expect(clsBlock).toMatch(/cluster\?\.cluster_kind === 'class'/);
-    expect(clsBlock).toMatch(/cluster\.dominant_class_id/);
-    // The old implementation assumed cluster_id === class_id and matched
-    // classesStore entries against clusterId directly.
-    expect(clsBlock).not.toMatch(/c\.id === clusterId/);
+    expect(clsBlock).toMatch(/cluster\?\.dominant_class_name/);
+    expect(clsBlock).toMatch(/c\.name === cluster!\.dominant_class_name/);
+    // Class identity is the name: no registry row is matched by an id.
+    expect(clsBlock).not.toMatch(/dominant_class_id|cluster_kind|c\.id ===/);
   });
 });
 
-describe('the core cut line uses the served cluster_is_core, not a 0.75 constant', () => {
-  it('cutLine is computed from filteredCrops via computeCutLine, which reads cluster_is_core', () => {
-    expect(src).toMatch(
-      /const cutLine = \$derived\.by\(\(\) =>\s*computeCutLine\(\s*filteredCrops,\s*orderMode === 'default' && detectorSort === 'default',?\s*\),?\s*\);/,
-    );
+describe('the detail view carries no retired cluster geometry', () => {
+  it('has no core cut line, sub-cluster tabs or grouping (cluster_is_core, subid are not served)', () => {
+    expect(src).not.toMatch(/cutLine|computeCutLine|cluster_is_core/);
+    expect(src).not.toMatch(/subTab|subClusterIds|groupBySubcluster|cluster_subid/);
     expect(src).not.toMatch(/similarity_to_centroid/);
   });
 
-  it('imports computeCutLine from the shared lib rather than reimplementing the boundary scan inline (one place for the core-first cut)', () => {
-    expect(src).toMatch(/import \{ computeCutLine \} from '\$lib\/clusters\/cutLine';/);
+  it('asks for the best-scored-first order the server serves (core_first), keyed by the cluster uid', () => {
+    expect(src).toMatch(/'core_first'/);
+    expect(src).toMatch(/getCluster\(clusterUid, page, pageSize/);
+    expect(src).not.toMatch(/clusterId/);
   });
 });

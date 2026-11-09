@@ -2,8 +2,8 @@
  * Slot-gallery controller — the state + logic behind a region slot's
  * gallery view on /clusters (`SlotGallery.svelte` renders it): the
  * browse pager over the slot's `queue.browsePath`, multi-select, the
- * secondary region-clustering sub-system (buckets, sub-cluster refine,
- * FP centroids, suspected-FP triage), the filter strip, and the
+ * secondary region-clustering sub-system (clusters, FP centroids,
+ * suspected-FP triage), the filter strip, and the
  * bbox-editor modal wiring.
  *
  * One controller per slot: `createSlotGalleryController(slot)` reads every
@@ -29,7 +29,6 @@ import { createSelection } from '$lib/selection.svelte';
 import type { Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 import type { SlotSpec } from '$lib/annotations/types';
-import { rowBoxOf } from '$lib/annotations/rowBox';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 import { createSlotGalleryJobs } from '$lib/slots/slotGalleryJobs';
 import { createSlotGalleryWrites } from '$lib/slots/slotGalleryWrites';
@@ -92,31 +91,12 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // null = all ranks.
   let maxRank = $state<number | null>(null);
 
-  // Region clustering (AHC-refinable buckets over the region embeddings).
-  // selectedCluster narrows the gallery to one bucket; null shows the
-  // bucket grid (or the flat gallery when no clustering has run).
+  // Region clusters (the serving region-box partition). selectedCluster is a
+  // `cluster_uid` and narrows the gallery to that cluster; null shows the card
+  // grid (or the flat gallery when no clustering has run).
   let clusters = $state<Cluster[]>([]);
-  let selectedCluster = $state<number | null>(null);
+  let selectedCluster = $state<string | null>(null);
   let clusterBusy = $state<boolean>(false);
-
-  // The permanent false-positive bucket is identified by the served
-  // `cluster_kind === 'false_positive'` on the selected cluster card —
-  // never by its id (the backend's `-100` is just today's convention, not
-  // a contract). Looked up in the already-loaded `clusters` list rather
-  // than carried alongside `selectedCluster`, so a normal cluster that
-  // happens to reuse that id is never mistaken for the FP bucket.
-  const selectedClusterIsFalsePositive = $derived(
-    clusters.find((c) => c.id === selectedCluster)?.cluster_kind === 'false_positive',
-  );
-
-  // Sub-cluster delineation inside an open region bucket — mirrors the item
-  // cluster detail. null = "all" (the server returns regions ordered by subid so
-  // AHC groups are contiguous; we render a labeled separator before each).
-  // Selecting a chip filters the gallery to that one sub-cluster.
-  let subTab = $state<string | null>(null);
-  // Last refine outcome, shown inline next to the button so the result is not
-  // just a transient toast (the run is fast and easy to miss).
-  let refineMsg = $state<string | null>(null);
 
   // Suspected-FP review: crops the FP centroids flag as likely false
   // positives. Loads into the same `pager.items` so the shift-select +
@@ -126,17 +106,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
   let suspectedFpView = $state<boolean>(false);
   let suspectedFpThreshold = $state<number>(0.35);
 
-  // M3 (interactive pass): the bucket-card grid
-  // below only ever showed real AHC region clusters — when the only
-  // cluster is the permanent false-positive bucket (the common case
-  // before "Cluster regions" has been run over the good regions), every
-  // other region was unreachable from this view: no "unclustered" entry
-  // and no fallback flat grid. `viewingAll` opens the same flat
-  // gallery `selectedCluster !== null` already renders, but with no
-  // `region_cluster_id` filter, so every region — clustered or not — is
-  // browsable. Kept independent of `selectedCluster` (rather than
-  // reusing it with a sentinel id) so `browseQuery` never needs to
-  // distinguish "filter to real cluster 0" from "no filter".
+  // `viewingAll` opens the flat gallery with no `cluster_uid` filter, so every
+  // region — clustered or not — is browsable. Kept independent of
+  // `selectedCluster` so `browseQuery` never needs a sentinel.
   let viewingAll = $state<boolean>(false);
 
   // Filter sidebar state — only active on the gallery view.
@@ -154,76 +126,6 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // rows are about.
   let boxStateFilter = $state<string>('');
 
-  // A row's sub-cluster lives on its own box (`region_boxes[].cluster_subid`),
-  // the one `region_box_id` names.
-  function rowSubid(p: RegionBrowseItem): string | null {
-    return rowBoxOf(p.slots?.[slot.key], p.region_box_id)?.clusterSubid ?? null;
-  }
-
-  // Distinct sub-cluster ids present in the loaded regions, sorted lexically so
-  // "9a","9aa","9ab"… land in human-expected order.
-  const subclusterIds = $derived.by(() => {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
-    const set = new Set<string>();
-    for (const p of pager.items) {
-      const sub = rowSubid(p);
-      if (sub) set.add(sub);
-    }
-    return [...set].sort();
-  });
-
-  // Per-subid counts for the separator-header labels ('__none__' = unrefined).
-  const subCounts = $derived.by(() => {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
-    const m = new Map<string, number>();
-    for (const p of pager.items) {
-      const k = rowSubid(p) ?? '__none__';
-      m.set(k, (m.get(k) ?? 0) + 1);
-    }
-    return m;
-  });
-
-  // Group only when a bucket is open, on the "all" tab, and refine has produced
-  // sub-clusters. Otherwise render one flat group (no separators).
-  const groupBySubid = $derived(
-    selectedCluster != null && subTab == null && subclusterIds.length > 0,
-  );
-
-  // Partition loaded regions into one group PER sub-cluster id. Built with a
-  // Map (not a contiguity walk) so it is robust to a non-contiguous list —
-  // e.g. the transient render right after opening a bucket, when the pager
-  // still holds the previous mixed-bucket gallery before the bucket's own
-  // (subid-sorted) data arrives. A contiguity walk would emit the same subid
-  // as multiple groups there, producing duplicate {#each} keys and a Svelte
-  // each_key_duplicate crash that froze the detail view from opening.
-  const groups = $derived.by(
-    (): { key: string; label: string; items: RegionBrowseItem[] }[] => {
-      if (!groupBySubid) return [{ key: '__all__', label: '', items: pager.items }];
-      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
-      const byKey = new Map<string, RegionBrowseItem[]>();
-      for (const p of pager.items) {
-        const sub = rowSubid(p) ?? '__none__';
-        let bucket = byKey.get(sub);
-        if (!bucket) {
-          bucket = [];
-          byKey.set(sub, bucket);
-        }
-        bucket.push(p);
-      }
-      // Sort subids lexically; the '__none__' (unrefined) group always last.
-      const keys = [...byKey.keys()].sort((a, b) => {
-        if (a === '__none__') return 1;
-        if (b === '__none__') return -1;
-        return a < b ? -1 : a > b ? 1 : 0;
-      });
-      return keys.map((k) => ({
-        key: k,
-        label: k === '__none__' ? 'unrefined' : `sub-cluster ${k}`,
-        items: byKey.get(k)!,
-      }));
-    },
-  );
-
   function browseQuery(page: number): import('$lib/api_regions').RegionsQuery {
     return {
       page,
@@ -235,12 +137,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       status: statusFilter || undefined,
       box_state: boxStateFilter || undefined,
       max_rank: maxRank ?? undefined,
-      region_cluster_id: selectedCluster ?? undefined,
-      // When a single sub-cluster tab is active, filter to it; otherwise (the
-      // "all" tab) ask the server to order by sub-cluster so AHC groups come
-      // back contiguous across pages and we can render them with separators.
-      region_cluster_subid: subTab ?? undefined,
-      sort_by_subid: selectedCluster != null && subTab == null ? true : undefined,
+      cluster_uid: selectedCluster ?? undefined,
     };
   }
 
@@ -339,69 +236,37 @@ export function createSlotGalleryController(slot: SlotSpec) {
     get disposed() {
       return disposed;
     },
-    get maxRank() {
-      return maxRank;
-    },
-    get selectedCluster() {
-      return selectedCluster;
-    },
     get clusterBusy() {
       return clusterBusy;
     },
     set clusterBusy(v: boolean) {
       clusterBusy = v;
     },
-    get refineMsg() {
-      return refineMsg;
-    },
-    set refineMsg(v: string | null) {
-      refineMsg = v;
-    },
-    get subTab() {
-      return subTab;
-    },
-    set subTab(v: string | null) {
-      subTab = v;
-    },
     loadClusters,
-    loadFirst,
   });
 
-  function openCluster(id: number): void {
+  function openCluster(uid: string): void {
     suspectedFpView = false;
     viewingAll = false;
-    subTab = null;
-    refineMsg = null;
     // Clear the previous gallery synchronously so the render between selecting
-    // the bucket and its data arriving doesn't group a stale mixed-bucket list.
+    // the cluster and its data arriving doesn't show the previous list.
     pager.items = [];
-    selectedCluster = id;
+    selectedCluster = uid;
   }
 
-  /** M3: browse every region with no `region_cluster_id` filter — the
-   *  entry point for regions that aren't in any AHC bucket yet (or when
-   *  the only bucket that exists is the false-positive one). */
+  /** M3: browse every region with no `cluster_uid` filter — the entry point for
+   *  regions that aren't in any cluster yet. */
   function openAll(): void {
     suspectedFpView = false;
-    subTab = null;
-    refineMsg = null;
     pager.items = [];
     selectedCluster = null;
     viewingAll = true;
     void loadFirst();
   }
 
-  function selectSubTab(sub: string | null): void {
-    if (subTab === sub) return;
-    subTab = sub;
-    void loadFirst();
-  }
-
   function backToClusters(): void {
     selectedCluster = null;
     viewingAll = false;
-    subTab = null;
-    refineMsg = null;
     sel.clear();
     if (suspectedFpView) {
       // Leaving the suspected-FP view: reload the real region gallery the
@@ -496,17 +361,8 @@ export function createSlotGalleryController(slot: SlotSpec) {
     get selectedCluster() {
       return selectedCluster;
     },
-    get selectedClusterIsFalsePositive() {
-      return selectedClusterIsFalsePositive;
-    },
     get clusterBusy() {
       return clusterBusy;
-    },
-    get subTab() {
-      return subTab;
-    },
-    get refineMsg() {
-      return refineMsg;
     },
     get suspectedFpView() {
       return suspectedFpView;
@@ -556,15 +412,6 @@ export function createSlotGalleryController(slot: SlotSpec) {
     set statusFilter(v: string) {
       statusFilter = v;
     },
-    get subclusterIds() {
-      return subclusterIds;
-    },
-    get subCounts() {
-      return subCounts;
-    },
-    get groups() {
-      return groups;
-    },
     loadFirst,
     loadMore,
     loadClusters,
@@ -577,10 +424,8 @@ export function createSlotGalleryController(slot: SlotSpec) {
       if (typedDebounce) clearTimeout(typedDebounce);
       typedDebounce = null;
     },
-    runRefineCluster: jobs.runRefineCluster,
     openCluster,
     openAll,
-    selectSubTab,
     backToClusters,
     toggleSelect,
     selectAll,

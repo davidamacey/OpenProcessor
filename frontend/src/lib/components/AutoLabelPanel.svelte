@@ -1,20 +1,16 @@
 <script lang="ts">
   import { apiErrorText } from '$lib/api_errors';
   /*
-   * Recluster / auto-label control panel.
+   * Auto-label control panel.
    *
    * Renders on the dashboard. Polls {API_PREFIX}/pipeline/auto_label/status — slowly
-   * when idle (30s, just to detect a daemon-fired run), fast when a job is
-   * active (3s). Shows stage name, progress bar, ETA, elapsed time, and the
-   * final stage-by-stage summary once the run lands.
+   * when idle (30s, just to detect a daemon-fired run), fast while the run is
+   * live (3s). The run is a queued job: the panel prints the status the server
+   * reports (queued, running, paused with its reason, cancelling), the stage,
+   * progress bar, ETA, elapsed time, and the final stage-by-stage summary.
    *
-   * The pipeline (cluster_id_normalize → AHC residuals → auto_promote
-   * → vlm → finalize) is the same one the cluster-refresh daemon runs, so
-   * kicking it off here is functionally identical to the existing cron
-   * path — just with operator visibility. The previous CLIP-prototype
-   * labeling stage was removed because a single mean centroid couldn't
-   * represent visually diverse classes and produced confident mis-labels
-   * that the VLM was then prevented from reviewing.
+   * The pipeline is embed_missing (opt-in) → vlm → finalize. Clustering is its
+   * own run (`POST /clusters/runs`, <ClusterRunPanel>).
    *
    * Since 2026-09 the run can optionally be scoped: <AssistScopeBar>
    * picks one class (and, when the backend advertises them, a detection
@@ -28,11 +24,15 @@
   import { onMount, onDestroy } from 'svelte';
   import AssistScopeBar from './AssistScopeBar.svelte';
   import {
+    AUTO_LABEL_LIVE_STATUSES,
     cancelAutoLabel,
     getAutoLabelStatus,
+    pauseAutoLabel,
+    resumeAutoLabel,
     startAutoLabel,
     unknownStrategyDetail,
     type AutoLabelJobState,
+    type AutoLabelStatus,
   } from '$lib/api_autoLabel';
   import { configErrorDetail } from '$lib/api_profiles';
   import { createAssistScope } from '$lib/assistScope.svelte';
@@ -63,12 +63,6 @@
   // step the way the dashboard's other one-shot actions already are.
   let confirmOpen: boolean = $state(false);
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
-  // Broaden mode: when true the residual AHC stage re-pools items
-  // already sitting in candidate clusters so smaller candidates can fuse
-  // into bigger ones. Off by default — most runs only want to cluster
-  // unassigned + class-bucketed items.
-  let mergeCandidates: boolean = $state(false);
-
   // G5: explicit control for pipeline.py's `run_vlm` (default False
   // server-side) — off by default here too, matching the backend. A
   // scoped run (AssistScopeBar picked a class/pack) always implies
@@ -77,16 +71,6 @@
   let runVlm: boolean = $state(false);
   // v0.4.0: embed the items without a vector first. Sent only when ticked.
   let embedMissing: boolean = $state(false);
-
-  // Cluster scope — train + assign only the largest, clear crops (what the
-  // business sorts on); smaller / blurrier crops are parked until a looser
-  // recluster. OFF by default so the standard run is unchanged. This is a
-  // FULL retrain (not the cheap incremental assign), and it needs the
-  // rank/blur backfill complete — the API blocks otherwise.
-  // scope: 0 = full pool, 1 = largest only, 2 = largest + 2nd.
-  let clusterScope: 0 | 1 | 2 = $state(0);
-  let clusterBlur: number = $state(0);
-  let nClusters: number | null = $state(null);
 
   // -- VLM-assist scoping (this plan §4) ---------------------------------
   // The scope bar is absent, not disabled, until /methods advertises the
@@ -124,20 +108,11 @@
   const STAGE_LABEL: Record<string, string> = {
     '': 'preparing…',
     embed_missing: 'embedding items without a vector',
-    cluster_id_normalize: 'aligning cluster_id with class_id',
-    cluster_residuals: 'clustering residual pool',
-    auto_promote: 'promoting high-purity clusters',
     vlm: 'VLM sweep over unvalidated crops',
-    finalize: 'final normalization and accounting',
+    finalize: 'final accounting',
   };
 
-  const STAGE_ORDER = [
-    'cluster_id_normalize',
-    'cluster_residuals',
-    'auto_promote',
-    'vlm',
-    'finalize',
-  ];
+  const STAGE_ORDER = ['vlm', 'finalize'];
 
   // The embed stage runs first, and only when the run asked for it (the
   // job echoes its resolved args).
@@ -165,7 +140,7 @@
     if (pollTimer) clearTimeout(pollTimer);
     // Fast poll while running, slow when idle. The slow poll catches
     // daemon-initiated runs without hammering the API.
-    const ms = job?.status === 'running' ? 3000 : 30000;
+    const ms = isLive ? 3000 : 30000;
     pollTimer = setTimeout(() => void poll(), ms);
   }
 
@@ -184,15 +159,10 @@
     try {
       const sendRunVlm = resolveAutoLabelRunVlm(scope.toStartParams(), runVlm);
       job = await startAutoLabel({
-        train_clusters: true,
         vlm_concurrency: 16,
         // 0 = process every unvalidated crop. Operators can ramp down
         // later if they want to time-box a run.
         max_vlm_crops: 0,
-        recluster_unvalidated: mergeCandidates,
-        gate_max_rank: clusterScope === 0 ? null : clusterScope,
-        gate_min_blur_ratio: clusterBlur > 0 ? clusterBlur : null,
-        n_clusters: nClusters && nClusters >= 2 ? nClusters : null,
         // `{}` whenever nothing is scoped, so the composed URL stays
         // byte-identical to every request this panel has ever sent.
         ...scope.toStartParams(),
@@ -204,10 +174,10 @@
       });
       toastStore.success(
         scopeClassName
-          ? `Recluster started — VLM labeling limited to ${scopeClassName} (VLM stage will run).`
+          ? `Auto-label queued — VLM labeling limited to ${scopeClassName} (VLM stage will run).`
           : sendRunVlm
-            ? 'Recluster started — running the VLM labeling stage.'
-            : 'Recluster started.',
+            ? 'Auto-label queued — running the VLM labeling stage.'
+            : 'Auto-label queued.',
       );
       schedule();
     } catch (e) {
@@ -224,7 +194,7 @@
         // `validation_failed`): its own message, never the generic 409.
         toastStore.error(`Start failed: ${refusal.message}`);
       } else if (msg.includes('409') || msg.includes('already in progress')) {
-        toastStore.warn('A recluster run is already in progress.');
+        toastStore.warn('An auto-label run is already queued, running or paused.');
         void poll();
       } else {
         toastStore.error(`Start failed: ${msg}`);
@@ -246,6 +216,29 @@
     }
   }
 
+  async function pause(): Promise<void> {
+    busy = true;
+    try {
+      job = await pauseAutoLabel();
+    } catch (e) {
+      toastStore.error(`Pause failed: ${apiErrorText(e)}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function resume(): Promise<void> {
+    busy = true;
+    try {
+      job = await resumeAutoLabel();
+      schedule();
+    } catch (e) {
+      toastStore.error(`Resume failed: ${apiErrorText(e)}`);
+    } finally {
+      busy = false;
+    }
+  }
+
   onMount(() => {
     void poll();
   });
@@ -254,9 +247,17 @@
     if (pollTimer) clearTimeout(pollTimer);
   });
 
-  const isRunning: boolean = $derived(
-    ((job as AutoLabelJobState | null)?.status ?? '') === 'running',
+  // The server works on the run, or is stopping it (queued, running, cancelling).
+  const isLive: boolean = $derived(
+    AUTO_LABEL_LIVE_STATUSES.includes(
+      ((job as AutoLabelJobState | null)?.status ?? 'idle') as AutoLabelStatus,
+    ),
   );
+  const isPaused: boolean = $derived(
+    ((job as AutoLabelJobState | null)?.status ?? '') === 'paused',
+  );
+  // The run holds the project (live or paused): no new start until it ends.
+  const hasRun: boolean = $derived(isLive || isPaused);
   const stageOrder: string[] = $derived(stageOrderFor(job as AutoLabelJobState | null));
   const stageIdx: number = $derived(
     stageIndex(stageOrder, (job as AutoLabelJobState | null)?.stage ?? ''),
@@ -266,18 +267,6 @@
     return Math.min(100, Math.round((job.processed / job.total) * 100));
   });
 
-  // Backend chip — gpu (cuml …) vs cpu (sklearn …). Empty string when
-  // the worker is on an older build that doesn't emit the field, so the
-  // chip renders only when the backend has been detected.
-  const backendName: string = $derived(
-    ((job as AutoLabelJobState | null)?.backend ?? '') as string,
-  );
-  const backendDetail: string = $derived(
-    ((job as AutoLabelJobState | null)?.backend_detail ?? '') as string,
-  );
-  const peakVramMb: number | null = $derived(
-    ((job as AutoLabelJobState | null)?.peak_vram_mb ?? null) as number | null,
-  );
   const stageDurations: Array<[string, number]> = $derived.by(() => {
     const sd = (job as AutoLabelJobState | null)?.stage_durations;
     if (!sd) return [];
@@ -302,97 +291,20 @@
     data-testid="recluster-header"
   >
     <div class="min-w-0 xl:max-w-md" data-testid="recluster-description">
-      <h2 class="text-base font-semibold">Data integrity — recluster</h2>
-      <!-- m27 (2026-09-24 interactive pass): this used to say "AHC"
-           (the deployment's live clustering method is IVF, with AHC
-           only as a refine step over residuals — see CLAUDE.md's
-           `/clusters` strategy-bar section) and "runs the VLM", though
-           `run_vlm` defaults off (see the checkbox below, off unless
-           scoped). -->
+      <h2 class="text-base font-semibold">Auto-label</h2>
       <p class="mt-0.5 text-xs text-zinc-400">
-        Aligns <code class="text-zinc-300">cluster_id</code> with
-        <code class="text-zinc-300">class_id</code>, re-clusters unlabeled residuals (IVF
-        + AHC refine), and promotes high-purity clusters. Optionally also runs the VLM
-        over remaining unvalidated crops (off by default — see "Run VLM labeling stage"
-        below). The classifier's confident labels and human validations are never
-        overwritten. Safe to cancel.
+        Optionally embeds the items that have no vector, and runs the VLM over the
+        unvalidated crops (off by default — see "Run VLM labeling stage" below), then
+        finalizes. The classifier's confident labels and human validations are never
+        overwritten. The run is queued, can be paused, and is safe to cancel. Grouping the
+        items into clusters is a separate run (see Clusters below).
       </p>
     </div>
-    {#if !isRunning}
-      <!-- Cluster scope: focus the FULL recluster on the largest, clear
-           crops (parks the rest). OFF = current full-pool behavior. Needs
-           the rank/blur backfill complete; the API blocks otherwise. -->
-      <div class="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
-        <span class="text-zinc-500">scope:</span>
-        <div class="inline-flex overflow-hidden rounded border border-zinc-700">
-          {#each [{ v: 0, l: 'Full pool' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }] as o (o.v)}
-            <button
-              type="button"
-              class="px-2 py-0.5 {clusterScope === o.v
-                ? 'bg-blue-600 text-white'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-              onclick={() => (clusterScope = o.v as 0 | 1 | 2)}
-              disabled={busy}
-            >
-              {o.l}
-            </button>
-          {/each}
-        </div>
-        <label
-          class="flex items-center gap-1.5"
-          title="Train/assign only crops at or above this clarity (blur_lap_ratio)."
-        >
-          <span class="text-zinc-500">clarity ≥</span>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.05"
-            bind:value={clusterBlur}
-            disabled={busy}
-            class="h-1 w-28 cursor-pointer accent-blue-500"
-          />
-          <span class="w-10 tabular-nums text-zinc-400"
-            >{clusterBlur > 0 ? clusterBlur.toFixed(2) : 'off'}</span
-          >
-        </label>
-        <label
-          class="flex items-center gap-1.5"
-          title="IVF centroid count (default 512). Sweep down with the gate on."
-        >
-          <span class="text-zinc-500">clusters</span>
-          <input
-            type="number"
-            min="2"
-            max="4096"
-            placeholder="512"
-            bind:value={nClusters}
-            disabled={busy}
-            class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-zinc-100"
-          />
-        </label>
-        {#if clusterScope !== 0 || clusterBlur > 0}
-          <span class="text-amber-300/80">full retrain · parks smaller/blurry crops</span>
-        {/if}
-      </div>
-    {/if}
     <div class="flex flex-wrap items-center gap-3">
-      {#if !isRunning}
+      {#if !hasRun}
         {#if scopeAvailable}
           <AssistScopeBar {scope} classes={classesStore.classes} disabled={busy} />
         {/if}
-        <label
-          class="flex items-center gap-1.5 text-xs text-zinc-300"
-          title="Re-pool items already in candidate clusters so smaller candidates can merge into bigger ones."
-        >
-          <input
-            type="checkbox"
-            class="h-3.5 w-3.5 accent-blue-500"
-            bind:checked={mergeCandidates}
-            disabled={busy}
-          />
-          Merge candidate clusters
-        </label>
         <label
           class="flex items-center gap-1.5 text-xs text-zinc-300"
           title="pipeline.py's run_vlm — off by default, matching the backend. Implied automatically when a class, prompt pack or VLM endpoint is scoped above."
@@ -420,10 +332,33 @@
           Embed missing vectors first
         </label>
       {/if}
-      {#if isRunning}
-        <button class="btn btn-danger" type="button" onclick={cancel} disabled={busy}>
-          Cancel
-        </button>
+      {#if hasRun}
+        {#if isPaused}
+          <button
+            class="btn btn-primary"
+            type="button"
+            onclick={resume}
+            disabled={busy}
+            data-testid="auto-label-resume"
+          >
+            Resume
+          </button>
+        {:else if job?.status === 'queued' || job?.status === 'running'}
+          <button
+            class="btn"
+            type="button"
+            onclick={pause}
+            disabled={busy}
+            data-testid="auto-label-pause"
+          >
+            Pause
+          </button>
+        {/if}
+        {#if job?.status !== 'cancelling'}
+          <button class="btn btn-danger" type="button" onclick={cancel} disabled={busy}>
+            Cancel
+          </button>
+        {/if}
       {:else}
         <button
           class="btn btn-primary"
@@ -432,7 +367,7 @@
           disabled={busy || gate?.blocked}
           title={gate?.blocked ? gate.reason : undefined}
         >
-          {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
+          {scopeClassName ? `Auto-label · VLM: ${scopeClassName}` : 'Auto-label now'}
         </button>
       {/if}
     </div>
@@ -442,15 +377,12 @@
   </div>
 
   {#if confirmOpen}
-    <Modal label="Confirm recluster" onclose={closeConfirmStart}>
+    <Modal label="Confirm auto-label" onclose={closeConfirmStart}>
       <h3 class="mb-3 text-base font-semibold">
-        {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
+        {scopeClassName ? `Auto-label · VLM: ${scopeClassName}` : 'Auto-label now'}
       </h3>
       <p class="mb-4 text-xs text-zinc-400">
-        Starts the deployment's clustering pipeline{resolveAutoLabelRunVlm(
-          scope.toStartParams(),
-          runVlm,
-        )
+        Queues the auto-label run{resolveAutoLabelRunVlm(scope.toStartParams(), runVlm)
           ? ' and runs the VLM labeling stage'
           : ''}. This can run for a while.
       </p>
@@ -478,40 +410,35 @@
               ? 'bg-emerald-500/20 text-emerald-200'
               : job.status === 'failed'
                 ? 'bg-red-500/20 text-red-200'
-                : job.status === 'cancelled'
+                : job.status === 'cancelled' ||
+                    job.status === 'cancelling' ||
+                    job.status === 'paused' ||
+                    job.status === 'completed_with_errors' ||
+                    job.status === 'interrupted'
                   ? 'bg-orange-500/20 text-orange-200'
                   : 'bg-zinc-700/40 text-zinc-300'}"
+          data-testid="auto-label-status"
         >
-          {job.status}
+          {job.status.replaceAll('_', ' ')}
         </span>
-        {#if isRunning}
+        {#if isPaused && job.pause_reason}
+          <span class="text-zinc-300" data-testid="auto-label-pause-reason"
+            >{job.pause_reason.replaceAll('_', ' ')}</span
+          >
+        {/if}
+        {#if isLive}
           <span class="text-zinc-300">{STAGE_LABEL[job.stage] ?? job.stage}</span>
           <span class="font-mono text-zinc-500">
             stage {stageIdx + 1}/{stageOrder.length}
           </span>
-        {:else if job.status !== 'idle' && job.finished_at}
+        {:else if job.status !== 'idle' && !isPaused && job.finished_at}
           <span class="text-zinc-400">finished {lastFinishedRel}</span>
-        {/if}
-        <!-- Backend chip: only renders once cluster_residuals has detected
-             whether cuML or sklearn ran. Hovering shows the long detail
-             string (cuml version + GPU id + free VRAM). -->
-        {#if backendName}
-          <span
-            class="rounded px-2 py-0.5 font-mono uppercase
-              {backendName === 'gpu'
-              ? 'bg-fuchsia-500/20 text-fuchsia-200'
-              : 'bg-zinc-700/40 text-zinc-300'}"
-            title={backendDetail}
-          >
-            {backendName}
-          </span>
         {/if}
       </div>
 
-      {#if isRunning}
-        <!-- Per-stage progress bar. Indeterminate when total=0 (AHC /
-             normalize stages don't expose a counter); determinate for the
-             VLM stage which is the dominant cost. -->
+      {#if isLive}
+        <!-- Per-stage progress bar. Indeterminate when total=0; determinate
+             for the VLM stage which is the dominant cost. -->
         <div class="h-2 overflow-hidden rounded bg-zinc-800">
           {#if percent != null}
             <div
@@ -545,16 +472,18 @@
       {#if job.error}
         <p class="text-xs text-red-300">Error: {job.error}</p>
       {/if}
+      {#if job.error_detail}
+        <p class="text-xs text-red-300/80" data-testid="auto-label-error-detail">
+          {job.error_detail}
+        </p>
+      {/if}
 
-      {#if job.status === 'completed' || job.status === 'failed'}
+      {#if job.status === 'completed' || job.status === 'completed_with_errors' || job.status === 'failed'}
         <!-- Per-stage durations + peak VRAM (GPU runs only). Rendered as
              a compact table above the raw JSON so operators can answer
              "where did the wall time go?" without parsing the full result. -->
-        {#if stageDurations.length > 0 || peakVramMb != null || backendDetail}
+        {#if stageDurations.length > 0}
           <div class="space-y-1 text-xs text-zinc-300">
-            {#if backendDetail}
-              <p class="font-mono text-[10px] text-zinc-400">{backendDetail}</p>
-            {/if}
             {#if stageDurations.length > 0}
               <table class="font-mono text-[10px]">
                 <tbody>
@@ -566,11 +495,6 @@
                   {/each}
                 </tbody>
               </table>
-            {/if}
-            {#if peakVramMb != null}
-              <p class="font-mono text-[10px] text-zinc-400">
-                peak VRAM: {peakVramMb.toLocaleString()} MB
-              </p>
             {/if}
           </div>
         {/if}

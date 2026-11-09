@@ -58,26 +58,13 @@ export function createSlotInventory() {
         .filter((r) => r.box?.thumbnailUrl != null)
         .slice(0, 4);
       return {
-        id: cls.id,
-        // Not a real cluster: cluster_kind/purity_tier/promotable/etc.
-        // have no server-served value for a slot-inventory entry, so
-        // they're left at honest defaults rather than invented. See
-        // `isSlotCard` on the type and its use in purityBadge/borderColor
-        // in ClusterGridCard, which skip the purity badge entirely for this card.
-        cluster_kind: 'unassigned',
+        // Not a real cluster: the key only keeps the card unique in the grid.
+        uid: `slot:${slot.key}`,
         validated_count: 0,
         size: res.total,
-        purity: null,
-        purity_tier: null,
-        promotable: false,
-        core_similarity_min: null,
         is_unlabeled: false,
-        dominant_class_id: cls.id,
         dominant_class_name: cls.name,
         dominant_pct: null,
-        n_subclusters: 0,
-        subcluster_ids: [],
-        has_subclusters: false,
         representative_crop_ids: reps.map((r) => r.p.crop_id),
         // Region close-ups, not parent-item thumbnails: the card is the
         // entry point to the slot's own inventory.

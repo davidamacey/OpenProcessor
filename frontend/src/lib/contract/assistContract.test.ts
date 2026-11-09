@@ -36,17 +36,14 @@ const CASES: [string, string[]][] = [
   ],
   [
     'AssistSample',
-    keys({ mode: true, size: true, seed: true, stratify_by: true } satisfies Record<
+    keys({ mode: true, size: true, seed: true } satisfies Record<
       keyof T.AssistSample,
       true
     >),
   ],
   [
     'AssistContext',
-    keys({ cluster_id: true, cluster_subid: true } satisfies Record<
-      keyof T.AssistContext,
-      true
-    >),
+    keys({ cluster_uid: true } satisfies Record<keyof T.AssistContext, true>),
   ],
   [
     'SegmentSpec',
@@ -69,7 +66,7 @@ const CASES: [string, string[]][] = [
   ],
   [
     'ClusterTarget',
-    keys({ kind: true, cluster_id: true, cluster_subid: true } satisfies Record<
+    keys({ kind: true, cluster_uid: true } satisfies Record<
       keyof T.AssistClusterTarget,
       true
     >),
@@ -100,7 +97,6 @@ const CASES: [string, string[]][] = [
       scope_digest: true,
       sampled: true,
       sample_seed: true,
-      strata: true,
       skipped: true,
       vlm: true,
       prompt_pack: true,
@@ -117,13 +113,6 @@ const CASES: [string, string[]][] = [
       box_not_found: true,
       not_found: true,
     } satisfies Record<keyof T.AssistSkipped, true>),
-  ],
-  [
-    'StratumInfo',
-    keys({ key: true, size: true, sampled: true } satisfies Record<
-      keyof T.AssistStratum,
-      true
-    >),
   ],
   [
     'AssistProgress',

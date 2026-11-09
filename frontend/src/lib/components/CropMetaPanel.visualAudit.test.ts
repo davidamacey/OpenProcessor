@@ -57,7 +57,14 @@ function crop(over: Partial<Crop> = {}): Crop {
     bbox_norm: { cx: 0.5, cy: 0.5, w: 0.5, h: 0.5 },
     class_id: null,
     class_name: null,
-    cluster_id: 7,
+    cluster: {
+      uid: '0b9f9a38-0000-4000-8000-000000000007',
+      partition_id: 'p1',
+      state: 'assigned',
+      score: 0.8,
+      margin: null,
+      assigned_by: 'run',
+    },
     label_confidence: 0.655,
     label_source: 'vlm',
     class_source: 'vlm_new_class_pending',
@@ -110,7 +117,7 @@ describe('R11: embedded Details drops rows the review panel already shows', () =
     expect(rowValue(el, 'Detector score')).toBeNull();
     expect(rowValue(el, 'Confidence')).toBeNull();
     expect(rowValue(el, 'VLM confidence')).toBeNull();
-    expect(rowValue(el, 'Cluster')).toMatch(/^#7/);
+    expect(rowValue(el, 'Cluster')).toMatch(/^0b9f9a38/);
   });
 });
 
