@@ -8,9 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 import psycopg
 
+from curation.cross_project_leak._pg_world import seed_world
+
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
 
 def _one(cursor: Any) -> Any:
@@ -53,9 +56,9 @@ _RUN = (
 )
 
 
-def seed_pg_rows(pg: Any, records: Mapping[str, Any]) -> dict[str, dict[str, str]]:
+def seed_pg_rows(pg: Any, records: Mapping[str, Any], root: Path) -> dict[str, dict[str, str]]:
     """Per slug: ``job_id``, ``run_id`` and ``group_id`` (the group's lineage, which is what the
-    wire calls its id) of rows that belong to that project."""
+    wire calls its id) of rows that belong to that project, and the rows of ``seed_world``."""
     out: dict[str, dict[str, str]] = {}
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         for slug, record in records.items():
@@ -81,5 +84,6 @@ def seed_pg_rows(pg: Any, records: Mapping[str, Any]) -> dict[str, dict[str, str
                 'job_id': str(_job(conn, project)),
                 'run_id': str(run),
                 'group_id': str(lineage),
+                **seed_world(conn, slug, project, str(root / 'images' / slug)),
             }
     return out

@@ -345,7 +345,7 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     assert not streaming_unmapped, f'unmapped streaming route(s): {streaming_unmapped}'
     mutating = {(m, p[len(SCOPED) :]) for m, p in routes if m != 'GET'}
     every = {(m, p[len(SCOPED) :]) for m, p in routes}
-    mapped = set(NO_WRITE) | set(route_bodies('x', Path('/unused'))) | set(CROP_FOR) | set(PREPARE)
+    mapped = set(NO_WRITE) | set(route_bodies('x', Path('/unused'))) | set(CROP_FOR)
     stale = sorted(
         (mapped - mutating)
         | (set(UNSEEDED_WRITES) - every)
@@ -354,6 +354,7 @@ def test_every_scoped_route_stays_inside_the_bound_project(
         | (set(PG_ROW_IDS) - every)
         | (set(READ_CROP_FOR) - every)
         | (set(UNREACHED_OK) - every)
+        | (set(PREPARE) - every)
     )
     assert not stale, f'entries for routes that no longer exist: {stale}'
 

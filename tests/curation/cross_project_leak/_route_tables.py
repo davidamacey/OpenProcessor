@@ -51,8 +51,36 @@ SLUG_QUERIES: dict[tuple[str, str], Callable[[str], dict[str, dict[str, str]]]] 
     ('GET', '/regions/training_candidates'): lambda _slug: {'params': {'mode': 'human_corrected'}},
 }
 
-# Path parameters that name a PostgreSQL row of the bound project: the seeded id (LeakEnv.pg_ids).
+# Path parameters that name a row (or a run, bake-off job or export file) of the bound project: the
+# seeded id (LeakEnv.pg_ids, written by _pg_rows and _pg_world).
 PG_ROW_IDS: dict[tuple[str, str], dict[str, str]] = {
+    ('GET', '/assist/loops/{loop_id}'): {'loop_id': 'loop_id'},
+    ('GET', '/assist/loops/{loop_id}/nodes'): {'loop_id': 'loop_id'},
+    ('GET', '/assist/loops/{loop_id}/nodes/{node_path}/members'): {'loop_id': 'loop_id'},
+    ('GET', '/assist/runs/{run_id}'): {'run_id': 'assist_run_id'},
+    **{
+        ('GET', f'/bakeoff/{what}/{{job_id}}'): {'job_id': 'bakeoff_job_id'}
+        for what in ('matrix', 'results', 'status')
+    },
+    ('GET', '/clusters/partitions/{partition_id}'): {'partition_id': 'partition_id'},
+    **{
+        ('GET', f'/datasets/imports/{{import_id}}{suffix}'): {'import_id': 'import_id'}
+        for suffix in ('', '/entries', '/issues')
+    },
+    ('GET', '/export/registry/{artifact}'): {'artifact': 'export_artifact'},
+    ('GET', '/ingest/bulk/{run_id}'): {'run_id': 'bulk_run_id'},
+    ('GET', '/ingest/bulk/{run_id}/failures'): {'run_id': 'bulk_run_id'},
+    ('GET', '/ingest/sources/{source_id}'): {'source_id': 'source_id'},
+    ('GET', '/pipeline/auto_label/status/{job_id}'): {'job_id': 'autolabel_job_id'},
+    ('GET', '/reprocess/jobs/{job_id}'): {'job_id': 'reprocess_job_id'},
+    ('GET', '/train/artifacts/{job_id}/{name}'): {'job_id': 'train_job_id'},
+    ('GET', '/train/log/tail/{job_id}'): {'job_id': 'train_job_id'},
+    ('GET', '/train/manifest/{job_id}'): {'job_id': 'train_job_id'},
+    ('GET', '/train/status/{job_id}'): {'job_id': 'train_job_id'},
+    ('GET', '/train/promote/{job_id}/jobs/{promote_id}'): {
+        'job_id': 'train_job_id',
+        'promote_id': 'promote_id',
+    },
     ('GET', '/jobs/{job_id}'): {'job_id': 'job_id'},
     ('GET', '/near_duplicates/runs/{run_id}'): {'run_id': 'run_id'},
     ('GET', '/near_duplicates/groups/{group_id}'): {'group_id': 'group_id'},
@@ -61,64 +89,11 @@ PG_ROW_IDS: dict[tuple[str, str], dict[str, str]] = {
 # Scoped routes that may answer 4xx in the sweep without it being a gap, and why. A route that
 # neither answers below 400 nor wrote nor is listed here (or in NO_WRITE / UNSEEDED_WRITES, which
 # carry their own reasons) fails the sweep: the request never reached the handler.
-_NO_SUCH_JOB_STATE = (
-    'the sweep seeds no such job, run or file of this kind, so the handler answers its own '
-    '404 for the bound project; a seeded world for it is a follow-up (see the lane report)'
-)
-_NAME_NOT_SEEDED = (
-    'reads a config-store document by name from PostgreSQL; the sweep seeds none under the '
-    'path name (404). Isolation is proven by tests/db/test_config_repo.py and the row-level '
-    'security tests'
-)
-_UUID_NO_ROW = (
-    'the id is a uuid for a PostgreSQL row the sweep does not seed (404/400 from the handler)'
-)
 UNREACHED_OK: dict[tuple[str, str], str] = {
-    **dict.fromkeys(
-        (
-            ('GET', '/assist/loops/{loop_id}'),
-            ('GET', '/assist/loops/{loop_id}/nodes'),
-            ('GET', '/assist/loops/{loop_id}/nodes/{node_path}/members'),
-            ('GET', '/assist/runs/{run_id}'),
-            ('GET', '/bakeoff/matrix/{job_id}'),
-            ('GET', '/bakeoff/results/{job_id}'),
-            ('GET', '/bakeoff/status/{job_id}'),
-            ('GET', '/datasets/imports/{import_id}'),
-            ('GET', '/datasets/imports/{import_id}/entries'),
-            ('GET', '/datasets/imports/{import_id}/issues'),
-            ('GET', '/export/registry/{artifact}'),
-            ('GET', '/ingest/bulk/{run_id}'),
-            ('GET', '/ingest/bulk/{run_id}/failures'),
-            ('GET', '/ingest/sources/{source_id}'),
-            ('GET', '/models/{model_name}/class_mapping'),
-            ('GET', '/pipeline/auto_label/status/{job_id}'),
-            ('GET', '/viz/projection'),
-            ('GET', '/train/artifacts/{job_id}/{name}'),
-        ),
-        _NO_SUCH_JOB_STATE,
-    ),
-    **dict.fromkeys(
-        (
-            ('GET', '/clusters/partitions/{partition_id}'),
-            ('GET', '/reprocess/jobs/{job_id}'),
-            ('GET', '/train/log/tail/{job_id}'),
-            ('GET', '/train/manifest/{job_id}'),
-            ('GET', '/train/status/{job_id}'),
-            ('GET', '/train/promote/{job_id}/jobs/{promote_id}'),
-        ),
-        _UUID_NO_ROW,
-    ),
-    **dict.fromkeys(
-        (
-            (method, f'/{kind}/{{name}}{suffix}')
-            for kind in ('prompt_packs', 'region_profiles', 'ingest_profiles', 'open_vocab')
-            for method, suffix in (
-                ('GET', ''),
-                ('GET', '/revisions'),
-                ('GET', '/revisions/{revision}'),
-            )
-        ),
-        _NAME_NOT_SEEDED,
+    ('GET', '/assist/loops/{loop_id}/nodes/{node_path}/members'): (
+        'the members of a node are read from the loop snapshot blob of a node that ran; the sweep '
+        "runs no loop level, so the node is not there (404). Another project's loop is a 404 "
+        'before the node is looked up (test_assist_loop_isolation)'
     ),
 }
 
