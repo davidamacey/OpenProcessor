@@ -14,7 +14,7 @@ import inspect
 
 import pytest
 
-from src.config.queue import NON_JOB_QUEUES
+from src.config.queue import NON_JOB_QUEUES, TaskQueues
 from src.config.task_routes import ROUTES
 
 
@@ -40,7 +40,12 @@ def test_noop_is_the_wrapper_task_of_its_kind(worker_app) -> None:
     assert list(inspect.signature(task.run).parameters) == ['job_id']
 
 
-JOB_TASKS = sorted(name for name, queue in ROUTES.items() if queue not in NON_JOB_QUEUES)
+# The GPU queues are consumed by their own images, whose modules register these tasks through
+# register_job (the same wrapper); the API's worker app never imports them.
+GPU_QUEUES = frozenset({TaskQueues.GPU_TRAIN, TaskQueues.GPU_EXPORT, TaskQueues.GPU_EVAL})
+JOB_TASKS = sorted(
+    name for name, queue in ROUTES.items() if queue not in NON_JOB_QUEUES | GPU_QUEUES
+)
 BEAT_TASKS = sorted(name for name, queue in ROUTES.items() if queue in NON_JOB_QUEUES)
 
 
