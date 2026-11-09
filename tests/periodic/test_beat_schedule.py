@@ -13,7 +13,14 @@ from src.config.task_routes import ROUTES
 from src.tasks.beat_schedule import build_schedule
 
 
-EXPECTED = {'reaper', 'ingest_dispatch', 'open_vocab_sweep'}
+EXPECTED = {
+    'reaper',
+    'ingest_dispatch',
+    'open_vocab_sweep',
+    'job_stats',
+    'vlm_batch_staging_sweep',
+    'upload_sweep',
+}
 
 
 @pytest.fixture
