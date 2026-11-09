@@ -66,6 +66,12 @@ def near_dup_full_build_tick() -> None:
     run_periodic('near_dup_full_build', near_dup_ticks.full_build_tick())
 
 
+@app.task(name='op.periodic.near_dup_core_group', **_TICK)
+def near_dup_core_group_tick() -> None:
+    """Start the core near-duplicate grouping job when core ingest left pending rows."""
+    run_periodic('near_dup_core_group', near_dup_ticks.core_group_tick())
+
+
 @app.task(name='op.periodic.cache_prune', **_TICK)
 def cache_prune_tick() -> None:
     """Evict the oldest crops once the tmpfs crop cache is over its cap."""

@@ -42,9 +42,9 @@ async def fetch_image_data(
         indexed_at=source.get('indexed_at'),
         imohash=source.get('imohash'),
         file_size_bytes=source.get('file_size_bytes'),
-        duplicate_group_id=source.get('duplicate_group_id'),
-        is_duplicate_primary=source.get('is_duplicate_primary'),
-        duplicate_score=source.get('duplicate_score'),
+        duplicate_group_id=source.get('near_dup_group_id'),
+        is_duplicate_primary=source.get('near_dup_is_representative'),
+        duplicate_score=source.get('near_dup_cosine_to_rep'),
         cluster_id=source.get('cluster_id'),
         cluster_distance=source.get('cluster_distance'),
     )
@@ -129,7 +129,15 @@ async def fetch_image_data(
 
 
 async def delete_image_everywhere(client: AsyncOpenSearch, image_id: str) -> DeleteImageResponse:
-    """Remove one image from every index that holds it."""
+    """Remove one image from every index that holds it.
+
+    The near-duplicate pending row goes first (the grouping job then drops the image from its
+    group), the exact-content row once the global document is gone (a later upload of the same
+    file is new again).
+    """
+    from src.services.near_duplicates import content_key, core_pending
+
+    await core_pending.record_pending([image_id], 'deleted')
     deleted_from = []
     total_deleted = 0
 
@@ -141,6 +149,7 @@ async def delete_image_everywhere(client: AsyncOpenSearch, image_id: str) -> Del
     except NotFoundError as e:
         # Not found is OK - document may not exist in this index
         logger.debug('Could not delete from global index: %s', e)
+    await content_key.release_core([image_id])
 
     # Delete from vehicles (by query - multiple docs per image)
     try:

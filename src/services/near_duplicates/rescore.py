@@ -8,6 +8,10 @@ incremental run equals a full build on the same state for the components it touc
 A pending member whose vector is gone is not an error when its reason is ``deleted``; for any
 other reason it is counted, its edges are dropped, and its pending row stays so the next tick
 retries it. The run is written only when every claimed row was handled or kept.
+
+The core level (no project, no build step) starts from the pending rows: with no current run the
+first pass is a ``full`` run over the claimed members and what they join; a project level
+refuses to start incrementally.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.db.repos import near_dup as repo
+from src.domain import near_dup as rules
 from src.services.near_duplicates import candidates
 from src.services.near_duplicates.grouping import copied, group_edges, with_lineage
 from src.services.near_duplicates.runs import Env, RunSummary, write_and_flip
@@ -144,7 +149,7 @@ async def rescore(env: Env) -> RescoreOutcome:
     assert env.job_id is not None  # a rescore is always a job
     async with env.scope() as session:
         parent = await repo.current_run(session, env.project_id, env.plan.level)
-        if parent is None:
+        if parent is None and env.plan.level != rules.CORE:
             msg = f'the {env.plan.level} level has no current run; build it in full first'
             raise NoCurrentRunError(msg)
         claimed = await repo.claim_pending(
@@ -164,8 +169,8 @@ async def rescore(env: Env) -> RescoreOutcome:
             session, env.project_id, env.plan.level, env.plan.space_key, claimed_ids, edges
         )
         decisions = await repo.load_decisions(session, env.project_id, env.plan.level)
-        parent_dedup = await repo.load_groups(session, parent.id, 'dedup')
-        parent_leak = await repo.load_groups(session, parent.id, 'leak')
+        parent_dedup = [] if parent is None else await repo.load_groups(session, parent.id, 'dedup')
+        parent_leak = [] if parent is None else await repo.load_groups(session, parent.id, 'leak')
     affected, scoped_edges = await _affected(
         env, claimed_ids, (parent_dedup, parent_leak), decisions
     )
@@ -185,8 +190,8 @@ async def rescore(env: Env) -> RescoreOutcome:
     leak += [copied(g) for g in parent_leak if not affected.intersection(g.members)]
     summary = await write_and_flip(
         env,
-        mode='incremental',
-        parent_run_id=parent.id,
+        mode='full' if parent is None else 'incremental',
+        parent_run_id=None if parent is None else parent.id,
         dedup=dedup,
         leak=leak,
         scored=len(members),

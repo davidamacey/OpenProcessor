@@ -67,10 +67,12 @@ OCR_RESULT = {
 }
 
 SCENARIOS: dict[str, dict[str, Any]] = {
-    'full': {'faces': _faces(2), 'dup': 'joined'},
+    'full': {'faces': _faces(2)},
     'duplicate_found': {'existing': True},
     'duplicate_ignored_when_not_skipping': {'existing': True, 'kwargs': {'skip_duplicates': False}},
-    'opensearch_duplicate_check_raises': {'dup_check_raises': True},
+    'content_store_raises': {'content_raises': True},
+    'stored_row_without_document': {'existing': True, 'orphans': True},
+    'image_id_already_holds_other_bytes': {'taken': True},
     'detection_only': {
         'kwargs': {'enable_clip': False, 'enable_faces': False, 'enable_ocr': False},
     },
@@ -110,9 +112,9 @@ SCENARIOS: dict[str, dict[str, Any]] = {
             'errors': ['Global: x'],
         },
     },
-    'near_duplicate_disabled': {'dup': 'joined', 'kwargs': {'detect_near_duplicates': False}},
-    'near_duplicate_created': {'dup': 'created', 'kwargs': {'near_duplicate_threshold': 0.9}},
-    'near_duplicate_raises': {'dup': 'raise'},
+    'near_duplicate_disabled': {'kwargs': {'detect_near_duplicates': False}},
+    'near_duplicate_candidates': {'neighbours': ['old-x', 'old-y']},
+    'pending_write_raises': {'pending_raises': True},
     'ocr_finds_text': {'ocr': OCR_RESULT},
     'ocr_no_text': {'ocr': {'status': 'success', 'num_texts': 0}},
     'ocr_disabled': {'ocr': OCR_RESULT, 'kwargs': {'enable_ocr': False}},
@@ -171,15 +173,23 @@ class FakeOpenSearch:
     def __init__(self, sc: dict[str, Any]) -> None:
         self.sc = sc
         self.calls: list[tuple[str, Any]] = []
+        self.client = self
 
-    async def check_duplicate_by_hash(self, image_hash: str) -> Any:
-        self.calls.append(('check_duplicate_by_hash', image_hash))
-        if self.sc.get('dup_check_raises'):
-            msg = 'search down'
-            raise RuntimeError(msg)
-        if self.sc.get('existing'):
-            return {'image_id': 'old-1', 'image_path': '/old.jpg'}
-        return None
+    async def msearch(self, body: list[dict[str, Any]]) -> dict[str, Any]:
+        """The candidate lookup finds the scripted neighbours (cosine 1.0 with the scripted vector
+        direction; the vector is normalised by the lookup)."""
+        self.calls.append(('msearch', len(body) // 2))
+        vector = self.sc.get('yolo', YOLO).get('image_embedding') or [1.0]
+        hit = [
+            {'_id': n, '_score': 1.0, '_source': {'global_embedding': vector}}
+            for n in self.sc.get('neighbours', [])
+        ]
+        return {'responses': [{'hits': {'hits': hit}} for _ in body[::2]]}
+
+    async def mget(self, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
+        """The holder's document: found, unless the scenario left a row without its document."""
+        self.calls.append(('mget', {'index': index, 'ids': body['ids'], **kw}))
+        return {'docs': [{'_id': i, 'found': not self.sc.get('orphans')} for i in body['ids']]}
 
     async def ingest_image(self, **kw: Any) -> dict[str, Any]:
         self.calls.append(('ingest_image', kw))
@@ -212,38 +222,42 @@ def _plain(value: Any) -> Any:
     return value
 
 
-async def run_scenario(name: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+async def run_scenario(
+    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any, content_rows: Any
+) -> dict[str, Any]:
     sc = SCENARIOS[name]
     triton, face, ocr, opensearch = FakeTriton(sc), FakeFace(sc), FakeOcr(sc), FakeOpenSearch(sc)
+    if sc.get('existing'):
+        content_rows.core_rows[_hash(DATA)] = ('old-1', '/old.jpg', None)
+    if sc.get('taken'):
+        content_rows.core_rows['taken'] = ('id-1', '/taken', b'other bytes')
+    if sc.get('content_raises'):
+
+        async def down(_entries: Any) -> Any:
+            msg = 'database down'
+            raise RuntimeError(msg)
+
+        monkeypatch.setattr('src.services.near_duplicates.content_key.resolve_many_core', down)
     monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)  # noqa: ARG005
     monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)  # noqa: ARG005
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', lambda: ocr)
     svc = VisualSearchService.__new__(VisualSearchService)
     svc.opensearch = opensearch  # type: ignore[assignment]
     svc.inference = None  # type: ignore[assignment]
-    dup_calls: list[dict[str, Any]] = []
+    if sc.get('pending_raises'):
 
-    async def assign(image_id: str, embedding: Any, threshold: float = 0.99) -> Any:
-        dup_calls.append(
-            {'image_id': image_id, 'embedding': _plain(embedding), 'threshold': threshold}
-        )
-        kind = sc.get('dup')
-        if kind == 'raise':
-            msg = 'dup service down'
+        async def refuse(_ids: Any, _reason: str) -> int:
+            msg = 'database down'
             raise RuntimeError(msg)
-        if kind == 'joined':
-            return {'action': 'joined_group', 'group_id': 'g1'}
-        if kind == 'created':
-            return {'action': 'created_group', 'group_id': 'g2'}
-        return None
 
-    svc._assign_to_duplicate_group = assign  # type: ignore[method-assign]
+        monkeypatch.setattr('src.services.near_duplicates.core_pending.record_pending', refuse)
     result = await svc.ingest_image(DATA, 'id-1', **sc.get('kwargs', {}))
     return _plain(
         {
             'result': result,
             'opensearch': opensearch.calls,
-            'dup_calls': dup_calls,
+            'pending': pending_calls.calls,
+            'content_rows': sorted((v[0], v[1]) for v in content_rows.core_rows.values()),
             'triton_calls': triton.calls,
             'face_calls': face.calls,
             'ocr_calls': ocr.calls,
@@ -253,8 +267,10 @@ async def run_scenario(name: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('name', sorted(SCENARIOS))
-async def test_ingest_image_matches_golden(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    got = await run_scenario(name, monkeypatch)
+async def test_ingest_image_matches_golden(
+    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any, content_rows: Any
+) -> None:
+    got = await run_scenario(name, monkeypatch, pending_calls, content_rows)
     assert got == json.loads(GOLDEN.read_text())[name]
 
 

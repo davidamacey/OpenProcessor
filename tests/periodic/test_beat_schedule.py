@@ -27,6 +27,7 @@ EXPECTED = {
     'cluster_refresh',
     'db_backup',
     'near_dup_rescore',
+    'near_dup_core_group',
     'near_dup_full_build',
 }
 

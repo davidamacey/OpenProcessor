@@ -11,7 +11,7 @@ from src.core.dependencies import VisualSearchDep
 from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.ingest._router import router
-from src.schemas.ingest import IndexedCounts, IngestResponse, NearDuplicateInfo, OCRInfo
+from src.schemas.ingest import IndexedCounts, IngestResponse, NearDuplicateCandidate, OCRInfo
 
 
 logger = logging.getLogger(__name__)
@@ -42,12 +42,14 @@ Ingest a single image with automatic indexing to appropriate OpenSearch indexes.
    - Person detections -> visual_search_people
    - Vehicle detections -> visual_search_vehicles
    - Face embeddings -> visual_search_faces
-6. Check for near-duplicates and assign to groups (if enabled)
+6. Mark the image for near-duplicate grouping and list the candidates above the core cut (if enabled)
 7. Run OCR and index text content (if enabled)
 
 **Duplicate Detection:**
 - Uses imohash (fast perceptual hash) for exact duplicates
-- Near-duplicate grouping uses CLIP embedding similarity (default threshold: 0.99)
+- Near-duplicate grouping uses CLIP embedding similarity (cosine 0.98). It does not run in the
+  request: the response lists `near_duplicate_candidates`, and the group appears once the
+  `near_dup_core_group` job has run (`GET /query/duplicates`)
 
 **High Concurrency:**
 - Uses CPU preprocessing for stability at high request rates
@@ -75,14 +77,7 @@ async def ingest_image(
     ),
     detect_near_duplicates: bool = Form(
         True,
-        description='Check for visually similar images and assign to duplicate groups.',
-    ),
-    near_duplicate_threshold: float = Form(
-        0.99,
-        ge=0.90,
-        le=1.0,
-        description='Similarity threshold for near-duplicate grouping. '
-        '0.99 matches near-identical images, 0.90 matches similar content.',
+        description='Mark the image for near-duplicate grouping and list its candidates.',
     ),
     enable_ocr: bool = Form(
         True,
@@ -146,7 +141,6 @@ async def ingest_image(
             metadata=parsed_metadata,
             skip_duplicates=skip_duplicates,
             detect_near_duplicates=detect_near_duplicates,
-            near_duplicate_threshold=near_duplicate_threshold,
             enable_ocr=enable_ocr,
             enable_detection=enable_detection,
             enable_faces=enable_faces,
@@ -190,15 +184,10 @@ async def ingest_image(
             }
         )
 
-        near_duplicate = None
-        if result.get('near_duplicate'):
-            nd = result['near_duplicate']
-            near_duplicate = NearDuplicateInfo(
-                action=nd['action'],
-                group_id=nd['group_id'],
-                similarity=nd['similarity'],
-                matched_image=nd['matched_image'],
-            )
+        candidates = [
+            NearDuplicateCandidate(image_id=c['image_id'], cosine=c['cosine'])
+            for c in result.get('near_duplicate_candidates') or []
+        ]
 
         ocr_info = None
         if result.get('ocr'):
@@ -217,7 +206,7 @@ async def ingest_image(
             embedding_norm=result.get('embedding_norm', 0.0),
             imohash=result.get('imohash'),
             indexed=indexed,
-            near_duplicate=near_duplicate,
+            near_duplicate_candidates=candidates or None,
             ocr=ocr_info,
             errors=result.get('errors') if result.get('errors') else None,
             total_time_ms=round(elapsed_ms, 2),

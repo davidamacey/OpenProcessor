@@ -22,3 +22,13 @@ def test_the_four_kinds_follow_the_kind_table() -> None:
         assert kind.project_scope == 'project'
         assert ROUTES[kind.task_name] == TaskQueues.JOBS
         assert KIND_BY_TASK[kind.task_name] is kind
+
+
+def test_the_core_grouping_kind_is_deployment_wide_with_its_own_single_writer_group() -> None:
+    kind = KINDS['near_dup_core_group']
+    assert (kind.exclusive_group, kind.exclusive_scope) == ('near_dup_core', '')
+    assert (kind.auto_resume, kind.max_queue_wait_s) == (True, 3600)
+    assert (kind.soft_limit_s, kind.hard_limit_s) == (10800, 11700)
+    assert kind.project_scope == 'deployment'
+    assert ROUTES[kind.task_name] == TaskQueues.JOBS
+    assert KIND_BY_TASK[kind.task_name] is kind

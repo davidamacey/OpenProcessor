@@ -50,12 +50,6 @@ PENDING_REPLACEMENT = {
     'services/curation/semantic_search.py': 'kNN and unembedded count in parallel',
 }
 
-# Left in an exempt module until the core near-duplicate grouping leaves the ingest request; the
-# lane that deletes the function deletes this entry (a stale entry fails below).
-INGEST_LEFTOVER_GATHER = {
-    'services/visual_search/ingest_batch.py': 'near-duplicate grouping inside the request',
-}
-
 
 def fan_out_calls(source: str) -> list[tuple[str, int]]:
     """``(name, line)`` of every gather, create_task or ensure_future call in ``source``."""
@@ -90,15 +84,12 @@ def test_the_ingest_data_plane_has_no_create_task_or_gather_outside_task_groups(
         names = [n for n, _ in fan_out_calls((SRC / rel).read_text(encoding='utf-8'))]
         assert 'ensure_future' not in names, rel
         gathers = names.count('gather')
-        assert gathers == (1 if rel in INGEST_LEFTOVER_GATHER else 0), rel
+        assert gathers == 0, rel
 
 
 def test_every_helper_and_leftover_entry_still_applies() -> None:
     for rel in (*ROUTER_HELPERS, *PENDING_REPLACEMENT):
         assert fan_out_calls((SRC / rel).read_text(encoding='utf-8')), f'{rel} no longer needs it'
-    for rel in INGEST_LEFTOVER_GATHER:
-        names = [n for n, _ in fan_out_calls((SRC / rel).read_text(encoding='utf-8'))]
-        assert 'gather' in names, f'{rel} no longer needs it'
 
 
 def test_the_scan_finds_a_planted_violation() -> None:

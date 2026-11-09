@@ -4,7 +4,7 @@ The job takes the images of one directory, reads them a batch at a time and hand
 ``VisualSearchService.ingest_batch``. A re-run of the same directory stores nothing twice: every
 global document is keyed by the image's path relative to the directory (a repeat overwrites it),
 and with ``skip_duplicates`` the batch drops images whose content hash is already indexed
-(``ingest_batch.py``, ``check_duplicates_by_hash_batch``).
+(``ingest_batch.py``).
 """
 
 from __future__ import annotations
@@ -47,7 +47,6 @@ class DirectoryIngestOptions:
     batch_size: int = 64
     skip_duplicates: bool = True
     detect_near_duplicates: bool = True
-    near_duplicate_threshold: float = 0.99
     enable_ocr: bool = True
     enable_detection: bool = True
     enable_faces: bool = True
@@ -142,7 +141,6 @@ async def run_directory_ingest(
                     images_data=data,
                     skip_duplicates=options.skip_duplicates,
                     detect_near_duplicates=options.detect_near_duplicates,
-                    near_duplicate_threshold=options.near_duplicate_threshold,
                     enable_ocr=options.enable_ocr,
                     enable_detection=options.enable_detection,
                     enable_faces=options.enable_faces,

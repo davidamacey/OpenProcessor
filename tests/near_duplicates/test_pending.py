@@ -6,8 +6,8 @@ import psycopg
 import pytest
 from sqlalchemy.exc import DBAPIError
 
-from src.db.session import async_session_factory, project_tx
-from src.services.near_duplicates.pending import PendingError, enqueue_pending
+from src.db.session import async_session_factory, core_tx, project_tx
+from src.services.near_duplicates.pending import PendingError, enqueue_core_pending, enqueue_pending
 
 from .conftest import make_project
 
@@ -71,3 +71,25 @@ async def test_an_unknown_level_or_reason_is_refused(project) -> None:
         await _enqueue(project, 'frame', ['a'], 'added')
     with pytest.raises(PendingError):
         await _enqueue(project, 'item', ['a'], 'moved')
+
+
+async def test_core_rows_have_no_project_and_a_project_scope_cannot_write_them(pg, project) -> None:
+    async with async_session_factory()() as session, core_tx(session, 'test'):
+        assert await enqueue_core_pending(session, ['b', 'a', 'a'], 'added') == 2
+    async with async_session_factory()() as session, core_tx(session, 'test'):
+        await enqueue_core_pending(session, ['a'], 'deleted')  # the newest reason wins
+
+    with psycopg.connect(pg.conninfo('super'), autocommit=True) as c:
+        rows = c.execute(
+            "SELECT member_id, reason, project_id FROM near_dup_pending WHERE level = 'core' "
+            'ORDER BY member_id'
+        ).fetchall()
+    assert rows == [('a', 'deleted', None), ('b', 'added', None)]
+
+    async with async_session_factory()() as session, project_tx(session, project):
+        with pytest.raises(DBAPIError, match='row-level security'):
+            await enqueue_core_pending(session, ['x'], 'added')
+        await session.rollback()
+    async with async_session_factory()() as session, core_tx(session, 'test'):
+        with pytest.raises(PendingError):
+            await enqueue_core_pending(session, ['x'], 'moved')

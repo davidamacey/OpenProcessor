@@ -65,14 +65,6 @@ async def test_ocr_reads_raise(client: OpenSearchClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_duplicate_checks_raise(client: OpenSearchClient) -> None:
-    with pytest.raises(UpstreamError):
-        await client.check_duplicate_by_hash('abc')
-    with pytest.raises(UpstreamError):
-        await client.check_duplicates_by_hash_batch(['abc'])
-
-
-@pytest.mark.asyncio
 async def test_an_empty_answer_is_still_empty(client: OpenSearchClient) -> None:
     client.client.search = AsyncMock(return_value={'hits': {'hits': []}})
     assert await client.search_global(np.zeros(512, dtype=np.float32), top_k=5) == []

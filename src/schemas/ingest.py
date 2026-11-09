@@ -19,17 +19,11 @@ class IndexedCounts(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-class NearDuplicateInfo(BaseModel):
-    """Information about near-duplicate detection result."""
+class NearDuplicateCandidate(BaseModel):
+    """A stored image above the core near-duplicate cut."""
 
-    action: Literal['joined_group', 'created_group'] = Field(
-        ..., description='Action taken for duplicate grouping'
-    )
-    group_id: str = Field(..., description='Duplicate group ID')
-    similarity: float = Field(
-        ..., ge=0.0, le=1.0, description='Similarity score with matched image'
-    )
-    matched_image: str = Field(..., description='Image ID of the matched duplicate')
+    image_id: str = Field(..., description='ID of the stored image')
+    cosine: float = Field(..., ge=-1.0, le=1.0, description='Cosine similarity to the new image')
 
 
 class OCRInfo(BaseModel):
@@ -58,8 +52,10 @@ class IngestResponse(BaseModel):
     indexed: IndexedCounts | None = Field(
         default=None, description='Counts of documents indexed per category'
     )
-    near_duplicate: NearDuplicateInfo | None = Field(
-        default=None, description='Near-duplicate grouping result (if detected)'
+    near_duplicate_candidates: list[NearDuplicateCandidate] | None = Field(
+        default=None,
+        description='Stored images above the core cut, closest first. The group itself appears '
+        'once the near_dup_core_group job has run (GET /query/duplicates).',
     )
     ocr: OCRInfo | None = Field(default=None, description='OCR processing result (if enabled)')
     existing_image_id: str | None = Field(
@@ -107,14 +103,13 @@ class ErrorDetail(BaseModel):
     error: str = Field(..., description='Error message')
 
 
-class NearDuplicateDetail(BaseModel):
-    """Details about a near-duplicate assignment."""
+class ImageNearDuplicateCandidates(BaseModel):
+    """The near-duplicate candidates of one image of a batch."""
 
-    image_id: str = Field(..., description='ID of the image')
-    action: str = Field(..., description='Action taken (joined_group or created_group)')
-    group_id: str = Field(..., description='Duplicate group ID')
-    similarity: float = Field(..., description='Similarity score')
-    matched_image: str = Field(..., description='ID of matched image')
+    image_id: str = Field(..., description='ID of the new image')
+    candidates: list[NearDuplicateCandidate] = Field(
+        ..., description='Stored images above the core cut, closest first'
+    )
 
 
 class BatchIngestResponse(BaseModel):
@@ -122,7 +117,7 @@ class BatchIngestResponse(BaseModel):
     Response for batch image ingestion.
 
     Includes summary statistics and detailed lists of duplicates, errors,
-    and near-duplicate assignments.
+    and near-duplicate candidates.
     """
 
     status: Literal['success', 'partial', 'error'] = Field(..., description='Overall batch status')
@@ -133,9 +128,11 @@ class BatchIngestResponse(BaseModel):
     indexed: BatchIndexedCounts = Field(
         default_factory=BatchIndexedCounts, description='Aggregate indexed counts'
     )
-    near_duplicates: int = Field(default=0, ge=0, description='Images assigned to duplicate groups')
+    near_duplicates: int = Field(
+        default=0, ge=0, description='Images with near-duplicate candidates'
+    )
     deferred_ops: int = Field(
-        default=0, ge=0, description='Images with deferred near-duplicate detection'
+        default=0, ge=0, description='Images with skipped near-duplicate candidate lookup'
     )
     duplicate_details: list[DuplicateDetail] | None = Field(
         default=None, description='Details of detected duplicates'
@@ -143,8 +140,10 @@ class BatchIngestResponse(BaseModel):
     error_details: list[ErrorDetail] | None = Field(
         default=None, description='Details of failed images'
     )
-    near_duplicate_details: list[NearDuplicateDetail] | None = Field(
-        default=None, description='Details of near-duplicate assignments'
+    near_duplicate_candidates: list[ImageNearDuplicateCandidates] | None = Field(
+        default=None,
+        description='Stored images above the core cut for each new image. The groups appear once '
+        'the near_dup_core_group job has run (GET /query/duplicates).',
     )
     total_time_ms: float | None = Field(default=None, description='Total batch processing time')
     faces_enabled: bool = Field(
@@ -172,7 +171,9 @@ class DirectoryIngestResponse(BaseModel):
     indexed: BatchIndexedCounts = Field(
         default_factory=BatchIndexedCounts, description='Aggregate indexed counts'
     )
-    near_duplicates: int = Field(default=0, ge=0, description='Images assigned to duplicate groups')
+    near_duplicates: int = Field(
+        default=0, ge=0, description='Images with near-duplicate candidates'
+    )
     skipped_extensions: list[str] | None = Field(
         default=None, description='File extensions that were skipped'
     )

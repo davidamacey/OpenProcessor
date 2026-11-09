@@ -38,7 +38,7 @@ PENDING_CHUNK = 2000
 
 async def enqueue_pending(
     session: AsyncSession,
-    project_id: uuid.UUID,
+    project_id: uuid.UUID | None,
     level: str,
     member_ids: Iterable[str],
     reason: str,
@@ -216,8 +216,11 @@ async def load_edges(
 
 
 async def load_decisions(
-    session: AsyncSession, project_id: uuid.UUID, level: str
+    session: AsyncSession, project_id: uuid.UUID | None, level: str
 ) -> dict[tuple[str, str], str]:
+    """The human decisions of one (project, level); the core level has none (no project owns one)."""
+    if project_id is None:
+        return {}
     rows = await session.execute(
         select(NearDupDecision.a_id, NearDupDecision.b_id, NearDupDecision.decision).where(
             NearDupDecision.project_id == project_id, NearDupDecision.level == level
@@ -473,11 +476,13 @@ async def prune_runs(
 
 @dataclass(frozen=True)
 class MemberState:
-    """What a member shows on the index: its group lineage, role and group size per purpose."""
+    """What a member shows on the index: its group lineage, role, group size and cosine to the
+    representative, per purpose."""
 
     lineage_id: uuid.UUID
     is_representative: bool
     group_size: int
+    cosine_to_rep: float
 
 
 async def member_states(
@@ -491,12 +496,15 @@ async def member_states(
             NearDupGroup.lineage_id,
             NearDupMember.is_representative,
             NearDupGroup.member_count,
+            NearDupMember.cosine_to_rep,
         )
         .join(NearDupGroup, NearDupGroup.id == NearDupMember.group_id)
         .where(NearDupMember.run_id == run_id)
     )
     return {
-        (r.purpose, r.member_id): MemberState(r.lineage_id, r.is_representative, r.member_count)
+        (r.purpose, r.member_id): MemberState(
+            r.lineage_id, r.is_representative, r.member_count, float(r.cosine_to_rep)
+        )
         for r in rows
     }
 

@@ -32,12 +32,16 @@ type SessionScope = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 
 @dataclass(frozen=True)
 class Env:
-    """Everything a run needs: how to open a project-scoped session, the client, the plan."""
+    """Everything a run needs: how to open a scoped session, the client, the plan.
+
+    The core level has no project and no profile (``None`` for both): its session is a core or
+    deployment scope and its plan is :func:`~src.services.near_duplicates.plan.core_plan`.
+    """
 
     scope: SessionScope
     client: AsyncOpenSearch
-    project_id: uuid.UUID
-    profile: ActiveProfile
+    project_id: uuid.UUID | None
+    profile: ActiveProfile | None
     plan: LevelPlan
     job_id: uuid.UUID | None
 
@@ -92,7 +96,7 @@ async def write_and_flip(
             mode=mode,
             job_id=env.job_id,
             parent_run_id=parent_run_id,
-            profile=(env.profile.config_id, env.profile.revision),
+            profile=None if env.profile is None else (env.profile.config_id, env.profile.revision),
             params=env.plan.params,
             space=env.plan.space_key,
             algorithm_version=rules.ALGORITHM_VERSION,
@@ -102,6 +106,7 @@ async def write_and_flip(
         run = await repo.get_run(session, run_id)
         assert run is not None  # inserted above
         if env.plan.is_item:
+            assert env.project_id is not None  # an item run is always a project run
             counters['holdout_absorbed'] = await absorb(
                 session,
                 env.client,
@@ -112,10 +117,11 @@ async def write_and_flip(
             )
         await repo.flip_current(session, run, counters)
         await repo.prune_runs(session, env.project_id, env.plan.level, rules.KEPT_SUPERSEDED_RUNS)
-        await apublish(
-            'near_dup.run',
-            {'run_id': str(run_id), 'level': env.plan.level, 'mode': mode, **counters},
-            project=env.project_id,
-            session=session,
-        )
+        if env.project_id is not None:  # a core run has no project stream to publish on
+            await apublish(
+                'near_dup.run',
+                {'run_id': str(run_id), 'level': env.plan.level, 'mode': mode, **counters},
+                project=env.project_id,
+                session=session,
+            )
     return RunSummary(run_id=run_id, **counters)

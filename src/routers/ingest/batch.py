@@ -4,7 +4,7 @@ import json
 import logging
 import time
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import File, Form, HTTPException, UploadFile, status
 
@@ -17,11 +17,87 @@ from src.schemas.ingest import (
     BatchIngestResponse,
     DuplicateDetail,
     ErrorDetail,
-    NearDuplicateDetail,
+    ImageNearDuplicateCandidates,
+    NearDuplicateCandidate,
 )
 
 
 logger = logging.getLogger(__name__)
+
+
+def _json_list(raw: str | None, name: str, count: int) -> list[Any]:
+    """The JSON array a form field carries, one entry per image; ``None`` per image when absent."""
+    if not raw:
+        return [None] * count
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f'Invalid {name} JSON: {e}'
+        ) from e
+    if not isinstance(parsed, list):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f'{name} must be a JSON array'
+        )
+    if len(parsed) != count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'{name} length ({len(parsed)}) must match images length ({count})',
+        )
+    return parsed
+
+
+def _overall_status(result: dict[str, Any]) -> Literal['success', 'partial', 'error']:
+    if result.get('errors_count', 0) <= 0:
+        return 'success'
+    return 'partial' if result.get('processed', 0) > 0 else 'error'
+
+
+def _response(result: dict[str, Any], submitted: int, elapsed_ms: float) -> BatchIngestResponse:
+    """The wire body of one batch result."""
+    indexed_data = result.get('indexed', {})
+    indexed = BatchIndexedCounts(
+        **{
+            key: indexed_data.get(key, 0)
+            for key in ('global', 'vehicles', 'people', 'faces', 'ocr')
+        }
+    )
+    duplicate_details = [
+        DuplicateDetail(
+            image_id=d['image_id'],
+            existing_image_id=d.get('existing_image_id'),
+            imohash=d.get('imohash', ''),
+        )
+        for d in result.get('duplicate_details') or []
+    ]
+    error_details = [
+        ErrorDetail(image_id=e['image_id'], error=e.get('error', 'Unknown error'))
+        for e in result.get('error_details') or []
+    ]
+    candidates = [
+        ImageNearDuplicateCandidates(
+            image_id=entry['image_id'],
+            candidates=[
+                NearDuplicateCandidate(image_id=c['image_id'], cosine=c['cosine'])
+                for c in entry['candidates']
+            ],
+        )
+        for entry in result.get('near_duplicate_candidates') or []
+    ]
+    return BatchIngestResponse(
+        status=_overall_status(result),
+        total=result.get('total', submitted),
+        processed=result.get('processed', 0),
+        duplicates=result.get('duplicates', 0),
+        errors_count=result.get('errors_count', 0),
+        indexed=indexed,
+        near_duplicates=result.get('near_duplicates', 0),
+        deferred_ops=result.get('deferred_ops', 0),
+        duplicate_details=duplicate_details or None,
+        error_details=error_details or None,
+        near_duplicate_candidates=candidates or None,
+        total_time_ms=round(elapsed_ms, 2),
+    )
 
 
 @router.post(
@@ -43,13 +119,13 @@ Batch ingest up to 64 images with optimized parallel processing.
 - Batch duplicate checking (msearch - 10x faster than sequential)
 - Batch Triton inference with dynamic batching
 - Bulk OpenSearch indexing for images and faces
-- Parallel near-duplicate detection
+- Near-duplicate candidates listed in one query (the groups come from the `near_dup_core_group` job)
 - Reduced HTTP overhead
 
 **Target throughput:** 300+ images/second with batch sizes of 32-64.
 
-**High-Throughput Mode:** Set `defer_heavy_ops=true` to skip near-duplicate detection
-during rapid ingestion. These can be processed later when system load is lower.
+**High-Throughput Mode:** Set `defer_heavy_ops=true` to skip the near-duplicate candidate lookup
+during rapid ingestion; the groups are built by the job either way.
 
 **Partial Failures:** The endpoint returns partial results if some images fail.
 Check the `error_details` field for per-image error information.
@@ -72,13 +148,7 @@ async def ingest_batch(
     ),
     detect_near_duplicates: bool = Form(
         True,
-        description='Check for near-duplicates and assign to groups.',
-    ),
-    near_duplicate_threshold: float = Form(
-        0.99,
-        ge=0.90,
-        le=1.0,
-        description='Similarity threshold for near-duplicate grouping.',
+        description='Mark images for near-duplicate grouping and list their candidates.',
     ),
     enable_ocr: bool = Form(
         True,
@@ -99,7 +169,7 @@ async def ingest_batch(
     ),
     defer_heavy_ops: bool = Form(
         False,
-        description='Defer heavy operations (near-duplicate detection) for faster ingestion. '
+        description='Skip the near-duplicate candidate lookup for faster ingestion. '
         'Use during high-throughput bulk ingestion.',
     ),
 ) -> BatchIngestResponse:
@@ -125,49 +195,8 @@ async def ingest_batch(
                 detail='Maximum 64 images per batch',
             )
 
-        # Parse image_ids JSON array if provided
-        parsed_ids: list[str | None] = [None] * len(images)
-        if image_ids:
-            try:
-                ids_list = json.loads(image_ids)
-                if not isinstance(ids_list, list):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail='image_ids must be a JSON array',
-                    )
-                if len(ids_list) != len(images):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f'image_ids length ({len(ids_list)}) must match images length ({len(images)})',
-                    )
-                parsed_ids = ids_list
-            except json.JSONDecodeError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f'Invalid image_ids JSON: {e}',
-                ) from e
-
-        # Parse image_paths JSON array if provided
-        parsed_paths: list[str | None] = [None] * len(images)
-        if image_paths:
-            try:
-                paths_list = json.loads(image_paths)
-                if not isinstance(paths_list, list):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail='image_paths must be a JSON array',
-                    )
-                if len(paths_list) != len(images):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f'image_paths length ({len(paths_list)}) must match images length ({len(images)})',
-                    )
-                parsed_paths = paths_list
-            except json.JSONDecodeError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f'Invalid image_paths JSON: {e}',
-                ) from e
+        parsed_ids: list[str | None] = _json_list(image_ids, 'image_ids', len(images))
+        parsed_paths: list[str | None] = _json_list(image_paths, 'image_paths', len(images))
 
         # Read all image bytes and prepare data tuples
         images_data: list[tuple[bytes, str, str | None]] = []
@@ -192,7 +221,6 @@ async def ingest_batch(
             images_data=images_data,
             skip_duplicates=skip_duplicates,
             detect_near_duplicates=detect_near_duplicates,
-            near_duplicate_threshold=near_duplicate_threshold,
             enable_ocr=enable_ocr,
             enable_detection=enable_detection,
             enable_faces=enable_faces,
@@ -202,77 +230,7 @@ async def ingest_batch(
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
 
-        # Build response
-        indexed_data = result.get('indexed', {})
-        indexed = BatchIndexedCounts(
-            **{
-                'global': indexed_data.get('global', 0),
-                'vehicles': indexed_data.get('vehicles', 0),
-                'people': indexed_data.get('people', 0),
-                'faces': indexed_data.get('faces', 0),
-                'ocr': indexed_data.get('ocr', 0),
-            }
-        )
-
-        # Parse duplicate details
-        duplicate_details = None
-        if result.get('duplicate_details'):
-            duplicate_details = [
-                DuplicateDetail(
-                    image_id=d['image_id'],
-                    existing_image_id=d.get('existing_image_id'),
-                    imohash=d.get('imohash', ''),
-                )
-                for d in result['duplicate_details']
-            ]
-
-        # Parse error details
-        error_details = None
-        if result.get('error_details'):
-            error_details = [
-                ErrorDetail(
-                    image_id=e['image_id'],
-                    error=e.get('error', 'Unknown error'),
-                )
-                for e in result['error_details']
-            ]
-
-        # Parse near-duplicate details
-        near_duplicate_details = None
-        if result.get('near_duplicate_details'):
-            near_duplicate_details = [
-                NearDuplicateDetail(
-                    image_id=nd['image_id'],
-                    action=nd['action'],
-                    group_id=nd['group_id'],
-                    similarity=nd['similarity'],
-                    matched_image=nd['matched_image'],
-                )
-                for nd in result['near_duplicate_details']
-            ]
-
-        # Determine overall status
-        status_value: Literal['success', 'partial', 'error'] = 'success'
-        if result.get('errors_count', 0) > 0:
-            if result.get('processed', 0) > 0:
-                status_value = 'partial'
-            else:
-                status_value = 'error'
-
-        return BatchIngestResponse(
-            status=status_value,
-            total=result.get('total', len(images)),
-            processed=result.get('processed', 0),
-            duplicates=result.get('duplicates', 0),
-            errors_count=result.get('errors_count', 0),
-            indexed=indexed,
-            near_duplicates=result.get('near_duplicates', 0),
-            deferred_ops=result.get('deferred_ops', 0),
-            duplicate_details=duplicate_details,
-            error_details=error_details,
-            near_duplicate_details=near_duplicate_details,
-            total_time_ms=round(elapsed_ms, 2),
-        )
+        return _response(result, len(images), elapsed_ms)
 
     except HTTPException:
         raise

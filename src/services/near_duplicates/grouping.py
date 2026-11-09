@@ -57,10 +57,9 @@ async def group_edges(
     known: Mapping[str, MemberDoc] | None = None,
 ) -> Grouped:
     """Components at the dedup and the leak cut; ``known`` spares a re-read of vectors in hand."""
-    per_purpose = {
-        'dedup': _purpose_edges(edges, plan.dedup_cosine, decisions),
-        'leak': _purpose_edges(edges, plan.leak_cosine, decisions),
-    }
+    per_purpose = {'dedup': _purpose_edges(edges, plan.dedup_cosine, decisions)}
+    if plan.has_leak:
+        per_purpose['leak'] = _purpose_edges(edges, plan.leak_cosine, decisions)
     components = {p: rules.group_members(e, plan.max_group_size) for p, e in per_purpose.items()}
     wanted = {m for c in components.values() for g in c.groups for m in g}
     docs = dict(known or {})
@@ -88,7 +87,7 @@ async def group_edges(
     }
     return Grouped(
         described['dedup'],
-        described['leak'],
+        described.get('leak', []),
         max(c.oversized_split for c in components.values()),
     )
 

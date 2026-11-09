@@ -78,9 +78,7 @@ def ingest_curation(
     return mapping
 
 
-def _core_ingest_one(
-    api: str, path: Path, image_id: str, near_duplicate: bool, threshold: float
-) -> dict[str, Any]:
+def _core_ingest_one(api: str, path: Path, image_id: str, near_duplicate: bool) -> dict[str, Any]:
     with httpx.Client(timeout=300.0) as client:
         resp = client.post(
             f'{api}/ingest',
@@ -89,7 +87,6 @@ def _core_ingest_one(
                 'image_id': image_id,
                 'image_path': path.name,
                 'detect_near_duplicates': str(near_duplicate).lower(),
-                'near_duplicate_threshold': str(threshold),
             },
         )
     body: dict[str, Any] = resp.json() if resp.content else {}
@@ -99,8 +96,8 @@ def _core_ingest_one(
 def ingest_core(api: str, work: Path, sample: list[dict[str, Any]], workers: int) -> dict[str, Any]:
     jobs = [(work / 'images' / r['file_name'], core_id(r['coco_id'])) for r in sample]
     with ThreadPoolExecutor(workers) as pool:
-        results = list(pool.map(lambda j: _core_ingest_one(api, j[0], j[1], True, 0.99), jobs))
-    flagged = [r for r in results if r.get('near_duplicate')]
+        results = list(pool.map(lambda j: _core_ingest_one(api, j[0], j[1], True), jobs))
+    flagged = [r for r in results if r.get('near_duplicate_candidates')]
     out = {
         'n': len(results),
         'http': {
@@ -112,7 +109,8 @@ def ingest_core(api: str, work: Path, sample: list[dict[str, Any]], workers: int
         },
         'near_duplicate_flagged_among_distinct_images': len(flagged),
         'flagged_examples': [
-            {'image_id': r['image_id'], **r['near_duplicate']} for r in flagged[:20]
+            {'image_id': r['image_id'], 'candidates': r['near_duplicate_candidates'][:3]}
+            for r in flagged[:20]
         ],
     }
     (work / 'core_ingest.json').write_text(json.dumps(out, indent=1))
@@ -574,72 +572,60 @@ def _poll_dup(client: httpx.Client, api: str) -> dict[str, Any]:
 def eval_dedupe(
     client: httpx.Client, a: argparse.Namespace, sample: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Near-duplicate variants through core ingest. Set A/B/C of --variants images at thresholds 0.99/0.95/0.90."""
+    """Near-duplicate variants of --variants images through core ingest, at the fixed core cut
+    (cosine 0.98): the candidates each response lists. The groups come from the
+    ``near_dup_core_group`` job, so the group listing is read after it has run."""
     work = Path(a.work)
     vdir = work / 'variants'
     vdir.mkdir(exist_ok=True)
     out: dict[str, Any] = {
-        'route': 'POST /ingest (near-duplicate grouping), GET /query/duplicates*',
+        'route': 'POST /ingest (near-duplicate candidates), GET /query/duplicates*',
         'stats_before': _poll_dup(client, a.api),
-    }
-    sets = {
-        '99': (0.99, sample[0 : a.variants]),
-        '95': (0.95, sample[a.variants : 2 * a.variants]),
-        '90': (0.90, sample[2 * a.variants : 3 * a.variants]),
     }
     per: dict[str, Any] = {}
     jobs = []
-    for tag, (thr, rows) in sets.items():
-        for r in rows:
-            for kind in data.VARIANTS:
-                path = vdir / f'{r["coco_id"]}_{kind}_{tag}.jpg'
-                path.write_bytes(data.make_variant(work / 'images' / r['file_name'], kind))
-                jobs.append((tag, thr, kind, r['coco_id'], path))
+    for r in sample[: a.variants]:
+        for kind in data.VARIANTS:
+            path = vdir / f'{r["coco_id"]}_{kind}.jpg'
+            path.write_bytes(data.make_variant(work / 'images' / r['file_name'], kind))
+            jobs.append((kind, r['coco_id'], path))
     with ThreadPoolExecutor(2) as pool:
         results = list(
             pool.map(
-                lambda j: _core_ingest_one(a.api, j[4], f'rqv_{j[3]}_{j[2]}_{j[0]}', True, j[1]),
+                lambda j: _core_ingest_one(a.api, j[2], f'rqv_{j[1]}_{j[0]}', True),
                 jobs,
             )
         )
-    group_cache: dict[str, set[str]] = {}
-
-    def members(gid: str) -> set[str]:
-        if gid not in group_cache:
-            body = client.get(f'{a.api}/query/duplicates/{gid}').json()
-            group_cache[gid] = {m['image_id'] for m in body.get('members', [])}
-        return group_cache[gid]
-
-    for (tag, thr, kind, coco, _), res in zip(jobs, results, strict=True):
-        key = f'thr_{tag}/{kind}'
+    for (kind, coco, _), res in zip(jobs, results, strict=True):
         row = per.setdefault(
-            key,
+            kind,
             {
-                'threshold': thr,
                 'kind': kind,
                 'n': 0,
                 'http_ok': 0,
-                'grouped': 0,
-                'grouped_with_original': 0,
-                'similarities': [],
+                'listed': 0,
+                'listed_with_original': 0,
+                'cosines_to_original': [],
             },
         )
         row['n'] += 1
         row['http_ok'] += res['http'] in (200, 201)
-        nd = res.get('near_duplicate')
-        if nd:
-            row['grouped'] += 1
-            row['similarities'].append(nd['similarity'])
-            row['grouped_with_original'] += core_id(coco) in members(nd['group_id'])
+        listed = res.get('near_duplicate_candidates') or []
+        if listed:
+            row['listed'] += 1
+            original = [c['cosine'] for c in listed if c['image_id'] == core_id(coco)]
+            if original:
+                row['listed_with_original'] += 1
+                row['cosines_to_original'].append(original[0])
     for row in per.values():
-        sims = sorted(row.pop('similarities'))
-        row['similarity_min'] = sims[0] if sims else None
-        row['similarity_median'] = sims[len(sims) // 2] if sims else None
+        cosines = sorted(row.pop('cosines_to_original'))
+        row['cosine_min'] = cosines[0] if cosines else None
+        row['cosine_median'] = cosines[len(cosines) // 2] if cosines else None
     out['variants'] = per
     out['stats_after'] = _poll_dup(client, a.api)
     # exact re-upload of 20 originals
     exact = [
-        _core_ingest_one(a.api, work / 'images' / r['file_name'], core_id(r['coco_id']), True, 0.99)
+        _core_ingest_one(a.api, work / 'images' / r['file_name'], core_id(r['coco_id']), True)
         for r in sample[:20]
     ]
     out['exact_reupload'] = {

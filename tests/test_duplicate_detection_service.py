@@ -1,12 +1,12 @@
-"""DuplicateDetectionService: the exact OpenSearch requests it sends and how it reads the replies."""
+"""DuplicateDetectionService: the exact OpenSearch requests it sends and how it reads the replies.
+
+The group fields are the ``near_dup_*`` projection of the current core run."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest import mock
 
-import numpy as np
 import pytest
 
 from src.services.duplicate_detection.service import DuplicateDetectionService
@@ -21,25 +21,13 @@ GLOBAL_INDEX = 'visual_search_global'
 class _FakeClient:
     """Records every call and answers from canned replies."""
 
-    def __init__(self, *, get: Any = None, search: Any = None, count: Any = None) -> None:
+    def __init__(self, *, search: Any = None, count: Any = None) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
-        self._get, self._search, self._count = get, search, count
-
-    async def get(self, **kwargs: Any) -> Any:
-        self.calls.append(('get', kwargs))
-        if isinstance(self._get, Exception):
-            raise self._get
-        return self._get
+        self._search, self._count = search, count
 
     async def search(self, **kwargs: Any) -> Any:
         self.calls.append(('search', kwargs))
-        if isinstance(self._search, list):
-            return self._search.pop(0)
         return self._search
-
-    async def update(self, **kwargs: Any) -> dict[str, Any]:
-        self.calls.append(('update', kwargs))
-        return {}
 
     async def count(self, **kwargs: Any) -> Any:
         self.calls.append(('count', kwargs))
@@ -48,127 +36,6 @@ class _FakeClient:
 
 def _service(client: _FakeClient) -> DuplicateDetectionService:
     return DuplicateDetectionService(SimpleNamespace(client=client))  # type: ignore[arg-type]
-
-
-def _hit(hit_id: str, score: float, path: str = 'p', group: str | None = None) -> dict[str, Any]:
-    source: dict[str, Any] = {'image_id': hit_id}
-    if path is not None:
-        source['image_path'] = path
-    if group is not None:
-        source['duplicate_group_id'] = group
-    return {'_id': hit_id, '_score': score, '_source': source}
-
-
-def _knn(vector: list[float], k: int, size: int) -> dict[str, Any]:
-    return {
-        'size': size,
-        'query': {'knn': {'global_embedding': {'vector': vector, 'k': k}}},
-        '_source': ['image_id', 'image_path', 'duplicate_group_id'],
-    }
-
-
-async def test_find_duplicates_sends_knn_and_drops_self_and_low_scores() -> None:
-    client = _FakeClient(
-        get={'_source': {'global_embedding': [0.1, 0.2], 'image_path': 'a'}},
-        search={
-            'hits': {
-                'hits': [
-                    _hit('a', 1.0),
-                    _hit('b', 0.995, 'pb', 'g1'),
-                    _hit('c', 0.99),
-                    _hit('d', 0.98),
-                ]
-            }
-        },
-    )
-    found = await _service(client).find_duplicates('a', threshold=0.99, max_results=3)
-
-    assert client.calls == [
-        (
-            'get',
-            {
-                'index': GLOBAL_INDEX,
-                'id': 'a',
-                '_source': ['global_embedding', 'image_path'],
-            },
-        ),
-        ('search', {'index': GLOBAL_INDEX, 'body': _knn([0.1, 0.2], 4, 4)}),
-    ]
-    assert [(m.image_id, m.image_path, m.similarity, m.duplicate_group_id) for m in found] == [
-        ('b', 'pb', 0.995, 'g1'),
-        ('c', 'p', 0.99, None),
-    ]
-
-
-async def test_find_duplicates_returns_empty_when_the_image_is_missing() -> None:
-    client = _FakeClient(get=RuntimeError('not found'))
-    assert await _service(client).find_duplicates('zzz') == []
-    assert [name for name, _ in client.calls] == ['get']
-
-
-@pytest.mark.parametrize('as_array', [True, False])
-async def test_find_duplicates_by_embedding_converts_arrays_and_excludes_one_id(
-    as_array: bool,
-) -> None:
-    client = _FakeClient(
-        search={'hits': {'hits': [_hit('a', 0.999), _hit('b', 0.5), _hit('c', 0.991)]}}
-    )
-    vector: Any = np.array([0.5, 0.25]) if as_array else [0.5, 0.25]
-    found = await _service(client).find_duplicates_by_embedding(
-        vector, threshold=0.9, max_results=7, exclude_image_id='a'
-    )
-
-    assert client.calls == [('search', {'index': GLOBAL_INDEX, 'body': _knn([0.5, 0.25], 7, 7)})]
-    assert [m.image_id for m in found] == ['c']
-
-
-async def test_find_duplicates_by_embedding_keeps_every_id_without_an_exclusion() -> None:
-    client = _FakeClient(search={'hits': {'hits': [_hit('a', 0.999)]}})
-    found = await _service(client).find_duplicates_by_embedding([1.0])
-    assert [m.image_id for m in found] == ['a']
-    assert client.calls[0][1]['body']['size'] == 50
-
-
-async def test_create_duplicate_group_updates_the_primary_then_each_duplicate() -> None:
-    client = _FakeClient()
-    with mock.patch('src.services.duplicate_detection.service.uuid.uuid4') as uuid4:
-        uuid4.return_value = SimpleNamespace(hex='0123456789abcdef0123')
-        group_id = await _service(client).create_duplicate_group('p', ['d1', 'd2'], [0.97, 0.95])
-
-    assert group_id == 'dup_0123456789ab'
-    assert client.calls == [
-        (
-            'update',
-            {
-                'index': GLOBAL_INDEX,
-                'id': 'p',
-                'body': {
-                    'doc': {
-                        'duplicate_group_id': group_id,
-                        'is_duplicate_primary': True,
-                        'duplicate_score': 1.0,
-                    }
-                },
-            },
-        ),
-        *(
-            (
-                'update',
-                {
-                    'index': GLOBAL_INDEX,
-                    'id': dup,
-                    'body': {
-                        'doc': {
-                            'duplicate_group_id': group_id,
-                            'is_duplicate_primary': False,
-                            'duplicate_score': score,
-                        }
-                    },
-                },
-            )
-            for dup, score in (('d1', 0.97), ('d2', 0.95))
-        ),
-    ]
 
 
 def _bucket(key: str, count: int, primary: dict[str, Any] | None) -> dict[str, Any]:
@@ -192,17 +59,17 @@ async def test_get_duplicate_groups_aggregates_and_paginates() -> None:
                 'index': GLOBAL_INDEX,
                 'body': {
                     'size': 0,
-                    'query': {'exists': {'field': 'duplicate_group_id'}},
+                    'query': {'exists': {'field': 'near_dup_group_id'}},
                     'aggs': {
                         'groups': {
                             'terms': {
-                                'field': 'duplicate_group_id',
+                                'field': 'near_dup_group_id',
                                 'size': 10000,
                                 'min_doc_count': 2,
                             },
                             'aggs': {
                                 'primary': {
-                                    'filter': {'term': {'is_duplicate_primary': True}},
+                                    'filter': {'term': {'near_dup_is_representative': True}},
                                     'aggs': {
                                         'doc': {
                                             'top_hits': {
@@ -235,9 +102,9 @@ async def test_get_duplicate_groups_aggregates_and_paginates() -> None:
 _MEMBER_FIELDS = [
     'image_id',
     'image_path',
-    'duplicate_group_id',
-    'is_duplicate_primary',
-    'duplicate_score',
+    'near_dup_group_id',
+    'near_dup_is_representative',
+    'near_dup_cosine_to_rep',
     'width',
     'height',
     'indexed_at',
@@ -249,11 +116,13 @@ async def test_get_group_members_query_and_sort(include_primary: bool) -> None:
     client = _FakeClient(search={'hits': {'hits': [{'_source': {'image_id': 'x'}}]}})
     members = await _service(client).get_group_members('g1', include_primary=include_primary)
 
-    term = {'term': {'duplicate_group_id': 'g1'}}
+    term = {'term': {'near_dup_group_id': 'g1'}}
     query = (
         term
         if include_primary
-        else {'bool': {'must': [term], 'must_not': [{'term': {'is_duplicate_primary': True}}]}}
+        else {
+            'bool': {'must': [term], 'must_not': [{'term': {'near_dup_is_representative': True}}]}
+        }
     )
     assert client.calls == [
         (
@@ -265,8 +134,8 @@ async def test_get_group_members_query_and_sort(include_primary: bool) -> None:
                     'query': query,
                     '_source': _MEMBER_FIELDS,
                     'sort': [
-                        {'is_duplicate_primary': {'order': 'desc'}},
-                        {'duplicate_score': {'order': 'desc'}},
+                        {'near_dup_is_representative': {'order': 'desc'}},
+                        {'near_dup_cosine_to_rep': {'order': 'desc'}},
                     ],
                 },
             },
@@ -289,7 +158,7 @@ async def test_get_stats_counts_and_averages(
         ('count', {'index': GLOBAL_INDEX}),
         (
             'count',
-            {'index': GLOBAL_INDEX, 'body': {'query': {'exists': {'field': 'duplicate_group_id'}}}},
+            {'index': GLOBAL_INDEX, 'body': {'query': {'exists': {'field': 'near_dup_group_id'}}}},
         ),
         (
             'search',
@@ -297,8 +166,8 @@ async def test_get_stats_counts_and_averages(
                 'index': GLOBAL_INDEX,
                 'body': {
                     'size': 0,
-                    'query': {'exists': {'field': 'duplicate_group_id'}},
-                    'aggs': {'group_count': {'cardinality': {'field': 'duplicate_group_id'}}},
+                    'query': {'exists': {'field': 'near_dup_group_id'}},
+                    'aggs': {'group_count': {'cardinality': {'field': 'near_dup_group_id'}}},
                 },
             },
         ),

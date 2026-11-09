@@ -37,8 +37,8 @@ async def list_duplicate_groups(
     """
     List duplicate groups.
 
-    Returns groups of near-duplicate images detected during ingestion.
-    Each group has a primary image (best quality) and duplicates.
+    Returns the groups of the current core run, written by the ``near_dup_core_group`` job
+    after ingestion. Each group has a primary image (the most central member) and duplicates.
 
     Args:
         page: Page number (0-indexed)
@@ -157,8 +157,8 @@ async def get_duplicate_group(
             DuplicateGroupMember(
                 image_id=m.get('image_id', ''),
                 image_path=m.get('image_path'),
-                is_primary=m.get('is_duplicate_primary', False),
-                duplicate_score=m.get('duplicate_score'),
+                is_primary=m.get('near_dup_is_representative', False),
+                duplicate_score=m.get('near_dup_cosine_to_rep'),
                 width=m.get('width'),
                 height=m.get('height'),
                 indexed_at=m.get('indexed_at'),

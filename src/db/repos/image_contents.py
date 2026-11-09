@@ -5,7 +5,8 @@ second file with that ``imohash`` made the full comparison necessary). ``imohash
 two different files can share it, and the SHA-256 tells them apart (UNIQUE per project where it is
 set).
 
-Every function takes a session already inside ``project_tx`` and never commits. A lookup and the
+Every function takes a session already inside ``project_tx`` (``core_tx`` for the core global
+index, whose rows have no project: ``project_id`` ``None``) and never commits. A lookup and the
 insert that follows it must run in one transaction under :func:`lock_imohash`, so concurrent
 callers with the same content are decided one after the other, across every process (#358).
 """
@@ -13,7 +14,7 @@ callers with the same content are decided one after the other, across every proc
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -28,6 +29,15 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 CHUNK = 4000
+
+
+def _owner(project_id: uuid.UUID | None) -> Any:
+    """The project filter: the project's rows, or the core rows (no project)."""
+    return (
+        ImageContent.project_id.is_(None)
+        if project_id is None
+        else (ImageContent.project_id == project_id)
+    )
 
 
 class ContentKeyConflictError(ValueError):
@@ -45,7 +55,7 @@ class ContentRow:
     content_sha256: str | None
 
 
-async def lock_imohash(session: AsyncSession, project_id: uuid.UUID, imohash: str) -> None:
+async def lock_imohash(session: AsyncSession, project_id: uuid.UUID | None, imohash: str) -> None:
     """``pg_advisory_xact_lock`` on a 64-bit key of (project, imohash), held to the end of the
     transaction. Two imohashes that share a hashed key only wait for each other."""
     await session.execute(
@@ -55,7 +65,7 @@ async def lock_imohash(session: AsyncSession, project_id: uuid.UUID, imohash: st
 
 
 async def rows_for_imohash(
-    session: AsyncSession, project_id: uuid.UUID, imohash: str
+    session: AsyncSession, project_id: uuid.UUID | None, imohash: str
 ) -> list[ContentRow]:
     """The project's content rows with this ``imohash``, oldest first."""
     rows = await session.execute(
@@ -66,7 +76,7 @@ async def rows_for_imohash(
             ImageContent.size_bytes,
             ImageContent.content_sha256,
         )
-        .where(ImageContent.project_id == project_id, ImageContent.imohash == imohash)
+        .where(_owner(project_id), ImageContent.imohash == imohash)
         .order_by(ImageContent.id)
     )
     return [
@@ -75,7 +85,7 @@ async def rows_for_imohash(
 
 
 async def imohashes_with_rows(
-    session: AsyncSession, project_id: uuid.UUID, imohashes: Iterable[str]
+    session: AsyncSession, project_id: uuid.UUID | None, imohashes: Iterable[str]
 ) -> set[str]:
     """Which of ``imohashes`` the project already stores (one query)."""
     wanted = sorted(set(imohashes))
@@ -83,7 +93,7 @@ async def imohashes_with_rows(
         return set()
     rows = await session.execute(
         select(ImageContent.imohash)
-        .where(ImageContent.project_id == project_id, ImageContent.imohash.in_(wanted))
+        .where(_owner(project_id), ImageContent.imohash.in_(wanted))
         .distinct()
     )
     return {r.imohash for r in rows}
@@ -100,7 +110,7 @@ async def set_sha256(session: AsyncSession, row_id: int, sha256: str) -> None:
 
 async def insert_content(
     session: AsyncSession,
-    project_id: uuid.UUID,
+    project_id: uuid.UUID | None,
     *,
     imohash: str,
     sha256: str | None,
@@ -131,7 +141,7 @@ async def insert_content(
     held = (
         await session.execute(
             select(ImageContent.imohash).where(
-                ImageContent.project_id == project_id, ImageContent.image_id == image_id
+                _owner(project_id), ImageContent.image_id == image_id
             )
         )
     ).scalar_one_or_none()
@@ -142,22 +152,20 @@ async def insert_content(
 
 
 async def recorded_images(
-    session: AsyncSession, project_id: uuid.UUID, image_ids: Iterable[str]
+    session: AsyncSession, project_id: uuid.UUID | None, image_ids: Iterable[str]
 ) -> set[str]:
     """The image ids that already have a content row."""
     wanted = sorted(set(image_ids))
     if not wanted:
         return set()
     rows = await session.execute(
-        select(ImageContent.image_id).where(
-            ImageContent.project_id == project_id, ImageContent.image_id.in_(wanted)
-        )
+        select(ImageContent.image_id).where(_owner(project_id), ImageContent.image_id.in_(wanted))
     )
     return {r.image_id for r in rows}
 
 
 async def release_contents(
-    session: AsyncSession, project_id: uuid.UUID, image_ids: Iterable[str]
+    session: AsyncSession, project_id: uuid.UUID | None, image_ids: Iterable[str]
 ) -> int:
     """Delete the exact-content rows of ``image_ids`` (the image delete path)."""
     ids = sorted(set(image_ids))
@@ -165,8 +173,7 @@ async def release_contents(
     for start in range(0, len(ids), CHUNK):
         result = await session.execute(
             delete(ImageContent).where(
-                ImageContent.project_id == project_id,
-                ImageContent.image_id.in_(ids[start : start + CHUNK]),
+                _owner(project_id), ImageContent.image_id.in_(ids[start : start + CHUNK])
             )
         )
         done += result.rowcount  # type: ignore[attr-defined]

@@ -10,7 +10,7 @@ Subcommands (each writes JSON under ``--out``; defaults keep raw output in ``art
     image-core        leave-one-out image-to-image through ``POST /search/image``
     latency           per-stage text-search p50/p95/p99 from Server-Timing, unfiltered and by band (#414)
     filters           class_name / cluster_id filtered curation search: latency and correctness
-    dedupe            near-duplicate variants through the core ingest and ``GET /query/duplicates``
+    dedupe            near-duplicate variants through the core ingest (the candidates it lists) and ``GET /query/duplicates``
     core-cleanup      delete this sample's images from the core indexes (``DELETE /query/image``)
 
 Ground truth is the human COCO captions (text-to-image) and COCO instance-category set overlap

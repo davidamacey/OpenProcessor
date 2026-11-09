@@ -13,7 +13,6 @@ from src.clients.opensearch.names import (
     get_class_name,
     get_cluster_index_name,
 )
-from src.utils.upstream_errors import UpstreamError
 
 
 if TYPE_CHECKING:
@@ -235,89 +234,3 @@ class IngestMixin:
 
         await self.client.index(index=index.value, id=detection_id, body=doc, refresh=False)
         results[counter] += 1
-
-    async def check_duplicate_by_hash(self, imohash: str) -> dict[str, Any] | None:
-        """
-        Check if an image with the same imohash already exists.
-
-        This is a fast duplicate check using constant-time hashing.
-        The imohash samples only 48KB of the file (16KB x 3 locations),
-        making it O(1) regardless of file size.
-
-        Args:
-            imohash: Hex string from imohash.hashbytes()
-
-        Returns:
-            Existing document if found, None if no duplicate
-        """
-        try:
-            response = await self.client.search(
-                index=IndexName.GLOBAL.value,
-                body={
-                    'size': 1,
-                    'query': {'term': {'imohash': imohash}},
-                    '_source': ['image_id', 'image_path', 'indexed_at', 'imohash'],
-                },
-            )
-
-            hits = response['hits']['hits']
-            if hits:
-                typed: dict[str, Any] | None = hits[0]['_source']
-                return typed
-            return None
-
-        except Exception as e:
-            logger.warning(f'Duplicate check failed: {e}')
-            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
-
-    async def check_duplicates_by_hash_batch(
-        self, imohashes: list[str]
-    ) -> dict[str, dict[str, Any] | None]:
-        """
-        Batch check for duplicate images using msearch.
-
-        Efficiently checks multiple hashes in a single request using OpenSearch
-        multi-search API. ~10x faster than sequential checks for batch operations.
-
-        Args:
-            imohashes: List of hex strings from imohash.hashbytes()
-
-        Returns:
-            Dict mapping imohash -> existing document (or None if not found)
-        """
-        if not imohashes:
-            return {}
-
-        results: dict[str, dict[str, Any] | None] = dict.fromkeys(imohashes)
-
-        try:
-            # Build msearch request body
-            body: list[dict[str, Any]] = []
-            for imohash in imohashes:
-                # Header line (index)
-                body.append({'index': IndexName.GLOBAL.value})
-                # Query line
-                body.append(
-                    {
-                        'size': 1,
-                        'query': {'term': {'imohash': imohash}},
-                        '_source': ['image_id', 'image_path', 'indexed_at', 'imohash'],
-                    }
-                )
-
-            response = await self.client.msearch(body=body)
-
-            # Parse responses
-            for i, resp in enumerate(response['responses']):
-                if 'error' in resp:
-                    logger.warning(f'msearch error for hash {imohashes[i]}: {resp["error"]}')
-                    continue
-                hits = resp.get('hits', {}).get('hits', [])
-                if hits:
-                    results[imohashes[i]] = hits[0]['_source']
-
-            return results
-
-        except Exception as e:
-            logger.warning(f'Batch duplicate check failed: {e}')
-            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
