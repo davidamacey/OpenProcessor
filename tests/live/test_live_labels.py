@@ -23,6 +23,20 @@ from .conftest import CLASS_NAMES, INDEXES, crop_ids_in, get_doc, refresh
 pytestmark = pytest.mark.live
 
 
+PLACEMENT_FIELDS = (
+    'cluster_partition_id',
+    'cluster_uid',
+    'cluster_state',
+    'cluster_score',
+    'cluster_margin',
+    'cluster_assigned_by',
+)
+
+
+def _placement(source: dict[str, Any]) -> dict[str, Any]:
+    return {f: source.get(f) for f in PLACEMENT_FIELDS}
+
+
 def _source(opensearch: Any, crop_id: str) -> dict[str, Any]:
     return get_doc(opensearch, INDEXES['items'], crop_id)['_source']
 
@@ -39,6 +53,7 @@ def test_single_label_writes_class_and_grows_history(
 ) -> None:
     crop_id = label_cohort[0]
     before = _source(opensearch, crop_id)
+    assert before['cluster_uid'], 'the seed partition places the cohort'
     history_before = len(before.get('class_id_history') or [])
 
     resp = api_client.put(f'/crops/{crop_id}/label', json={'class_id': 3, 'label_source': 'human'})
@@ -50,10 +65,8 @@ def test_single_label_writes_class_and_grows_history(
     assert after['class_name'] == CLASS_NAMES[3]
     assert after['class_validated'] is True
     assert after['class_source'] == 'human'
-    # cluster_id mirrors class_id for class clusters, and the AHC sub-id is
-    # cluster-local so a class change must clear it.
-    assert after['cluster_id'] == 3
-    assert after.get('cluster_subid') is None
+    # Placement belongs to clustering: a label never moves the item.
+    assert _placement(after) == _placement(before)
     assert after['class_labeler'] == 'human'
     history_after = after.get('class_id_history') or []
     assert len(history_after) == history_before + 1, history_after
@@ -92,6 +105,7 @@ def test_batch_label_updates_every_crop(
     api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     batch = label_cohort[2:8]
+    placed = {c: _placement(_source(opensearch, c)) for c in batch}
     resp = api_client.put('/crops/batch_label', json={'crop_ids': batch, 'class_id': 5})
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -103,13 +117,14 @@ def test_batch_label_updates_every_crop(
         assert src['class_id'] == 5
         assert src['class_name'] == CLASS_NAMES[5]
         assert src['class_validated'] is True
-        assert src['cluster_id'] == 5
+        assert _placement(src) == placed[crop_id]
 
 
 def test_unlabel_resets_class_provenance(
     api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     crop_id = label_cohort[2]
+    placed = _placement(_source(opensearch, crop_id))
     resp = api_client.delete(f'/crops/{crop_id}/label')
     assert resp.status_code == 200, resp.text
 
@@ -121,6 +136,7 @@ def test_unlabel_resets_class_provenance(
     assert src['label_source'] == 'secondary_model'
     # The first 16 seeded cls1 rows are the class-2 minority.
     assert src['class_id'] == 2
+    assert _placement(src) == placed
 
 
 def test_review_dismiss_is_recorded(
@@ -138,6 +154,7 @@ def test_exclude_then_unexclude_round_trip(
     api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     batch = label_cohort[10:13]
+    placed = {c: _placement(_source(opensearch, c)) for c in batch}
     resp = api_client.post('/crops/batch_exclude', json={'crop_ids': batch, 'reason': 'blurry'})
     assert resp.status_code == 200, resp.text
     assert resp.json()['excluded'] == len(batch)
@@ -145,8 +162,8 @@ def test_exclude_then_unexclude_round_trip(
         src = _source(opensearch, crop_id)
         assert src['class_excluded'] is True
         assert src['excluded_reason'] == 'blurry'
-        # Leaves its candidate bucket immediately (the excluded sentinel).
-        assert src['cluster_id'] == -2
+        # Exclusion hides the item from the cluster readers; it never moves it.
+        assert _placement(src) == placed[crop_id]
         assert src['class_validated'] is False
 
     resp = api_client.post('/crops/batch_unexclude', json={'crop_ids': batch})
@@ -156,7 +173,7 @@ def test_exclude_then_unexclude_round_trip(
         src = _source(opensearch, crop_id)
         assert src['class_excluded'] is False
         assert src['excluded_reason'] is None
-        assert src['cluster_id'] is None
+        assert _placement(src) == placed[crop_id]
 
 
 def test_move_into_an_unknown_cluster_is_refused_and_writes_nothing(
