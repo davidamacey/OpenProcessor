@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
@@ -15,6 +16,7 @@ from src.services.curation.cluster_cards import (
     ClusterListParams,
     ClusterSortId,
     ValidationFilter,
+    attach_display_nos,
     fetch_representatives,
     list_cluster_cards,
 )
@@ -26,6 +28,7 @@ from src.services.embedding_spaces.readers import item_write_fields
 @router.get('/clusters', response_model=None, responses={200: {'model': ClusterListResponse}})
 async def list_clusters(
     opensearch: OpenSearchDep,
+    session: DbSessionDep,
     item_filter: ItemFilterQuery,
     per_cluster: int = Query(4, ge=0, le=10, description='Representative crops per cluster'),
     max_clusters: int = Query(
@@ -78,7 +81,7 @@ async def list_clusters(
         item_filter_clauses(gate, embedding=await item_write_fields())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return await list_cluster_cards(
+    response = await list_cluster_cards(
         opensearch,
         ClusterListParams(
             item_filter=gate,
@@ -97,6 +100,8 @@ async def list_clusters(
             needs_review=needs_review,
         ),
     )
+    await attach_display_nos(session, response['items'])
+    return response
 
 
 @router.get(

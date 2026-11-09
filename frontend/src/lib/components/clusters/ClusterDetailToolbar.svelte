@@ -4,6 +4,7 @@
   import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
   import ShortcutsButton from '$components/ShortcutsButton.svelte';
   import { isAssignableClass } from '$lib/classVisibility';
+  import { displayNoText } from '$lib/clusters/clusterCardText';
   import { projectHref } from '$lib/projectPaths';
   import { classesStore } from '$stores/classes.svelte';
   import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
@@ -36,11 +37,11 @@
     {#if view.clusterName}
       <span class="capitalize text-zinc-100">{view.clusterName}</span>
       <span class="font-mono text-sm font-normal text-zinc-500" title={view.clusterUid}
-        >{view.clusterUid.slice(0, 8)}</span
+        >{displayNoText(view.cluster ?? {})}</span
       >
     {:else}
       <span class="text-zinc-100" title={view.clusterUid}
-        >Cluster {view.clusterUid.slice(0, 8)}</span
+        >Cluster {displayNoText(view.cluster ?? {})}</span
       >
       {#if view.cluster?.is_unlabeled}
         <span class="text-sm font-normal text-amber-400/80">unlabeled</span>

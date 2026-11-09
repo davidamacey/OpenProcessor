@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { dominantShareText, dominantShareTitle } from './clusterCardText';
+import { displayNoText, dominantShareText, dominantShareTitle } from './clusterCardText';
 
 describe('cluster card display text (visual audit C1/K4)', () => {
+  it('names the served display number and invents none', () => {
+    expect(displayNoText({ display_no: 7 })).toBe('#7');
+    expect(displayNoText({ display_no: null })).toBe('');
+    expect(displayNoText({})).toBe('');
+  });
+
   it('dominant share reads the label share, labelled as such', () => {
     expect(dominantShareText({ dominant_pct: 1 })).toBe('100% of labeled');
     expect(dominantShareText({ dominant_pct: null })).toBeNull();

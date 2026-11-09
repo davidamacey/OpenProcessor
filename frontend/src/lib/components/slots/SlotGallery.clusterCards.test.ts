@@ -56,14 +56,15 @@ describe('SlotGallery — region cluster cards are keyed by cluster_uid', () => 
 
   it('shows a card per served cluster and no false-positive bucket or sub-cluster chrome', async () => {
     vi.mocked(getRegionClusters).mockResolvedValue({
-      clusters: [baseCluster({ uid: UID })],
+      clusters: [baseCluster({ uid: UID, display_no: 12 })],
     } as never);
     vi.mocked(getRegions).mockResolvedValue({ items: [], total: 0 } as never);
     const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 
-    expect(el.textContent).toContain(UID.slice(0, 8));
+    expect(el.textContent).toContain('#12');
+    expect(el.textContent).not.toContain(UID.slice(0, 8));
     expect(el.textContent).not.toContain('False positives');
     expect(el.textContent).not.toContain('Refine');
     expect(el.textContent).not.toContain('sub-cluster');

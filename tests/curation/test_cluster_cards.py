@@ -325,9 +325,20 @@ def client(fake: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch) -> TestCl
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
+    from src.core.db_session import get_db
+
+    async def no_database():
+        yield None
+
+    async def numbered(_session: Any, cards: list[Any]) -> None:
+        for card in cards:
+            card['display_no'] = 40 + int(card['cluster_uid'][-4:])
+
+    monkeypatch.setattr('src.routers.curation.clusters.attach_display_nos', numbered)
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    app.dependency_overrides[get_db] = no_database
     return TestClient(app)
 
 
@@ -392,3 +403,15 @@ def test_one_card_by_cluster_uid_and_a_malformed_uid_is_refused(client: TestClie
     one = client.get(f'{URL}/clusters', params={'per_cluster': 0, 'cluster_uid': uid(2)}).json()
     assert [c['cluster_uid'] for c in one['items']] == [uid(2)]
     assert client.get(f'{URL}/clusters', params={'cluster_uid': '7'}).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_card_has_no_display_no_until_the_partition_names_one() -> None:
+    cards = await cards_by_id(bucket(1, 5))
+    assert cards[uid(1)]['display_no'] is None
+
+
+def test_the_route_serves_each_cards_display_no(client: TestClient) -> None:
+    items = client.get(f'{URL}/clusters', params={'per_cluster': 0}).json()['items']
+    assert items
+    assert all(c['display_no'] == 40 + int(c['cluster_uid'][-4:]) for c in items)
