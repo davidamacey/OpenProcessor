@@ -82,7 +82,7 @@ src/services/curation/region_test_run.py	1	test-run leg boundary: a detector fai
 src/services/curation/reprocess_images.py	2	per-scope and per-image boundary: any failure is counted as failed and the batch continues
 src/services/curation/reprocess_open_vocab.py	1	per-image boundary after a segmenter outage is handled: any other failure marks the image failed and the run continues
 src/services/curation/strategy_defaults.py	1	GET methods must never fail: any settings lookup failure falls back to the hardcoded defaults, logged
-src/services/curation/strategy_registry.py	2	GET /curation/methods must never fail: a failed settings lookup or field-coverage count degrades to defaults and unknown coverage, logged
+src/services/curation/strategy_registry.py	1	GET /curation/methods must never fail: a failed settings lookup degrades to the default settings, logged
 src/services/curation/vlm_strategies.py	1	GET methods boundary: a failed VLM state refresh degrades to the cached endpoint state, logged
 src/services/curation/worker_liveness.py	1	heartbeat loop boundary: one failed write is logged and must not stop the worker
 src/services/detection/segmenter_gate.py	1	caller-supplied visibility probe: any failure means unknown so the segmenter call runs (an error is not a no), logged
