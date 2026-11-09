@@ -132,6 +132,13 @@ repos:
         pass_filenames: false
         files: ^(src|scripts|docker|export|models)/.*\.py$|^scripts/codegen/baselines/(complexity|broad_except)\.txt$
 
+      - id: check-noqa-ratchet
+        name: noqa comments per file may not grow
+        entry: python3 scripts/codegen/check_noqa_ratchet.py
+        language: system
+        pass_filenames: false
+        files: \.py$|^scripts/codegen/baselines/noqa\.txt$
+
       - id: check-process-ids
         name: No work-package ids or history names in comments, docstrings or file names
         entry: python3 scripts/codegen/check_process_ids.py
