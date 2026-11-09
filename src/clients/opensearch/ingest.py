@@ -6,6 +6,8 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.opensearch.names import (
     DetectionCategory,
     IndexName,
@@ -150,7 +152,7 @@ class IngestMixin:
                 refresh=False,
             )
             results['global'] = True
-        except Exception as e:
+        except OpenSearchException as e:
             results['errors'].append(f'Global: {e!s}')
 
         # 2. Route box embeddings to category-specific indexes
@@ -171,7 +173,7 @@ class IngestMixin:
                         metadata=metadata,
                         clustering_service=clustering_service,
                     )
-                except Exception as e:
+                except OpenSearchException as e:
                     results['errors'].append(f'{detection_id}: {e!s}')
 
         logger.info(

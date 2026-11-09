@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.opensearch import bulk as bulk_module
 from src.clients.opensearch.bulk import BulkMixin
@@ -173,7 +174,7 @@ async def test_reported_counts_come_from_the_bulk_helper(monkeypatch: pytest.Mon
 async def test_failure_keeps_earlier_counts_and_stops(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    rec = BulkRecorder({'visual_search_vehicles': RuntimeError('vehicles down')})
+    rec = BulkRecorder({'visual_search_vehicles': OpenSearchException('vehicles down')})
     monkeypatch.setattr(bulk_module, 'async_bulk', rec)
     with caplog.at_level(logging.INFO, logger='src.clients.opensearch.bulk'):
         res = await Store().bulk_ingest(

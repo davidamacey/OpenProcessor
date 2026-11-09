@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
 from opensearchpy.helpers import async_bulk
 
 from src.clients.opensearch.names import IndexName
@@ -101,7 +102,7 @@ class OcrMixin:
             success, errors = await async_bulk(self.client, docs, raise_on_error=False)
             failed = errors if isinstance(errors, list) else []
             return {'indexed': success, 'errors': [str(e) for e in failed]}
-        except Exception as e:
+        except OpenSearchException as e:
             logger.error(f'Failed to index OCR results: {e}')
             return {'indexed': 0, 'errors': [str(e)]}
 

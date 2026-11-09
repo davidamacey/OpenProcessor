@@ -31,6 +31,8 @@ import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ_locks import is_locked_box, is_locked_class, is_locked_item
 from src.config import ITEM_EMBEDDING_FIELD, get_region_fields
 from src.config.curation_accessors import items_index
@@ -298,7 +300,7 @@ async def occ_skip_on_conflict_bulk(
 
         try:
             resp = await client.bulk(body=bulk_body, refresh=refresh)
-        except Exception as exc:
+        except OpenSearchException as exc:
             for doc_id, _update_doc, _source in pending:
                 errors.append({'doc_id': doc_id, 'phase': 'update', 'error': str(exc)})
             continue

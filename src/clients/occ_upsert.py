@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.clients.occ_locks import _is_locked_marker, is_locked_class
 from src.config.curation_accessors import items_index
@@ -282,7 +284,7 @@ async def _update_existing_docs(
             max_retries=1,
             refresh=refresh,
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning(
             'curation_ingest_upsert_bulk_update_failed',
             writer_id=writer_id,

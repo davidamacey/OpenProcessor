@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.curation_opensearch.base import (
     F,
     _is_recoverable_mapping_conflict,
@@ -65,7 +67,7 @@ async def ensure_items_vlm_raw_label_fields(
             'index': index,
             'fields_added': list(body['properties'].keys()),
         }
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -120,7 +122,7 @@ async def ensure_items_label_cluster_fields(
             'index': index,
             'fields_added': list(body['properties'].keys()),
         }
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -185,7 +187,7 @@ async def ensure_items_provenance_fields(
             'index': index,
             'fields_added': list(body['properties'].keys()),
         }
-    except Exception as exc:
+    except OpenSearchException as exc:
         # OpenSearch's ``mapper_parsing_exception`` arrives wrapped in an
         # ``opensearchpy`` transport error; we don't import the client class
         # here so we string-match the error type. Either way, the failure
@@ -241,7 +243,7 @@ async def ensure_items_validation_split_fields(
             'index': index,
             'fields_added': fields,
         }
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -280,7 +282,7 @@ async def ensure_items_history_fields(
     index = config.items_index
     try:
         existing = await client.indices.get_mapping(index=index)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.info('curation_mapping_precheck_failed', index=index, error=str(exc))
         existing = {}
     for mapping in (existing or {}).values():
@@ -310,7 +312,7 @@ async def ensure_items_history_fields(
             'index': index,
             'fields_added': list(body['properties']),
         }
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -344,7 +346,7 @@ async def ensure_items_exclusion_fields(
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
-        except Exception as exc:
+        except OpenSearchException as exc:
             msg = str(exc)
             if not _is_recoverable_mapping_conflict(msg):
                 logger.error('curation_mapping_migration_failed', index=index, error=msg)
@@ -374,7 +376,7 @@ async def ensure_items_text_fields(
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
-        except Exception as exc:
+        except OpenSearchException as exc:
             msg = str(exc)
             if not _is_recoverable_mapping_conflict(msg):
                 logger.error('curation_mapping_migration_failed', index=index, error=msg)
@@ -414,7 +416,7 @@ async def ensure_items_embedding_fields(
             'index': index,
             'fields_added': ['pe_embedding'],
         }
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -452,7 +454,7 @@ async def ensure_items_region_boxes_fields(
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
-        except Exception as exc:
+        except OpenSearchException as exc:
             msg = str(exc)
             if not _is_recoverable_mapping_conflict(msg):
                 logger.error('curation_mapping_migration_failed', index=index, error=msg)
