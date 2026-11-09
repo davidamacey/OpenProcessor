@@ -178,7 +178,7 @@ async def test_the_fixture_loads_every_family(make_runner, clean_db) -> None:
 
     # ingest: only the pending queue rows; the import ledger keeps one row per image (latest event)
     assert rows(clean_db, 'SELECT file_key, status, attempts FROM ingest_source_files ORDER BY 1') == [
-        ('images/a.jpg', 'pending', 0), ('images/b.jpg', 'pending', 1),
+        ('images/a.jpg\x1fe1', 'pending', 0), ('images/b.jpg\x1fe2', 'pending', 1),
     ]  # fmt: skip
     assert rows(clean_db, 'SELECT image_key, status, item_ids FROM dataset_import_images ORDER BY 1') == [
         ('a.jpg', 'written', ['c1', 'c2']), ('b.jpg', 'skipped', []), ('c.jpg', 'failed', []),

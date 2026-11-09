@@ -64,6 +64,13 @@ def version_of(file_key: str) -> str:
     return file_key.partition(VERSION_SEP)[2]
 
 
+def file_key_for(entry: QueueEntry, *, backend: str, bucket: str = '') -> str:
+    """The ``ingest_source_files`` key of one version of a file (see the module docstring)."""
+    if backend == 's3':
+        return ObjectRef(bucket, entry.key, entry.etag, entry.version, entry.size).to_uri()
+    return f'{entry.key}{VERSION_SEP}{entry.etag}' if entry.etag else entry.key
+
+
 class SourceQueue:
     """One source's files and scan state in PostgreSQL."""
 
@@ -79,11 +86,7 @@ class SourceQueue:
         return _scoped(self.project_id)
 
     def file_key(self, entry: QueueEntry) -> str:
-        if self._s3:
-            return ObjectRef(
-                self._bucket, entry.key, entry.etag, entry.version, entry.size
-            ).to_uri()
-        return f'{entry.key}{VERSION_SEP}{entry.etag}' if entry.etag else entry.key
+        return file_key_for(entry, backend='s3' if self._s3 else 'folder', bucket=self._bucket)
 
     # ------------------------------------------------------------------ writes
 

@@ -45,7 +45,9 @@ class _Reader:
 
 @pytest.mark.db
 @pytest.mark.asyncio
-async def test_the_served_view_after_the_step_equals_the_060_assignment(pg_env, pg) -> None:
+async def test_the_served_view_after_the_step_equals_the_060_assignment(
+    pg_env, pg, bound_async_engine
+) -> None:
     project = make_project(pg)
     docs = [(f'c{i}', {'cluster_id': OFFSET + i % 3, 'cluster_distance': 0.1}) for i in range(9)]
     docs.append(('class_item', {'cluster_id': 2}))
