@@ -10,6 +10,7 @@ from __future__ import annotations
 from src.services.periodic import (
     cache_prune,
     cluster_refresh,
+    db_backup,
     ingest_dispatch,
     job_stats,
     near_dup_ticks,
@@ -23,6 +24,8 @@ from src.tasks.app import app
 
 
 _TICK = {'shared': False, 'soft_time_limit': 120, 'time_limit': 150, 'ignore_result': True}
+# A dump of a large database outlasts a short tick; the limits sit above db_backup.DUMP_TIMEOUT_S.
+_BACKUP_TICK = {**_TICK, 'soft_time_limit': 3300, 'time_limit': 3600}
 
 
 @app.task(name='op.periodic.ingest_dispatch', **_TICK)
@@ -83,3 +86,9 @@ def reload_promoted_tick() -> None:
 def cluster_refresh_tick() -> None:
     """Start a cluster run for each project whose item pool grew past its profile's rule."""
     run_periodic('cluster_refresh', cluster_refresh.tick())
+
+
+@app.task(name='op.periodic.db_backup', **_BACKUP_TICK)
+def db_backup_tick() -> None:
+    """Dump the control-plane database to the backup directory and prune old dumps."""
+    run_periodic('db_backup', db_backup.tick())

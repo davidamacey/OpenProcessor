@@ -15,6 +15,7 @@ ROUTES: dict[str, str] = {
     'op.periodic.reload_promoted': TaskQueues.PERIODIC,
     'op.periodic.serving_inventory': TaskQueues.PERIODIC,
     'op.periodic.cluster_refresh': TaskQueues.PERIODIC,
+    'op.periodic.db_backup': TaskQueues.PERIODIC,
     'op.periodic.near_dup_rescore': TaskQueues.PERIODIC,
     'op.periodic.near_dup_full_build': TaskQueues.PERIODIC,
 }
