@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from opensearchpy.exceptions import NotFoundError
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError, NotFoundError
 
 
 # The regions queue exists only while a region profile is active (GH #51).
@@ -39,7 +39,9 @@ def _client(fake: Any) -> TestClient:
 
 def _down() -> AsyncMock:
     fake = AsyncMock()
-    boom = AsyncMock(side_effect=RuntimeError('connection refused'))
+    boom = AsyncMock(
+        side_effect=OpenSearchConnectionError('N/A', 'connection refused', OSError('refused'))
+    )
     fake.search = boom
     fake.count = boom
     fake.get = boom
