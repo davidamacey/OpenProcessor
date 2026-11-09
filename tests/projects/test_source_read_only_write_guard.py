@@ -30,7 +30,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.config.project_context import try_current_project
-from src.services.projects import lifecycle
+from src.services.projects import clone as clone_mod, lifecycle
 from src.services.projects.guard_errors import ProjectReadOnly
 from src.services.projects.guard_policy import check_request
 from src.services.projects.registry import ProjectRegistry, set_project_registry
@@ -101,7 +101,7 @@ def test_settings_defaults_source_bind_blocks_planted_write(monkeypatch) -> None
     )
     with pytest.raises(ProjectReadOnly):
         asyncio.run(
-            lifecycle.clone_settings(
+            clone_mod.clone_settings(
                 client, target_record=target, from_slug='source', axes=['settings_defaults']
             )
         )
@@ -122,7 +122,7 @@ def test_keymap_source_bind_blocks_planted_write(monkeypatch) -> None:
     monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _probing_get_keymap_doc)
     with pytest.raises(ProjectReadOnly):
         asyncio.run(
-            lifecycle.clone_settings(
+            clone_mod.clone_settings(
                 client, target_record=target, from_slug='source', axes=['keymap']
             )
         )
@@ -147,7 +147,7 @@ def test_clone_prompt_packs_source_bind_blocks_planted_write(monkeypatch) -> Non
     monkeypatch.setattr(ConfigStore, 'ensure_fresh', _probing_ensure_fresh)
     with pytest.raises(ProjectReadOnly):
         asyncio.run(
-            lifecycle.clone_settings(
+            clone_mod.clone_settings(
                 client, target_record=target, from_slug='source', axes=['prompt_packs']
             )
         )
@@ -187,7 +187,7 @@ def test_clone_activations_source_bind_blocks_planted_write(monkeypatch) -> None
     monkeypatch.setattr(ConfigStore, 'ensure_fresh', _probing_ensure_fresh)
     with pytest.raises(ProjectReadOnly):
         asyncio.run(
-            lifecycle.clone_settings(
+            clone_mod.clone_settings(
                 client, target_record=target, from_slug='source', axes=['activations']
             )
         )

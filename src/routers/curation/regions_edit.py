@@ -21,14 +21,9 @@ from fastapi import HTTPException
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
 from src.config import get_region_fields
+from src.config.curation_accessors import items_index
 from src.domain.region_boxes import RegionBoxWriteError
-from src.routers.curation._common import (
-    OpenSearchDep,
-    RegionProfileDep,
-    items_index,
-    logger,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, logger, router
 from src.routers.curation._crop_write_models import (
     HUMAN_REGION_STATUS_VALUES,
     CropBatchStatusRequest,

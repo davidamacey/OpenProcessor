@@ -7,9 +7,10 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
+from src.config.curation_accessors import items_index
 from src.core.db_session import DbSessionDep
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.schemas.curation.clusters import ClusterFacets, ClusterListResponse
 from src.services.curation.cluster_cards import (

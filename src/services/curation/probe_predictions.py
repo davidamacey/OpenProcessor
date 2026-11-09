@@ -71,16 +71,7 @@ from opensearchpy.exceptions import OpenSearchException
 from src.clients.opensearch.bulk import failed_bulk_items
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
-from src.services.curation.probe_models import (  # noqa: F401 - re-exported for callers and tests
-    PROBE_ARCHITECTURES,
-    _build_predictor,
-    _build_raw_predictor,
-    _PredictFn,
-    _RawPreds,
-    _summarize_prediction_raw,
-    _summarize_prediction_yolov5_objectness_raw,
-    _use_class_score_head,
-)
+from src.services.curation.probe_models import _build_predictor, _PredictFn
 
 
 if TYPE_CHECKING:

@@ -7,8 +7,7 @@ The old single-candidate cascade (``_process_crop`` + its
 ``combined._run_combined_cohort_path`` cohort routing) has been deleted
 -- ``runner.py``'s streaming pipeline is the only production cascade
 (it had zero production callers). This module now only keeps the
-pending-fetch query, the crop/geometry helpers ``runner.py`` still calls, and the
-``SegmenterClient`` re-export other modules import from here.
+pending-fetch query and the crop/geometry helpers ``runner.py`` still calls.
 """
 
 from __future__ import annotations
@@ -32,13 +31,15 @@ from src.services.detection.profile_registry import get_active_region_profile
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker.client import SegmenterClient  # noqa: TC001  # runtime re-export for shim + tests
-from scripts.curation.worker.state import JPEG_QUALITY, _ItemTask, items_index
+from scripts.curation.worker.state import JPEG_QUALITY, _ItemTask
 from scripts.curation.worker.verify_policy import project_region_verify
+from src.config.curation_accessors import items_index
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
+
+    from scripts.curation.worker.client import SegmenterClient
 
 
 def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]:

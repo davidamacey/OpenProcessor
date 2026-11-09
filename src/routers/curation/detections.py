@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.config.curation_accessors import items_index
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.services.curation.detections_summary import DetectionsSummary, detections_summary
 

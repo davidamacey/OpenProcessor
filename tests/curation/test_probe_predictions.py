@@ -314,7 +314,7 @@ def test_raw_preds_accepts_arbitrary_attributes() -> None:
     anticipated, not just the ones this module already knows about."""
     import torch
 
-    from src.services.curation.probe_predictions import _RawPreds
+    from src.services.curation.probe_models import _RawPreds
 
     preds = _RawPreds(torch.zeros((9, 1)))
     preds.speed = {'preprocess': 0.1}

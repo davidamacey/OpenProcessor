@@ -13,13 +13,13 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import HTTPException, Path as PathParam, Query
 
 from src.config import get_region_fields
+from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
     get_class_registry,
     guard_page_depth,
     is_not_found,
-    items_index,
     router,
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery

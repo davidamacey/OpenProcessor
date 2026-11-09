@@ -8,8 +8,9 @@ backend serves clean data, no overlay.
 
 from __future__ import annotations
 
+from src.config.curation_accessors import images_index
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, images_index, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._open_vocab_models import (
     OpenVocabTestGate,
     OpenVocabTestHit,

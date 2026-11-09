@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.services.projects import lifecycle
+from src.services.projects import delete as delete_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 from src.services.training import triton_promote
 
@@ -53,7 +53,7 @@ def test_dry_run_reports_owned_promoted_model(tmp_path) -> None:
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await promoted_seed.seed()
 
-        report = await lifecycle.dry_run_delete(client, slug='cars')
+        report = await delete_mod.dry_run_delete(client, slug='cars')
         assert report['promoted_models'] == ['cars__detector_v1']
 
     asyncio.run(_run())
@@ -74,7 +74,7 @@ def test_dry_run_reports_a_private_promoted_model_too(tmp_path) -> None:
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await promoted_seed.seed()
 
-        report = await lifecycle.dry_run_delete(client, slug='cars')
+        report = await delete_mod.dry_run_delete(client, slug='cars')
         assert report['promoted_models'] == ['cars__private_v1']
 
     asyncio.run(_run())
@@ -110,9 +110,9 @@ def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None
         await promoted_seed.seed()
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
-        deleting = await lifecycle.delete_project(slug='cars', confirm='cars', force=True)
+        deleting = await delete_mod.delete_project(slug='cars', confirm='cars', force=True)
         assert deleting.status == 'deleting'
-        finished = (await lifecycle.delete_project_finish(client, slug='cars')).record
+        finished = (await delete_mod.delete_project_finish(client, slug='cars')).record
         assert finished.status == 'deleted'
 
     asyncio.run(_run())
@@ -147,9 +147,9 @@ def test_real_delete_unloads_a_private_promoted_model_with_no_force(tmp_path, mo
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
         # No force=True: a private model must never trip `in_use`.
-        deleting = await lifecycle.delete_project(slug='cars', confirm='cars')
+        deleting = await delete_mod.delete_project(slug='cars', confirm='cars')
         assert deleting.status == 'deleting'
-        finished = (await lifecycle.delete_project_finish(client, slug='cars')).record
+        finished = (await delete_mod.delete_project_finish(client, slug='cars')).record
         assert finished.status == 'deleted'
 
     asyncio.run(_run())

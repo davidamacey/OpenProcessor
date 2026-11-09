@@ -16,11 +16,12 @@ from fastapi.responses import JSONResponse
 from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, Field
 
+from src.config.curation_accessors import items_index
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import embedded_clause
-from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation import review_queries
 from src.services.curation.diverse_limits import DIVERSE_SELECT_MAX_K
 from src.services.curation.diverse_order import diverse_enabled, job_max_n, max_n, sync_max_ops

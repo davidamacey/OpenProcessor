@@ -8,17 +8,12 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.config.curation_accessors import items_index
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.db.session import project_tx
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    RegistryDep,
-    get_class_registry,
-    items_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, RegistryDep, get_class_registry, router
 from src.routers.curation._crop_write_models import (
     CropBatchLabelRequest,
     CropFlagNewClassRequest,

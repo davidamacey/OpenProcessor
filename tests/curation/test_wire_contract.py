@@ -23,7 +23,7 @@ from src.config.region_fields import RegionFields
 from src.domain.embedding_spaces import Target
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.routers.curation import _common
-from src.routers.curation._common import ItemDoc
+from src.routers.curation._item_models import ItemDoc
 from src.services.curation import index_bootstrap, semantic_search_run, wire
 from src.services.curation.region_rows import INNER_HITS_NAME
 from src.services.curation.wire import (

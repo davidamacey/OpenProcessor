@@ -16,19 +16,14 @@ from fastapi import HTTPException, Query
 from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
 from src.routers.curation._class_models import (
     ResolveConflict,
     ResolveNewClassRequest,
     ResolveNewClassResponse,
 )
-from src.routers.curation._common import (
-    OpenSearchDep,
-    get_class_registry,
-    items_index,
-    logger,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
 from src.routers.curation.classes_write import create_registry_class
 from src.services.classes.registry import ClassRegistryError
 from src.services.curation.class_label import ItemLabel, class_label_update

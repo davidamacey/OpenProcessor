@@ -7,16 +7,11 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
+from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    CropsPageResponse,
-    ItemDoc,
-    OpenSearchDep,
-    guard_page_depth,
-    items_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, guard_page_depth, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
+from src.routers.curation._item_models import CropsPageResponse, ItemDoc
 from src.routers.curation._review_params import UnsetIfEmpty
 from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_browse import crops_page

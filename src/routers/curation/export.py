@@ -16,8 +16,9 @@ from fastapi import Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, RegistryDep, items_index, logger, router
+from src.routers.curation._common import OpenSearchDep, RegistryDep, logger, router
 from src.routers.curation._export_models import ExportYoloRequest
 from src.routers.curation.near_dup_gate import require_near_dup_fresh
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir

@@ -7,10 +7,11 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from src.config.curation_accessors import items_index
 from src.config.project_context import current_project_id
 from src.db.session import async_session_factory
 from src.routers.curation._class_models import ClassMergeRequest
-from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.services.classes import projection_sync
 from src.services.jobs import service as jobs
 from src.services.jobs.status import get_job

@@ -13,9 +13,7 @@ scripts/bench/vectordb/adapters/lancedb.py	1	suppressions recorded when the ratc
 scripts/curation/bakeoff/backends/registry.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/curation/vlm_pending.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/curation/worker/bulk_writer.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-scripts/curation/worker/cascade.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/curation/worker/client.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-scripts/curation/worker/state.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/docs/check_docs_vs_code.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/app/factory.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/clients/curation_opensearch/crops.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
@@ -39,7 +37,6 @@ src/db/schema_check.py	1	suppressions recorded when the ratchet landed; fix or j
 src/domain/embedding_spaces.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/domain/label_ops.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/routers/curation/__init__.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-src/routers/curation/_common.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/routers/curation/_mounting.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/routers/curation/export.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/routers/curation/ingest_profiles.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
@@ -61,7 +58,6 @@ src/services/curation/dataset_import/upload.py	1	suppressions recorded when the 
 src/services/curation/edit_history.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/item_scores/mistakenness.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/item_scores/uniqueness.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
-src/services/curation/probe_predictions.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/stale_label_source_repair.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/strategy_defaults.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/worker_liveness.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
@@ -75,7 +71,7 @@ src/services/labeling/vlm_url_policy.py	3	suppressions recorded when the ratchet
 src/services/projects/capacity.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/projects/guard_errors.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/projects/guard_policy.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-src/services/projects/lifecycle.py	5	suppressions recorded when the ratchet landed; fix or justify, then lower
+src/services/projects/lifecycle.py	4	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/projects/registry.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/upgrade/from_060/bundle.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/visual_search/clustering.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower

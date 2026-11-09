@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import Query
 
+from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
 from src.routers.curation._audit_models import (
@@ -21,7 +22,7 @@ from src.routers.curation._audit_models import (
     AuditStartRequest,
     AuditStartResponse,
 )
-from src.routers.curation._common import OpenSearchDep, guard_page_depth, items_index, router
+from src.routers.curation._common import OpenSearchDep, guard_page_depth, router
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.audit import (
     DEFAULT_MIN_PER_CLASS,

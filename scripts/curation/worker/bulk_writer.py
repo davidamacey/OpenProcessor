@@ -33,12 +33,13 @@ from src.services.near_duplicates import pending as near_dup_pending
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker.state import _ItemTask, items_index
+from src.config.curation_accessors import items_index
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
+    from scripts.curation.worker.state import _ItemTask
     from src.domain.region_boxes import RegionBox
 
 

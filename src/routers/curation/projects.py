@@ -43,7 +43,7 @@ from src.schemas.curation.projects import (
     ProjectsResponse,
     ProjectStatsResponse,
 )
-from src.services.projects import lifecycle
+from src.services.projects import clone as clone_mod, delete as delete_mod, lifecycle
 from src.services.projects.guard import make_curation_opensearch
 from src.services.projects.registry import get_project_registry
 
@@ -248,7 +248,7 @@ async def clone_settings_route(
     body: CloneSettingsRequest,
 ) -> ProjectLifecycleResponse:
     client = await make_curation_opensearch()
-    record, keymap_clone_conflicts = await lifecycle.clone_settings_into(
+    record, keymap_clone_conflicts = await clone_mod.clone_settings_into(
         client,
         slug=project,
         from_slug=body.from_,
@@ -284,13 +284,13 @@ async def delete_project(
     -> 404, to know when it finished."""
     client = await make_curation_opensearch()
     if dry_run:
-        report = await lifecycle.dry_run_delete(client, slug=project)
+        report = await delete_mod.dry_run_delete(client, slug=project)
         return DeleteDryRunResponse(**report)
-    record = await lifecycle.delete_project(slug=project, confirm=confirm, force=force)
+    record = await delete_mod.delete_project(slug=project, confirm=confirm, force=force)
     # Starting is idempotent on the project row: a re-DELETE of a `deleting` project (the retry
     # path) answers 202 and leaves the finish that is already queued or running to finish.
     try:
-        started = await lifecycle.start_project_delete(session, project)
+        started = await delete_mod.start_project_delete(session, project)
         job_id: str | None = str(started.job.id)
     except RequestRejectedError as exc:
         if exc.detail.get('error') != 'job_busy':

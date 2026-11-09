@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.config import TERMINAL_STATUSES, RegionStatus, get_region_fields
-from src.config.curation_accessors import items_index  # noqa: F401 - re-exported for the worker package
 from src.core.logging import get_logger
 from src.services.curation.crop_bytes import CROP_JPEG_QUALITY, load_item_crop_jpeg
 from src.services.detection.profile_registry import get_active_region_profile
