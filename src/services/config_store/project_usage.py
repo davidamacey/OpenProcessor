@@ -8,8 +8,14 @@ read that fails raises, so a caller that refuses on the result fails closed.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from src.db.repos import config as repo
 from src.services.config_store.documents import tx
+
+
+if TYPE_CHECKING:
+    from src.config import DetectionProfile
 
 
 # The "profile" a project's own ingest detector is reported under.
@@ -29,6 +35,20 @@ async def active_detector_users(model_name: str) -> list[tuple[str, str]]:
         (slug, INGEST_DETECTOR_USER) for slug in await ingest_detector_users(model_name)
     ]
     return sorted([*region_users, *ingest_users])
+
+
+async def active_region_profiles() -> dict[str, DetectionProfile]:
+    """``slug -> profile`` of every project's ACTIVE region profile (the revision it pinned).
+
+    A body that no longer decodes raises, so a caller that refuses on the result fails closed.
+    """
+    from src.services.detection.profile_registry import region_profile_from_dict
+
+    async with tx('active region profiles') as session:
+        active = await repo.list_active_bodies(session, 'detection_profile')
+    return {
+        a.slug: region_profile_from_dict({**a.body, 'name': a.name}, source=a.name) for a in active
+    }
 
 
 async def ingest_models_by_project() -> dict[str, frozenset[str]]:
@@ -70,6 +90,7 @@ async def model_dependents(owner_slug: str, models: list[str]) -> list[dict[str,
 __all__ = [
     'INGEST_DETECTOR_USER',
     'active_detector_users',
+    'active_region_profiles',
     'ingest_detector_users',
     'ingest_models_by_project',
     'model_dependents',

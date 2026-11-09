@@ -58,6 +58,19 @@ def _no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _only_the_default_projects_region_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The guard reads every project's active region profile from the database; these tests
+    run one project, whose profile is whatever the test activates."""
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    async def _profiles() -> dict[str, object]:
+        profile = get_active_region_profile()
+        return {} if profile is None else {'default': profile}
+
+    monkeypatch.setattr('src.services.model_unload_guard.active_region_profiles', _profiles)
+
+
+@pytest.fixture(autouse=True)
 def _no_ingest_detector(monkeypatch: pytest.MonkeyPatch) -> None:
     # No OpenSearch behind these routes; the ingest-detector guard is
     # exercised explicitly at the bottom of the file.

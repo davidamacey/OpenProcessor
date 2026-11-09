@@ -89,3 +89,54 @@ def test_the_public_routes_refuse_it_and_remove_nothing(
     assert resp.status_code == 403, resp.text
     unload.assert_not_awaited()
     assert (tmp_path / 'models' / 'birds').exists()
+
+
+def _regions_of(monkeypatch: pytest.MonkeyPatch, profiles: dict[str, dict[str, str]]) -> None:
+    from src.services.detection.profile_registry import region_profile_from_dict
+
+    async def _scan() -> dict[str, object]:
+        return {
+            slug: region_profile_from_dict({'name': slug, **fields}, source=slug)
+            for slug, fields in profiles.items()
+        }
+
+    monkeypatch.setattr(model_unload_guard, 'active_region_profiles', _scan)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('field', ['detector_model', 'ocr_rec_model'])
+async def test_a_model_a_non_default_projects_region_profile_runs_is_refused_with_none_bound(
+    monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    """The global delete route binds no project: the guard reads every project's profile."""
+    _projects_using(monkeypatch, {})
+    _regions_of(monkeypatch, {'default': {}, 'second': {field: 'second_detector_v3'}})
+    with pytest.raises(UnloadRefusedError) as info:
+        await check_unload('second_detector_v3', force=True)
+    assert info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_non_default_projects_segmenter_is_an_external_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _projects_using(monkeypatch, {})
+    _regions_of(monkeypatch, {'second': {'segmenter_name': 'my_segmenter'}})
+    with pytest.raises(UnloadRefusedError) as info:
+        await check_unload('my_segmenter', force=True)
+    assert info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_region_profile_refuses_instead_of_allowing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom() -> dict[str, object]:
+        msg = 'configs unreadable'
+        raise ConnectionError(msg)
+
+    _projects_using(monkeypatch, {})
+    monkeypatch.setattr(model_unload_guard, 'active_region_profiles', _boom)
+    with pytest.raises(UnloadRefusedError) as info:
+        await check_unload('birds', force=True)
+    assert info.value.status_code == 503
