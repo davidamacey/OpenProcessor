@@ -507,6 +507,8 @@ def test_build_cohort_deduplicates_when_a_yaml_lists_the_same_dir_twice(
     assert {c.split for c in cohort} == {'train'}  # first occurrence wins
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('pg_registry')
 def test_cli_dataset_cohort_with_path_map(monkeypatch, tmp_path: Path, capsys) -> None:
     data = _dataset(tmp_path / 'ds')
     out = tmp_path / 'out'
@@ -531,6 +533,8 @@ def test_cli_dataset_cohort_with_path_map(monkeypatch, tmp_path: Path, capsys) -
     assert 'det_a' in printed
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('pg_registry')
 def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> None:
     data = _dataset(tmp_path / 'ds')
     state = tmp_path / 'state'
@@ -588,6 +592,8 @@ def _entries() -> list[dict[str, Any]]:
     ]
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('pg_registry')
 def test_import_cohort_scores_exactly_the_imported_frames(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:
@@ -629,6 +635,8 @@ def test_an_import_entry_outside_the_dataset_root_is_refused(tmp_path: Path, rel
         )
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('pg_registry')
 def test_import_cohort_with_nothing_written_is_a_clear_error(monkeypatch, tmp_path: Path) -> None:
     mod = _cli()
     data = _dataset(tmp_path / 'ds')

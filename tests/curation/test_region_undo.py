@@ -44,8 +44,8 @@ def _detected(crop_id: str, **extra: Any) -> dict[str, Any]:
         detector='det_model',
         detector_version='3',
         source='detector',
-        cluster_id=5,
-        cluster_subid='5a',
+        cluster_partition_id='p1',
+        cluster_uid='5a',
         detected_at='2026-09-24T03:08:19+00:00',
     )
     return {
