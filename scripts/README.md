@@ -145,7 +145,6 @@ before touching OpenSearch.
 | `vlm_worker.py` | `curation-vlm-worker` | Long-lived VLM labeling and verification loop |
 | `auto_label_worker.py` | `curation-auto-label-worker` | Drives the `POST /curation/projects/{project}/pipeline/auto_label` job protocol |
 | `assist_loop_worker.py` | `curation-assist-loop-worker` | Runs the cluster-sampled auto-label loop jobs (`POST /curation/projects/{project}/assist/loops`) |
-| `cluster_refresh_daemon.py` | `curation-cluster-refresh` | Triggers residual-clustering refresh as the item count grows |
 | `bakeoff/` | `curation-evaluator` | Model-comparison harness: scores models per class on an eval dataset's test split, aggregates comparisons; domain examples under `examples/bakeoff/` |
 
 ### Ingest and import

@@ -1,36 +1,32 @@
-"""When the cluster-refresh daemon starts a full cluster retrain.
+"""When the periodic cluster refresh starts a ``cluster_run``.
 
-Scheduling only: the retrain itself is the auto-label job, unchanged (same
-method, parameters, seed and pool). The daemon asks this module, per project
-and per poll, whether to start it now. Pure logic with an injected clock so
-it is tested without a stack.
+Scheduling only: the run itself is the ``cluster_run`` job. The beat tick asks this module, per
+project and per tick, whether to start one now. Pure logic with an injected clock so it is tested
+without a stack.
 
-* A retrain is requested once the item count has grown by ``threshold``
-  since the last one dispatched, or once a never-trained project has any item.
-  An empty project requests nothing.
-* It never starts while an auto-label loop runs on the project (the loop works on a pinned
-  partition; a retrain would move its members). The request is kept and runs after.
-* It starts when ingest is quiet: the item count did not change since the
-  previous poll, no region work is unfinished and no image was ingested within
-  the settle window (a slow ingest batch leaves the count flat between polls). While
-  ingest runs, new items are already assigned to the persisted centroids at ingest time.
-* ``max_deferral_s`` bounds the wait so a long ingest never starves
-  clustering.
-* Requests coalesce: one pending flag per project, however many polls cross
-  the threshold. A request raised while a job runs is kept and runs once
-  after it.
-* A job that ended badly (failed, cancelled, interrupted by the stale
-  repair, or lost) hands its trained mark back, so the request is raised
-  again and retried after ``retry_backoff_s``.
+* A run is requested once the item pool has grown by ``threshold`` past the pool of the newest
+  finished partition (``built``), or once a never-clustered project has any item. An empty project
+  requests nothing.
+* It never starts while an assist loop runs on the project (the loop works on a pinned partition;
+  a run would move its members). The request is kept and runs after.
+* It starts when ingest is quiet: the pool did not change since the previous tick, no region work
+  is unfinished and no image was ingested within the settle window (a slow ingest batch leaves the
+  count flat between ticks). While ingest runs, new items are already assigned to the serving
+  partition's prototypes at ingest time.
+* ``max_deferral_s`` bounds the wait so a long ingest never starves clustering.
+* Requests coalesce: one pending clock per project, however many ticks cross the threshold. A
+  request raised while a run is live is kept and runs once after it.
+* A run that ended badly (failed, cancelled, interrupted, or lost) leaves no partition, so the
+  growth still stands and the request is retried after ``retry_backoff_s``.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 
-ACTIVE_JOB_STATUSES = frozenset({'queued', 'running'})
+ACTIVE_JOB_STATUSES = frozenset({'queued', 'running', 'paused', 'cancelling'})
 
 
 class Action(Enum):
@@ -41,78 +37,34 @@ class Action(Enum):
 
 @dataclass(frozen=True)
 class Policy:
-    threshold: int
+    threshold: float
     max_deferral_s: float
     retry_backoff_s: float
 
 
 @dataclass(frozen=True)
 class Observation:
-    count: int
+    count: int  # items in the clustering pool now
+    built: int  # pool size of the newest finished partition, 0 when there is none
     unfinished: int  # items still waiting for the region stage
-    tracked_status: str | None  # status of the job this daemon started, if any
-    busy: bool  # any auto-label job (not only ours) is queued or running
-    loop_live: bool  # an auto-label loop is running: nothing may retrain under it
+    tracked_status: str | None  # status of the run this schedule started, if any
+    busy: bool  # any cluster_run of the project is live (not only ours)
+    loop_live: bool  # an assist loop is running: nothing may re-cluster under it
     recent_ingest: bool  # any image ingested within the settle window
 
 
 @dataclass
 class ProjectSchedule:
-    last_trained_count: int = 0  # item count when the last retrain was dispatched
-    trained_before: int | None = None  # the mark to restore if that job does not finish
+    """The clock a tick carries to the next one (``refresh_state_store``); wall-clock seconds."""
+
     prev_count: int | None = None
     pending_since: float | None = None
     retry_not_before: float = 0.0
     job_id: str | None = None
-    # Persistence bookkeeping (see ``refresh_state_store``): whether the stored state was
-    # restored yet, the revision it carried and what was last written.
-    restored: bool = False
-    stored_revision: int = 0
-    stored: tuple[int, int | None, int | None, str | None] | None = None
 
-    def persistent(self) -> tuple[int, int | None, int | None, str | None]:
-        """The fields a restart must not lose."""
-        return (self.last_trained_count, self.trained_before, self.prev_count, self.job_id)
-
-    def restore(
-        self, revision: int, persisted: tuple[int, int | None, int | None, str | None]
-    ) -> None:
-        self.last_trained_count, self.trained_before, self.prev_count, self.job_id = persisted
-        self.stored_revision = revision
-        self.stored = persisted
-        self.restored = True
-
-    def on_started(self, count: int, job_id: str | None, *, previous_trained: int) -> None:
-        self.trained_before = previous_trained
-        self.last_trained_count = count
+    def on_started(self, job_id: str) -> None:
         self.job_id = job_id
         self.pending_since = None
-
-    def on_cancelled(self) -> None:
-        """The daemon cancelled its job (project paused): the work was not done."""
-        self._restore()
-
-    def _restore(self) -> None:
-        if self.trained_before is not None:
-            self.last_trained_count = self.trained_before
-        self.trained_before = None
-        self.job_id = None
-
-
-@dataclass
-class ScheduleBook:
-    """One schedule per project slug; projects never share state."""
-
-    _by_slug: dict[str, ProjectSchedule] = field(default_factory=dict)
-
-    def get(self, slug: str) -> ProjectSchedule:
-        return self._by_slug.setdefault(slug, ProjectSchedule())
-
-    def forget(self, slug: str) -> None:
-        self._by_slug.pop(slug, None)
-
-    def slugs(self) -> list[str]:
-        return list(self._by_slug)
 
 
 def step(s: ProjectSchedule, o: Observation, now: float, p: Policy) -> Action:
@@ -129,19 +81,17 @@ def step(s: ProjectSchedule, o: Observation, now: float, p: Policy) -> Action:
             in_flight = True
         elif o.tracked_status == 'completed':
             s.job_id = None
-            s.trained_before = None
         else:
-            s._restore()
+            s.job_id = None
             s.retry_not_before = now + p.retry_backoff_s
             return Action.NONE
 
-    # last_trained_count == 0 means never trained; an empty project has nothing to train on,
-    # and on_started(0) would leave the mark at 0, re-requesting a job every cycle.
-    crossed = o.count > 0 and (
-        s.last_trained_count == 0 or o.count - s.last_trained_count >= p.threshold
-    )
+    # built == 0 means never clustered; an empty project has nothing to cluster.
+    crossed = o.count > 0 and (o.built == 0 or o.count - o.built >= p.threshold)
     if crossed and s.pending_since is None:
         s.pending_since = now
+    if not crossed and not in_flight:
+        s.pending_since = None
     if s.pending_since is None or in_flight or o.busy or o.loop_live or now < s.retry_not_before:
         return Action.NONE
     if quiet or now - s.pending_since >= p.max_deferral_s:

@@ -32,21 +32,19 @@ def storage_root(tmp_path, monkeypatch):
 async def test_refresh_state_defaults_then_round_trips(pg_env) -> None:
     assert await refresh_state_store.load_refresh_state() == refresh_state_store.RefreshState()
     saved = await refresh_state_store.save_refresh_state(
-        refresh_state_store.RefreshState(last_trained_count=40, job_id='j1')
+        refresh_state_store.RefreshState(prev_count=40, job_id='j1')
     )
     assert saved.revision == 1
     loaded = await refresh_state_store.load_refresh_state()
-    assert (loaded.revision, loaded.last_trained_count, loaded.job_id) == (1, 40, 'j1')
+    assert (loaded.revision, loaded.prev_count, loaded.job_id) == (1, 40, 'j1')
 
 
 @pytest.mark.asyncio
 async def test_a_refresh_state_built_from_a_stale_revision_conflicts(pg_env) -> None:
     first = await refresh_state_store.load_refresh_state()
-    await refresh_state_store.save_refresh_state(first.model_copy(update={'last_trained_count': 1}))
+    await refresh_state_store.save_refresh_state(first.model_copy(update={'prev_count': 1}))
     with pytest.raises(PolicyConflictError):
-        await refresh_state_store.save_refresh_state(
-            first.model_copy(update={'last_trained_count': 2})
-        )
+        await refresh_state_store.save_refresh_state(first.model_copy(update={'prev_count': 2}))
 
 
 @pytest.mark.asyncio

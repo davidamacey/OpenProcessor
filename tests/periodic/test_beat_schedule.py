@@ -23,6 +23,7 @@ EXPECTED = {
     'cache_prune',
     'reload_promoted',
     'serving_inventory',
+    'cluster_refresh',
     'near_dup_rescore',
     'near_dup_full_build',
 }
@@ -59,3 +60,13 @@ def test_the_ingest_dispatch_interval_is_the_env_value_and_zero_turns_it_off(
     assert build_schedule()['ingest_dispatch']['schedule'] == 12.0
     monkeypatch.setenv('OP_INGEST_DISPATCH_S', '0')
     assert 'ingest_dispatch' not in build_schedule()
+
+
+def test_the_cluster_refresh_interval_is_the_env_value_and_zero_turns_it_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert build_schedule()['cluster_refresh']['schedule'] == 120.0
+    monkeypatch.setenv('OP_CLUSTER_REFRESH_INTERVAL_S', '45')
+    assert build_schedule()['cluster_refresh']['schedule'] == 45.0
+    monkeypatch.setenv('OP_CLUSTER_REFRESH_INTERVAL_S', '0')
+    assert 'cluster_refresh' not in build_schedule()

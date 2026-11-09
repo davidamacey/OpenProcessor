@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from src.services.periodic import (
     cache_prune,
+    cluster_refresh,
     ingest_dispatch,
     job_stats,
     near_dup_ticks,
@@ -76,3 +77,9 @@ def serving_inventory_tick() -> None:
 def reload_promoted_tick() -> None:
     """Re-load promoted models that Triton lost in a restart."""
     run_periodic('reload_promoted', reload_promoted.tick())
+
+
+@app.task(name='op.periodic.cluster_refresh', **_TICK)
+def cluster_refresh_tick() -> None:
+    """Start a cluster run for each project whose item pool grew past its profile's rule."""
+    run_periodic('cluster_refresh', cluster_refresh.tick())

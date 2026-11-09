@@ -14,6 +14,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.tasks.reaper',  # stuck-job recovery runs across all projects
     'src.tasks.periodic',  # beat tasks (cache prune, retention, ingest dispatch)
     'src.tasks.beat_schedule',
+    'src.tasks.queue_liveness',  # the cluster consumer's liveness row belongs to no project
     'src.tasks.runtime',  # the job wrapper claims a job by id before it knows the project
     'src.services.events',  # event publish and the global event stream read across projects
     'src.services.periodic',  # the beat tick bodies read the projects they act on

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.config.cluster_profile import DEFAULT_REFRESH_INTERVAL_S, REFRESH_INTERVAL_ENV
 from src.config.env import env_float, env_int
 
 
@@ -49,6 +50,9 @@ def build_schedule() -> dict[str, dict[str, Any]]:
     )
     schedule['reload_promoted'] = _every('op.periodic.reload_promoted', RELOAD_PROMOTED_INTERVAL_S)
     schedule['cache_prune'] = _every('op.periodic.cache_prune', CACHE_PRUNE_INTERVAL_S)
+    refresh = env_int(REFRESH_INTERVAL_ENV, DEFAULT_REFRESH_INTERVAL_S, minimum=0)
+    if refresh > 0:
+        schedule['cluster_refresh'] = _every('op.periodic.cluster_refresh', refresh)
     schedule['near_dup_rescore'] = _every(
         'op.periodic.near_dup_rescore', NEAR_DUP_RESCORE_INTERVAL_S
     )

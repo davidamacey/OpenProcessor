@@ -1,10 +1,9 @@
-"""Storage of the cluster-refresh daemon's per-project growth state.
+"""The periodic cluster refresh's per-project clock, in ``project_state`` key ``cluster_refresh``.
 
-The one interim of D-84: the daemon keeps running for one PR after its OpenSearch settings
-document is gone, so its state lives in ``project_state`` key ``cluster_refresh`` (a thin adapter
-over the generic repository). Lane 4F redefines the body as the beat's scheduling clock and
-deletes this module. The daemon restores it on its first poll of a project, so a restart neither
-retrains a project that was just retrained nor starts a retrain in the middle of an ingest.
+The beat tick is stateless between runs; what it must carry over is when a refresh became due
+(``pending_since``), when a failed run may be retried (``retry_not_before``), the pool size it saw
+(``prev_count``, to tell ingest is still growing it) and the run it started (``job_id``). All
+times are wall-clock epoch seconds. A thin adapter over the generic repository.
 """
 
 from __future__ import annotations
@@ -23,9 +22,9 @@ KEY = 'cluster_refresh'
 
 class RefreshState(BaseModel):
     revision: int = 0
-    last_trained_count: int = 0
-    trained_before: int | None = None
     prev_count: int | None = None
+    pending_since: float | None = None
+    retry_not_before: float = 0.0
     job_id: str | None = None
 
 
