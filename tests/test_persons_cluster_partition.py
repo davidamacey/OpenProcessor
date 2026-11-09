@@ -59,7 +59,9 @@ async def _count(where: str) -> int:
         ).scalar_one()
 
 
-async def test_one_run_writes_one_ready_face_partition_and_get_reads_it(pg_env, faces) -> None:
+async def test_one_run_writes_one_ready_face_partition_and_get_reads_it(
+    bound_async_engine, faces
+) -> None:
     before = await _count("target = 'face'")
     ctx = _Ctx({'similarity_threshold': 0.7, 'min_faces_per_person': 2})
     result = await persons_cluster(cast('Any', ctx))
@@ -79,7 +81,7 @@ async def test_one_run_writes_one_ready_face_partition_and_get_reads_it(pg_env, 
 
 
 async def test_a_rerun_keeps_person_identities_and_replaces_the_serving_partition(
-    pg_env, faces
+    bound_async_engine, faces
 ) -> None:
     first = await persons_cluster(
         cast('Any', _Ctx({'similarity_threshold': 0.7, 'min_faces_per_person': 2}))
