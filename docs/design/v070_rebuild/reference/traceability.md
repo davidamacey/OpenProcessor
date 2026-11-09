@@ -510,7 +510,7 @@ change, 5.5).
 |---|---|
 | 5.1 per-box fields | W5e `w5e/region-text-fields` PT-F1, PT-F4 |
 | 5.1 index analysis settings (creation time) | 2F-6 (with the upgraded-index close and open, X-4) |
-| 5.2 tables | W5e store lane PT-S1 (`0005_region_text`, approved, RD-4) |
+| 5.2 tables | W5e store lane PT-S1 (`0007_region_text`, approved, RD-4) |
 | 5.3 job kinds and the `text_read` queue | W5e jobs lane PT-J1..PT-J3 |
 | 5.4 queries | PT-F3 |
 | 5.5 `region_profile` fields | **moved** from 2C to the W5e fields lane (5.5) |

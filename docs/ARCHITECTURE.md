@@ -301,7 +301,7 @@ output, never the output index.
 `0004_privacy_purges` (the `privacy_purges` table, whose CHECK keeps it to counts)
 and `0006_model_sharing_revision` (a monotonic `sharing_revision` on `models`).
 `db-migrate` applies them; the API and workers refuse to start at another revision.
-Revision `0005_region_text` is planned for the plate-text work and not on this branch.
+Revision `0007_region_text` is planned for the plate-text work and not on this branch.
 
 The global indexes (`visual_search_global`, `_vehicles`, `_people`, `_faces`,
 `_ocr`) belong to the inference API and are described in

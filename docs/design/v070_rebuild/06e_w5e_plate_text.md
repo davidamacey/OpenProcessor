@@ -4,7 +4,7 @@
 |---|---|
 | Status | plan, not started; written 2026-11-04 by the research integration pass |
 | Design | [09h_research_plate_text.md](09h_research_plate_text.md) sections 5 and 7 (the contract; this file only orders the work and fixes file ownership) |
-| Owner direction | plate text is ordinary searchable label data, stored as readable text, searchable (exact, fuzzy, fragment), detectable and labelable, "a development tool for labeling data" (2026-11-05, D-79: no privacy modes, no ceiling, no salt, no plate purge, no sink test); plate text is a must (2026-11-04); its own wave W5e (RD-3, implied by the owner's RD-4 answer) and its tables in their own W5e revision `0005_region_text` (RD-4, approved 2026-11-04; [00d](reference/owner_questions.md)); the plate-text index normalizer stays (Q-A); PP-OCRv6 is one short reader comparison (Q-B); the plate data are freely downloadable sets plus set P, without UFPR-ALPR and LPLC (RD-10) |
+| Owner direction | plate text is ordinary searchable label data, stored as readable text, searchable (exact, fuzzy, fragment), detectable and labelable, "a development tool for labeling data" (2026-11-05, D-79: no privacy modes, no ceiling, no salt, no plate purge, no sink test); plate text is a must (2026-11-04); its own wave W5e (RD-3, implied by the owner's RD-4 answer) and its tables in their own W5e revision `0007_region_text` (RD-4, approved 2026-11-04; [00d](reference/owner_questions.md)); the plate-text index normalizer stays (Q-A); PP-OCRv6 is one short reader comparison (Q-B); the plate data are freely downloadable sets plus set P, without UFPR-ALPR and LPLC (RD-10) |
 | Depends on | W5c merged (track `ocr` adds the `rec_char_min` output, [06c](06c_b5_crops_ocr_faces.md) research amendment); W4 merged (the capture lane writes `capture_taken_utc` on items, which the `capture_window` consensus basis reads; there is no plate privacy lane in W4 any more (owner decision of 2026-11-05, D-79)); W2.3b merged (the near-duplicate runs that the `near_dup` basis reads); the plate prototypes P0-P5 read in PW-2 ([00f](08_research_prototype_track.md); `pt:P6` is cut before the tag, so plate boxes come from the segmenter with the text hint, today's path) |
 | Integration branch | `int/b5e-plate-text`, cut from `main` after the W5d PR merged; one PR |
 | Lanes | store first; then fields and jobs in parallel; the reader lane only if P1 adopts a dedicated reader |
@@ -22,8 +22,8 @@ survive the alphanumeric normalizer are 12 characters long, longer than any plat
 
 ## Lane `w5e/region-text-store` (first)
 
-**Owns:** new `src/db/models/region_text.py`, new revision `src/db/migrations/versions/0005_region_text.py`
-(`down_revision = '0004_privacy_purges'`, [02d](02d_research_seam_schema.md) section 4), new
+**Owns:** new `src/db/models/region_text.py`, new revision `src/db/migrations/versions/0007_region_text.py`
+(`down_revision = '0006_model_sharing_revision'`, [02d](02d_research_seam_schema.md) section 4), new
 `src/db/repos/region_text.py`, `tests/db/test_region_text_schema.py`.
 
 | ID | Task | Red test | Control |

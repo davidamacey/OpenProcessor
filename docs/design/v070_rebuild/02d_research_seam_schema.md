@@ -26,7 +26,7 @@ with `--rev-id`, so two lanes never guess the chain:
 | `0001_control_plane` | 1A `b2/db-core`, W2.1 | every table of 02a, **including the in-place research changes listed in section 1** (columns and `CHECK` values on 02a tables, the `gpu_devices` table) | a change to a table 0001 creates is made in 0001 |
 | `0002_research_seams` | 1F `b2/db-research-seams`, W2.1 (cut after 1A merged; [03a](03a_stage1_foundation.md) lane 1F) | section 2: serving reports, clustering S-core, the embedding registry, the auto-label loop record | only new tables; `down_revision = '0001_control_plane'` |
 | `0003_near_duplicates` | ND-A `b2/near-duplicates`, W2.3a ([03d](03d_stage4_job_families.md) lane ND-A) | section 3: the near-duplicate tables, three `holdout_freezes` columns, the `near_dup_profile` kind and `near_dup` axis, the `near_dup_run` projection kind | the only revision-writing lane of W2.3a (W2.3a writes none) |
-| `0005_region_text` | `w5e/region-text-store`, W5e ([06e](06e_w5e_plate_text.md)) | section 4: the registration-plate text tables and the `region_text_consensus_marker` state key | approved (RD-4) |
+| `0007_region_text` | `w5e/region-text-store`, W5e ([06e](06e_w5e_plate_text.md)) | section 4: the registration-plate text tables and the `region_text_consensus_marker` state key | approved (RD-4) |
 
 A wave that needs a schema change has exactly one revision-writing lane. Downgrade is tested to base
 and back (1A-3), so every revision has a real `downgrade()`.
@@ -433,7 +433,7 @@ RD-43 changed by the owner 2026-11-08), `near_dup_runs`
 `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending`,
 `holdout_near_dup_moves`. `holdout_near_dup_moves` is the only writer path for near-duplicate holdout moves, and it goes through the lock rule of `src/clients/occ_locks.py` (an automated writer never overwrites a human- or import-validated class or box, or an item in the frozen holdout); a test moves a locked item and expects a refusal.
 
-## 4. Revision `0005_region_text` (lane `w5e/region-text-store`, W5e; approved, RD-4)
+## 4. Revision `0007_region_text` (lane `w5e/region-text-store`, W5e; approved, RD-4)
 
 The DDL is the registration-plate plan's section 5.2, with one change: `region_text_runs` refers to
 its profile by `(profile_config_id, profile_revision) REFERENCES config_revisions(config_id,

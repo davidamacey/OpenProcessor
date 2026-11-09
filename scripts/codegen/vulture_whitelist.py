@@ -93,6 +93,8 @@ _.PlanReport  # src/schemas/processing_plan.py; response model of the plan-aware
 _.ProcessingPlan  # src/schemas/processing_plan.py; request model of the plan-aware routes, docs/design/processing_plans_plan.md phase P2
 _.to_request  # ProcessingPlan.to_request; the route that parses the plan, docs/design/processing_plans_plan.md phase P2
 _.crop_key  # src/domain/storage_keys.py; docs/design/v070_rebuild/03a_stage1_foundation.md 1E-4 (crop sizing work); only tests/clients/storage/test_crop_key_variant.py calls it today
+_.replace_groups  # src/db/repos/region_text.py; the consensus job of docs/design/v070_rebuild/06e_w5e_plate_text.md lane w5e/region-text-jobs; only tests/db/test_region_text_repo.py calls it today
+_.groups_for_boxes  # src/db/repos/region_text.py; the region-text wire and review lanes of 06e_w5e_plate_text.md; only tests/db/test_region_text_repo.py calls it today
 
 # Registered or read by a framework through a name, a decorator or a protocol
 _._on_worker_init  # src/tasks/app.py; connected to Celery's worker_init signal by decorator

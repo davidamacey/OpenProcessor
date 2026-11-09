@@ -504,7 +504,7 @@ plan's vendor claims (SAM 3 data engine) are marked vendor-reported, as they sho
   X-5 joins the two model registries through one contract class.
 - **Revision order:**
   - `0001_control_plane` (with the in-place changes), then `0002_research_seams` (1F, after 1A
-    merged), then `0003_near_duplicates` (ND-A, the only W2.3 writer), then `0005_region_text`
+    merged), then `0003_near_duplicates` (ND-A, the only W2.3 writer), then `0007_region_text`
     (W5e, pending RD-4).
   - The chain is linear, with one writer per wave and fixed `--rev-id` values. It is coherent.
   - With the RR-12 cuts, 0002 shrinks; the later tables come in a new revision of their landing

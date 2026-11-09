@@ -12,7 +12,7 @@ from src.db.base import Base
 
 pytestmark = pytest.mark.db
 
-HEAD = '0006_model_sharing_revision'
+HEAD = '0007_region_text'
 
 
 def test_there_is_exactly_one_head() -> None:
