@@ -41,7 +41,7 @@ def _fake_result(class_ids: list[int]) -> dict:
         'boxes': np.tile(np.array([0.1, 0.1, 0.2, 0.2], dtype=np.float32), (n, 1)),
         'scores': np.full(n, 0.9, dtype=np.float32),
         'classes': np.array(class_ids, dtype=np.float32),
-        'box_frame': 'normalized',
+        'box_frame': 'pixels',
     }
 
 

@@ -22,7 +22,7 @@ from src.clients.triton_client import TritonClient
 
 
 class _FakeAdapter:
-    """Reports one detection box in letterbox-normalized [0,1] space."""
+    """Reports one detection box in letterbox pixels (the fused contract's frame)."""
 
     requested_outputs = ('det_boxes', 'det_scores', 'det_classes', 'num_dets')
 
@@ -30,10 +30,10 @@ class _FakeAdapter:
         return [
             {
                 'num_dets': 1,
-                'boxes': np.array([[0.2, 0.2, 0.6, 0.6]], dtype=np.float32),
+                'boxes': np.array([[128.0, 128.0, 384.0, 384.0]], dtype=np.float32),
                 'scores': np.array([0.93], dtype=np.float32),
                 'classes': np.array([2], dtype=np.int64),
-                'box_frame': 'normalized',
+                'box_frame': 'pixels',
             }
         ]
 
@@ -116,7 +116,7 @@ class _MultiSmallBoxAdapter:
 
     requested_outputs = ('det_boxes', 'det_scores', 'det_classes', 'num_dets')
 
-    # XYXY in [0,1] letterbox-normalized space, chosen so the boxes crop out
+    # XYXY in 640-px letterbox pixels (the fractions below times 640), chosen so the boxes crop out
     # to a range of small absolute pixel sizes on a 640x480 image (tens of
     # px on a side -- the regime that hit the float-truncation bug).
     _BOXES = np.array(
@@ -128,7 +128,7 @@ class _MultiSmallBoxAdapter:
             [0.05, 0.80, 0.09, 0.86],
         ],
         dtype=np.float32,
-    )
+    ) * np.float32(640)
 
     def parse(self, response: Any, batch_size: int) -> list[dict]:  # noqa: ARG002
         n = len(self._BOXES)
@@ -138,7 +138,7 @@ class _MultiSmallBoxAdapter:
                 'boxes': self._BOXES,
                 'scores': np.full(n, 0.9, dtype=np.float32),
                 'classes': np.zeros(n, dtype=np.int64),
-                'box_frame': 'normalized',
+                'box_frame': 'pixels',
             }
         ]
 

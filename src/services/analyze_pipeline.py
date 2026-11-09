@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from tritonclient.utils import InferenceServerException
+
 from src.config.faces import faces_enabled
 from src.config.settings import TritonModelConfig
 from src.schemas.analyze import (
@@ -23,6 +25,7 @@ from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.services.ocr_service import get_ocr_service
 from src.utils.affine import format_detections_from_triton
+from src.utils.retry import RetryExhaustedError
 
 
 if TYPE_CHECKING:
@@ -30,6 +33,16 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+# What a failed crop-embedding batch raises (Triton call, retries spent, a crop that will not
+# decode): the detections are still returned, without embeddings. Anything else is a bug.
+_CROP_EMBED_ERRORS = (
+    InferenceServerException,
+    RetryExhaustedError,
+    OSError,
+    ValueError,
+    RuntimeError,
+)
 
 
 @lru_cache(maxsize=1)
@@ -54,9 +67,7 @@ def detections_from_yolo(
     detections: list[DetectionResult] = []
     if yolo_clip_result.get('num_dets', 0) > 0:
         formatted = format_detections_from_triton(
-            yolo_clip_result,
-            input_size=yolo_clip_result['input_size'],
-            model_name=TritonModelConfig.YOLO_MODEL,
+            yolo_clip_result, model_name=TritonModelConfig.YOLO_MODEL
         )
         detections.extend(
             DetectionResult(
@@ -212,7 +223,7 @@ def _attach_crop_embeddings(
         if crop_embeddings is not None:
             for i, det in enumerate(detections):
                 det.embedding = crop_embeddings[i].tolist()
-    except Exception:
+    except _CROP_EMBED_ERRORS:
         logger.warning('Failed to generate batched crop embeddings')
 
 
@@ -323,7 +334,7 @@ def _embed_detection_crops(
         crop_embeddings = client.infer_mobileclip_batch(batch_tensor)
         for det_i, det in enumerate(detections):
             det.embedding = crop_embeddings[det_i].tolist()
-    except Exception:
+    except _CROP_EMBED_ERRORS:
         logger.warning(f'Failed to generate crop embeddings for {filename}')
 
 
