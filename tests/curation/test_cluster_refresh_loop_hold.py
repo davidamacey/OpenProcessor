@@ -1,6 +1,6 @@
-"""While an auto-label loop runs, nothing retrains the clusters under it: the periodic refresh
-keeps its request and starts nothing, and the retraining start routes answer 409
-``assist_loop_running``. (The tick's own hold is run on a database in
+"""While an auto-label loop runs, nothing re-clusters under it: the periodic refresh keeps its
+request and starts nothing. The auto-label start routes no longer cluster, so a live loop does
+not hold them. (The tick's own hold is run on a database in
 ``tests/tasks/test_cluster_refresh_starts_cluster_run.py``.)"""
 
 from __future__ import annotations
@@ -43,14 +43,11 @@ LOOP_ID = '01a1b198-3400-7fd7-a7c3-1acc88024d4a'
 def live_loop(monkeypatch: pytest.MonkeyPatch) -> str:
     """The project has a live loop (the lookup the hold reads, answered)."""
 
-    from src.routers.curation import pipeline_public
-
     async def live(_session: Any) -> str:
         return LOOP_ID
 
     monkeypatch.setattr(service, '_live_loop_id', live)
     monkeypatch.setattr(service, 'require_no_live_loop', REAL_HOLD)
-    monkeypatch.setattr(pipeline_public, 'require_no_live_loop', REAL_HOLD)
     return LOOP_ID
 
 
@@ -92,38 +89,8 @@ def test_a_live_loop_holds_the_retrain_and_keeps_the_request() -> None:
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')
-def test_a_retraining_start_is_refused_with_409_while_a_loop_is_live(
-    http: TestClient, live_loop: str
-) -> None:
-    loop_id = live_loop
-
-    refused = http.post(START)
-
-    assert refused.status_code == 409, refused.text
-    detail = refused.json()['detail']
-    assert detail['error'] == 'assist_loop_running'
-    assert detail['loop_id'] == loop_id
-
-
-@pytest.mark.usefixtures('packs', 'job_dir')
 @pytest.mark.usefixtures('live_loop')
-def test_a_start_that_does_not_retrain_is_not_held(http: TestClient) -> None:
-
-    allowed = http.post(START, params={'train_clusters': 'false'})
+def test_a_start_is_not_held_by_a_live_loop(http: TestClient) -> None:
+    allowed = http.post(START)
 
     assert allowed.status_code == 202, allowed.text
-
-
-@pytest.mark.usefixtures('packs', 'job_dir')
-@pytest.mark.usefixtures('live_loop')
-def test_the_synchronous_chain_is_held_too(http: TestClient) -> None:
-
-    refused = http.post('/curation/projects/default/pipeline/auto_label')
-
-    assert refused.status_code == 409, refused.text
-    assert refused.json()['detail']['error'] == 'assist_loop_running'
-
-
-@pytest.mark.usefixtures('packs', 'job_dir')
-def test_a_start_goes_through_once_the_loop_has_ended(http: TestClient) -> None:
-    assert http.post(START).status_code == 202

@@ -67,21 +67,11 @@ def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
     summary = asyncio.run(
         run_auto_label(
             opensearch=fake_os,
-            train_clusters=False,
-            promote_min_purity=0.85,
-            promote_min_members=4,
             vlm_batch_size=32,
             vlm_concurrency=8,
             max_vlm_crops=0,
             classifier_confidence_skip_vlm=0.80,
-            clustering_method=None,
             run_vlm=False,
-            recluster_unvalidated=False,
-            reassign_only=False,
-            run_auto_promote=False,
-            gate_max_rank=None,
-            gate_min_blur_ratio=None,
-            n_clusters=None,
             class_id=None,
             cluster_id=None,
             prompt_pack=name,
@@ -117,7 +107,6 @@ def _run_job(c, monkeypatch, query):
 
     monkeypatch.setattr(auto_label_run, 'resolve_run_prompt_pack', _resolve)
     args = {k: v for k, v in captured.items() if k != 'opensearch'}
-    args['train_clusters'] = False
     args['run_vlm'] = False
     summary = asyncio.run(run_auto_label(opensearch=_FakeOpenSearch({}), **args))
     return captured, summary
@@ -207,7 +196,6 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     _pack_setup(c)
     args = _start_args(c, monkeypatch, query)
     reset_config_stores()  # a different process: cold store
-    args['train_clusters'] = False
     args['run_vlm'] = False
     summary = asyncio.run(run_auto_label(opensearch=object(), **args))
     print('store loaded after job stages:', get_config_store().current.loaded_at)
@@ -256,7 +244,7 @@ def test_hidden_resolved_flag_is_not_client_settable(app_client):
     c = app_client
     r = c.post(
         '/curation/projects/default/pipeline/auto_label',
-        params={'prompt_pack': 'nope', 'prompt_pack_resolved': 'true', 'train_clusters': 'false'},
+        params={'prompt_pack': 'nope', 'prompt_pack_resolved': 'true'},
     )
     print('direct+resolved flag ->', r.status_code, r.text[:200])
     assert r.status_code == 422

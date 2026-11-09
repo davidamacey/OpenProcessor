@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
-from src.services.curation.clustering.id_normalize import class_cluster_placement
 from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot
 
 
@@ -53,12 +52,9 @@ def label_batch_update(
 
 
 def label_batch_merge(update: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
-    """``update`` as written onto ``current``: a registry class moves the item
-    into its class cluster (as the worker's combined call does), an unmatched
-    answer does not keep the class it just contradicted, and the previous
-    class is snapshotted for undo."""
+    """``update`` as written onto ``current``: an unmatched answer does not keep the class it
+    just contradicted, and the previous class is snapshotted for undo."""
     merged = dict(update)
-    merged.update(class_cluster_placement(merged, current))
     if merged.get('class_source') == VLM_UNMATCHED_CLASS_SOURCE:
         merged.update(unmatched_class_clear(current))
     return with_class_snapshot(merged, current, writer='vlm_label_batch')

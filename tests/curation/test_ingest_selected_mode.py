@@ -19,11 +19,6 @@ DETECTIONS = [
 ]
 
 
-class _IvfStore:
-    def assign_one_with_distance(self, _embedding: Any) -> tuple[int, float]:
-        return 7, 0.1
-
-
 def _service(policy: IngestPolicy) -> Any:
     from curation.ingest_fakes import FakeClassRegistry, _FakeClassEntry
 
@@ -41,7 +36,6 @@ def _by_score(os_fake: Any) -> dict[float, dict[str, Any]]:
 async def test_selected_mode_embeds_only_chosen_classes_and_stores_the_rest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr('src.services.curation.ingest_index.get_ivf_ingest_store', _IvfStore)
     svc, os_fake = _service(
         IngestPolicy(embedding=EmbeddingPolicy(mode='selected', classes=['widget']))
     )
@@ -61,17 +55,27 @@ async def test_selected_mode_embeds_only_chosen_classes_and_stores_the_rest(
     assert 'pe_embedding' in widget
     assert gadget['embedding_state'] == 'not_selected'
     assert 'pe_embedding' not in gadget
-    assert gadget['cluster_id'] == 0  # a class-labeled item keeps its class cluster
     assert unclassed['embedding_state'] == 'not_selected'
     assert 'pe_embedding' not in unclassed
-    assert 'cluster_id' not in unclassed  # no IVF placement without a vector
+    assert 'cluster_uid' not in unclassed  # no placement without a vector
 
 
 @pytest.mark.asyncio
 async def test_selected_mode_still_places_an_embedded_unclassed_item(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr('src.services.curation.ingest_index.get_ivf_ingest_store', _IvfStore)
+    import uuid
+
+    from src.services.clustering.assign import Placement
+
+    partition, cluster = uuid.uuid4(), uuid.uuid4()
+    placed_ids: list[str] = []
+
+    async def place(item_ids: Any, _vectors: Any) -> list[Placement]:
+        placed_ids.extend(item_ids)
+        return [Placement(i, partition, cluster, 'assigned', 0.9, 0.2) for i in item_ids]
+
+    monkeypatch.setattr('src.services.curation.ingest_index.place_vectors', place)
     svc, os_fake = _service(
         IngestPolicy(
             embedding=EmbeddingPolicy(mode='selected', min_confidence=0.2, max_per_image=3)
@@ -80,7 +84,11 @@ async def test_selected_mode_still_places_an_embedded_unclassed_item(
     await svc.ingest_one(_jpeg_bytes(), '/tmp/a.jpg')
     unclassed = _by_score(os_fake)[0.3]
     assert unclassed['embedding_state'] == 'embedded'
-    assert unclassed['cluster_id'] == 7 + 10_000
+    assert unclassed['cluster_uid'] == str(cluster)
+    assert unclassed['cluster_partition_id'] == str(partition)
+    assert unclassed['cluster_state'] == 'assigned'
+    assert len(placed_ids) == 3  # every embedded item is placed, class-labeled or not
+    assert 'cluster_id' not in unclassed
 
 
 @pytest.mark.asyncio

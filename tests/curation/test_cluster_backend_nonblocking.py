@@ -10,7 +10,7 @@ long enough for the API's 30s staleness watchdog to kill a genuinely-
 running clustering job ("auto_label worker heartbeat stale (38.0s ago)"),
 despite the function's own docstring claiming "a few microseconds."
 
-Both real call sites now wrap the call as `asyncio.to_thread(detect_
+The real call site now wraps the call as `asyncio.to_thread(detect_
 cluster_backend)` — the function is passed *by reference* there (no
 parens, no direct invocation), so a correctly-fixed module has zero
 `ast.Call` nodes with func name `detect_cluster_backend`. Only the
@@ -25,7 +25,7 @@ from __future__ import annotations
 import ast
 import inspect
 
-from src.services.curation.clustering import embedding_reduce, orchestrator
+from src.services.curation.clustering import embedding_reduce
 
 
 def _synchronous_call_lines(module) -> list[int]:
@@ -44,14 +44,5 @@ def test_embedding_reduce_never_calls_detect_cluster_backend_synchronously():
     assert offending == [], (
         f'detect_cluster_backend() called synchronously (blocks the event '
         f'loop — see module docstring) at embedding_reduce.py line(s) '
-        f'{offending}; must be asyncio.to_thread(detect_cluster_backend)'
-    )
-
-
-def test_clustering_orchestrator_never_calls_detect_cluster_backend_synchronously():
-    offending = _synchronous_call_lines(orchestrator)
-    assert offending == [], (
-        f'detect_cluster_backend() called synchronously (blocks the event '
-        f'loop — see module docstring) at orchestrator.py line(s) '
         f'{offending}; must be asyncio.to_thread(detect_cluster_backend)'
     )

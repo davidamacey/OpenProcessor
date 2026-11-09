@@ -181,10 +181,7 @@ class IVFMethod:
         normalized-mean centroid instead of leaving the store untrained.
 
         Without this, ``IVFCentroidStore.is_trained()`` stays False forever
-        on a fresh install with a small residual pool, so
-        ``should_retrain_centroids`` reports ``no_centroids_yet`` on every
-        poll (every ``ORCHESTRATOR_POLL_INTERVAL_S``, 1800s) instead of
-        applying the growth/cooldown gates.
+        on a fresh install with a small residual pool.
         """
         from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
 

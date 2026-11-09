@@ -3,15 +3,12 @@
 Before the fix, ``IVFMethod.fit_predict`` on a pool smaller than
 ``IVF_MIN_TRAIN_VECTORS`` returned an all-zero label array without ever
 writing to :class:`IVFCentroidStore`. That leaves ``is_trained()`` False
-forever on a small/fresh install, so
-:func:`should_retrain_centroids` reports ``no_centroids_yet`` on every poll
-(every 1800s) instead of applying its growth/cooldown gates.
+forever on a small/fresh install.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
@@ -80,19 +77,3 @@ async def test_single_bucket_respects_persist_false(ivf_store_dir: Path) -> None
 
     store = IVFCentroidStore()
     assert not store.is_trained()
-
-
-@pytest.mark.asyncio
-async def test_should_retrain_centroids_sees_trained_store_after_single_bucket(
-    ivf_store_dir: Path,
-) -> None:
-    from src.services.curation.clustering.retrain_policy import should_retrain_centroids
-
-    embeddings = _small_pool()
-    method = IVFMethod()
-    await method.fit_predict(embeddings, backend_info=_cpu_backend(), progress=None)
-
-    client = AsyncMock()
-    client.count = AsyncMock(return_value={'count': embeddings.shape[0]})
-    decision = await should_retrain_centroids(client)
-    assert decision['reason'] != 'no_centroids_yet'

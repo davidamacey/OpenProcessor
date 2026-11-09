@@ -1,11 +1,11 @@
 """Split a node of the loop's partition tree into children.
 
-Within :data:`~src.services.curation.clustering.refine.MAX_REFINE_MEMBERS` this is the
-refine core (complete-linkage cosine AHC cut into exactly ``branching`` groups) with a
-writer that only captures the labels; above it, whose pairwise matrix would not fit, a
-seeded k-means on L2-normalized vectors. Neither writes to the datastore: the tree lives
-in the job directory. Members are fitted in sorted id order, so the result depends on the
-ids, the vectors, ``seed`` and ``path`` only, never on input order.
+Within :data:`MAX_AHC_MEMBERS` this is complete-linkage cosine AHC cut into exactly
+``branching`` groups; above it, whose full pairwise matrix (about 8 * n^2 bytes) would not
+fit, a seeded k-means on L2-normalized vectors. Neither writes to the datastore: the tree
+lives in the job record. Members are fitted in sorted id order, so the result depends on the
+ids, the vectors, ``seed`` and ``path`` only, never on input order. The vectors are read from
+the bound project's primary item space (``embedding_space``), the field the clustering ran on.
 """
 
 from __future__ import annotations
@@ -18,12 +18,7 @@ import numpy as np
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.domain.loop_tree import seed_int
-from src.services.curation.clustering.refine import (
-    MAX_REFINE_MEMBERS,
-    MIN_REFINE_MEMBERS,
-    refine_members,
-)
-from src.services.curation.clustering.residual_fetch import RESIDUAL_EMBEDDING_FIELD
+from src.services.curation.clustering.methods.ahc import AHC_LINKAGE, AHC_METRIC
 
 
 if TYPE_CHECKING:
@@ -32,6 +27,9 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
 KMEANS_N_INIT = 4
+MAX_AHC_MEMBERS = 8000
+"""Above this a node is split by k-means: the AHC pairwise matrix would be over 500 MB."""
+MIN_SPLIT_MEMBERS = 4
 
 
 @dataclass(frozen=True)
@@ -44,12 +42,14 @@ class SplitResult:
     method: Literal['ahc', 'kmeans']
 
 
-async def fetch_embeddings(opensearch: AsyncOpenSearch, ids: Sequence[str]) -> dict[str, Any]:
-    """``{crop_id: embedding}`` for the ids that have one."""
-    docs = await mget_crops(opensearch, list(ids), source_includes=[RESIDUAL_EMBEDDING_FIELD])
+async def fetch_embeddings(
+    opensearch: AsyncOpenSearch, ids: Sequence[str], *, field: str
+) -> dict[str, Any]:
+    """``{crop_id: embedding}`` read from the vector field ``field``, for the ids that have one."""
+    docs = await mget_crops(opensearch, list(ids), source_includes=[field])
     out: dict[str, Any] = {}
     for crop_id, doc in docs.items():
-        vector = (doc.get('_source') or {}).get(RESIDUAL_EMBEDDING_FIELD)
+        vector = (doc.get('_source') or {}).get(field)
         if vector is not None:
             out[crop_id] = vector
     return out
@@ -80,39 +80,21 @@ async def _kmeans_groups(
     return groups
 
 
+def _ahc_labels(matrix: np.ndarray, *, k: int) -> np.ndarray:
+    from sklearn.cluster import AgglomerativeClustering
+
+    clusterer = AgglomerativeClustering(n_clusters=k, linkage=AHC_LINKAGE, metric=AHC_METRIC)
+    return np.asarray(clusterer.fit_predict(matrix))
+
+
 async def _ahc_groups(
-    placed: list[str], vectors: list[Any], *, branching: int, max_members: int
+    placed: list[str], vectors: list[Any], *, branching: int
 ) -> dict[Any, list[str]]:
-    members = [
-        {'_id': crop_id, 'embedding': vector, 'class_name': None}
-        for crop_id, vector in zip(placed, vectors, strict=True)
-    ]
-    captured: list[tuple[Any, str]] = []
-
-    async def count() -> int:
-        return len(members)
-
-    async def fetch() -> list[dict[str, Any]]:
-        return members
-
-    async def capture(pairs: list[tuple[Any, str]]) -> int:
-        captured.extend(pairs)
-        return len(pairs)
-
-    summary = await refine_members(
-        0,
-        count_members=count,
-        fetch_members=fetch,
-        write_subids=capture,
-        unit='items',
-        max_members=max_members,
-        n_clusters=branching,
-    )
-    if summary['action'] != 'refined':
-        return {}
+    matrix = np.asarray(vectors, dtype=np.float32)
+    labels = await asyncio.to_thread(_ahc_labels, matrix, k=branching)
     groups: dict[Any, list[str]] = {}
-    for crop_id, subid in captured:
-        groups.setdefault(subid, []).append(crop_id)
+    for crop_id, label in zip(placed, labels, strict=True):
+        groups.setdefault(int(label), []).append(crop_id)
     return groups
 
 
@@ -123,7 +105,7 @@ async def split_node(
     branching: int,
     seed: int,
     path: str,
-    max_members: int = MAX_REFINE_MEMBERS,
+    max_members: int = MAX_AHC_MEMBERS,
 ) -> SplitResult:
     """Split ``ids`` into up to ``branching`` children by embedding similarity."""
     unique = sorted(set(ids))
@@ -132,15 +114,13 @@ async def split_node(
     vectors = [embeddings[crop_id] for crop_id in placed]
     method: Literal['ahc', 'kmeans'] = 'kmeans' if len(placed) > max_members else 'ahc'
     groups: dict[Any, list[str]] = {}
-    if len(placed) >= max(MIN_REFINE_MEMBERS, branching):
+    if len(placed) >= max(MIN_SPLIT_MEMBERS, branching):
         if method == 'kmeans':
             groups = await _kmeans_groups(
                 placed, vectors, branching=branching, seed=seed, path=path
             )
         else:
-            groups = await _ahc_groups(
-                placed, vectors, branching=branching, max_members=max_members
-            )
+            groups = await _ahc_groups(placed, vectors, branching=branching)
     children = sorted((sorted(group) for group in groups.values() if group), key=lambda c: c[0])
     return SplitResult(
         children=children if len(children) >= 2 else [], unplaced=unplaced, method=method

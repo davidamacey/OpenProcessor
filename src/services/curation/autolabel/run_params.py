@@ -11,11 +11,6 @@ from src.core.exceptions import RequestRejectedError
 from src.services.curation.strategy_defaults import UnknownStrategyError, resolve_strategy_selection
 
 
-CLUSTER_SCOPED_SKIP: dict[str, object] = {
-    'skipped': True,
-    'reason': 'cluster-scoped run: index-wide stage not run',
-}
-
 # detection_profile is NOT a per-run option: region detection runs in the
 # detection worker on the active region profile, and no auto-label stage
 # uses it. The param stays declared (hidden) only so an old client still

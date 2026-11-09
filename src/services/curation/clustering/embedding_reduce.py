@@ -1,29 +1,18 @@
 """UMAP residual-pool reducer fit and rebuild — visualization only.
 
-Two genuinely separate things are involved in residual clustering, and only
-one of them touches real clustering:
+Two things are involved:
 
-1. Fetching classifier/PE embeddings for residual crops, in
-   :mod:`src.services.curation.clustering.residual_fetch`. That part IS
-   shared with the real clustering path:
-   :func:`~src.services.curation.clustering.orchestrator.cluster_residuals`
-   calls it directly for its embedding fetch.
-2. UMAP reduction to 50 dimensions with a deterministic seed and
-   ``cosine`` metric (CPU: ``umap-learn``; GPU: ``cuml.manifold.UMAP``
-   when the worker container has a usable GPU and free VRAM — see
-   :mod:`src.services.curation.clustering.backend`), in this module, plus
-   persisting the fitted reducer
-   (:mod:`src.services.curation.clustering.umap_state`).
+1. Fetching the residual crops' embeddings, in
+   :mod:`src.services.curation.clustering.residual_fetch`.
+2. UMAP reduction to 50 dimensions with a deterministic seed and ``cosine`` metric (CPU:
+   ``umap-learn``; GPU: ``cuml.manifold.UMAP`` when the worker container has a usable GPU and
+   free VRAM — see :mod:`src.services.curation.clustering.backend`), in this module, plus
+   persisting the fitted reducer (:mod:`src.services.curation.clustering.umap_state`).
 
-**The UMAP-reduced output from (2) is never fed into AHC or IVF.**
-``cluster_residuals`` clusters the raw, L2-normalized 1024-d embeddings
-fetched in (1) directly — that's also what makes the AHC
-``distance_threshold=0.25`` cosine cut dimensionally correct against
-the source vectors, not a reduced projection. The only caller of the
-UMAP-reduce path is ``POST /curation/projects/{project}/cluster/umap/rebuild``
-(:mod:`src.routers.curation.umap`), which exists purely to feed the
-labeler's 2D/3D scatter visualization. Any design note claiming "UMAP
-feeds the clustering pipeline" is wrong; correct it if you find one.
+**The UMAP-reduced output is never fed into clustering**: the ``cluster_run`` job clusters the
+raw, L2-normalized vectors of the project's item space. The only caller of the UMAP-reduce path
+is ``POST /curation/projects/{project}/cluster/umap/rebuild`` (:mod:`src.routers.curation.umap`),
+which exists purely to feed the labeler's 2D/3D scatter visualization.
 """
 
 from __future__ import annotations
@@ -34,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import Target
 from src.services.curation.clustering.backend import (
     BackendInfo,
     detect_cluster_backend,
@@ -49,6 +39,7 @@ from src.services.curation.clustering.pool_size import (
 )
 from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings
 from src.services.curation.clustering.umap_state import load_reducer, save_reducer, state_id_for
+from src.services.embedding_spaces.resolve import embedding_space
 
 
 if TYPE_CHECKING:
@@ -202,7 +193,8 @@ async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
     consume this module's UMAP-reduced output; see the module
     docstring.
     """
-    ids, embeddings = await fetch_residual_embeddings(client)
+    field = (await embedding_space(Target.ITEM)).vector_field
+    ids, embeddings = await fetch_residual_embeddings(client, field=field)
     if len(ids) == 0:
         return {
             'status': 'no_residuals',

@@ -31,9 +31,9 @@ from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.embedding_state import EMBEDDED
 from src.domain.region_boxes import read_boxes
-from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store
 from src.services.curation.image_serving import is_servable_image_path
-from src.services.curation.ingest_index import crop_pil, residual_placement
+from src.services.curation.ingest_index import crop_pil, place_vectors
+from src.services.curation.item_doc import placement_fields
 from src.services.curation.region_box_embeddings import (
     embeddable,
     entry_for,
@@ -78,9 +78,8 @@ class EmbedTarget:
     items: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     """``(crop_id, _source)``; the source needs ``bbox_norm`` for the crop
     part, the region boxes (and, for ``only_missing``, the stored box
-    embeddings' ids and geometry) for the region part, and ``class_id`` /
-    ``cluster_id`` / ``crop_rank_in_image`` / ``blur_lap_ratio`` for the
-    cluster placement of an item that had no vector."""
+    embeddings' ids and geometry) for the region part, and ``cluster_partition_id``
+    for the cluster placement of an item that was never placed."""
     skip_crop: frozenset[str] = frozenset()
     """Crop ids that already have a vector and keep it (``only_missing``)."""
 
@@ -226,29 +225,12 @@ async def _bulk_update(
             raise RuntimeError(f'embedding bulk update failed: {str(resp.get("items"))[:300]}')
 
 
-def _placement(store: Any, src: dict[str, Any], vector: Any) -> dict[str, Any]:
-    """Cluster fields for an item that has neither a class nor a cluster yet (it
-    was stored without a vector), placed by the rule ingest uses. Anything
-    already clustered or classed is left where it is."""
-    if store is None or src.get('class_id') is not None or src.get('cluster_id') is not None:
-        return {}
-    placed = residual_placement(
-        store, vector, src.get('crop_rank_in_image'), src.get('blur_lap_ratio')
-    )
-    if placed is None:
-        return {}
-    cluster_id, distance = placed
-    out: dict[str, Any] = {'cluster_id': cluster_id, 'cluster_distance': distance}
-    if distance is not None:
-        out['cluster_distance_cluster_id'] = cluster_id
-    return out
-
-
 @dataclass
 class _Writes:
     """What a pass writes once every image is embedded, and its counters."""
 
-    ivf_store: Any
+    place: bool
+    """Whether crops never placed in the serving partition are placed once embedded."""
     counts: dict[str, int] = field(
         default_factory=lambda: dict.fromkeys(
             (
@@ -265,6 +247,7 @@ class _Writes:
     items: dict[str, dict[str, Any]] = field(default_factory=dict)
     images: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     boxes: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    unplaced: dict[str, Any] = field(default_factory=dict)
 
     def add(
         self,
@@ -281,7 +264,8 @@ class _Writes:
         for (cid, src), vec in zip(boxed, vectors.crops, strict=True):
             update = self.items.setdefault(cid, {})
             update.update(pe_embedding=float_list(vec), embedding_state=EMBEDDED)
-            update.update(_placement(self.ivf_store, src, vec))
+            if self.place and not src.get('cluster_partition_id'):
+                self.unplaced[cid] = vec
             self.counts['crop_written'] += 1
         for (cid, box), region_vec in zip(work, vectors.regions, strict=True):
             self.boxes.setdefault(cid, []).append(entry_for(box, region_vec))
@@ -309,7 +293,7 @@ async def reembed_items(
     ``region_written`` and ``missing_image`` (path unservable or unreadable).
     """
     cfg = get_curation_config()
-    writes = _Writes(get_ivf_ingest_store() if 'crop' in parts and place_in_clusters else None)
+    writes = _Writes('crop' in parts and place_in_clusters)
     gate = gate or new_image_gate()
 
     async def embed_target(target: EmbedTarget) -> None:
@@ -349,6 +333,12 @@ async def reembed_items(
         if isinstance(outcome, BaseException):
             raise outcome
 
+    if writes.unplaced:
+        placements = await place_vectors(
+            list(writes.unplaced), np.asarray(list(writes.unplaced.values()), dtype=np.float32)
+        )
+        for placement in placements:
+            writes.items[placement.item_id].update(placement_fields(placement))
     await near_dup_pending.enqueue_pending_bound('item', writes.items, 'vector_changed')
     await near_dup_pending.enqueue_pending_bound(
         'image', [doc_id for doc_id, _ in writes.images], 'vector_changed'

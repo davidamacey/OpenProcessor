@@ -25,28 +25,16 @@ from src.services.curation.clustering.methods.ivf import IVFMethod
 if TYPE_CHECKING:
     from pathlib import Path
 
-CLUSTER_PARAMS = (
-    'train_clusters',
-    'clustering_method',
-    'recluster_unvalidated',
-    'reassign_only',
-    'gate_max_rank',
-    'gate_min_blur_ratio',
-    'n_clusters',
-    'class_id',
-    'cluster_id',
-    'run_auto_promote',
-    'run_vlm',
-)
+RUN_PARAMS = ('class_id', 'cluster_id', 'run_vlm')
 
 
-def test_job_route_and_sync_route_share_cluster_defaults() -> None:
+def test_job_route_and_sync_route_share_run_defaults() -> None:
     from src.routers.curation.pipeline_public import pipeline_auto_label
     from src.routers.curation.pipeline_start import pipeline_auto_label_start
 
     sync = inspect.signature(pipeline_auto_label).parameters
     job = inspect.signature(pipeline_auto_label_start).parameters
-    for name in CLUSTER_PARAMS:
+    for name in RUN_PARAMS:
         assert job[name].default == sync[name].default, name
 
 

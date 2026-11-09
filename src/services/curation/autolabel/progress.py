@@ -1,4 +1,4 @@
-"""Progress of an auto-label run: the stage names, the stages' elapsed tick, and the bridge to the job.
+"""Progress of an auto-label run: the stage names and the bridge to the job.
 
 The stages report through a synchronous reporter (``start_stage``, ``advance``, ``update``). The
 bridge keeps that state in memory and a sibling task flushes it to ``ctx.progress`` once a second
@@ -13,20 +13,13 @@ import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
-from src.services.curation.clustering.pool_coverage import PARTIAL
-
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
-
     from src.tasks.runtime.context import JobContext
 
 
 STAGES: tuple[str, ...] = (
     'embed_missing',
-    'cluster_id_normalize',
-    'cluster_residuals',
-    'auto_promote',
     'vlm',
     'finalize',
 )
@@ -38,15 +31,13 @@ class PauseRequestedError(Exception):
 
 
 def failed_stages(result: Any) -> list[str]:
-    """Names of the stages a finished run reported as ``status: error`` or ``partial``
-    (a cluster pass that did not cover its pool); such a run must not end as a success."""
+    """Names of the stages a finished run reported as ``status: error``; such a run must not
+    end as a success."""
     stages = result.get('stages') if isinstance(result, dict) else None
     if not isinstance(stages, dict):
         return []
     return [
-        name
-        for name, s in stages.items()
-        if isinstance(s, dict) and s.get('status') in ('error', PARTIAL)
+        name for name, s in stages.items() if isinstance(s, dict) and s.get('status') == 'error'
     ]
 
 
@@ -58,9 +49,6 @@ class JobProgress:
         self.stage = ''
         self.processed = 0
         self.total = 0
-        self.backend: str | None = None
-        self.backend_detail: str | None = None
-        self.free_vram_mb: int | None = None
         self.peak_vram_mb: int | None = None
         self.stage_durations: dict[str, float] = {}
         self._stage_started_at = 0.0
@@ -86,9 +74,6 @@ class JobProgress:
         self.processed = max(0, int(processed))
         if total is not None:
             self.total = max(0, int(total))
-
-    def set_backend(self, name: str, detail: str, free_vram_mb: int | None = None) -> None:
-        self.backend, self.backend_detail, self.free_vram_mb = name, detail, free_vram_mb
 
     def record_peak_vram(self, mb: int | None) -> None:
         if mb is not None and mb > (self.peak_vram_mb or 0):
@@ -120,9 +105,6 @@ class JobProgress:
             self.total,
             self.stage or None,
             {
-                'backend': self.backend,
-                'backend_detail': self.backend_detail,
-                'free_vram_mb': self.free_vram_mb,
                 'peak_vram_mb': self.peak_vram_mb,
                 'stage_durations': dict(self.stage_durations),
             },
@@ -134,27 +116,3 @@ class JobProgress:
             await self.flush()
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=FLUSH_INTERVAL_S)
-
-
-async def with_elapsed_tick[T](
-    progress: JobProgress | None, coro: Coroutine[Any, Any, T], *, interval: float = 5.0
-) -> T:
-    """Run ``coro`` while a sibling task ticks ``progress.update(elapsed_s)``, so a stage whose
-    operation offers no callback shows a live counter instead of ``0/0``."""
-    if progress is None:
-        return await coro
-    started = time.time()
-
-    async def _tick() -> None:
-        while True:
-            progress.update(processed=int(time.time() - started), total=0)
-            await asyncio.sleep(interval)
-
-    task = asyncio.create_task(coro)
-    ticker = asyncio.create_task(_tick())
-    try:
-        return await task
-    finally:
-        ticker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await ticker

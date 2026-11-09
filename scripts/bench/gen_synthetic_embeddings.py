@@ -4,7 +4,7 @@ Each vector is a mixture-component centroid plus isotropic gaussian noise, L2-no
 centroids are sampled from the real vectors of ``--base`` (a ``vecdb`` npz), so the component
 geometry is that of real PE-Core crop embeddings; the component weights are log-normal so the
 classes are unbalanced like real crop sets. The output is the same ``vecdb`` npz
-(``vectors`` float32, ``class_name`` = ``c<component>``) that ``cluster_ladder.py`` reads, and
+(``vectors`` float32, ``class_name`` = ``c<component>``) that the cluster benchmarks read, and
 sizes are nested prefixes (rows are drawn i.i.d., so a prefix is a random subsample).
 
     gen_synthetic_embeddings.py --base setP.npz --out synth.npz --n 1000000 --seed 7

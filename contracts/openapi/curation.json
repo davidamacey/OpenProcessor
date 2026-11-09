@@ -1814,29 +1814,6 @@
             "title": "Args",
             "type": "object"
           },
-          "backend": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Clustering backend, 'gpu' or 'cpu'; null before it ran.",
-            "title": "Backend"
-          },
-          "backend_detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backend Detail"
-          },
           "done": {
             "description": "There was a job to pause or resume.",
             "title": "Done",
@@ -1883,17 +1860,6 @@
             "description": "Unix seconds; 0 while it has not finished.",
             "title": "Finished At",
             "type": "number"
-          },
-          "free_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Free Vram Mb"
           },
           "job_id": {
             "title": "Job Id",
@@ -1949,7 +1915,7 @@
           },
           "result": {
             "additionalProperties": true,
-            "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
+            "description": "Per-stage outcomes under `stages` (embed_missing, vlm, ...); each stage reports its own counters.",
             "title": "Result",
             "type": "object"
           },
@@ -2004,9 +1970,6 @@
           "result",
           "args",
           "pipeline",
-          "backend",
-          "backend_detail",
-          "free_vram_mb",
           "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
@@ -2025,29 +1988,6 @@
             "description": "The arguments the run was started with.",
             "title": "Args",
             "type": "object"
-          },
-          "backend": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Clustering backend, 'gpu' or 'cpu'; null before it ran.",
-            "title": "Backend"
-          },
-          "backend_detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backend Detail"
           },
           "cancelled": {
             "description": "A cancellation was requested for a running job.",
@@ -2096,17 +2036,6 @@
             "title": "Finished At",
             "type": "number"
           },
-          "free_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Free Vram Mb"
-          },
           "job_id": {
             "title": "Job Id",
             "type": "string"
@@ -2161,7 +2090,7 @@
           },
           "result": {
             "additionalProperties": true,
-            "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
+            "description": "Per-stage outcomes under `stages` (embed_missing, vlm, ...); each stage reports its own counters.",
             "title": "Result",
             "type": "object"
           },
@@ -2216,9 +2145,6 @@
           "result",
           "args",
           "pipeline",
-          "backend",
-          "backend_detail",
-          "free_vram_mb",
           "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
@@ -2237,29 +2163,6 @@
             "description": "The arguments the run was started with.",
             "title": "Args",
             "type": "object"
-          },
-          "backend": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Clustering backend, 'gpu' or 'cpu'; null before it ran.",
-            "title": "Backend"
-          },
-          "backend_detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backend Detail"
           },
           "elapsed_seconds": {
             "title": "Elapsed Seconds",
@@ -2303,17 +2206,6 @@
             "title": "Finished At",
             "type": "number"
           },
-          "free_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Free Vram Mb"
-          },
           "job_id": {
             "title": "Job Id",
             "type": "string"
@@ -2368,7 +2260,7 @@
           },
           "result": {
             "additionalProperties": true,
-            "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
+            "description": "Per-stage outcomes under `stages` (embed_missing, vlm, ...); each stage reports its own counters.",
             "title": "Result",
             "type": "object"
           },
@@ -2423,9 +2315,6 @@
           "result",
           "args",
           "pipeline",
-          "backend",
-          "backend_detail",
-          "free_vram_mb",
           "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
@@ -41359,7 +41248,7 @@
     },
     "/curation/projects/{project}/cluster/umap/rebuild": {
       "post": {
-        "description": "Refit the UMAP reducer and re-cluster the residual pool.\n\nReturns the same envelope as :func:`cluster_residuals` —\n``{status, n_residuals, n_clusters, n_noise, refit, ...}``.",
+        "description": "Refit the UMAP reducer over the residual pool (visualization only; it never changes a\ncluster).\n\nReturns ``{status, n_residuals, refit, backend, backend_detail}``.",
         "operationId": "post_umap_rebuild_curation_projects__project__cluster_umap_rebuild_post",
         "parameters": [
           {
@@ -42404,127 +42293,6 @@
         ]
       }
     },
-    "/curation/projects/{project}/clusters/auto_promote": {
-      "post": {
-        "description": "Promote classifier-labelled crops that agree with their high-purity cluster.\n\nValidates each such crop (``class_source='cluster_majority_agreement'``).\nGated on the accuracy audit (``POST /audit/start``): every class the run would\npromote needs enough audited crops and an audited detector precision of at\nleast ``promote_min_precision``, else ``409 audit_required`` or\n``409 audit_precision_low`` listing the classes and nothing is written.\n``force=true`` bypasses the gate; a dry run is never gated.",
-        "operationId": "auto_promote_clusters_endpoint_curation_projects__project__clusters_auto_promote_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Min dominant-class share",
-            "in": "query",
-            "name": "min_purity",
-            "required": false,
-            "schema": {
-              "default": 0.85,
-              "description": "Min dominant-class share",
-              "maximum": 1.0,
-              "minimum": 0.5,
-              "title": "Min Purity",
-              "type": "number"
-            }
-          },
-          {
-            "description": "Skip clusters smaller than this",
-            "in": "query",
-            "name": "min_members",
-            "required": false,
-            "schema": {
-              "default": 4,
-              "description": "Skip clusters smaller than this",
-              "maximum": 1000,
-              "minimum": 2,
-              "title": "Min Members",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Compute summary without writing",
-            "in": "query",
-            "name": "dry_run",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Compute summary without writing",
-              "title": "Dry Run",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Audited detector precision a class needs to be promoted",
-            "in": "query",
-            "name": "promote_min_precision",
-            "required": false,
-            "schema": {
-              "default": 0.95,
-              "description": "Audited detector precision a class needs to be promoted",
-              "maximum": 1.0,
-              "minimum": 0.0,
-              "title": "Promote Min Precision",
-              "type": "number"
-            }
-          },
-          {
-            "description": "Promote without the accuracy-audit gate (logged)",
-            "in": "query",
-            "name": "force",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Promote without the accuracy-audit gate (logged)",
-              "title": "Force",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Auto Promote Clusters Endpoint Curation Projects  Project  Clusters Auto Promote Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Auto Promote Clusters Endpoint",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/clusters/partitions": {
       "get": {
         "operationId": "list_cluster_partitions_curation_projects__project__clusters_partitions_get",
@@ -42643,86 +42411,6 @@
           }
         },
         "summary": "Get Cluster Partition",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/clusters/refine/{cluster_id}": {
-      "post": {
-        "description": "Run AHC refinement on a curation item cluster.\n\nWrites ``cluster_subid`` (keyword, e.g. ``\"47a\"``) to every member.\nSkips clusters below the small-cluster floor or above ``max_members``\n(the pairwise matrix grows ~8*n^2 bytes). Re-running on the same\ncluster overwrites prior subids, so refinement is idempotent.",
-        "operationId": "refine_cluster_endpoint_curation_projects__project__clusters_refine__cluster_id__post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "cluster_id",
-            "required": true,
-            "schema": {
-              "title": "Cluster Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "distance_threshold",
-            "required": false,
-            "schema": {
-              "default": 0.25,
-              "maximum": 1.0,
-              "minimum": 0.05,
-              "title": "Distance Threshold",
-              "type": "number"
-            }
-          },
-          {
-            "description": "Skip clusters larger than this. AHC builds a full ~8*n^2-byte pairwise matrix, so larger values cost RAM (8000~512MB, 12000~1.15GB). Default 8000 (env OP_MAX_REFINE_MEMBERS).",
-            "in": "query",
-            "name": "max_members",
-            "required": false,
-            "schema": {
-              "default": 8000,
-              "description": "Skip clusters larger than this. AHC builds a full ~8*n^2-byte pairwise matrix, so larger values cost RAM (8000~512MB, 12000~1.15GB). Default 8000 (env OP_MAX_REFINE_MEMBERS).",
-              "maximum": 50000,
-              "minimum": 50,
-              "title": "Max Members",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Refine Cluster Endpoint Curation Projects  Project  Clusters Refine  Cluster Id  Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Refine Cluster Endpoint",
         "tags": [
           "Curation"
         ]
@@ -52619,7 +52307,7 @@
     },
     "/curation/projects/{project}/pipeline/auto_label": {
       "post": {
-        "description": "Run the full auto-labeling chain end-to-end, synchronously (no job):\n\n1. (optional) Re-train FAISS clusters on every embedded item.\n2. Auto-promote items in high-purity clusters (``cluster_propagation``).\n3. Run the VLM over remaining unvalidated items with the open-vocabulary\n   prompt — high-confidence labels are auto-validated, ``__new__``\n   proposals are flagged for the curator queue.\n\nOutput enumerates each stage's counts so the labeler dashboard can show\n\"this many items still need a human.\" Idempotent: safe to re-run.\n\nFor a background job with progress polling, see ``POST\n/pipeline/auto_label/start`` instead.",
+        "description": "Run the auto-labeling chain synchronously (no job): the optional embed-missing stage,\nthen the VLM over the unvalidated items with the open-vocabulary prompt (high-confidence\nlabels are auto-validated, ``__new__`` proposals are flagged for the curator queue).\n\nOutput enumerates each stage's counts so the labeler dashboard can show\n\"this many items still need a human.\" Idempotent: safe to re-run.\n\nFor a background job with progress polling, see ``POST\n/pipeline/auto_label/start`` instead.",
         "operationId": "pipeline_auto_label_curation_projects__project__pipeline_auto_label_post",
         "parameters": [
           {
@@ -52629,42 +52317,6 @@
             "schema": {
               "title": "Project",
               "type": "string"
-            }
-          },
-          {
-            "description": "Re-train clusters on the items index before promote/VLM.",
-            "in": "query",
-            "name": "train_clusters",
-            "required": false,
-            "schema": {
-              "default": true,
-              "description": "Re-train clusters on the items index before promote/VLM.",
-              "title": "Train Clusters",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "promote_min_purity",
-            "required": false,
-            "schema": {
-              "default": 0.85,
-              "maximum": 1.0,
-              "minimum": 0.5,
-              "title": "Promote Min Purity",
-              "type": "number"
-            }
-          },
-          {
-            "in": "query",
-            "name": "promote_min_members",
-            "required": false,
-            "schema": {
-              "default": 4,
-              "maximum": 1000,
-              "minimum": 2,
-              "title": "Promote Min Members",
-              "type": "integer"
             }
           },
           {
@@ -52720,24 +52372,6 @@
             }
           },
           {
-            "description": "Residual-pool clusterer id from GET /methods (axis=cluster).",
-            "in": "query",
-            "name": "clustering_method",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Residual-pool clusterer id from GET /methods (axis=cluster).",
-              "title": "Clustering Method"
-            }
-          },
-          {
             "description": "Run the VLM stage. See /start.",
             "in": "query",
             "name": "run_vlm",
@@ -52750,95 +52384,7 @@
             }
           },
           {
-            "description": "Merge candidate clusters.",
-            "in": "query",
-            "name": "recluster_unvalidated",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Merge candidate clusters.",
-              "title": "Recluster Unvalidated",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "IVF: stream-assign residuals vs persisted centroids; skip retrain.",
-            "in": "query",
-            "name": "reassign_only",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "IVF: stream-assign residuals vs persisted centroids; skip retrain.",
-              "title": "Reassign Only",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Run the auto-promote stage (classifier + cluster-majority agreement). Defaults False: the rule had no classifier confidence floor and was auto-validating low-confidence classifier predictions into class clusters. Opt-in only after a confidence-gated rewrite.",
-            "in": "query",
-            "name": "run_auto_promote",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Run the auto-promote stage (classifier + cluster-majority agreement). Defaults False: the rule had no classifier confidence floor and was auto-validating low-confidence classifier predictions into class clusters. Opt-in only after a confidence-gated rewrite.",
-              "title": "Run Auto Promote",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "gate_max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gate Max Rank"
-            }
-          },
-          {
-            "in": "query",
-            "name": "gate_min_blur_ratio",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gate Min Blur Ratio"
-            }
-          },
-          {
-            "in": "query",
-            "name": "n_clusters",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 4096,
-                  "minimum": 2,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "N Clusters"
-            }
-          },
-          {
-            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Unset runs the full unvalidated cohort.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -52851,12 +52397,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Unset runs the full unvalidated cohort.",
               "title": "Class Id"
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -52869,7 +52415,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
               "title": "Cluster Id"
             }
           },
@@ -53133,40 +52679,6 @@
           },
           {
             "in": "query",
-            "name": "train_clusters",
-            "required": false,
-            "schema": {
-              "default": true,
-              "title": "Train Clusters",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "promote_min_purity",
-            "required": false,
-            "schema": {
-              "default": 0.85,
-              "maximum": 1.0,
-              "minimum": 0.5,
-              "title": "Promote Min Purity",
-              "type": "number"
-            }
-          },
-          {
-            "in": "query",
-            "name": "promote_min_members",
-            "required": false,
-            "schema": {
-              "default": 4,
-              "maximum": 1000,
-              "minimum": 2,
-              "title": "Promote Min Members",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
             "name": "vlm_batch_size",
             "required": false,
             "schema": {
@@ -53214,22 +52726,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "clustering_method",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Clustering Method"
-            }
-          },
-          {
             "description": "Run the VLM labeling stage. Defaults to False — the detection worker now labels crops on the drain path; this stage just duplicates that work. Opt-in for a one-off no-region-cohort backfill.",
             "in": "query",
             "name": "run_vlm",
@@ -53242,95 +52738,7 @@
             }
           },
           {
-            "description": "Merge candidate clusters.",
-            "in": "query",
-            "name": "recluster_unvalidated",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Merge candidate clusters.",
-              "title": "Recluster Unvalidated",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Run the auto-promote stage (classifier + cluster-majority agreement). Defaults False: the rule had no classifier confidence floor and was auto-validating low-confidence classifier predictions into class clusters. Opt-in only after a confidence-gated rewrite.",
-            "in": "query",
-            "name": "run_auto_promote",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Run the auto-promote stage (classifier + cluster-majority agreement). Defaults False: the rule had no classifier confidence floor and was auto-validating low-confidence classifier predictions into class clusters. Opt-in only after a confidence-gated rewrite.",
-              "title": "Run Auto Promote",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "IVF: stream-assign residuals vs persisted centroids; skip retrain.",
-            "in": "query",
-            "name": "reassign_only",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "IVF: stream-assign residuals vs persisted centroids; skip retrain.",
-              "title": "Reassign Only",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "gate_max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gate Max Rank"
-            }
-          },
-          {
-            "in": "query",
-            "name": "gate_min_blur_ratio",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gate Min Blur Ratio"
-            }
-          },
-          {
-            "in": "query",
-            "name": "n_clusters",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 4096,
-                  "minimum": 2,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "N Clusters"
-            }
-          },
-          {
-            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Unset runs the full unvalidated cohort.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -53343,12 +52751,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Unset runs the full unvalidated cohort.",
               "title": "Class Id"
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -53361,7 +52769,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
               "title": "Cluster Id"
             }
           },
@@ -53414,13 +52822,13 @@
             }
           },
           {
-            "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are clustered and labeled too. Scoped by class_id, cluster_id and the item filter.",
+            "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_id and the item filter.",
             "in": "query",
             "name": "embed_missing",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are clustered and labeled too. Scoped by class_id, cluster_id and the item filter.",
+              "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_id and the item filter.",
               "title": "Embed Missing",
               "type": "boolean"
             }

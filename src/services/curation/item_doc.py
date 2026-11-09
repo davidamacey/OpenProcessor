@@ -78,8 +78,6 @@ class DetectedItem:
     pe_embedding: Any | None = None  # np.ndarray | None, kept loose to avoid a numpy import here
     # Why there is no ``pe_embedding``; ignored when the vector is present.
     embedding_state: str | None = None
-    cluster_id: int | None = None
-    cluster_distance: float | None = None
     # Where the serving partition placed the item at ingest (4F ``assign.place_new``); None when
     # the project has no serving partition for the item target.
     placement: Placement | None = None
@@ -100,24 +98,16 @@ class DetectedItem:
     extra_fields: dict[str, Any] = field(default_factory=dict)
 
 
-def _cluster_fields(item: DetectedItem) -> dict[str, Any]:
-    """The item's cluster fields: the residual cluster and its distance, and its place in the
-    serving partition (``placement``)."""
-    fields: dict[str, Any] = {}
-    if item.cluster_id is not None:
-        fields['cluster_id'] = item.cluster_id
-        fields['cluster_distance'] = item.cluster_distance
-        if item.cluster_distance is not None:
-            fields['cluster_distance_cluster_id'] = item.cluster_id
-    placed = item.placement
-    if placed is not None:
-        fields['cluster_partition_id'] = str(placed.partition_id)
-        fields['cluster_uid'] = None if placed.cluster_uid is None else str(placed.cluster_uid)
-        fields['cluster_state'] = placed.state
-        fields['cluster_score'] = placed.score
-        fields['cluster_margin'] = placed.margin
-        fields['cluster_assigned_by'] = placed.assigned_by
-    return fields
+def placement_fields(placed: Placement) -> dict[str, Any]:
+    """The item fields that record where the serving partition placed it."""
+    return {
+        'cluster_partition_id': str(placed.partition_id),
+        'cluster_uid': None if placed.cluster_uid is None else str(placed.cluster_uid),
+        'cluster_state': placed.state,
+        'cluster_score': placed.score,
+        'cluster_margin': placed.margin,
+        'cluster_assigned_by': placed.assigned_by,
+    }
 
 
 def build_image_doc(
@@ -236,7 +226,8 @@ def build_item_doc(
     for name in DETECTOR_FIELDS:
         if getattr(item, name) is not None:
             doc[name] = getattr(item, name)
-    doc.update(_cluster_fields(item))
+    if item.placement is not None:
+        doc.update(placement_fields(item.placement))
     if item.pe_embedding is not None:
         doc['pe_embedding'] = float_list(item.pe_embedding)
         doc['embedding_state'] = EMBEDDED

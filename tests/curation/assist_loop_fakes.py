@@ -462,6 +462,7 @@ async def build_deps(
     deps = LoopDeps(
         opensearch=world.os,  # type: ignore[arg-type]
         reader=reader,
+        embedding_field='pe_embedding',
         asker=VlmAsker(
             world.os,  # type: ignore[arg-type]
             ctx,

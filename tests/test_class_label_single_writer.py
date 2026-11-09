@@ -6,16 +6,9 @@ index, no OCC, no restorable snapshot). Every human AND dataset-import
 class-label write now goes through ``src/services/curation/class_label.py``
 (``class_label_fields`` / ``class_label_update``).
 
-Scope note (the rule is "no dict literal sets class_validated: True
-outside class_label.py", with one carve-out): one pre-existing
-automated validator — ``clustering/auto_promote.py``'s
-``_merge_promote`` (majority-agreement auto-validation, not a human or
-imported label) — is allowlisted below. It is not a human or import
-label write, so it is outside the shared label abstraction.
-
-The allowlist is scoped to the specific ``(file, function)`` pair, not
-the whole file — a future second writer added anywhere else in ``auto_promote.py`` is
-still caught. The scan is also literal-only (a subscript assignment
+Scope note: the rule is "no dict literal sets class_validated: True
+outside class_label.py". The allowlist can name a specific ``(file, function)`` pair, not
+a whole file, so a second writer added next to an allowed one is still caught. The scan is also literal-only (a subscript assignment
 like ``update['class_validated'] = True`` or a variable value like
 ``{'class_validated': validated}`` is not detected) -- documented, not
 fixed; see ``test_class_sources.py`` for the same
@@ -32,16 +25,13 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# The one legitimate writer, plus one pre-existing out-of-scope automated
-# validator, narrowed to the exact function (see module docstring).
+# The one legitimate writer (see module docstring).
 _ALLOWED_CLASS_VALIDATED_TRUE_FILES = {
     'src/services/curation/class_label.py',
     # Generates 0.6.0-shaped data (the upgrade's input) on purpose; not a writer.
     'scripts/db/make_v060_fixture.py',
 }
-_ALLOWED_CLASS_VALIDATED_TRUE_FUNCTIONS = {
-    ('src/services/curation/clustering/auto_promote.py', '_merge_promote'),
-}
+_ALLOWED_CLASS_VALIDATED_TRUE_FUNCTIONS: set[tuple[str, str | None]] = set()
 
 _SCAN_ROOTS = ('src', 'scripts')
 

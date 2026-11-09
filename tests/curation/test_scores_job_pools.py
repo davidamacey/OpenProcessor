@@ -28,6 +28,7 @@ Two things are exercised here:
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -207,6 +208,11 @@ async def _run_with_spies(
         'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
         _fake_residual,
     )
+
+    async def _fake_space(_target, key=None):
+        return SimpleNamespace(vector_field='pe_embedding')
+
+    monkeypatch.setattr('src.services.embedding_spaces.resolve.embedding_space', _fake_space)
 
     async def _fake_probe_ids(client):
         assert probe_pool_ids is not None

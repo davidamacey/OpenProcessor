@@ -25,7 +25,6 @@ two restored tests assert against instead.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -184,46 +183,6 @@ class TestAutomatedClassWritersExcludeTestHoldout:
     """One check per automated class writer, each against the writer's
     real query-building code (not a re-derived literal) so breaking the
     guard in the source actually fails the test."""
-
-    @pytest.mark.asyncio
-    async def test_auto_promote_scroll_query_has_holdout_must_not(self) -> None:
-        import src.services.curation.clustering.auto_promote as auto_promote_mod
-
-        fake_client = AsyncMock()
-        fake_client.search = AsyncMock(
-            return_value={
-                'aggregations': {
-                    'clusters': {
-                        'buckets': [
-                            {
-                                # composite-agg bucket key is a dict.
-                                'key': {'cluster_id': 7},
-                                'doc_count': 10,
-                                'top_class': {
-                                    'buckets': [{'key': 'sedan', 'doc_count': 9}],
-                                },
-                            },
-                        ],
-                    },
-                },
-            }
-        )
-        captured: dict[str, Any] = {}
-
-        async def _fake_scroll_hits(
-            _client: Any, *, index: str, query: dict[str, Any]
-        ) -> dict[str, dict[str, Any]]:
-            captured['index'] = index
-            captured['query'] = query
-            return {}
-
-        with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(auto_promote_mod, '_scroll_hits', _fake_scroll_hits)
-            await auto_promote_mod.auto_promote_clusters(fake_client, min_purity=0.5, min_members=1)
-
-        assert captured, 'auto_promote_clusters never reached the scroll query'
-        must_not = captured['query']['bool']['must_not']
-        assert {'term': {'test_holdout': True}} in must_not
 
     @pytest.mark.asyncio
     async def test_classes_merge_query_has_holdout_must_not(self) -> None:

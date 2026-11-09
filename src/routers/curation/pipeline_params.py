@@ -2,15 +2,6 @@
 the auto-label routes (split out to keep those modules under the
 file-size ceiling). No routes live here."""
 
-# Shared description for the run_auto_promote query param so both
-# /start and /pipeline_auto_label entry points say the same thing.
-AUTO_PROMOTE_DESC = (
-    'Run the auto-promote stage (classifier + cluster-majority agreement). '
-    'Defaults False: the rule had no classifier confidence floor and was '
-    'auto-validating low-confidence classifier predictions into class clusters. '
-    'Opt-in only after a confidence-gated rewrite.'
-)
-
 RUN_VLM_DESC = (
     'Run the VLM labeling stage. Defaults to False — the '
     'detection worker now labels crops on the drain path; this '
@@ -30,21 +21,17 @@ VLM_ATTRIBUTES_DESC = (
     'pack that declares item attributes (422 pack_declares_no_attributes).'
 )
 
-REASSIGN_ONLY_DESC = 'IVF: stream-assign residuals vs persisted centroids; skip retrain.'
-
 # Labeling-assist item selection (task d): scope a run to one registry class.
 CLASS_ID_DESC = (
     'Scope the VLM labeling stage to a single registry class (labeling-assist '
-    'item selection); its cluster-id upkeep touches only the selected items. '
-    'Clustering and auto-promote are not scoped. Unset runs '
-    'the full unvalidated cohort, unchanged from before this parameter existed.'
+    'item selection). Unset runs the full unvalidated cohort.'
 )
 
 CLUSTER_ID_DESC = (
     'Scope the run to one cluster: every unvalidated, non-holdout, non-excluded '
     "member is VLM-labeled (the global sweep's cost skips do not apply) and every "
-    'write stays on those members, so the index-wide clustering and auto-promote '
-    'stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.'
+    'write stays on those members. For a sampled, per-cluster or per-sub-cluster run use '
+    'POST /assist/runs.'
 )
 
 PROMPT_PACK_DESC = (

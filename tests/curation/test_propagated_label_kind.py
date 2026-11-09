@@ -97,9 +97,7 @@ def test_a_propagated_item_stays_open_to_later_fixes() -> None:
 def test_it_counts_as_confident_so_the_normalizer_and_residual_pool_leave_it() -> None:
     assert PROPAGATED_CLASS_SOURCE in confident_class_sources()
     item = {**_vlm_item(), **class_label_update(_vlm_item(), _label())}
-    pool = residual_pool_query(
-        include_candidate_clusters=True, candidate_cluster_id_min=None, extra_must=None
-    )
+    pool = residual_pool_query(field='pe_embedding', extra_must=None)
     assert matches(_vlm_item() | {'class_source': 'unlabeled_proposal'}, pool)
     assert not matches(item, pool)
 

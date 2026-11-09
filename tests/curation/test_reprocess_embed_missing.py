@@ -3,6 +3,7 @@ cluster placement of a newly embedded item, dry run equal to the applied run."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -19,7 +20,6 @@ from curation.reprocess_fixtures import (
     servable_root,
 )
 from src.services.curation import reprocess_embed
-from src.services.curation.ingest_index import PARKED_CLUSTER_ID
 from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_models import (
     EmbedOptions,
@@ -65,7 +65,8 @@ def _world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, FakePE
             class_id=1,
             class_name='widget',
             class_validated=True,
-            cluster_id=1,
+            cluster_partition_id='old-partition',
+            cluster_uid='old-cluster',
             embedding_state='deferred',
         ),
     ]
@@ -162,33 +163,54 @@ async def test_a_locked_item_is_embedded_but_its_class_fields_never_change(
     assert {k for k in after if after[k] != before.get(k)} == {'pe_embedding', 'embedding_state'}
 
 
-class _Store:
-    def assign_one_with_distance(self, _vec: Any) -> tuple[int, float]:
-        return 4, 0.25
+def _fake_placement(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    import uuid
+
+    from src.services.clustering.assign import Placement
+
+    partition, cluster = uuid.uuid4(), uuid.uuid4()
+    placed: list[str] = []
+
+    async def place(item_ids: Any, _vectors: Any) -> list[Placement]:
+        placed.extend(item_ids)
+        return [Placement(i, partition, cluster, 'assigned', 0.9, 0.2) for i in item_ids]
+
+    monkeypatch.setattr(reprocess_embed, 'place_vectors', place)
+    return placed
 
 
 @pytest.mark.asyncio
-async def test_a_newly_embedded_unclassed_item_is_placed_like_an_ingested_one(
+async def test_a_newly_embedded_unplaced_item_is_placed_like_an_ingested_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(reprocess_embed, 'get_ivf_ingest_store', _Store)
+    placed = _fake_placement(monkeypatch)
     fake, _, service = _world(tmp_path, monkeypatch)
     await apply_reprocess(fake, _req(crops=['car', 'human']), service_factory=_factory(service))
     car = docs(fake)['car']
-    assert (car['cluster_id'], car['cluster_distance']) == (10_004, 0.25)
-    assert car['cluster_distance_cluster_id'] == 10_004
-    assert docs(fake)['human']['cluster_id'] == 1  # a class-labeled item keeps its class cluster
+    assert car['cluster_state'] == 'assigned'
+    assert car['cluster_assigned_by'] == 'incremental'
+    assert car['cluster_uid']
+    assert car['cluster_partition_id']
+    assert 'cluster_id' not in car
+    assert placed == ['car']  # the item that already has a placement keeps it
+    assert docs(fake)['human']['cluster_uid'] == 'old-cluster'
+    assert docs(fake)['human']['cluster_partition_id'] == 'old-partition'
 
 
 @pytest.mark.asyncio
-async def test_an_item_failing_the_clustering_gate_is_parked(
+async def test_nothing_is_placed_when_the_project_turned_automatic_clustering_off(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(reprocess_embed, 'get_ivf_ingest_store', _Store)
-    monkeypatch.setattr('src.services.curation.ingest_index.ingest_passes_gate', lambda *_a: False)
+    placed = _fake_placement(monkeypatch)
     fake, _, service = _world(tmp_path, monkeypatch)
+
+    async def automatic_off() -> Any:
+        return SimpleNamespace(clustering=SimpleNamespace(automatic=False))
+
+    monkeypatch.setattr('src.services.curation.reprocess_images.get_ingest_policy', automatic_off)
     await apply_reprocess(fake, _req(crops=['car']), service_factory=_factory(service))
-    assert docs(fake)['car']['cluster_id'] == PARKED_CLUSTER_ID
+    assert placed == []
+    assert 'cluster_uid' not in docs(fake)['car']
 
 
 @pytest.mark.asyncio

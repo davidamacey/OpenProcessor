@@ -4,7 +4,7 @@ label) has produced items for one decoded image.
 :class:`~src.services.curation.ingest.CurationIngestService` splits one
 image's ingest into ``ingest_image`` (decode, dedup, image identity) and
 :func:`index_items` (this module): per-crop and whole-frame PE embeddings,
-rank/blur quality, cluster placement, the crop cache, item docs and the
+rank/blur quality, the serving-partition placement, the crop cache, item docs and the
 bulk index. ``ingest_one`` runs ``ingest_image`` -> detector ->
 ``index_items``; a dataset import runs ``ingest_image`` -> its own
 label boxes -> the same ``index_items``, so an imported item is built by
@@ -22,8 +22,6 @@ import numpy as np
 
 from src.core.logging import get_logger, get_request_id
 from src.domain.embedding_state import EMBEDDED, FAILED
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.ingest_policy import select_for_embedding
@@ -50,13 +48,11 @@ if TYPE_CHECKING:
 
     from PIL import Image
 
-    from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
+    from src.services.clustering.assign import Placement
     from src.services.curation.ingest import CurationIngestService
 
 
 logger = get_logger(__name__)
-
-PARKED_CLUSTER_ID = -3
 
 
 @dataclass
@@ -143,48 +139,34 @@ def _box_blurs(
         return [crop_lap_var(rgb, box, 'rgb') for box in boxes]
 
 
-def residual_placement(
-    store: IVFCentroidStore, embedding: Any, rank: int | None, blur_ratio: float | None
-) -> tuple[int, float | None] | None:
-    """Where an embedded item with no class goes: ``(cluster_id, distance)``,
-    the parked cluster when it fails the ingest clustering gate, or ``None``
-    when the store cannot place it. The one placement rule, shared by ingest
-    and the embed step so a later-embedded item lands where an ingest-embedded
-    one would have."""
-    if not ingest_passes_gate(rank, blur_ratio):
-        return PARKED_CLUSTER_ID, None
-    try:
-        centroid, distance = store.assign_one_with_distance(embedding)
-    except Exception as exc:
-        logger.debug('ingest_ivf_assign_failed', error=str(exc))
-        return None
-    return int(centroid) + RESIDUAL_CLUSTER_ID_OFFSET, distance
-
-
-async def place_in_serving_partition(items: list[DetectedItem], item_ids: list[str]) -> None:
-    """Stamp each embedded item with its place in the serving partition (4F ``assign.place_new``).
-
-    Nothing is written for an item without a vector, and for all of them when the project has no
-    serving partition for the item target (an unclustered project behaves as before). A failure
-    of the read refuses the ingest: a placement that silently vanished would leave an item
-    looking unclustered.
-    """
+async def place_vectors(item_ids: Sequence[str], vectors: np.ndarray) -> list[Placement]:
+    """Place new items by the serving partition's prototypes (4F ``assign.place_new``); empty when
+    the project has no serving partition for the item target. A failure of the read refuses the
+    call: a placement that silently vanished would leave an item looking unclustered."""
     from src.db.session import async_session_factory, project_tx
     from src.services.clustering.assign import place_new
     from src.services.config_store.bound_project import bound_project_id
 
+    project = await bound_project_id()
+    async with async_session_factory()() as session, project_tx(session, project):
+        return await place_new(
+            session, project=project, target='item', item_ids=item_ids, vectors=vectors
+        )
+
+
+async def place_in_serving_partition(items: list[DetectedItem], item_ids: list[str]) -> None:
+    """Stamp each embedded item with its place in the serving partition.
+
+    Nothing is written for an item without a vector, and for all of them when the project has no
+    serving partition for the item target (an unclustered project behaves as before).
+    """
     embedded = [i for i, it in enumerate(items) if it.pe_embedding is not None]
     if not embedded:
         return
-    project = await bound_project_id()
-    async with async_session_factory()() as session, project_tx(session, project):
-        placements = await place_new(
-            session,
-            project=project,
-            target='item',
-            item_ids=[item_ids[i] for i in embedded],
-            vectors=np.asarray([items[i].pe_embedding for i in embedded], dtype=np.float32),
-        )
+    placements = await place_vectors(
+        [item_ids[i] for i in embedded],
+        np.asarray([items[i].pe_embedding for i in embedded], dtype=np.float32),
+    )
     if not placements:
         return
     for i, placement in zip(embedded, placements, strict=True):
@@ -391,13 +373,8 @@ async def index_items(
         )
     }
 
-    store: IVFCentroidStore | None = None
-    if service.policy.clustering.automatic and any(
-        it.class_id is None and it.pe_embedding is not None for it in items
-    ):
-        store = get_ivf_ingest_store()
-
-    await place_in_serving_partition(items, cids)
+    if service.policy.clustering.automatic:
+        await place_in_serving_partition(items, cids)
 
     box_vars: list[float | None]
     if frame is not None:
@@ -414,13 +391,6 @@ async def index_items(
         cid = cids[idx]
         box_var = box_vars[idx]
         ratio = blur_ratio(box_var, full_var)
-
-        if item.class_id is not None:
-            item.cluster_id = int(item.class_id)
-        elif item.pe_embedding is not None and store is not None:
-            placed = residual_placement(store, item.pe_embedding, rank_by_idx[idx], ratio)
-            if placed is not None:
-                item.cluster_id, item.cluster_distance = placed
 
         with stage_timer('doc_build'):
             doc = build_item_doc(
@@ -493,10 +463,9 @@ async def index_items(
 
 
 __all__ = [
-    'PARKED_CLUSTER_ID',
     'ImageContext',
     'IndexOutcome',
     'crop_pil',
     'index_items',
-    'residual_placement',
+    'place_vectors',
 ]

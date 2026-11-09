@@ -1,7 +1,6 @@
 """The pool a ``cluster_run`` fits: one point-in-time read, keyed and sorted by item key.
 
-Items: every embedded item that is not confidently labelled, validated or shelved (the residual
-gate of ``residual_fetch.residual_pool_query``, without its integer ``cluster_id`` clause: a run
+Items: every embedded item that is not confidently labelled, validated or shelved (a run
 re-clusters the whole pool and identities are carried over by member overlap). Region boxes: the
 accepted, vectored boxes (``region_box_rows.scroll_box_rows``), keyed ``crop_id:box_id``.
 The vector field is the one the embedding registry resolved for the project, never an env value.
@@ -15,7 +14,7 @@ import numpy as np
 
 from src.config.curation_accessors import items_index
 from src.domain.embedding_state import embedded_clause
-from src.services.curation.clustering.residual_fetch import CONFIDENT_CLASS_SOURCES
+from src.domain.ingest_class_sources import confident_class_sources
 
 
 if TYPE_CHECKING:
@@ -35,7 +34,7 @@ def item_pool_query(vector_field: str, extra_must: Sequence[dict[str, Any]] = ()
             'filter': [embedded_clause(vector_field), *extra_must],
             'must_not': [
                 {'term': {'class_validated': True}},
-                {'terms': {'class_source': list(CONFIDENT_CLASS_SOURCES)}},
+                {'terms': {'class_source': list(confident_class_sources())}},
                 {'term': {'class_excluded': True}},
             ],
         }

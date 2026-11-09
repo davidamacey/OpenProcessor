@@ -13,6 +13,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.domain.embedding_spaces import Target
 from src.schemas.curation.assist_loop import AssistLoopRequest
 from src.services.curation.assist.prepare import images_per_call_for
 from src.services.curation.assist.slot_write import RunMeta
@@ -23,6 +24,7 @@ from src.services.curation.assist_loop.partition import PartitionReader, Partiti
 from src.services.curation.autolabel.run_vlm import job_endpoint
 from src.services.curation.class_write_guard import ClassWriteGuard
 from src.services.curation.vlm_class_batch import class_context
+from src.services.embedding_spaces.resolve import embedding_space
 from src.services.labeling.run_labeler import get_vlm_labeler
 from src.services.labeling.vlm_factory import assert_may_connect
 from src.utils.timeutil import now_iso
@@ -147,6 +149,7 @@ async def build(opensearch: AsyncOpenSearch, record: LoopRecord, budget: LoopBud
             opensearch, record.sessions, project=run.project_id, pinned=pinned
         ),
         asker=await _asker(opensearch, run, request, primary, pack),
+        embedding_field=(await embedding_space(Target.ITEM)).vector_field,
         auditor=(
             await _auditor(opensearch, record, budget, request, judge, pack.get('revision'))
             if judge is not None

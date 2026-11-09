@@ -1,12 +1,11 @@
 """Label paths -> ``/export/yolo`` round trip (no labels-confirmed write-through hole).
 
 A reference deployment this stack descends from had an exporter that read
-only the confirmed-labels index while the labeler and auto-promote wrote only
+only the confirmed-labels index while the labeler wrote only
 ``class_validated`` onto items — so an export after hours of labeling came
 out with zero rows. On this codebase the contract is the other way round:
 
-- every labeling path (single / batch human label, cluster
-  auto-promote, dataset import) sets ``class_validated=true`` on the item;
+- every labeling path (single / batch human label, dataset import) sets ``class_validated=true`` on the item;
 - :class:`~src.services.curation.export.GenericYoloExportService` selects
   ``class_validated=true`` items straight from the items index and never
   reads the confirmed-labels index, which nothing writes anymore;
@@ -29,7 +28,6 @@ from _class_registry_fake import InMemoryRegistry
 from curation.dataset_import.db_fixture import import_database  # noqa: F401 - fixture
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
 
 pytestmark = pytest.mark.usefixtures('label_ops_state')
@@ -74,20 +72,6 @@ def fake() -> QueryFakeOpenSearch:
         'b2': _item('b2', image='img3'),
         'never': _item('never', image='img5'),
     }
-    # One high-purity CANDIDATE cluster (cluster_id >= the residual
-    # offset -- auto-promote excludes class-range clusters, cluster_id ==
-    # class_id, from auto-promote entirely since their purity is 1.0 by
-    # construction): 4 members all predicted 'gadget' by the detector ->
-    # auto-promote validates them.
-    for i in range(4):
-        items[f'ap{i}'] = _item(
-            f'ap{i}',
-            image=f'ap_img{i}',
-            cluster_id=RESIDUAL_CLUSTER_ID_OFFSET + 42,
-            class_id=1,
-            class_name='gadget',
-            class_source='classifier_model',
-        )
     images = {'imp': {'image_id': 'imp', 'image_path': '/data/imp.jpg'}}
     return QueryFakeOpenSearch({ITEMS: items, IMAGES: images})
 
@@ -147,14 +131,10 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     test uses.
     """
     from curation.dataset_import.harness import Harness, write_yolo
-    from src.services.curation.clustering.auto_promote import auto_promote_clusters
     from src.services.curation.dataset_import.mapping import ClassMappingEntry
     from src.services.curation.ingest import CurationIngestService
 
     await _human_label_paths(fake, registry, monkeypatch)
-
-    promoted = await auto_promote_clusters(fake, min_purity=0.85, min_members=4)
-    assert promoted['promoted'] == 4
 
     # The production importer, pointed at this test's index and registry.
     h = Harness(tmp_path, monkeypatch)
@@ -180,10 +160,10 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     imported_ids = {i for i, d in items.items() if d.get('import_ids') == [import_id]}
     assert len(imported_ids) == 1
     validated = {i for i, d in items.items() if d.get('class_validated') is True}
-    assert validated == {'h1', 'b1', 'b2', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
+    assert validated == {'h1', 'b1', 'b2'} | imported_ids
     assert 'never' not in validated
     result = await _export(fake, registry, tmp_path)
-    assert result.image_count == len(validated) == 8
+    assert result.image_count == len(validated) == 4
     # Items, plus the images index the imported-negative-frame scan reads.
     assert set(fake.searched_indexes) == {ITEMS, IMAGES}
 

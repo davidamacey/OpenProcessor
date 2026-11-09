@@ -212,7 +212,7 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
         image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
     )
 
-    await pipeline_auto_label(session=object(), opensearch=fake, train_clusters=False, run_vlm=True)
+    await pipeline_auto_label(opensearch=fake, run_vlm=True)
 
     docs = fake.docs(ITEMS)
     assert (docs['undone']['class_id'], docs['undone']['class_source']) == (12, 'det_model')
@@ -261,43 +261,6 @@ async def test_registry_reclassify_skips_item_touched_after_read(tmp_path: Path)
     docs = fake.docs(index)
     assert docs['t']['class_source'] == 'vlm_unmatched'
     assert docs['u']['class_source'] == 'vlm_reclassified'
-
-
-# ---------------------------------------------------------------- cluster auto-promote
-
-
-@pytest.mark.asyncio
-async def test_auto_promote_skips_item_restored_to_another_class(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from src.services.curation.clustering import auto_promote as ap
-
-    monkeypatch.setattr(ap, 'classifier_class_sources', lambda: frozenset({'det_model'}))
-    cluster = 10001
-    members = {
-        f'm{i}': {
-            'crop_id': f'm{i}',
-            'cluster_id': cluster,
-            'class_name': 'coupe',
-            'class_source': 'det_model',
-            'class_validated': False,
-        }
-        for i in range(6)
-    }
-    fake = QueryFakeOpenSearch({ap.items_index(): members})
-
-    def _undo_to_other_class() -> None:
-        doc = fake.docs(ap.items_index())['m0']
-        doc.update(class_name='sedan', class_id=4)
-        doc['class_id_history'] = [dict(UNDO_ENTRY)]
-
-    _hook_mget(fake, _undo_to_other_class)
-    await ap.auto_promote_clusters(fake, min_purity=0.5, min_members=2, dry_run=False)
-
-    docs = fake.docs(ap.items_index())
-    assert docs['m0'].get('class_validated') is False
-    assert docs['m0']['class_name'] == 'sedan'
-    assert docs['m1']['class_validated'] is True
 
 
 # ---------------------------------------------------------------- detection worker

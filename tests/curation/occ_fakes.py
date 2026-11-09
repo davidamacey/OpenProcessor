@@ -5,9 +5,7 @@ of per-doc ``get``/``update``, so every test double that stands in for
 an ``AsyncOpenSearch`` client in a code path that calls it needs
 ``mget`` + ``bulk`` methods (not ``get``/``update``). This module
 centralizes that fake-response construction so it isn't duplicated
-across test files -- including
-``tests/curation/test_clustering_orchestrator_extra.py``, which needs
-it for ``auto_promote_clusters``'s OCC-bulk write path. These helpers
+across test files. These helpers
 only build plain response-dict shapes and have zero import dependency
 on ``src.clients.occ``.
 """

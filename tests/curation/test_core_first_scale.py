@@ -120,12 +120,13 @@ def test_stored_distances_serve_pages_without_a_cluster_scan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     docs = _docs()
-    # Pre-measured cluster (as the geometry pass leaves it).
-    from src.services.curation.clustering.cluster_geometry import centroid_distances, unit_centroid
-
+    # Pre-measured cluster (as the lazy backfill leaves it).
     ids = [i for i, d in docs.items() if d['cluster_id'] == 5]
     x = np.asarray([docs[i]['pe_embedding'] for i in ids], dtype=np.float32)
-    dist = centroid_distances(x, unit_centroid(x))
+    x /= np.linalg.norm(x, axis=1, keepdims=True)
+    centroid = x.mean(axis=0)
+    centroid /= np.linalg.norm(centroid)
+    dist = np.clip(1.0 - x @ centroid, 0.0, 2.0)
     for i, dv in zip(ids, dist.tolist(), strict=True):
         docs[i]['cluster_distance'] = dv
         docs[i]['cluster_distance_cluster_id'] = 5
