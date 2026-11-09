@@ -18,6 +18,7 @@ file per source image with partial-frame policy and counts:
 
 from __future__ import annotations
 
+from fixtures.contract import fill, job
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
@@ -323,3 +324,78 @@ def test_export_class_count_chip_prefers_served_classes_with_objects(
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, errors[:3]
+
+
+def test_freeze_refused_as_near_dup_stale_shows_the_panel_and_updates_the_groups(stub, page, app_url):
+    """409 `near_dup_stale` (only once a holdout is frozen): the panel lists the
+    served stale levels, "Update near-duplicate groups" starts one run per level
+    with the mode its reasons call for and follows the job; the freeze itself is
+    not retried."""
+    register_export_mount(stub)
+    freeze_calls: list[dict] = []
+    run_bodies: list[dict] = []
+
+    def freeze_handler(request, _match):
+        freeze_calls.append(request.post_data_json or {})
+        return (
+            409,
+            {
+                "detail": {
+                    "code": "near_dup_stale",
+                    "levels": [
+                        {"level": "image", "stale_reasons": ["pending"], "pending_count": 4},
+                        {"level": "item", "stale_reasons": ["no_run"], "pending_count": 0},
+                    ],
+                }
+            },
+        )
+
+    def run_handler(request, _match):
+        body = request.post_data_json or {}
+        run_bodies.append(body)
+        return (202, fill("NearDupRunStarted", job_id=f"job-{body['level']}", kind="near_dup_run"))
+
+    stub.on("POST", r"/test_holdout/freeze(\?|$)", freeze_handler)
+    stub.on("POST", r"/near_duplicates/runs$", run_handler)
+    for level in ("image", "item"):
+        stub.on("GET", rf"/jobs/job-{level}$", job(f"job-{level}", kind="near_dup_run"))
+
+    page.goto(f"{app_url}/p/default/export")
+    page.get_by_role("button", name="Freeze test set", exact=True).click()
+    expect(page.get_by_role("dialog")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.once("dialog", lambda d: d.accept())
+    page.get_by_role("button", name="Freeze", exact=True).click()
+
+    panel = page.get_by_test_id("near-dup-stale")
+    expect(panel).to_contain_text("Near-duplicate groups are stale", timeout=ACTION_TIMEOUT_MS)
+    expect(panel).to_contain_text("image level: has items not yet grouped (4 pending)")
+    expect(panel).to_contain_text("item level: has never been built")
+
+    page.get_by_test_id("near-dup-refresh").click()
+    expect(page.get_by_test_id("near-dup-message")).to_contain_text(
+        "Near-duplicate groups are up to date", timeout=ACTION_TIMEOUT_MS
+    )
+    assert [(b["level"], b["mode"]) for b in run_bodies] == [("image", "incremental"), ("item", "full")]
+    assert len(freeze_calls) == 1, "the refused freeze is not retried by the refresh"
+
+
+def test_collapse_near_duplicates_checkbox_sends_the_flag_not_a_threshold(stub, page, app_url):
+    register_export_mount(stub)
+    export_calls: list[dict] = []
+
+    def export_handler(request, _match):
+        export_calls.append(request.post_data_json or {})
+        return (200, EXPORT_YOLO_RESULT)
+
+    stub.on("POST", r"/export/yolo(\?|$)", export_handler)
+    page.goto(f"{app_url}/p/default/export")
+    page.get_by_test_id("export-collapse-near-dup").check(timeout=ACTION_TIMEOUT_MS)
+    export_button = page.get_by_role("button", name="Re-export", exact=True)
+    if export_button.count() == 0:
+        export_button = page.get_by_role("button", name="Export", exact=True)
+    export_button.click()
+    page.get_by_text("Export complete.", exact=False).wait_for(timeout=ACTION_TIMEOUT_MS)
+
+    assert len(export_calls) == 1, export_calls
+    assert export_calls[0].get("collapse_near_duplicates") is True, export_calls[0]
+    assert "dedup_threshold" not in export_calls[0], export_calls[0]
