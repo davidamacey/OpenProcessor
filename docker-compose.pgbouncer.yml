@@ -1,0 +1,92 @@
+# Opt-in overlay (D-50): PgBouncer in transaction mode in front of Postgres for every pooled
+# application connection (OP_DB_POOLER=pgbouncer, OP_DB_HOST=pgbouncer). The beat's single-beat
+# lock, the migration lock and db-migrate keep OP_DB_DIRECT_HOST=postgres: session advisory locks
+# need a session, which transaction mode does not give
+# (https://www.pgbouncer.org/features.html).
+#
+# When you need it (02b section 8.1): add up the connections of 02b section 8 at the scale you
+# plan (API replicas x uvicorn workers x per-process pool, plus the Celery children of every
+# worker replica x (the child pool + 2), plus the beat and the migrate step). When that sum is
+# above OP_PG_MAX_CONNECTIONS - 13 and raising max_connections is not wanted, use this overlay.
+# One API replica and one jobs-worker replica never need it.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.pgbouncer.yml up -d
+#
+# The image tag below is a floating tag: pin it by digest before a release (images.lock rules).
+
+x-pooled-db: &pooled-db
+  - OP_DB_HOST=pgbouncer
+  - OP_DB_DIRECT_HOST=postgres
+  - OP_DB_POOLER=pgbouncer
+
+x-pooled: &pooled
+  environment: *pooled-db
+  depends_on:
+    pgbouncer:
+      condition: service_healthy
+
+services:
+  pgbouncer:
+    image: ${OP_PGBOUNCER_IMAGE:-edoburu/pgbouncer:v1.24.1-p1}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    # The app role's password is a file (never a value in the environment); the entrypoint
+    # builds the auth file from DB_USER and DB_PASSWORD.
+    command:
+      - sh
+      - -c
+      - DB_PASSWORD="$$(cat /run/secrets/op_pg/app_password)" exec /entrypoint.sh /usr/bin/pgbouncer /etc/pgbouncer/pgbouncer.ini
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${OP_DB_APP_USER:-op_app}
+      - DB_NAME=${OP_DB_NAME:-openprocessor}
+      - POOL_MODE=transaction
+      - AUTH_TYPE=scram-sha-256
+      - LISTEN_PORT=5432
+      - MAX_CLIENT_CONN=${OP_PGBOUNCER_MAX_CLIENT_CONN:-2000}
+      - DEFAULT_POOL_SIZE=${OP_PGBOUNCER_POOL_SIZE:-60}
+      # Prepared statements through the pooler need 1.22+ (psycopg: prepared statements and
+      # PgBouncer).
+      - MAX_PREPARED_STATEMENTS=${OP_PGBOUNCER_MAX_PREPARED:-200}
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - triton_net
+
+  api: *pooled
+  jobs-worker: *pooled
+  periodic-worker: *pooled
+  open-vocab-worker: *pooled
+  cluster-worker: *pooled
+  curation-auto-label-worker: *pooled
+  curation-assist-loop-worker: *pooled
+  curation-trainer: *pooled
+  model-export-worker: *pooled
+  curation-evaluator: *pooled
+  # The beat's pooled connections go through the pooler too; its lock uses the direct host.
+  jobs-beat: *pooled
