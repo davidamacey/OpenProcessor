@@ -26,7 +26,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, logger, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
-from src.routers.curation.label_undo import _items_by_ids
 from src.services.curation.edit_history import (
     EDIT_HISTORY_FIELD,
     REGION_UNDO_WRITER,
@@ -36,6 +35,7 @@ from src.services.curation.edit_history import (
     record_edit,
     restore_edit_state,
 )
+from src.services.curation.label_undo import items_by_ids
 from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
@@ -107,7 +107,7 @@ async def undo_crop_region(
         raise HTTPException(
             status_code=409, detail=f'nothing to undo for crop region {crop_id}'
         ) from exc
-    items = await _items_by_ids(opensearch, [crop_id])
+    items = await items_by_ids(opensearch, [crop_id])
     if not items:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
     return items[0]
@@ -156,7 +156,7 @@ async def undo_crop_regions(
     if not by['undone'] and by['nothing_to_undo'] and not (by['conflicts'] or by['not_found']):
         raise HTTPException(status_code=409, detail='nothing to undo for any crop region')
     return {
-        'items': await _items_by_ids(opensearch, by['undone']),
+        'items': await items_by_ids(opensearch, by['undone']),
         'undone': len(by['undone']),
         'nothing_to_undo': by['nothing_to_undo'],
         'conflicts': by['conflicts'],
@@ -177,7 +177,7 @@ async def undo_vlm_dismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
         raise HTTPException(
             status_code=409, detail=f'no VLM dismissal to undo for crop {crop_id}'
         ) from exc
-    items = await _items_by_ids(opensearch, [crop_id])
+    items = await items_by_ids(opensearch, [crop_id])
     if not items:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
     return items[0]

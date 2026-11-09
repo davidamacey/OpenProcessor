@@ -113,12 +113,12 @@ def test_crop_single_get_keeps_class_id_history_source_but_excludes_vectors(
 
 
 def test_label_undo_internal_fetch_still_reads_class_id_history() -> None:
-    """label_undo.py's own internal history fetch (distinct from any list
+    """The label_undo service's own history fetch (distinct from any list
     endpoint) must keep reading class_id_history -- it's the one caller
     that actually needs it."""
     import inspect
 
-    from src.routers.curation import label_undo
+    from src.services.curation import label_undo
 
     source = inspect.getsource(label_undo)
     assert "_source_includes=['class_id_history']" in source
