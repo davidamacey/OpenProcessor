@@ -412,7 +412,9 @@ _LOCKED_EXISTING = {
         'class_source': 'human',
         'label_source': 'human',
         'class_validated': True,
-        'cluster_id': 5,
+        'cluster_partition_id': 'p1',
+        'cluster_uid': 'u5',
+        'cluster_state': 'assigned',
         'test_holdout': False,
     },
     # Issue #31: a holdout item whose class came from a machine writer.
@@ -427,7 +429,9 @@ _LOCKED_EXISTING = {
         'label_source': 'vlm',
         'class_detector': 'vlm_model',
         'class_validated': False,
-        'cluster_id': 5,
+        'cluster_partition_id': 'p1',
+        'cluster_uid': 'u5',
+        'cluster_state': 'assigned',
         'test_holdout': True,
     },
     'validated_import': {
@@ -436,7 +440,9 @@ _LOCKED_EXISTING = {
         'class_source': 'external_label',
         'label_source': 'import',
         'class_validated': True,
-        'cluster_id': 5,
+        'cluster_partition_id': 'p1',
+        'cluster_uid': 'u5',
+        'cluster_state': 'assigned',
         'test_holdout': False,
     },
 }
@@ -462,7 +468,9 @@ async def test_reingest_keeps_every_class_field_of_a_locked_item(kind: str) -> N
         'class_source': 'ingest',
         'label_source': 'ingest',
         'class_validated': False,
-        'cluster_id': 9,
+        'cluster_partition_id': 'p2',
+        'cluster_uid': 'u9',
+        'cluster_state': 'candidate',
         'confidence': 0.4,
         'test_holdout': False,
     }
