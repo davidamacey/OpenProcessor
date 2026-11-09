@@ -209,7 +209,9 @@ async def _split_children(run: LoopRun, record: NodeRecord) -> tuple[list[list[s
     ids = run.members(record.path)
     members = sorted(i for i in ids if run.states[i].state == 'eligible' or run.states[i].truth)
     async with run.split_slots:
-        vectors = await fetch_embeddings(run.deps.opensearch, members)
+        vectors = await fetch_embeddings(
+            run.deps.opensearch, members, field=run.deps.embedding_field
+        )
         result = await split_node(
             members,
             vectors,

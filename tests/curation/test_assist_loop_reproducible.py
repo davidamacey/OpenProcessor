@@ -83,7 +83,7 @@ async def test_input_order_does_not_change_the_split() -> None:
         assert (await _split(_shuffled(vectors, seed))).children == base.children
 
 
-async def test_above_the_refine_cap_a_seeded_kmeans_splits_instead() -> None:
+async def test_above_the_ahc_cap_a_seeded_kmeans_splits_instead() -> None:
     vectors = _blobs(per_blob=15)
 
     first = await _split(vectors, max_members=20)
@@ -96,7 +96,7 @@ async def test_above_the_refine_cap_a_seeded_kmeans_splits_instead() -> None:
         assert len({i.split('-')[0] for i in child}) == 1
 
 
-async def test_within_the_cap_the_refine_core_is_used() -> None:
+async def test_within_the_cap_the_ahc_split_is_used() -> None:
     assert (await _split(_blobs())).method == 'ahc'
 
 
@@ -126,20 +126,19 @@ async def test_members_without_an_embedding_are_unplaced_not_guessed() -> None:
     assert sorted(i for child in result.children for i in child) == sorted(vectors)
 
 
-async def test_fetch_embeddings_reads_the_residual_field() -> None:
-    from src.services.curation.clustering.residual_fetch import RESIDUAL_EMBEDDING_FIELD
-
+async def test_fetch_embeddings_reads_the_given_vector_field() -> None:
+    field = 'item_vec'
     fake = QueryFakeOpenSearch(
         {
             ITEMS: {
-                'a': {'crop_id': 'a', RESIDUAL_EMBEDDING_FIELD: [1.0, 0.0]},
-                'b': {'crop_id': 'b', RESIDUAL_EMBEDDING_FIELD: [0.0, 1.0]},
+                'a': {'crop_id': 'a', field: [1.0, 0.0]},
+                'b': {'crop_id': 'b', field: [0.0, 1.0]},
                 'c': {'crop_id': 'c'},
             }
         }
     )
 
-    got = await fetch_embeddings(fake, ['a', 'b', 'c', 'missing'])  # type: ignore[arg-type]
+    got = await fetch_embeddings(fake, ['a', 'b', 'c', 'missing'], field=field)  # type: ignore[arg-type]
 
     assert got == {'a': [1.0, 0.0], 'b': [0.0, 1.0]}
 

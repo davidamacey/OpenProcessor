@@ -98,6 +98,8 @@ class LoopDeps:
     opensearch: AsyncOpenSearch
     reader: RootReader
     asker: VlmAsker
+    embedding_field: str
+    """The vector field a split reads (the project's primary item space)."""
     auditor: Auditor | None = None
     """``None``: the audit is off (no audit endpoint), which the record states."""
 
