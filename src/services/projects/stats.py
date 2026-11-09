@@ -9,6 +9,8 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config.project_context import current_project
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
@@ -39,7 +41,7 @@ async def _count(client: Any, index: str, body: dict[str, Any] | None, what: str
             await client.count(index=index, body=body) if body else await client.count(index=index)
         )
         return int(resp.get('count') or 0)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('project_count_unavailable', what=what, index=index, error=str(exc))
         return None
 

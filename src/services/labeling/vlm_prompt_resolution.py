@@ -145,10 +145,7 @@ def _stored_packs() -> dict[str, PromptPack]:
     ``ensure_fresh`` cached). Malformed stored bodies are skipped with a
     logged warning rather than raised, same degrade-not-crash contract as
     the file-pack loaders."""
-    try:
-        from src.services.config_store import get_config_store
-    except Exception:  # pragma: no cover - config_store always importable
-        return {}
+    from src.services.config_store import get_config_store
     from src.services.labeling.vlm_prompts import PromptPack
 
     snapshot = get_config_store().current
@@ -167,10 +164,8 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
     (:func:`resolve_prompt_pack`) -- unchanged behavior for a deployment
     that never activates anything through the store.
     """
-    try:
-        from src.services.config_store import get_config_store
-    except Exception:  # pragma: no cover - config_store always importable
-        return resolve_prompt_pack(cfg)
+    from src.services.config_store import get_config_store
+
     snapshot = get_config_store().current
     ref = snapshot.active_pack
     # 'off' has no meaning for a required axis (the VLM always needs some
@@ -262,12 +257,9 @@ def get_prompt_pack(
         # `get_vlm_labeler` are unaffected).
         object.__setattr__(pack, '_resolved_revision', stored.revision)
         return pack
-    try:
-        from src.services.config_store import get_config_store
+    from src.services.config_store import get_config_store
 
-        ref = get_config_store().current.active_pack
-    except Exception:  # pragma: no cover - config_store always importable
-        ref = None
+    ref = get_config_store().current.active_pack
     if isinstance(ref, tuple) and ref[0] == name:
         return active_prompt_pack(cfg)
     return available_prompt_packs(cfg).get(name)
@@ -303,12 +295,9 @@ def prompt_pack_stamp(pack: PromptPack, *, revision: int | None = None) -> str:
         revision = getattr(pack, '_resolved_revision', None)
     if revision is not None:
         return f'{pack.name}@{revision}'
-    try:
-        from src.services.config_store import get_config_store
+    from src.services.config_store import get_config_store
 
-        ref = get_config_store().current.active_pack
-    except Exception:  # pragma: no cover - config_store always importable
-        ref = None
+    ref = get_config_store().current.active_pack
     if isinstance(ref, tuple):
         name, active_revision = ref
         if name == pack.name and active_revision is not None:

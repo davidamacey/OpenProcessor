@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.schemas.curation.projects import ProjectCounts, ProjectStatsCounts
 from src.services.projects.stats import _term_count, index_count
@@ -14,7 +15,7 @@ from tests.projects.test_project_counts import _record
 
 class _Down:
     async def count(self, **_: Any) -> dict[str, int]:
-        raise RuntimeError('opensearch is down')
+        raise OpenSearchConnectionError('N/A', 'opensearch is down', Exception('down'))
 
 
 @pytest.mark.asyncio

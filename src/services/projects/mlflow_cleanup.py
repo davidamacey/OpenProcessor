@@ -53,7 +53,7 @@ async def delete_experiment(
         )
         deleted.raise_for_status()
         return MlflowCleanup('done')
-    except Exception as exc:
+    except (httpx.HTTPError, ValueError) as exc:
         return MlflowCleanup('failed', f'{type(exc).__name__}: {exc}')
     finally:
         if owned:
