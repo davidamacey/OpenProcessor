@@ -29,8 +29,8 @@ describe('normalizeMethodStatus', () => {
 
 // The real {API_PREFIX}/methods wire shape (confirmed 2026-09-10 against the live
 // backend, strategy_registry.py's get_registry()): one flat `strategies`
-// array, each entry carrying an `axis` field (`'cluster' | 'sort' |
-// 'score' | 'overlay'`), plus a top-level `flags` object this file
+// array, each entry carrying an `axis` field (`'sort' | 'score' |
+// 'overlay'`), plus a top-level `flags` object this file
 // doesn't consume. parseMethodsResponse groups by `axis` into the four
 // buckets every downstream consumer (isDiverseOverlayAvailable, etc.)
 // already expects — these tests exercise that grouping directly rather
@@ -40,19 +40,6 @@ describe('parseMethodsResponse', () => {
   it('parses a well-formed full payload into typed lists, grouped by axis', () => {
     const raw = {
       strategies: [
-        {
-          id: 'ivf',
-          axis: 'cluster',
-          label: 'FAISS IVF-512 (production)',
-          status: 'stable',
-          default: true,
-        },
-        {
-          id: 'hdbscan',
-          axis: 'cluster',
-          label: 'HDBSCAN (dormant)',
-          status: 'disabled',
-        },
         {
           id: 'default',
           axis: 'sort',
@@ -88,15 +75,6 @@ describe('parseMethodsResponse', () => {
       flags: { scores_enabled: false },
     };
     const parsed = parseMethodsResponse(raw);
-    expect(parsed.cluster_methods).toEqual([
-      { id: 'ivf', label: 'FAISS IVF-512 (production)', status: 'stable', default: true },
-      {
-        id: 'hdbscan',
-        label: 'HDBSCAN (dormant)',
-        status: 'disabled',
-        default: undefined,
-      },
-    ]);
     expect(parsed.review_sorts[1]).toMatchObject({
       id: 'uncertainty_entropy',
       requires_field: 'probe_pred_margin',
@@ -143,7 +121,6 @@ describe('parseMethodsResponse', () => {
       expect(() => parseMethodsResponse(bad)).not.toThrow();
       const parsed = parseMethodsResponse(bad);
       expect(parsed).toEqual({
-        cluster_methods: [],
         review_sorts: [],
         overlays: [],
         scores: [],
@@ -160,7 +137,6 @@ describe('parseMethodsResponse', () => {
     for (const bad of ['not-an-array', null, undefined, 42]) {
       const parsed = parseMethodsResponse({ strategies: bad });
       expect(parsed).toEqual({
-        cluster_methods: [],
         review_sorts: [],
         overlays: [],
         scores: [],
@@ -196,7 +172,6 @@ describe('parseMethodsResponse', () => {
       },
     ]);
     // An export entry must not leak into any other bucket.
-    expect(parsed.cluster_methods).toEqual([]);
     expect(parsed.review_sorts).toEqual([]);
     expect(parsed.overlays).toEqual([]);
     expect(parsed.scores).toEqual([]);
@@ -254,7 +229,6 @@ describe('parseMethodsResponse', () => {
       },
     ]);
     // Neither axis leaks into any pre-existing bucket.
-    expect(parsed.cluster_methods).toEqual([]);
     expect(parsed.review_sorts).toEqual([]);
     expect(parsed.overlays).toEqual([]);
     expect(parsed.scores).toEqual([]);
@@ -264,11 +238,11 @@ describe('parseMethodsResponse', () => {
   it('drops entries missing a usable id or label, or an unrecognized axis, instead of crashing the whole parse', () => {
     const parsed = parseMethodsResponse({
       strategies: [
-        { id: 'ivf', axis: 'cluster', label: 'FAISS IVF-512', status: 'stable' },
-        { axis: 'cluster', label: 'no id' },
-        { id: 'no-label', axis: 'cluster' },
-        { id: '', axis: 'cluster', label: 'empty id' },
-        { id: 123, axis: 'cluster', label: 'non-string id' },
+        { id: 'recent', axis: 'sort', label: 'Recent', status: 'stable' },
+        { axis: 'sort', label: 'no id' },
+        { id: 'no-label', axis: 'sort' },
+        { id: '', axis: 'sort', label: 'empty id' },
+        { id: 123, axis: 'sort', label: 'non-string id' },
         { id: 'no-axis', label: 'missing axis entirely' },
         { id: 'future-axis', axis: 'quantum', label: "an axis this build doesn't route" },
         null,
@@ -276,10 +250,9 @@ describe('parseMethodsResponse', () => {
         42,
       ],
     });
-    expect(parsed.cluster_methods).toEqual([
-      { id: 'ivf', label: 'FAISS IVF-512', status: 'stable', default: undefined },
+    expect(parsed.review_sorts).toEqual([
+      { id: 'recent', label: 'Recent', status: 'stable', default: undefined },
     ]);
-    expect(parsed.review_sorts).toEqual([]);
     expect(parsed.overlays).toEqual([]);
     expect(parsed.scores).toEqual([]);
   });
@@ -289,14 +262,14 @@ describe('parseMethodsResponse', () => {
       strategies: [
         {
           id: 'some_future_method_v9',
-          axis: 'cluster',
+          axis: 'sort',
           label: 'Future Method',
           status: 'experimental',
         },
       ],
     });
-    expect(parsed.cluster_methods[0]?.id).toBe('some_future_method_v9');
-    expect(parsed.cluster_methods[0]?.status).toBe('experimental');
+    expect(parsed.review_sorts[0]?.id).toBe('some_future_method_v9');
+    expect(parsed.review_sorts[0]?.status).toBe('experimental');
   });
 
   it('normalizes an unrecognized status on a real entry to disabled rather than throwing', () => {
@@ -367,7 +340,7 @@ describe('settable flag on /methods entries', () => {
   it('keeps a boolean settable and drops anything else', () => {
     const parsed = parseMethodsResponse({
       strategies: [
-        { id: 'ivf', axis: 'cluster', label: 'IVF', status: 'stable', settable: true },
+        { id: 'recent', axis: 'sort', label: 'Recent', status: 'stable', settable: true },
         {
           id: 'lp',
           axis: 'detection_profile',
@@ -378,7 +351,7 @@ describe('settable flag on /methods entries', () => {
         { id: 'p', axis: 'prompt_pack', label: 'P', status: 'stable', settable: 'yes' },
       ],
     });
-    expect(parsed.cluster_methods[0]!.settable).toBe(true);
+    expect(parsed.review_sorts[0]!.settable).toBe(true);
     expect(parsed.detection_profiles[0]!.settable).toBe(false);
     expect(parsed.prompt_packs[0]!.settable).toBeUndefined();
   });

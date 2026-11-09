@@ -36,14 +36,14 @@ describe('parseCurationSettings', () => {
   it('parses the real documented body, resource_links in served order', () => {
     const docs = { ...LINK, id: 'swagger', url: '/docs', kind: 'docs', reachable: null };
     const raw = {
-      defaults: { cluster: 'ivf' },
+      defaults: { vlm: 'a' },
       revision: 4,
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
       resource_links: [docs, LINK],
     };
     expect(parseCurationSettings(raw)).toEqual({
-      defaults: { cluster: 'ivf' },
+      defaults: { vlm: 'a' },
       revision: 4,
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,
@@ -80,8 +80,8 @@ describe('parseCurationSettings', () => {
   });
 
   it('drops non-string values per-entry, siblings survive', () => {
-    const raw = { defaults: { cluster: 'ivf', sort: 7 } };
-    expect(parseCurationSettings(raw).defaults).toEqual({ cluster: 'ivf' });
+    const raw = { defaults: { vlm: 'a', sort: 7 } };
+    expect(parseCurationSettings(raw).defaults).toEqual({ vlm: 'a' });
   });
 
   it('preserves an axis id this build has never heard of (open-map round trip)', () => {
@@ -95,7 +95,7 @@ describe('SETTINGS_AXES', () => {
     const ids = SETTINGS_AXES.map((a) => a.axis);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.sort()).toEqual(
-      ['cluster', 'detection_profile', 'prompt_pack', 'sort', 'vlm'].sort(),
+      ['detection_profile', 'prompt_pack', 'sort', 'vlm'].sort(),
     );
   });
 
@@ -108,7 +108,7 @@ describe('SETTINGS_AXES', () => {
 });
 
 // Settable-ness is the server's per-entry `settable` flag, never this
-// build's opinion — mirrors OpenProcessor main after (B): cluster, sort
+// build's opinion — mirrors OpenProcessor main after (B): sort
 // and prompt_pack settable; detection_profile display-only.
 describe('settableAxes / advisoryAxes', () => {
   const entry = (id: string, settable?: boolean) => ({
@@ -118,7 +118,6 @@ describe('settableAxes / advisoryAxes', () => {
     ...(settable === undefined ? {} : { settable }),
   });
   const methods = {
-    cluster_methods: [entry('ivf', true)],
     review_sorts: [entry('recent', true)],
     detection_profiles: [entry('widget_tag', false)],
     prompt_packs: [entry('generic_item_v1', true)],
@@ -128,7 +127,6 @@ describe('settableAxes / advisoryAxes', () => {
 
   it('follows the server flag', () => {
     expect(settableAxes(methods).map((a) => a.axis)).toEqual([
-      'cluster',
       'sort',
       'prompt_pack',
       'vlm',
@@ -157,7 +155,6 @@ describe('settableAxes / advisoryAxes', () => {
 describe('axisOptions', () => {
   it('drops shadow/disabled entries and appends no synthetic sentinel', () => {
     const methods: MethodsResponse = {
-      cluster_methods: [],
       review_sorts: [
         { id: 'recent', label: 'Recent first', status: 'stable' },
         { id: 'uncertainty_entropy', label: 'Uncertainty', status: 'experimental' },
@@ -182,7 +179,6 @@ describe('axisOptions', () => {
 describe('effectiveDefaultId / isPinned', () => {
   const spec = axisSpec('sort')!;
   const methods: MethodsResponse = {
-    cluster_methods: [],
     review_sorts: [
       { id: 'recent', label: 'Recent first', status: 'stable', default: true },
       { id: 'uncertainty_entropy', label: 'Uncertainty', status: 'experimental' },
@@ -263,7 +259,6 @@ describe('vlm axis (W9)', () => {
     { id: 'gone', label: 'Gone', status: 'disabled' as const, settable: true },
   ];
   const methods = {
-    cluster_methods: [],
     review_sorts: [],
     overlays: [],
     scores: [],
