@@ -10,7 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.occ_locks import is_human_marker
+from src.config.curation_accessors import items_index
+from src.services.embedding_spaces.readers import vector_source_excludes
+from src.utils.timeutil import now_iso
 
 
 PRIOR_VALIDATED = 'excluded_prior_class_validated'
@@ -91,9 +95,56 @@ def park_restored_state_while_excluded(restored: dict[str, Any]) -> dict[str, An
     return out
 
 
+async def _occ_bulk_human_write(
+    opensearch: Any, crop_ids: list[str], merger: Any, *, writer_id: str
+) -> tuple[list[str], int]:
+    """Read-modify-write ``crop_ids`` via OCC bulk; return ``(written ids, failure count)``.
+
+    A version conflict (a concurrent write landed between read and write) counts as a failure
+    the caller reports, never a silent success; an item the merger left unchanged is in neither.
+    """
+    resp = await occ_skip_on_conflict_bulk(
+        opensearch,
+        vector_excludes=await vector_source_excludes(),
+        doc_ids=list(crop_ids),
+        merger=merger,
+        index=items_index(),
+        refresh='wait_for',
+        writer_id=writer_id,
+    )
+    failures = len(resp.get('errors') or []) + int(resp.get('skipped_due_to_conflict') or 0)
+    return list(resp.get('updated_ids') or []), failures
+
+
+async def exclude_items(
+    opensearch: Any, crop_ids: list[str], *, reason: str
+) -> tuple[list[str], int]:
+    """Exclude the items from training and clustering; ``(excluded ids, failure count)``."""
+    now = now_iso()
+    return await _occ_bulk_human_write(
+        opensearch,
+        crop_ids,
+        lambda _id, cur: exclusion_update(cur, reason=reason, now=now),
+        writer_id='human:batch_exclude_crops',
+    )
+
+
+async def unexclude_items(opensearch: Any, crop_ids: list[str]) -> tuple[list[str], int]:
+    """Reverse the exclusion; ``(un-excluded ids, failure count)``."""
+    now = now_iso()
+    return await _occ_bulk_human_write(
+        opensearch,
+        crop_ids,
+        lambda _id, cur: unexclusion_update(cur, now=now),
+        writer_id='human:batch_unexclude_crops',
+    )
+
+
 __all__ = [
     'PRIOR_VALIDATED',
+    'exclude_items',
     'exclusion_update',
     'park_restored_state_while_excluded',
+    'unexclude_items',
     'unexclusion_update',
 ]

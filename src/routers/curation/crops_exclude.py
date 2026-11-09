@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import HTTPException
-from opensearchpy.exceptions import NotFoundError
 
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._crop_write_models import CropExcludeRequest, CropUnexcludeRequest
 from src.routers.curation._selection import selected_crop_ids
 from src.routers.curation._selection_write_models import (
@@ -16,8 +15,8 @@ from src.routers.curation._selection_write_models import (
     BatchUnexcludeResponse,
     SelectionDryRunResponse,
 )
-from src.services.embedding_spaces.readers import vector_source_excludes
-from src.utils.timeutil import now_iso
+from src.services.curation.exclusion import exclude_items, unexclude_items
+from src.services.curation.label_undo import CropNotFoundError, review_dismiss
 
 
 @router.post(
@@ -50,50 +49,13 @@ async def batch_exclude_crops(
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
         return {'excluded': 0, 'updated_ids': [], 'errors': 0}
-    from src.services.curation.exclusion import exclusion_update
-
-    now = now_iso()
-    reason = payload.reason or 'ignore'
-    updated_ids, n_errors = await _occ_bulk_human_write(
-        opensearch,
-        ids,
-        lambda _id, cur: exclusion_update(cur, reason=reason, now=now),
-        writer_id='human:batch_exclude_crops',
-    )
-    return {'excluded': len(updated_ids), 'updated_ids': updated_ids, 'errors': n_errors}
-
-
-async def _occ_bulk_human_write(
-    opensearch: Any,
-    crop_ids: list[str],
-    merger: Any,
-    *,
-    writer_id: str,
-) -> tuple[list[str], int]:
-    """Read-modify-write ``crop_ids`` via OCC bulk; return ``(written ids,
-    failure count)``.
-
-    A version conflict (a concurrent write landed between read and write)
-    counts as a failure the caller reports, never a silent success; an item
-    the merger left unchanged is in neither.
-    """
-    from src.clients.occ import occ_skip_on_conflict_bulk
-
-    excludes = await vector_source_excludes()
     try:
-        resp = await occ_skip_on_conflict_bulk(
-            opensearch,
-            vector_excludes=excludes,
-            doc_ids=list(crop_ids),
-            merger=merger,
-            index=items_index(),
-            refresh='wait_for',
-            writer_id=writer_id,
+        updated_ids, n_errors = await exclude_items(
+            opensearch, ids, reason=payload.reason or 'ignore'
         )
     except Exception as exc:
         raise server_error(503, 'opensearch error', exc) from exc
-    failures = len(resp.get('errors') or []) + int(resp.get('skipped_due_to_conflict') or 0)
-    return list(resp.get('updated_ids') or []), failures
+    return {'excluded': len(updated_ids), 'updated_ids': updated_ids, 'errors': n_errors}
 
 
 @router.post(
@@ -116,15 +78,10 @@ async def batch_unexclude_crops(
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
         return {'unexcluded': 0, 'updated_ids': [], 'errors': 0}
-    from src.services.curation.exclusion import unexclusion_update
-
-    now = now_iso()
-    updated_ids, n_errors = await _occ_bulk_human_write(
-        opensearch,
-        ids,
-        lambda _id, cur: unexclusion_update(cur, now=now),
-        writer_id='human:batch_unexclude_crops',
-    )
+    try:
+        updated_ids, n_errors = await unexclude_items(opensearch, ids)
+    except Exception as exc:
+        raise server_error(503, 'opensearch error', exc) from exc
     return {'unexcluded': len(updated_ids), 'updated_ids': updated_ids, 'errors': n_errors}
 
 
@@ -139,21 +96,9 @@ async def review_dismiss_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[s
     underlying class / region state is left intact — only the review
     visibility changes.
     """
-    body = {
-        'doc': {
-            'review_dismissed_at': now_iso(),
-            'review_dismissed_by': 'human',
-            'updated_at': now_iso(),
-        }
-    }
     try:
-        await opensearch.update(
-            index=items_index(),
-            id=crop_id,
-            body=body,
-            refresh='wait_for',
-        )
-    except NotFoundError as exc:
+        await review_dismiss(opensearch, crop_id)
+    except CropNotFoundError as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
     except Exception as exc:
         raise server_error(503, 'opensearch error', exc) from exc

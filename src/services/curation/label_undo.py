@@ -210,6 +210,25 @@ async def review_undismiss(opensearch: Any, crop_id: str) -> None:
     )
 
 
+async def review_dismiss(opensearch: Any, crop_id: str) -> None:
+    """Hide the item from every review queue (one-way; the class and region state stay)."""
+    try:
+        await opensearch.update(
+            index=items_index(),
+            id=crop_id,
+            body={
+                'doc': {
+                    'review_dismissed_at': now_iso(),
+                    'review_dismissed_by': 'human',
+                    'updated_at': now_iso(),
+                }
+            },
+            refresh='wait_for',
+        )
+    except NotFoundError as exc:
+        raise CropNotFoundError(crop_id) from exc
+
+
 async def crop_history(opensearch: Any, crop_id: str) -> list[dict[str, Any]]:
     """The item's class history entries, oldest first, with only the documented keys."""
     try:

@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from opensearchpy.exceptions import ConnectionError as OsConnectionError
+from opensearchpy.exceptions import ConnectionError as OsConnectionError, NotFoundError
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
@@ -27,6 +27,14 @@ class _DownOpenSearch(QueryFakeOpenSearch):
 
     async def mget(self, **_kw: Any) -> dict[str, Any]:
         raise OsConnectionError('N/A', 'connection refused', None)
+
+    async def update(self, **_kw: Any) -> dict[str, Any]:
+        raise OsConnectionError('N/A', 'connection refused', None)
+
+
+class _MissingOnUpdate(QueryFakeOpenSearch):
+    async def update(self, **_kw: Any) -> dict[str, Any]:
+        raise NotFoundError(404, 'not_found', {})
 
 
 def _client(fake: Any) -> TestClient:
@@ -73,3 +81,15 @@ def test_a_missing_item_is_a_404(method: str, path: str, body: Any) -> None:
 def test_history_of_a_missing_item_is_a_404() -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
     assert _client(fake).get(f'{BASE}/crops/c1/history').status_code == 404
+
+
+def test_review_dismiss_of_a_missing_item_is_a_404() -> None:
+    fake = _MissingOnUpdate({ITEMS: {}})
+    r = _client(fake).post(f'{BASE}/crops/c1/review_dismiss')
+    assert r.status_code == 404, r.text
+    assert r.json()['detail'] == 'crop not found: c1'
+
+
+def test_review_dismiss_outage_is_a_503() -> None:
+    fake = _DownOpenSearch({ITEMS: {'c1': {'crop_id': 'c1'}}})
+    assert _client(fake).post(f'{BASE}/crops/c1/review_dismiss').status_code == 503
