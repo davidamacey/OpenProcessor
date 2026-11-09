@@ -23,6 +23,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.services.upgrade',  # the 0.6.0 control-data step
     'src.services.training.model_registry',  # who owns, shares and serves a Triton model name crosses projects
     'src.services.training.trainer_reachability',  # reads worker_capabilities and gpu_devices, which belong to no project
+    'src.services.training.gpu_arbiter',  # the global arbiter asks whether any project's bake-off holds the GPUs
     'src.services.config_store',  # resolves a slug to its id; deployment-wide endpoints and profiles
     'src.services.model_export_jobs',  # deployment-wide export jobs (no project) and the models they build
     'scripts.db',  # migration runner and db verify

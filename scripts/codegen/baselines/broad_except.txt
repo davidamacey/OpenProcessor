@@ -33,7 +33,7 @@ scripts/bench/ingest_write_path.py	1	ratchet: may only go down
 scripts/bench/vectordb/orchestrate.py	1	ratchet: may only go down
 scripts/curation/_vlm_activity.py	1	ratchet: may only go down
 scripts/curation/backfill_region_embeddings.py	2	ratchet: may only go down
-scripts/curation/bakeoff/bakeoff_runner.py	3	ratchet: may only go down
+scripts/curation/bakeoff/bakeoff_runner.py	2	ratchet: may only go down
 scripts/curation/bakeoff/report.py	2	ratchet: may only go down
 scripts/curation/cluster_raw_labels.py	1	ratchet: may only go down
 scripts/curation/cluster_refresh_daemon.py	2	ratchet: may only go down

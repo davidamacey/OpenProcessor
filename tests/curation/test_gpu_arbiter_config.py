@@ -9,16 +9,11 @@ not crash.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
 import pytest
 
-from src.config import GpuArbiterConfig, get_curation_config, get_gpu_arbiter_config
-from src.services.training import gpu_arbiter, gpu_arbiter_docker
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from src.config import GpuArbiterConfig, get_gpu_arbiter_config
+from src.services.training import gpu_arbiter_docker
 
 
 def test_defaults_are_empty_and_permissive() -> None:
@@ -26,9 +21,6 @@ def test_defaults_are_empty_and_permissive() -> None:
     assert cfg.allowed_gpu_ids == frozenset()
     assert cfg.containers == ()
     assert cfg.container_gpus == ()
-    # Never None: the router and the reconcile loop must watch the same dir
-    # even when OP_BAKEOFF_JOBS_DIR is unset.
-    assert cfg.bakeoff_jobs_dir == str(get_curation_config().bakeoff_jobs_dir)
     assert cfg.gpu_labels == {}
     assert cfg.default_train_gpus is None
 
@@ -110,7 +102,6 @@ def test_docker_client_unavailable_warns_once_not_per_call(
 _ARBITER_ENV_VARS = (
     'OP_GPU_ALLOWED_IDS',
     'OP_GPU_ARBITER_CONTAINERS',
-    'OP_BAKEOFF_JOBS_DIR',
     'OP_GPU_LABELS',
     'OP_TRAIN_DEFAULT_GPUS',
 )
@@ -134,14 +125,12 @@ def test_from_env_unset_is_permissive_default(clean_arbiter_env: pytest.MonkeyPa
 def test_from_env_parses_every_field(clean_arbiter_env: pytest.MonkeyPatch) -> None:
     clean_arbiter_env.setenv('OP_GPU_ALLOWED_IDS', ' 2, 0 ,')
     clean_arbiter_env.setenv('OP_GPU_ARBITER_CONTAINERS', 'vlm-server@2, region-worker')
-    clean_arbiter_env.setenv('OP_BAKEOFF_JOBS_DIR', '/var/lib/openprocessor/bakeoff_jobs')
     clean_arbiter_env.setenv('OP_GPU_LABELS', '0=RTX A6000,2=RTX A6000')
     clean_arbiter_env.setenv('OP_TRAIN_DEFAULT_GPUS', '2')
     cfg = GpuArbiterConfig.from_env()
     assert cfg.allowed_gpu_ids == frozenset({0, 2})
     assert cfg.containers == ('vlm-server', 'region-worker')
     assert cfg.container_gpus == (('vlm-server', frozenset({2})), ('region-worker', None))
-    assert cfg.bakeoff_jobs_dir == '/var/lib/openprocessor/bakeoff_jobs'
     assert cfg.gpu_labels == {0: 'RTX A6000', 2: 'RTX A6000'}
     assert cfg.default_train_gpus == '2'
 
@@ -208,118 +197,3 @@ def test_env_allowlist_rejects_disallowed_gpu_on_training_start(
         TrainJobSpec(dataset_export_dir='/data/exports/x', cuda_visible_devices='1')
     ok = TrainJobSpec(dataset_export_dir='/data/exports/x', cuda_visible_devices='2,0')
     assert ok.cuda_visible_devices == '0,2'
-
-
-def test_env_bakeoff_jobs_dir_reaches_reconcile_check(
-    clean_arbiter_env: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """OP_BAKEOFF_JOBS_DIR must drive gpu_arbiter.bakeoff_active() -- the
-    reconcile loop's 'is a bake-off queued' check -- with no code config."""
-    clean_arbiter_env.setenv('OP_BAKEOFF_JOBS_DIR', str(tmp_path))
-    assert gpu_arbiter.bakeoff_active() is False
-    (tmp_path / 'x.job.json').write_text('{}')
-    assert gpu_arbiter.bakeoff_active() is True
-
-
-def test_bakeoff_jobs_dir_default_is_shared_with_the_router(
-    clean_arbiter_env: pytest.MonkeyPatch,
-) -> None:
-    """With no env set, the router's JOBS_DIR is the arbiter's bakeoff_jobs_dir."""
-    from pathlib import Path
-
-    from src.routers.curation import bakeoff
-
-    cfg = GpuArbiterConfig.from_env()
-    assert cfg.bakeoff_jobs_dir == str(get_curation_config().bakeoff_jobs_dir)
-    # bakeoff.JOBS_DIR is now _jobs_dir(), resolved per-project at call
-    # time (projects_plan.md §5.3); for the bound default project it's
-    # still byte-for-byte the arbiter's bakeoff_jobs_dir.
-    assert Path(get_gpu_arbiter_config().bakeoff_jobs_dir) == bakeoff._jobs_dir()
-
-
-def test_bakeoff_active_after_enqueue_with_no_env(
-    clean_arbiter_env: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """An enqueued bake-off keeps GPU-resident containers down on the default config."""
-    import json
-    from pathlib import Path
-
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    import src.config.curation_accessors as curation_config_module
-    from src.config import CurationConfig
-    from src.routers.curation import bakeoff, router as curation_router
-    from src.services.curation import eval_datasets
-
-    state = tmp_path / 'state'
-    cfg = CurationConfig(state_dir=state)
-    clean_arbiter_env.setattr(
-        curation_config_module, '_default_curation_config', cfg, raising=False
-    )
-    jobs_dir = Path(get_gpu_arbiter_config().bakeoff_jobs_dir)
-    assert jobs_dir == state / 'projects' / 'default' / 'bakeoff_jobs'
-    clean_arbiter_env.setattr(bakeoff, '_jobs_dir', lambda: jobs_dir)
-    clean_arbiter_env.setattr(bakeoff, '_out_dir', lambda: tmp_path / 'out')
-    exports = tmp_path / 'exports'
-    d = exports / 'e1'
-    (d / 'labels' / 'test').mkdir(parents=True)
-    (d / 'labels' / 'test' / 'a.txt').write_text('0 0.5 0.5 0.1 0.1\n')
-    (d / 'data.yaml').write_text('names:\n  0: a\n')
-    (d / 'manifest.json').write_text(json.dumps({}))
-    clean_arbiter_env.setattr(eval_datasets, 'export_root', lambda: exports)
-    eval_datasets.clear_cache()
-
-    class _Action:
-        action = 'noop'
-
-    async def _stop(**_kw: object) -> _Action:
-        return _Action()
-
-    clean_arbiter_env.setattr(gpu_arbiter_docker, 'stop_gpu_services', _stop)
-    assert gpu_arbiter.bakeoff_active() is False
-    app = FastAPI()
-    from _curation_app import mount_curation_routers
-
-    mount_curation_routers(app, curation_router)
-    r = TestClient(app).post(
-        '/curation/projects/default/bakeoff/run',
-        json={
-            'datasets': [{'id': 'export:e1'}],
-            'models': [{'source': 'custom', 'name': 'c', 'backend': 'ultralytics'}],
-        },
-    )
-    assert r.status_code == 200, r.text
-    assert gpu_arbiter.bakeoff_active() is True
-
-
-def test_bakeoff_active_scans_every_projects_own_queue(
-    tmp_path: Path, clean_arbiter_env: pytest.MonkeyPatch
-) -> None:
-    """A bake-off queued in a non-default project's own ``bakeoff_jobs_dir``
-    must keep the GPUs claimed -- the arbiter scans every project's queue
-    (``gpu_arbiter.all_bakeoff_jobs_dirs()``), not one flat dir."""
-    from dataclasses import replace
-
-    from src.config.curation_accessors import base_curation_config
-    from src.config.projects import new_project_record
-    from src.services.projects import registry as registry_mod
-
-    alpha = new_project_record('alpha', base_curation_config())
-    alpha = replace(
-        alpha,
-        resources=replace(alpha.resources, bakeoff_jobs_dir=tmp_path / 'alpha' / 'bakeoff_jobs'),
-    )
-
-    class _Snap:
-        def snapshot(self) -> dict[str, object]:
-            return {'alpha': alpha}
-
-    clean_arbiter_env.setattr(registry_mod, 'get_project_registry', _Snap)
-    dirs = gpu_arbiter.all_bakeoff_jobs_dirs()
-    assert tmp_path / 'alpha' / 'bakeoff_jobs' in dirs
-
-    assert gpu_arbiter.bakeoff_active() is False
-    alpha.resources.bakeoff_jobs_dir.mkdir(parents=True)
-    (alpha.resources.bakeoff_jobs_dir / 'x.job.json').write_text('{}')
-    assert gpu_arbiter.bakeoff_active() is True

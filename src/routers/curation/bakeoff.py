@@ -3,8 +3,9 @@
 api pins an older Ultralytics release and cannot load every model
 family the harness scores, so it does NOT run the comparison itself. It
 resolves the request (eval datasets, training runs, class mappings; see
-``src/services/curation/bakeoff_jobs.py`` and its siblings) into a ``<job_id>.job.json`` in
-``_jobs_dir()``, which the evaluator container watches. The evaluator scores
+``src/services/curation/bakeoff_jobs.py`` and its siblings) into the parameters of a
+``bakeoff`` job on the ``gpu_eval`` queue (``start_job``, with a ``bakeoff_runs`` row), which
+the evaluator worker runs (the ``bakeoff_tasks`` module of the bakeoff package). The evaluator scores
 every model on every dataset's frozen test split and writes ``status.json``,
 ``<dataset dir>/comparison.json`` and ``matrix.json`` under
 ``_out_dir()/<job_id>/`` for these routes to serve.
@@ -21,16 +22,12 @@ Endpoints:
     GET  /bakeoff/matrix/{id}       model x dataset matrix
 
 GPU: enqueueing stops the GPU-resident containers configured in
-``GpuArbiterConfig`` and answers 409 if it cannot. When ``OP_BAKEOFF_HOST_GPUS``
-is set (the host GPU ids the evaluator container is attached to), only
-containers scoped (``GpuArbiterConfig.container_gpus``) to those ids are
-stopped -- a bake-off on an idle GPU no longer stops a service pinned to a
-different one. Unset keeps the old behavior: stop everything configured. The
-arbiter's reconcile loop keeps the scoped set stopped while any job file is
-queued in ``_jobs_dir()`` and restarts them once the evaluator moves it to
-``done/``. A job queued with no evaluator running keeps them stopped; its
-status stays ``queued`` and deleting the job file releases the GPU on the
-next reconcile tick.
+``GpuArbiterConfig`` and answers 409 (cancelling the job) if it cannot. When
+``OP_BAKEOFF_HOST_GPUS`` is set (the host GPU ids the evaluator container is
+attached to), only containers scoped (``GpuArbiterConfig.container_gpus``) to
+those ids are stopped. Unset stops everything configured. The arbiter's reconcile
+loop keeps the scoped set stopped while a ``bakeoff`` job is active and restarts them
+once it ends.
 
 What a run measures (classes, thresholds, rank metric, cascade context
 classes) comes from a ``BakeoffProfile`` (``scripts/curation/bakeoff/profile.py``)
@@ -50,6 +47,8 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_curation_config, get_gpu_arbiter_config
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.core.logging import get_logger
 from src.routers.curation._common import router
 from src.schemas.bakeoff.datasets import EvalDataset, EvalDatasetList
@@ -70,6 +69,7 @@ from src.schemas.bakeoff.run import (
 )
 from src.services.classes.registry import ClassRegistryError, get_class_registry
 from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
+from src.services.jobs.service import cancel_job
 from src.services.training.run_retention import bakeoff_out_dir
 from src.utils.atomic_write import atomic_write_json
 from src.utils.upstream_errors import UpstreamError
@@ -78,30 +78,13 @@ from src.utils.upstream_errors import UpstreamError
 logger = get_logger(__name__)
 
 
-# Project-scoped (the project-isolation design
-# §5.3): each project's bake-off jobs/outputs live under its own
-# ``CurationConfig.bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS entry), not
-# a single global dir, so no project's queue or results leak into
-# another's. Resolved at call time (never a module-level constant) so a
-# later bind_project is always picked up.
-#
-# Every project, ``default`` included, gets
-# ``<OP_STATE_DIR>/projects/<slug>/bakeoff_jobs``
-# (``src.config.projects.resources_for_new``); ``OP_BAKEOFF_JOBS_DIR`` does
-# not move it. The GPU arbiter scans every project's dir
-# (``arbiter_dirs.all_bakeoff_jobs_dirs``), and the evaluator finds them
-# from its ``--watch <OP_STATE_DIR>/bakeoff_jobs`` root (see
-# ``bakeoff_runner._pending_job_files``). ``_out_dir()`` keeps
-# ``default``'s exact old path/env var (``OP_BAKEOFF_OUT_DIR`` / a sibling
-# ``bakeoff_out`` dir, NOT nested under ``bakeoff_jobs``) and only nests a
-# project's outputs under its own ``bakeoff_jobs_dir`` for a non-default
-# project (which has no ``OP_BAKEOFF_OUT_DIR`` precedent to preserve).
-def _jobs_dir() -> Path:
-    return Path(get_curation_config().bakeoff_jobs_dir)
-
-
+# Project-scoped (the project-isolation design §5.3): each project's bake-off results live under
+# its own ``<CurationConfig.bakeoff_jobs_dir>/out`` (a PROJECT_SCOPED_FIELDS entry), so no
+# project's results leak into another's. Resolved at call time (never a module-level constant)
+# so a later bind_project is always picked up. The directory name is what lane 5E renames: it
+# holds results only now; no job file is written there.
 def _out_dir() -> Path:
-    return bakeoff_out_dir(_jobs_dir())
+    return bakeoff_out_dir(Path(get_curation_config().bakeoff_jobs_dir))
 
 
 def _raise(exc: bakeoff_resolve.BakeoffRequestError) -> NoReturn:
@@ -233,12 +216,12 @@ async def bakeoff_baseline_models(profile: str | None = None) -> BaselineModelLi
 
 
 @router.post('/bakeoff/run', response_model=BakeoffRunAccepted)
-async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
-    """Enqueue a comparison job for the evaluator container.
+async def bakeoff_run(payload: BakeoffRunRequest, session: DbSessionDep) -> BakeoffRunAccepted:
+    """Start a comparison as a ``bakeoff`` job for the evaluator worker.
 
-    Order: resolve + validate (400/422) -> ``status.json`` ``queued`` -> job
-    file (atomic) -> stop GPU-resident containers. If they cannot be stopped
-    the job file is removed, the status set to ``error`` and the answer is 409.
+    Order: resolve + validate (400/422) -> ``status.json`` ``queued`` -> ``start_job`` (the job
+    row, its ``bakeoff_runs`` row and the queue message) -> stop GPU-resident containers. If they
+    cannot be stopped the job is cancelled, the status set to ``error`` and the answer is 409.
     """
     from src.services.training.gpu_arbiter_docker import stop_gpu_services
     from src.services.training.gpu_arbiter_policy import (
@@ -250,9 +233,8 @@ async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
         spec, accepted = await bakeoff_jobs.build_job_spec(payload, out_root=_out_dir())
     except bakeoff_resolve.BakeoffRequestError as exc:
         _raise(exc)
-    job_file = _jobs_dir() / f'{spec.job_id}.job.json'
     status_file = _out_dir() / spec.job_id / 'status.json'
-    if job_file.exists() or status_file.exists():
+    if status_file.exists():
         raise HTTPException(status_code=409, detail=f'bake-off job {spec.job_id} already exists')
 
     models = [m.model for m in spec.models]
@@ -270,13 +252,21 @@ async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
         failed=[],
         error=None,
     )
+    project = current_project_id()
+
     _write_json(status_file, status.model_dump(mode='json'))
-    _write_json(job_file, spec.model_dump(mode='json'))
+    try:
+        started = await bakeoff_jobs.start_bakeoff(session, project, spec)
+    except Exception:
+        status_file.unlink(missing_ok=True)
+        raise
+    if not started.created:
+        raise HTTPException(status_code=409, detail=f'bake-off job {spec.job_id} already exists')
     scope = get_gpu_arbiter_config().bakeoff_host_gpus
     try:
         action = await stop_gpu_services(containers=containers_to_stop(scope) if scope else None)
     except GpuArbiterStopFailedError as exc:
-        job_file.unlink(missing_ok=True)
+        await cancel_job(session, started.job.id, project, requested_by='api')
         status.state, status.error = 'error', f'could not free the GPU: {exc}'
         status.finished_at = datetime.now(UTC).isoformat()
         _write_json(status_file, status.model_dump(mode='json'))

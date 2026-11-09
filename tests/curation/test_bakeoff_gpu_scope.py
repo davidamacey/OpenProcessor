@@ -134,6 +134,10 @@ async def test_bakeoff_host_gpu_unset_keeps_back_compat_stop_everything(
     assert registry['svc'].status == 'exited'
 
 
+async def _a_bakeoff_is_active() -> bool:
+    return True
+
+
 @pytest.mark.asyncio
 async def test_reconcile_restarts_service_outside_bakeoff_host_gpu_scope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -145,9 +149,7 @@ async def test_reconcile_restarts_service_outside_bakeoff_host_gpu_scope(
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
-    bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
-    bakeoff_jobs_dir.mkdir()
-    (bakeoff_jobs_dir / 'b1.job.json').write_text('{}')
+    monkeypatch.setattr(ga, '_bakeoff_holds_gpus', _a_bakeoff_is_active)
 
     registry = {'svc': _FakeContainer('svc', status='exited')}
     monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
@@ -155,7 +157,6 @@ async def test_reconcile_restarts_service_outside_bakeoff_host_gpu_scope(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
         bakeoff_host_gpus='0',
-        bakeoff_jobs_dir=str(bakeoff_jobs_dir),
     )
     _set_config(monkeypatch, cfg)
 
@@ -174,9 +175,7 @@ async def test_reconcile_keeps_intersecting_service_down_during_bakeoff(
     monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
-    bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
-    bakeoff_jobs_dir.mkdir()
-    (bakeoff_jobs_dir / 'b1.job.json').write_text('{}')
+    monkeypatch.setattr(ga, '_bakeoff_holds_gpus', _a_bakeoff_is_active)
 
     registry = {'svc': _FakeContainer('svc', status='running')}
     monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
@@ -184,7 +183,6 @@ async def test_reconcile_keeps_intersecting_service_down_during_bakeoff(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
         bakeoff_host_gpus='2',
-        bakeoff_jobs_dir=str(bakeoff_jobs_dir),
     )
     _set_config(monkeypatch, cfg)
 

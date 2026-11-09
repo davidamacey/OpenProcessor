@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 from curation.bakeoff_router._helpers import (
@@ -36,7 +35,7 @@ def test_dataset_id_rejects_traversal(env: dict[str, Path], client: TestClient) 
             client, {'datasets': [{'id': bad}], 'models': [{'source': 'run', 'run_id': 'r1'}]}
         )
         assert r.status_code == 400, (bad, r.text)
-    assert not env['jobs'].exists()
+    assert env['started'] == {}
 
 
 def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClient) -> None:
@@ -73,7 +72,7 @@ def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClie
     assert cm['not_covered_eval_classes'] == []
     assert m['train_test_overlap'] == {'export:20260924T233203Z': {'n_images': 0, 'fraction': 0.0}}
 
-    spec = BakeoffJobSpec.model_validate(json.loads((env['jobs'] / 'j1.job.json').read_text()))
+    spec = BakeoffJobSpec.model_validate(env['started']['j1'])
     assert spec.schema_version == 2
     assert spec.out_dir == str(env['out'] / 'j1')
     [ds] = spec.datasets
@@ -171,7 +170,7 @@ def test_run_rejects_multiclass_single_cls_run(env: dict[str, Path], client: Tes
         'single_cls run over 2 classes cannot be scored per class; '
         'compare it on a single-class export'
     )
-    assert not env['jobs'].exists()
+    assert env['started'] == {}
 
 
 def test_run_alias_run_dataset_id(env: dict[str, Path], client: TestClient) -> None:
@@ -212,7 +211,7 @@ def test_run_unknown_run_or_baseline_400(env: dict[str, Path], client: TestClien
     )
     assert r.status_code == 400
     assert 'export:missing' in r.json()['detail']
-    assert not env['jobs'].exists()
+    assert env['started'] == {}
 
 
 def test_run_requires_models_and_datasets(env: dict[str, Path], client: TestClient) -> None:
@@ -279,7 +278,7 @@ def test_run_custom_model_explicit_and_name_mapping(
     assert (names['method'], names['model_to_eval']) == ('names', None)
     assert names['warnings'] == ['resolved by name inside the evaluator']
     assert by_key['custom:coco']['train_test_overlap'] == {'export:20260924T233203Z': None}
-    spec = json.loads((env['jobs'] / 'jc.job.json').read_text())
+    spec = env['started']['jc']
     coco = next(m for m in spec['models'] if m['model'] == 'custom:coco')
     assert coco['class_map_by_dataset'] == {'export:20260924T233203Z': None}
     served = next(m for m in spec['models'] if m['model'] == 'custom:served')
@@ -299,7 +298,7 @@ def test_run_quantize_block_filled_from_run(env: dict[str, Path], client: TestCl
         },
     )
     assert r.status_code == 200, r.text
-    q = json.loads((env['jobs'] / 'run5_quant.job.json').read_text())['quantize']
+    q = env['started']['run5_quant']['quantize']
     assert q['model_key_prefix'] == 'run:run5'
     assert (q['checkpoint'], q['imgsz'], q['calib_dataset']) == (str(ckpt), 512, str(d))
     assert q['formats'] == ['fp32_onnx', 'fp16_onnx', 'int8_onnx']
@@ -342,7 +341,7 @@ def test_run_writes_queued_status(env: dict[str, Path], client: TestClient) -> N
     assert again.status_code == 409
 
 
-def test_run_stop_failure_returns_409_and_removes_job(
+def test_run_stop_failure_returns_409_and_cancels_job(
     env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from src.services.training import gpu_arbiter_docker, gpu_arbiter_policy
@@ -363,8 +362,7 @@ def test_run_stop_failure_returns_409_and_removes_job(
     )
     assert r.status_code == 409
     assert 'docker socket unavailable' in r.json()['detail']
-    assert not (env['jobs'] / 'jf.job.json').exists()
-    assert list(env['jobs'].glob('*.job.json')) == []
+    assert env['started'].cancelled == [env['started'].ids['jf']]
     st = client.get('/curation/projects/default/bakeoff/status/jf').json()
     assert st['state'] == 'error'
     assert 'docker socket unavailable' in st['error']

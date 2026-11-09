@@ -224,3 +224,14 @@ def loop_env(pg: Any, tmp_path: Any, captured_events: Any) -> Any:
     from curation.assist_loop_fakes import LoopEnv
 
     return LoopEnv.make(pg, tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def _no_active_bakeoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The GPU arbiter reads bake-off jobs from PostgreSQL; these tests have no database."""
+    from src.services.training import gpu_arbiter
+
+    async def _none() -> bool:
+        return False
+
+    monkeypatch.setattr(gpu_arbiter, '_bakeoff_holds_gpus', _none)

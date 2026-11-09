@@ -256,12 +256,16 @@ async def test_stale_training_lock_is_ignored_and_cleared(env: _Env, payload: di
     assert not target.exists()
 
 
+async def _a_bakeoff_is_active() -> bool:
+    return True
+
+
 @pytest.mark.asyncio
 async def test_queued_bakeoff_claims_every_container_without_a_host_scope(
     env: _Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     env.configure({'svc': frozenset({2}), 'other': frozenset({0})}, status='running')
-    monkeypatch.setattr(ga, 'bakeoff_active', lambda: True)
+    monkeypatch.setattr(ga, '_bakeoff_holds_gpus', _a_bakeoff_is_active)
     await env.reconcile()
     assert env.statuses() == {'svc': 'exited', 'other': 'exited'}
 
@@ -273,7 +277,7 @@ async def test_queued_bakeoff_with_a_host_scope_claims_only_intersecting_contain
     env.configure(
         {'svc': frozenset({2}), 'other': frozenset({0})}, status='running', bakeoff_host_gpus='2'
     )
-    monkeypatch.setattr(ga, 'bakeoff_active', lambda: True)
+    monkeypatch.setattr(ga, '_bakeoff_holds_gpus', _a_bakeoff_is_active)
     await env.reconcile()
     assert env.statuses() == {'svc': 'exited', 'other': 'running'}
 

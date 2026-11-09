@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.db.repos import bakeoff as bakeoff_repo
 from src.schemas.bakeoff.job_spec import BakeoffJobSpec, JobDataset, JobModel, JobQuantize
 from src.schemas.bakeoff.models import (
     BaselineModel,
@@ -51,11 +52,17 @@ from src.services.curation.bakeoff_resolve import (
     resolve_run_model,
     safe_job_id,
 )
+from src.services.jobs.service import StartResult, start_job
 from src.services.training import jobs as train_jobs
 
 
 if TYPE_CHECKING:
+    import uuid
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from scripts.curation.bakeoff import class_map as cmap
+    from src.db.repos.jobs import JobRow
     from src.schemas.bakeoff.run import (
         BakeoffRunRequest,
         BaselineModelRef,
@@ -350,3 +357,36 @@ async def build_job_spec(
         warnings=warnings,
     )
     return spec, accepted
+
+
+async def start_bakeoff(
+    session: AsyncSession, project: uuid.UUID, spec: BakeoffJobSpec
+) -> StartResult:
+    """Start the ``bakeoff`` job for ``spec`` with its ``bakeoff_runs`` row, in one transaction.
+
+    The job's parameters are the spec itself; ``created`` is false when the same job id was
+    already started in this project (the idempotency key names it).
+    """
+    models = [m.model for m in spec.models]
+    dataset_ids = [d.id for d in spec.datasets]
+
+    async def run_row(rows_session: AsyncSession, job: JobRow) -> None:
+        await rows_session.run_sync(
+            lambda sync: bakeoff_repo.insert_run(
+                sync,
+                job_id=job.id,
+                project_id=project,
+                eval_dataset_keys=dataset_ids,
+                models=models,
+            )
+        )
+
+    return await start_job(
+        session,
+        'bakeoff',
+        project,
+        params=spec.model_dump(mode='json'),
+        idempotency_key=f'bakeoff:{project}:{spec.job_id}',
+        requested_by='api',
+        with_rows=run_row,
+    )
