@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 from _class_registry_fake import InMemoryRegistry
 
+from curation.dataset_import.db_fixture import import_database  # noqa: F401 - fixture
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
@@ -140,7 +141,7 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 @pytest.mark.asyncio
 @pytest.mark.usefixtures('reference_ingest_profiles')
 @pytest.mark.db
-@pytest.mark.usefixtures('world', 'fake_queue')
+@pytest.mark.usefixtures('import_database', 'fake_queue')
 async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, monkeypatch):
     """The fifth "every label path" writer: dataset import.
 
