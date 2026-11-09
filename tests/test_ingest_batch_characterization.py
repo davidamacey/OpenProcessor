@@ -115,6 +115,11 @@ SCENARIOS: dict[str, dict[str, Any]] = {
     'jpeg_header_unreadable': {'jpeg_dims': 'fail'},
     'defer_heavy_ops': {'kwargs': {'defer_heavy_ops': True}},
     'near_duplicates_disabled': {'kwargs': {'detect_near_duplicates': False}},
+    'stored_row_without_document': {'existing': ['b'], 'orphans': True},
+    'same_bytes_twice_in_one_batch': {
+        'images': [(IMG['a'], 'id-a', None), (IMG['a'], 'id-a2', None)],
+    },
+    'image_id_already_holds_other_bytes': {'taken_ids': ['id-c']},
     'near_duplicate_candidates': {'neighbours': ['old-x']},
     'ocr_index_failure': {'ocr_index_fail': ['a']},
     'bulk_ingest_partial_result': {'bulk_result': {'global': 2}},
@@ -159,8 +164,9 @@ class FakeOcr:
 class FakeOpenSearch:
     def __init__(self, scenario: dict[str, Any]) -> None:
         self.existing = {
-            _hash(IMG[k]): {'image_id': f'old-{k}'} for k in scenario.get('existing', [])
+            _hash(IMG[k]): (f'old-{k}', f'/old/{k}.jpg') for k in scenario.get('existing', [])
         }
+        self.orphans = scenario.get('orphans', False)
         self.bulk_result = scenario.get('bulk_result', {'global': 4, 'vehicles': 3, 'people': 1})
         self.face_bulk = scenario.get('face_bulk', {'indexed': 4})
         self.ocr_fail = {f'id-{k}' for k in scenario.get('ocr_index_fail', [])}
@@ -178,9 +184,10 @@ class FakeOpenSearch:
         ]
         return {'responses': [{'hits': {'hits': hit}} for _ in body[::2]]}
 
-    async def check_duplicates_by_hash_batch(self, hashes: list[str]) -> dict[str, Any]:
-        self.calls.append(('check_duplicates_by_hash_batch', hashes))
-        return {h: self.existing.get(h) for h in hashes}
+    async def mget(self, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
+        """The holders' documents: found, unless the scenario left a row without its document."""
+        self.calls.append(('mget', {'index': index, 'ids': body['ids'], **kw}))
+        return {'docs': [{'_id': i, 'found': not self.orphans} for i in body['ids']]}
 
     async def bulk_ingest(self, documents: list[dict[str, Any]], refresh: bool = False) -> Any:
         self.calls.append(('bulk_ingest', {'documents': documents, 'refresh': refresh}))
@@ -210,7 +217,7 @@ def _plain(value: Any) -> Any:
 
 
 async def run_scenario(
-    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
+    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any, content_rows: Any
 ) -> dict[str, Any]:
     sc = SCENARIOS[name]
     images = sc.get('images', IMAGES)
@@ -218,6 +225,10 @@ async def run_scenario(
     face = FakeFace(BASE_SCRIPT)
     ocr = FakeOcr(BASE_SCRIPT)
     opensearch = FakeOpenSearch(sc)
+    for image_hash, (image_id, path) in opensearch.existing.items():
+        content_rows.core_rows[image_hash] = (image_id, path, None)
+    for taken in sc.get('taken_ids', []):
+        content_rows.core_rows[f'taken-{taken}'] = (taken, '/taken', b'other bytes')
     monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)  # noqa: ARG005
     monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)  # noqa: ARG005
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', lambda: ocr)
@@ -240,6 +251,7 @@ async def run_scenario(
             'result': result,
             'opensearch': opensearch.calls,
             'pending': pending_calls.calls,
+            'content_rows': sorted((v[0], v[1]) for v in content_rows.core_rows.values()),
             'triton': sorted(triton.calls),
             'face': sorted(face.calls),
             'ocr': sorted(ocr.calls),
@@ -250,9 +262,9 @@ async def run_scenario(
 @pytest.mark.asyncio
 @pytest.mark.parametrize('name', sorted(SCENARIOS))
 async def test_ingest_batch_matches_golden(
-    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
+    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any, content_rows: Any
 ) -> None:
-    got = await run_scenario(name, monkeypatch, pending_calls)
+    got = await run_scenario(name, monkeypatch, pending_calls, content_rows)
     # OCR indexing runs concurrently: compare it as a set, everything else in order.
     expected = json.loads(GOLDEN.read_text())[name]
     for snap in (got, expected):

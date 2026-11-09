@@ -15,13 +15,19 @@ from src.services.visual_search.batch_documents import landmarks_for
 logger = logging.getLogger(__name__)
 
 
-def _imohash(image_bytes: bytes) -> str:
-    import io
-
-    import imohash
-
-    typed: str = imohash.hashfileobject(io.BytesIO(image_bytes)).hex()
-    return typed
+def _duplicate(
+    image_id: str, image_hash: str, existing_id: str, existing_path: str | None
+) -> dict[str, Any]:
+    """The answer for bytes a stored image already holds."""
+    logger.info(f'Duplicate detected: {image_id} matches {existing_id}')
+    return {
+        'status': 'duplicate',
+        'image_id': image_id,
+        'existing_image_id': existing_id,
+        'existing_image_path': existing_path,
+        'imohash': image_hash,
+        'message': 'Image already exists in index (same content)',
+    }
 
 
 def _run_pipelines(
@@ -84,8 +90,8 @@ class IngestSingleMixin:
         Ingest single image with auto-routing to category indexes.
 
         Pipeline:
-        1. Compute imohash for exact duplicate detection (if skip_duplicates=True)
-        2. Check if image already exists by hash
+        1. Compute imohash for exact duplicate detection
+        2. Check if the same bytes are already stored (imohash, confirmed by SHA-256)
         3. Run YOLO detection + MobileCLIP encoding
         4. Extract global + box embeddings
         5. Route to appropriate indexes:
@@ -113,29 +119,26 @@ class IngestSingleMixin:
         """
         # Imported here: the near-duplicate services import the app's dependency module, which
         # imports this one.
-        from src.services.near_duplicates import core_candidates, core_pending
+        from src.services.near_duplicates import (
+            content_key,
+            core_candidates,
+            core_content,
+            core_pending,
+        )
 
         enable_faces = enable_faces and faces_enabled()
         try:
             # 1. Compute imohash for duplicate detection
-            image_hash = _imohash(image_bytes)
+            image_hash = content_key.content_imohash(image_bytes)
             file_size = len(image_bytes)
 
-            # 2. Check for duplicates if enabled
+            # 2. Check for duplicates if enabled: imohash finds the stored image, SHA-256 confirms
             if skip_duplicates:
-                existing = await self.opensearch.check_duplicate_by_hash(image_hash)
-                if existing:
-                    logger.info(
-                        f'Duplicate detected: {image_id} matches {existing.get("image_id")}'
-                    )
-                    return {
-                        'status': 'duplicate',
-                        'image_id': image_id,
-                        'existing_image_id': existing.get('image_id'),
-                        'existing_image_path': existing.get('image_path'),
-                        'imohash': image_hash,
-                        'message': 'Image already exists in index (same imohash)',
-                    }
+                (holder,) = await core_content.resolve_holders(
+                    self.opensearch.client, [(image_hash, image_bytes)]
+                )
+                if holder is not None:
+                    return _duplicate(image_id, image_hash, holder.image_id, holder.image_path)
 
             result, face_result = _run_pipelines(
                 image_bytes,
@@ -162,6 +165,26 @@ class IngestSingleMixin:
                 normalized_boxes = np.array(result.get('normalized_boxes', []))
                 det_classes = result.get('classes', [])
                 det_scores = result.get('scores', [])
+
+            # The content row goes before the images document it describes (one transaction
+            # under the imohash lock: a concurrent copy of these bytes loses here).
+            if skip_duplicates:
+                claims = await content_key.claim_many_core(
+                    [
+                        content_key.CoreEntry(
+                            image_hash, image_id, image_path or image_id, image_bytes
+                        )
+                    ]
+                )
+                if image_id in claims.duplicates:
+                    won = claims.duplicates[image_id]
+                    return _duplicate(image_id, image_hash, won.holder or '', won.holder_path)
+                if image_id in claims.conflicts:
+                    return {
+                        'status': 'error',
+                        'image_id': image_id,
+                        'error': claims.conflicts[image_id],
+                    }
 
             # The pending row goes before the index write it describes (an extra row costs one
             # idempotent rescore; a missing one would leave a stale group nobody knows about).

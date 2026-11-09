@@ -1,12 +1,14 @@
 {
  "clip_only": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [],
   "ocr_calls": 0,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -61,14 +63,29 @@
   },
   "triton_calls": 1
  },
+ "content_store_raises": {
+  "content_rows": [],
+  "face_calls": [],
+  "ocr_calls": 0,
+  "opensearch": [],
+  "pending": [],
+  "result": {
+   "error": "database down",
+   "image_id": "id-1",
+   "status": "error"
+  },
+  "triton_calls": 0
+ },
  "detection_only": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [],
   "ocr_calls": 0,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -662,12 +679,24 @@
   "triton_calls": 1
  },
  "duplicate_found": {
+  "content_rows": [
+   [
+    "old-1",
+    "/old.jpg"
+   ]
+  ],
   "face_calls": [],
   "ocr_calls": 0,
   "opensearch": [
    [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
+    "mget",
+    {
+     "_source": false,
+     "ids": [
+      "old-1"
+     ],
+     "index": "visual_search_global"
+    }
    ]
   ],
   "pending": [],
@@ -676,12 +705,18 @@
    "existing_image_path": "/old.jpg",
    "image_id": "id-1",
    "imohash": "1297ead300d79faa711327fa7ba5c194",
-   "message": "Image already exists in index (same imohash)",
+   "message": "Image already exists in index (same content)",
    "status": "duplicate"
   },
   "triton_calls": 0
  },
  "duplicate_ignored_when_not_skipping": {
+  "content_rows": [
+   [
+    "old-1",
+    "/old.jpg"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
@@ -774,16 +809,12 @@
   "triton_calls": 1
  },
  "face_client_raises": {
+  "content_rows": [],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 0,
-  "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ]
-  ],
+  "opensearch": [],
   "pending": [],
   "result": {
    "error": "face down",
@@ -793,15 +824,17 @@
   "triton_calls": 1
  },
  "face_index_raises_for_one": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -985,15 +1018,17 @@
   "triton_calls": 1
  },
  "face_with_empty_embedding": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -1113,15 +1148,17 @@
   "triton_calls": 1
  },
  "faces_numpy": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -1273,15 +1310,17 @@
   "triton_calls": 1
  },
  "faces_only": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 0,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -1907,15 +1946,17 @@
   "triton_calls": 0
  },
  "faces_short_landmarks_skips_that_face": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2035,15 +2076,17 @@
   "triton_calls": 1
  },
  "faces_short_quality": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2227,15 +2270,17 @@
   "triton_calls": 1
  },
  "faces_short_scores_and_quality": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2419,15 +2464,17 @@
   "triton_calls": 1
  },
  "full": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2579,15 +2626,17 @@
   "triton_calls": 1
  },
  "global_index_fails": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2670,16 +2719,38 @@
   },
   "triton_calls": 1
  },
+ "image_id_already_holds_other_bytes": {
+  "content_rows": [
+   [
+    "id-1",
+    "/taken"
+   ]
+  ],
+  "face_calls": [
+   0.5
+  ],
+  "ocr_calls": 0,
+  "opensearch": [],
+  "pending": [],
+  "result": {
+   "error": "image id-1 already holds other content",
+   "image_id": "id-1",
+   "status": "error"
+  },
+  "triton_calls": 1
+ },
  "ingest_errors_reported": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2769,15 +2840,17 @@
   "triton_calls": 1
  },
  "metadata_and_path": {
+  "content_rows": [
+   [
+    "id-1",
+    "/p/x.jpg"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2867,15 +2940,17 @@
   "triton_calls": 1
  },
  "near_duplicate_candidates": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -2973,15 +3048,17 @@
   "triton_calls": 1
  },
  "near_duplicate_disabled": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -3057,15 +3134,17 @@
   "triton_calls": 1
  },
  "no_detections": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -3121,15 +3200,17 @@
   "triton_calls": 1
  },
  "no_embedding_in_response": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -3691,13 +3772,15 @@
   "triton_calls": 1
  },
  "nothing_enabled": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [],
   "ocr_calls": 0,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -4259,15 +4342,17 @@
   "triton_calls": 0
  },
  "ocr_disabled": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 0,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -4355,15 +4440,17 @@
   "triton_calls": 1
  },
  "ocr_finds_text": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
    [
     "ingest_image",
     {
@@ -4504,14 +4591,227 @@
   "triton_calls": 1
  },
  "ocr_no_text": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 1,
   "opensearch": [
    [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
+    "ingest_image",
+    {
+     "box_embeddings": {
+      "ndarray": [
+       [
+        0.5,
+        0.5
+       ],
+       [
+        0.1,
+        0.9
+       ]
+      ]
+     },
+     "det_classes": [
+      2,
+      0
+     ],
+     "det_scores": [
+      0.9,
+      0.8
+     ],
+     "file_size_bytes": 18,
+     "global_embedding": {
+      "ndarray": [
+       3.0,
+       4.0
+      ]
+     },
+     "image_height": 480,
+     "image_id": "id-1",
+     "image_path": "id-1",
+     "image_width": 640,
+     "imohash": "1297ead300d79faa711327fa7ba5c194",
+     "metadata": null,
+     "normalized_boxes": {
+      "ndarray": [
+       [
+        0.1,
+        0.1,
+        0.5,
+        0.5
+       ],
+       [
+        0.2,
+        0.2,
+        0.6,
+        0.6
+       ]
+      ]
+     }
+    }
+   ],
+   [
+    "msearch",
+    1
+   ]
+  ],
+  "pending": [
+   [
+    "core",
+    [
+     "id-1"
+    ],
+    "added"
+   ]
+  ],
+  "result": {
+   "embedding_norm": 5.0,
+   "errors": [],
+   "image_id": "id-1",
+   "imohash": "1297ead300d79faa711327fa7ba5c194",
+   "indexed": {
+    "faces": 0,
+    "global": true,
+    "people": 1,
+    "skipped": 0,
+    "vehicles": 1
+   },
+   "num_detections": 2,
+   "num_faces": 0,
+   "status": "success"
+  },
+  "triton_calls": 1
+ },
+ "opensearch_ingest_raises": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
+  "face_calls": [
+   0.5
+  ],
+  "ocr_calls": 0,
+  "opensearch": [
+   [
+    "ingest_image",
+    {
+     "box_embeddings": {
+      "ndarray": [
+       [
+        0.5,
+        0.5
+       ],
+       [
+        0.1,
+        0.9
+       ]
+      ]
+     },
+     "det_classes": [
+      2,
+      0
+     ],
+     "det_scores": [
+      0.9,
+      0.8
+     ],
+     "file_size_bytes": 18,
+     "global_embedding": {
+      "ndarray": [
+       3.0,
+       4.0
+      ]
+     },
+     "image_height": 480,
+     "image_id": "id-1",
+     "image_path": "id-1",
+     "image_width": 640,
+     "imohash": "1297ead300d79faa711327fa7ba5c194",
+     "metadata": null,
+     "normalized_boxes": {
+      "ndarray": [
+       [
+        0.1,
+        0.1,
+        0.5,
+        0.5
+       ],
+       [
+        0.2,
+        0.2,
+        0.6,
+        0.6
+       ]
+      ]
+     }
+    }
+   ]
+  ],
+  "pending": [
+   [
+    "core",
+    [
+     "id-1"
+    ],
+    "added"
+   ]
+  ],
+  "result": {
+   "error": "index down",
+   "image_id": "id-1",
+   "status": "error"
+  },
+  "triton_calls": 1
+ },
+ "pending_write_raises": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
+  "face_calls": [
+   0.5
+  ],
+  "ocr_calls": 0,
+  "opensearch": [],
+  "pending": [],
+  "result": {
+   "error": "database down",
+   "image_id": "id-1",
+   "status": "error"
+  },
+  "triton_calls": 1
+ },
+ "stored_row_without_document": {
+  "content_rows": [
+   [
+    "id-1",
+    "id-1"
+   ]
+  ],
+  "face_calls": [
+   0.5
+  ],
+  "ocr_calls": 1,
+  "opensearch": [
+   [
+    "mget",
+    {
+     "_source": false,
+     "ids": [
+      "old-1"
+     ],
+     "index": "visual_search_global"
+    }
    ],
    [
     "ingest_image",
@@ -4599,134 +4899,13 @@
   },
   "triton_calls": 1
  },
- "opensearch_duplicate_check_raises": {
-  "face_calls": [],
-  "ocr_calls": 0,
-  "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ]
-  ],
-  "pending": [],
-  "result": {
-   "error": "search down",
-   "image_id": "id-1",
-   "status": "error"
-  },
-  "triton_calls": 0
- },
- "opensearch_ingest_raises": {
-  "face_calls": [
-   0.5
-  ],
-  "ocr_calls": 0,
-  "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ],
-   [
-    "ingest_image",
-    {
-     "box_embeddings": {
-      "ndarray": [
-       [
-        0.5,
-        0.5
-       ],
-       [
-        0.1,
-        0.9
-       ]
-      ]
-     },
-     "det_classes": [
-      2,
-      0
-     ],
-     "det_scores": [
-      0.9,
-      0.8
-     ],
-     "file_size_bytes": 18,
-     "global_embedding": {
-      "ndarray": [
-       3.0,
-       4.0
-      ]
-     },
-     "image_height": 480,
-     "image_id": "id-1",
-     "image_path": "id-1",
-     "image_width": 640,
-     "imohash": "1297ead300d79faa711327fa7ba5c194",
-     "metadata": null,
-     "normalized_boxes": {
-      "ndarray": [
-       [
-        0.1,
-        0.1,
-        0.5,
-        0.5
-       ],
-       [
-        0.2,
-        0.2,
-        0.6,
-        0.6
-       ]
-      ]
-     }
-    }
-   ]
-  ],
-  "pending": [
-   [
-    "core",
-    [
-     "id-1"
-    ],
-    "added"
-   ]
-  ],
-  "result": {
-   "error": "index down",
-   "image_id": "id-1",
-   "status": "error"
-  },
-  "triton_calls": 1
- },
- "pending_write_raises": {
-  "face_calls": [
-   0.5
-  ],
-  "ocr_calls": 0,
-  "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ]
-  ],
-  "pending": [],
-  "result": {
-   "error": "database down",
-   "image_id": "id-1",
-   "status": "error"
-  },
-  "triton_calls": 1
- },
  "triton_raises": {
+  "content_rows": [],
   "face_calls": [
    0.5
   ],
   "ocr_calls": 0,
-  "opensearch": [
-   [
-    "check_duplicate_by_hash",
-    "1297ead300d79faa711327fa7ba5c194"
-   ]
-  ],
+  "opensearch": [],
   "pending": [],
   "result": {
    "error": "triton down",

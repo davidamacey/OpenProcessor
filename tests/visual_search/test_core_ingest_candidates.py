@@ -83,7 +83,7 @@ async def test_a_deferred_or_disabled_lookup_asks_the_index_nothing(opensearch) 
     service = _service(opensearch)
     for flags in ({'defer_heavy_ops': True}, {'detect_near_duplicates': False}):
         result = await service.ingest_batch(
-            [(b'x', f'new-{len(asked)}', None)],
+            [(f'x{flags}'.encode(), f'new-{len(asked)}', None)],
             enable_ocr=False,
             enable_detection=False,
             enable_faces=False,

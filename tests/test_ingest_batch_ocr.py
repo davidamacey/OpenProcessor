@@ -37,7 +37,8 @@ class _FakeOcrService:
 class _FakeOpenSearch:
     def __init__(self):
         self.indexed_ocr_calls: list[dict] = []
-        self.check_duplicates_by_hash_batch = AsyncMock(return_value={})
+        self.client = self
+        self.msearch = AsyncMock(return_value={'responses': [{'hits': {'hits': []}}]})
         self.bulk_ingest = AsyncMock(return_value={'global': 1, 'vehicles': 0, 'people': 0})
         self.bulk_index_faces = AsyncMock(return_value={'indexed': 0})
 

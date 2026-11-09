@@ -32,35 +32,32 @@ def _summary(*, total: int, processed: int, duplicates: int) -> dict[str, Any]:
 
 def _compute_hashes(images_bytes: list[bytes]) -> list[str]:
     """imohash of every image, computed in parallel."""
-    import io
     from concurrent.futures import ThreadPoolExecutor
 
-    import imohash
-
-    def compute_hash(img_bytes: bytes) -> str:
-        typed: str = imohash.hashfileobject(io.BytesIO(img_bytes)).hex()
-        return typed
+    from src.services.near_duplicates.content_key import content_imohash
 
     with ThreadPoolExecutor(max_workers=8) as executor:
-        return list(executor.map(compute_hash, images_bytes))
+        return list(executor.map(content_imohash, images_bytes))
 
 
 def _split_duplicates(
     images_data: list[tuple[bytes, str, str | None]],
     hashes: list[str],
-    existing_map: dict[str, Any],
+    holders: list[Any],
 ) -> tuple[list[dict[str, Any]], list[tuple[bytes, str, str | None]], list[int]]:
-    """``(duplicates, images to process, their indices in the request)``."""
+    """``(duplicates, images to process, their indices in the request)``; ``holders`` holds, per
+    image, the stored image with the same bytes or ``None``."""
     duplicates: list[dict[str, Any]] = []
     to_process: list[tuple[bytes, str, str | None]] = []
     to_process_indices: list[int] = []
-    for i, (img_data, image_hash) in enumerate(zip(images_data, hashes, strict=False)):
-        existing = existing_map.get(image_hash)
-        if existing:
+    for i, (img_data, image_hash, holder) in enumerate(
+        zip(images_data, hashes, holders, strict=True)
+    ):
+        if holder is not None:
             duplicates.append(
                 {
                     'image_id': img_data[1],
-                    'existing_image_id': existing.get('image_id'),
+                    'existing_image_id': holder.image_id,
                     'imohash': image_hash,
                 }
             )
@@ -68,6 +65,45 @@ def _split_duplicates(
             to_process.append(img_data)
             to_process_indices.append(i)
     return duplicates, to_process, to_process_indices
+
+
+async def _claim_contents(
+    documents: list[dict[str, Any]],
+    face_documents: list[dict[str, Any]],
+    bytes_by_id: dict[str, bytes],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Store the exact content of each document in one transaction, before its images document.
+
+    Returns ``(documents, face documents, duplicates, errors)`` without the images that lost:
+    bytes a concurrent request (or an earlier image of this batch) stored first are duplicates of
+    that image, and an image id that already holds other bytes is refused.
+    """
+    from src.services.near_duplicates import content_key
+
+    claims = await content_key.claim_many_core(
+        [
+            content_key.CoreEntry(
+                d['imohash'], d['image_id'], d['image_path'], bytes_by_id[d['image_id']]
+            )
+            for d in documents
+        ]
+    )
+    lost = claims.duplicates.keys() | claims.conflicts.keys()
+    duplicates = [
+        {
+            'image_id': image_id,
+            'existing_image_id': verdict.holder,
+            'imohash': next(d['imohash'] for d in documents if d['image_id'] == image_id),
+        }
+        for image_id, verdict in claims.duplicates.items()
+    ]
+    errors = [{'image_id': i, 'error': why} for i, why in claims.conflicts.items()]
+    return (
+        [d for d in documents if d['image_id'] not in lost],
+        [f for f in face_documents if f['image_id'] not in lost],
+        duplicates,
+        errors,
+    )
 
 
 class IngestBatchMixin:
@@ -127,7 +163,7 @@ class IngestBatchMixin:
         from src.clients.triton_client import get_sync_triton_client
         from src.config import get_settings
         from src.config.faces import faces_enabled
-        from src.services.near_duplicates import core_pending
+        from src.services.near_duplicates import core_content, core_pending
 
         enable_faces = enable_faces and faces_enabled()
 
@@ -151,10 +187,13 @@ class IngestBatchMixin:
         # Step 2: Check for duplicates if enabled (batch operation - 10x faster)
         _t_dup_start = _time.perf_counter()
         if skip_duplicates:
-            # Use batch msearch for all hashes at once
-            existing_map = await self.opensearch.check_duplicates_by_hash_batch(hashes)
+            # imohash finds the stored image, SHA-256 confirms (one query for the batch)
+            holders = await core_content.resolve_holders(
+                self.opensearch.client,
+                [(h, img[0]) for img, h in zip(images_data, hashes, strict=True)],
+            )
             duplicates, to_process, to_process_indices = _split_duplicates(
-                images_data, hashes, existing_map
+                images_data, hashes, holders
             )
         else:
             duplicates = []
@@ -204,6 +243,18 @@ class IngestBatchMixin:
             datetime.now(UTC).isoformat(),
         )
 
+        # Step 4b: Store each image's exact content, one transaction for the batch. An image whose
+        # bytes a concurrent request stored first is a duplicate of that image, not indexed twice.
+        claimed_away: set[str] = set()
+        if skip_duplicates and documents:
+            offered = {d['image_id'] for d in documents}
+            documents, face_documents, raced, refused = await _claim_contents(
+                documents, face_documents, {img[1]: img[0] for img in to_process}
+            )
+            duplicates += raced
+            errors += refused
+            claimed_away = offered - {d['image_id'] for d in documents}
+
         # Step 5: Mark the images for the core grouping job, then bulk index to OpenSearch
         # (global, vehicles, people, faces, OCR). The pending row goes first: an extra row costs
         # one idempotent rescore, a missing one would leave a stale group nobody knows about.
@@ -215,7 +266,10 @@ class IngestBatchMixin:
         indexed = await self._bulk_index(documents, face_documents)
         indexed['ocr'] = 0
         if enable_ocr:
-            indexed['ocr'] = await self._index_ocr_results(inference_results, to_process)
+            kept = [i for i, img in enumerate(to_process) if img[1] not in claimed_away]
+            indexed['ocr'] = await self._index_ocr_results(
+                [inference_results[i] for i in kept], [to_process[i] for i in kept]
+            )
 
         # Step 6: The near-duplicate candidates (a read; the group appears once the job has run).
         near_duplicates: list[dict[str, Any]] = []

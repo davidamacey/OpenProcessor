@@ -129,7 +129,15 @@ async def fetch_image_data(
 
 
 async def delete_image_everywhere(client: AsyncOpenSearch, image_id: str) -> DeleteImageResponse:
-    """Remove one image from every index that holds it."""
+    """Remove one image from every index that holds it.
+
+    The near-duplicate pending row goes first (the grouping job then drops the image from its
+    group), the exact-content row once the global document is gone (a later upload of the same
+    file is new again).
+    """
+    from src.services.near_duplicates import content_key, core_pending
+
+    await core_pending.record_pending([image_id], 'deleted')
     deleted_from = []
     total_deleted = 0
 
@@ -141,6 +149,7 @@ async def delete_image_everywhere(client: AsyncOpenSearch, image_id: str) -> Del
     except NotFoundError as e:
         # Not found is OK - document may not exist in this index
         logger.debug('Could not delete from global index: %s', e)
+    await content_key.release_core([image_id])
 
     # Delete from vehicles (by query - multiple docs per image)
     try:

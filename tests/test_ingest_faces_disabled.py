@@ -23,11 +23,10 @@ def faces_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_single_ingest_skips_faces_even_when_asked(
-    faces_off: None, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
+    faces_off: None, monkeypatch: pytest.MonkeyPatch, pending_calls: Any, content_rows: Any
 ) -> None:
-    got = await single_char.run_scenario(
-        'full', monkeypatch, pending_calls
-    )  # enable_faces defaults True
+    # enable_faces defaults True
+    got = await single_char.run_scenario('full', monkeypatch, pending_calls, content_rows)
     assert got['face_calls'] == []
     assert [c[0] for c in got['opensearch']].count('index_face') == 0
     assert got['result']['num_faces'] == 0
@@ -36,9 +35,9 @@ async def test_single_ingest_skips_faces_even_when_asked(
 
 @pytest.mark.asyncio
 async def test_batch_ingest_skips_faces_even_when_asked(
-    faces_off: None, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
+    faces_off: None, monkeypatch: pytest.MonkeyPatch, pending_calls: Any, content_rows: Any
 ) -> None:
-    got = await batch_char.run_scenario('full', monkeypatch, pending_calls)
+    got = await batch_char.run_scenario('full', monkeypatch, pending_calls, content_rows)
     assert got['face'] == []
     assert 'bulk_index_faces' not in [c[0] for c in got['opensearch']]
     assert got['result']['processed'] == 4

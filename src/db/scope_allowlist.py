@@ -41,6 +41,7 @@ CORE_TX_MODULES: tuple[str, ...] = (
     'src.services.core_ingest*',  # the core ingest services and routers
     'src.routers.ingest',
     'src.tasks.near_dup_core',  # the core near-duplicate and person-grouping handlers
-    'src.services.near_duplicates.core*',  # core pending rows (written by core ingest) and the core content key
+    'src.services.near_duplicates.core*',  # core pending rows, written by core ingest
+    'src.services.near_duplicates.content_key',  # the core exact-content rows (no project)
     'src.tasks.clustering',
 )
