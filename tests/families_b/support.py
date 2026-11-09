@@ -97,15 +97,6 @@ def project(app, pg, slug: str | None = None) -> tuple[str, uuid.UUID]:
 
 
 @pytest.fixture
-def queue_env(monkeypatch, tmp_path):
-    """A valid queue URL and password file, so a lazily loaded config can resolve."""
-    password = tmp_path / 'queue_password'
-    password.write_text('test-password\n')
-    monkeypatch.setenv('OP_QUEUE_URL', 'redis://valkey:6379/0')
-    monkeypatch.setenv('OP_QUEUE_PASSWORD_FILE', str(password))
-
-
-@pytest.fixture
 def worker_app(queue_env):
     from src.tasks.app import app
 

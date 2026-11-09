@@ -9,11 +9,11 @@ is a stub returning fixed unit vectors. The stage embeds each ACCEPTED box of
 
 from __future__ import annotations
 
-import io
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
+from _image_helpers import make_jpeg as _make_jpeg
 from PIL import Image
 
 import scripts.curation.worker.region_embed_stage as stage
@@ -23,12 +23,6 @@ from src.domain.region_boxes import RegionBox
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (width, height), (50, 80, 120)).save(buf, format='JPEG', quality=85)
-    return buf.getvalue()
 
 
 @pytest.fixture(autouse=True)

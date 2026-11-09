@@ -27,6 +27,16 @@ pytest_plugins = [
     'config_store.memory_config',
 ]
 
+
+@pytest.fixture
+def queue_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A valid queue URL and password file, so a lazily loaded Celery config can resolve."""
+    password = tmp_path / 'queue_password'
+    password.write_text('test-password\n')
+    monkeypatch.setenv('OP_QUEUE_URL', 'redis://valkey:6379/0')
+    monkeypatch.setenv('OP_QUEUE_PASSWORD_FILE', str(password))
+
+
 # OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
 # DEFAULT_MODEL). A deterministic test value, set before any test module
 # imports vlm_client, so the whole suite doesn't have to configure it

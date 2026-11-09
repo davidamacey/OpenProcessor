@@ -2,26 +2,15 @@
 
 from __future__ import annotations
 
-import io
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE
-from PIL import Image
 
 
 # =============================================================================
 # Fixtures and helpers
 # =============================================================================
-
-
-def _make_jpeg(
-    width: int = 320, height: int = 240, color: tuple[int, int, int] = (50, 80, 120)
-) -> bytes:
-    """Synthesize a small RGB JPEG suitable for the region detector input path."""
-    buf = io.BytesIO()
-    Image.new('RGB', (width, height), color).save(buf, format='JPEG', quality=85)
-    return buf.getvalue()
 
 
 def _make_raw_output(

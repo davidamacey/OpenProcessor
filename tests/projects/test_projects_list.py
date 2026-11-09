@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.config.curation_accessors import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
@@ -49,7 +50,9 @@ class _FakeClient:
 
     class _Transport:
         async def perform_request(self, method, url, params=None, **kwargs):  # noqa: ARG002
-            raise ConnectionError('no fake cluster wired for this test')
+            raise OpenSearchConnectionError(
+                'N/A', 'no fake cluster wired for this test', OSError('none')
+            )
 
     def __init__(self) -> None:
         self.transport = self._Transport()

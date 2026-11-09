@@ -12,9 +12,9 @@ import asyncio
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-import cv2
 import numpy as np
 import pytest
+from _image_helpers import png_bytes as _png
 from PIL import Image
 from test_ocr_pipeline_rec_width import _FakeTensor, model_module  # noqa: F401 -- fixture + stub
 
@@ -32,12 +32,6 @@ BGR = RNG.integers(0, 256, (70, 90, 3), dtype=np.uint8)
 
 class _StopError(Exception):
     """Raised by the stubs to end a call once the inputs were captured."""
-
-
-def _png(arr: np.ndarray) -> bytes:
-    ok, buf = cv2.imencode('.png', arr)
-    assert ok
-    return buf.tobytes()
 
 
 def _values(inp: InferInput) -> np.ndarray:

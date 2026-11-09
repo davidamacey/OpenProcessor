@@ -29,14 +29,13 @@ if TYPE_CHECKING:
 
 
 async def _create_active(slug: str) -> None:
-    """One project row, ``active`` the way a finished create leaves it (no indexes to build)."""
-    from src.db.repos import projects as repo
+    """One project row, ``active`` the way a finished create leaves it (no indexes to build), with the default spaces a real create writes."""
     from src.services.projects.records import new_project_for
-    from src.services.projects.store import run_repo
+    from src.services.projects.store import create_with_default_spaces, run_repo
 
     await run_repo(
         'seed the leak environment',
-        repo.create_project,
+        create_with_default_spaces,
         new_project_for(slug, display_name=slug.title(), status='active'),
     )
 

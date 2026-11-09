@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
 
+from curation.export_fakes import FakeOpenSearch
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
 from src.services.curation.export_support import (
@@ -22,21 +22,6 @@ from src.services.curation.export_support import (
     _ExportRow,
     _remap_rows_to_export_ids,
 )
-
-
-class _FakeOpenSearch:
-    def __init__(self, docs: list[dict[str, Any]]) -> None:
-        self._docs = docs
-
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
-        hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]
-        return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
-
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
-        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
-
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
-        return None
 
 
 def test_build_export_id_map_is_contiguous_and_skips_deprecated(tmp_path):
@@ -112,7 +97,7 @@ async def test_label_files_on_disk_use_dense_ids_not_registry_ids(tmp_path):
         }
     ]
     cfg = CurationConfig(export_root=tmp_path / 'exports')
-    service = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=reg)
+    service = GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset()
 
     # One label file per source image, named by image_id.
@@ -145,7 +130,7 @@ async def test_manifest_export_id_map_is_invertible(tmp_path):
         for i, name in enumerate(['car', 'truck', 'bus'])
     ]
     cfg = CurationConfig(export_root=tmp_path / 'exports')
-    service = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=reg)
+    service = GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset()
 
     payload = json.loads((Path(result.export_dir) / 'class_registry.json').read_text())
@@ -177,7 +162,7 @@ async def test_manifest_counts_rows_dropped_for_unregistered_class_ids(tmp_path)
         for cid, class_id, name in [('ok', 0, 'car'), ('ghost1', 10000, ''), ('ghost2', 10000, '')]
     ]
     cfg = CurationConfig(export_root=tmp_path / 'exports')
-    service = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=reg)
+    service = GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset()
 
     manifest = json.loads((Path(result.export_dir) / 'manifest.json').read_text())

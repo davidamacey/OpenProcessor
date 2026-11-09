@@ -172,6 +172,10 @@ class _FakeLifecycleIndices:
     async def exists(self, *, index: str) -> bool:
         return index in self._outer.indexes
 
+    async def get(self, *, index: str, **_kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        # no schema marker recorded: the bootstrap shortcut reads "not current"
+        return {}
+
     async def refresh(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
         self._outer._refresh_all()
         return {'_shards': {'total': 0, 'successful': 0, 'failed': 0}}

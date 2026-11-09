@@ -14,11 +14,11 @@ proof the genericization happened rather than a rename.
 
 from __future__ import annotations
 
-import io
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _image_helpers import make_jpeg as _make_jpeg
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE
 from PIL import Image
 
@@ -43,12 +43,6 @@ BOX_PROFILE = DetectionProfile(
     text_hint_len_min=2,
     text_hint_len_max=6,
 )
-
-
-def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (width, height), (50, 80, 120)).save(buf, format='JPEG', quality=85)
-    return buf.getvalue()
 
 
 class _FakeInferResult:

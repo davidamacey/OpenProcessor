@@ -25,6 +25,7 @@ from _class_registry_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation.export_fakes import FakeOpenSearch
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 from src.services.curation.export_split import stratified_split
@@ -35,27 +36,12 @@ CLASS_NAMES = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']
 HOLDOUT_PER_CLASS = 5
 
 
-class _FakeOpenSearch:
-    def __init__(self, docs: list[dict[str, Any]]) -> None:
-        self._docs = docs
-
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
-        hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]
-        return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
-
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
-        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
-
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
-        return None
-
-
 def _service(tmp_path: Path, docs: list[dict[str, Any]]) -> GenericYoloExportService:
     cfg = CurationConfig(export_root=tmp_path / 'exports')
     registry = InMemoryRegistry()
     for name in CLASS_NAMES:
         registry.add(name)
-    return GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=registry)
+    return GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=registry)
 
 
 def _doc(
