@@ -55,6 +55,7 @@ PROJECT_STATE_KEYS = (
     'region_dependency_health',
     'vlm_external_ack',
     'open_vocab_gate',
+    'region_text_consensus_marker',
 )
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import _near_dup_plan as near_dup
+import _region_text_plan as region_text
 import _research_plan as research
 import psycopg
 import pytest
@@ -187,6 +188,15 @@ TRIGGERS |= near_dup.TRIGGERS
 POLICIES |= near_dup.POLICIES
 UNPROTECTED |= near_dup.UNPROTECTED
 FOREIGN_KEYS |= near_dup.FOREIGN_KEYS
+TABLES |= region_text.TABLES
+UNIQUE_CONSTRAINTS |= region_text.UNIQUE_CONSTRAINTS
+PARTIAL_INDEXES |= region_text.PARTIAL_INDEXES
+PLAIN_INDEXES |= region_text.PLAIN_INDEXES
+NULLS_NOT_DISTINCT |= region_text.NULLS_NOT_DISTINCT
+NAMED_CHECKS |= region_text.NAMED_CHECKS
+POLICIES |= region_text.POLICIES
+UNPROTECTED |= region_text.UNPROTECTED
+FOREIGN_KEYS |= region_text.FOREIGN_KEYS
 
 
 @pytest.fixture(scope='module')
