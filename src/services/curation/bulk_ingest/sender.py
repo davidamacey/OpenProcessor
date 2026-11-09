@@ -147,19 +147,7 @@ def make_client(base_url: str) -> httpx.AsyncClient:
 def url_sender(
     base_url: str, *, api_prefix: str, project: str, objects: bool = False
 ) -> HttpBatchSender:
-    """A sender aimed at an explicit API address (the dispatcher has no request to take
-    the listening socket from)."""
+    """A sender aimed at an explicit API address (a job has no request to take the
+    listening socket from)."""
     cls = ObjectBatchSender if objects else HttpBatchSender
     return cls(make_client(base_url), api_prefix=api_prefix, project=project)
-
-
-def loopback_sender(
-    server: tuple[str, int], *, api_prefix: str, project: str, objects: bool = False
-) -> HttpBatchSender:
-    """A sender aimed at the API process's own listening socket (``server`` is the
-    ASGI scope's ``(host, port)``)."""
-    host, port = server
-    netloc = f'[{host}]' if ':' in host else host
-    return url_sender(
-        f'http://{netloc}:{port}', api_prefix=api_prefix, project=project, objects=objects
-    )

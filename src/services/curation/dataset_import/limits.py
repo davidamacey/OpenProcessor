@@ -39,18 +39,9 @@ def reprocess_sync_max() -> int:
 
 
 def open_vocab_sweep_interval_s() -> int:
-    """Seconds between sweeps of images left ``pending`` by the ingest-time
-    open-vocabulary pass; ``0`` turns the sweeper off."""
+    """Seconds between the periodic starts of the ``open_vocab_drain`` job, which takes the
+    images left ``pending`` by the ingest-time open-vocabulary pass; ``0`` turns the sweep off."""
     return env_int('OP_OPEN_VOCAB_SWEEP_S', 120, minimum=0)
-
-
-def open_vocab_stale_after_s() -> int:
-    """Age of an ``open_vocab_status: pending`` stamp after which the sweeper
-    treats the drain as orphaned (an API restart) and reclaims it. Default 240 s
-    = two sweep ticks: a live drain of a 64-image ingest batch (a few seconds per
-    image at the default concurrency) finishes well inside it, and recovery after
-    a restart takes 4 to 6 minutes instead of 10 to 12. Floor 30 s."""
-    return max(30, env_int('OP_OPEN_VOCAB_STALE_S', 240, minimum=0))
 
 
 def open_vocab_concurrency() -> int:

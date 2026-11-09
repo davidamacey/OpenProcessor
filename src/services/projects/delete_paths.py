@@ -61,9 +61,6 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     data_root = projects_data_root()
     state_projects_root = base.state_dir / 'projects'
     autolabel_projects_root = env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects'
-    from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
-
-    bulk_ingest_projects_root = bulk_ingest_base_dir() / 'projects'
     reprocess_projects_root = env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess') / 'projects'
     assist_projects_root = env_path('OP_ASSIST_JOBS_DIR', '/jobs/assist') / 'projects'
     loop_projects_root = env_path('OP_ASSIST_LOOP_JOBS_DIR', '/jobs/assist_loop') / 'projects'
@@ -76,9 +73,8 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
         (record.resources.bakeoff_jobs_dir, state_projects_root),
         (record.resources.train_jobs_dir, trainer_jobs_root() / 'projects'),
         (record.resources.autolabel_dir, autolabel_projects_root),
-        # Bulk-ingest runs, ingest sources (definitions and queues) and reprocess jobs sit
-        # under the shared jobs volume, keyed by slug, not in the project's own resources.
-        (bulk_ingest_projects_root / record.slug, bulk_ingest_projects_root),
+        # Reprocess jobs sit under the shared jobs volume, keyed by slug, not in the project's
+        # own resources.
         (reprocess_projects_root / record.slug, reprocess_projects_root),
         (assist_projects_root / record.slug, assist_projects_root),
         (loop_projects_root / record.slug, loop_projects_root),

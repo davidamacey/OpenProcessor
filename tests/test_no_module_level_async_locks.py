@@ -15,8 +15,9 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[1] / 'src'
 PRIMITIVES = {'Lock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event'}
 
-#: module -> name, each a documented local throttle (see its comment).
-ALLOWED = {('services/curation/open_vocab_ingest.py', '_PASS_LOCK')}
+#: module -> name, each a documented local throttle (see its comment). None is left: the last one,
+#: the open-vocabulary pass lock, became the exclusive ``open_vocab_drain`` job.
+ALLOWED: set[tuple[str, str]] = set()
 
 
 def _module_level_primitives(path: Path) -> list[str]:

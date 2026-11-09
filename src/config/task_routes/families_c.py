@@ -1,6 +1,14 @@
-"""Task routes of the `families_c` family; filled by the lane that owns it."""
+"""Task routes of lane 4C."""
 
 from __future__ import annotations
 
+from src.config.queue import TaskQueues
 
-ROUTES: dict[str, str] = {}
+
+ROUTES: dict[str, str] = {
+    'op.families_c.project_delete': TaskQueues.JOBS,
+    'op.families_c.open_vocab_drain': TaskQueues.OPEN_VOCAB,
+    'op.families_c.directory_ingest': TaskQueues.JOBS,
+    'op.families_c.bulk_ingest_run': TaskQueues.JOBS,
+    'op.families_c.source_poll': TaskQueues.JOBS,
+}

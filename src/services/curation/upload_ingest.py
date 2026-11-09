@@ -104,7 +104,6 @@ async def stage_and_ingest(
         )
         await schedule_open_vocab_after_ingest(
             opensearch,
-            service,
             [r.image_id for r in result.results if r.status == 'success' and r.image_id],
         )
     return result, early

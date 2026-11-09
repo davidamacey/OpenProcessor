@@ -8,12 +8,16 @@ must lie under a configured source root.
 
 from __future__ import annotations
 
-from typing import Annotated
+import uuid
+from typing import Annotated, Literal
 
-from fastapi import Query, Request
+from fastapi import Query
 
 from src.config import get_curation_config
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves route annotations at runtime
 from src.core.disk_space import DISK_GUARD
+from src.core.exceptions import RequestRejectedError
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._ingest_bulk_models import (
@@ -24,19 +28,20 @@ from src.routers.curation._ingest_bulk_models import (
     BulkIngestRequest,
     BulkIngestRun,
 )
-from src.routers.curation._ingest_bulk_wire import open_run, own_address, run_wire, slug
+from src.routers.curation._ingest_bulk_wire import open_run, run_wire, slug
 from src.routers.curation.ingest_bulk_preview import preview_config
 from src.routers.curation.ingest_sources import resolve_bulk_source, start_run_now
 from src.services.curation import image_serving
-from src.services.curation.bulk_ingest import limits, runner, sender
+from src.services.curation.bulk_ingest import limits
+from src.services.curation.bulk_ingest.runs import failures as run_failures, list_runs
 from src.services.curation.bulk_ingest.source import (
     BulkSource,
     InvalidSourceError,
     normalise_extensions,
     validate_source,
 )
-from src.services.curation.bulk_ingest.store import list_stores
-from src.services.curation.ingest_service_factory import get_ingest_service
+from src.services.curation.bulk_ingest.sources import IngestSource, one_shot_source
+from src.services.jobs.service import cancel_job
 
 
 @router.get('/ingest/bulk/config', response_model=BulkIngestConfig)
@@ -58,7 +63,7 @@ async def bulk_ingest_config() -> BulkIngestConfig:
 )
 async def start_bulk_ingest(
     body: BulkIngestRequest,
-    request: Request,
+    session: DbSessionDep,
     opensearch: OpenSearchDep,
     registry: RegistryDep,
 ) -> BulkIngestRun:
@@ -66,67 +71,71 @@ async def start_bulk_ingest(
     resume the interrupted, cancelled or partly failed run of the same source
     (``resumed: true``). One run per project at a time (409 ``bulk_ingest_busy``)."""
     if body.s3 is not None or body.source_id is not None:
-        return await start_run_now(resolve_bulk_source(body), request, opensearch, registry)
-    source = BulkSource(
-        'folder' if body.folder is not None else 'manifest',
-        body.folder or body.manifest or '',
-        normalise_extensions(body.extensions),
-    )
+        return await start_run_now(session, await resolve_bulk_source(body), opensearch, registry)
+    kind: Literal['folder', 'manifest'] = 'folder' if body.folder is not None else 'manifest'
+    location = body.folder or body.manifest or ''
+    extensions = normalise_extensions(body.extensions)
     try:
-        validate_source(source)
+        validate_source(BulkSource(kind, location, extensions))
     except InvalidSourceError as exc:
         raise api_error(422, 'bulk_ingest_invalid_source', str(exc), project=slug()) from None
-    # Refuse up front (503) what the first batch would refuse: no detector, no encoder.
-    await get_ingest_service(opensearch, registry)
-    address = own_address(request)
-    options = runner.BulkOptions(body.source, body.batch_size, body.concurrency)
-    try:
-        store, resumed = runner.claim_run(source, options)
-    except runner.BulkBusyError as exc:
-        raise api_error(
-            409, 'bulk_ingest_busy', str(exc), run_id=exc.run_id, project=slug()
-        ) from None
-    batch_sender = sender.loopback_sender(
-        address, api_prefix=get_curation_config().api_prefix, project=slug()
+    source = await one_shot_source(
+        IngestSource(
+            name='',
+            backend=kind,
+            path=location,
+            extensions=list(extensions),
+            source_tag=body.source,
+            batch_size=body.batch_size,
+            concurrency=body.concurrency,
+        )
     )
-    runner.spawn(sender=batch_sender, store=store, source=source, options=options)
-    return run_wire(store, resumed=resumed)
+    return await start_run_now(session, source, opensearch, registry, checked=True)
 
 
 @router.get('/ingest/bulk', response_model=BulkIngestList)
 async def list_bulk_ingests(
+    session: DbSessionDep,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 20,
 ) -> BulkIngestList:
-    stores = list_stores()
-    chunk = stores[(page - 1) * page_size : page * page_size]
+    runs = await list_runs(session, current_project_id())
+    chunk = runs[(page - 1) * page_size : page * page_size]
     return BulkIngestList(
-        items=[run_wire(s) for s in chunk], total=len(stores), page=page, page_size=page_size
+        items=[run_wire(r) for r in chunk], total=len(runs), page=page, page_size=page_size
     )
 
 
 @router.get('/ingest/bulk/{run_id}', response_model=BulkIngestRun)
-async def get_bulk_ingest(run_id: str) -> BulkIngestRun:
-    return run_wire(open_run(run_id))
+async def get_bulk_ingest(run_id: str, session: DbSessionDep) -> BulkIngestRun:
+    return run_wire(await open_run(session, current_project_id(), run_id))
 
 
 @router.get('/ingest/bulk/{run_id}/failures', response_model=BulkIngestFailurePage)
 async def get_bulk_ingest_failures(
     run_id: str,
+    session: DbSessionDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> BulkIngestFailurePage:
     """The failed images of the run's latest attempt, with the reason for each."""
-    rows, total = open_run(run_id).failures(offset=offset, limit=limit)
+    project = current_project_id()
+    run = await open_run(session, project, run_id)
+    rows, total = await run_failures(session, project, run, offset=offset, limit=limit)
     return BulkIngestFailurePage(
         items=[BulkIngestFailure(**row) for row in rows], total=total, offset=offset, limit=limit
     )
 
 
 @router.post('/ingest/bulk/{run_id}/cancel', response_model=BulkIngestRun)
-async def cancel_bulk_ingest(run_id: str) -> BulkIngestRun:
+async def cancel_bulk_ingest(run_id: str, session: DbSessionDep) -> BulkIngestRun:
     """Stop after the batches in flight; images already stored stay stored and a
     later start of the same source continues from them."""
-    store = open_run(run_id)
-    runner.cancel_run(store)
-    return run_wire(store)
+    project = current_project_id()
+    run = await open_run(session, project, run_id)
+    try:
+        await cancel_job(session, uuid.UUID(run.id), project, requested_by='api')
+    except RequestRejectedError as exc:
+        if exc.detail.get('error') != 'job_finished':
+            raise  # a run that finished keeps its status
+    return run_wire(await open_run(session, project, run_id))

@@ -383,20 +383,3 @@ def curation_app(
             yield c
     finally:
         main_module.app.dependency_overrides.clear()
-
-
-def route_bulk_ingest_through_the_app(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Bulk ingest sends its batches back to the API's own socket; under the test
-    client there is none, so aim the sender at the app in-process instead. The
-    request still goes through the real ``/ingest/batch`` route."""
-    import httpx
-
-    import src.main as main_module
-    from src.services.curation.bulk_ingest import sender as bulk_sender
-
-    def in_process_client(_base_url: str) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=main_module.app), base_url='http://testserver'
-        )
-
-    monkeypatch.setattr(bulk_sender, 'make_client', in_process_client)

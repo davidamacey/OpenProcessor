@@ -12,13 +12,14 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from src.services.curation.bulk_ingest.object_queue import QueueEntry
 from src.services.curation.bulk_ingest.s3_listing import (
     LAST_SCAN_META,
     WATERMARK_META,
     WATERMARK_OVERLAP_S,
     ScanResult,
 )
+from src.services.curation.bulk_ingest.source import iter_manifest_paths
+from src.services.curation.bulk_ingest.source_queue import QueueEntry
 from src.services.curation.bulk_ingest.walk import iter_image_paths
 
 
@@ -26,23 +27,26 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from pathlib import Path
 
-    from src.services.curation.bulk_ingest.object_queue import ObjectQueue
+    from src.services.curation.bulk_ingest.source_queue import SourceQueue
 
 SETTLE_S = 5.0
 _CHUNK = 500
 
 
 def scan_folder(
-    queue: ObjectQueue,
+    queue: SourceQueue,
     root: Path,
     *,
     extensions: Iterable[str],
     workers: int = 8,
     should_stop: Callable[[], bool] = lambda: False,
     now: float | None = None,
+    full: bool = False,
 ) -> ScanResult:
+    """One pass. ``full`` ignores the watermark and the settle delay and queues every file: a
+    one-shot start names a folder a person has finished writing, and has no next pass."""
     started = now if now is not None else time.time()
-    watermark: float | None = queue.meta_get(WATERMARK_META)
+    watermark: float | None = None if full else queue.meta_get(WATERMARK_META)
     result = ScanResult()
     chunk: list[QueueEntry] = []
 
@@ -60,7 +64,7 @@ def scan_folder(
         except OSError:
             continue
         result.listed += 1
-        if stat.st_mtime > started - SETTLE_S:
+        if not full and stat.st_mtime > started - SETTLE_S:
             continue
         if watermark is not None and stat.st_mtime < watermark:
             continue
@@ -81,4 +85,28 @@ def scan_folder(
     return result
 
 
-__all__ = ['scan_folder']
+def scan_manifest(
+    queue: SourceQueue, path: Path, *, should_stop: Callable[[], bool] = lambda: False
+) -> ScanResult:
+    """Queue every entry of a manifest (``source.py``); known entries queue nothing."""
+    result = ScanResult()
+    chunk: list[str] = []
+
+    def flush() -> None:
+        queued, duplicates = queue.enqueue_keys(chunk)
+        result.queued += queued
+        result.duplicates += duplicates
+        chunk.clear()
+
+    for entry in iter_manifest_paths(path):
+        if should_stop():
+            break
+        result.listed += 1
+        chunk.append(entry)
+        if len(chunk) >= _CHUNK:
+            flush()
+    flush()
+    return result
+
+
+__all__ = ['scan_folder', 'scan_manifest']

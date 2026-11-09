@@ -67,6 +67,10 @@ RETIRED_ENV: dict[str, str] = {
     'OP_EVENT_BUS': f'{_REMOVED} events are rows in PostgreSQL; there is no file bus',
     'OP_EVENT_LOG_MAX_BYTES': f'{_REMOVED} events are rows in PostgreSQL, trimmed after 24 hours',
     'OP_REGION_DRAIN_STATE_DIR': f'{_REMOVED} the drain streak is the region_drain row of project_state',
+    # Bulk-ingest runs, sources and queues are PostgreSQL rows, not files.
+    'OP_BULK_INGEST_DIR': f'{_REMOVED} runs are bulk_ingest_run jobs and queues are PostgreSQL rows',
+    # The open_vocab_drain job is exclusive per project, so no drain's pending stamp is ever reclaimed.
+    'OP_OPEN_VOCAB_STALE_S': f'{_REMOVED} one exclusive open_vocab_drain job takes every pending image',
     # The VLM endpoint registry is a PostgreSQL table, not an OpenSearch index.
     'OP_GLOBAL_CONFIGS_INDEX': f'{_REMOVED} the endpoint registry is stored in PostgreSQL',
     # The project records are PostgreSQL rows, not an OpenSearch index.

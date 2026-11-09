@@ -69,36 +69,6 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
         assert source.json()['revision'] == 1
 
 
-def test_bulk_ingest_runs_of_alpha_are_invisible_to_beta_and_a_misplaced_dir_is_refused(
-    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import shutil
-
-    from src.config.project_context import ProjectDirMismatchError, bind_project
-    from src.services.curation.bulk_ingest.store import (
-        BulkStore,
-        list_stores,
-        open_store,
-        runs_root,
-    )
-
-    monkeypatch.setenv('OP_BULK_INGEST_DIR', str(leak_env.root / 'bulk'))
-    run_id = 'bulk_20260101T000000_0123abcd'
-    with bind_project(leak_env.records['alpha']):
-        BulkStore(runs_root() / run_id).job.write({'status': 'completed'})
-        assert open_store(run_id) is not None
-        alpha_dir = runs_root()
-        assert (alpha_dir / '.project').read_text() == 'alpha'
-    with bind_project(leak_env.records['beta']):
-        assert open_store(run_id) is None
-        assert list_stores() == []
-        beta_dir = runs_root()
-    assert beta_dir != alpha_dir
-    shutil.copytree(alpha_dir, beta_dir)
-    with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
-        open_store(run_id)
-
-
 def test_reprocess_and_upload_dirs_are_marked_with_their_project(
     leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:

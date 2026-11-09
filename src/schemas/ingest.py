@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config.faces import faces_enabled
+from src.schemas.jobs import JobView
 
 
 class IndexedCounts(BaseModel):
@@ -181,3 +182,21 @@ class DirectoryIngestResponse(BaseModel):
         description='False when the deployment has face models off (OP_FACES_ENABLED=false): no face was detected or indexed',
     )
     error: str | None = Field(default=None, description='Error message if status is error')
+
+
+class DirectoryIngestAccepted(BaseModel):
+    """``202`` of ``POST /ingest/directory``: the job that ingests the directory."""
+
+    job_id: str = Field(..., description='The directory_ingest job')
+    status: Literal['queued'] = Field(..., description='Always queued at the start')
+    status_url: str = Field(..., description='Where to read the job (GET)')
+
+
+class DirectoryIngestStatus(BaseModel):
+    """``GET /ingest/directory/{job_id}``: the job, and its result once it has one."""
+
+    job: JobView = Field(..., description='The job row: status, progress, errors')
+    directory: str | None = Field(default=None, description='Source directory path')
+    result: DirectoryIngestResponse | None = Field(
+        default=None, description='The ingest result, once the job finished'
+    )

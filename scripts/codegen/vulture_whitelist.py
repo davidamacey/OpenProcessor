@@ -122,6 +122,7 @@ _.GPU_ARBITER  # src/config/advisory_locks.py, periodic arbiter tick (stage 6)
 _.CLUSTER_REFRESH  # src/config/advisory_locks.py, periodic clustering refresh (stage 6)
 _.REAPER  # src/config/advisory_locks.py, the reaper tick (stage 3)
 _.NEAR_DUP_RESCORE  # src/config/advisory_locks.py, periodic near-duplicate rescore (stage 4)
+_.open_vocab_sweep_interval_s  # src/services/curation/dataset_import/limits.py, interval of the periodic open_vocab_drain start (stage 6 beat)
 _.QUEUE_PROFILE  # src/config/queue.py, queue -> compose profile table the consumers-from-compose test reads
 _._on_worker_init  # src/tasks/app.py, connected to Celery's worker_init signal by decorator
 _._on_beat_init  # src/tasks/app.py, connected to Celery's beat_init signal by decorator
