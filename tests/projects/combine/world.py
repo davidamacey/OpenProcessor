@@ -193,12 +193,13 @@ class World:
         ``cls`` (class name), ``bbox`` and any item-doc field."""
         seed = self.next_seed() if seed is None else seed
         data = jpeg_bytes(seed)
-        imohash = hashlib.sha256(data).hexdigest()[:32]
-        path = self.records[slug].resources.upload_root / imohash[:2] / f'{imohash}.jpg'
+        content_sha256 = hashlib.sha256(data).hexdigest()
+        name = content_sha256[:32]
+        path = self.records[slug].resources.upload_root / name[:2] / f'{name}.jpg'
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         # A path-and-hash id, as ingest wrote before #358: one content at two paths is two ids.
-        image_id = hashlib.sha256(f'{path}|{imohash}'.encode()).hexdigest()[:32]
+        image_id = hashlib.sha256(f'{path}|{content_sha256}'.encode()).hexdigest()[:32]
         names = self.registry_ids(slug)
         image_doc: dict[str, Any] = {
             'image_id': image_id,
@@ -206,7 +207,7 @@ class World:
             'source': 'test',
             'width': 32 + seed,
             'height': 32,
-            'imohash': imohash,
+            'content_sha256': content_sha256,
             'indexed_at': NOW,
         }
         if split:

@@ -183,6 +183,23 @@ def content_rows(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.fixture(autouse=True)
+def _no_serving_partition_offline(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ingest places each embedded item by the project's serving partition (PostgreSQL); the
+    offline tier has none, so it places nothing, and a ``db`` test runs the real lookup."""
+    if request.node.get_closest_marker('db') is not None:
+        return
+
+    async def no_placement(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        'src.services.curation.ingest_index.place_in_serving_partition', no_placement
+    )
+
+
+@pytest.fixture(autouse=True)
 def _bind_default_project(request: pytest.FixtureRequest) -> Iterator[None]:
     """Bind the ``default`` project for every test (projects_plan.md §3.3).
 

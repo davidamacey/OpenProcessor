@@ -247,7 +247,7 @@ async def _source_pass(
         ):
             for image in page:
                 st.images += 1
-                prints.append(Fingerprint(index, image.image_id, image.imohash, image.path))
+                prints.append(Fingerprint(index, image.image_id, image.content_sha256, image.path))
                 if image.is_holdout:
                     st.holdout_images += 1
                     holdout.add((index, image.image_id))

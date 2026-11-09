@@ -75,7 +75,15 @@ def bulk_counts(bundle: Path, parsed: Parsed) -> dict[str, int]:
         elif area == 'bulk_ingest' and parts[-1] == 'queue.sqlite' and len(parts) == 3:
             source = sources.get((slug, parts[1]))
             if source is not None:
-                counts['ingest_source_files'] += sum(1 for _ in pending_queue_rows(None, file.data))
+                counts['ingest_source_files'] += sum(
+                    1
+                    for _ in pending_queue_rows(
+                        None,
+                        file.data,
+                        backend=source.kind,
+                        bucket=str(source.config.get('bucket') or ''),
+                    )
+                )
         elif area == 'state' and len(parts) == 3 and parts[0] == 'label_ops':
             counts['label_operation_members'] += len(member_ids(file.data))
     return counts

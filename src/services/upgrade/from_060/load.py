@@ -268,7 +268,13 @@ async def _load_bulk(
             source = sources.get((slug, parts[1]))
             if source is not None:
                 n = await ledger_copy.copy_ingest_files(
-                    session, pending_queue_rows(source.id, file.data)
+                    session,
+                    pending_queue_rows(
+                        source.id,
+                        file.data,
+                        backend=source.kind,
+                        bucket=str(source.config.get('bucket') or ''),
+                    ),
                 )
                 report.add('ingest_source_files', n)
         elif area == 'state' and len(parts) == 3 and parts[0] == 'label_ops':

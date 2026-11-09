@@ -21,7 +21,7 @@ async def _start(kind: str, project, level: str):
 
 
 async def test_two_concurrent_starts_of_one_level_give_one_job(
-    pg, job_env, producer, wakes
+    pg, job_env, bound_async_engine, producer, wakes
 ) -> None:
     project = make_project(pg)
     results = await asyncio.gather(
@@ -38,7 +38,7 @@ async def test_two_concurrent_starts_of_one_level_give_one_job(
 
 
 async def test_the_other_level_and_the_projection_group_are_independent(
-    pg, job_env, producer, wakes
+    pg, job_env, bound_async_engine, producer, wakes
 ) -> None:
     project = make_project(pg)
     await _start('near_dup_score', project, 'image')

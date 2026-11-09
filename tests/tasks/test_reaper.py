@@ -5,9 +5,10 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.exc import OperationalError
 
+from src.config.job_kinds import KINDS
 from src.config.queue import TaskQueues
 from src.config.task_routes import ROUTES
-from src.services.jobs.reaper import Reaper, ReaperError
+from src.services.jobs.reaper import PROJECTION_JOBS, Reaper, ReaperError
 
 
 @pytest.fixture
@@ -52,5 +53,7 @@ def test_with_the_database_down_the_tick_fails_and_every_rule_was_tried() -> Non
 
     with pytest.raises(ReaperError):
         Reaper(session_factory=Down).tick()
-    # rules a, b, c, d, h, g, f and i each tried (e skips while its job kind is unregistered)
-    assert len(attempts) == 8
+    # rules a, b, c, d, h, g and f always try; e and i try only when a job kind that syncs one of
+    # their projection tasks is registered (each skips its connect otherwise)
+    projection_rules = {rule for rule, job in PROJECTION_JOBS.values() if job in KINDS}
+    assert len(attempts) == 7 + len(projection_rules & {'e', 'i'})

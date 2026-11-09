@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import importlib
 import uuid
 from dataclasses import replace
 from typing import Any
@@ -396,6 +397,18 @@ _REPO_FUNCTIONS = (
 
 def install(monkeypatch: pytest.MonkeyPatch) -> MemoryConfig:
     """Route the config-store services to a fresh in-memory repository."""
+    # Import every patched module first: one first imported while `documents.tx` is patched
+    # binds the stand-in through `from ... import tx`, and the undo then restores the stand-in
+    # for every later (db) test of the process.
+    for module in (
+        'bound_project',
+        'documents',
+        'store',
+        'snapshot_load',
+        'project_usage',
+        'vlm_usage',
+    ):
+        importlib.import_module(f'src.services.config_store.{module}')
     memory = MemoryConfig()
     _installed.append(memory)
     for name in _REPO_FUNCTIONS:

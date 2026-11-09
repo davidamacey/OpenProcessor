@@ -4,8 +4,6 @@ resume, and the target's status transitions (4B-4)."""
 from __future__ import annotations
 
 import asyncio
-import sys
-import types
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -66,11 +64,7 @@ async def api(world: World, pg_registry, job_env, producer, wakes, monkeypatch):
         calls['bound'].append(current_project().record.slug)
         return await real_copy(ctx, source_index, page)
 
-    package = types.ModuleType('src.services.near_duplicates')
-    pending = types.ModuleType('src.services.near_duplicates.pending')
-    pending.enqueue_pending = enqueue_pending  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, 'src.services.near_duplicates', package)
-    monkeypatch.setitem(sys.modules, 'src.services.near_duplicates.pending', pending)
+    monkeypatch.setattr('src.services.near_duplicates.pending.enqueue_pending', enqueue_pending)
     monkeypatch.setattr(execute, 'copy_page', spying_copy)
     monkeypatch.setattr(projects_combine, 'make_curation_opensearch', make_client)
     monkeypatch.setattr(lifecycle, 'create_project', create_project)

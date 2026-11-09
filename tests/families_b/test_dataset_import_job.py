@@ -3,9 +3,7 @@ ledger (4B-3).
 
 The routes insert the import rows and the job in one transaction and answer 202; nothing is
 scanned, resumed or undone in the request. The worker scans the dataset again at the start of
-every attempt, claims pending ledger rows in chunks and imports them. Depends on the ND-A merge
-for the ledger's ``detail`` column (``ledger_detail``) and on its ``enqueue_pending`` (stood in
-for in ``sys.modules``, never in ``src/``).
+every attempt, claims pending ledger rows in chunks and imports them.
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from curation.dataset_import.harness import write_yolo
 from curation.query_fakes import QueryFakeOpenSearch
-from families_b.ledger_detail import ensure_detail_column, stand_in_enqueue_pending
 from families_b.support import bind_worker_to, project
 from fixtures.job_rows import sql
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
@@ -37,7 +34,6 @@ pytestmark = pytest.mark.db
 def _environment(pg, monkeypatch, tmp_path):
     from src.services.curation import image_serving
 
-    ensure_detail_column(pg)
     monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(
@@ -48,12 +44,7 @@ def _environment(pg, monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def pending_calls(monkeypatch) -> list[tuple[str, list[str], str]]:
-    return stand_in_enqueue_pending(monkeypatch)
-
-
-@pytest.fixture
-def worker(app, pg, worker_app, monkeypatch, tmp_path, pending_calls):
+def worker(app, pg, worker_app, monkeypatch, tmp_path):
     """The task side: a fake OpenSearch, Triton and encoder instead of the real clients."""
     fake = QueryFakeOpenSearch()
     app.state.opensearch = fake
@@ -174,7 +165,7 @@ async def test_broker_down_is_503_and_the_job_fails(app, client, pg, producer, t
 
 @pytest.mark.asyncio
 async def test_the_task_imports_through_the_wrapper_and_records_the_ledger(
-    app, client, pg, producer, worker_app, worker, pending_calls, tmp_path
+    app, client, pg, producer, worker_app, worker, tmp_path
 ) -> None:
     slug, _pid, root = _setup(app, pg, tmp_path)
     started = (await _start(client, slug, root)).json()
@@ -196,10 +187,9 @@ async def test_the_task_imports_through_the_wrapper_and_records_the_ledger(
     assert [r[0] for r in ledger] == ['written'] * 3
     assert all(r[1] and r[2] == 1 for r in ledger)
     assert len(worker.docs(_items_index(app, slug))) == 3
-    assert sorted(i for _level, ids, _r in pending_calls for i in ids) == sorted(
-        r[1] for r in ledger
-    )
-    assert {(level, reason) for level, _ids, reason in pending_calls} == {('image', 'added')}
+    pending = sql(pg, "SELECT level, member_id, reason FROM near_dup_pending WHERE level = 'image'")
+    assert sorted(member for _level, member, _reason in pending) == sorted(r[1] for r in ledger)
+    assert {(level, reason) for level, _member, reason in pending} == {('image', 'added')}
     done = (
         await client.get(f'/curation/projects/{slug}/datasets/imports/{started["import_id"]}')
     ).json()

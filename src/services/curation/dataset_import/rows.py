@@ -21,11 +21,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Integer, cast, column, func, select, table, text, update
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, insert as pg_insert
-from sqlalchemy.types import Text, Uuid
+from sqlalchemy import Integer, cast, func, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from src.db.models.datasets import DatasetImport
+from src.db.models.datasets import DatasetImport, DatasetImportImage
 from src.services.curation.dataset_import.report import ImportReport
 
 
@@ -40,20 +39,7 @@ if TYPE_CHECKING:
 Sessions = Callable[[], 'AbstractAsyncContextManager[AsyncSession]']
 """Opens a session in the import's project scope; commits on a clean exit."""
 
-# `detail` comes with the near-duplicate revision; a lightweight table keeps this module
-# independent of the ORM model until it carries the column.
-_LEDGER = table(
-    'dataset_import_images',
-    column('import_id', Uuid()),
-    column('image_key', Text),
-    column('image_id', Text),
-    column('item_ids', ARRAY(Text())),
-    column('status', Text),
-    column('error', Text),
-    column('detail', JSONB),
-)
-
-_ORD = cast(_LEDGER.c.detail['ord'].astext, Integer)  # a row's place in chunk order
+_ORD = cast(DatasetImportImage.detail['ord'].astext, Integer)  # a row's place in chunk order
 
 FINAL_STATUSES = ('written', 'skipped', 'failed')
 _LEGACY_STATUS = {'written': 'ok', 'pending': 'pending', 'skipped': 'skipped', 'failed': 'failed'}
@@ -212,8 +198,11 @@ async def set_report(session: AsyncSession, import_id: uuid.UUID, report: dict[s
 async def mark_undone(session: AsyncSession, import_id: uuid.UUID) -> None:
     """The import is undone: its ledger rows and the import row say so."""
     await session.execute(
-        update(_LEDGER)
-        .where(_LEDGER.c.import_id == import_id, _LEDGER.c.status.in_(('written', 'skipped')))
+        update(DatasetImportImage)
+        .where(
+            DatasetImportImage.import_id == import_id,
+            DatasetImportImage.status.in_(('written', 'skipped')),
+        )
         .values(status='undone')
     )
     await session.execute(
@@ -288,7 +277,9 @@ class Ledger:
                 for offset, e in enumerate(entries[start : start + SEED_BATCH])
             ]
             async with self.sessions() as session:
-                await session.execute(pg_insert(_LEDGER).values(values).on_conflict_do_nothing())
+                await session.execute(
+                    pg_insert(DatasetImportImage).values(values).on_conflict_do_nothing()
+                )
 
     async def claim(self, limit: int, *, after: int) -> list[Claimed]:
         """The next ``limit`` pending images past order ``after``. ``FOR UPDATE SKIP LOCKED``: a
@@ -296,10 +287,10 @@ class Ledger:
         async with self.sessions() as session:
             rows = (
                 await session.execute(
-                    select(_LEDGER.c.image_key, _LEDGER.c.detail)
+                    select(DatasetImportImage.image_key, DatasetImportImage.detail)
                     .where(
-                        _LEDGER.c.import_id == self._id,
-                        _LEDGER.c.status == 'pending',
+                        DatasetImportImage.import_id == self._id,
+                        DatasetImportImage.status == 'pending',
                         after < _ORD,
                     )
                     .order_by(_ORD)
@@ -325,14 +316,16 @@ class Ledger:
         error = (row.get('error') or None) if status == 'failed' else None
         async with self.sessions() as session:
             written = await session.execute(
-                update(_LEDGER)
-                .where(_LEDGER.c.import_id == self._id, _LEDGER.c.image_key == key)
+                update(DatasetImportImage)
+                .where(
+                    DatasetImportImage.import_id == self._id, DatasetImportImage.image_key == key
+                )
                 .values(
                     status=status,
                     image_id=row.get('image_id'),
                     item_ids=[i['crop_id'] for i in items if i.get('crop_id')],
                     error=error,
-                    detail=_LEDGER.c.detail.op('||')(detail),
+                    detail=DatasetImportImage.detail.op('||')(detail),
                 )
             )
         if written.rowcount != 1:  # type: ignore[attr-defined]
@@ -346,18 +339,18 @@ class Ledger:
         while True:
             query = (
                 select(
-                    _LEDGER.c.image_key,
-                    _LEDGER.c.status,
-                    _LEDGER.c.image_id,
-                    _LEDGER.c.error,
-                    _LEDGER.c.detail,
+                    DatasetImportImage.image_key,
+                    DatasetImportImage.status,
+                    DatasetImportImage.image_id,
+                    DatasetImportImage.error,
+                    DatasetImportImage.detail,
                 )
-                .where(_LEDGER.c.import_id == self._id, last < _ORD)
+                .where(DatasetImportImage.import_id == self._id, last < _ORD)
                 .order_by(_ORD)
                 .limit(SEED_BATCH)
             )
             if statuses is not None:
-                query = query.where(_LEDGER.c.status.in_(list(statuses)))
+                query = query.where(DatasetImportImage.status.in_(list(statuses)))
             async with self.sessions() as session:
                 page = (await session.execute(query)).all()
             if not page:
@@ -376,26 +369,28 @@ class Ledger:
         limit: int,
     ) -> tuple[list[dict[str, Any]], int]:
         """One page of rows and the filtered total, for the entries route."""
-        where = [_LEDGER.c.import_id == self._id]
+        where = [DatasetImportImage.import_id == self._id]
         if split is not None:
-            where.append(_LEDGER.c.detail['split'].astext == split)
+            where.append(DatasetImportImage.detail['split'].astext == split)
         if label_state is not None:
-            where.append(_LEDGER.c.detail['label_state'].astext == label_state)
+            where.append(DatasetImportImage.detail['label_state'].astext == label_state)
         if status is not None:
             wanted = [c for c, legacy in _LEGACY_STATUS.items() if legacy == status]
-            where.append(_LEDGER.c.status.in_(wanted or [status]))
+            where.append(DatasetImportImage.status.in_(wanted or [status]))
         async with self.sessions() as session:
             total = (
-                await session.execute(select(func.count()).select_from(_LEDGER).where(*where))
+                await session.execute(
+                    select(func.count()).select_from(DatasetImportImage).where(*where)
+                )
             ).scalar_one()
             found = (
                 await session.execute(
                     select(
-                        _LEDGER.c.image_key,
-                        _LEDGER.c.status,
-                        _LEDGER.c.image_id,
-                        _LEDGER.c.error,
-                        _LEDGER.c.detail,
+                        DatasetImportImage.image_key,
+                        DatasetImportImage.status,
+                        DatasetImportImage.image_id,
+                        DatasetImportImage.error,
+                        DatasetImportImage.detail,
                     )
                     .where(*where)
                     .order_by(_ORD)

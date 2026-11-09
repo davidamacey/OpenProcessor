@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.services.curation.bulk_ingest.source_queue import QueueEntry, file_key_for
 from src.services.upgrade.from_060 import sources as legacy
 from src.services.upgrade.from_060.ids import stable_id
 from src.services.upgrade.from_060.model import (
@@ -251,26 +252,33 @@ def parse_ingest_sources(snap: Snapshot, project: ProjectSrc) -> list[IngestSour
     return out
 
 
-def pending_queue_rows(source_id: Any, image: bytes) -> Iterator[tuple[Any, ...]]:
+def pending_queue_rows(
+    source_id: Any, image: bytes, *, backend: str, bucket: str = ''
+) -> Iterator[tuple[Any, ...]]:
     """``(source_id, file_key, status, attempts, error, enqueued_at, updated_at)`` of the rows still
-    to ingest (state ``pending``); done, failed and dead rows are history and are not loaded."""
+    to ingest (state ``pending``); done, failed and dead rows are history and are not loaded.
+
+    The key is the one the 0.7.0 scanner writes for that file version (an S3 object reference with
+    the source's bucket, or the folder path and its ``mtime_ns:size``), so the first scan after
+    the upgrade finds the row already queued instead of ingesting the file again."""
     with tempfile.TemporaryDirectory(prefix='op-queue-') as tmp:
         path = Path(tmp) / 'queue.sqlite'
         path.write_bytes(image)
         conn = sqlite3.connect(path.as_posix())
         try:
             cursor = conn.execute(
-                'SELECT key, attempts, error, queued_at, updated_at FROM objects '
-                "WHERE state = 'pending' ORDER BY queued_at, key"
+                'SELECT key, etag, version, size, attempts, error, queued_at, updated_at '
+                "FROM objects WHERE state = 'pending' ORDER BY queued_at, key"
             )
             seen: set[str] = set()
-            for key, attempts, error, queued, updated in cursor:
+            for key, etag, version, size, attempts, error, queued, updated in cursor:
                 if key in seen:  # one row per key (the queue keeps one per key and etag)
                     continue
                 seen.add(key)
+                entry = QueueEntry(key=key, etag=etag or '', version=version, size=size)
                 yield (
                     source_id,
-                    key,
+                    file_key_for(entry, backend=backend, bucket=bucket),
                     'pending',
                     int(attempts or 0),
                     error,
