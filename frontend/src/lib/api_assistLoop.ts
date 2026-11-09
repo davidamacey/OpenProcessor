@@ -1,11 +1,12 @@
 /**
  * The auto-label loop (`{prefix}/assist/loops`): start (a dry run by default),
- * list, read, the node table and a node's members, cancel, resume and rollback.
+ * list, read, the node table and a node's members, cancel, pause, resume, the budget edit and rollback.
  */
 import { apiFetch, qs, scoped } from '$lib/api';
 import type {
   AssistLoopRequest,
   AssistLoopState,
+  LoopBudgetLimit,
   LoopMembersPage,
   LoopNodePage,
   LoopRollbackResponse,
@@ -83,6 +84,23 @@ export function cancelAssistLoop(loopId: string): Promise<AssistLoopState> {
   return apiFetch<AssistLoopState>(
     `${scoped()}/assist/loops/${encodeURIComponent(loopId)}/cancel`,
     { method: 'POST' },
+  );
+}
+
+export function pauseAssistLoop(loopId: string): Promise<AssistLoopState> {
+  return apiFetch<AssistLoopState>(
+    `${scoped()}/assist/loops/${encodeURIComponent(loopId)}/pause`,
+    { method: 'POST' },
+  );
+}
+
+export function editAssistLoopBudget(
+  loopId: string,
+  limits: LoopBudgetLimit[],
+): Promise<AssistLoopState> {
+  return apiFetch<AssistLoopState>(
+    `${scoped()}/assist/loops/${encodeURIComponent(loopId)}/budget`,
+    { method: 'PATCH', body: JSON.stringify({ limits }) },
   );
 }
 
