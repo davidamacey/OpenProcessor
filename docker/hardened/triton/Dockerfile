@@ -23,6 +23,8 @@ ARG TRITON_TAG=26.06-py3
 ARG TRITON_DIGEST=sha256:58df7489c3f2276f9591d500a012dee03e23d35543ce3c390b4c001e6bf90794
 FROM nvcr.io/nvidia/tritonserver:${TRITON_TAG}@${TRITON_DIGEST}
 
+COPY docker/hardened/triton/requirements-security.txt /tmp/requirements-security.txt
+
 # hadolint ignore=DL3008,DL3009,DL4006
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
@@ -52,11 +54,9 @@ RUN set -eux; \
     apt-get -y purge nsight-systems-cli-2026.3.1 nsight-compute-2026.2.0 || true; \
     rm -rf /usr/local/cuda-*/NsightSystems-cli-* /usr/local/cuda-*/nsight-compute-* \
            /opt/nvidia/nsight-compute* 2>/dev/null || true; \
-    # Tier 1 — patch flagged Python deps. starlette>=1.3.1 fixes CVE-2026-48818 /
-    # CVE-2026-54283 but needs a matching fastapi (>=0.139) or the pin breaks; upgrade
-    # the pair together. These back only Triton's optional OpenAI frontend, not core
-    # KServe v2 serving, so this is safe.
-    python3 -m pip install --no-cache-dir --upgrade "starlette>=1.3.1" "fastapi>=0.139.0"; \
+    # Tier 1 — patch flagged Python deps (exact pins and the reason in requirements-security.txt).
+    # They back only Triton's optional OpenAI frontend, not core KServe v2 serving, so this is safe.
+    python3 -m pip install --no-cache-dir --upgrade -r /tmp/requirements-security.txt; \
     # re-enable NVIDIA/CUDA repos so downstream images can install if needed
     for f in /etc/apt/sources.list.d/*.disabled; do \
       [ -f "$f" ] && mv "$f" "${f%.disabled}" || true; \
