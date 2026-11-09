@@ -13,7 +13,6 @@ it needs live elsewhere:
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Protocol
 
 
@@ -31,11 +30,7 @@ class QueueHooks(Protocol):
     def clear_queued(self, job_id: str) -> None: ...
 
 
-ServerChooser = Callable[[str], str | None]
-"""``kind name -> server name`` (or ``None``): the router's choice for one job."""
-
 _queue_hooks: QueueHooks | None = None
-_server_chooser: ServerChooser | None = None
 
 
 def install_queue_hooks(hooks: QueueHooks | None) -> None:
@@ -45,12 +40,3 @@ def install_queue_hooks(hooks: QueueHooks | None) -> None:
 
 def queue_hooks() -> QueueHooks | None:
     return _queue_hooks
-
-
-def install_server_chooser(chooser: ServerChooser | None) -> None:
-    global _server_chooser  # noqa: PLW0603 - one router per process, installed at app import
-    _server_chooser = chooser
-
-
-def choose_server(kind: str) -> str | None:
-    return None if _server_chooser is None else _server_chooser(kind)
