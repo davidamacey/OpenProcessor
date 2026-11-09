@@ -118,7 +118,7 @@ def _decode_image(data: bytes, path: str) -> Image.Image | None:
             raw.load()
             img = ImageOps.exif_transpose(raw)
             return img if img.mode == 'RGB' else img.convert('RGB')
-    except Exception as exc:
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as exc:
         logger.warning('reembed_image_unreadable', path=path, error=str(exc))
         return None
 

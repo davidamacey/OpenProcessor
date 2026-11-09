@@ -101,24 +101,17 @@ src/services/curation/ingest_index.py	4	per-image boundary: embed, blur and inde
 src/services/curation/ingest_items.py	2	secondary detector failure is recorded on the summary and the primary result is kept
 src/services/curation/ingest_writer.py	1	drain-loop boundary: a crash fails every pending caller with the same exception
 src/services/curation/item_delete.py	1	delete boundary: the failure is recorded per crop id in errors
-src/services/curation/open_vocab_ingest.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/open_vocab_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/ops_metrics_refresh.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/probe_predictions.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/region_box_embeddings.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/region_box_refresh.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/region_dependency_health.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/region_test_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/reprocess_embed.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/reprocess_images.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/reprocess_open_vocab.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/source_image_cache.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/stale_label_source_repair.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/strategy_defaults.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/strategy_registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/unmatched_class_repair.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/vlm_strategies.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/worker_liveness.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/open_vocab_ingest.py	1	stays broad: ingest scheduling is best-effort: any failure (config, OpenSearch, drain start) must not fail the ingest, logged and returns False
+src/services/curation/ops_metrics_refresh.py	3	stays broad: metrics refresh boundary: one bad project/chunk/tick is logged and must not stop the loop
+src/services/curation/region_box_refresh.py	1	stays broad: encoder boundary: any embed failure leaves boxes pending and never fails the edit
+src/services/curation/region_dependency_health.py	2	stays broad: status endpoint boundary: an unreachable Triton or a broken segmenter checker is reported as unavailable, never a 500
+src/services/curation/region_test_run.py	1	stays broad: test-run leg boundary: a detector failure of any kind is reported as leg status error
+src/services/curation/reprocess_images.py	2	stays broad: per-scope/per-image boundary: any failure counts as failed and the batch continues
+src/services/curation/reprocess_open_vocab.py	1	stays broad: per-image boundary after segmenter outage handled: any failure marks the image failed and the run continues
+src/services/curation/strategy_defaults.py	1	stays broad: GET methods must never fail: any settings lookup failure falls back to hardcoded defaults
+src/services/curation/strategy_registry.py	2	stays broad: GET /curation/methods must never fail or block: settings/coverage failures degrade to defaults
+src/services/curation/vlm_strategies.py	1	stays broad: GET methods boundary: a VLM refresh failure degrades to the cached endpoint state
+src/services/curation/worker_liveness.py	1	stays broad: heartbeat loop boundary: one failed write must not stop the worker
 src/services/detection/profile_registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/detection/segmenter_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/face_identity/person_management.py	4	triage every return-empty handler in PR 3; ratchet: may only go down

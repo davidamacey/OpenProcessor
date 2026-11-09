@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OsConnectionError
 
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
@@ -195,6 +196,6 @@ async def test_prune_failure_is_logged_not_raised() -> None:
 
     class _Boom:
         async def mget(self, **_kw: Any) -> dict[str, Any]:
-            raise RuntimeError('down')
+            raise OsConnectionError('N/A', 'down', Exception('x'))
 
     await prune_box_embeddings(_Boom(), index=INDEX, crop_ids=['c1'])

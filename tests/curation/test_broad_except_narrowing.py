@@ -53,3 +53,21 @@ def test_pack_synonyms_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(vlm_prompt_resolution, 'active_prompt_pack', boom)
     with pytest.raises(RuntimeError):
         prepare._pack_synonyms()
+
+
+@pytest.mark.asyncio
+async def test_prune_box_embeddings_propagates_a_programming_error() -> None:
+    from src.services.curation.region_box_embeddings import prune_box_embeddings
+
+    class _Bug:
+        async def mget(self, **_: Any) -> dict[str, Any]:
+            raise TypeError('bug')
+
+    with pytest.raises(TypeError):
+        await prune_box_embeddings(_Bug(), index='idx', crop_ids=['c1'])
+
+
+def test_undecodable_image_bytes_are_none_not_an_exception() -> None:
+    from src.services.curation import reprocess_embed
+
+    assert reprocess_embed._decode_image(b'not an image', 'x') is None

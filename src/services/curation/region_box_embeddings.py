@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
 from src.config.region_fields import RegionFields, get_region_fields
 from src.config.region_state import RegionStatus
@@ -204,7 +206,7 @@ async def prune_box_embeddings(
         return
     try:
         await write_box_embeddings(client, index=index, by_crop={c: [] for c in ids})
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('box_embeddings_prune_failed', error=str(exc), n=len(ids))
 
 
