@@ -93,7 +93,6 @@ tests/curation/dataset_import/test_op_export.py	1	suppressions recorded when the
 tests/curation/test_activation_registers_region_class.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_backfill_region_embeddings.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_cluster_refresh_loop_hold.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-tests/curation/test_crop_discard.py	15	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_embed_missing_stage.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_export_readiness.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_pipeline.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower

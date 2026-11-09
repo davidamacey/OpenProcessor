@@ -29,6 +29,7 @@ pytest_plugins = [
     'curation.dataset_import.db_fixture',
     'config_store.memory_settings',
     'config_store.memory_config',
+    'curation.crops_fixtures',
 ]
 
 

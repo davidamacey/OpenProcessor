@@ -17,17 +17,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from curation.test_crops_undo_exclude import (  # noqa: F401 - fixtures
-    ITEMS,
-    _class_state,
-    _label,
-    _proposal_doc,
-    client_for,
-    crops,
-    ids,
-    registry,
-    registry_ids,
-)
+from curation.test_crops_undo_exclude import ITEMS, _class_state, _label, _proposal_doc
 
 
 if TYPE_CHECKING:
@@ -45,7 +35,7 @@ def _state(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_for) -> None:  # noqa: F811
+async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_for) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     await _label(crops, fake, registry, 'c1', ids['widget'])
     labeled = _state(fake.docs(ITEMS)['c1'])
@@ -65,7 +55,7 @@ async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_f
 
 
 @pytest.mark.asyncio
-async def test_undo_after_discard_after_label_steps_back(crops, registry, ids, client_for) -> None:  # noqa: F811
+async def test_undo_after_discard_after_label_steps_back(crops, registry, ids, client_for) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     original = _state(fake.docs(ITEMS)['c1'])
     await _label(crops, fake, registry, 'c1', ids['widget'])
@@ -82,10 +72,10 @@ async def test_undo_after_discard_after_label_steps_back(crops, registry, ids, c
 
 @pytest.mark.asyncio
 async def test_review_dismiss_only_keeps_class_and_is_undoable(
-    crops,  # noqa: F811
-    registry,  # noqa: F811
-    ids,  # noqa: F811
-    client_for,  # noqa: F811
+    crops,
+    registry,
+    ids,
+    client_for,
 ) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     before = _state(fake.docs(ITEMS)['c1'])
@@ -104,7 +94,7 @@ async def test_review_dismiss_only_keeps_class_and_is_undoable(
     assert _state(fake.docs(ITEMS)['c1']) == before
 
 
-def test_discard_requires_an_effect(client_for) -> None:  # noqa: F811
+def test_discard_requires_an_effect(client_for) -> None:
     client = client_for(QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}}))
     r = client.post(
         '/curation/projects/default/crops/c1/discard',
@@ -113,12 +103,12 @@ def test_discard_requires_an_effect(client_for) -> None:  # noqa: F811
     assert r.status_code == 422
 
 
-def test_discard_unknown_crop_is_404(client_for) -> None:  # noqa: F811
+def test_discard_unknown_crop_is_404(client_for) -> None:
     client = client_for(QueryFakeOpenSearch({ITEMS: {}}))
     assert client.post('/curation/projects/default/crops/nope/discard', json={}).status_code == 404
 
 
-def test_discard_batch(client_for) -> None:  # noqa: F811
+def test_discard_batch(client_for) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('a', 'b')}})
     before = {k: _state(v) for k, v in fake.docs(ITEMS).items()}
     client = client_for(fake)
@@ -142,7 +132,7 @@ def test_discard_batch(client_for) -> None:  # noqa: F811
 
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
-def test_label_source_must_be_a_human_source(client_for, ids) -> None:  # noqa: F811
+def test_label_source_must_be_a_human_source(client_for, ids) -> None:
     client = client_for(QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}}))
     r = client.put(
         '/curation/projects/default/crops/c1/label',
@@ -157,7 +147,7 @@ def test_label_source_must_be_a_human_source(client_for, ids) -> None:  # noqa: 
 
 
 @pytest.mark.asyncio
-async def test_class_source_is_always_human_on_a_human_write(crops, registry, ids) -> None:  # noqa: F811
+async def test_class_source_is_always_human_on_a_human_write(crops, registry, ids) -> None:
     from src.routers.curation._crop_write_models import CropLabelRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
@@ -175,7 +165,7 @@ async def test_class_source_is_always_human_on_a_human_write(crops, registry, id
 @pytest.mark.asyncio
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
-async def test_batch_writes_return_updated_ids(crops, ids) -> None:  # noqa: F811
+async def test_batch_writes_return_updated_ids(crops, ids) -> None:
     from curation.queued_label import call_route
     from curation.serving_partition import serve_clusters
     from src.routers.curation._crop_write_models import CropBatchLabelRequest, CropMoveRequest
@@ -204,7 +194,7 @@ class _UpdateRaises(QueryFakeOpenSearch):
         raise self._exc
 
 
-def test_review_dismiss_opensearch_outage_is_503(crops, registry, ids, client_for) -> None:  # noqa: F811
+def test_review_dismiss_opensearch_outage_is_503(crops, registry, ids, client_for) -> None:
     from opensearchpy.exceptions import ConnectionError as OsConnectionError
 
     client = client_for(_UpdateRaises(OsConnectionError('N/A', 'refused', Exception('x'))))
@@ -212,7 +202,7 @@ def test_review_dismiss_opensearch_outage_is_503(crops, registry, ids, client_fo
     assert r.status_code == 503, r.text
 
 
-def test_review_dismiss_missing_crop_is_404(crops, registry, ids, client_for) -> None:  # noqa: F811
+def test_review_dismiss_missing_crop_is_404(crops, registry, ids, client_for) -> None:
     from opensearchpy.exceptions import NotFoundError
 
     client = client_for(_UpdateRaises(NotFoundError(404, 'document_missing_exception', {})))
