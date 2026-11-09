@@ -370,8 +370,7 @@ async def refine_cluster(
     max_members: int = MAX_REFINE_MEMBERS,
 ) -> dict[str, Any]:
     """Per-cluster AHC refinement of an *item* cluster (``pe_embedding`` /
-    ``cluster_id`` / ``cluster_subid``); see :func:`refine_members`. Region
-    boxes refine through ``region_box_clustering.refine_region_cluster``."""
+    ``cluster_id`` / ``cluster_subid``); see :func:`refine_members`."""
     index = items_index()
 
     async def count_members() -> int:

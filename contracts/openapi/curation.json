@@ -24418,6 +24418,24 @@
         "title": "RegionDependencyStatusResponse",
         "type": "object"
       },
+      "RegionFpCentroidsStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind"
+        ],
+        "title": "RegionFpCentroidsStarted",
+        "type": "object"
+      },
       "RegionItemWriteResponse": {
         "description": "``PUT /crops/{crop_id}/regions``.",
         "properties": {
@@ -55994,7 +56012,7 @@
     },
     "/curation/projects/{project}/regions": {
       "get": {
-        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``region_cluster_id``,\n``region_cluster_subid``, ``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``cluster_id``, ``verified`` and the shared item\nfilter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,\n``max_rank``, ``origin``, ``embedding_state``, ``review_status``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
+        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``cluster_uid``,\n``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``verified`` and the shared item\nfilter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,\n``max_rank``, ``origin``, ``embedding_state``, ``review_status``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
         "operationId": "list_regions_curation_projects__project__regions_get",
         "parameters": [
           {
@@ -56030,45 +56048,9 @@
             }
           },
           {
-            "description": "Filter by the ITEM cluster.",
+            "description": "Box filter: the box sits in this cluster of the serving partition.",
             "in": "query",
-            "name": "cluster_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Filter by the ITEM cluster.",
-              "title": "Cluster Id"
-            }
-          },
-          {
-            "description": "Box filter: region cluster bucket.",
-            "in": "query",
-            "name": "region_cluster_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Box filter: region cluster bucket.",
-              "title": "Region Cluster Id"
-            }
-          },
-          {
-            "description": "Box filter: AHC sub-cluster.",
-            "in": "query",
-            "name": "region_cluster_subid",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
@@ -56079,20 +56061,8 @@
                   "type": "null"
                 }
               ],
-              "description": "Box filter: AHC sub-cluster.",
-              "title": "Region Cluster Subid"
-            }
-          },
-          {
-            "description": "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
-            "in": "query",
-            "name": "sort_by_subid",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters come back contiguous across pages (the UI groups them with separators). Overrides the default outliers-first ordering.",
-              "title": "Sort By Subid",
-              "type": "boolean"
+              "description": "Box filter: the box sits in this cluster of the serving partition.",
+              "title": "Cluster Uid"
             }
           },
           {
@@ -56699,166 +56669,9 @@
         ]
       }
     },
-    "/curation/projects/{project}/regions/cluster": {
-      "post": {
-        "description": "Launch the full region-clustering pipeline as a background job (50k+\nregions take minutes). Rebuilds FP sub-centroids, auto-pulls tight FP\nmatches into the FP bucket, then re-partitions the good regions (the\nre-partition is skipped if a manual refine is still fresh, unless\n``force_repartition``). Poll GET {api_prefix}/regions/cluster/status.",
-        "operationId": "cluster_regions_curation_projects__project__regions_cluster_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Only top-N largest crops.",
-            "in": "query",
-            "name": "max_rank",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Only top-N largest crops.",
-              "title": "Max Rank"
-            }
-          },
-          {
-            "description": "Auto-move regions within this L2 distance of an FP sub-centroid into the FP bucket (tight, near-certain matches). 0 disables.",
-            "in": "query",
-            "name": "auto_fp_threshold",
-            "required": false,
-            "schema": {
-              "default": 0.2,
-              "description": "Auto-move regions within this L2 distance of an FP sub-centroid into the FP bucket (tight, near-certain matches). 0 disables.",
-              "maximum": 1.0,
-              "minimum": 0.0,
-              "title": "Auto Fp Threshold",
-              "type": "number"
-            }
-          },
-          {
-            "description": "Rebuild FP sub-type centroids before the auto-assign pass.",
-            "in": "query",
-            "name": "rebuild_fp_centroids",
-            "required": false,
-            "schema": {
-              "default": true,
-              "description": "Rebuild FP sub-type centroids before the auto-assign pass.",
-              "title": "Rebuild Fp Centroids",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Re-partition the good regions even if a manual refine happened recently. Default respects the refine TTL so recent sub-clusters are kept.",
-            "in": "query",
-            "name": "force_repartition",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Re-partition the good regions even if a manual refine happened recently. Default respects the refine TTL so recent sub-clusters are kept.",
-              "title": "Force Repartition",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cluster Regions Curation Projects  Project  Regions Cluster Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Cluster Regions",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/regions/cluster/status": {
-      "get": {
-        "description": "Status of the background region-clustering job.",
-        "operationId": "region_cluster_status_curation_projects__project__regions_cluster_status_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Region Cluster Status Curation Projects  Project  Regions Cluster Status Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Region Cluster Status",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/regions/clusters": {
       "get": {
-        "description": "Cluster cards for the region buckets (mirrors /curation/clusters' shape).\n\nClusters hold *boxes*: a card's ``size`` is the items with at least one\nbox in the cluster, ``box_count`` the boxes (rows) in it -- an item with\ntwo boxes in one cluster is ``size`` 1, ``box_count`` 2. Most cards are\n``candidate`` (regions are one class); the permanent false-positive\nbucket is tagged ``cluster_kind='false_positive'`` and pinned first.\n``representatives`` are rows for the boxes closest to the centroid\n(full wire item + ``region_box_id``), shown as region close-up\nthumbnails.",
+        "description": "Cluster cards for the serving region-box partition.\n\nClusters hold *boxes*: a card's ``size`` is the items with at least one\nbox in the cluster, ``box_count`` the boxes (rows) in it -- an item with\ntwo boxes in one cluster is ``size`` 1, ``box_count`` 2. ``cluster_uid`` names the\ncluster across partitions. ``representatives`` are rows for the boxes with the highest\n``cluster_score`` (cosine to the cluster centre; full wire item + ``region_box_id``),\nshown as region close-up thumbnails. False positives are a box state, not a card: list them\nwith ``GET /regions?box_state=false_positive``.",
         "operationId": "list_region_clusters_curation_projects__project__regions_clusters_get",
         "parameters": [
           {
@@ -56952,73 +56765,9 @@
         ]
       }
     },
-    "/curation/projects/{project}/regions/clusters/refine/{cluster_id}": {
-      "post": {
-        "description": "Per-bucket AHC refine over the bucket's boxes; writes each box's\n``cluster_subid`` so outliers split out.",
-        "operationId": "refine_region_cluster_endpoint_curation_projects__project__regions_clusters_refine__cluster_id__post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "cluster_id",
-            "required": true,
-            "schema": {
-              "title": "Cluster Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Refine Region Cluster Endpoint Curation Projects  Project  Regions Clusters Refine  Cluster Id  Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegionProfileUnavailableResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Refine Region Cluster Endpoint",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/regions/fp_centroids/build": {
       "post": {
-        "description": "Sub-type the FP bucket + (re)build the FP centroid store (background).\n\nThis is the retrain trigger for the FP matcher: re-run it after marking a\nnew batch of false positives so the per-sub-type centroids reflect them.",
+        "description": "Sub-type the false-positive boxes and (re)build the FP centroid store, as a job.\n\nThe retrain trigger for the FP matcher: re-run it after marking a new batch of false\npositives so the per-sub-type centroids reflect them. 202 with the job id (409 ``job_busy``\nwhile one is active); progress and the result are on ``GET .../jobs/{job_id}``.",
         "operationId": "build_fp_centroids_endpoint_curation_projects__project__regions_fp_centroids_build_post",
         "parameters": [
           {
@@ -57029,16 +56778,28 @@
               "title": "Project",
               "type": "string"
             }
+          },
+          {
+            "description": "After the build, move regions within this L2 distance of an FP sub-centroid into the false_positive state (tight, near-certain matches). 0 disables.",
+            "in": "query",
+            "name": "auto_fp_threshold",
+            "required": false,
+            "schema": {
+              "default": 0.0,
+              "description": "After the build, move regions within this L2 distance of an FP sub-centroid into the false_positive state (tight, near-certain matches). 0 disables.",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Auto Fp Threshold",
+              "type": "number"
+            }
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Build Fp Centroids Endpoint Curation Projects  Project  Regions Fp Centroids Build Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionFpCentroidsStarted"
                 }
               }
             },
@@ -57066,51 +56827,6 @@
           }
         },
         "summary": "Build Fp Centroids Endpoint",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/regions/fp_centroids/status": {
-      "get": {
-        "description": "Background FP-centroid build job snapshot + persisted centroid metadata.",
-        "operationId": "fp_centroids_status_curation_projects__project__regions_fp_centroids_status_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Fp Centroids Status Curation Projects  Project  Regions Fp Centroids Status Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Fp Centroids Status",
         "tags": [
           "Curation"
         ]

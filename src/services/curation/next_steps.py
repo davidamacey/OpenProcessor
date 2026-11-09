@@ -26,8 +26,9 @@ def recluster_items() -> dict[str, Any]:
 def cluster_regions() -> dict[str, Any]:
     return _step(
         'cluster_regions',
-        '/regions/cluster',
-        'Group the imported region boxes with their visual neighbours.',
+        '/clusters/runs',
+        'Group the imported region boxes with their visual neighbours '
+        '(body {"target": "region_box"}).',
     )
 
 

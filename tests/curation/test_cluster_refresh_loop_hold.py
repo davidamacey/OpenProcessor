@@ -10,18 +10,22 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
-from src.services.curation.assist_loop import service
-from src.services.curation.clustering.refresh_schedule import (
+from src.services.clustering.refresh_schedule import (
     Action,
     Observation,
     Policy,
     ProjectSchedule,
     step,
 )
+from src.services.curation.assist_loop import service
 
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
+
+# The real hold, taken at import: the offline tier's autouse fixture replaces it with a no-op
+# in every non-db test, and a test of the hold itself puts it back.
+REAL_HOLD = service.require_no_live_loop
 
 POLICY = Policy(threshold=200, max_deferral_s=600.0, retry_backoff_s=300.0)
 START = '/curation/projects/default/pipeline/auto_label/start'
@@ -39,10 +43,14 @@ LOOP_ID = '01a1b198-3400-7fd7-a7c3-1acc88024d4a'
 def live_loop(monkeypatch: pytest.MonkeyPatch) -> str:
     """The project has a live loop (the lookup the hold reads, answered)."""
 
+    from src.routers.curation import pipeline_public
+
     async def live(_session: Any) -> str:
         return LOOP_ID
 
     monkeypatch.setattr(service, '_live_loop_id', live)
+    monkeypatch.setattr(service, 'require_no_live_loop', REAL_HOLD)
+    monkeypatch.setattr(pipeline_public, 'require_no_live_loop', REAL_HOLD)
     return LOOP_ID
 
 

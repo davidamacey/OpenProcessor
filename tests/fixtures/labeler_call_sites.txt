@@ -88,12 +88,8 @@
 /pipeline/events
 /regions
 /regions/batch_status
-/regions/cluster
-/regions/cluster/status
 /regions/clusters
-/regions/clusters/refine/{param}
 /regions/fp_centroids/build
-/regions/fp_centroids/status
 /regions/suspected_false_positives
 /regions/training_candidates
 /review/{param}

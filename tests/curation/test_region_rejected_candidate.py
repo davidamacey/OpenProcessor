@@ -23,7 +23,6 @@ from src.config import get_region_fields
 from src.config.curation_accessors import base_curation_config
 from src.config.region_rejection import REJECT_REASON_HUMAN, REJECT_REASON_SANITY_PREFIX
 from src.domain.region_boxes import RegionBox, boxes_write_fields
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.edit_history import EditKind, restore_edit_state
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
@@ -238,7 +237,7 @@ class TestHumanReversal:
         for key in (F.status, F.rejection_reason, F.boxes, F.count, F.rejected_count):
             assert doc.get(key) == before.get(key), key
 
-    def test_false_positive_keeps_the_box_and_parks_it_in_the_fp_cluster(
+    def test_false_positive_keeps_the_box(
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
         resp = client.patch(
@@ -252,7 +251,6 @@ class TestHumanReversal:
         assert box['state'] == 'false_positive'
         assert box['bbox_norm'] == CANDIDATE
         assert box['detector'] == 'det_model'
-        assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
         # The verdict that made it a rejected box does not outlive the
         # transition (m5): a false-positive box carries no stale reason.
         assert box['rejection_reason'] is None

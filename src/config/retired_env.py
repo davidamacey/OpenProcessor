@@ -27,6 +27,9 @@ _BAKEOFF_TARGET_REMOVED = (
 _FEATURE_OUTPUT_REMOVED = f'{_REMOVED} the profile feature_output field was removed'
 RETIRED_ENV: dict[str, str] = {
     'OP_TRITON_URL': 'TRITON_URL',
+    'OP_AUTO_LABEL_STATE_DIR': (
+        f'{_REMOVED} auto-label state is the jobs table; a clustering run is a partition row'
+    ),
     'OP_IVF_RETRAIN_CHECK_S': (
         f'{_REMOVED} the IVF retrain is a cluster_run started by the periodic cluster refresh'
     ),

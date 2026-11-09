@@ -1,14 +1,13 @@
-"""Curation region-clustering + false-positive endpoints.
+"""Curation region cluster cards and the false-positive endpoints.
 
 Split out of ``regions.py`` to keep each router sub-module focused (and
-under the 700-LOC gate). Covers the region-cluster *view* (coarse KMeans
-buckets + AHC refine), the permanent false-positive bucket, and the
-FP-centroid matcher.
+under the 700-LOC gate). Covers the region cluster cards of the serving region-box partition,
+the permanent false-positive state, and the FP-centroid matcher.
 
 False positives are heterogeneous (background clutter, similar-looking
 non-target objects, empty/spurious detections), so the matcher is
 **double-layered**:
-:func:`~src.services.curation.clustering.region_box_clustering.build_region_fp_centroids`
+:func:`~src.services.clustering.region_fp.build_region_fp_centroids`
 sub-types the false-positive *boxes* into ``k`` sub-clusters and persists
 **one centroid per sub-type**; :func:`suspected_false_positives` matches
 each candidate box's vector against *all* sub-centroids and keeps the
@@ -25,29 +24,22 @@ import numpy as np
 from fastapi import Query
 
 from src.config import get_region_fields
-from src.config.project_context import current_project, project_api_base
-from src.config.region_state import RegionStatus
+from src.config.project_context import current_project, current_project_id, project_api_base
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    RegionProfileDep,
-    items_index,
-    logger,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, items_index, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
+from src.schemas.curation.region_fp import RegionFpCentroidsStarted
+from src.services.curation.clustering.pool_snapshot import GOOD_BOX_STATES
 from src.services.curation.clustering.region_box_rows import box_state_clause
 from src.services.curation.region_rows import rows_for_pairs
 from src.services.curation.wire import box_thumbnail_url
+from src.services.jobs.service import start_job
 
 
-# ``dominant_class_name`` for a non-FP region-cluster card. Region clusters
-# are single-class by construction (every member is a region), so the card
-# carries the generic region name rather than a domain class.
-REGION_CLUSTER_CLASS_NAME = 'region'
+REGION_FP_KIND = 'region_fp_centroids'
 
 
 SUSPECTED_FP_MAX_DISTANCE = 0.35
@@ -69,75 +61,6 @@ _suspected_fp_cache: dict[
 ] = {}
 
 
-@router.post('/regions/cluster', responses=REGION_PROFILE_RESPONSES)
-async def cluster_regions(
-    opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
-    max_rank: int | None = Query(None, ge=1, description='Only top-N largest crops.'),
-    auto_fp_threshold: float = Query(
-        0.20,
-        ge=0.0,
-        le=1.0,
-        description='Auto-move regions within this L2 distance of an FP sub-centroid '
-        'into the FP bucket (tight, near-certain matches). 0 disables.',
-    ),
-    rebuild_fp_centroids: bool = Query(
-        True, description='Rebuild FP sub-type centroids before the auto-assign pass.'
-    ),
-    force_repartition: bool = Query(
-        False,
-        description='Re-partition the good regions even if a manual refine happened '
-        'recently. Default respects the refine TTL so recent sub-clusters are kept.',
-    ),
-) -> dict[str, Any]:
-    """Launch the full region-clustering pipeline as a background job (50k+
-    regions take minutes). Rebuilds FP sub-centroids, auto-pulls tight FP
-    matches into the FP bucket, then re-partitions the good regions (the
-    re-partition is skipped if a manual refine is still fresh, unless
-    ``force_repartition``). Poll GET {api_prefix}/regions/cluster/status."""
-    from src.services.curation.clustering.region_cluster_jobs import start_region_cluster_job
-
-    return await start_region_cluster_job(
-        opensearch,
-        max_rank=max_rank,
-        auto_fp_threshold=auto_fp_threshold,
-        rebuild_fp_centroids=rebuild_fp_centroids,
-        force_repartition=force_repartition,
-    )
-
-
-@router.get('/regions/cluster/status')
-async def region_cluster_status() -> dict[str, Any]:
-    """Status of the background region-clustering job."""
-    from src.services.curation.clustering.region_cluster_jobs import region_cluster_job_status
-
-    return region_cluster_job_status()
-
-
-@router.post('/regions/clusters/refine/{cluster_id}', responses=REGION_PROFILE_RESPONSES)
-async def refine_region_cluster_endpoint(
-    cluster_id: int,
-    opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
-) -> dict[str, Any]:
-    """Per-bucket AHC refine over the bucket's boxes; writes each box's
-    ``cluster_subid`` so outliers split out."""
-    from src.services.curation.clustering.region_box_clustering import refine_region_cluster
-    from src.services.curation.clustering.region_cluster_jobs import mark_region_refine
-
-    try:
-        result = await refine_region_cluster(opensearch, cluster_id)
-    except Exception as exc:
-        logger.error('region_refine_failed', cluster_id=cluster_id, error=str(exc))
-        raise server_error(500, 'region refine failed', exc) from exc
-    # Anchor the re-partition TTL on good-bucket refines so a later one-click
-    # recluster won't wipe this fresh sub-cluster work (the FP bucket is rebuilt
-    # by its own centroid job, not protected here).
-    if cluster_id != FALSE_POSITIVE_REGION_CLUSTER_ID:
-        mark_region_refine(cluster_id)
-    return result
-
-
 @router.get('/regions/clusters', responses=REGION_PROFILE_RESPONSES)
 async def list_region_clusters(
     opensearch: OpenSearchDep,
@@ -146,26 +69,23 @@ async def list_region_clusters(
     per_cluster: int = Query(4, ge=1, le=20),
     max_rank: int | None = Query(None, ge=1),
 ) -> dict[str, Any]:
-    """Cluster cards for the region buckets (mirrors /curation/clusters' shape).
+    """Cluster cards for the serving region-box partition.
 
     Clusters hold *boxes*: a card's ``size`` is the items with at least one
     box in the cluster, ``box_count`` the boxes (rows) in it -- an item with
-    two boxes in one cluster is ``size`` 1, ``box_count`` 2. Most cards are
-    ``candidate`` (regions are one class); the permanent false-positive
-    bucket is tagged ``cluster_kind='false_positive'`` and pinned first.
-    ``representatives`` are rows for the boxes closest to the centroid
-    (full wire item + ``region_box_id``), shown as region close-up
-    thumbnails.
+    two boxes in one cluster is ``size`` 1, ``box_count`` 2. ``cluster_uid`` names the
+    cluster across partitions. ``representatives`` are rows for the boxes with the highest
+    ``cluster_score`` (cosine to the cluster centre; full wire item + ``region_box_id``),
+    shown as region close-up thumbnails. False positives are a box state, not a card: list them
+    with ``GET /regions?box_state=false_positive``.
     """
     F = get_region_fields()
-    # A box sits in a cluster when it is accepted or false_positive (the FP
-    # bucket keeps its geometry for FP analysis/training) and carries a
-    # cluster id; the same nested scope drives the aggregation.
+    uid = f'{F.boxes}.cluster_uid'
     scope = {
         'bool': {
             'filter': [
-                box_state_clause(['accepted', RegionStatus.FALSE_POSITIVE.value], F),
-                {'exists': {'field': f'{F.boxes}.cluster_id'}},
+                box_state_clause(list(GOOD_BOX_STATES), F),
+                {'exists': {'field': uid}},
             ]
         }
     }
@@ -183,7 +103,7 @@ async def list_region_clusters(
                         'filter': scope,
                         'aggs': {
                             'clusters': {
-                                'terms': {'field': f'{F.boxes}.cluster_id', 'size': max_clusters},
+                                'terms': {'field': uid, 'size': max_clusters},
                                 'aggs': {
                                     'reps': {
                                         'top_hits': {
@@ -193,17 +113,14 @@ async def list_region_clusters(
                                             'docvalue_fields': [f'{F.boxes}.box_id'],
                                             'sort': [
                                                 {
-                                                    f'{F.boxes}.cluster_distance': {
-                                                        'order': 'asc',
+                                                    f'{F.boxes}.cluster_score': {
+                                                        'order': 'desc',
                                                         'missing': '_last',
                                                         'unmapped_type': 'float',
                                                     }
                                                 }
                                             ],
                                         }
-                                    },
-                                    'subids': {
-                                        'cardinality': {'field': f'{F.boxes}.cluster_subid'}
                                     },
                                     'items': {
                                         'reverse_nested': {},
@@ -235,32 +152,19 @@ async def list_region_clusters(
             for h in rep_hits
         ]
         rep_pairs.extend((crop_id, box_id, {}) for crop_id, box_id in reps)
-        n_sub = int((b.get('subids') or {}).get('value', 0))
-        is_fp = int(b['key']) == FALSE_POSITIVE_REGION_CLUSTER_ID
         items = b.get('items') or {}
         clusters.append(
             {
-                'id': int(b['key']),
-                'cluster_kind': RegionStatus.FALSE_POSITIVE if is_fp else 'candidate',
+                'cluster_uid': str(b['key']),
                 'size': int(items.get('doc_count', 0)),
                 'box_count': int(b['doc_count']),
                 'validated_count': int((items.get('validated') or {}).get('doc_count', 0)),
-                'dominant_class_id': None,
-                'dominant_class_name': RegionStatus.FALSE_POSITIVE
-                if is_fp
-                else REGION_CLUSTER_CLASS_NAME,
-                'dominant_pct': None,
-                'purity': None,
-                'is_unlabeled': True,
                 'representative_crop_ids': [crop_id for crop_id, _box_id in reps],
                 'representative_box_ids': [box_id for _crop_id, box_id in reps],
                 'representative_thumb_urls': [
                     box_thumbnail_url(project_api_base(), crop_id, box_id or '')
                     for crop_id, box_id in reps
                 ],
-                'has_subclusters': n_sub > 0,
-                'n_subclusters': n_sub,
-                'updated_at': None,
             }
         )
     rows = await rows_for_pairs(
@@ -276,31 +180,41 @@ async def list_region_clusters(
             for key in zip(c['representative_crop_ids'], c['representative_box_ids'], strict=True)
             if key in by_key
         ]
-    # Pin the permanent FP card first, then largest buckets.
-    clusters.sort(key=lambda c: (c['cluster_kind'] != RegionStatus.FALSE_POSITIVE, -c['size']))
+    clusters.sort(key=lambda c: -c['size'])
     return {'clusters': clusters, 'count': len(clusters)}
 
 
-@router.post('/regions/fp_centroids/build', responses=REGION_PROFILE_RESPONSES)
+@router.post(
+    '/regions/fp_centroids/build',
+    response_model=RegionFpCentroidsStarted,
+    status_code=202,
+    responses=REGION_PROFILE_RESPONSES,
+)
 async def build_fp_centroids_endpoint(
-    opensearch: OpenSearchDep, _profile: RegionProfileDep
-) -> dict[str, Any]:
-    """Sub-type the FP bucket + (re)build the FP centroid store (background).
+    session: DbSessionDep,
+    _profile: RegionProfileDep,
+    auto_fp_threshold: float = Query(
+        0.0,
+        ge=0.0,
+        le=1.0,
+        description='After the build, move regions within this L2 distance of an FP '
+        'sub-centroid into the false_positive state (tight, near-certain matches). 0 disables.',
+    ),
+) -> RegionFpCentroidsStarted:
+    """Sub-type the false-positive boxes and (re)build the FP centroid store, as a job.
 
-    This is the retrain trigger for the FP matcher: re-run it after marking a
-    new batch of false positives so the per-sub-type centroids reflect them.
+    The retrain trigger for the FP matcher: re-run it after marking a new batch of false
+    positives so the per-sub-type centroids reflect them. 202 with the job id (409 ``job_busy``
+    while one is active); progress and the result are on ``GET .../jobs/{job_id}``.
     """
-    from src.services.curation.clustering.region_cluster_jobs import start_region_fp_centroid_job
-
-    return await start_region_fp_centroid_job(opensearch)
-
-
-@router.get('/regions/fp_centroids/status')
-async def fp_centroids_status() -> dict[str, Any]:
-    """Background FP-centroid build job snapshot + persisted centroid metadata."""
-    from src.services.curation.clustering.region_cluster_jobs import region_fp_centroid_job_status
-
-    return region_fp_centroid_job_status()
+    started = await start_job(
+        session,
+        REGION_FP_KIND,
+        current_project_id(),
+        params={'auto_fp_threshold': auto_fp_threshold},
+        requested_by='curation-api',
+    )
+    return RegionFpCentroidsStarted(job_id=str(started.job.id), kind=REGION_FP_KIND)
 
 
 @router.get(
@@ -333,7 +247,7 @@ async def suspected_false_positives(
     """
     import time
 
-    from src.services.curation.clustering.region_box_clustering import fp_candidate_rows
+    from src.services.clustering.region_fp import fp_candidate_rows
     from src.services.detection.fp_store import FalsePositiveCentroidStore
 
     if threshold is None:

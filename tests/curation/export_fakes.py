@@ -115,7 +115,7 @@ def make_item(
     *,
     bbox: list[float] | None = None,
     test_holdout: bool = False,
-    cluster_id: int | None = None,
+    cluster_uid: str | None = None,
 ) -> dict[str, Any]:
     return {
         'crop_id': f'crop-{idx}',
@@ -124,7 +124,7 @@ def make_item(
         'bbox_norm': bbox or [0.1, 0.1, 0.5, 0.5],
         'class_id': class_id,
         'test_holdout': test_holdout,
-        'cluster_id': cluster_id,
+        'cluster_uid': cluster_uid,
     }
 
 
@@ -135,7 +135,7 @@ def make_region_item(
     region_bbox: list[float] | None = None,
     class_id: int = 0,
     test_holdout: bool = False,
-    region_cluster_id: int | None = None,
+    region_cluster_uid: str | None = None,
 ) -> dict[str, Any]:
     doc = make_item(idx, class_id, test_holdout=test_holdout)
     doc[FIELDS.status] = status.value
@@ -145,7 +145,7 @@ def make_region_item(
                 'box_id': 'b1',
                 'bbox_norm': list(region_bbox),
                 'state': 'accepted',
-                'cluster_id': region_cluster_id,
+                'cluster_uid': region_cluster_uid,
             }
         ]
         if region_bbox is not None

@@ -23,7 +23,6 @@ from src.clients.curation_opensearch.ensure_overlay_fields import (
 from src.config import IndexRole, get_region_fields, index_name
 from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 
 
 F = get_region_fields()
@@ -118,29 +117,21 @@ def test_box_filters_select_the_same_box_not_any_box() -> None:
     assert body['total_rows'] == 1
 
 
-def test_cluster_filters_and_state_match_the_same_box() -> None:
+def test_cluster_filter_and_state_match_the_same_box() -> None:
     docs = {
         'x': _item(
             'x',
-            [
-                _box('b1', cluster_id=7),
-                _box('b2', 'false_positive', cluster_id=FALSE_POSITIVE_REGION_CLUSTER_ID),
-            ],
+            [_box('b1', cluster_uid='u7'), _box('b2', 'false_positive', cluster_uid='u9')],
         ),
     }
 
     client = _client(QueryFakeOpenSearch({ITEMS: docs}))
-    in_bucket = _get(client, '/regions', region_cluster_id=7)
-    assert _rows(in_bucket) == [('x', 'b1')]
-    # b1 is accepted but in bucket 7; the FP box is not in bucket 7.
-    fp_in_seven = _get(client, '/regions', region_cluster_id=7, box_state='false_positive')
-    assert _rows(fp_in_seven) == []
-    fp = _get(
-        client,
-        '/regions',
-        region_cluster_id=FALSE_POSITIVE_REGION_CLUSTER_ID,
-        box_state='false_positive',
-    )
+    in_cluster = _get(client, '/regions', cluster_uid='u7')
+    assert _rows(in_cluster) == [('x', 'b1')]
+    # b1 is accepted and in u7; the FP box is in u9, so no box is both false_positive and in u7.
+    fp_in_u7 = _get(client, '/regions', cluster_uid='u7', box_state='false_positive')
+    assert _rows(fp_in_u7) == []
+    fp = _get(client, '/regions', cluster_uid='u9', box_state='false_positive')
     assert _rows(fp) == [('x', 'b2')]
 
 

@@ -45,7 +45,7 @@ async def test_after_the_load_the_project_indexes_are_stamped(
         for name, idx in cluster.indexes.items()
         if idx['_meta'].get(index_bootstrap.SCHEMA_META_KEY) == index_bootstrap.schema_fingerprint()
     ]
-    assert len(stamped) == 6  # images, items and leases of two projects
+    assert len(stamped) == 4  # images and items of two projects
 
 
 def test_the_pending_check_reads_the_state_and_the_legacy_index(

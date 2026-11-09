@@ -33,6 +33,16 @@ KINDS: tuple[JobKind, ...] = (
         auto_resume=True,
     ),
     JobKind(
+        name='region_fp_centroids',
+        task_name='op.clustering.region_fp_centroids',
+        queue=TaskQueues.JOBS,
+        project_scope='project',
+        soft_limit_s=3 * _HOUR,
+        hard_limit_s=3 * _HOUR + 15 * 60,
+        max_queue_wait_s=24 * _HOUR,
+        exclusive_group='region_fp_centroids',
+    ),
+    JobKind(
         name='persons_cluster',
         task_name='op.clustering.persons_cluster',
         queue=TaskQueues.JOBS,

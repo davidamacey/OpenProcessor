@@ -9,8 +9,9 @@ from _config_fixtures import make_project
 
 from src.services.config_store.bound_project import bound_project_id
 from src.services.curation import embedding_viz, embedding_viz_read
-from src.services.curation.clustering import refresh_state_store, umap_state
+from src.services.curation.clustering import umap_state
 from src.services.curation.policy_doc_store import PolicyConflictError
+from src.services.periodic import cluster_refresh_clock as clock
 
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine')]
@@ -30,21 +31,19 @@ def storage_root(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_refresh_state_defaults_then_round_trips(pg_env) -> None:
-    assert await refresh_state_store.load_refresh_state() == refresh_state_store.RefreshState()
-    saved = await refresh_state_store.save_refresh_state(
-        refresh_state_store.RefreshState(prev_count=40, job_id='j1')
-    )
+    assert await clock.load_refresh_state() == clock.RefreshState()
+    saved = await clock.save_refresh_state(clock.RefreshState(prev_count=40, job_id='j1'))
     assert saved.revision == 1
-    loaded = await refresh_state_store.load_refresh_state()
+    loaded = await clock.load_refresh_state()
     assert (loaded.revision, loaded.prev_count, loaded.job_id) == (1, 40, 'j1')
 
 
 @pytest.mark.asyncio
 async def test_a_refresh_state_built_from_a_stale_revision_conflicts(pg_env) -> None:
-    first = await refresh_state_store.load_refresh_state()
-    await refresh_state_store.save_refresh_state(first.model_copy(update={'prev_count': 1}))
+    first = await clock.load_refresh_state()
+    await clock.save_refresh_state(first.model_copy(update={'prev_count': 1}))
     with pytest.raises(PolicyConflictError):
-        await refresh_state_store.save_refresh_state(first.model_copy(update={'prev_count': 2}))
+        await clock.save_refresh_state(first.model_copy(update={'prev_count': 2}))
 
 
 @pytest.mark.asyncio

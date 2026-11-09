@@ -8,7 +8,6 @@ from typing import Any
 import pytest
 from _class_registry_fake import InMemoryRegistry, use_registry
 
-from src.services.curation.clustering.region_box_clustering import count_false_positive_boxes
 from src.services.curation.clustering.residual_gate import _park_gated_residuals
 from src.services.curation.probe_predictions import _registry_class_ids
 
@@ -25,12 +24,6 @@ class _Down:
 async def test_a_failed_park_is_an_error_not_zero_parked() -> None:
     with pytest.raises(RuntimeError, match='down'):
         await _park_gated_residuals(_Down(), max_rank=3, min_blur_ratio=0.5)
-
-
-@pytest.mark.asyncio
-async def test_a_failed_false_positive_count_is_an_error_not_zero() -> None:
-    with pytest.raises(RuntimeError, match='down'):
-        await count_false_positive_boxes(_Down())
 
 
 @pytest.mark.asyncio

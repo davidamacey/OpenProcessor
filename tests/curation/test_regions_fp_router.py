@@ -1,10 +1,9 @@
 """Tests for ``src/routers/curation/regions_fp.py`` over production-shaped
 items (box lists + per-box vectors) in the query-evaluating fake.
 
-Covers the region-cluster cards (``GET /regions/clusters``: the permanent
-false-positive bucket sorts first, ``size`` counts items and ``box_count``
-boxes), the "no centroids built yet" short-circuit and the per-box rows of
-``GET /regions/suspected_false_positives``.
+Covers the region-cluster cards of the serving partition (``GET /regions/clusters``:
+``size`` counts items and ``box_count`` boxes), the "no centroids built yet" short-circuit and
+the per-box rows of ``GET /regions/suspected_false_positives``.
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.config import IndexRole, get_region_fields, index_name
 from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.region_box_embeddings import entry_for
 
 
@@ -32,7 +30,6 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 F = get_region_fields()
 ITEMS = index_name(base_curation_config(), IndexRole.ITEMS)
 PREFIX = '/curation/projects/default'
-FP = FALSE_POSITIVE_REGION_CLUSTER_ID
 
 
 def _vec(*xyz: float) -> list[float]:
@@ -113,7 +110,7 @@ def _save_centroid(vector: tuple[float, float, float], trained_at: str = 'T1') -
 
     FalsePositiveCentroidStore().save(
         np.asarray([_vec(*vector)], dtype=np.float32),
-        {'trained_at': trained_at, 'k': 1, 'n_boxes': 1, 'subids': [f'{FP}a'], 'dim': 3},
+        {'trained_at': trained_at, 'k': 1, 'n_boxes': 1, 'subids': ['a'], 'dim': 3},
     )
 
 
@@ -122,12 +119,10 @@ def _save_centroid(vector: tuple[float, float, float], trained_at: str = 'T1') -
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_cards_pin_the_fp_bucket_first() -> None:
-    # A larger "good" bucket plus the (smaller) permanent FP bucket: size
-    # ordering alone would put the good bucket first; the FP pin overrides it.
+def test_cluster_cards_are_the_serving_clusters_largest_first() -> None:
     docs = {
-        **{f'g{i}': _item(f'g{i}', [(_box('b1', cluster_id=7), A)]) for i in range(5)},
-        'fp': _item('fp', [(_box('b1', 'false_positive', cluster_id=FP), B)]),
+        **{f'g{i}': _item(f'g{i}', [(_box('b1', cluster_uid='big'), A)]) for i in range(5)},
+        'small': _item('small', [(_box('b1', cluster_uid='small'), B)]),
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}))
 
@@ -136,62 +131,60 @@ def test_cluster_cards_pin_the_fp_bucket_first() -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['count'] == 2
-    assert body['clusters'][0]['id'] == FP
-    assert body['clusters'][0]['cluster_kind'] == 'false_positive'
-    assert body['clusters'][1]['id'] == 7
-    assert body['clusters'][1]['cluster_kind'] == 'candidate'
+    assert [c['cluster_uid'] for c in body['clusters']] == ['big', 'small']
+
+
+def test_a_false_positive_box_is_not_a_card() -> None:
+    docs = {'fp': _item('fp', [(_box('b1', 'false_positive', cluster_uid='u1'), B)])}
+    client = _client(QueryFakeOpenSearch({ITEMS: docs}))
+
+    assert client.get(f'{PREFIX}/regions/clusters').json() == {'clusters': [], 'count': 0}
 
 
 def test_cluster_cards_count_items_and_boxes_separately() -> None:
     docs = {
-        # two boxes of ONE item in cluster 9: size 1, box_count 2
-        'two': _item('two', [(_box('b1', cluster_id=9), A), (_box('b2', cluster_id=9), A)]),
-        'one': _item('one', [(_box('b1', cluster_id=9), A)], **{F.validated: True}),
-        'elsewhere': _item('elsewhere', [(_box('b1', cluster_id=3), A)]),
+        # two boxes of ONE item in cluster u9: size 1, box_count 2
+        'two': _item('two', [(_box('b1', cluster_uid='u9'), A), (_box('b2', cluster_uid='u9'), A)]),
+        'one': _item('one', [(_box('b1', cluster_uid='u9'), A)], **{F.validated: True}),
+        'elsewhere': _item('elsewhere', [(_box('b1', cluster_uid='u3'), A)]),
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}))
 
-    cards = {c['id']: c for c in client.get(f'{PREFIX}/regions/clusters').json()['clusters']}
+    cards = {
+        c['cluster_uid']: c for c in client.get(f'{PREFIX}/regions/clusters').json()['clusters']
+    }
 
-    assert cards[9]['size'] == 2
-    assert cards[9]['box_count'] == 3
-    assert cards[9]['validated_count'] == 1
-    assert cards[3]['size'] == cards[3]['box_count'] == 1
+    assert cards['u9']['size'] == 2
+    assert cards['u9']['box_count'] == 3
+    assert cards['u9']['validated_count'] == 1
+    assert cards['u3']['size'] == cards['u3']['box_count'] == 1
 
 
 def test_cluster_cards_serve_representative_rows_with_their_box_ids() -> None:
-    docs = {
-        'x': _item(
-            'x',
-            [
-                (_box('b1', cluster_id=9, cluster_subid='9a'), A),
-                (_box('b2', cluster_id=4), A),
-            ],
-        )
-    }
+    docs = {'x': _item('x', [(_box('b1', cluster_uid='u9'), A), (_box('b2', cluster_uid='u4'), A)])}
     client = _client(QueryFakeOpenSearch({ITEMS: docs}))
 
-    cards = {c['id']: c for c in client.get(f'{PREFIX}/regions/clusters').json()['clusters']}
+    cards = {
+        c['cluster_uid']: c for c in client.get(f'{PREFIX}/regions/clusters').json()['clusters']
+    }
 
-    nine = cards[9]
+    nine = cards['u9']
     assert nine['representative_crop_ids'] == ['x']
     assert nine['representative_box_ids'] == ['b1']
     assert nine['representative_thumb_urls'][0].endswith('/crops/x/region_thumbnail?box_id=b1')
     (row,) = nine['representatives']
     assert (row['crop_id'], row['region_box_id']) == ('x', 'b1')
     assert [b['box_id'] for b in row['region_boxes']] == ['b1', 'b2']
-    assert nine['has_subclusters'] is True
-    assert nine['n_subclusters'] == 1
-    assert cards[4]['representative_box_ids'] == ['b2']
+    assert cards['u4']['representative_box_ids'] == ['b2']
 
 
-def test_cluster_representatives_are_the_boxes_nearest_the_centroid() -> None:
+def test_cluster_representatives_are_the_boxes_nearest_the_centre() -> None:
     docs = {
-        f'c{i}': _item(f'c{i}', [(_box('b1', cluster_id=9, cluster_distance=d), A)])
-        for i, d in enumerate([0.9, 0.1, 0.5, 0.3])
+        f'c{i}': _item(f'c{i}', [(_box('b1', cluster_uid='u9', cluster_score=sc), A)])
+        for i, sc in enumerate([0.1, 0.9, 0.5, 0.7])
     }
-    # An unmeasured box (no distance) must sort after every measured one.
-    docs['unmeasured'] = _item('unmeasured', [(_box('b1', cluster_id=9), A)])
+    # An unscored box must sort after every scored one.
+    docs['unscored'] = _item('unscored', [(_box('b1', cluster_uid='u9'), A)])
     client = _client(QueryFakeOpenSearch({ITEMS: docs}))
 
     card = client.get(f'{PREFIX}/regions/clusters', params={'per_cluster': 3}).json()['clusters'][0]
@@ -201,7 +194,7 @@ def test_cluster_representatives_are_the_boxes_nearest_the_centroid() -> None:
 
 def test_cluster_cards_ignore_rejected_and_unclustered_boxes() -> None:
     docs = {
-        'rej': _item('rej', [(_box('b1', 'rejected', cluster_id=5), A)]),
+        'rej': _item('rej', [(_box('b1', 'rejected', cluster_uid='u5'), A)]),
         'plain': _item('plain', [(_box('b1'), A)]),
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}))
@@ -259,7 +252,7 @@ def test_suspected_false_positives_are_boxes_not_items(fp_store_dir: Any) -> Non
         ('both', 'b1'),
     ]
     assert body['total'] == body['total_rows'] == 3
-    assert all(r['nearest_fp_subid'] == f'{FP}a' for r in body['items'])
+    assert all(r['nearest_fp_subid'] == 'a' for r in body['items'])
     assert body['items'][0]['suspected_fp_distance'] == pytest.approx(0.0, abs=1e-5)
     assert body['items'][0]['suspected_fp_distance'] < body['items'][2]['suspected_fp_distance']
     assert body['centroids_built'] is True
@@ -334,8 +327,36 @@ def test_suspected_fp_scan_error_still_clears_the_scroll(fp_store_dir: Any) -> N
     assert fake.clear_scroll_calls == 1
 
 
-def test_cluster_status_and_fp_centroid_status_are_reachable(fp_store_dir: Any) -> None:
+def test_building_centroids_queues_a_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The build is a job: 202 with its id, the threshold in its params."""
+    from types import SimpleNamespace
+
+    from src.core.db_session import get_db
+    from src.routers.curation import regions_fp
+
+    started: list[dict[str, Any]] = []
+
+    async def fake_start(_session: Any, kind: str, project: Any, **kw: Any) -> Any:
+        started.append({'kind': kind, **kw})
+        return SimpleNamespace(job=SimpleNamespace(id='j-1'))
+
+    monkeypatch.setattr(regions_fp, 'start_job', fake_start)
+    monkeypatch.setattr(regions_fp, 'current_project_id', lambda: 'p')
     client = _client(QueryFakeOpenSearch({ITEMS: {}}))
 
-    assert client.get(f'{PREFIX}/regions/cluster/status').status_code == 200
-    assert client.get(f'{PREFIX}/regions/fp_centroids/status').status_code == 200
+    async def no_db() -> object:
+        return object()
+
+    client.app.dependency_overrides[get_db] = no_db  # type: ignore[union-attr]
+
+    resp = client.post(f'{PREFIX}/regions/fp_centroids/build', params={'auto_fp_threshold': 0.2})
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json() == {'job_id': 'j-1', 'kind': 'region_fp_centroids'}
+    assert started == [
+        {
+            'kind': 'region_fp_centroids',
+            'params': {'auto_fp_threshold': 0.2},
+            'requested_by': 'curation-api',
+        }
+    ]

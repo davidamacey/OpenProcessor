@@ -22,7 +22,6 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
@@ -155,11 +154,7 @@ def test_accepting_a_false_positive_box_confirms_it(
 ) -> None:
     fake_os.docs(INDEX)['c1'] = _detected(
         'c1',
-        _detector_box(
-            state='false_positive',
-            cluster_id=FALSE_POSITIVE_REGION_CLUSTER_ID,
-            cluster_distance=0.0,
-        ),
+        _detector_box(state='false_positive'),
     )
     resp = _put(client, [{'box_id': 'b1', 'bbox_norm': BOX, 'state': 'accepted'}])
     assert resp.status_code == 200, resp.text
@@ -167,9 +162,6 @@ def test_accepting_a_false_positive_box_confirms_it(
     _assert_box_provenance_kept(doc)
     (box,) = doc[F.boxes]
     assert box['state'] == 'accepted'
-    # Leaving the false-positive bucket releases the box for re-clustering.
-    assert box['cluster_id'] is None
-    assert box['cluster_distance'] is None
     assert doc[F.status] == 'detected'
     assert doc[F.verified] is True
 

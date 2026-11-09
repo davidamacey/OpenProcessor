@@ -31,13 +31,6 @@ def test_the_promote_json_module_and_the_detached_wait_are_deleted() -> None:
         assert not hasattr(promote_job, name), name
 
 
-def test_the_promote_lease_kinds_are_deleted() -> None:
-    from src.domain.job_lease import LeaseKind
-
-    assert 'promote' not in {k.value for k in LeaseKind}
-    assert 'promote_json' not in {k.value for k in LeaseKind}
-
-
 @pytest.mark.asyncio
 async def test_the_promoted_model_listing_keeps_its_shape(model_registry_fake) -> None:
     """Control: the entries the listing route builds still carry the same four keys."""

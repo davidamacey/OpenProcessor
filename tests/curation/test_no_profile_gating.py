@@ -85,7 +85,6 @@ _GATED_ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ('post', '/curation/projects/default/crops/region/undo_batch', {'crop_ids': ['crop1']}),
     ('post', '/curation/projects/default/vlm/verify_region_batch', {'crops': []}),
     ('post', '/curation/projects/default/vlm/region_visible_batch', {'crops': []}),
-    ('post', '/curation/projects/default/regions/clusters/refine/5', None),
     ('get', '/curation/projects/default/regions/clusters', None),
 )
 
@@ -133,8 +132,6 @@ _UNGATED_REGION_ROUTES = frozenset(
         # static vocabularies and read-only job snapshots
         '/regions/statuses',
         '/regions/vocabulary',
-        '/regions/cluster/status',
-        '/regions/fp_centroids/status',
         # documented to answer 200 with empty region_dependencies
         '/ingest/region_drain',
     }

@@ -81,7 +81,6 @@ class CurationConfig:
     # no second naming path.
     images_index: str = _FROM_DEFAULT_PROJECT
     items_index: str = _FROM_DEFAULT_PROJECT
-    leases_index: str = _FROM_DEFAULT_PROJECT
 
     class_registry_path: Path = _FROM_DEFAULT_PROJECT_PATH
     # Optional deployment-supplied VLM PromptPack (see
@@ -234,7 +233,6 @@ class CurationConfig:
     project_slug: str = 'default'
     project_state_dir: Path = _FOLLOWS_STATE_DIR
     train_jobs_dir: Path = Path('/jobs')
-    autolabel_dir: Path = Path('/jobs/auto_label')
     bakeoff_results_dir: Path = _FOLLOWS_STATE_DIR
     mlflow_experiment: str = 'openprocessor'
     model_prefix: str = ''

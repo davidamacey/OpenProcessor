@@ -399,7 +399,7 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
                 i,
                 RegionStatus.DETECTED,
                 region_bbox=[0.4, 0.4, 0.5, 0.45],
-                region_cluster_id=i % 3,
+                region_cluster_uid=f'u{i % 3}',
             )
             for i in range(30)
         ],

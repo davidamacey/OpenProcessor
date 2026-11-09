@@ -5,7 +5,7 @@ scripts/curation/bakeoff/bakeoff_runner.py::run_job	17	ratchet: may only go down
 scripts/curation/worker/runner.py::run	20	ratchet: may only go down
 scripts/curation/worker/stage_a.py::stage_a_vlm_visible	19	ratchet: may only go down
 src/routers/curation/models.py::models_status	17	ratchet: may only go down
-src/routers/curation/regions.py::list_regions	20	ratchet: may only go down
+src/routers/curation/regions.py::list_regions	17	ratchet: may only go down
 src/routers/curation/review_resolve.py::resolve_new_class_proposal	16	ratchet: may only go down
 src/routers/ingest/batch.py::ingest_batch	21	ratchet: may only go down
 src/services/curation/clustering/auto_promote.py::auto_promote_clusters	16	ratchet: may only go down

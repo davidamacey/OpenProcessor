@@ -68,16 +68,8 @@ async def list_regions(
     item_filter: ItemFilterQuery,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    cluster_id: int | None = Query(None, description='Filter by the ITEM cluster.'),
-    region_cluster_id: int | None = Query(None, description='Box filter: region cluster bucket.'),
-    region_cluster_subid: str | None = Query(None, description='Box filter: AHC sub-cluster.'),
-    sort_by_subid: bool = Query(
-        False,
-        description=(
-            "Within a bucket, order by the boxes' sub-cluster so AHC sub-clusters "
-            'come back contiguous across pages (the UI groups them with '
-            'separators). Overrides the default outliers-first ordering.'
-        ),
+    cluster_uid: str | None = Query(
+        None, description='Box filter: the box sits in this cluster of the serving partition.'
     ),
     min_score: float | None = Query(None, ge=0.0, le=1.0, description='Box filter.'),
     max_score: float | None = Query(None, ge=0.0, le=1.0, description='Box filter.'),
@@ -102,10 +94,10 @@ async def list_regions(
     """Browse region rows filtered by provenance/score/text.
 
     Rows (:class:`RegionRowPage`): the box filters (``detector``,
-    ``min_score``, ``max_score``, ``text``, ``region_cluster_id``,
-    ``region_cluster_subid``, ``box_state``) all select the SAME box, and
+    ``min_score``, ``max_score``, ``text``, ``cluster_uid``,
+    ``box_state``) all select the SAME box, and
     each matching box is its own row (``region_box_id``). The item filters
-    (``status``, ``cluster_id``, ``verified`` and the shared item
+    (``status``, ``verified`` and the shared item
     filter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,
     ``max_rank``, ``origin``, ``embedding_state``, ``review_status``)
     select items. ``page`` / ``page_size`` page items; ``total`` counts
@@ -136,10 +128,8 @@ async def list_regions(
                 }
             }
         )
-    if region_cluster_id is not None:
-        parts.append({'term': {f'{F.boxes}.cluster_id': region_cluster_id}})
-    if region_cluster_subid is not None:
-        parts.append({'term': {f'{F.boxes}.cluster_subid': region_cluster_subid}})
+    if cluster_uid is not None:
+        parts.append({'term': {f'{F.boxes}.cluster_uid': cluster_uid}})
     if min_score is not None or max_score is not None:
         rng: dict[str, float] = {}
         if min_score is not None:
@@ -158,8 +148,6 @@ async def list_regions(
         filt.append({'term': {F.status: status}})
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
-    if cluster_id is not None:
-        filt.append({'term': {'cluster_id': cluster_id}})
     try:
         filt.extend(item_filter_clauses(item_filter))
     except ValueError as exc:
@@ -167,33 +155,25 @@ async def list_regions(
     if verified is not None:
         filt.append({'term': {F.verified: verified}})
 
-    # In a bucket, either group by sub-cluster (subid asc, then outliers within
-    # each subid) so refine results render as contiguous, paginated groups -- or
-    # float regions farthest from the centroid (outliers) first. The sort reads
-    # the boxes of the bucket only (the nested filter), so an item with a box
-    # in another bucket doesn't sort by that box.
-    def _bucket_sort(field: str, order: str, mode: str, unmapped: str) -> dict[str, Any]:
-        return {
-            f'{F.boxes}.{field}': {
-                'order': order,
-                'mode': mode,
-                'missing': '_last',
-                'unmapped_type': unmapped,
-                'nested': {
-                    'path': F.boxes,
-                    'filter': {'term': {f'{F.boxes}.cluster_id': region_cluster_id}},
-                },
-            }
-        }
-
+    # In a cluster, float the regions least like its centre (outliers) first. The sort reads the
+    # boxes of the cluster only (the nested filter), so an item with a box in another cluster
+    # doesn't sort by that box.
     sort: list[dict[str, Any]]
-    if region_cluster_id is not None:
-        distance_sort = _bucket_sort('cluster_distance', 'desc', 'max', 'float')
-        sort = (
-            [_bucket_sort('cluster_subid', 'asc', 'min', 'keyword'), distance_sort]
-            if sort_by_subid
-            else [distance_sort]
-        )
+    if cluster_uid is not None:
+        sort = [
+            {
+                f'{F.boxes}.cluster_score': {
+                    'order': 'asc',
+                    'mode': 'min',
+                    'missing': '_last',
+                    'unmapped_type': 'float',
+                    'nested': {
+                        'path': F.boxes,
+                        'filter': {'term': {f'{F.boxes}.cluster_uid': cluster_uid}},
+                    },
+                }
+            }
+        ]
     else:
         # Items order by their most recently detected box: a nested sort
         # with mode='max' (region_boxes carries detected_at per box).

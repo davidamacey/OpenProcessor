@@ -129,7 +129,6 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
     # A job started through the routes writes its state under this dir.
     import src.config.curation_accessors as curation_config_mod
 
-    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.delenv('OP_VLM_EXTERNAL_POLICY', raising=False)

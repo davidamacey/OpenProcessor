@@ -163,3 +163,10 @@ def test_every_variable_the_060_upgrade_reads_is_retired_and_stripped_by_the_ins
     block = re.search(r'UPGRADE_060_LEGACY_ENV=\((.*?)\)', script, re.S)
     assert block is not None
     assert set(block.group(1).split()) == read
+
+
+def test_the_auto_label_state_dir_is_retired(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert RETIRED_ENV['OP_AUTO_LABEL_STATE_DIR'].startswith('removed:')
+    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')
+    with pytest.raises(RuntimeError, match='OP_AUTO_LABEL_STATE_DIR was removed'):
+        reject_retired_env()

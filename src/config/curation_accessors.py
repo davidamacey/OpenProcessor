@@ -25,7 +25,6 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
     {
         'images_index',
         'items_index',
-        'leases_index',
         'class_registry_path',
         'export_root',
         'upload_root',
@@ -33,7 +32,6 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
         'project_slug',
         'project_state_dir',
         'train_jobs_dir',
-        'autolabel_dir',
         'bakeoff_results_dir',
         'mlflow_experiment',
         'model_prefix',
@@ -57,7 +55,6 @@ _PROJECT_FIELD_RESOURCE_ATTR: dict[str, str] = {
     'bakeoff_eval_root': 'bakeoff_eval_root',
     'project_state_dir': 'project_state_dir',
     'train_jobs_dir': 'train_jobs_dir',
-    'autolabel_dir': 'autolabel_dir',
     'bakeoff_results_dir': 'bakeoff_results_dir',
     'mlflow_experiment': 'mlflow_experiment',
     'model_prefix': 'model_prefix',

@@ -1,10 +1,8 @@
-"""Region boxes as clustering rows: read them, write cluster fields back.
+"""Region boxes as rows: read the boxes with a vector, write automated box edits back.
 
-Region clustering works on *boxes*, not items: one row per box that has a
-vector. Rows are the join of ``region_boxes`` and ``region_box_embeddings``
-(:func:`~src.services.curation.region_box_embeddings.join_box_vectors`);
-a cluster result goes back onto the box itself (``cluster_id`` /
-``cluster_subid`` / ``cluster_distance`` inside ``region_boxes``).
+Region clustering and the false-positive matcher work on *boxes*, not items: one row per box
+that has a vector. Rows are the join of ``region_boxes`` and ``region_box_embeddings``
+(:func:`~src.services.curation.region_box_embeddings.join_box_vectors`).
 
 Every write is an OCC read-modify-write over the live item
 (:func:`write_box_edits`): the edit is a pure function of the box *as it
@@ -18,7 +16,6 @@ rather than dropping the write.
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,13 +25,7 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.core.logging import get_logger
-from src.domain.region_boxes import (
-    RegionBox,
-    box_query,
-    boxes_write_fields,
-    read_boxes,
-    without_cluster,
-)
+from src.domain.region_boxes import RegionBox, box_query, boxes_write_fields, read_boxes
 from src.services.curation.region_box_embeddings import box_vector_source_includes, join_box_vectors
 
 
@@ -73,19 +64,10 @@ def box_state_clause(states: Sequence[str], F: RegionFields | None = None) -> di
     return {'terms': {f'{F.boxes}.{F.boxes_state}': list(states)}}
 
 
-def box_filter(
-    states: Sequence[str],
-    *,
-    cluster_id: int | None = None,
-    F: RegionFields | None = None,
-) -> dict[str, Any]:
-    """The one nested clause selecting boxes in ``states`` (and, when given,
-    in ``cluster_id``) -- both conditions on the same box."""
+def box_filter(states: Sequence[str], *, F: RegionFields | None = None) -> dict[str, Any]:
+    """The one nested clause selecting boxes in ``states``."""
     F = F or get_region_fields()
-    must: list[dict[str, Any]] = [box_state_clause(states, F)]
-    if cluster_id is not None:
-        must.append({'term': {f'{F.boxes}.cluster_id': cluster_id}})
-    return box_query({'bool': {'filter': must}}, F)
+    return box_query({'bool': {'filter': [box_state_clause(states, F)]}}, F)
 
 
 def has_vector_clause(F: RegionFields | None = None) -> dict[str, Any]:
@@ -99,41 +81,15 @@ def has_vector_clause(F: RegionFields | None = None) -> dict[str, Any]:
     }
 
 
-async def count_boxes(
-    client: AsyncOpenSearch, *, index: str, states: Sequence[str], cluster_id: int | None = None
-) -> int:
-    """The number of *boxes* (not items) in ``states`` / ``cluster_id``."""
-    F = get_region_fields()
-    must: list[dict[str, Any]] = [box_state_clause(states, F)]
-    if cluster_id is not None:
-        must.append({'term': {f'{F.boxes}.cluster_id': cluster_id}})
-    resp = await client.search(
-        index=index,
-        body={
-            'size': 0,
-            'track_total_hits': False,
-            'aggs': {
-                'boxes': {
-                    'nested': {'path': F.boxes},
-                    'aggs': {'matching': {'filter': {'bool': {'filter': must}}}},
-                }
-            },
-        },
-    )
-    boxes = (resp.get('aggregations') or {}).get('boxes') or {}
-    return int((boxes.get('matching') or {}).get('doc_count', 0))
-
-
 async def scroll_box_rows(
     client: AsyncOpenSearch,
     *,
     index: str,
     states: Sequence[str],
-    cluster_id: int | None = None,
     filters: Sequence[dict[str, Any]] = (),
     must_not: Sequence[dict[str, Any]] = (),
 ) -> list[RegionBoxRow]:
-    """Every box in ``states`` (and ``cluster_id``) with a valid stored
+    """Every box in ``states`` with a valid stored
     vector, from the items matching ``filters`` / not matching ``must_not``.
 
     A box whose vector is missing or stale (the box moved since it was
@@ -148,7 +104,7 @@ async def scroll_box_rows(
     query = {
         'bool': {
             'filter': [
-                box_filter(states, cluster_id=cluster_id, F=F),
+                box_filter(states, F=F),
                 has_vector_clause(F),
                 *filters,
             ],
@@ -170,8 +126,6 @@ async def scroll_box_rows(
                 src = hit.get('_source') or {}
                 for box, vector in join_box_vectors(src, F):
                     if box.state not in states:
-                        continue
-                    if cluster_id is not None and box.cluster_id != cluster_id:
                         continue
                     rows.append(
                         RegionBoxRow(
@@ -226,7 +180,7 @@ async def write_box_edits(
     edits: dict[str, dict[str, BoxEdit]],
     respect_human: bool,
     item_fields: Callable[[Sequence[RegionBox]], dict[str, Any]] | None = None,
-    writer_id: str = 'region_clustering',
+    writer_id: str = 'region_fp',
 ) -> dict[str, int]:
     """Apply per-box edits onto the live items: ``edits[crop_id][box_id]``
     is a pure function of the box as it is now (it re-checks its own
@@ -270,13 +224,7 @@ async def write_box_edits(
             unchanged.add(crop_id)
             return {}
         changed[crop_id] = sum(1 for old, new in zip(boxes, new_boxes, strict=True) if old != new)
-        # A cluster-only write (partition, refine) changes nothing an open
-        # editor sees, so it must not invalidate its expected revision.
-        visible = any(
-            without_cluster(old) != without_cluster(new)
-            for old, new in zip(boxes, new_boxes, strict=True)
-        )
-        doc = dict(boxes_write_fields(new_boxes, current_src=current, F=F, bump_revision=visible))
+        doc = dict(boxes_write_fields(new_boxes, current_src=current, F=F))
         doc['updated_at'] = datetime.now(UTC).isoformat()
         if item_fields is not None:
             doc.update(item_fields(new_boxes))
@@ -308,31 +256,15 @@ async def write_box_edits(
     }
 
 
-def with_cluster(cluster_id: int, distance: float | None, *, only_states: Sequence[str]) -> BoxEdit:
-    """Place a box in ``cluster_id`` at ``distance`` (clearing a sub-id from
-    a previous partition) -- only while it is still in one of ``only_states``."""
-
-    def edit(box: RegionBox) -> RegionBox:
-        if box.state not in only_states:
-            return box
-        return dataclasses.replace(
-            box, cluster_id=cluster_id, cluster_subid=None, cluster_distance=distance
-        )
-
-    return edit
-
-
 __all__ = [
     'BoxEdit',
     'RegionBoxRow',
     'box_filter',
     'box_state_clause',
-    'count_boxes',
     'has_vector_clause',
     'human_final_clauses',
     'human_final_must_not',
     'item_is_human_final',
     'scroll_box_rows',
-    'with_cluster',
     'write_box_edits',
 ]

@@ -55,7 +55,7 @@ class Observation:
 
 @dataclass
 class ProjectSchedule:
-    """The clock a tick carries to the next one (``refresh_state_store``); wall-clock seconds."""
+    """The clock a tick carries to the next one (``cluster_refresh_clock``); wall-clock seconds."""
 
     prev_count: int | None = None
     pending_since: float | None = None

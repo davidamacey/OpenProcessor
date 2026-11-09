@@ -8,9 +8,9 @@ landed during the fit, so both (``cluster_residuals``,
 ``assign_only_residuals``) share :func:`_guarded_class_cluster_write`, a
 painless ``script`` update that noops when the doc's current state shows
 human ownership; ``_bulk_update_subids`` (item refine) has its own "doc
-moved to a different cluster" guard. The region-box clustering writers are
+moved to a different cluster" guard. The region-box writers are
 guarded in ``region_box_rows.write_box_edits`` (see
-``test_region_box_clustering.py``).
+``test_region_fp.py``).
 
 The guard logic lives in a single ``GuardClause`` list
 (``CLASS_CLUSTER_WRITE_GUARD_CLAUSES``), rendered into painless text by

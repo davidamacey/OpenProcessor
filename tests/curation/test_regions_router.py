@@ -19,7 +19,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.config import get_region_fields
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.wire import ITEM_WIRE_KEYS
 
 
@@ -324,7 +323,7 @@ def test_patch_region_meta_accepts_human_settable_status(
     assert written[F.validated] is True
 
 
-def test_patch_region_meta_false_positive_routes_to_fp_bucket(
+def test_patch_region_meta_false_positive_marks_the_box(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.patch(
@@ -334,11 +333,9 @@ def test_patch_region_meta_false_positive_routes_to_fp_bucket(
     assert resp.status_code == 200, resp.text
     (box,) = fake_os._docs['crop-1'][F.boxes]
     assert box['state'] == 'false_positive'
-    assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
-    assert box['cluster_subid'] is None
 
 
-def test_patch_region_box_text_only_does_not_touch_cluster_fields(
+def test_patch_region_box_text_only_does_not_touch_the_served_cluster(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     """``region_text`` moved off ``region_meta`` onto the per-box PATCH
@@ -355,7 +352,7 @@ def test_patch_region_box_text_only_does_not_touch_cluster_fields(
     box = written[F.boxes][0]
     assert box['text'] == 'ABC123'
     assert box['text_source'] == 'human'
-    assert box.get('cluster_id') is None
+    assert box.get('cluster_uid') is None
 
 
 def test_patch_region_meta_requires_at_least_one_field(app_client: TestClient) -> None:
@@ -433,7 +430,7 @@ def test_batch_set_region_status_updates_every_crop_and_refreshes(
     assert len(fake_os.bulk_calls) == 1
 
 
-def test_batch_set_region_status_false_positive_marks_fp_bucket_for_every_crop(
+def test_batch_set_region_status_false_positive_marks_every_crop(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.post(
@@ -443,7 +440,7 @@ def test_batch_set_region_status_false_positive_marks_fp_bucket_for_every_crop(
     assert resp.status_code == 200, resp.text
     for crop_id in ('crop-1', 'crop-2'):
         (box,) = fake_os._docs[crop_id][F.boxes]
-        assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
+        assert box['state'] == 'false_positive'
 
 
 def test_batch_set_region_status_empty_crop_ids_is_a_noop(app_client: TestClient) -> None:

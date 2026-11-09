@@ -4,10 +4,9 @@ region's derived state.
 Live case (crop 938e2635...): a region already ``false_positive`` with
 ``region_verified=true`` (written before the status invariants existed)
 was included in a bulk "false positive" write. Its status didn't change,
-yet ``region_verified`` flipped true -> false and its region-cluster
-placement was re-written. A re-assertion of the stored status must leave
-``region_verified`` and the box's region-cluster fields alone; only a real
-status change re-derives them.
+yet ``region_verified`` flipped true -> false and its box was re-written. A
+re-assertion of the stored status must leave ``region_verified`` and the box's served-cluster
+fields alone; only a real status change re-derives ``region_verified``.
 """
 
 from __future__ import annotations
@@ -22,7 +21,6 @@ from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.domain.region_boxes import RegionBox, boxes_write_fields
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.region_writes import human_status_box_write
 
 
@@ -51,9 +49,8 @@ def _fp_box(**over: Any) -> RegionBox:
         bbox_norm=BOX,
         state='false_positive',
         score=0.74,
-        cluster_id=FALSE_POSITIVE_REGION_CLUSTER_ID,
-        cluster_subid='-100b',
-        cluster_distance=0.12,
+        cluster_uid='uid-fp',
+        cluster_score=0.12,
         **over,
     )
 
@@ -64,9 +61,8 @@ def _accepted_box() -> RegionBox:
         bbox_norm=BOX,
         state='accepted',
         score=0.9,
-        cluster_id=7,
-        cluster_subid='7a',
-        cluster_distance=0.2,
+        cluster_uid='uid-7',
+        cluster_score=0.2,
     )
 
 
@@ -103,12 +99,10 @@ def test_bulk_false_positive_on_false_positive_keeps_verified(
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['fp-1']
     assert doc[F.verified] is True
-    # The box is already a false positive: its FP sub-type placement (the
-    # sub-id and the distance the matcher measured) is not re-written.
+    # The box is already a false positive: its served cluster fields are not re-written.
     (box,) = doc[F.boxes]
-    assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
-    assert box['cluster_subid'] == '-100b'
-    assert box['cluster_distance'] == 0.12
+    assert box['cluster_uid'] == 'uid-fp'
+    assert box['cluster_score'] == 0.12
     assert resp.json()['items'][0]['region_verified'] is True
 
 
@@ -131,20 +125,17 @@ def test_reconfirm_detected_keeps_region_cluster(
     assert resp.status_code == 200, resp.text
     doc = fake_os._docs['det-1']
     (box,) = doc[F.boxes]
-    assert box['cluster_id'] == 7
-    assert box['cluster_subid'] == '7a'
+    assert box['cluster_uid'] == 'uid-7'
+    assert box['cluster_score'] == 0.2
     assert doc[F.verified] is True
 
 
-def test_status_change_still_derives_verified_and_parks_the_box_in_the_fp_cluster() -> None:
+def test_status_change_still_derives_verified() -> None:
     current = _item('x', RegionStatus.DETECTED, _accepted_box(), verified=True)
     doc = human_status_box_write('false_positive', current)
     assert doc[F.verified] is False
     (box,) = doc[F.boxes]
     assert box['state'] == 'false_positive'
-    assert box['cluster_id'] == FALSE_POSITIVE_REGION_CLUSTER_ID
-    assert box['cluster_subid'] is None
-    assert box['cluster_distance'] == 0.0
 
 
 def test_confirm_same_status_sets_verified_when_unverified() -> None:
@@ -152,7 +143,7 @@ def test_confirm_same_status_sets_verified_when_unverified() -> None:
     doc = human_status_box_write('detected', current)
     assert doc[F.verified] is True
     (box,) = doc[F.boxes]
-    assert box['cluster_id'] == 7
+    assert box['cluster_uid'] == 'uid-7'
 
 
 def test_a_whole_set_reject_by_an_automated_source_does_not_take_the_human_lock() -> None:
