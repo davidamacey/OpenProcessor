@@ -34,11 +34,12 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.parity_metrics import adjusted_rand_index, normalized_mutual_info, purity
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.services.curation.semantic_search import _build_filter
 from src.services.curation.semantic_search_run import build_knn_query
 
 
-VECTOR = 'pe_embedding'
+VECTOR = LEGACY_ITEM_VECTOR_FIELD
 SOURCE = ['crop_id', 'image_path', 'bbox_norm', 'detector_class_name', 'cluster_id', VECTOR]
 
 

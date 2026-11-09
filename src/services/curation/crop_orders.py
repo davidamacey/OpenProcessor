@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.curation.crop_browse import crops_page, embedding_pool_query_and_count
 from src.services.curation.detections_summary import suggested_embed_request
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 if TYPE_CHECKING:
@@ -56,14 +57,12 @@ async def ordered_crops_page(
 ) -> dict[str, Any] | None:
     """The ``crops_page`` envelope for a computed order, or ``None``."""
     if order in CLUSTER_ORDERS and cluster_uid is not None:
-        from src.services.curation.clustering.outliers import (
-            OUTLIER_EMBEDDING_FIELD,
-            compute_centroid_distances,
-        )
+        from src.services.curation.clustering.outliers import compute_centroid_distances
 
         # Pool query + exact count scoped to the embedding-bearing subset.
+        vector_field = await item_vector_field()
         pool_query, pool_count = await embedding_pool_query_and_count(
-            opensearch, index, query_clause, OUTLIER_EMBEDDING_FIELD
+            opensearch, index, query_clause, vector_field
         )
         if order == 'core_first':
             resp = await opensearch.search(
@@ -91,7 +90,7 @@ async def ordered_crops_page(
                 suggested_reprocess=_embed_suggestion(item_filter, n_pool - pool_count),
             )
         distances = await compute_centroid_distances(
-            opensearch, index, pool_query, current_count=pool_count
+            opensearch, index, pool_query, embedding_field=vector_field, current_count=pool_count
         )
         if distances is None:
             return None
@@ -109,13 +108,19 @@ async def ordered_crops_page(
         )
 
     if order == 'diverse':
-        from src.services.curation.diverse_order import EMBEDDING_FIELD, compute_diverse_order
+        from src.services.curation.diverse_order import compute_diverse_order
 
+        vector_field = await item_vector_field()
         pool_query, pool_count = await embedding_pool_query_and_count(
-            opensearch, index, query_clause, EMBEDDING_FIELD
+            opensearch, index, query_clause, vector_field
         )
         diverse_ids = await compute_diverse_order(
-            opensearch, index, pool_query, current_count=pool_count, k=k
+            opensearch,
+            index,
+            pool_query,
+            embedding_field=vector_field,
+            current_count=pool_count,
+            k=k,
         )
         if diverse_ids is None:
             return None

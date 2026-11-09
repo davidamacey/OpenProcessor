@@ -12,6 +12,8 @@ from src.services.curation.wire import serialize_item
 
 def _doc(item: DetectedItem) -> dict:
     return build_item_doc(
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         crop_id='c1',
         image_id='i1',
         image_path='/data/a.jpg',

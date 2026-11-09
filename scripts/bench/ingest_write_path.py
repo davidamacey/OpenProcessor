@@ -42,6 +42,7 @@ from scripts.bench.baseline_report import percentile
 from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.suite_probes import cgroup_cpu_s
 from src.config import get_curation_config
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.services.curation.ingest_writer import IngestWriter
 from src.services.curation.semantic_search import _build_filter
 from src.services.curation.semantic_search_run import build_knn_query
@@ -57,7 +58,7 @@ ARMS: dict[str, dict[str, Any]] = {
     'coalesced_bulk500': {'max_docs': 500},
     'coalesced_nolinger': {'linger_s': 0.0},
 }
-VECTORS = ('pe_embedding', 'embedding')
+VECTORS = (LEGACY_ITEM_VECTOR_FIELD, 'embedding')
 
 
 def load_images(client: httpx.Client, url: str, items_idx: str, images_idx: str) -> list[dict]:
@@ -128,7 +129,7 @@ async def run_arm(
     failures = 0
     exact_real = docs_total = 0
     knn_lat: list[float] = []
-    query_vectors = [it['pe_embedding'] for s in sources[:200] for it in s['items'][:1]]
+    query_vectors = [it[LEGACY_ITEM_VECTOR_FIELD] for s in sources[:200] for it in s['items'][:1]]
     item_space = legacy_item_space()
     flt = _build_filter(
         tab=None,

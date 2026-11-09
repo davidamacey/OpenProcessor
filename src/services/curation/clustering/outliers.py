@@ -4,7 +4,7 @@ CLASS clusters (cluster_id == class_id) are populated from classifier/human
 labels, not from a FAISS centroid, so they carry no ``cluster_distance``.
 To let operators cherry-pick the worst offenders (a car sitting in the
 "pickup" cluster, a mislabel, a junk crop), we compute the class centroid as
-the mean of the members' ``pe_embedding`` and rank each member by cosine
+the mean of the members' vectors and rank each member by cosine
 distance from it — farthest first. Same idea a folder-sorting utility
 used to float outliers to the top of a review folder.
 
@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-OUTLIER_EMBEDDING_FIELD = 'pe_embedding'
 # Above this many members the pairwise scroll + sort isn't worth it for an
 # interactive request — callers fall back to the default sort.
 _MAX_MEMBERS = env_int('OP_OUTLIER_MAX_MEMBERS', 20000)
@@ -55,7 +54,7 @@ async def compute_centroid_distances(
     index: str,
     query: dict[str, Any],
     *,
-    embedding_field: str = OUTLIER_EMBEDDING_FIELD,
+    embedding_field: str,
     current_count: int | None = None,
 ) -> dict[str, float] | None:
     """``{doc _id: cosine distance to the matched members' centroid}``.
@@ -114,7 +113,7 @@ async def compute_centroid_distances(
         return {}
 
     x = np.asarray(vecs, dtype=np.float32)
-    # Unit-normalize members (pe_embedding is already L2-normed, but be safe),
+    # Unit-normalize members (the stored vectors are already L2-normed, but be safe),
     # build the centroid, normalize it, then cosine distance = 1 - cos.
     xn = x / (np.linalg.norm(x, axis=1, keepdims=True) + 1e-9)
     centroid = xn.mean(axis=0)
@@ -133,7 +132,7 @@ async def compute_outlier_order(
     index: str,
     query: dict[str, Any],
     *,
-    embedding_field: str = OUTLIER_EMBEDDING_FIELD,
+    embedding_field: str,
     current_count: int | None = None,
 ) -> list[str] | None:
     """Member doc ``_id``s ordered by descending centroid distance (most
@@ -152,7 +151,7 @@ async def compute_core_first_order(
     index: str,
     query: dict[str, Any],
     *,
-    embedding_field: str = OUTLIER_EMBEDDING_FIELD,
+    embedding_field: str,
     current_count: int | None = None,
 ) -> tuple[list[str], dict[str, float]] | None:
     """``(ids nearest-the-centroid first, distances)``: the reverse of
@@ -166,7 +165,6 @@ async def compute_core_first_order(
 
 
 __all__ = [
-    'OUTLIER_EMBEDDING_FIELD',
     'compute_centroid_distances',
     'compute_core_first_order',
     'compute_outlier_order',

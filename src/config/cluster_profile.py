@@ -26,7 +26,6 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
     'item': {
         'target': 'item',
         'level': 'class',
-        'embedding_field': 'pe_embedding',
         'method': 'ivf',
         'params': {'n_clusters': 512},
         'refresh': DEFAULT_REFRESH,
@@ -36,7 +35,6 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
     'region_box': {
         'target': 'region_box',
         'level': 'class',
-        'embedding_field': 'region_box_embeddings.embedding',
         'method': 'minibatch_kmeans',
         'params': {'target_bucket_size': 200},
         'refresh': DEFAULT_REFRESH,
@@ -46,10 +44,18 @@ _DEFAULTS: Final[dict[str, dict[str, Any]]] = {
 }
 
 
-def default_profile_body(target: str) -> dict[str, Any]:
-    """The profile body of a project that activated none (a copy; callers may validate it)."""
+def default_profile_body(target: str, embedding_field: str) -> dict[str, Any]:
+    """The profile body of a project that activated none (a copy; callers may validate it).
+
+    ``embedding_field`` is the vector field of the project's primary space for ``target``: the
+    profile names the space it clusters, and only the registry knows it."""
     try:
         body = _DEFAULTS[target]
     except KeyError:
         raise ValueError(f'no cluster profile for target {target!r}') from None
-    return {**body, 'params': dict(body['params']), 'refresh': dict(body['refresh'])}
+    return {
+        **body,
+        'embedding_field': embedding_field,
+        'params': dict(body['params']),
+        'refresh': dict(body['refresh']),
+    }

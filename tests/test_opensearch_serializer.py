@@ -90,6 +90,8 @@ def test_documents_carry_vectors_as_python_floats() -> None:
     vector = np.random.default_rng(3).normal(size=1024).astype(np.float32)
     item = DetectedItem(bbox_pixel=(0.0, 0.0, 10.0, 10.0), score=0.5, pe_embedding=vector)
     doc = build_item_doc(
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         crop_id='c',
         image_id='i',
         image_path='/p.jpg',
@@ -105,6 +107,7 @@ def test_documents_carry_vectors_as_python_floats() -> None:
         blur_lap_ratio=None,
     )
     image_doc = build_image_doc(
+        vector_field='pe_embedding',
         image_id='i',
         image_path='/p.jpg',
         source='s',

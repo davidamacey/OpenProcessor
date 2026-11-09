@@ -41,6 +41,7 @@ from src.services.curation.region_box_embeddings import (
     write_box_embeddings,
 )
 from src.services.curation.reprocess_gpu_embed import embed_on_gpu
+from src.services.embedding_spaces.readers import WriteFields, frame_vector_field, item_write_fields
 from src.services.near_duplicates import pending as near_dup_pending
 from src.utils.cpu_pool import offload_always, run_cpu
 from src.utils.vectors import float_list
@@ -231,6 +232,8 @@ class _Writes:
 
     place: bool
     """Whether crops never placed in the serving partition are placed once embedded."""
+    item_fields: WriteFields
+    frame_vector_field: str
     counts: dict[str, int] = field(
         default_factory=lambda: dict.fromkeys(
             (
@@ -259,11 +262,14 @@ class _Writes:
         self.counts['images'] += 1
         self.counts['items'] += len(target.items)
         if vectors.frame is not None:
-            self.images.append((target.image_id, {'pe_embedding': float_list(vectors.frame)}))
+            self.images.append(
+                (target.image_id, {self.frame_vector_field: float_list(vectors.frame)})
+            )
             self.counts['frame_written'] += 1
         for (cid, src), vec in zip(boxed, vectors.crops, strict=True):
             update = self.items.setdefault(cid, {})
-            update.update(pe_embedding=float_list(vec), embedding_state=EMBEDDED)
+            update[self.item_fields.vector_field] = float_list(vec)
+            update[self.item_fields.state_field] = EMBEDDED
             if self.place and not src.get('cluster_partition_id'):
                 self.unplaced[cid] = vec
             self.counts['crop_written'] += 1
@@ -293,7 +299,9 @@ async def reembed_items(
     ``region_written`` and ``missing_image`` (path unservable or unreadable).
     """
     cfg = get_curation_config()
-    writes = _Writes('crop' in parts and place_in_clusters)
+    writes = _Writes(
+        'crop' in parts and place_in_clusters, await item_write_fields(), await frame_vector_field()
+    )
     gate = gate or new_image_gate()
 
     async def embed_target(target: EmbedTarget) -> None:
