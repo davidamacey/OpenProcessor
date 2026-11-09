@@ -307,17 +307,14 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     # The lifespan's mapping check reads OpenSearch, which unit tests never reach. The check
     # itself is tested in tests/opensearch/test_mapping_gate.py against its original function.
-    # It still builds the shared client the way the real one does (a failed ping leaves the
-    # client cached), because later lifespan steps take that client without pinging again.
+    # Later lifespan steps take the shared client without pinging, so it is installed unpinged
+    # (a real one is cached only after a successful ping, which unit tests never get).
     async def _no_mapping_check() -> None:
-        from contextlib import suppress
+        from src.core.dependencies import OpenSearchClientFactory, app_state
 
-        from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
-
-        from src.core.dependencies import OpenSearchClientFactory
-
-        with suppress(OpenSearchConnectionError):
-            await OpenSearchClientFactory.get_client()
+        monkeypatch.setattr(
+            app_state, '_opensearch_client', OpenSearchClientFactory.create_client()
+        )
 
     monkeypatch.setattr('src.core.dependencies.bootstrap_opensearch_indexes', _no_mapping_check)
 

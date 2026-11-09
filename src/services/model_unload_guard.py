@@ -23,12 +23,19 @@ never by a hardcoded model list.
 from __future__ import annotations
 
 import contextlib
+from typing import TYPE_CHECKING
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
-from src.services.config_store.project_usage import ingest_models_by_project
+from src.services.config_store.project_usage import active_region_profiles, ingest_models_by_project
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_endpoints import available_vlm_endpoints
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from src.config import DetectionProfile
 
 
 REGION_PROTECTED_PREFIXES = ('paddleocr_',)
@@ -44,11 +51,18 @@ class UnloadRefusedError(Exception):
         self.detail = detail
 
 
-def region_protected_models() -> frozenset[str]:
+def region_protected_models(
+    regions: Iterable[DetectionProfile | None] | None = None,
+) -> frozenset[str]:
+    """The models the pipeline depends on. ``regions`` are the region profiles to protect;
+    omitted, the bound project's active one (a deployment-wide route passes every project's)."""
     primary = ingest_primary_profile()
     secondary = ingest_secondary_profile()
-    region = get_active_region_profile()
-    region_models = (region.detector_model, region.ocr_rec_model) if region is not None else ()
+    if regions is None:
+        regions = [get_active_region_profile()]
+    region_models = [
+        m for r in regions if r is not None for m in (r.detector_model, r.ocr_rec_model)
+    ]
     return frozenset(
         name
         for name in (
@@ -63,13 +77,16 @@ def region_protected_models() -> frozenset[str]:
 
 
 def is_region_protected_model(
-    model_name: str, *, used_elsewhere: frozenset[str] = frozenset()
+    model_name: str,
+    *,
+    used_elsewhere: frozenset[str] = frozenset(),
+    regions: Iterable[DetectionProfile | None] | None = None,
 ) -> bool:
     """Whether no ``force`` can unload ``model_name``. ``used_elsewhere`` is the
     models other projects' active ingest profiles run
     (:func:`models_run_by_other_projects`)."""
     return (
-        model_name in region_protected_models()
+        model_name in region_protected_models(regions)
         or model_name in used_elsewhere
         or model_name.startswith(REGION_PROTECTED_PREFIXES)
     )
@@ -94,13 +111,16 @@ def core_pipeline_models() -> frozenset[str]:
     )
 
 
-def external_service_model_names() -> frozenset[str]:
+def external_service_model_names(
+    regions: Iterable[DetectionProfile | None] | None = None,
+) -> frozenset[str]:
     """Names of roster entries that are their own HTTP services, not Triton
-    models: the segmenter, and every VLM endpoint's name and model id."""
+    models: the segmenter of each of ``regions`` (default: the bound project's active
+    profile), and every VLM endpoint's name and model id."""
     names: set[str] = set()
-    region = get_active_region_profile()
-    if region is not None and region.segmenter_name:
-        names.add(region.segmenter_name)
+    if regions is None:
+        regions = [get_active_region_profile()]
+    names.update(r.segmenter_name for r in regions if r is not None and r.segmenter_name)
     with contextlib.suppress(Exception):  # an unresolvable registry just skips the VLMs
         for endpoint in available_vlm_endpoints():
             names.update((endpoint.name, endpoint.body.model, endpoint.model_id))
@@ -114,21 +134,10 @@ async def check_unload(model_name: str, *, force: bool, own_project: str | None 
 
     ``own_project`` is the
     bound project of a project route (its own use is that route's to weigh)."""
-    if model_name in external_service_model_names():
-        raise UnloadRefusedError(
-            400,
-            f'{model_name!r} is an external-service model (segmenter or VLM), '
-            'not a Triton model. It has no Triton repository entry to unload; '
-            'manage it out of band.',
-        )
-    if is_region_protected_model(model_name):
-        raise UnloadRefusedError(
-            403,
-            f'{model_name!r} is a region-detector pipeline model (detector or OCR) '
-            'and can never be unloaded through this endpoint, even with '
-            'force=true. Manage it out of band.',
-        )
+    # Models are deployment-wide, so every project's active region profile counts, not the
+    # bound one (the global delete route binds none). An unreadable project fails closed.
     try:
+        regions = list((await active_region_profiles()).values())
         by_project = await ingest_models_by_project()
     except Exception as exc:
         raise UnloadRefusedError(
@@ -136,6 +145,20 @@ async def check_unload(model_name: str, *, force: bool, own_project: str | None 
             'could not read every project to see whether another project runs '
             f'{model_name!r}; retry (force does not skip this check)',
         ) from exc
+    if model_name in external_service_model_names(regions):
+        raise UnloadRefusedError(
+            400,
+            f'{model_name!r} is an external-service model (segmenter or VLM), '
+            'not a Triton model. It has no Triton repository entry to unload; '
+            'manage it out of band.',
+        )
+    if is_region_protected_model(model_name, regions=regions):
+        raise UnloadRefusedError(
+            403,
+            f'{model_name!r} is a region-detector pipeline model (detector or OCR) '
+            'and can never be unloaded through this endpoint, even with '
+            'force=true. Manage it out of band.',
+        )
     users = sorted(s for s, m in by_project.items() if s != own_project and model_name in m)
     if users:
         raise UnloadRefusedError(

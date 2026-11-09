@@ -13,6 +13,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.config.project_context import current_project
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.domain.embedding_state import embedded_clause
 from src.services.embedding_spaces.readers import item_vector_field
 from src.services.training.model_classes import owned_model_names
@@ -61,8 +62,13 @@ async def validated_count(client: Any, items_index: str) -> int | None:
 
 async def embedded_count(client: Any, items_index: str) -> int | None:
     """Items with a vector in the primary item space (the working set), or ``None`` when
-    uncountable. Caller binds the owning project."""
-    vector_field = await item_vector_field()
+    uncountable (an outage, or a project the registry has no primary item space for).
+    Caller binds the owning project."""
+    try:
+        vector_field = await item_vector_field()
+    except EmbeddingSpaceError as exc:
+        logger.warning('project_count_unavailable', what='embedded', error=str(exc))
+        return None
     return await _query_count(client, items_index, embedded_clause(vector_field), 'embedded')
 
 
