@@ -76,6 +76,8 @@ export interface ReviewItem extends Crop {
  */
 export interface SearchCrop extends Crop {
   similarity_score: number;
+  /** The space `similarity_score` was measured in (the first space that found the item). */
+  score_space?: string | null;
   /** `target=box` searches: the box of this item that matched, and whether its vector predates a
    *  move of the box. Null for a crop-target search. */
   matched_box_id?: string | null;

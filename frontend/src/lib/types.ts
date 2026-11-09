@@ -296,6 +296,10 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   page_size: number;
+  /** Search routes: the space key searched, and the extra keys fused in by
+   *  reciprocal rank fusion. */
+  space?: string;
+  fuse?: string[];
   /** Set by `{API_PREFIX}/review/{tab}` when the requested `?sort=` couldn't be
    *  honored (e.g. the field isn't backfilled yet) and the server fell
    *  back to the default ordering. Rendered as an inline note, never a

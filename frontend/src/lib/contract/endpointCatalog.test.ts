@@ -67,6 +67,7 @@ const SCANNED_FILES = [
   'lib/api_labelOps.ts',
   'lib/api_bulkIngest.ts',
   'lib/api_ingestSources.ts',
+  'lib/api_embeddingSpaces.ts',
   'lib/api_jobs.ts',
 ] as const;
 
