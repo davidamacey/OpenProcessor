@@ -21,13 +21,19 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+class _Client(TestClient):
+    """The test client with the fakes its fixture hangs on it."""
+
+    fake_os: Any
 
 
 if TYPE_CHECKING:
@@ -282,13 +288,13 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client = _Client(app)
+    client.fake_os = fake_os
     return client
 
 
 def test_get_crops_order_diverse_flag_off_behaves_like_default(
-    crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    crops_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     r_default = crops_app_client.get(
@@ -302,7 +308,7 @@ def test_get_crops_order_diverse_flag_off_behaves_like_default(
 
 
 def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
-    crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    crops_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         'src.services.curation.diverse_order.compute_diverse_order',
@@ -318,7 +324,7 @@ def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
 
 
 def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
-    crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    crops_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         'src.services.curation.diverse_order.compute_diverse_order',
@@ -364,8 +370,8 @@ def select_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         yield None
 
     app.dependency_overrides[get_db] = no_database
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client = _Client(app)
+    client.fake_os = fake_os
     return client
 
 
@@ -379,7 +385,7 @@ def _job_seam(monkeypatch: pytest.MonkeyPatch, latest) -> AsyncMock:
 
 
 def test_select_diverse_disabled_400(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     r = select_app_client.post('/curation/projects/default/select/diverse', json={'k': 5})
@@ -387,7 +393,7 @@ def test_select_diverse_disabled_400(
     assert 'disabled' in r.json()['detail']
 
 
-def test_select_diverse_unknown_review_tab_400(select_app_client: TestClient) -> None:
+def test_select_diverse_unknown_review_tab_400(select_app_client: _Client) -> None:
     r = select_app_client.post(
         '/curation/projects/default/select/diverse', json={'k': 5, 'scope': {'review_tab': 'nope'}}
     )
@@ -395,7 +401,7 @@ def test_select_diverse_unknown_review_tab_400(select_app_client: TestClient) ->
 
 
 def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
-    select_app_client: TestClient,
+    select_app_client: _Client,
 ) -> None:
     pool = _orthonormal_pool(6)
     select_app_client.fake_os.count = AsyncMock(return_value={'count': 6})
@@ -422,7 +428,7 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
 
 
 def test_select_diverse_job_path_for_large_pool(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A tiny OP_SELECT_SYNC_MAX_OPS forces the job path: the route queues the job and answers
     202 with its state (the queue, busy and run paths are in ``tests/curation/jobs_a``)."""
@@ -450,7 +456,7 @@ def test_select_diverse_job_path_for_large_pool(
 
 
 def test_select_status_idle_with_no_job(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _job_seam(monkeypatch, None)
     r = select_app_client.get('/curation/projects/default/select/status')
@@ -459,7 +465,7 @@ def test_select_status_idle_with_no_job(
 
 
 def test_select_cancel_with_no_job_running(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _job_seam(monkeypatch, None)
     monkeypatch.setattr(

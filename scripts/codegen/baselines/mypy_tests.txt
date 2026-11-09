@@ -38,9 +38,7 @@ tests.curation.test_crop_bytes	1	still has mypy errors; fix the module and delet
 tests.curation.test_crop_cache_project_scope	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_crop_context	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_curation_images	1	still has mypy errors; fix the module and delete this line
-tests.curation.test_curation_settings_integration	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_curation_settings_router	1	still has mypy errors; fix the module and delete this line
-tests.curation.test_curation_viz_router	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_geometry	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_index_schema_marker	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_ingest_concurrent_duplicates	1	still has mypy errors; fix the module and delete this line
@@ -67,7 +65,6 @@ tests.curation.test_search_space_wire	1	still has mypy errors; fix the module an
 tests.curation.test_search_timing	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_seed_from_detector	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_seed_live_harness_region_shape	1	still has mypy errors; fix the module and delete this line
-tests.curation.test_select_router	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_slice_failure_cancels_siblings	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_stage_b_combined_orchestration	1	still has mypy errors; fix the module and delete this line
 tests.curation.test_stage_sam_consumer_orchestration	1	still has mypy errors; fix the module and delete this line

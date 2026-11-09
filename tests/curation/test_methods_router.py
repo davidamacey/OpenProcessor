@@ -12,13 +12,19 @@ established pattern — see test_review_disagreements.py). Verifies:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
+
+
+class _Client(TestClient):
+    """The test client with the fakes its fixture hangs on it."""
+
+    fake_os: Any
 
 
 if TYPE_CHECKING:
@@ -46,12 +52,12 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client = _Client(app)
+    client.fake_os = fake_os
     return client
 
 
-def test_there_is_no_cluster_axis(app_client: TestClient) -> None:
+def test_there_is_no_cluster_axis(app_client: _Client) -> None:
     r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
@@ -59,7 +65,7 @@ def test_there_is_no_cluster_axis(app_client: TestClient) -> None:
     assert 'cluster' not in {a['axis'] for a in body['axes']}
 
 
-def test_score_entries_disabled_by_default(app_client: TestClient) -> None:
+def test_score_entries_disabled_by_default(app_client: _Client) -> None:
     from src.services.curation.item_scores import available_scorers
 
     r = app_client.get('/curation/projects/default/methods')
@@ -73,7 +79,7 @@ def test_score_entries_disabled_by_default(app_client: TestClient) -> None:
 
 
 def test_score_entries_shadow_when_enabled_and_shadow(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Validation promoted
     ``mistakenness`` and ``uniqueness`` one notch each (shadow ->
@@ -108,7 +114,7 @@ def test_score_entries_shadow_when_enabled_and_shadow(
 
 
 def test_score_entries_experimental_when_enabled_not_shadow(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
@@ -119,7 +125,7 @@ def test_score_entries_experimental_when_enabled_not_shadow(
         assert entry['status'] == 'experimental'
 
 
-def test_every_advertised_id_resolves(app_client: TestClient) -> None:
+def test_every_advertised_id_resolves(app_client: _Client) -> None:
     from src.services.curation.item_scores import get_scorer
 
     r = app_client.get('/curation/projects/default/methods')
@@ -129,7 +135,7 @@ def test_every_advertised_id_resolves(app_client: TestClient) -> None:
             get_scorer(entry['id'])  # raises ValueError if unknown
 
 
-def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: TestClient) -> None:
+def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: _Client) -> None:
     r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     overlay_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'overlay'}
@@ -141,7 +147,7 @@ def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: TestC
     assert body['flags']['select_diverse_enabled'] is False
 
 
-def test_diverse_overlay_serves_the_real_k_limits(app_client: TestClient) -> None:
+def test_diverse_overlay_serves_the_real_k_limits(app_client: _Client) -> None:
     """The served limits are the ones the routes enforce (openapi ``maximum``)."""
     entry = next(
         s
@@ -159,7 +165,7 @@ def test_diverse_overlay_serves_the_real_k_limits(app_client: TestClient) -> Non
 
 
 def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Only diversity's cheap pre-screen
     passed; the full training A/B gate
@@ -174,7 +180,7 @@ def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     assert body['flags']['select_diverse_enabled'] is True
 
 
-def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestClient) -> None:
+def test_viz_projection_entry_present_and_disabled_by_default(app_client: _Client) -> None:
     r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
@@ -187,7 +193,7 @@ def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestCl
 
 
 def test_viz_projection_experimental_when_flag_on_but_never_stable(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The purity half of
     the protocol passed for real (the UMAP-viz
@@ -203,7 +209,7 @@ def test_viz_projection_experimental_when_flag_on_but_never_stable(
     assert body['flags']['viz_projection_enabled'] is True
 
 
-def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: TestClient) -> None:
+def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: _Client) -> None:
     """The real number from the offline purity-evaluation script (this
     pass, not a placeholder) plus the frontend-facing banner flag --
     ``requires_banner`` is False because the measured purity landed in the
@@ -220,7 +226,7 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
 
 
 def test_export_axis_advertises_yolo_and_single_class_and_omits_lpr(
-    app_client: TestClient,
+    app_client: _Client,
 ) -> None:
     """The frontend gates
     its export panels on this axis rather than probing the write endpoint.
@@ -240,7 +246,7 @@ def test_export_axis_advertises_yolo_and_single_class_and_omits_lpr(
     assert 'lpr' not in export_entries
 
 
-def test_detection_profile_axis_is_empty_by_default(app_client: TestClient) -> None:
+def test_detection_profile_axis_is_empty_by_default(app_client: _Client) -> None:
     """Neutral default: with no region profile configured, nothing is
     advertised -- the built-in reference plate profile is selectable by
     name but no longer self-registers as the default."""
@@ -255,7 +261,7 @@ def test_detection_profile_axis_is_empty_by_default(app_client: TestClient) -> N
 
 @pytest.mark.usefixtures('reference_region_profile')
 def test_detection_profile_axis_advertises_the_selected_profile(
-    app_client: TestClient,
+    app_client: _Client,
 ) -> None:
     """``reference_region_profile`` (``OP_REGION_PROFILE_PATH`` pointed at
     the ``license_plate`` example file) selects that profile; the axis
@@ -311,7 +317,7 @@ def test_detection_profile_registry_supports_more_than_one_profile() -> None:
             profile_registry.register_profile(profile, default=profile.name == saved_default)
 
 
-def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: TestClient) -> None:
+def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: _Client) -> None:
     """With no ``OP_PROMPT_PACK_PATH``
     configured, the axis must advertise the built-in generic pack by its
     own ``name`` field."""
@@ -329,7 +335,7 @@ def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: TestClient) -
 
 
 def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A deployment pointing ``OP_PROMPT_PACK_PATH`` at its own pack file
     (task a) sees that pack on the axis as the default, still alongside
@@ -357,7 +363,7 @@ def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
 
 
 def test_prompt_pack_axis_advertises_every_configured_pack(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``OP_PROMPT_PACK_PATHS`` adds more selectable packs: the axis lists
     the generic pack, every extra pack, and the default pack, keyed by
@@ -396,7 +402,7 @@ def test_prompt_pack_axis_advertises_every_configured_pack(
     assert [k for k, e in pack_entries.items() if e['default']] == ['pallet_v1']
 
 
-def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
+def test_writes_never_include_cluster_fields(app_client: _Client) -> None:
     forbidden = {'cluster_id', 'cluster_subid', 'cluster_distance'}
     r = app_client.get('/curation/projects/default/methods')
     body = r.json()
@@ -405,7 +411,7 @@ def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
         assert not (writes & forbidden)
 
 
-def _coverage_search_count(client: TestClient) -> int:
+def _coverage_search_count(client: _Client) -> int:
     """Coverage queries only: the config-store refreshes the route also does
     (the VLM endpoint registry) search the configs indexes, not the pool."""
     calls = client.fake_os.search.call_args_list  # type: ignore[attr-defined]
@@ -428,7 +434,7 @@ def _fake_field_counts(*, total: int, per_field: dict[str, int] | None = None, d
     return AsyncMock(side_effect=_search)
 
 
-def test_methods_emits_field_coverage_per_entry(app_client: TestClient) -> None:
+def test_methods_emits_field_coverage_per_entry(app_client: _Client) -> None:
     """Phase 6 (P1-2/P1-3): every entry — including ones with no
     ``requires_field`` — now carries a ``field_coverage`` key.
     Before this fix, ``/curation/methods`` never emitted the key at all."""
@@ -458,7 +464,7 @@ def test_methods_emits_field_coverage_per_entry(app_client: TestClient) -> None:
 
 
 def test_methods_reports_zero_coverage_for_a_genuinely_inert_sort(
-    app_client: TestClient,
+    app_client: _Client,
 ) -> None:
     """mistakenness_score/probe_pred_entropy/uniqueness_score/dup_group_id
     are 0% covered on the real pool today -- this must come through as a
@@ -481,7 +487,7 @@ def test_methods_reports_zero_coverage_for_a_genuinely_inert_sort(
 
 
 def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
-    app_client: TestClient,
+    app_client: _Client,
 ) -> None:
     """The fail-open direction matters: a dead OpenSearch
     must not silently hide every control by reporting 0 coverage
@@ -502,7 +508,7 @@ def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
             assert entry['field_coverage_total'] is None, entry
 
 
-def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
+def test_methods_does_not_query_per_entry(app_client: _Client) -> None:
     """O(1) request, not O(entries) or O(distinct fields): every
     distinct ``requires_field`` (several sorts share one, e.g. both
     uncertainty_entropy and disagreement_entropy_asc need
@@ -547,7 +553,7 @@ def test_methods_contract_declares_field_coverage() -> None:
     assert 'field_coverage_total' in entry_props
 
 
-def test_every_sort_with_requires_field_has_integer_coverage(app_client: TestClient) -> None:
+def test_every_sort_with_requires_field_has_integer_coverage(app_client: _Client) -> None:
     """Regression guard (passes before this change too, per the plan): every
     ``axis == 'sort'`` entry with a ``requires_field`` gets a real int
     ``field_coverage`` / ``field_coverage_total``, never left null just
@@ -571,7 +577,7 @@ if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
 
-def test_export_entries_serve_no_cosine_cut(app_client: TestClient) -> None:
+def test_export_entries_serve_no_cosine_cut(app_client: _Client) -> None:
     body = app_client.get('/curation/projects/default/methods').json()
     exports = {s['id']: s for s in body['strategies'] if s['axis'] == 'export'}
     assert set(exports) == {'yolo', 'single_class'}
