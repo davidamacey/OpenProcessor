@@ -46,7 +46,7 @@ def kept(clauses: list[dict[str, Any]]) -> set[str]:
 def _search_clauses(hide: bool) -> list[dict[str, Any]]:
     return _build_filter(
         tab=None,
-        cluster_id=None,
+        cluster_uid=None,
         date_from=None,
         date_to=None,
         max_rank=None,

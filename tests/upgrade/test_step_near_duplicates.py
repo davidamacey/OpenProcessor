@@ -97,3 +97,50 @@ async def test_a_second_clear_starts_no_task(v060) -> None:
     assert first > 0
     assert second == 0
     assert v060.os.calls[len(calls_after_first) :] == ['count']
+
+
+HASH_A = 'a' * 32
+HASH_B = 'b' * 32
+
+
+async def test_core_images_load_their_content_key_and_wait_for_one_grouping(
+    make_runner, clean_db, v060
+) -> None:
+    v060.os.indexes[step.CORE_INDEX] = {
+        'docs': {
+            'c1': {'imohash': HASH_A, 'image_path': '/img/c1.jpg', 'file_size_bytes': 10},
+            'c2': {'imohash': HASH_B, 'image_path': '/img/c2.jpg', 'file_size_bytes': 11},
+            'c3': {'image_path': '/img/c3.jpg'},
+        },
+        'mappings': {},
+        'settings': {},
+    }
+    await make_runner().run()
+    with clean_db.engine('super').connect() as conn:
+        contents = conn.execute(
+            text(
+                'SELECT image_id, imohash, image_path, size_bytes FROM image_contents '
+                'WHERE project_id IS NULL ORDER BY 1'
+            )
+        ).all()
+        pending = (
+            conn.execute(
+                text(
+                    "SELECT member_id FROM near_dup_pending WHERE level = 'core' "
+                    'AND project_id IS NULL ORDER BY 1'
+                )
+            )
+            .scalars()
+            .all()
+        )
+        report = conn.execute(
+            text("SELECT report FROM upgrade_runs WHERE step = 'load'")
+        ).scalar_one()
+    assert [tuple(r) for r in contents] == [
+        ('c1', HASH_A, '/img/c1.jpg', 10),
+        ('c2', HASH_B, '/img/c2.jpg', 11),
+    ]
+    assert pending == ['c1', 'c2', 'c3']
+    notes = report['notes']['near_duplicates']
+    assert notes['core_images_without_imohash'] == ['c3']
+    assert notes['start_core_grouping'] is True

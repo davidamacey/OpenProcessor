@@ -10,13 +10,21 @@
   build; nothing is written for that. The report lists the projects that should also start the
   ``source_backfill`` job: the exact-content key (``image_contents``) covers only images ingested
   after the upgrade until that job has read the files the upgrade carried over.
+* The core index keeps its images: each one with an ``imohash`` gets its project-less
+  ``image_contents`` row from its document, and every core image gets a ``core`` pending row. The
+  single-writer ``near_dup_core_group`` job (with no current run its first pass is a full run
+  over what it claims) builds the first core grouping when the beat tick reaches it;
+  ``start_core_grouping`` in the report says so.
 """
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
+from src.db.repos import image_contents
 from src.schemas.curation.near_duplicates import NearDupProfileBody
+from src.services.near_duplicates.pending import enqueue_core_pending
 from src.services.near_duplicates.profiles import (
     AXIS,
     DEFAULT_NAME,
@@ -42,6 +50,7 @@ ITEM_FIELDS = (
 )
 CORE_FIELDS = ('duplicate_group_id', 'is_duplicate_primary', 'duplicate_score')
 CORE_INDEX = 'visual_search_global'
+IMOHASH = re.compile(r'^[0-9a-f]{32}$')
 REQUESTS_PER_SECOND = 500  # gentle on a small-heap node
 
 
@@ -96,6 +105,35 @@ async def load_profile(ctx: StepContext, slug: str) -> None:
     ctx.report.add('near_dup_profiles')
 
 
+async def load_core_images(ctx: StepContext) -> tuple[int, list[str]]:
+    """Content rows from the core documents, and a pending row for every core image.
+
+    Returns how many content rows were loaded and the ids that have no usable ``imohash`` (they
+    are still grouped; only the exact-content key cannot know them).
+    """
+    ids: list[str] = []
+    without: list[str] = []
+    loaded = 0
+    async for image_id, doc in ctx.reader.iter_docs(CORE_INDEX):
+        ids.append(image_id)
+        imohash = doc.get('imohash')
+        if not isinstance(imohash, str) or not IMOHASH.match(imohash):
+            without.append(image_id)
+            continue
+        await image_contents.insert_content(
+            ctx.session,
+            None,
+            imohash=imohash,
+            sha256=None,
+            image_id=image_id,
+            image_path=str(doc.get('image_path') or image_id),
+            size_bytes=int(doc.get('file_size_bytes') or 0),
+        )
+        loaded += 1
+    await enqueue_core_pending(ctx.session, ids, 'added')
+    return loaded, sorted(without)
+
+
 async def run(ctx: StepContext) -> None:
     cleared: dict[str, int] = {}
     for pd in ctx.parsed.projects:
@@ -106,11 +144,17 @@ async def run(ctx: StepContext) -> None:
         await load_profile(ctx, slug)
     if await ctx.reader.index_exists(CORE_INDEX):
         cleared[CORE_INDEX] = await clear_index(ctx, CORE_INDEX, CORE_FIELDS)
+        loaded, without = await load_core_images(ctx)
+        ctx.report.add('core_content_rows', loaded)
+        core_notes = {'core_images_without_imohash': without, 'start_core_grouping': True}
+    else:
+        core_notes = {'core_images_without_imohash': [], 'start_core_grouping': False}
     ctx.report.add('near_dup_values_cleared', sum(cleared.values()))
     ctx.notes['near_duplicates'] = {
         'values_cleared_by_index': cleared,
         'levels_needing_a_full_build': ['image', 'item'],
         'start_source_backfill': sorted(pd.project.slug for pd in ctx.parsed.projects),
+        **core_notes,
     }
 
 
