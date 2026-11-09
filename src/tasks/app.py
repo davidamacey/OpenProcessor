@@ -11,7 +11,7 @@ from typing import Any
 from celery.signals import beat_init, worker_init
 
 from src.config.retired_env import reject_retired_env
-from src.tasks import queue_hooks
+from src.tasks import beat_lock, queue_hooks
 from src.tasks.beat_schedule import apply_schedule
 from src.tasks.runtime.gpu_app import build_app, install_worker_signals
 from src.tasks.runtime.log_context import install_log_context
@@ -72,3 +72,6 @@ def _on_worker_init(**_: Any) -> None:
 def _on_beat_init(**_: Any) -> None:
     reject_retired_env()
     _require_current_schema()
+
+
+beat_init.connect(beat_lock.hold_single_beat, weak=False)
