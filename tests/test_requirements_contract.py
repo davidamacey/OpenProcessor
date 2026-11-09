@@ -119,8 +119,6 @@ _REQ_RE = re.compile(
 # package cannot stay on the list.
 _UNPINNED_UNTIL_PART_B = frozenset(
     {
-        'opencv-python',
-        'simplejpeg',
         'transformers',
         'timm',
         'huggingface-hub',
@@ -133,12 +131,8 @@ _UNPINNED_UNTIL_PART_B = frozenset(
         'cupy-cuda12x',
         'faiss-cpu',
         'faiss-gpu-cu12',
-        # Pillow is imported directly but declared nowhere yet; part B adds `Pillow==...`
-        # together with simplejpeg (it decodes images).
-        'pillow',
     }
 )
-_NOT_YET_DECLARED = frozenset({'pillow'})
 
 # One distribution family, one version: the extra or build differs, the release must not.
 _VERSION_FAMILIES = {
@@ -225,7 +219,7 @@ def test_no_floor_and_no_unpinned_runtime_line_outside_part_b() -> None:
 
 
 def test_the_part_b_allowlist_only_shrinks() -> None:
-    stale = sorted(_UNPINNED_UNTIL_PART_B - _loose_runtime_lines() - _NOT_YET_DECLARED)
+    stale = sorted(_UNPINNED_UNTIL_PART_B - _loose_runtime_lines())
     assert not stale, f'already pinned everywhere, delete from the allowlist: {stale}'
 
 
