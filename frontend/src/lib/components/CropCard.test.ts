@@ -1,5 +1,5 @@
 /**
- * Mount-based behavior tests for CropCard (docs/design/test-audit-2026-09-24.md
+ * Mount-based behavior tests for CropCard (test audit
  * P1-4/2.4). Previously every "component test" in this directory was a
  * regex scan over the .svelte source text — it passed as long as a line of
  * code existed, not whether it ran correctly. These mount the real

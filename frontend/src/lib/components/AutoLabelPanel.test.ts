@@ -1,6 +1,6 @@
 /**
  * Static source-scan regression guard for the scoped-VLM-assist wiring in
- * `AutoLabelPanel.svelte` (docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md
+ * `AutoLabelPanel.svelte` (VLM-scoped labeling assist plan
  * §4.3). Same convention as `StrategyBar.test.ts`/`AssistScopeBar.test.ts`
  * — this repo has no `@testing-library/svelte`, so a mounted-component
  * assertion isn't available; a source scan is the established substitute.

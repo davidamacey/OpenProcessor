@@ -45,7 +45,7 @@
   import { summarizeRunStages } from '$lib/autoLabelRunSummary';
   import Modal from '$components/Modal.svelte';
 
-  // Additive, optional (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
+  // Additive, optional (Ingest UI plan
   // §A.5): `/ingest`'s ClusteringHandoff passes a gate computed from the
   // upload run state + the served region drain; the dashboard passes
   // nothing, so its behavior is unchanged. `null`/absent === unblocked,

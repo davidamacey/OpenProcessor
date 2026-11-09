@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Small badge for a per-crop curation score (curation-strategy plan
-   * §4/§5 — docs/curation-strategy-plan-2026-09.md), e.g. `mistakenness`.
+   * §4/§5 — curation strategy plan), e.g. `mistakenness`.
    *
    * Closest existing analog is `ProvenanceChip.svelte` — same rounded
    * border/bg/text triple, same font-mono + title-tooltip convention —

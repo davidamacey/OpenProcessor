@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * 2-d embedding-projection scatter plot (curation-strategy plan Phase 5 —
-   * docs/curation-strategy-plan-2026-09.md §2.7/§5.6). UMAP-as-visualization
+   * curation strategy plan §2.7/§5.6). UMAP-as-visualization
    * -only overlay: it decorates the existing FAISS-IVF `cluster_id`
    * assignment, it never decides one, and it is never fit on a request
    * path — `getVizProjection` only ever serves whatever the last backend
