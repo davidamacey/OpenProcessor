@@ -176,7 +176,7 @@
     </dd>
   {/if}
 
-  <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md):
+  <!-- DQ-M8:
        `label_confidence` (wire `confidence`) is the classifier-
        detector score on every row, including VLM-sourced
        ones — the repro was exactly this panel, "Current label

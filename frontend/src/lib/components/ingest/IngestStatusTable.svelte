@@ -2,7 +2,7 @@
   import { apiErrorText } from '$lib/api_errors';
   /**
    * The `by_source` ingest status table plus `total` and `by_day`
-   * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2).
+   * (Ingest UI plan §A.2).
    * Refreshes every 10s while the page is visible, plus once whenever
    * `refreshToken` changes (the run panel bumps it, debounced, after
    * each completed chunk).

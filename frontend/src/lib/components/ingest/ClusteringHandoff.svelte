@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Wraps `<AutoLabelPanel>` with the ingest-aware gate
-   * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.5):
+   * (Ingest UI plan §A.5):
    * blocked while the upload run is active, or while the served region
    * drain isn't `drained`, or while the drain fetch itself is failing.
    *

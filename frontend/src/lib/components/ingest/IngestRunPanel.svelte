@@ -3,7 +3,7 @@
    * Source tag / identifier prefix / skip-lookup controls, Start/Pause/
    * Resume/Cancel, a progress bar, totals chips, and paged per-file
    * results with a CSV download
-   * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2/§A.4).
+   * (Ingest UI plan §A.2/§A.4).
    */
   import { untrack } from 'svelte';
   import { beforeNavigate } from '$app/navigation';

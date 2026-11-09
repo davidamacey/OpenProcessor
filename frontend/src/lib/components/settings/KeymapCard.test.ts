@@ -1,6 +1,6 @@
 /**
  * Mount-based behavior test for `/settings#keyboard`'s `KeymapCard`
- * (K2, docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
+ * (K2, configurable keyboard shortcuts plan
  * §5.4/§5.6): rows per context, a locked action is read-only, a served
  * 422 validation report renders on the offending row, and a 409
  * `class_hotkey_conflict` opens the unbind dialog.

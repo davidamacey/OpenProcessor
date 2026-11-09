@@ -1,6 +1,6 @@
 /**
  * Mount test for `SourceImageOverlay` (K6,
- * docs/design/k6-frontend-overlay-plan-2026-09-24.md) — the boxes/
+ * K6 frontend overlay plan) — the boxes/
  * labels this component draws are the ONLY place they exist once the
  * backend stops burning them into `/crops/{id}/image`, so every claim
  * here is pinned against the actual rendered `%` geometry, not just
