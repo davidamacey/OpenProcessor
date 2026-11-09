@@ -203,7 +203,7 @@ async def discard_crop(
 
     ``clear_class`` (default ``true``): the item doesn't belong in its
     class/cluster — class, provenance and validation are cleared and it
-    drops to the residual pool (``cluster_id: null``).
+    drops to the residual pool (no ``cluster_uid``).
     ``dismiss_from_review`` (default ``false``): hide it from every
     ``/review`` tab (``review_dismissed_at``). The pre-write state is
     snapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it
