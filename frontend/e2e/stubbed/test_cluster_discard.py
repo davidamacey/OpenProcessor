@@ -1,5 +1,5 @@
 """New coverage (test audit recommendation 5):
-`/clusters/[id]` D discards the current selection.
+`/clusters/[uid]` D discards the current selection.
 
 Single selection -> `POST {API_PREFIX}/crops/{id}/discard` (discardCrop).
 Multi selection -> `POST {API_PREFIX}/crops/discard_batch`
@@ -12,33 +12,15 @@ from harness.constants import ACTION_TIMEOUT_MS
 
 from playwright.sync_api import expect
 
+from fixtures.contract import cluster_card, cluster_list
 from fixtures.wire import make_item
 
 CLASSES = [
     {"class_id": 1, "class_name": "ducati", "kind": "item", "group": "moto", "hotkey_letter": "k", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": 1,
-            "cluster_kind": "class",
-            "size": 3,
-            "validated_count": 0,
-            "dominant_class_id": 1,
-            "dominant_class_name": "ducati",
-            "purity": 1.0,
-            "is_unlabeled": False,
-            "representatives": [{"crop_id": "crop-0"}],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0001"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=3))
 
 
 def crop(i: int) -> dict:
@@ -47,7 +29,7 @@ def crop(i: int) -> dict:
         image_id=f"img-{i}",
         class_id=1,
         class_name="ducati",
-        cluster_id=1,
+        cluster={"partition_id": "p1", "uid": CLUSTER_UID, "state": "assigned", "score": 0.9, "margin": 0.1, "assigned_by": "run"},
         label_validated=False,
         label_source="model_suggestion",
         thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
@@ -72,7 +54,7 @@ def test_cluster_single_discard(stub, page, app_url):
     # `discard_calls` catches that class of bug instead.
     stub.on("POST", r"/crops/discard_batch$", lambda req, m: (200, {"items": [], "discarded": 0, "conflicts": [], "not_found": []}))
 
-    page.goto(f"{app_url}/p/default/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
 
     page.locator("img").nth(1).click()

@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 
 from harness.constants import ACTION_TIMEOUT_MS
 
+from fixtures.contract import cluster_card, cluster_list
 from fixtures.wire import make_item, review_tab, review_tabs
 
 CLASSES = [
@@ -47,27 +48,8 @@ CLASSES = [
     },
 ]
 
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": 1,
-            "cluster_kind": "class",
-            "size": 2,
-            "validated_count": 0,
-            "dominant_class_id": 1,
-            "dominant_class_name": "widget",
-            "purity": 1.0,
-            "is_unlabeled": False,
-            "representatives": [],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0001"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=2, dominant_class_name="widget"))
 
 
 def item(i: int) -> dict:

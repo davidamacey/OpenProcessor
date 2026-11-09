@@ -2,13 +2,15 @@
 every action runs the server's dry run first (`dry_run: true`, the dialog
 states its `selected`), the real call repeats the same selection with
 `dry_run: false` only after Apply, and the served `updated_ids` go to the
-undo stack so Z reverts the write (a label via `label/undo_batch`, an
+undo stack so Z reverts the write (a label by operation id through `/label_ops/{op_id}/undo`, an
 ignore via `batch_unexclude`).
 """
 
 from __future__ import annotations
 
+from fixtures.contract import job, label_op_accepted
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.label_ops import stub_label_op_undo
 from harness.waits import expect_handled
 
 from fixtures.wire import make_item
@@ -101,27 +103,24 @@ def test_ignore_all_matching_dry_runs_first_then_applies_and_z_restores(stub, pa
     assert undo.value.post_data_json == {"crop_ids": ["crop-0", "crop-1"]}
 
 
-def test_label_all_matching_needs_a_class_and_z_undoes_through_label_undo(stub, page, app_url):
+def test_label_all_matching_needs_a_class_and_z_undoes_by_op_id(stub, page, app_url):
     bodies: list[dict] = []
+    undo_bodies: list[dict] = []
 
     def label_handler(request, _match):
         body = request.post_data_json or {}
         bodies.append(body)
         if body.get("dry_run"):
             return (200, {"dry_run": True, "selected": 2})
-        return (200, {"updated": 2, "updated_ids": ["crop-0", "crop-1"], "conflicts": []})
-
-    undo_bodies: list[dict] = []
-
-    def undo_handler(request, _match):
-        undo_bodies.append(request.post_data_json or {})
-        return (
-            200,
-            {"items": [], "undone": 2, "nothing_to_undo": [], "conflicts": [], "not_found": []},
-        )
+        return (202, label_op_accepted("op-sel-1", "job-op-sel-1"))
 
     stub.on("PUT", r"/crops/batch_label$", label_handler)
-    stub.on("POST", r"/crops/label/undo_batch$", undo_handler)
+    stub.on(
+        "GET",
+        r"/jobs/job-op-sel-1$",
+        job("job-op-sel-1", result={"op_id": "op-sel-1", "updated": 2, "conflicts": 0, "complete": True}),
+    )
+    stub_label_op_undo(stub, "op-sel-1", restored=2, calls=undo_bodies)
     _setup(stub, page, app_url)
 
     page.get_by_test_id("matching-action-label").click()
@@ -153,12 +152,13 @@ def test_label_all_matching_needs_a_class_and_z_undoes_through_label_undo(stub, 
         page.get_by_role("button", name="Apply").click()
     page.get_by_role("button", name="Apply").wait_for(state="detached", timeout=ACTION_TIMEOUT_MS)
 
+    # The 202 is followed through GET /jobs/{id}; Z then undoes the recorded op by id.
     with expect_handled(page,
-        lambda r: r.method == "POST" and r.url.endswith("/crops/label/undo_batch"),
+        lambda r: r.method == "POST" and r.url.endswith("/label_ops/op-sel-1/undo"),
         timeout=ACTION_TIMEOUT_MS,
-    ) as undo:
+    ):
         page.keyboard.press("z")
-    assert undo.value.post_data_json == {"crop_ids": ["crop-0", "crop-1"]}
+    assert undo_bodies == [{"dry_run": False}]
 
 
 def test_a_served_refusal_is_shown_verbatim_and_nothing_is_written(stub, page, app_url):

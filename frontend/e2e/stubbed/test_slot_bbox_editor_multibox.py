@@ -16,6 +16,7 @@ from __future__ import annotations
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
 
+from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import REGION_CLASS, make_item
 
 CLASSES = [
@@ -32,27 +33,8 @@ CLASSES = [
     },
 ]
 
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": 1,
-            "cluster_kind": "class",
-            "size": 1,
-            "validated_count": 0,
-            "dominant_class_id": 1,
-            "dominant_class_name": REGION_CLASS,
-            "purity": 1.0,
-            "is_unlabeled": False,
-            "representatives": [{"crop_id": "tag-1"}],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0001"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=1, dominant_class_name=REGION_CLASS))
 
 
 def _box(box_id: str, bbox: list[float]) -> dict:
@@ -78,9 +60,12 @@ def _box(box_id: str, bbox: list[float]) -> dict:
         "text_disagreement": None,
         "text_choice": None,
         "text_vlm_invalid": None,
-        "cluster_id": None,
-        "cluster_subid": None,
-        "cluster_distance": None,
+        "cluster_partition_id": None,
+        "cluster_uid": None,
+        "cluster_state": None,
+        "cluster_score": None,
+        "cluster_margin": None,
+        "cluster_assigned_by": None,
         "detected_at": "2026-05-06T07:08:09Z",
         "thumbnail_url": f"/curation/crops/tag-1/region_thumbnail?box_id={box_id}",
     }
@@ -92,7 +77,7 @@ def tag_item() -> dict:
         image_id="img-1",
         class_id=1,
         class_name=REGION_CLASS,
-        cluster_id=1,
+        cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         label_source="model_suggestion",
         thumbnail_url="/curation/crops/tag-1/thumbnail",
@@ -119,7 +104,7 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(
 
     stub.on("PUT", r"/crops/([^/]+)/regions$", region_put)
 
-    page.goto(f"{app_url}/p/default/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
 
     thumbnail = page.locator("img").first

@@ -1,4 +1,4 @@
-"""Regression coverage for the live /clusters/[id] header-refresh bug
+"""Regression coverage for the live /clusters/[uid] header-refresh bug
 (artifacts_local/cw-live/train-smoke/): the header's "N validated · N
 labeled · N in cluster" chip reads `classesStore` (per-class
 `validated_count`/`count`, `GET {API_PREFIX}/classes`), which the server
@@ -14,58 +14,30 @@ picks up the server's new count with no navigation/reload.
 from __future__ import annotations
 
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.label_ops import stub_label_op
 
 from playwright.sync_api import expect
 
-import json
-
+from fixtures.contract import cluster_card, cluster_list
 from fixtures.wire import make_item
 
-CLUSTER_ID = 44
+CLASS_ID = 44
 
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": CLUSTER_ID,
-            "cluster_kind": "class",
-            "size": 2,
-            "validated_count": 0,
-            "dominant_class_id": CLUSTER_ID,
-            "dominant_class_name": "mustang",
-            "purity": 1.0,
-            "is_unlabeled": False,
-            "representatives": [{"crop_id": "crop-0"}],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0044"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=2, dominant_class_name="mustang"))
 
 
 def crop(i: int) -> dict:
     return make_item(
         crop_id=f"crop-{i}",
         image_id=f"img-{i}",
-        class_id=CLUSTER_ID,
+        class_id=CLASS_ID,
         class_name="mustang",
-        cluster_id=CLUSTER_ID,
+        cluster={"partition_id": "p1", "uid": CLUSTER_UID, "state": "assigned", "score": 0.9, "margin": 0.1, "assigned_by": "run"},
         label_validated=False,
         label_source="model_suggestion",
         thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
     )
-
-
-def _json(request):
-    if not request.post_data:
-        return None
-    try:
-        return json.loads(request.post_data)
-    except (ValueError, TypeError):
-        return None
 
 
 def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app_url):
@@ -82,7 +54,7 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
             {
                 "classes": [
                     {
-                        "class_id": CLUSTER_ID,
+                        "class_id": CLASS_ID,
                         "class_name": "mustang",
                         "kind": "item",
                         "group": "car",
@@ -112,13 +84,9 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
         {"total": 2, "page": 1, "page_size": 60, "crops": [crop(0), crop(1)]},
     )
 
-    def batch_label_handler(request, match):
-        ids = (_json(request) or {}).get("crop_ids", [])
-        return (200, {"updated": len(ids), "updated_ids": ids, "conflicts": []})
+    stub_label_op(stub, r"/crops/batch_label$", "op-label-1", method="PUT")
 
-    stub.on("PUT", r"/crops/batch_label$", batch_label_handler)
-
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
 
     header = page.get_by_title("validated · labeled · cluster total")
@@ -180,7 +148,7 @@ def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
         r"/crops(\?|$)",
         {"total": 1, "page": 1, "page_size": 60, "crops": [crop(0)]},
     )
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     expect(page.get_by_test_id("cluster-card-error")).to_contain_text(
         "aggregation unavailable", timeout=ACTION_TIMEOUT_MS
     )

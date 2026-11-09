@@ -6,7 +6,9 @@ deployment serves semantic search.
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
+from fixtures.contract import embedding_space, embedding_spaces
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
@@ -130,3 +132,49 @@ def test_more_like_this_hidden_when_semantic_search_off(stub, page, app_url):
     page.goto(f"{app_url}/p/default/review")
     expect(page.locator("main")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id("review-similar").count() == 0
+
+
+def test_text_search_in_a_picked_embedding_space_sends_space_and_fuse(stub, page, app_url):
+    """With two ready spaces the search box offers a space picker; the choice goes to
+    `GET /search/text` as `space` (and `fuse` for "Fuse all spaces") and the served echo is shown."""
+    seen: list[dict[str, list[str]]] = []
+    serve_similar(stub)
+    stub.on(
+        "GET",
+        r"/embedding/spaces(\?|$)",
+        embedding_spaces(
+            embedding_space("pe_core"),
+            embedding_space("pe_alt", role="secondary", model_key="pe-alt"),
+        ),
+    )
+
+    def text_search(request, _match):
+        q = parse_qs(urlparse(request.url).query)
+        seen.append(q)
+        return {
+            "items": [neighbour(1, 0.9)],
+            "total": 1,
+            "page": 1,
+            "page_size": 200,
+            "unembedded_in_scope": 0,
+            "space": q.get("space", ["pe_core"])[0],
+            "fuse": q.get("fuse", []),
+        }
+
+    stub.on("GET", r"/search/text(\?|$)", text_search)
+    page.goto(f"{app_url}/p/default/clusters")
+    box = page.get_by_placeholder('Search, e.g. "blurry closeup"')
+    picker = page.get_by_test_id("search-space-picker")
+    expect(picker).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    box.fill("red widget")
+    box.press("Enter")
+    expect(page.get_by_test_id("search-space-echo")).to_contain_text("in pe_core", timeout=ACTION_TIMEOUT_MS)
+    assert "space" not in seen[-1] and "fuse" not in seen[-1], seen[-1]
+
+    page.get_by_test_id("search-space-select").select_option("pe_alt")
+    expect(page.get_by_test_id("search-space-echo")).to_contain_text("in pe_alt", timeout=ACTION_TIMEOUT_MS)
+    assert seen[-1]["space"] == ["pe_alt"], seen[-1]
+
+    page.get_by_test_id("search-space-fuse").check()
+    expect(page.get_by_test_id("search-space-echo")).to_contain_text("+ pe_core", timeout=ACTION_TIMEOUT_MS)
+    assert seen[-1]["fuse"] == ["pe_core"], seen[-1]

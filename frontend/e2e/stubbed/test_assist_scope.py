@@ -22,6 +22,7 @@ pre-existing params.
 
 from __future__ import annotations
 
+from fixtures.contract import auto_label_job
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
 
@@ -73,20 +74,7 @@ METHODS_WITH_PROMPT_PACK = {
     "flags": {},
 }
 
-IDLE_JOB = {
-    "job_id": "job-0",
-    "status": "idle",
-    "stage": "",
-    "processed": 0,
-    "total": 0,
-    "started_at": 0,
-    "finished_at": 0,
-    "error": None,
-    "result": {},
-    "args": {},
-    "eta_seconds": None,
-    "elapsed_seconds": 0,
-}
+IDLE_JOB = auto_label_job()
 
 # Full DatasetStats shape (src/lib/api.ts) — DatasetStats.svelte reads
 # nested fields (e.g. in_progress.region_drain_total_unfinished) directly, so
@@ -125,7 +113,7 @@ def register_base(stub, methods_body):
 
     def start_handler(request, _match):
         starts.append(request.url)
-        return (200, IDLE_JOB)
+        return (202, auto_label_job("queued"))
 
     stub.on("POST", r"/pipeline/auto_label/start", start_handler)
     return starts
@@ -142,7 +130,7 @@ def test_assist_scope(stub, page, app_url):
     starts1 = register_base(stub, METHODS_TODAY)
 
     page.goto(f"{app_url}/p/default/dashboard")
-    start_btn = page.get_by_role("button", name="Recluster now")
+    start_btn = page.get_by_role("button", name="Auto-label now")
     start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     # Real wait for the dashboard's on-mount requests to finish before the
     # negative "no assist chip" assertion below.
@@ -150,11 +138,11 @@ def test_assist_scope(stub, page, app_url):
 
     assert not [c for c in stub.console_errors if c.startswith("pageerror")], "dashboard should render with no pageerror"
     assert page.get_by_text(re.compile(r"^assist:")).count() == 0, "no 'assist:' chip should render — absent, not disabled"
-    assert start_btn.count() > 0, "primary button should read exactly 'Recluster now'"
+    assert start_btn.count() > 0, "primary button should read exactly 'Auto-label now'"
 
     starts1.clear()
     start_btn.first.click()
-    # p2 (2026-09-24 interactive pass): "Recluster now" opens an in-page
+    # p2 (2026-09-24 interactive pass): "Auto-label now" opens an in-page
     # confirm dialog before it actually starts the run.
     confirm_btn = page.get_by_role("button", name="Start")
     confirm_btn.first.wait_for(timeout=5000)
@@ -167,6 +155,8 @@ def test_assist_scope(stub, page, app_url):
     qs = query_of(starts1[0])
     assert "class_id" not in qs, qs
     assert "prompt_pack" not in qs, qs
+    # Clustering is its own run now: none of its retired knobs ride on the start.
+    assert not any(p in qs for p in ["train_clusters", "recluster_unvalidated", "n_clusters"]), qs
 
     # ================================================================
     # Pass 2 — backend advertises the prompt_pack axis.
@@ -203,7 +193,7 @@ def test_assist_scope(stub, page, app_url):
     if collapse_btn.count() > 0:
         collapse_btn.first.click()
 
-    scoped_btn = page.get_by_role("button", name=re.compile(r"^Recluster · VLM: pallets$"))
+    scoped_btn = page.get_by_role("button", name=re.compile(r"^Auto-label · VLM: pallets$"))
     expect(scoped_btn.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_text(re.compile(r"^assist:\s*pallets")).first).to_be_visible(
         timeout=ACTION_TIMEOUT_MS
@@ -223,7 +213,7 @@ def test_assist_scope(stub, page, app_url):
     assert "class_id=1" in qs, qs
     assert "prompt_pack=warehouse_v1" in qs, qs
     assert all(
-        p in qs for p in ["train_clusters", "vlm_concurrency", "max_vlm_crops", "recluster_unvalidated"]
+        p in qs for p in ["vlm_concurrency", "max_vlm_crops", "run_vlm=true"]
     ), qs
 
     # Re-expand, reset — chip and button return to the unscoped defaults.

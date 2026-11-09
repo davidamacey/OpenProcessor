@@ -9,6 +9,7 @@ without ever throwing a page error — resolveStatsUpdate
 
 from __future__ import annotations
 
+from fixtures.contract import auto_label_job
 from harness.constants import ACTION_TIMEOUT_MS
 
 from playwright.sync_api import expect
@@ -19,20 +20,7 @@ CLASSES = [
     {"class_id": 1, "class_name": "ducati", "kind": "item", "group": "moto", "hotkey_letter": "k", "sample_count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
-IDLE_JOB = {
-    "job_id": "job-0",
-    "status": "idle",
-    "stage": "",
-    "processed": 0,
-    "total": 0,
-    "started_at": 0,
-    "finished_at": 0,
-    "error": None,
-    "result": {},
-    "args": {},
-    "eta_seconds": None,
-    "elapsed_seconds": 0,
-}
+IDLE_JOB = auto_label_job()
 
 
 def test_dashboard_stats_unavailable(stub, page, app_url):

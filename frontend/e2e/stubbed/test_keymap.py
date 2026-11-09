@@ -25,8 +25,8 @@ from playwright.sync_api import expect
 
 import copy
 import json
-import re
 
+from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
 
 CLASSES = [
@@ -376,27 +376,8 @@ CLUSTER_CLASSES = [
     {"id": 1, "name": "widget", "group": None, "hotkey_letter": None, "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
 ]
 
-CLUSTER_LIST = {
-    "items": [
-        {
-            "cluster_id": 1,
-            "cluster_kind": "class",
-            "size": 3,
-            "validated_count": 0,
-            "dominant_class_id": 1,
-            "dominant_class_name": "widget",
-            "purity": 1.0,
-            "is_unlabeled": False,
-            "representatives": [{"crop_id": "crop-0"}],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0001"
+CLUSTER_LIST = cluster_list(cluster_card(CLUSTER_UID, size=3, dominant_class_name="widget"))
 
 
 def cluster_crop(i: int) -> dict:
@@ -405,7 +386,7 @@ def cluster_crop(i: int) -> dict:
         image_id=f"cimg-{i}",
         class_id=1,
         class_name="widget",
-        cluster_id=1,
+        cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         label_source="model_suggestion",
         thumbnail_url=f"/curation/crops/ccrop-{i}/thumbnail",
@@ -516,7 +497,7 @@ def test_keymap_per_context_override(stub, page, app_url):
     stub.on("POST", r"/crops/([^/]+)/discard$", discard_handler)
     stub.on("POST", r"/crops/discard_batch$", lambda req, m: (200, {"items": [], "discarded": 0, "conflicts": [], "not_found": []}))
 
-    page.goto(f"{app_url}/clusters/1", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/clusters/{CLUSTER_UID}", wait_until="domcontentloaded")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.locator("img").nth(1).click()
     expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)

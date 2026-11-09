@@ -16,6 +16,7 @@ from harness.waits import wait_for_paint
 
 import re
 
+from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
 from playwright.sync_api import expect
 
@@ -23,7 +24,7 @@ ROUTES = [
     "/",
     "/p/default/dashboard",
     "/p/default/clusters",
-    "/p/default/clusters/1",
+    "/p/default/clusters/cl-fixture-0001",
     "/p/default/review",
     "/p/default/classes",
     "/p/default/export",
@@ -67,34 +68,15 @@ def crop(i: int) -> dict:
         class_name="ducati",
         class_source="model",
         confidence=0.9,
-        cluster_id=1,
+        cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         label_source="model_suggestion",
         thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
     )
 
 
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": 1,
-            "cluster_kind": "class",
-            "size": 3,
-            "validated_count": 0,
-            "dominant_class_id": 1,
-            "dominant_class_name": "ducati",
-            "purity": 1.0,
-            "is_unlabeled": False,
-            "representatives": [{"crop_id": "crop-0"}],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0001"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=3, dominant_class_name="ducati"))
 
 
 def register_base(stub, *, fail_put_label: bool = False) -> None:
@@ -179,7 +161,7 @@ def test_labeling_flow(stub, page, app_url):
     register_base(stub)
 
     # ---- cluster detail page ------------------------------------
-    page.goto(f"{app_url}/p/default/clusters/1")
+    page.goto(f"{app_url}/p/default/clusters/cl-fixture-0001")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     # wait_for_selector("img") above already blocks until a real crop image
     # is in the DOM, which only happens inside the grid — no extra sleep

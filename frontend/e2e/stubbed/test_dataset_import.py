@@ -28,6 +28,7 @@ from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
 from playwright.sync_api import expect
 
+from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
 from test_ingest import _base_ingest_stubs
 
@@ -305,10 +306,10 @@ def completed_job() -> dict[str, Any]:
     j["report"] = {**j["report"], "images_created": 96, "items_created": 285, "labels_written": 285}
     j["next_steps"] = [
         {
-            "action": "Cluster the region boxes",
+            "action": "cluster_regions",
             "method": "POST",
-            "path": "/regions/cluster",
-            "reason": "Group the imported region boxes for review.",
+            "path": "/clusters/runs",
+            "reason": 'Group the imported region boxes with their visual neighbours (body {"target": "region_box"}).',
         }
     ]
     return j
@@ -450,31 +451,14 @@ def test_failed_job_shows_its_served_error(stub, page, app_url):
     )
 
 
+CLUSTER_UID = "cl-fixture-0002"
+
+
 def serve_cluster(stub: Any) -> None:
     stub.on(
         "GET",
         r"/clusters(\?|$)",
-        {
-            "items": [
-                {
-                    "cluster_id": 2,
-                    "cluster_kind": "class",
-                    "size": 3,
-                    "validated_count": 0,
-                    "dominant_class_id": 2,
-                    "dominant_class_name": "widget",
-                    "purity": 1.0,
-                    "is_unlabeled": False,
-                    "representatives": [{"crop_id": "crop-0"}],
-                    "n_subclusters": 0,
-                    "updated_at": None,
-                }
-            ],
-            "total": 1,
-            "total_class_clusters": 1,
-            "total_candidate_clusters": 0,
-            "cluster_id_offset": 10000,
-        },
+        cluster_list(cluster_card(CLUSTER_UID, size=3, dominant_class_name="widget")),
     )
     crops = [
         make_item(
@@ -482,7 +466,7 @@ def serve_cluster(stub: Any) -> None:
             image_id=f"img-{i}",
             class_id=2,
             class_name="widget",
-            cluster_id=2,
+            cluster=item_cluster(CLUSTER_UID),
             label_validated=False,
             label_source="model_suggestion",
             thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
@@ -522,7 +506,7 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
 
     stub.on("POST", r"/reprocess$", reprocess_handler)
 
-    page.goto(f"{app_url}/p/default/clusters/2")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.locator("img").nth(1).click()
     expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -569,7 +553,7 @@ def test_feature_absent_when_formats_404(stub, page, app_url):
     expect(page.get_by_test_id("import-path")).to_have_count(0)
 
     with page.expect_response(lambda r: r.url.endswith("/datasets/formats")):
-        page.goto(f"{app_url}/p/default/clusters/2")
+        page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     page.locator("img").nth(1).click()
     expect(page.get_by_text("1 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)

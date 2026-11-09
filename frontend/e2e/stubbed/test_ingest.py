@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from fixtures.contract import auto_label_job
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
 from playwright.sync_api import expect
@@ -20,16 +21,7 @@ from fixtures.multipart import parse_multipart
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ingest" / "batch1"
 
-IDLE_JOB = {
-    "job_id": "job-0",
-    "status": "idle",
-    "stage": "",
-    "processed": 0,
-    "total": 0,
-    "started_at": 0,
-    "finished_at": 0,
-    "error": None,
-}
+IDLE_JOB = auto_label_job()
 
 
 BULK_CONFIG = {
@@ -263,15 +255,15 @@ def test_drain_gate(stub, page, app_url):
     stub.on("POST", r"/ingest/path_lookup", {"known_paths": {}})
 
     start_calls = []
-    stub.on("POST", r"/pipeline/auto_label/start", lambda *_: start_calls.append(1) or IDLE_JOB)
+    stub.on("POST", r"/pipeline/auto_label/start", lambda *_: start_calls.append(1) or (202, auto_label_job("queued")))
 
     page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector("text=4")
 
-    recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
-    recluster_btn.wait_for()
-    assert recluster_btn.is_disabled()
+    auto_label_btn = page.get_by_role("button", name="Auto-label now", exact=True)
+    auto_label_btn.wait_for()
+    assert auto_label_btn.is_disabled()
 
     # BA-3: total_unfinished reaching 0 is not enough on its own — the
     # gate reads the server's own `drained` verdict. Flip the drain stub
@@ -291,9 +283,9 @@ def test_drain_gate(stub, page, app_url):
     )
     page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
-    recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
-    recluster_btn.wait_for()
-    assert recluster_btn.is_disabled()
+    auto_label_btn = page.get_by_role("button", name="Auto-label now", exact=True)
+    auto_label_btn.wait_for()
+    assert auto_label_btn.is_disabled()
     assert "waiting for the served stability verdict" in page.locator("body").inner_text()
 
     # Now the server actually confirms drained=True — the gate lifts.
@@ -312,9 +304,9 @@ def test_drain_gate(stub, page, app_url):
     page.goto(f"{app_url}/p/default/ingest")
     page.wait_for_selector('h1:has-text("Ingest")')
 
-    recluster_btn = page.get_by_role("button", name="Recluster now", exact=True)
-    expect(recluster_btn).to_be_enabled()
-    recluster_btn.click()
+    auto_label_btn = page.get_by_role("button", name="Auto-label now", exact=True)
+    expect(auto_label_btn).to_be_enabled()
+    auto_label_btn.click()
     with expect_handled(
         page,
         lambda r: r.method == "POST" and "/pipeline/auto_label/start" in r.url,

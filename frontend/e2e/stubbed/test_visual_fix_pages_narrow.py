@@ -9,48 +9,22 @@ from __future__ import annotations
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
 
+from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
 from fixtures.wire import REGION_CLASS, make_box, make_item
 
 NARROW = {"width": 800, "height": 1000}
 
-CLUSTER_ID = 64
+CLASS_ID = 64
 
 CLASSES = [
-    {"class_id": CLUSTER_ID, "class_name": "class_b", "kind": "item", "group": "moto", "hotkey_letter": None,
+    {"class_id": CLASS_ID, "class_name": "class_b", "kind": "item", "group": "moto", "hotkey_letter": None,
      "sample_count": 641, "validated_count": 0, "cluster_size": 616, "deprecated": False},
     {"class_id": 80, "class_name": REGION_CLASS, "kind": "region", "group": "widgets", "hotkey_letter": None,
      "sample_count": 40, "validated_count": 0, "cluster_size": 44, "deprecated": False},
 ]
 
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": CLUSTER_ID,
-            "cluster_kind": "class",
-            "size": 616,
-            "validated_count": 0,
-            "labelled_count": 616,
-            "dominant_class_id": CLUSTER_ID,
-            "dominant_class_name": "class_b",
-            "dominant_count": 616,
-            "purity": 0.03,
-            "purity_n": 616,
-            "purity_basis": "nearest_centroid",
-            "purity_tier": "noisy",
-            "label_agreement": 1.0,
-            "labelled_share": 1.0,
-            "promotable": False,
-            "is_unlabeled": False,
-            "representatives": [],
-            "n_subclusters": 0,
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 1,
-    "total_candidate_clusters": 0,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-fixture-0064"
+CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=616, dominant_class_name="class_b"))
 
 CLASS_SOURCES = {
     "class_sources": [
@@ -63,13 +37,13 @@ def _crop(i: int) -> dict:
     return make_item(
         crop_id=f"crop-{i}",
         image_id=f"img-{i}",
-        class_id=CLUSTER_ID,
+        class_id=CLASS_ID,
         class_name="class_b",
         class_source="vlm",
         label_source="vlm",
         label_validated=False,
         class_validated=False,
-        cluster_id=CLUSTER_ID,
+        cluster=item_cluster(CLUSTER_UID),
         thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
     )
 
@@ -90,7 +64,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
     stub.on("GET", r"/crops(\?|$)",
             {"total": 6, "page": 1, "page_size": 60, "crops": [_crop(i) for i in range(6)]})
 
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     name = page.locator('[data-testid="class-name"]').first
     name.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)  # layout settle for the following overflow/bbox check
@@ -235,29 +209,24 @@ DASHBOARD_STATS = {
                  "noise_count": 0, "method": None},
 }
 
-COMPLETED_JOB = {
-    "job_id": "job-1",
-    "status": "completed",
-    "stage": "finalize",
-    "processed": 0,
-    "total": 0,
-    "started_at": 1,
-    "finished_at": 2,
-    "error": None,
-    "result": {
+COMPLETED_JOB = auto_label_job(
+    "completed",
+    job_id="job-1",
+    stage="finalize",
+    started_at=1,
+    finished_at=2,
+    elapsed_seconds=1,
+    result={
         "stages": {
-            "cluster_residuals": {"status": "success", "method": "ivf", "n_clusters": 1},
-            "auto_promote": {"skipped": True, "reason": "disabled by default"},
+            "vlm": {"skipped": True, "reason": "disabled by default"},
+            "finalize": {"status": "success"},
         }
     },
-    "args": {},
-    "eta_seconds": None,
-    "elapsed_seconds": 1,
-}
+)
 
 
-def test_dashboard_recluster_card_stacks_at_800(stub, page, app_url):
-    """D3: at 800px the recluster description was squeezed into a ~60px
+def test_dashboard_auto_label_card_stacks_at_800(stub, page, app_url):
+    """D3: at 800px the auto-label description was squeezed into a ~60px
     column (one word per line). D5: the last-run summary is a stage table,
     not a JSON dump."""
     page.set_viewport_size(NARROW)
@@ -278,7 +247,7 @@ def test_dashboard_recluster_card_stacks_at_800(stub, page, app_url):
         "el => el.getBoundingClientRect().width"
         " / el.closest('section').getBoundingClientRect().width"
     )
-    assert ratio >= 0.9, f"recluster description squeezed to {ratio:.0%} of its card at 800px"
+    assert ratio >= 0.9, f"auto-label description squeezed to {ratio:.0%} of its card at 800px"
 
     page.get_by_text("Last run summary").click()
     table = page.locator('[data-testid="last-run-stages"]')

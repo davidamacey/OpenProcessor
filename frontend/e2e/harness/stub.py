@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 import pytest
 
+from fixtures.contract import cluster_facets, embedding_spaces, fill
 from fixtures.wire import (
     REGION_PROFILE,
     REGION_TAB_LABEL,
@@ -123,8 +124,12 @@ class Stub:
         self.on("GET", r"/assist/runs(\?|$)", {"runs": []})
         # The clusters page probes the auto-label loop panel on every visit.
         self.on("GET", r"/assist/loops(\?|$)", {"loops": []})
+        # The dashboard and /ingest cluster-run panel list the serving partition;
+        # the search box lists the project's ready embedding spaces (one: no picker).
+        self.on("GET", r"/clusters/partitions(\?|$)", fill("ClusterPartitionList", partitions=[]))
+        self.on("GET", r"/embedding/spaces(\?|$)", embedding_spaces())
         # ...and reads its facet counts; a test that checks chips overrides this.
-        self.on("GET", r"/clusters/(\d+)/facets$", self._empty_facets)
+        self.on("GET", r"/clusters/([^/]+)/facets$", self._empty_facets)
         # S1 fix (visual audit 2026-09-24): `/review` now reads the
         # deployment's pinned curation defaults (`curationSettingsStore`)
         # so StrategyBar can flag a zero-coverage pinned sort — fired on
@@ -342,19 +347,7 @@ class Stub:
 
     @staticmethod
     def _empty_facets(_request: Any, match: "re.Match[str]") -> HandlerResult:
-        return (
-            200,
-            {
-                "cluster_id": int(match.group(1)),
-                "total": 0,
-                "detector_classes": [],
-                "class_sources": [],
-                "validation": {"validated": 0, "unvalidated": 0},
-                "review_tabs": {},
-                "detector_confidence": [],
-                "detector_confidence_missing": 0,
-            },
-        )
+        return (200, cluster_facets(match.group(1)))
 
     @staticmethod
     def _context(_request: Any, _match: "re.Match[str]") -> HandlerResult:

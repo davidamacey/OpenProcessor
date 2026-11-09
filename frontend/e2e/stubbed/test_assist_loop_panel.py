@@ -9,7 +9,7 @@ from playwright.sync_api import expect
 from test_cluster_discard import CLASSES, CLUSTERS, crop
 
 REQUEST = {
-    "scope": {"cluster_ids": None, "min_root_size": 40},
+    "scope": {"cluster_uids": None, "min_root_size": 40},
     "vlm": None,
     "prompt_pack": None,
     "acknowledge_external": False,
@@ -26,6 +26,7 @@ REQUEST = {
         "floor": 0.85,
         "on_fail": "pause",
     },
+    "on_budget": "pause",
     "vlm_concurrency": 16,
     "node_concurrency": 8,
     "dry_run": False,
@@ -50,9 +51,24 @@ POOL = {
 }
 
 
+def loop_control(status: str) -> dict:
+    """The served control block: what the buttons offer is decided by the server."""
+    live = status in {"queued", "running"}
+    return {
+        "state": status,
+        "can_pause": live,
+        "can_resume": status == "paused",
+        "can_cancel": live or status in {"paused", "pausing"},
+        "can_edit_budget": live or status == "paused",
+        "can_rollback": status in {"completed", "completed_with_errors", "cancelled"},
+        "resume_blocked_reason": None,
+    }
+
+
 def loop_state(status: str, *, dry_run: bool = False) -> dict:
     started = not dry_run
     return {
+        "control": loop_control(status) if started else None,
         "loop_id": "loop_abc123" if started else None,
         "status": status,
         "stop_reason": None,
@@ -111,7 +127,7 @@ def loop_state(status: str, *, dry_run: bool = False) -> dict:
 
 
 NODE = {
-    "path": "r10001",
+    "path": "r1",
     "level": 0,
     "parent": None,
     "n": 300,
@@ -139,7 +155,7 @@ def serve_loop(stub, status: str) -> None:
     stub.on("GET", r"/assist/loops(\?|$)", {"loops": [loop_state(status)]})
     stub.on("GET", r"/assist/loops/loop_abc123$", loop_state(status))
     stub.on("GET", r"/assist/loops/loop_abc123/nodes(\?|$)", {"nodes": [NODE], "next_after": None})
-    stub.on("GET", r"/assist/loops/loop_abc123/nodes/r10001/members(\?|$)", {"crop_ids": ["c1", "c2"], "next_after": None})
+    stub.on("GET", r"/assist/loops/loop_abc123/nodes/r1/members(\?|$)", {"crop_ids": ["c1", "c2"], "next_after": None})
     stub.on("GET", r"/crops/[^/]+/thumbnail", (200, b"", "image/png"))
 
 
@@ -183,3 +199,25 @@ def test_finished_loop_shows_totals_and_node_members(stub, page, app_url):
     show_finished_loop(page)
     expect(page.get_by_test_id("loop-propagated")).to_contain_text("2,100")
     expect(page.get_by_test_id("loop-members-count")).to_contain_text("2 member ids loaded")
+
+
+def test_running_loop_offers_what_the_served_control_block_allows(stub, page, app_url):
+    serve_loop(stub, "running")
+    pause_calls: list[str] = []
+
+    def pause(_request, match):
+        pause_calls.append(match.string)
+        return loop_state("running")
+
+    stub.on("POST", r"/assist/loops/loop_abc123/pause$", pause)
+    page.goto(f"{app_url}/p/default/clusters")
+    open_panel(page)
+    expect(page.get_by_test_id("loop-pause")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("loop-cancel")).to_be_visible()
+    expect(page.get_by_test_id("loop-resume")).to_have_count(0)
+    expect(page.get_by_test_id("loop-rollback")).to_have_count(0)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith("/pause"), timeout=ACTION_TIMEOUT_MS
+    ):
+        page.get_by_test_id("loop-pause").click()
+    assert len(pause_calls) == 1
