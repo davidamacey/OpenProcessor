@@ -11,10 +11,8 @@ def _flags(**over: object) -> list[str]:
     base: dict[str, object] = {
         'size': 50,
         'detector_top_share': 1.0,
-        'purity_tier': 'pure',
         'label_agreement': 1.0,
         'labelled_count': 50,
-        'promotable': False,
         'needs_review_count': 0,
         'validation_state': 'complete',
     }
@@ -53,11 +51,6 @@ def test_mixed_detector_classes_boundaries(share: float | None, size: int, flagg
     assert ('mixed_detector_classes' in _flags(detector_top_share=share, size=size)) is flagged
 
 
-@pytest.mark.parametrize(('tier', 'flagged'), [('noisy', True), ('mixed', False), (None, False)])
-def test_low_geometry_purity_is_the_noisy_tier(tier: str | None, flagged: bool) -> None:
-    assert ('low_geometry_purity' in _flags(purity_tier=tier)) is flagged
-
-
 @pytest.mark.parametrize(
     ('agreement', 'labelled', 'flagged'),
     [
@@ -74,8 +67,7 @@ def test_label_disagreement_boundaries(
     assert ('label_disagreement' in got) is flagged
 
 
-def test_promotable_needs_review_and_unvalidated_flags() -> None:
-    assert _flags(promotable=True) == ['promotable']
+def test_needs_review_and_unvalidated_flags() -> None:
     assert _flags(needs_review_count=1) == ['needs_review']
     assert _flags(needs_review_count=0) == []
     assert _flags(validation_state='none') == ['unvalidated']
@@ -85,14 +77,12 @@ def test_promotable_needs_review_and_unvalidated_flags() -> None:
 def test_flags_come_out_in_vocabulary_order() -> None:
     got = _flags(
         detector_top_share=0.1,
-        purity_tier='noisy',
         label_agreement=0.1,
-        promotable=True,
         needs_review_count=3,
         validation_state='none',
     )
     assert got == [f['id'] for f in cf.FLAG_VOCABULARY]
-    assert len(got) == 6
+    assert len(got) == 4
 
 
 def test_vocabulary_entries_are_complete_and_unique() -> None:

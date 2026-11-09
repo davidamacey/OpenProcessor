@@ -10,39 +10,26 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
 from curation import query_fakes
-from curation._cluster_cards_helpers import bucket, cards_by_id, list_cards, os_returning
+from curation._cluster_cards_helpers import bucket, cards_by_id, list_cards, os_returning, uid
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.schemas.curation.clusters import ClusterCard, ClusterListResponse
 from src.services.curation import cluster_cards as cc, review_tab_clauses
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.review_request import ReviewFilters, build_review_request
 
 
-CAND = RESIDUAL_CLUSTER_ID_OFFSET
-
-
 def _card(cid: int, **over: Any) -> ClusterCard:
     base: dict[str, Any] = {
-        'cluster_id': cid,
-        'cluster_kind': 'class',
+        'cluster_uid': uid(cid),
         'size': 10,
         'validated_count': 0,
         'labelled_count': 10,
         'dominant_count': 10,
-        'purity_n': 0,
-        'purity_basis': 'nearest_centroid',
-        'promotable': False,
         'is_unlabeled': False,
-        'n_subclusters': 0,
-        'subcluster_ids': [],
         'representatives': [],
         'validation_state': 'none',
-        'dominant_class_id': None,
         'dominant_class_name': None,
-        'purity': None,
-        'purity_tier': None,
         'label_agreement': None,
         'labelled_share': None,
         'updated_at': None,
@@ -65,7 +52,6 @@ def _fixture() -> list[ClusterCard]:
             validated_count=100,
             validation_state='complete',
             label_agreement=0.95,
-            purity=0.9,
             detector_conf_mean=0.9,
             updated_at='2026-01-01T00:00:00.000Z',
             dominant_class_name='car',
@@ -78,7 +64,6 @@ def _fixture() -> list[ClusterCard]:
             validated_count=10,
             validation_state='partial',
             label_agreement=0.5,
-            purity=0.4,
             detector_conf_mean=0.3,
             needs_review_count=20,
             updated_at='2026-03-01T00:00:00.000Z',
@@ -89,7 +74,6 @@ def _fixture() -> list[ClusterCard]:
         ),
         _card(
             3,
-            cluster_kind='candidate',
             size=50,
             needs_review_count=20,
             dominant_class_name=None,
@@ -101,7 +85,6 @@ def _fixture() -> list[ClusterCard]:
             validated_count=5,
             validation_state='partial',
             label_agreement=0.7,
-            purity=0.7,
             detector_conf_mean=0.6,
             needs_review_count=5,
             updated_at='2026-02-01T00:00:00.000Z',
@@ -114,18 +97,16 @@ def _fixture() -> list[ClusterCard]:
 
 
 def _ids(cards: list[ClusterCard]) -> list[int]:
-    return [c['cluster_id'] for c in cards]
+    return [int(c['cluster_uid'][-12:]) for c in cards]
 
 
 @pytest.mark.parametrize(
     ('sort', 'expected'),
     [
-        ('needs_review_desc', [2, 3, 4, 1]),  # 2 and 3 tie: by cluster_id
+        ('needs_review_desc', [2, 3, 4, 1]),  # 2 and 3 tie: by cluster_uid
         ('size_desc', [1, 2, 3, 4]),
         ('size_asc', [4, 2, 3, 1]),
         ('label_agreement_asc', [2, 4, 1, 3]),  # unmeasured last
-        ('purity_asc', [2, 4, 1, 3]),
-        ('purity_desc', [1, 4, 2, 3]),
         ('detector_conf_asc', [2, 4, 1, 3]),
         ('unvalidated_desc', [3, 2, 4, 1]),  # size minus validated: 50, 40, 5, 0
         ('updated_desc', [2, 4, 1, 3]),
@@ -135,7 +116,7 @@ def _ids(cards: list[ClusterCard]) -> list[int]:
 def test_each_sort_orders_the_fixture(sort: str, expected: list[int]) -> None:
     cards = _fixture()
     assert _ids(cc.sort_cards(cards, sort)) == expected  # type: ignore[arg-type]
-    # Input order never changes the result: ties break on cluster_id.
+    # Input order never changes the result: ties break on cluster_uid.
     assert _ids(cc.sort_cards(list(reversed(cards)), sort)) == expected  # type: ignore[arg-type]
 
 
@@ -180,13 +161,13 @@ async def test_filters_and_sort_apply_before_representatives_paging() -> None:
     resp = await list_cards(
         client, per_cluster=2, validation_state='none', sort='size_asc', offset=1, limit=1
     )
-    assert [c['cluster_id'] for c in resp['items']] == [3, 2]
+    assert _ids(resp['items']) == [3, 2]
     assert resp['total'] == 2
     assert resp['sort'] == 'size_asc'
     # The page [1, 2) of the SERVED order is cluster 2 alone.
     lines = client.msearch.await_args.kwargs['body']
     assert len(lines) == 2
-    assert [c['cluster_id'] for c in resp['items'] if c['representatives']] == [2]
+    assert _ids([c for c in resp['items'] if c['representatives']]) == [2]
 
 
 def _msearch_recorder() -> Any:
@@ -226,7 +207,6 @@ async def test_response_validates_and_serves_vocabularies() -> None:
     assert resp['sort'] == 'size_desc'
     assert [o['id'] for o in resp['sort_options']] == [o[0] for o in cc.SORT_OPTIONS]
     assert {f['id'] for f in resp['flag_vocabulary']} >= {
-        'promotable',
         'needs_review',
         'unvalidated',
     }
@@ -245,7 +225,7 @@ async def test_new_fields_come_from_the_aggregation() -> None:
             review={'all': 7, 'outliers': 2},
         )
     )
-    card = cards[3]
+    card = cards[uid(3)]
     assert card['detector_top_class'] == 'car'
     assert card['detector_top_share'] == pytest.approx(0.75)
     assert card['detector_conf_mean'] == 0.75
@@ -256,11 +236,12 @@ async def test_new_fields_come_from_the_aggregation() -> None:
     assert card['needs_review_count'] == 7
     assert 'needs_review' in card['flags']
     assert 'label_purity' not in card
+    assert card['cluster_uid'] == uid(3)
 
 
 @pytest.mark.asyncio
 async def test_a_cluster_without_detector_classes_has_none_not_zero() -> None:
-    card = (await cards_by_id(bucket(3, 40)))[3]
+    card = (await cards_by_id(bucket(3, 40)))[uid(3)]
     assert card['detector_top_class'] is None
     assert card['detector_top_share'] is None
     assert card['detector_conf_mean'] is None
@@ -293,10 +274,10 @@ def _disagrees(doc: dict[str, Any]) -> bool:
     return bool(detector) and bool(current) and detector != current
 
 
-def _item(crop_id: str, cluster_id: int, **kw: Any) -> dict[str, Any]:
+def _item(crop_id: str, cluster: int, **kw: Any) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
-        'cluster_id': cluster_id,
+        'cluster_uid': uid(cluster),
         'class_id': 1,
         'class_name': 'widget',
         'class_source': 'vlm',
@@ -358,48 +339,56 @@ async def test_review_counts_equal_what_the_review_query_matches(
     client: TestClient, fake: QueryFakeOpenSearch
 ) -> None:
     body = client.get(f'{URL}/clusters', params={'per_cluster': 0}).json()
-    cards = {c['cluster_id']: c for c in body['items']}
-    assert set(cards) == {1, 2}
-    for cluster_id, card in cards.items():
+    cards = {c['cluster_uid']: c for c in body['items']}
+    assert set(cards) == {uid(1), uid(2)}
+    for cluster_uid, card in cards.items():
         for tab in cc.CLUSTER_REVIEW_TABS:
-            request = await build_review_request(
-                tab, ReviewFilters(item=ItemFilter(cluster_id=cluster_id)), None, fake
-            )
-            matched = (await fake.count(index=ITEMS, body={'query': request.query}))['count']
-            assert card['review_counts'][tab] == matched, (cluster_id, tab)
+            request = await build_review_request(tab, ReviewFilters(item=ItemFilter()), None, fake)
+            in_cluster = {
+                'bool': {'filter': [request.query, {'term': {'cluster_uid': cluster_uid}}]}
+            }
+            matched = (await fake.count(index=ITEMS, body={'query': in_cluster}))['count']
+            assert card['review_counts'][tab] == matched, (cluster_uid, tab)
     # The route itself, across both clusters.
     for tab in cc.CLUSTER_REVIEW_TABS:
         served = client.get(f'{URL}/review/{tab}', params={'page_size': 100}).json()
         assert served['total'] == sum(c['review_counts'][tab] for c in cards.values()), tab
     # a1 (low VLM confidence), a3 (outlier) and a4 (unmatched) are in the queue; a2 only
     # disagrees with the detector (its own tab) and a5 is clean.
-    assert cards[1]['review_counts']['all'] == 3
-    assert cards[1]['needs_review_count'] == 3
-    assert cards[1]['review_counts']['detector_disagreements'] == 1
-    assert cards[2]['review_counts']['all'] == 1
+    one, two = cards[uid(1)], cards[uid(2)]
+    assert one['review_counts']['all'] == 3
+    assert one['needs_review_count'] == 3
+    assert one['review_counts']['detector_disagreements'] == 1
+    assert two['review_counts']['all'] == 1
 
 
 def test_holdout_and_excluded_members_are_never_counted(client: TestClient) -> None:
     cards = {
-        c['cluster_id']: c
+        c['cluster_uid']: c
         for c in client.get(f'{URL}/clusters', params={'per_cluster': 0}).json()['items']
     }
     # a1..a9: holdout (a7) and excluded (a8) are out of the size too.
-    assert cards[1]['size'] == 7
+    assert cards[uid(1)]['size'] == 7
 
 
 def test_the_route_serves_filtered_sorted_cards(client: TestClient) -> None:
     body = client.get(
         f'{URL}/clusters', params={'per_cluster': 0, 'sort': 'size_asc', 'min_size': 1}
     ).json()
-    assert [c['cluster_id'] for c in body['items']] == [2, 1]
+    assert _ids(body['items']) == [2, 1]
     only = client.get(f'{URL}/clusters', params={'per_cluster': 0, 'needs_review': 'false'}).json()
     assert only['items'] == []
     flagged = client.get(
-        f'{URL}/clusters', params={'per_cluster': 0, 'flag': ['needs_review', 'promotable']}
+        f'{URL}/clusters', params={'per_cluster': 0, 'flag': ['needs_review', 'unvalidated']}
     ).json()
-    assert [c['cluster_id'] for c in flagged['items']] == [1, 2]
+    assert _ids(flagged['items']) == [1, 2]
     bad = client.get(f'{URL}/clusters', params={'sort': 'nonsense'})
     assert bad.status_code == 422
     bad_state = client.get(f'{URL}/clusters', params={'validation_state': 'most'})
     assert bad_state.status_code == 422
+
+
+def test_one_card_by_cluster_uid_and_a_malformed_uid_is_refused(client: TestClient) -> None:
+    one = client.get(f'{URL}/clusters', params={'per_cluster': 0, 'cluster_uid': uid(2)}).json()
+    assert [c['cluster_uid'] for c in one['items']] == [uid(2)]
+    assert client.get(f'{URL}/clusters', params={'cluster_uid': '7'}).status_code == 422

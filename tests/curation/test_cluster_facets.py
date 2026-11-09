@@ -1,4 +1,4 @@
-"""``GET {P}/clusters/{cluster_id}/facets``: every count is what the matching filtered
+"""``GET {P}/clusters/{cluster_uid}/facets``: every count is what the matching filtered
 ``GET /crops`` returns."""
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import pytest
 from pydantic import TypeAdapter
 
 from curation import query_fakes
-from curation._cluster_cards_helpers import curation_client
+from curation._cluster_cards_helpers import curation_client, uid
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.schemas.curation.clusters import ClusterFacets
@@ -29,10 +29,10 @@ def _disagrees(doc: dict[str, Any]) -> bool:
     return bool(detector) and bool(current) and detector != current
 
 
-def _item(crop_id: str, cluster_id: int = 1, **kw: Any) -> dict[str, Any]:
+def _item(crop_id: str, cluster: int = 1, **kw: Any) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
-        'cluster_id': cluster_id,
+        'cluster_uid': uid(cluster),
         'class_id': 1,
         'class_name': 'car',
         'class_source': 'vlm',
@@ -56,7 +56,7 @@ def _docs() -> list[dict[str, Any]]:
         _item('a08', class_name=None, class_id=None, class_source='vlm_unmatched'),
         _item('hold', test_holdout=True, detector_class_name='holdout_only'),
         _item('excl', class_excluded=True, detector_class_name='excluded_only'),
-        _item('other', cluster_id=2, detector_class_name='other_cluster_only'),
+        _item('other', cluster=2, detector_class_name='other_cluster_only'),
     ]
 
 
@@ -73,14 +73,14 @@ def client(fake: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch) -> TestCl
     return curation_client(fake, monkeypatch)
 
 
-def _facets(client: TestClient, cluster_id: int = 1) -> dict[str, Any]:
-    resp = client.get(f'{URL}/clusters/{cluster_id}/facets')
+def _facets(client: TestClient, cluster: int = 1) -> dict[str, Any]:
+    resp = client.get(f'{URL}/clusters/{uid(cluster)}/facets')
     assert resp.status_code == 200, resp.text
     return resp.json()
 
 
 def _crops_total(client: TestClient, **params: Any) -> int:
-    resp = client.get(f'{URL}/crops', params={'cluster_id': 1, 'page_size': 1, **params})
+    resp = client.get(f'{URL}/crops', params={'cluster_uid': uid(1), 'page_size': 1, **params})
     assert resp.status_code == 200, resp.text
     return resp.json()['total']
 
@@ -88,7 +88,7 @@ def _crops_total(client: TestClient, **params: Any) -> int:
 def test_the_response_has_the_documented_shape(client: TestClient) -> None:
     body = _facets(client)
     TypeAdapter(ClusterFacets).validate_python(body, strict=True)
-    assert body['cluster_id'] == 1
+    assert body['cluster_uid'] == uid(1)
     # holdout and excluded members are not members for a reviewer
     assert body['total'] == 8
     assert _crops_total(client) == body['total']
@@ -169,3 +169,7 @@ def test_an_unknown_cluster_has_empty_facets(client: TestClient) -> None:
     assert body['detector_classes'] == []
     assert all(b['count'] == 0 for b in body['detector_confidence'])
     assert body['validation'] == {'validated': 0, 'unvalidated': 0}
+
+
+def test_a_malformed_cluster_uid_is_refused(client: TestClient) -> None:
+    assert client.get(f'{URL}/clusters/1/facets').status_code == 422

@@ -11,17 +11,16 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from curation._cluster_cards_helpers import list_cards
+from curation._cluster_cards_helpers import list_cards, uid
 
 
 def _bucket(cid: int, size: int = 5) -> dict[str, Any]:
     return {
-        'key': cid,
+        'key': uid(cid),
         'doc_count': size,
         'top_class': {'buckets': [{'key': 'van', 'doc_count': size}]},
         'labelled': {'doc_count': size},
         'validated': {'doc_count': 0},
-        'subclusters': {'value': 0},
         'latest_update': {},
     }
 
@@ -46,8 +45,6 @@ async def _call(
         os_client,
         per_cluster=per_cluster,
         max_clusters=100,
-        kind='all',
-        cluster_id=None,
         offset=offset,
         limit=limit,
     )
@@ -85,12 +82,12 @@ async def test_msearch_only_issued_for_requested_page() -> None:
 
     # Cards outside [offset, offset+limit) keep empty representatives;
     # only the page's cards got filled.
-    by_id = {c['cluster_id']: c for c in resp['items']}
-    assert by_id[1]['representatives'] == []
-    assert by_id[2]['representatives'] != []
-    assert by_id[3]['representatives'] != []
-    assert by_id[4]['representatives'] == []
-    assert by_id[5]['representatives'] == []
+    by_id = {c['cluster_uid']: c for c in resp['items']}
+    assert by_id[uid(1)]['representatives'] == []
+    assert by_id[uid(2)]['representatives'] != []
+    assert by_id[uid(3)]['representatives'] != []
+    assert by_id[uid(4)]['representatives'] == []
+    assert by_id[uid(5)]['representatives'] == []
     assert resp['representatives_offset'] == 1
     assert resp['representatives_limit'] == 2
 

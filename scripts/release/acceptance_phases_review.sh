@@ -61,33 +61,33 @@ check_cluster_list() {
 check_cluster_facets() {
     local cid facets v t want tab
     api GET "${PROJECT_API}/clusters?max_clusters=1000"; expect 200
-    cid="$(jqb '[.items[] | select(.size > 0)] | .[0].cluster_id // empty')"
+    cid="$(jqb '[.items[] | select(.size > 0)] | .[0].cluster_uid // empty')"
     [[ -n "$cid" ]] || return 0
     api GET "${PROJECT_API}/clusters/${cid}/facets"; expect 200
     facets="$(cat "$BODY")"
     fct() { jq -r "$1" <<< "$facets"; }
-    t="$(crops_total "cluster_id=${cid}")"
+    t="$(crops_total "cluster_uid=${cid}")"
     [[ "$(fct .total)" == "$t" ]] || fail "facets total $(fct .total) != /crops total ${t} (cluster ${cid})"
     for v in true false; do
         want="$(fct ".validation.$([[ "$v" == true ]] && echo validated || echo unvalidated)")"
-        t="$(crops_total "cluster_id=${cid}&label_validated=${v}")"
+        t="$(crops_total "cluster_uid=${cid}&label_validated=${v}")"
         [[ "$want" == "$t" ]] || fail "facets validation(${v}) ${want} != /crops total ${t}"
     done
     v="$(fct '.detector_classes[0].value // empty')"
     if [[ -n "$v" ]]; then
         want="$(fct '.detector_classes[0].count')"
-        t="$(crops_total "cluster_id=${cid}&detector_class_name=$(jq -rn --arg v "$v" '$v|@uri')")"
+        t="$(crops_total "cluster_uid=${cid}&detector_class_name=$(jq -rn --arg v "$v" '$v|@uri')")"
         [[ "$want" == "$t" ]] || fail "facets detector class '${v}' ${want} != /crops total ${t}"
     fi
     v="$(fct '.class_sources[0].value // empty')"
     if [[ -n "$v" ]]; then
         want="$(fct '.class_sources[0].count')"
-        t="$(crops_total "cluster_id=${cid}&class_source=$(jq -rn --arg v "$v" '$v|@uri')")"
+        t="$(crops_total "cluster_uid=${cid}&class_source=$(jq -rn --arg v "$v" '$v|@uri')")"
         [[ "$want" == "$t" ]] || fail "facets class source '${v}' ${want} != /crops total ${t}"
     fi
     for tab in $(fct '.review_tabs | keys[]'); do
         want="$(jq -r --arg t "$tab" '.review_tabs[$t]' <<< "$facets")"
-        t="$(crops_total "cluster_id=${cid}&review_tab=${tab}")"
+        t="$(crops_total "cluster_uid=${cid}&review_tab=${tab}")"
         [[ "$want" == "$t" ]] || fail "facets review tab '${tab}' ${want} != /crops total ${t}"
     done
     ev "cluster ${cid} facets equal the filtered /crops totals (total, validation, detector class, class source, review tabs)"

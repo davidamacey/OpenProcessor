@@ -9,8 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from curation import query_fakes
-from curation.cross_project_leak._constants import CLASS_NAMES, SCOPED, SLUGS
-from src.services.curation import cluster_cards, review_tab_clauses
+from curation.cross_project_leak._constants import CLASS_NAMES, SCOPED, SLUGS, cluster_uid
+from src.services.curation import review_tab_clauses
 
 
 if TYPE_CHECKING:
@@ -24,8 +24,6 @@ pytestmark = pytest.mark.db
 def _script_twins(monkeypatch: pytest.MonkeyPatch) -> None:
     # The fake cannot run painless: without a Python twin the whole aggregation is dropped.
     twins = query_fakes.SCRIPT_EVALUATORS
-    monkeypatch.setitem(twins, cluster_cards.MEASURED_SCRIPT, lambda _doc: False)
-    monkeypatch.setitem(twins, cluster_cards.FITS_SCRIPT, lambda _doc: False)
     monkeypatch.setitem(twins, review_tab_clauses.DETECTOR_DISAGREES_SCRIPT, lambda _doc: False)
 
 
@@ -63,11 +61,11 @@ def test_cluster_facets_serve_only_the_bound_projects_data(leak_env: LeakEnv, sl
     client = TestClient(leak_env.app, raise_server_exceptions=False)
     leak_env.accesses.clear()
 
-    resp = client.get(f'{SCOPED.format(project=slug)}/clusters/1/facets')
+    resp = client.get(f'{SCOPED.format(project=slug)}/clusters/{cluster_uid(slug)}/facets')
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body['total'] > 0, 'the seeded project has members in cluster 1'
+    assert body['total'] > 0, 'the seeded project has members in the seeded cluster'
     text = json.dumps(body)
     for other in (s for s in SLUGS if s != slug):
         assert CLASS_NAMES[other] not in text

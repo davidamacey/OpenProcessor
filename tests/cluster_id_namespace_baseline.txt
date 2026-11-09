@@ -17,7 +17,7 @@ src/routers/curation/_config_test_models.py	2
 src/routers/curation/_item_models.py	2
 src/routers/curation/assist.py	8
 src/routers/curation/classes.py	4
-src/routers/curation/clusters.py	8
+src/routers/curation/clusters.py	2
 src/routers/curation/crops_list.py	8
 src/routers/curation/pipeline_public.py	3
 src/routers/curation/pipeline_start.py	3
@@ -25,7 +25,6 @@ src/routers/curation/search.py	6
 src/routers/curation/search_image.py	3
 src/routers/curation/select.py	4
 src/routers/curation/viz.py	8
-src/schemas/curation/clusters.py	3
 src/schemas/query.py	1
 src/services/classes/projection_sync.py	2
 src/services/curation/assist/job.py	9
@@ -41,8 +40,6 @@ src/services/curation/autolabel/selection.py	18
 src/services/curation/autolabel/vlm_stage.py	3
 src/services/curation/class_label.py	6
 src/services/curation/class_sources.py	9
-src/services/curation/cluster_cards.py	18
-src/services/curation/cluster_facets.py	9
 src/services/curation/cluster_ids.py	8
 src/services/curation/cluster_representatives.py	5
 src/services/curation/clustering/auto_promote.py	19

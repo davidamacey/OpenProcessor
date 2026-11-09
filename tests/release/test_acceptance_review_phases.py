@@ -43,7 +43,7 @@ def test_health_requires_live_and_root(fake, tmp_path, path):
 
 def _card(cid, size, flags=(), **extra):
     return {
-        'cluster_id': cid, 'size': size, 'flags': list(flags),
+        'cluster_uid': f'u{cid}', 'size': size, 'flags': list(flags),
         'label_agreement': 0.9, **extra,
     }  # fmt: skip
 
@@ -70,7 +70,7 @@ def _cluster_routes(cards, facets_ok=True):
 
     def facets(_p):
         return 200, {
-            'cluster_id': 1, 'total': 10,
+            'cluster_uid': 'u1', 'total': 10,
             'validation': {'validated': 4, 'unvalidated': 6 if facets_ok else 5},
             'detector_classes': [{'value': 'car', 'count': 3}],
             'class_sources': [{'value': 'vlm', 'count': 7}],
@@ -90,7 +90,7 @@ def _cluster_routes(cards, facets_ok=True):
         return 200, {'total': total, 'crops': []}
 
     routes[('GET', f'{P}/clusters')] = (200, listing)
-    routes[('GET', f'{P}/clusters/1/facets')] = (200, facets)
+    routes[('GET', f'{P}/clusters/u1/facets')] = (200, facets)
     routes[('GET', f'{P}/crops')] = (200, crops)
     return routes, listing, crops
 
@@ -124,7 +124,7 @@ def test_cluster_fails_when_a_card_serves_label_purity(fake, tmp_path):
 
 
 def test_cluster_fails_when_a_card_lacks_label_agreement(fake, tmp_path):
-    cards = [*GOOD_CARDS, {'cluster_id': 4, 'size': 9, 'flags': []}]
+    cards = [*GOOD_CARDS, {'cluster_uid': 'u4', 'size': 9, 'flags': []}]
     (_proc, data), _f = _cluster_run(fake, tmp_path, cards)
     assert by_name(data)['cluster']['status'] == 'fail'
 
