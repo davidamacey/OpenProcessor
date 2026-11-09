@@ -77,6 +77,7 @@ def _review_page(n_items: int) -> dict[str, Any]:
                 ],
             },
             f'c{i}',
+            state_fields={'bench_space': 'embedding_state'},
             api_prefix='/curation/projects/bench',
         )
         for i in range(n_items)

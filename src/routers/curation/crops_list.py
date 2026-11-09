@@ -28,7 +28,11 @@ from src.services.curation.crop_listing import (
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
 from src.services.curation.wire import item_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
+from src.services.embedding_spaces.readers import (
+    item_state_fields,
+    item_write_fields,
+    vector_source_excludes,
+)
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
@@ -218,7 +222,11 @@ async def list_crops(
         return ordered
 
     hits = (resp.get('hits') or {}).get('hits') or []
-    crops = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]
+    state_fields = await item_state_fields()
+    crops = [
+        serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
+        for h in hits
+    ]
     return crops_page(total=int(total), page=page, page_size=page_size, crops=crops)
 
 
@@ -245,4 +253,4 @@ async def get_crop(
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}
-    return serialize_item(src, crop_id)
+    return serialize_item(src, crop_id, state_fields=await item_state_fields())

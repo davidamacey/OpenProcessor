@@ -3,6 +3,8 @@ whether it was drawn into an audit, the machine label it carried and the verdict
 
 from __future__ import annotations
 
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
+
 from src.domain.audit_math import AUDIT_FIELDS
 from src.routers.curation._item_models import ItemDoc
 from src.services.curation.wire import ITEM_WIRE_KEYS, serialize_item
@@ -18,13 +20,13 @@ def test_drawn_item_serves_its_audit_state() -> None:
         'audit_outcome': 'vlm_wrong',
         'audit_human_name': 'mug',
     }
-    item = serialize_item(src, 'x', api_prefix='')
+    item = serialize_item(src, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')
     for key, value in src.items():
         assert item[key] == value
 
 
 def test_undrawn_item_serves_nulls() -> None:
-    item = serialize_item({}, 'x', api_prefix='')
+    item = serialize_item({}, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')
     assert all(item[k] is None for k in AUDIT_FIELDS)
 
 

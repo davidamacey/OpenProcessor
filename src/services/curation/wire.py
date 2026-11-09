@@ -32,7 +32,7 @@ from src.services.curation.class_sources import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from src.domain.region_boxes import RegionBox
 
@@ -226,12 +226,14 @@ def serialize_item(
     src: dict[str, Any],
     fallback_id: str = '',
     *,
+    state_fields: Mapping[str, str],
     storage: RegionFields | None = None,
     api_prefix: str | None = None,
 ) -> dict[str, Any]:
     """Project one stored items-index document onto the wire item.
 
-    ``storage`` is the ``RegionFields`` instance the document was written
+    ``state_fields`` maps each live item space's key to its state field
+    (``item_state_fields()``); ``embedding_states`` reports the stored state of each. ``storage`` is the ``RegionFields`` instance the document was written
     with (default: the process-wide one); ``api_prefix`` defaults to the
     configured ``OP_API_PREFIX`` so server-built URLs match the mount.
     """
@@ -296,8 +298,13 @@ def serialize_item(
         # Human flagged "needs a class the registry doesn't have yet".
         'needs_new_class': bool(src.get('needs_new_class', False)),
         'needs_new_class_note': src.get('needs_new_class_note'),
-        # Why the item has no vector (null = written before the field existed).
-        'embedding_state': src.get('embedding_state'),
+        # Per item space: whether the item has a vector in it, and why not. A space the item
+        # has no state in (written before the field existed, or not built yet) is absent.
+        'embedding_states': {
+            space_key: state
+            for space_key, field in state_fields.items()
+            if (state := src.get(field))
+        },
         'cluster': cluster_object(src),
         'class_excluded': bool(src.get('class_excluded', False)),
         'excluded_reason': src.get('excluded_reason'),
@@ -449,7 +456,7 @@ def region_boxes_to_wire(
     }
 
 
-ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', api_prefix=''))
+ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', state_fields={}, api_prefix=''))
 
 # Endpoint-specific keys layered on top of the shared item. Everything
 # else is identical across endpoints.

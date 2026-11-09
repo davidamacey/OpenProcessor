@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
+
 from curation.query_fakes import matches
 from src.domain.embedding_state import EMBEDDED, FAILED, embedded_clause, not_embedded_clause
 from src.routers.curation._item_models import ItemDoc
@@ -58,10 +60,16 @@ def test_no_vector_and_no_declared_state_writes_no_state() -> None:
     assert 'embedding_state' not in _doc(DetectedItem((0, 0, 1, 1), 0.9))
 
 
-def test_wire_carries_the_state_and_null_for_legacy() -> None:
-    assert serialize_item({'crop_id': 'c', 'embedding_state': FAILED})['embedding_state'] == FAILED
-    assert serialize_item({'crop_id': 'c'})['embedding_state'] is None
+def test_wire_carries_the_state_of_each_space_and_omits_a_missing_one() -> None:
+    doc = {'crop_id': 'c', 'embedding_state': FAILED, 'vec_x_state': EMBEDDED}
+    both = {'pe_core_l14_336_v1': 'embedding_state', 'x_v1': 'vec_x_state'}
+    assert serialize_item(doc, state_fields=both)['embedding_states'] == {
+        'pe_core_l14_336_v1': FAILED,
+        'x_v1': EMBEDDED,
+    }
+    legacy = serialize_item({'crop_id': 'c'}, state_fields=DEFAULT_STATE_FIELDS)
+    assert legacy['embedding_states'] == {}
 
 
 def test_item_doc_model_exposes_the_field() -> None:
-    assert 'embedding_state' in ItemDoc.model_fields
+    assert 'embedding_states' in ItemDoc.model_fields

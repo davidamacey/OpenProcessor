@@ -36,7 +36,7 @@ from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_job import job_info
 from src.services.curation.reprocess_targets import ReprocessTargetsError
 from src.services.curation.wire import item_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 from src.services.jobs import status as job_status
 from src.services.jobs.service import cancel_job
 
@@ -77,7 +77,10 @@ async def _items_where(opensearch: Any, field: str, value: str) -> list[dict[str
         },
     )
     hits = (resp.get('hits') or {}).get('hits') or []
-    return [serialize_item(h.get('_source') or {}, h['_id']) for h in hits]
+    state_fields = await item_state_fields()
+    return [
+        serialize_item(h.get('_source') or {}, h['_id'], state_fields=state_fields) for h in hits
+    ]
 
 
 async def _with_items(

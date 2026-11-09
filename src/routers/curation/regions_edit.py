@@ -14,7 +14,7 @@ concern.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 
@@ -48,8 +48,12 @@ from src.services.curation.region_writes import (
     post_write_item,
     reason_only_box_write,
 )
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 from src.utils.timeutil import now_iso
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _write_error(exc: RegionBoxWriteError) -> HTTPException:
@@ -73,9 +77,10 @@ class _Recorder:
     the item's edit history, which ``POST /crops/{id}/region/undo``
     restores."""
 
-    def __init__(self, build: Any, writer: str) -> None:
+    def __init__(self, build: Any, writer: str, state_fields: Mapping[str, str]) -> None:
         self._build = build
         self._writer = writer
+        self.state_fields = state_fields
         self.current: dict[str, Any] = {}
         self.update: dict[str, Any] = {}
 
@@ -88,7 +93,7 @@ class _Recorder:
         return self.update
 
     def item(self, crop_id: str) -> dict[str, Any]:
-        return post_write_item(self.current, self.update, crop_id)
+        return post_write_item(self.current, self.update, crop_id, self.state_fields)
 
 
 async def _write_one(
@@ -183,7 +188,7 @@ async def patch_crop_region_meta(
             doc.update(reason_only_box_write(current, payload.region_rejection_reason))
         return doc
 
-    rec = _Recorder(_build, 'human:patch_region_meta')
+    rec = _Recorder(_build, 'human:patch_region_meta', await item_state_fields())
     await _write_one(opensearch, crop_id, rec, 'human:patch_region_meta')
     embedding = await refresh_box_embeddings(opensearch, [crop_id])
     return {
@@ -224,12 +229,13 @@ async def _batch_write(
     invalid: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
     recorders: dict[str, _Recorder] = {}
+    state_fields = await item_state_fields()
 
     def prepare(crop_id: str, doc: dict[str, Any] | None) -> dict[str, Any] | None:
         if doc is None:
             conflicts.append({'crop_id': crop_id, 'current_source': None})
             return None
-        rec = _Recorder(build, writer_id)
+        rec = _Recorder(build, writer_id, state_fields)
         try:
             update_doc = rec(doc.get('_source') or {})
         except RegionBoxWriteError as exc:

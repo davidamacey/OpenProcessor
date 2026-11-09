@@ -54,6 +54,20 @@ async def item_write_fields() -> WriteFields:
     return WriteFields(space.vector_field, space.state_field)
 
 
+async def item_state_fields() -> dict[str, str]:
+    """``{space_key: state field}`` of every live item space of the bound project.
+
+    The item wire reports ``embedding_states`` for each of them (a flipped or optional space
+    keeps its own state field), so a serializer is handed this map by the route that reads the
+    items.
+    """
+    return {
+        s.space_key: s.state_field
+        for s in await live_spaces()
+        if s.target is Target.ITEM and s.state_field is not None
+    }
+
+
 async def frame_vector_field() -> str:
     """The vector field of the bound project's primary frame space (the images index)."""
     return (await embedding_space(Target.FRAME)).vector_field

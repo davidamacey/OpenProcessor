@@ -39,7 +39,7 @@ from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.class_undo import class_undo_update, undo_class_writes
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.wire import item_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -83,8 +83,9 @@ async def _items_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]
         body={'ids': ids},
         _source_excludes=item_source_excludes(await vector_source_excludes()),
     )
+    state_fields = await item_state_fields()
     return [
-        serialize_item(d.get('_source') or {}, d.get('_id', ''))
+        serialize_item(d.get('_source') or {}, d.get('_id', ''), state_fields=state_fields)
         for d in (resp.get('docs') or [])
         if d.get('found')
     ]

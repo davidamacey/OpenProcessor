@@ -14,7 +14,7 @@ under the repo's 700-LOC-per-module ceiling.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -51,8 +51,12 @@ from src.services.curation.region_writes import (
     parent_to_source_bbox,
     post_write_item,
 )
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 from src.utils.timeutil import now_iso
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 class BoxWriteElement(BaseModel):
@@ -198,14 +202,16 @@ def _check_revision(current: dict[str, Any], expected: int | None) -> None:
         raise RegionConflictError(current)
 
 
-def _region_conflict_detail(crop_id: str, current: dict[str, Any]) -> dict[str, Any]:
+def _region_conflict_detail(
+    crop_id: str, current: dict[str, Any], state_fields: Mapping[str, str]
+) -> dict[str, Any]:
     F = get_region_fields()
     boxes = read_boxes(current, F)
     return {
         'error': 'region_conflict',
         'current_region_revision': int(current.get(F.revision) or 0),
         'current_box_ids': [b.box_id for b in boxes],
-        'item': post_write_item(current, {}, crop_id),
+        'item': post_write_item(current, {}, crop_id, state_fields),
     }
 
 
@@ -227,7 +233,8 @@ async def _write_one_boxes(opensearch: Any, crop_id: str, rec: _Recorder, writer
         raise
     except RegionConflictError as exc:
         raise HTTPException(
-            status_code=409, detail=_region_conflict_detail(crop_id, exc.current)
+            status_code=409,
+            detail=_region_conflict_detail(crop_id, exc.current, rec.state_fields),
         ) from exc
     except RegionBoxWriteError as exc:
         raise _write_error(exc) from exc
@@ -313,7 +320,7 @@ async def set_crop_regions(
     build = _put_boxes_build(
         payload, profile, frame=payload.frame, check_revision=payload.expected_region_revision
     )
-    rec = _Recorder(build, 'human:set_crop_regions')
+    rec = _Recorder(build, 'human:set_crop_regions', await item_state_fields())
     await _write_one_boxes(opensearch, crop_id, rec, 'human:set_crop_regions')
     embedding = await refresh_box_embeddings(opensearch, [crop_id])
     return {'crop_id': crop_id, 'item': rec.item(crop_id), 'vector_refresh': embedding}
@@ -399,7 +406,7 @@ async def patch_crop_region_box(
             human_version=profile.human_detector_version,
         )
 
-    rec = _Recorder(_build, 'human:patch_crop_region_box')
+    rec = _Recorder(_build, 'human:patch_crop_region_box', await item_state_fields())
     await _write_one_boxes(opensearch, crop_id, rec, 'human:patch_crop_region_box')
     embedding = await refresh_box_embeddings(opensearch, [crop_id])
     return {
@@ -466,8 +473,11 @@ async def batch_set_region_box_state(
     conflicts: list[dict[str, Any]] = []
     invalid: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
+    state_fields = await item_state_fields()
     for crop_id, box_ids in by_crop.items():
-        rec = _Recorder(_build_for(crop_id, box_ids), 'human:batch_set_region_box_state')
+        rec = _Recorder(
+            _build_for(crop_id, box_ids), 'human:batch_set_region_box_state', state_fields
+        )
         try:
             await _write_one_boxes(opensearch, crop_id, rec, 'human:batch_set_region_box_state')
         except HTTPException as exc:

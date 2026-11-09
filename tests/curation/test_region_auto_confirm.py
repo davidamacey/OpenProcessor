@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 
 from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item
 from src.config import get_region_fields
@@ -132,6 +133,7 @@ def test_auto_confirmed_region_is_on_the_wire_and_not_label_validated() -> None:
     item = serialize_item(
         {'crop_id': 'x', F.status: 'detected', F.auto_confirmed: True, F.validated: False},
         'x',
+        state_fields=DEFAULT_STATE_FIELDS,
         api_prefix='',
     )
     assert item['region_auto_confirmed'] is True

@@ -25,7 +25,7 @@
     "class_name",
     "class_source",
     "confidence",
-    "embedding_state",
+    "embedding_states",
     "class_confidence",
     "class_confidence_source",
     "label_source",
@@ -792,23 +792,18 @@
         "default": null,
         "title": "Detector Confidence"
       },
-      "embedding_state": {
-        "anyOf": [
-          {
-            "enum": [
-              "embedded",
-              "not_selected",
-              "deferred",
-              "failed"
-            ],
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Embedding State"
+      "embedding_states": {
+        "additionalProperties": {
+          "enum": [
+            "embedded",
+            "not_selected",
+            "deferred",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "title": "Embedding States",
+        "type": "object"
       },
       "excluded_at": {
         "anyOf": [

@@ -8,6 +8,7 @@ import json
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 
 from curation.config_test_stack import ITEM_BOX, profile_body
 from src.config import get_region_fields
@@ -94,7 +95,9 @@ def test_candidate_boxes_use_the_stored_box_math_in_both_frames(stack, car) -> N
                 current_src={},
             ),
         }
-        served = serialize_item(stored, 'car1')['region_boxes'][0]
+        served = serialize_item(stored, 'car1', state_fields=DEFAULT_STATE_FIELDS)['region_boxes'][
+            0
+        ]
         assert served['bbox_in_parent'] == pytest.approx(candidate['bbox_in_parent'], abs=1e-6)
         px1, py1, px2, py2 = ITEM_BOX
         assert candidate['bbox_norm'][0] == pytest.approx(

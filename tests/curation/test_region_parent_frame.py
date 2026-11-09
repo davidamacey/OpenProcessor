@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -114,7 +115,9 @@ def _wire_box(src_box: list[float], item_box: list[float] | None) -> dict[str, A
     }
     if item_box is not None:
         doc['bbox_norm'] = item_box
-    (box,) = serialize_item(doc, 'x', api_prefix='')['region_boxes']
+    (box,) = serialize_item(doc, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')[
+        'region_boxes'
+    ]
     return box
 
 

@@ -22,7 +22,7 @@ from src.services.curation.wire import (
     item_source_excludes,
     serialize_item,
 )
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
 _MAX_SIBLINGS = 500
@@ -117,7 +117,8 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
     image_id = item.get('image_id')
     image: dict[str, Any] | None = None
-    items: list[dict[str, Any]] = [serialize_item(item, crop_id)]
+    state_fields = await item_state_fields()
+    items: list[dict[str, Any]] = [serialize_item(item, crop_id, state_fields=state_fields)]
     if image_id:
         img = await _get_source(opensearch, images_index(), image_id)
         if img is not None:
@@ -151,5 +152,8 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
         except Exception as exc:
             raise server_error(503, 'opensearch unavailable', exc) from exc
         hits = (resp.get('hits') or {}).get('hits') or []
-        items = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]
+        items = [
+            serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
+            for h in hits
+        ]
     return {'image': image, 'items': items}

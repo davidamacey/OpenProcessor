@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -37,7 +38,7 @@ def _doc(crop_id: str, **over: Any) -> dict[str, Any]:
 
 
 def test_the_item_wire_carries_the_provenance_and_the_outline() -> None:
-    wire = serialize_item(_doc('a'))
+    wire = serialize_item(_doc('a'), state_fields=DEFAULT_STATE_FIELDS)
     assert wire['source_prompt'] == 'traffic cone'
     assert wire['open_vocab_set'] == 'street'
     assert wire['open_vocab_revision'] == 3
@@ -46,7 +47,7 @@ def test_the_item_wire_carries_the_provenance_and_the_outline() -> None:
 
 
 def test_an_ordinary_item_has_the_keys_with_null_values() -> None:
-    wire = serialize_item({'crop_id': 'plain', 'image_id': 'i'})
+    wire = serialize_item({'crop_id': 'plain', 'image_id': 'i'}, state_fields=DEFAULT_STATE_FIELDS)
     assert [wire[k] for k in ('source_prompt', 'open_vocab_set', 'open_vocab_revision')] == [
         None,
         None,

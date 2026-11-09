@@ -34,6 +34,7 @@ from src.services.curation.region_box_pass import (
 )
 from src.services.curation.region_preview import preview_item
 from src.services.curation.region_verify import BoxVerdict, verifiable_boxes, verify_regions_update
+from src.services.embedding_spaces.readers import item_state_fields
 from src.services.labeling.vlm_class_names import resolve_class_name
 from src.services.labeling.vlm_probe import ProbeCrop, probe
 from src.utils.timeutil import now_iso
@@ -133,6 +134,7 @@ async def _combined(
     from src.services.detection.region_text_rules import region_text_rules
 
     _check_capacity(len(crops), capacity)
+    state_fields = await item_state_fields()
     F = get_region_fields()
     jpegs = {c.crop_id: _jpeg(c) for c in crops}
     candidates = {
@@ -227,7 +229,7 @@ async def _combined(
             trace=trace,
             stamps=stamps,
         )
-        item.preview = preview_item(crop.source, write, crop.crop_id)
+        item.preview = preview_item(crop.source, write, crop.crop_id, state_fields)
     return run
 
 
@@ -242,6 +244,7 @@ async def _classify(
     capacity: int,
 ) -> PackTestRun:
     _check_capacity(len(crops), capacity)
+    state_fields = await item_state_fields()
     cache_dir = get_curation_config().crop_cache_dir
     probe_crops = []
     for c in crops:
@@ -275,7 +278,7 @@ async def _classify(
             item.skipped = 'request_failed'
             continue
         item.preview = preview_item(
-            crop.source, label_batch_merge(update, crop.source), crop.crop_id
+            crop.source, label_batch_merge(update, crop.source), crop.crop_id, state_fields
         )
     return run
 
@@ -318,6 +321,7 @@ async def _region_verify(
     if not owner:
         raise NoRegionBoxError
     _check_capacity(len(owner), capacity)
+    state_fields = await item_state_fields()
     probe_crops = [
         ProbeCrop(
             crop_id=f'{c.crop_id}#{box.box_id}',
@@ -354,7 +358,9 @@ async def _region_verify(
                 'vlm_model': labeler.identity.model,
             },
         )
-        previews[crop.crop_id] = preview_item(crop.source, write, crop.crop_id) if write else None
+        previews[crop.crop_id] = (
+            preview_item(crop.source, write, crop.crop_id, state_fields) if write else None
+        )
     for item in run.results:
         item.preview = previews.get(item.crop_id)
         if item.preview is None:

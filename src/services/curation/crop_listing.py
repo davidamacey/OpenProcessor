@@ -10,7 +10,7 @@ from src.config.curation_accessors import items_index
 from src.services.curation.crop_browse import parse_crop_sort
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.wire import item_list_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -94,8 +94,9 @@ async def crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]:
         body={'ids': ids},
         _source_excludes=item_list_source_excludes(await vector_source_excludes()),
     )
+    state_fields = await item_state_fields()
     return [
-        serialize_item(d.get('_source') or {}, d.get('_id', ''))
+        serialize_item(d.get('_source') or {}, d.get('_id', ''), state_fields=state_fields)
         for d in (resp.get('docs') or [])
         if d.get('found')
     ]

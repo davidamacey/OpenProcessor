@@ -14162,22 +14162,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [
@@ -25507,22 +25503,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [
@@ -29414,22 +29406,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [
@@ -31026,22 +31014,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [

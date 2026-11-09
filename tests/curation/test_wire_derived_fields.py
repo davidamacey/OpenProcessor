@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
+
 from src.services.curation.wire import ITEM_WIRE_KEYS, REVIEW_EXTRA_KEYS, serialize_item
 
 
@@ -19,7 +21,7 @@ if TYPE_CHECKING:
 
 
 def _item(**doc: Any) -> dict[str, Any]:
-    return serialize_item(doc, 'c1', api_prefix='')
+    return serialize_item(doc, 'c1', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')
 
 
 # ------------------------------------------------------------- proposed class

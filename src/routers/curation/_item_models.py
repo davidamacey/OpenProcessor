@@ -90,9 +90,9 @@ class ItemDoc(BaseModel):
     class_source: str | None = ''
     # The detector/classifier score, whatever wrote the label.
     confidence: float = 0.0
-    # 'embedded' = has a vector; the other values say why not. Null = written
-    # before the field existed (unknown; treat as embedded when it has a cluster).
-    embedding_state: EmbeddingState | None = None
+    # Per item space (keyed by space key): 'embedded' = has a vector in it; the other values
+    # say why not. A space with no entry: written before the field existed, or not built yet.
+    embedding_states: dict[str, EmbeddingState] = Field(default_factory=dict)
     # Confidence of the writer that set the label: the VLM category mapped
     # through high 0.92 / medium 0.70 / low 0.40 ('vlm'), or the classifier
     # score ('model'); null for human / merge / import / proposal labels.

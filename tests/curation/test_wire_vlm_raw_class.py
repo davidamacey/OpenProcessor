@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
+
 from src.routers.curation._item_models import ItemDoc
 from src.services.curation.wire import ITEM_WIRE_KEYS, serialize_item
 
@@ -22,6 +24,7 @@ def test_unmatched_item_serves_the_vlm_answer() -> None:
     item = serialize_item(
         {'class_source': 'vlm_unmatched', 'class_name': 'class_b', 'vlm_raw_class': 'trike'},
         'x',
+        state_fields=DEFAULT_STATE_FIELDS,
         api_prefix='',
     )
     assert item['vlm_raw_class'] == 'trike'
@@ -29,7 +32,10 @@ def test_unmatched_item_serves_the_vlm_answer() -> None:
 
 
 def test_missing_answer_is_null() -> None:
-    assert serialize_item({}, 'x', api_prefix='')['vlm_raw_class'] is None
+    assert (
+        serialize_item({}, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')['vlm_raw_class']
+        is None
+    )
 
 
 def test_answer_is_documented_in_the_model_and_the_contract() -> None:

@@ -49,7 +49,7 @@ from src.services.curation.review_request import (
 )
 from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -203,9 +203,10 @@ async def review_queue(
         )
     items: list[dict[str, Any]] = []
     region_fields = get_region_fields() if tab == 'regions' else None
+    state_fields = await item_state_fields()
     for h in hits:
         src = h.get('_source') or {}
-        item = serialize_item(src, h.get('_id', ''))
+        item = serialize_item(src, h.get('_id', ''), state_fields=state_fields)
         # Review-only extra on top of the shared wire item.
         if tab == 'mismatches':
             item['reason'] = review_reasons.mismatch_reason(src, registry_names, req.reason)

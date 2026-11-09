@@ -13,7 +13,7 @@ from dataclasses import fields as dataclass_fields
 from typing import Any
 
 import pytest
-from _embedding_registry_fake import default_space
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS, default_space
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -206,7 +206,11 @@ def test_semantic_search_item_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     hit = {'_id': 'crop-1', '_source': _stored_doc(storage), '_score': 0.77}
     # Served URLs are canonical and scoped (the bound project's base).
     item = semantic_search_run.hydrate_item(
-        hit, storage, project_api_base(), default_space(Target.ITEM)
+        hit,
+        storage,
+        project_api_base(),
+        default_space(Target.ITEM),
+        state_fields=DEFAULT_STATE_FIELDS,
     )
     assert set(item) == ITEM_WIRE_KEYS | SEARCH_EXTRA_KEYS
     assert item['semantic_score'] == 0.77
@@ -228,7 +232,7 @@ def test_region_values_reach_the_wire(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_vlm_suggestion_keys_on_every_item() -> None:
     assert {'vlm_proposed_class_id', 'vlm_proposed_class_name'} <= ITEM_WIRE_KEYS
-    empty = wire.serialize_item({}, 'x', api_prefix='')
+    empty = wire.serialize_item({}, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')
     assert empty['vlm_proposed_class_id'] is None
     assert empty['vlm_proposed_class_name'] is None
 
@@ -371,7 +375,9 @@ def test_a_rejected_only_item_serves_its_boxes_with_per_box_urls_and_frames() ->
         f.status: 'verify_rejected',
     }
 
-    item = wire.serialize_item(src, 'crop-rej', api_prefix='/curation')
+    item = wire.serialize_item(
+        src, 'crop-rej', state_fields=DEFAULT_STATE_FIELDS, api_prefix='/curation'
+    )
 
     (box,) = item['region_boxes']
     assert box['bbox_norm'] == [0.3, 0.6, 0.4, 0.7]

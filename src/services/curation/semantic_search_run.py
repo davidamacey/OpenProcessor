@@ -8,7 +8,7 @@ query vector made in another space), the page body and the unembedded count, the
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -24,7 +24,7 @@ from src.services.curation.semantic_search_box import (
     no_box_vectors_clause,
 )
 from src.services.curation.wire import item_list_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 from src.services.embedding_spaces.resolve import embedding_space
 from src.utils.search_timing import search_annotate, search_span
 
@@ -84,14 +84,22 @@ def build_knn_query(
 
 
 def hydrate_item(
-    hit: dict[str, Any], fields: RegionFields, api_prefix: str, space: ResolvedSpace
+    hit: dict[str, Any],
+    fields: RegionFields,
+    api_prefix: str,
+    space: ResolvedSpace,
+    state_fields: Mapping[str, str],
 ) -> dict[str, Any]:
     """Project one OpenSearch hit onto the shared wire item (same keys as
     ``/crops`` and ``/review``) plus a ``semantic_score`` (the raw kNN
     cosine-similarity ``_score``) so the UI can render a relevance chip.
     """
     item = serialize_item(
-        hit.get('_source') or {}, hit.get('_id', ''), storage=fields, api_prefix=api_prefix
+        hit.get('_source') or {},
+        hit.get('_id', ''),
+        state_fields=state_fields,
+        storage=fields,
+        api_prefix=api_prefix,
     )
     item['semantic_score'] = hit.get('_score')
     item['score_space'] = space.space_key
@@ -215,6 +223,7 @@ def _wire_page(
     page_size: int,
     unembedded: int,
     fields: RegionFields,
+    state_fields: Mapping[str, str],
     target: SearchTarget,
     skip_box: tuple[str, str] | None,
     spaces: Sequence[ResolvedSpace],
@@ -223,7 +232,7 @@ def _wire_page(
     items: list[dict[str, Any]] = []
     with search_span('hydrate'):
         for hit, space in ranked:
-            item = hydrate_item(hit, fields, project_api_base(), space)
+            item = hydrate_item(hit, fields, project_api_base(), space, state_fields)
             if target is SearchTarget.BOX and not attach_match(
                 item, hit, fields, space, skip=skip_box
             ):
@@ -319,6 +328,7 @@ async def run_search(
         page_size=page_size,
         unembedded=_total(counted),
         fields=fields,
+        state_fields=await item_state_fields(),
         target=target,
         skip_box=skip_box,
         spaces=spaces,

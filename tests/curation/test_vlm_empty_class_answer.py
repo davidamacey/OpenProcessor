@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
-from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS, DEFAULT_WRITE_FIELDS
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
@@ -454,10 +454,11 @@ def test_wire_item_carries_the_attempt() -> None:
     from src.services.curation.wire import serialize_item
 
     item = serialize_item(
-        {'crop_id': 'c', ATTEMPTED: '2026-09-24T12:00:00+00:00', REASON: 'no_match'}
+        {'crop_id': 'c', ATTEMPTED: '2026-09-24T12:00:00+00:00', REASON: 'no_match'},
+        state_fields=DEFAULT_STATE_FIELDS,
     )
     assert item[ATTEMPTED] == '2026-09-24T12:00:00+00:00'
     assert item[REASON] == 'no_match'
-    empty = serialize_item({'crop_id': 'd'})
+    empty = serialize_item({'crop_id': 'd'}, state_fields=DEFAULT_STATE_FIELDS)
     assert empty[ATTEMPTED] is None
     assert empty[REASON] is None
