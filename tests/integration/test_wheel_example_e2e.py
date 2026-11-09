@@ -150,6 +150,9 @@ def world(
 
     monkeypatch.setattr(httpx.AsyncHTTPTransport, 'handle_async_request', serve)
     monkeypatch.setenv('OP_SEGMENTER_URL', SEGMENTER_URL)
+    # preflight asks the broker which workers consume gpu_train (a read-only inspect, 5A-4); there is
+    # no broker and no trainer here, so nobody answers
+    monkeypatch.setattr('src.services.training.trainer_reachability._inspect_active_queues', dict)
     with (
         patch(
             'src.services.curation.index_bootstrap.ensure_indexes',
@@ -554,12 +557,13 @@ def test_wheel_example_end_to_end(
     assert pre.status_code == 200, pre.text
     checks = {c['name']: c['severity'] for c in pre.json()['checks']}
     # The export itself is sound for a single-class run: pairing, emptiness and
-    # splits all pass. What blocks is only the environment (no trainer volume
-    # in this process) and the 5-frame size of the toy dataset.
+    # splits all pass. What blocks is only the environment (no trainer worker and no trainer
+    # volume in this process) and the 5-frame size of the toy dataset.
     for name in ('region_pairing', 'empty_labels', 'export_not_empty', 'export_splits_nonempty'):
         assert checks[name] == 'ok', (name, pre.json())
     assert {n for n, sev in checks.items() if sev == 'block'} == {
         'free_disk',
+        'trainer_reachable',
         'class_balance',
         'test_holdout',
     }
