@@ -1,9 +1,10 @@
 """A worker of a CPU-only queue says it is alive: ``worker_capabilities`` as a liveness table.
 
 GPU workers write their ``worker_capabilities`` row from the card inventory
-(``src/tasks/runtime/inventory.py``). A consumer of a queue with no card behind it (``cluster``)
-has none, yet the beat's ``cluster_refresh`` tick must know a consumer is there before it queues a
-run (review RR-21: a fresh row, never a broadcast ``inspect()``). When such a worker is ready, a
+(``src/tasks/runtime/inventory.py``). A consumer of a queue with no card behind it (``cluster``,
+``arbiter``) has none, yet the beat's ``cluster_refresh`` tick must know a consumer is there before
+it queues a run (review RR-21: a fresh row, never a broadcast ``inspect()``), and the training
+preflight must know the GPU arbiter worker is there before it promises a stop. When such a worker is ready, a
 daemon thread upserts the row every ``worker_liveness.INTERVAL_S`` seconds; the reader accepts a
 row younger than ``worker_liveness.FRESH_S``. The thread uses its own unpooled connection per
 touch, so the prefork parent holds no pooled socket its children could inherit
@@ -24,7 +25,7 @@ from src.config.queue import TaskQueues
 
 logger = logging.getLogger(__name__)
 
-LIVENESS_QUEUES = (TaskQueues.CLUSTER,)
+LIVENESS_QUEUES = (TaskQueues.CLUSTER, TaskQueues.ARBITER)
 _stop = threading.Event()
 
 

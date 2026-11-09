@@ -185,9 +185,6 @@ def test_size_check() -> None:
 @pytest.fixture
 def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     install_run_fakes(monkeypatch)  # the active-run check reads PostgreSQL otherwise
-    from src.services.training import gpu_arbiter_policy
-
-    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
     class _Reg:
         async def snapshot(self, *_a: Any, **_k: Any) -> Any:

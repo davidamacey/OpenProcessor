@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from curation.bakeoff_router._helpers import (
     LIVE_REMAP,
@@ -18,7 +18,6 @@ from src.services.curation.export_support import frozen_test_sha_of
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
     from fastapi.testclient import TestClient
 
 
@@ -339,33 +338,6 @@ def test_run_writes_queued_status(env: dict[str, Path], client: TestClient) -> N
         },
     )
     assert again.status_code == 409
-
-
-def test_run_stop_failure_returns_409_and_cancels_job(
-    env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from src.services.training import gpu_arbiter_docker, gpu_arbiter_policy
-
-    async def _fail(**_kw: Any) -> None:
-        raise gpu_arbiter_policy.GpuArbiterStopFailedError('docker socket unavailable')
-
-    monkeypatch.setattr(gpu_arbiter_docker, 'stop_gpu_services', _fail)
-    d = _live_export(env)
-    make_run(env, 'run5', export_dir=d, class_remap=LIVE_REMAP)
-    r = _post_run(
-        client,
-        {
-            'job_id': 'jf',
-            'datasets': [{'id': 'export:20260924T233203Z'}],
-            'models': [{'source': 'run', 'run_id': 'run5'}],
-        },
-    )
-    assert r.status_code == 409
-    assert 'docker socket unavailable' in r.json()['detail']
-    assert env['started'].cancelled == [env['started'].ids['jf']]
-    st = client.get('/curation/projects/default/bakeoff/status/jf').json()
-    assert st['state'] == 'error'
-    assert 'docker socket unavailable' in st['error']
 
 
 def test_run_warns_about_train_test_overlap(env: dict[str, Path], client: TestClient) -> None:

@@ -18,24 +18,22 @@ if TYPE_CHECKING:
 
 
 class _Started(dict[str, dict[str, Any]]):
-    """Job spec (the job parameters) by bake-off job id, plus the ids of cancelled jobs."""
+    """Job spec (the job parameters) by bake-off job id, plus the job row ids."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.cancelled: list[uuid.UUID] = []
         self.ids: dict[str, uuid.UUID] = {}
 
 
 @pytest.fixture
 def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
-    """Point every bake-off / training dir at tmp_path and stub the GPU arbiter and the job service.
+    """Point every bake-off / training dir at tmp_path and stub the job service.
 
     ``env['started']`` records the ``bakeoff`` jobs the route started (their parameters are the
     job spec v2); no database is behind the route in these tests.
     """
     from src.routers.curation import bakeoff
     from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
-    from src.services.training import gpu_arbiter_docker
 
     dirs: dict[str, Any] = {
         'exports': tmp_path / 'exports',
@@ -59,14 +57,6 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
     dirs['run_fakes'] = install_run_fakes(monkeypatch)
     eval_datasets.clear_cache()
 
-    class _Action:
-        action = 'noop'
-
-    async def _stop(**_kw: Any) -> _Action:
-        return _Action()
-
-    monkeypatch.setattr(gpu_arbiter_docker, 'stop_gpu_services', _stop)
-
     started = _Started()
 
     async def _start_job(_session: Any, kind: str, project: Any, **kwargs: Any) -> Any:
@@ -77,11 +67,7 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
         started.ids[spec['job_id']] = job_id
         return SimpleNamespace(created=True, job=SimpleNamespace(id=job_id))
 
-    async def _cancel_job(_session: Any, job_id: uuid.UUID, project: Any, **_kw: Any) -> None:
-        started.cancelled.append(job_id)
-
     monkeypatch.setattr(bakeoff_jobs, 'start_job', _start_job)
-    monkeypatch.setattr(bakeoff, 'cancel_job', _cancel_job)
     monkeypatch.setattr(bakeoff, 'current_project_id', uuid.uuid4)
     dirs['started'] = started  # type: ignore[assignment]
     return dirs

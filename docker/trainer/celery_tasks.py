@@ -41,6 +41,7 @@ from src.db.repos import gpu_devices, gpu_reservations as reservations, training
 from src.domain.gpu_order import parse_order, position_of
 from src.domain.training_keys import RUN_ARTIFACT_WHITELIST, RUN_LOG_NAME, run_object_key
 from src.tasks.runtime.gpu_app import make_app
+from src.tasks.runtime.gpu_claim import wait_for_arbiter
 from src.tasks.runtime.register import register_job
 
 
@@ -177,7 +178,8 @@ async def train(ctx: JobContext) -> dict[str, Any]:
 
     try:
         with tee_to_run_log(log.scratch):
-            await _reserve_cards(ctx, spec)
+            if await _reserve_cards(ctx, spec):
+                await wait_for_arbiter(ctx)  # services on these cards are stopped before the fit
             fit = asyncio.ensure_future(asyncio.to_thread(run_training, spec, state))
             await _publish_until_done(ctx, fit, state, log)
             fit.result()

@@ -44,11 +44,6 @@ def _docker_client() -> Any:
         return None
 
 
-def docker_client_available() -> bool:
-    """Preflight probe -- can a docker client reach the daemon?"""
-    return _docker_client() is not None
-
-
 def _stop_containers_sync(client: Any, names: tuple[str, ...]) -> list[str]:
     """Stop each named container if running. Returns the names stopped."""
     import docker.errors
