@@ -33,7 +33,7 @@ Your project already has useful foundations for this research:
 | Periodic cluster-refresh worker             | A natural integration point for continuous refinement             |
 | Human labels, VLM labels, and locking       | Providing trusted signals and constraints for cluster corrections |
 
-Your current API even exposes `POST /curation/projects/{project}/clusters/refine/{cluster_id}` for AHC refinement of a particular cluster. It also provides a residual-pool UMAP rebuild route.&#x20;
+Your current API even exposed a per-cluster refine route (since removed) for AHC refinement of a particular cluster. It also provides a residual-pool UMAP rebuild route.&#x20;
 
 [image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
 

@@ -6,7 +6,7 @@ public COCO crops, CPU only. Issue #342 (epic #346). GPU arms ran at 20k only fo
 
 ## 1. Question
 
-Refinement today stays inside one cluster (`POST /clusters/refine/{cluster_id}`), so two clusters
+Refinement today stays inside one cluster (the per-cluster refine route, since removed), so two clusters
 that hold the same kind of object are never joined. Can a global kNN graph plus Leiden community
 detection, started from the current partition, merge those fragments and reassign items across
 boundaries without raising the false-merge rate, and what does it cost? Baselines named in the issue:

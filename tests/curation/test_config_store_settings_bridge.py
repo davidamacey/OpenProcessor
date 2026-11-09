@@ -33,7 +33,9 @@ def _reset_caches() -> Iterator[None]:
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = object()  # the config routes no longer read OpenSearch
+    # _validate_defaults -> get_registry counts field coverage with one size-0 search
+    fake_os = AsyncMock()
+    fake_os.search = AsyncMock(return_value={'hits': {'total': {'value': 0}}, 'aggregations': {}})
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
