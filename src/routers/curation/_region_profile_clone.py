@@ -6,6 +6,7 @@ ratchet (same pattern as ``_models_sharing.py``/``models.py``).
 from __future__ import annotations
 
 from src.routers.curation._api_error import api_error
+from src.routers.curation._clone_common import resolve_clone_source
 from src.routers.curation._common import router
 from src.routers.curation._region_profile_models import RegionProfileCloneRequest, RegionProfileDoc
 from src.services.config_store import RevisionConflictError
@@ -29,24 +30,14 @@ from src.services.curation.class_registry_names import registry_class_names
 async def _resolve_clone_source(
     *, name: str, revision: int | None, source: str | None
 ) -> ProfileRecord:
-    if source == 'stored' and revision is not None:
-        record = await get_revision_record(name, revision)
-        if record is None:
-            raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
-        return record
-    if source is not None:
-        record = build_record(name, revision=revision)
-        if record is None or record.source != source:
-            raise api_error(404, 'not_found', f'{name!r} has no {source} source')
-        return record
-    if revision is not None:
-        record = await get_revision_record(name, revision)
-        if record is not None:
-            return record
-    record = build_record(name, revision=revision)
-    if record is None:
-        raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
-    return record
+    return await resolve_clone_source(
+        name=name,
+        revision=revision,
+        source=source,
+        what='region profile',
+        get_revision=get_revision_record,
+        build=build_record,
+    )
 
 
 @router.post('/region_profiles/{name}/clone', response_model=RegionProfileDoc, status_code=201)

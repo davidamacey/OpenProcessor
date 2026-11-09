@@ -12,7 +12,13 @@ from typing import Any, Literal
 from fastapi import Response
 
 from src.core.wire_json import WireJSONResponse
-from src.routers.curation._api_error import active_conflict_error, api_error
+from src.routers.curation._api_error import (
+    active_conflict_error,
+    api_error,
+    revision_conflict_error,
+    unknown_revision_error,
+)
+from src.routers.curation._clone_common import resolve_clone_source
 from src.routers.curation._common import router
 from src.routers.curation._prompt_pack_models import (
     PromptPackActivateRequest,
@@ -384,7 +390,7 @@ async def list_prompt_pack_revisions(name: str) -> PromptPackRevisionsResponse:
 async def get_prompt_pack_revision(name: str, revision: int) -> PromptPackDoc:
     record = await get_revision_record(name, revision)
     if record is None:
-        raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
+        raise unknown_revision_error(name, revision)
     return _to_doc(record)
 
 
@@ -396,24 +402,14 @@ async def get_prompt_pack_revision(name: str, revision: int) -> PromptPackDoc:
 async def _resolve_clone_source(
     *, name: str, revision: int | None, source: str | None
 ) -> PackRecord:
-    if source == 'stored' and revision is not None:
-        record = await get_revision_record(name, revision)
-        if record is None:
-            raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
-        return record
-    if source is not None:
-        record = build_record(name, revision=revision)
-        if record is None or record.source != source:
-            raise api_error(404, 'not_found', f'{name!r} has no {source} source')
-        return record
-    if revision is not None:
-        record = await get_revision_record(name, revision)
-        if record is not None:
-            return record
-    record = build_record(name, revision=revision)
-    if record is None:
-        raise api_error(404, 'not_found', f'{name!r} is not a known pack')
-    return record
+    return await resolve_clone_source(
+        name=name,
+        revision=revision,
+        source=source,
+        what='pack',
+        get_revision=get_revision_record,
+        build=build_record,
+    )
 
 
 @router.post('/prompt_packs/{name}/clone', response_model=PromptPackDoc, status_code=201)
@@ -513,12 +509,7 @@ async def save_prompt_pack(name: str, body: PromptPackSaveRequest) -> PromptPack
             else (existing.description if existing else ''),
         )
     except RevisionConflictError as exc:
-        raise api_error(
-            409,
-            'revision_conflict',
-            f'{name!r} changed since you loaded it',
-            current_revision=exc.current_revision,
-        ) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     return _to_doc(record, validation=report)
 
 
@@ -538,12 +529,7 @@ async def delete_prompt_pack_route(name: str, expected_revision: int) -> Respons
     try:
         await delete_pack(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
-        raise api_error(
-            409,
-            'revision_conflict',
-            f'{name!r} changed since you loaded it',
-            current_revision=exc.current_revision,
-        ) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     # A 204 must carry no body and no JSON content-type: a JSON response class
     # would stamp 'application/json' on an empty body, and a client calling
     # .json() on it (as the isolation sweep in tests/curation/cross_project_leak/

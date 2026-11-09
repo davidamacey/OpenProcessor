@@ -15,7 +15,12 @@ from typing import Any
 from fastapi import Query, Response
 
 from src.core.wire_json import WireJSONResponse
-from src.routers.curation._api_error import active_conflict_error, api_error
+from src.routers.curation._api_error import (
+    active_conflict_error,
+    api_error,
+    revision_conflict_error,
+    unknown_revision_error,
+)
 from src.routers.curation._common import router
 from src.routers.curation._ingest_profile_models import (
     IngestProfileActivateRequest,
@@ -92,15 +97,6 @@ def _to_summary(record: IngestProfileRecord) -> IngestProfileSummary:
 
 def _active_conflict(exc: ActiveConflictError) -> Any:
     return active_conflict_error('the active ingest profile', exc.current)
-
-
-def _revision_conflict(name: str, exc: RevisionConflictError) -> Any:
-    return api_error(
-        409,
-        'revision_conflict',
-        f'{name!r} changed since you loaded it',
-        current_revision=exc.current_revision,
-    )
 
 
 def _schema_rows() -> list[IngestProfileFieldSchema]:
@@ -314,7 +310,7 @@ async def list_ingest_profile_revisions(name: str) -> IngestProfileRevisionsResp
 async def get_ingest_profile_revision(name: str, revision: int) -> IngestProfileDoc:
     record = await get_revision_record(name, revision)
     if record is None:
-        raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
+        raise unknown_revision_error(name, revision)
     return _to_doc(record)
 
 
@@ -342,7 +338,7 @@ async def save_ingest_profile(name: str, body: IngestProfileSaveRequest) -> Inge
             description=body.description if body.description is not None else existing.description,
         )
     except RevisionConflictError as exc:
-        raise _revision_conflict(name, exc) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     return _to_doc(record, validation=report)
 
 
@@ -361,7 +357,7 @@ async def delete_ingest_profile(name: str, expected_revision: int) -> None:
     try:
         await delete_profile(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
-        raise _revision_conflict(name, exc) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     return Response(status_code=204)  # type: ignore[return-value]
 
 
