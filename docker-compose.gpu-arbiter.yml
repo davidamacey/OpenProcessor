@@ -61,6 +61,8 @@ services:
       - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
       - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OPENSEARCH_URL=http://opensearch:9200
+      - OP_GPU_ARBITER_CONTAINERS=${OP_GPU_ARBITER_CONTAINERS:-}
+      - OP_BAKEOFF_HOST_GPUS=${OP_BAKEOFF_HOST_GPUS:-}
     tmpfs:
       - /run/op-prom-worker:mode=1777
     volumes:
