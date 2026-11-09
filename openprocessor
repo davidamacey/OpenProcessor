@@ -67,6 +67,10 @@ case "$(_env_value OP_FACES_ENABLED | tr '[:upper:]' '[:lower:]')" in
         fi
         ;;
 esac
+# One Triton server per card, written by the installer for a TRITON_GPU_ID that lists several.
+if [[ -f "$PROJECT_DIR/docker-compose.triton-cards.yml" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.triton-cards.yml")
+fi
 # The user's own overrides (extra bind mounts, a second source root), last so
 # they win. docker-compose.override.yml is not read: the file name is yours.
 if [[ -f "$PROJECT_DIR/docker-compose.local.yml" ]]; then
