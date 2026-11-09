@@ -30,7 +30,7 @@ from src.services.curation.class_sources import (
     vlm_suggestion,
     vlm_suggestion_dismissed,
 )
-from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
+from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_similarity
 
 
 if TYPE_CHECKING:
@@ -177,16 +177,6 @@ def cluster_object(src: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def current_cluster_distance(src: dict[str, Any]) -> Any:
-    """The stored ``cluster_distance`` if it was measured against the item's
-    current cluster (``cluster_distance_cluster_id`` absent — written
-    before that field existed — or equal to ``cluster_id``), else ``None``."""
-    ref = src.get('cluster_distance_cluster_id')
-    if ref is not None and ref != src.get('cluster_id'):
-        return None
-    return src.get('cluster_distance')
-
-
 def _api_prefix() -> str:
     """The bound project's base (``{api_prefix}/projects/{slug}``): every
     served URL is scoped to the project that served it."""
@@ -254,7 +244,7 @@ def serialize_item(
     crop_id = src.get('crop_id') or fallback_id
     image_path = src.get('image_path', '')
     vlm_class_id, vlm_class_name = vlm_suggestion(src)
-    distance = current_cluster_distance(src)
+    distance = src.get('cluster_distance')
     similarity = cluster_similarity(distance)
     label_conf, label_conf_source = class_confidence(src)
     probe_pred_class = src.get('probe_pred_class')
@@ -315,20 +305,10 @@ def serialize_item(
         # Why the item has no vector (null = written before the field existed).
         'embedding_state': src.get('embedding_state'),
         'cluster': cluster_object(src),
-        'cluster_id': src.get('cluster_id'),
-        'cluster_kind': cluster_kind(src.get('cluster_id')),
         # Null when measured against a cluster the item has since left.
         'cluster_distance': distance,
         'cluster_similarity': similarity,
         'cluster_is_core': None if similarity is None else similarity >= CORE_SIMILARITY_MIN,
-        # Cluster whose centroid is nearest this item (== cluster_id when
-        # it sits best where it is); null unless measured for its cluster.
-        'cluster_nearest_id': (
-            src.get('cluster_nearest_id')
-            if src.get('cluster_distance_cluster_id') == src.get('cluster_id')
-            else None
-        ),
-        'cluster_subid': src.get('cluster_subid'),
         'class_excluded': bool(src.get('class_excluded', False)),
         'excluded_reason': src.get('excluded_reason'),
         'excluded_at': src.get('excluded_at'),
@@ -515,7 +495,6 @@ __all__ = [
     'TRAINING_CANDIDATE_EXTRA_KEYS',
     'WIRE_REGION_FIELDS',
     'box_thumbnail_url',
-    'current_cluster_distance',
     'item_context_source_excludes',
     'item_list_source_excludes',
     'item_source_excludes',

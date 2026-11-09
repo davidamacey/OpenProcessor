@@ -55,8 +55,7 @@ def _unmatched(raw: str, **extra: Any) -> dict[str, Any]:
         'label_source': 'vlm',
         'vlm_raw_label': raw,
         'vlm_confidence': 'high',
-        'cluster_id': 10004,
-        'cluster_subid': '10004a',
+        'cluster_uid': 'u1',
         **extra,
     }
 
@@ -127,8 +126,7 @@ async def test_apply_promotes_only_resolvable_unguarded_items(registry):
     assert result.by_class == {'widget': 2, 'gadget': 1}
 
     u1 = items['u1']
-    assert (u1['class_id'], u1['class_name'], u1['cluster_id']) == (0, 'widget', 0)
-    assert u1['cluster_subid'] is None
+    assert (u1['class_id'], u1['class_name'], u1['cluster_uid']) == (0, 'widget', 'u1')
     assert u1['label_source'] == 'vlm'
     assert 'class_validated' not in u1 or u1['class_validated'] is not True
     [prior] = u1['class_id_history']

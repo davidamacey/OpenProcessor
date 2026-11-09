@@ -35,7 +35,8 @@ if TYPE_CHECKING:
 
     from src.services.upgrade.from_060.snapshot import Snapshot
 
-POLICY_KEYS = ('ingest_policy', 'vlm_policy', 'vlm_scope_reps')
+# 0.6.0's vlm_scope_reps claims name integer cluster ids; the next run claims again by cluster_uid.
+POLICY_KEYS = ('ingest_policy', 'vlm_policy')
 _AXIS_KIND = dict(ACTIVATION_AXES)
 _REVISION_ID = re.compile(r'^(?P<prefix>[a-z]+):(?P<name>.+)@(?P<rev>\d+)$')
 _CURRENT_ID = re.compile(r'^(?P<prefix>[a-z]+):(?P<name>[^@]+)$')

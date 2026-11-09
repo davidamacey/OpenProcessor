@@ -423,6 +423,13 @@ class QueryFakeOpenSearch:
                 # The review rank sort: params.ranks maps a keyword to its rank, 0 when absent.
                 ranks = first['_script']['script']['params']['ranks']
                 pool.sort(key=lambda kv: (ranks.get(kv[1].get('vlm_confidence'), 0), kv[0]))
+            elif sort_field == 'cluster_score' and first[sort_field].get('order') == 'desc':
+                # numeric, highest first, a missing value last
+                def _desc(kv: tuple[str, dict[str, Any]]) -> tuple[bool, float, str]:
+                    value = kv[1].get(sort_field)
+                    return (value is None, 0.0 if value is None else -float(value), kv[0])
+
+                pool.sort(key=_desc)
             else:
                 pool.sort(key=lambda kv: str(kv[1].get(sort_field, kv[0])))
             if body.get('search_after') is not None and sort_field != '_script':

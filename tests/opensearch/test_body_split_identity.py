@@ -14,11 +14,13 @@ from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 
 
 CLUSTER_BEFORE = {
-    'cluster_id': {'type': 'integer'},
+    'cluster_partition_id': {'type': 'keyword'},
+    'cluster_uid': {'type': 'keyword'},
+    'cluster_state': {'type': 'keyword'},
+    'cluster_score': {'type': 'float'},
+    'cluster_margin': {'type': 'float'},
+    'cluster_assigned_by': {'type': 'keyword'},
     'cluster_distance': {'type': 'float'},
-    'cluster_subid': {'type': 'keyword'},
-    'cluster_distance_cluster_id': {'type': 'integer'},
-    'cluster_nearest_id': {'type': 'integer'},
     'cluster_auto_suggest': {'type': 'keyword'},
 }
 NEAR_DUP_FIELDS = {
@@ -53,5 +55,5 @@ def test_no_other_module_defines_those_fields_again() -> None:
 
     source = Path(bodies_core.__file__).read_text(encoding='utf-8')
 
-    for field in ('near_dup_group_id', 'cluster_nearest_id', 'cluster_auto_suggest'):
+    for field in ('near_dup_group_id', 'cluster_auto_suggest'):
         assert field not in source

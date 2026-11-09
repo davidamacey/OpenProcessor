@@ -86,7 +86,8 @@ def test_attribute_summary_counts_values_per_key() -> None:
 # ---- the run, the scope check and apply -------------------------------------------
 
 RUNS = '/assist/runs'
-CLUSTER = 10000
+CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
+OTHER = '0c9a9f5e-3b7d-4a6f-8f0e-5d1b2c3d4e5f'
 
 
 @pytest.fixture
@@ -94,10 +95,9 @@ def world(assist_queue: Any, stack: Any, readable_crops: None) -> Any:
     return stack
 
 
-def _seed(stack: Any, crop_id: str, subid: str = f'{CLUSTER}a', **doc: Any) -> None:
+def _seed(stack: Any, crop_id: str, **doc: Any) -> None:
     defaults = {
-        'cluster_id': CLUSTER,
-        'cluster_subid': subid,
+        'cluster_uid': CLUSTER,
         'class_source': 'item_model',
         'updated_at': '2026-10-01T00:00:00+00:00',
     }
@@ -124,7 +124,7 @@ def _reply(*names: str) -> str:
 
 def _run_cluster(stack: Any, **body: Any) -> dict[str, Any]:
     payload = {
-        'target': {'kind': 'cluster', 'cluster_id': CLUSTER},
+        'target': {'kind': 'cluster', 'cluster_uid': CLUSTER},
         'actions': ['classify'],
         'dry_run': False,
         **body,
@@ -162,11 +162,11 @@ def test_a_re_refine_marks_the_proposal_stale_with_the_overlap(world: Any) -> No
     for i in range(3):
         _seed(world, f'c{i}')
     world.upstream.vlm_content = _reply('gadget', 'gadget', 'gadget')
-    state = _run_cluster(world, target={'kind': 'cluster', 'cluster_id': CLUSTER})
+    state = _run_cluster(world, target={'kind': 'cluster', 'cluster_uid': CLUSTER})
 
-    # a re-refine: one member leaves the cluster, another joins it
+    # the partition changed: one member leaves the cluster, another joins it
     docs = world.items.store[ITEMS]
-    docs['c2']['cluster_id'] = 77
+    docs['c2']['cluster_uid'] = OTHER
     _seed(world, 'newcomer')
 
     now = world.client.get(f'/curation/projects/default{RUNS}/{state["run_id"]}').json()
@@ -181,7 +181,7 @@ def test_apply_refuses_a_changed_scope_and_applies_when_allowed(world: Any) -> N
         _seed(world, f'c{i}')
     world.upstream.vlm_content = _reply('gadget', 'gadget', 'gadget')
     state = _run_cluster(world)
-    world.items.store[ITEMS]['c2']['cluster_id'] = 77
+    world.items.store[ITEMS]['c2']['cluster_uid'] = OTHER
     _seed(world, 'newcomer')
     url = f'{RUNS}/{state["run_id"]}/apply'
 
@@ -255,7 +255,6 @@ def test_apply_as_propagated_writes_the_machine_kind_and_leaves_the_locked(world
         False,
     )
     assert free['class_detector_version'] == state['run_id']
-    assert free['cluster_id'] == free['class_id']
     assert _doc(world, 'human1')['class_source'] == 'human'
 
 
@@ -296,10 +295,10 @@ def test_a_run_without_a_cluster_scope_cannot_be_applied(world: Any) -> None:
 
 
 @pytest.mark.db
-def test_a_selection_with_a_context_proposes_for_that_sub_cluster(world: Any) -> None:
+def test_a_selection_with_a_context_proposes_for_that_cluster(world: Any) -> None:
     for i in range(3):
         _seed(world, f'a{i}')
-    _seed(world, 'b0', f'{CLUSTER}b')
+    _seed(world, 'b0', cluster_uid=OTHER)
     world.upstream.vlm_content = _reply('gadget', 'gadget', 'gadget')
     with world.client:
         started = world.post(
@@ -307,21 +306,21 @@ def test_a_selection_with_a_context_proposes_for_that_sub_cluster(world: Any) ->
             target={
                 'kind': 'crops',
                 'crop_ids': ['a0', 'a1', 'a2'],
-                'context': {'cluster_id': CLUSTER, 'cluster_subid': f'{CLUSTER}a'},
+                'context': {'cluster_uid': CLUSTER},
             },
             actions=['classify'],
             dry_run=False,
         )
         state = _wait(world, started.json()['run_id'])
-    assert state['scope_now']['count'] == 3, 'the context sub-cluster, not the selection'
+    assert state['scope_now']['count'] == 3, 'the context cluster, not the selection'
 
     listed = world.client.get(
         f'/curation/projects/default{RUNS}',
-        params={'cluster_id': CLUSTER, 'cluster_subid': f'{CLUSTER}a'},
+        params={'cluster_uid': CLUSTER},
     ).json()
     assert [r['run_id'] for r in listed['runs']] == [state['run_id']]
     other = world.client.get(
         f'/curation/projects/default{RUNS}',
-        params={'cluster_id': CLUSTER, 'cluster_subid': f'{CLUSTER}b'},
+        params={'cluster_uid': OTHER},
     ).json()
     assert other['runs'] == []

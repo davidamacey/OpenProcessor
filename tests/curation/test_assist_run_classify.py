@@ -21,7 +21,7 @@ pytest_plugins = ['curation.assist_queue']
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('readable_crops')]
 
 RUNS = '/assist/runs'
-CLUSTER = 10000
+CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 MAKE = {'key': 'make', 'description': 'car manufacturer', 'values': []}
 
 
@@ -32,8 +32,7 @@ def _queue(assist_queue: Any) -> None:
 
 def _seed(stack: Any, crop_id: str, **doc: Any) -> None:
     defaults = {
-        'cluster_id': CLUSTER,
-        'cluster_subid': f'{CLUSTER}a',
+        'cluster_uid': CLUSTER,
         'class_source': 'item_model',
         'updated_at': '2026-10-01T00:00:00+00:00',
     }
@@ -46,7 +45,7 @@ def _reply(*entries: dict[str, Any]) -> str:
 
 def _cluster_body(**over: Any) -> dict[str, Any]:
     return {
-        'target': {'kind': 'cluster', 'cluster_id': CLUSTER},
+        'target': {'kind': 'cluster', 'cluster_uid': CLUSTER},
         'actions': ['classify'],
         'dry_run': False,
         **over,
@@ -123,8 +122,7 @@ def test_unlocked_items_get_a_class_suggestion_and_an_assist_slot(stack: Any) ->
     assert one['assist']['class_name'] == 'gadget'
     assert one['assist']['run_id'] == state['run_id']
     assert one['assist']['class_confidence'] == 'high'
-    assert one['cluster_id'] == CLUSTER, 'a suggestion does not move the item out of its cluster'
-    assert one['cluster_subid'] == f'{CLUSTER}a'
+    assert one['cluster_uid'] == CLUSTER, 'a suggestion does not move the item out of its cluster'
     assert one['vlm_prompt_pack'].startswith(GENERIC_ITEM_PACK.name)
 
 
@@ -253,7 +251,12 @@ def test_a_second_run_while_one_is_live_is_busy(stack: Any) -> None:
 
 
 def test_an_unknown_cluster_is_a_404_and_an_empty_filter_a_422(stack: Any) -> None:
-    missing = stack.post(RUNS, **_cluster_body(target={'kind': 'cluster', 'cluster_id': 99}))
+    missing = stack.post(
+        RUNS,
+        **_cluster_body(
+            target={'kind': 'cluster', 'cluster_uid': '0c9a9f5e-3b7d-4a6f-8f0e-5d1b2c3d4e5f'}
+        ),
+    )
     assert (missing.status_code, missing.json()['detail']['error']) == (404, 'not_found')
     empty = stack.post(RUNS, **_cluster_body(target={'kind': 'filter', 'filter': {}}))
     assert (empty.status_code, empty.json()['detail']['error']) == (422, 'invalid_request')

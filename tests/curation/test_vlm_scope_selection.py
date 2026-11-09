@@ -37,7 +37,8 @@ def _doc(crop_id: str, **extra: Any) -> dict[str, Any]:
         'class_validated': False,
         'confidence': 0.9,
         'pe_embedding': [0.1],
-        'cluster_id': -1,
+        'cluster_state': 'unassigned',
+        'cluster_id': -1,  # still read by the auto-label cluster scope
         **extra,
     }
 
@@ -45,26 +46,78 @@ def _doc(crop_id: str, **extra: Any) -> dict[str, Any]:
 def _docs() -> dict[str, dict[str, Any]]:
     docs = [
         # cluster 1, nearest first
-        _doc('c1a', cluster_id=1, cluster_distance=0.1, confidence=0.95),
-        _doc('c1b', cluster_id=1, cluster_distance=0.2, confidence=0.5),
-        _doc('c1c', cluster_id=1, cluster_distance=0.3, confidence=0.97),
+        _doc(
+            'c1a',
+            cluster_uid='cl1',
+            cluster_id=1,
+            cluster_state='assigned',
+            cluster_score=0.9,
+            confidence=0.95,
+        ),
+        _doc(
+            'c1b',
+            cluster_uid='cl1',
+            cluster_id=1,
+            cluster_state='assigned',
+            cluster_score=0.8,
+            confidence=0.5,
+        ),
+        _doc(
+            'c1c',
+            cluster_uid='cl1',
+            cluster_id=1,
+            cluster_state='assigned',
+            cluster_score=0.7,
+            confidence=0.97,
+        ),
         # cluster 2
-        _doc('c2a', cluster_id=2, cluster_distance=0.1, confidence=0.99),
-        _doc('c2b', cluster_id=2, cluster_distance=0.4, confidence=0.99),
+        _doc(
+            'c2a',
+            cluster_uid='cl2',
+            cluster_id=2,
+            cluster_state='assigned',
+            cluster_score=0.9,
+            confidence=0.99,
+        ),
+        _doc(
+            'c2b',
+            cluster_uid='cl2',
+            cluster_id=2,
+            cluster_state='assigned',
+            cluster_score=0.6,
+            confidence=0.99,
+        ),
         # unassigned
-        _doc('u1', cluster_id=-1, confidence=0.99),
-        _doc('u2', cluster_id=-1, confidence=0.3),
+        _doc('u1', confidence=0.99),
+        _doc('u2', confidence=0.3),
         # no detector confidence recorded
-        _doc('noconf', cluster_id=-1, confidence=None),
+        _doc('noconf', confidence=None),
         # unvalidated but out of the pipeline: never selected under any scope
-        _doc('frozen', cluster_id=1, cluster_distance=0.5, test_holdout=True, confidence=0.1),
-        _doc('shelved', cluster_id=-1, class_excluded=True, confidence=0.1),
+        _doc(
+            'frozen',
+            cluster_uid='cl1',
+            cluster_id=1,
+            cluster_state='assigned',
+            cluster_score=0.5,
+            test_holdout=True,
+            confidence=0.1,
+        ),
+        _doc('shelved', class_excluded=True, confidence=0.1),
         # never selected under any scope
-        _doc('human', cluster_id=1, cluster_distance=0.05, class_validated=True),
+        _doc(
+            'human',
+            cluster_uid='cl1',
+            cluster_id=1,
+            cluster_state='assigned',
+            cluster_score=0.95,
+            class_validated=True,
+        ),
         _doc(
             'excluded',
+            cluster_uid='cl2',
             cluster_id=2,
-            cluster_distance=0.01,
+            cluster_state='assigned',
+            cluster_score=0.99,
             class_excluded=True,
             class_validated=True,
         ),

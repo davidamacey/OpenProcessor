@@ -52,16 +52,10 @@ async def list_crops(
             )
         ),
     ] = None,
-    cluster_id: int | None = None,
     cluster_uid: Annotated[
         uuid.UUID | None,
         UnsetIfEmpty,
         Query(description='Members of this cluster of the served partition.'),
-    ] = None,
-    cluster_subid: Annotated[
-        str | None,
-        UnsetIfEmpty,
-        Query(description="One AHC sub-cluster of a cluster, e.g. '10000b'."),
     ] = None,
     label_source: str | None = None,
     class_source: str | None = None,
@@ -123,9 +117,8 @@ async def list_crops(
         Query(
             description=(
                 "'outliers' ranks a cluster's members farthest-from-centroid first; "
-                "'core_first' nearest-first, with each item's cluster_distance / "
-                'cluster_similarity / cluster_is_core recomputed against the same live '
-                'centroid (both need cluster_id). '
+                "'core_first' best-scored-first by the partition's cluster_score "
+                '(both need cluster_uid). '
                 "'diverse' ranks the matched pool by k-center-greedy coverage "
                 '(gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized '
                 'order value when the flag is off).'
@@ -169,9 +162,7 @@ async def list_crops(
             sort=sort,
             item_filter_params=item_filter.model_dump(exclude_defaults=True),
             route_params={
-                'cluster_id': cluster_id,
                 'cluster_uid': None if cluster_uid is None else str(cluster_uid),
-                'cluster_subid': cluster_subid,
                 'label_source': label_source,
                 'class_source': class_source,
                 'label_validated': label_validated,
@@ -207,7 +198,7 @@ async def list_crops(
         index=items_index(),
         order=order,
         query_clause=listing.query_clause,
-        cluster_id=cluster_id,
+        cluster_uid=None if cluster_uid is None else str(cluster_uid),
         item_filter=listing.item_filter,
         page=page,
         page_size=page_size,

@@ -40,8 +40,10 @@ def test_the_list_returns_the_runs_that_name_the_cluster_newest_first(stack: Any
             ids.append(started.json()['run_id'])
             _wait(stack, ids[-1])
             time.sleep(0.01)
-        listed = stack.client.get(f'/curation/projects/default{RUNS}?cluster_id={CLUSTER}')
-        other = stack.client.get(f'/curation/projects/default{RUNS}?cluster_id=77')
+        listed = stack.client.get(f'/curation/projects/default{RUNS}?cluster_uid={CLUSTER}')
+        other = stack.client.get(
+            f'/curation/projects/default{RUNS}?cluster_uid=0c9a9f5e-3b7d-4a6f-8f0e-5d1b2c3d4e5f'
+        )
     assert [r['run_id'] for r in listed.json()['runs']] == ids[::-1]
     assert other.json()['runs'] == []
 

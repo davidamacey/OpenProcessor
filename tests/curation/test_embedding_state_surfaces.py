@@ -107,7 +107,7 @@ async def test_ordered_page_reports_how_many_it_could_not_rank(
         index='items',
         order='diverse',
         query_clause={'match_all': {}},
-        cluster_id=None,
+        cluster_uid=None,
         item_filter=ItemFilter(),
         page=1,
         page_size=10,

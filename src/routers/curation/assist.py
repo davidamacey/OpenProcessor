@@ -4,13 +4,14 @@
 selection, a cluster, a sub-cluster, a filter): a dry run by default that counts
 what the run would send to the VLM, then a background run that writes the VLM's
 class suggestions and pack-declared attributes. The run's result carries a
-proposal for the (sub-)cluster; ``apply`` is the only route that turns it into
+proposal for the cluster; ``apply`` is the only route that turns it into
 labels. The routes only adapt HTTP; the rules (scope, sample, lock rule, one run per
 project) live in :mod:`src.services.curation.assist`.
 """
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
 from typing import Annotated, Any
 
 from fastapi import Query, Response
@@ -110,19 +111,18 @@ async def create_assist_run(
 async def list_assist_runs(
     opensearch: OpenSearchDep,
     session: DbSessionDep,
-    cluster_id: Annotated[int | None, Query()] = None,
-    cluster_subid: Annotated[str | None, Query()] = None,
+    cluster_uid: Annotated[uuid.UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> AssistRunList:
-    """The newest runs, newest first, whose target or context names that cluster (and
-    sub-cluster); all runs without ``cluster_id``. Each carries ``scope_now``, so a
-    client can mark a proposal stale after a re-refine. The newest 100 runs are scanned."""
-    runs = await list_runs(session, cluster_id=cluster_id, cluster_subid=cluster_subid, limit=limit)
-    shared: dict[tuple[int | None, str | None], Any] = {}
+    """The newest runs, newest first, whose target or context names that cluster;
+    all runs without ``cluster_uid``. Each carries ``scope_now``, so a client can mark a
+    proposal stale after the cluster changed. The newest 100 runs are scanned."""
+    runs = await list_runs(session, cluster_uid=cluster_uid, limit=limit)
+    shared: dict[uuid.UUID | None, Any] = {}
     out = []
     for run, before in runs:
         flt = getattr(run.request.target, 'context', None) or run.request.target
-        key = (getattr(flt, 'cluster_id', None), getattr(flt, 'cluster_subid', None))
+        key = getattr(flt, 'cluster_uid', None)
         if key not in shared:
             shared[key] = await current_members(opensearch, run.request)
         out.append(await _with_scope(opensearch, run, before, members=shared[key]))

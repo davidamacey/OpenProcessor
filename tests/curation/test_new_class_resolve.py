@@ -31,8 +31,6 @@ CLASS_STATE_FIELDS = (
     'label_source',
     'confidence',
     'class_validated',
-    'cluster_id',
-    'cluster_subid',
 )
 
 
@@ -112,7 +110,6 @@ def test_resolve_with_class_id_writes_every_matching_pending_item(
         assert doc['class_source'] == 'human'
         assert doc['class_validated'] is True
         assert doc['class_id'] == class_id
-        assert doc['cluster_id'] == class_id
         assert doc['needs_new_class'] is False
 
     # Untouched.

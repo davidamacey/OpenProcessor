@@ -19,7 +19,6 @@ from src.clients.curation_opensearch.bodies_core import (
     _region_auto_confirm_mapping,
     _region_boxes_mapping,
 )
-from src.clients.curation_opensearch.cluster_fields import CLUSTER_GEOMETRY_MAPPING
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
@@ -355,26 +354,6 @@ async def ensure_items_exclusion_fields(
         'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
     )
     return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
-
-
-async def ensure_items_cluster_geometry_fields(
-    client: AsyncOpenSearch,
-) -> dict[str, Any]:
-    """PUT :data:`CLUSTER_GEOMETRY_MAPPING` onto the items mapping — one
-    ``PUT _mapping`` per field, additive and idempotent."""
-    index = config.items_index
-    added: list[str] = []
-    for field, spec in CLUSTER_GEOMETRY_MAPPING.items():
-        try:
-            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
-            added.append(field)
-        except Exception as exc:
-            msg = str(exc)
-            if not _is_recoverable_mapping_conflict(msg):
-                logger.error('curation_mapping_migration_failed', index=index, error=msg)
-                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
-    logger.info('curation_mapping_migration', index=index, fields=added)
-    return {'acknowledged': True, 'index': index, 'fields_added': added}
 
 
 async def ensure_items_text_fields(

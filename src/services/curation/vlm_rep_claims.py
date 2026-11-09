@@ -1,10 +1,8 @@
 """The representative crops the VLM scope has already claimed, per cluster.
 
-Scope ``representatives`` asks the VLM about the ``per_cluster`` crops nearest
-each cluster centre. A VLM class write moves the crop out of its candidate
-cluster into the class cluster, so ranking the cluster's *current* members
-again would hand out the next K, then the next, until the cluster is drained.
-Claims make the choice sticky: once a cluster's reps are named they stay named
+Scope ``representatives`` asks the VLM about the ``per_cluster`` best-scored crops of
+each served cluster. Once a rep is labelled, ranking the cluster again would hand out the
+next K, then the next, until the cluster is drained. Claims make the choice sticky: once a cluster's reps are named they stay named
 (labelled or not) and the cluster is never ranked again for more.
 
 Stored in the project's settings document next to the policies, on purpose
@@ -24,9 +22,9 @@ KEY = 'vlm_scope_reps'
 
 
 class RepClaim(BaseModel):
-    cluster_id: int
+    cluster_uid: str
     crop_ids: list[str]
-    """Nearest-first; may be longer than ``per_cluster`` after it was lowered, so
+    """Best-scored first; may be longer than ``per_cluster`` after it was lowered, so
     raising it again returns the same crops instead of claiming new ones."""
 
 

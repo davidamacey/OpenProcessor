@@ -30,8 +30,6 @@ _SOURCE_NUMBERED_FIELDS = (
     'class_id_history',
     'label_op_id',
     'edit_history',
-    'excluded_prior_cluster_id',
-    'excluded_prior_cluster_subid',
     'vlm_dismissed_class_id',
     'probe_pred_class_id',
     'cluster_id',

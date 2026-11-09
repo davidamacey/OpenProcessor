@@ -149,9 +149,6 @@ class RegionTestCandidate(BaseModel):
     text_choice: str | None
     text_vlm_invalid: str | None
     text_disagreement: bool | None
-    cluster_id: int | None
-    cluster_subid: str | None
-    cluster_distance: float | None
     cluster_partition_id: str | None
     cluster_uid: str | None
     cluster_state: str | None

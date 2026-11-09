@@ -21,7 +21,6 @@ def _target(**kw: Any) -> dict[str, Any]:
         'class_id': 7,
         'class_name': 'cone',
         'class_source': 'open_vocab_target',
-        'cluster_id': 7,
         'source_prompt': 'traffic cone',
         **kw,
     }
@@ -34,7 +33,6 @@ def _vlm_update(**kw: Any) -> dict[str, Any]:
         'class_source': 'vlm',
         'class_detector': 'vlm',
         'class_labeler': 'vlm',
-        'cluster_id': 3,
         'label_source': 'vlm',
         'vlm_confidence': 'high',
         'vlm_raw_label': 'barrel',
@@ -55,7 +53,6 @@ def test_a_vlm_relabel_keeps_the_target_class_and_records_a_suggestion() -> None
         'cone',
         'open_vocab_target',
     )
-    assert doc['cluster_id'] == 7
     assert doc['source_prompt'] == 'traffic cone'
     assert doc['vlm_class_attempted_at'] == NOW
     assert vlm_suggestion(doc) == (None, 'barrel')

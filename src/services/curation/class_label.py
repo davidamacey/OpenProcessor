@@ -149,8 +149,6 @@ def class_label_fields(label: ItemLabel) -> dict[str, Any]:
             'class_source': HUMAN_CLASS_SOURCE,
             'class_validated': True,
             'label_source': label.label_source or 'human',
-            'cluster_id': label.class_id,
-            'cluster_subid': None,
             # Always written for a human label: a single label clears a stale tag.
             'label_op_id': label.op_id,
             **human_class_provenance(),
@@ -162,8 +160,6 @@ def class_label_fields(label: ItemLabel) -> dict[str, Any]:
             'class_source': PROPAGATED_CLASS_SOURCE,
             'class_validated': False,
             'label_source': ASSIST_LOOP,
-            'cluster_id': label.class_id,
-            'cluster_subid': None,
             **class_provenance(
                 detector=ASSIST_LOOP, detector_version=label.run_id or '', labeler=ASSIST_LOOP
             ),
@@ -177,9 +173,6 @@ def class_label_fields(label: ItemLabel) -> dict[str, Any]:
             'label_source': label.label_source or LABEL_SOURCE_IMPORT,
             **import_class_provenance(label.import_id or '', now=label.labeled_at),
         }
-        if label.validated:
-            fields['cluster_id'] = label.class_id
-            fields['cluster_subid'] = None
     return fields
 
 

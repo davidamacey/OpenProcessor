@@ -4,9 +4,8 @@
   before the most recent human label write (single label, batch label,
   move) — class, provenance, validation and cluster placement — not just
   null the provenance while leaving the human's class in place.
-- ``POST /crops/batch_exclude`` -> ``batch_unexclude`` must return a
-  validated item to its class cluster (``cluster_id == class_id``)
-  instead of dropping it into the residual pool.
+- ``POST /crops/batch_exclude`` -> ``batch_unexclude`` must give a validated item its
+  validation back and leave its cluster placement alone.
 
 Every write runs through the real router functions against the
 query-evaluating in-memory OpenSearch.
@@ -35,6 +34,7 @@ pytestmark = pytest.mark.usefixtures('label_ops_state')
 
 
 ITEMS = base_curation_config().items_index
+CLUSTER_UID = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 
 # The class / label / provenance / cluster state an undo must restore.
 CLASS_STATE_FIELDS = (
@@ -80,18 +80,15 @@ def _ingest_doc(crop_id: str, **item_kw: Any) -> dict[str, Any]:
 
 
 def _proposal_doc(crop_id: str) -> dict[str, Any]:
-    """An unlabeled ingest proposal sitting in a residual candidate cluster."""
+    """An unlabeled ingest proposal sitting in a cluster of the serving partition."""
     doc = _ingest_doc(
         crop_id,
         class_source='detector_proposal',
         proposal_name='thing',
         class_detector='detector',
         class_detector_version='3',
-        cluster_id=10003,
-        cluster_distance=0.2,
     )
-    doc['cluster_subid'] = '10003b'
-    return doc
+    return {**doc, 'cluster_uid': CLUSTER_UID, 'cluster_state': 'assigned'}
 
 
 def _class_state(doc: dict[str, Any]) -> dict[str, Any]:
@@ -174,7 +171,6 @@ async def test_undo_restores_prior_vlm_label(crops, registry, ids) -> None:
         class_labeler='vlm_label_batch',
         class_labeled_at='2026-09-02T00:00:00+00:00',
         class_validated=False,
-        cluster_id=ids['widget'],
     )
     fake = QueryFakeOpenSearch({ITEMS: {'c2': doc}})
     before = _class_state(fake.docs(ITEMS)['c2'])
@@ -220,9 +216,8 @@ async def test_successive_undos_step_back_through_human_labels(crops, registry, 
 
     await label_undo.unlabel_crop('c3', fake)
     restored = _class_state(fake.docs(ITEMS)['c3'])
-    # Back to the first human label: still validated, in its class cluster.
+    # Back to the first human label: still validated.
     assert restored == first_label
-    assert restored['cluster_id'] == ids['widget']
 
     await label_undo.unlabel_crop('c3', fake)
     assert _class_state(fake.docs(ITEMS)['c3']) == original
@@ -249,7 +244,6 @@ async def test_undo_without_history_clears_class(crops) -> None:
         class_source='human',
         label_source='human',
         class_validated=True,
-        cluster_id=4,
     )
     fake = QueryFakeOpenSearch({ITEMS: {'legacy': doc}})
     await label_undo.unlabel_crop('legacy', fake)
@@ -257,11 +251,10 @@ async def test_undo_without_history_clears_class(crops) -> None:
     assert after['class_id'] is None
     assert after['class_validated'] is False
     assert after['class_source'] is None
-    assert after['cluster_id'] is None
 
 
 # =============================================================================
-# Bug B — exclude -> unexclude keeps validated items in their class cluster
+# Bug B — exclude -> unexclude restores the validation and never moves the item
 # =============================================================================
 
 
@@ -278,10 +271,10 @@ async def _unexclude(crops, fake, crop_ids: list[str]) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_unexclude_returns_validated_item_to_its_class_cluster(crops, registry, ids) -> None:
+async def test_exclusion_restores_validation_and_never_moves_the_item(crops, registry, ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'v': _proposal_doc('v'), 'u': _proposal_doc('u')}})
     await _label(crops, fake, registry, 'v', ids['gadget'])
-    fake.docs(ITEMS)['v']['cluster_subid'] = f'{ids["gadget"]}a'
+    placed = {k: v for k, v in fake.docs(ITEMS)['v'].items() if k.startswith('cluster_')}
 
     assert await _exclude(crops, fake, ['v', 'u']) == {
         'excluded': 2,
@@ -290,8 +283,8 @@ async def test_unexclude_returns_validated_item_to_its_class_cluster(crops, regi
     }
     for doc in fake.docs(ITEMS).values():
         assert doc['class_excluded'] is True
-        assert doc['cluster_id'] == -2
         assert doc['class_validated'] is False
+        assert doc['cluster_uid'] == CLUSTER_UID, 'the cluster readers filter class_excluded'
 
     assert await _unexclude(crops, fake, ['v', 'u']) == {
         'unexcluded': 2,
@@ -301,71 +294,9 @@ async def test_unexclude_returns_validated_item_to_its_class_cluster(crops, regi
     v, u = fake.docs(ITEMS)['v'], fake.docs(ITEMS)['u']
     assert v['class_excluded'] is False
     assert v['class_validated'] is True
-    assert v['cluster_id'] == v['class_id'] == ids['gadget']
-    assert v['cluster_subid'] == f'{ids["gadget"]}a'
-    # An unvalidated item whose candidate cluster no longer has members
-    # drops to the residual pool for a fresh assignment.
+    assert {k: x for k, x in v.items() if k.startswith('cluster_')} == placed
     assert u['class_validated'] is False
-    assert u['cluster_id'] is None
-    assert u['cluster_subid'] is None
-
-
-@pytest.mark.asyncio
-async def test_unexclude_restores_a_live_candidate_cluster(crops, registry, ids) -> None:
-    """An unvalidated item excluded from a candidate cluster that still has
-    members goes back to it instead of vanishing from every cluster grid."""
-    fake = QueryFakeOpenSearch({ITEMS: {'u': _proposal_doc('u'), 'peer': _proposal_doc('peer')}})
-    await _exclude(crops, fake, ['u'])
-    await _unexclude(crops, fake, ['u'])
-    u = fake.docs(ITEMS)['u']
-    assert u['class_excluded'] is False
-    assert u['class_validated'] is False
-    assert u['cluster_id'] == 10003
-    assert u['cluster_subid'] == '10003b'
-
-
-@pytest.mark.asyncio
-async def test_unexclude_returns_unvalidated_item_to_its_class_cluster(crops, ids) -> None:
-    """An unvalidated class-kind item (VLM label, sitting in its class
-    cluster) comes back to that class cluster, not the residual pool."""
-    doc = _proposal_doc('cv')
-    doc.update(
-        class_id=ids['widget'],
-        class_name='widget',
-        class_source='vlm',
-        label_source='vlm',
-        class_validated=False,
-        cluster_id=ids['widget'],
-        cluster_subid=f'{ids["widget"]}c',
-    )
-    fake = QueryFakeOpenSearch({ITEMS: {'cv': doc}})
-    await _exclude(crops, fake, ['cv'])
-    assert fake.docs(ITEMS)['cv']['cluster_id'] == -2
-    await _unexclude(crops, fake, ['cv'])
-    cv = fake.docs(ITEMS)['cv']
-    assert cv['class_excluded'] is False
-    assert cv['class_validated'] is False
-    assert cv['cluster_id'] == ids['widget']
-    assert cv['cluster_subid'] == f'{ids["widget"]}c'
-
-
-@pytest.mark.asyncio
-async def test_unexclude_unvalidated_item_from_another_class_cluster_goes_residual(
-    crops, ids
-) -> None:
-    """The class-cluster restore only applies to the item's own class."""
-    doc = _proposal_doc('oc')
-    doc.update(
-        class_id=ids['widget'],
-        class_name='widget',
-        class_source='vlm',
-        class_validated=False,
-        cluster_id=ids['gadget'],
-    )
-    fake = QueryFakeOpenSearch({ITEMS: {'oc': doc}})
-    await _exclude(crops, fake, ['oc'])
-    await _unexclude(crops, fake, ['oc'])
-    assert fake.docs(ITEMS)['oc']['cluster_id'] is None
+    assert u['cluster_uid'] == CLUSTER_UID
 
 
 # =============================================================================
@@ -452,7 +383,6 @@ async def test_re_exclude_keeps_the_recorded_pre_exclusion_state(crops, registry
     await _unexclude(crops, fake, ['v'])
     v = fake.docs(ITEMS)['v']
     assert v['class_validated'] is True
-    assert v['cluster_id'] == ids['widget']
 
 
 @pytest.mark.asyncio
@@ -482,14 +412,11 @@ async def test_unexclude_legacy_exclusion_of_human_label(crops) -> None:
         class_validated=False,
         class_excluded=True,
         excluded_reason='ignore',
-        cluster_id=-2,
-        cluster_subid=None,
     )
     fake = QueryFakeOpenSearch({ITEMS: {'old': doc}})
     await _unexclude(crops, fake, ['old'])
     after = fake.docs(ITEMS)['old']
     assert after['class_validated'] is True
-    assert after['cluster_id'] == 7
 
 
 @pytest.mark.asyncio
@@ -502,14 +429,12 @@ async def test_undo_label_on_excluded_item_keeps_it_excluded(crops, registry, id
     await label_undo.unlabel_crop('x', fake)
     x = fake.docs(ITEMS)['x']
     assert x['class_excluded'] is True
-    assert x['cluster_id'] == -2
     assert x['class_validated'] is False
     assert x['class_id'] == ids['widget']
 
     await _unexclude(crops, fake, ['x'])
     x = fake.docs(ITEMS)['x']
     assert x['class_validated'] is True
-    assert x['cluster_id'] == ids['widget']
 
 
 # =============================================================================

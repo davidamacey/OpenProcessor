@@ -21,8 +21,7 @@ def _label(request: AssistRunRequest) -> str:
         scope = target.context  # type: ignore[assignment]
     else:
         return 'the scope'
-    suffix = f' sub-cluster {scope.cluster_subid}' if scope.cluster_subid else ''
-    return f'cluster {scope.cluster_id}{suffix}'
+    return f'cluster {scope.cluster_uid}'
 
 
 async def current_members(

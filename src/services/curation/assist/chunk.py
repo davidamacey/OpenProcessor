@@ -97,7 +97,7 @@ async def _classify(
     out.predicted += len(preds)
     out.failed += sum(1 for p in preds if p.failure == 'request_failed')
     out.request_failed_ids += [p.img_id for p in preds if p.failure == 'request_failed']
-    updates, _proposals = updates_from_predictions(preds, ctx, set_cluster=False)
+    updates, _proposals = updates_from_predictions(preds, ctx)
     locked = {cid for cid in updates if class_write_locked(sources.get(cid, {}))}
     writable = {cid: u for cid, u in updates.items() if cid not in locked}
     await write_updates(opensearch, ctx, writable, writer_id=WRITER)

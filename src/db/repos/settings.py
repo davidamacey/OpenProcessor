@@ -79,7 +79,7 @@ class ProjectionStateRow:
     project_id: uuid.UUID
     projection_version: int
     scope: str
-    cluster_id: int | None
+    cluster_uid: uuid.UUID | None
     n_points: int
     n_components: int
     metric: str
@@ -294,7 +294,7 @@ async def get_projection_state(
         row.project_id,
         row.projection_version,
         row.scope,
-        row.cluster_id,
+        row.cluster_uid,
         row.n_points,
         row.n_components,
         row.metric,
@@ -310,7 +310,7 @@ async def put_projection_state(
     *,
     projection_version: int,
     scope: str,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     n_points: int,
     n_components: int,
     metric: str,
@@ -322,7 +322,7 @@ async def put_projection_state(
     values = {
         'projection_version': projection_version,
         'scope': scope,
-        'cluster_id': cluster_id,
+        'cluster_uid': cluster_uid,
         'n_points': n_points,
         'n_components': n_components,
         'metric': metric,

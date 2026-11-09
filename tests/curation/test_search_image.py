@@ -216,12 +216,16 @@ def test_rgba_and_grayscale_become_three_channels(client):
 
 
 def test_filters_reach_the_knn_filter(client):
-    resp = _post(client, _image(), params={'cluster_id': 7, 'min_score': 0.3})
+    resp = _post(
+        client,
+        _image(),
+        params={'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11', 'min_score': 0.3},
+    )
     assert resp.status_code == 200
     body = _knn_body(client)
-    assert {'term': {'cluster_id': 7}} in body['query']['knn']['pe_embedding']['filter']['bool'][
-        'filter'
-    ]
+    assert {'term': {'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'}} in body['query'][
+        'knn'
+    ]['pe_embedding']['filter']['bool']['filter']
     assert body['min_score'] == 0.3
 
 

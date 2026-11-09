@@ -22,7 +22,7 @@ pytest_plugins = ['curation.assist_queue']
 pytestmark = pytest.mark.db
 
 RUNS = '/assist/runs'
-CLUSTER = 10000
+CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 # What legitimately differs between two writes of the same label.
 VOLATILE = {'updated_at', 'class_labeled_at'}
 
@@ -34,8 +34,7 @@ def world(assist_queue: Any, stack: Any, readable_crops: None) -> Any:
 
 def _seed(stack: Any, crop_id: str, **doc: Any) -> None:
     defaults = {
-        'cluster_id': CLUSTER,
-        'cluster_subid': f'{CLUSTER}a',
+        'cluster_uid': CLUSTER,
         'class_source': 'item_model',
         'updated_at': '2026-10-01T00:00:00+00:00',
     }
@@ -50,7 +49,7 @@ def _run(stack: Any) -> str:
     with stack.client:
         started = stack.post(
             RUNS,
-            target={'kind': 'cluster', 'cluster_id': CLUSTER},
+            target={'kind': 'cluster', 'cluster_uid': CLUSTER},
             actions=['classify'],
             dry_run=False,
         )

@@ -147,8 +147,6 @@ _EXCLUSION_MAPPING: dict[str, Any] = {
     'excluded_by': {'type': 'keyword'},
     'excluded_reason': {'type': 'keyword'},
     'excluded_prior_class_validated': {'type': 'boolean'},
-    'excluded_prior_cluster_id': {'type': 'integer'},
-    'excluded_prior_cluster_subid': {'type': 'keyword'},
     # Review-queue dismissal (POST /crops/{id}/review_dismiss, /discard).
     'review_dismissed_at': {'type': 'date'},
     'review_dismissed_by': {'type': 'keyword'},

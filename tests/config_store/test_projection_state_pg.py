@@ -64,13 +64,13 @@ async def test_a_fit_writes_the_view_state_and_the_viz_read_serves_the_same_shap
     umap_state.save_reducer({'fitted': True}, state_id=embedding_viz.VIZ_REDUCER_STATE_ID)
     fitted_at = dt.datetime(2026, 5, 1, 12, tzinfo=dt.UTC).isoformat()
     await embedding_viz._save_run_metadata(
-        scope='all', cluster_id=None, n_points=7, fitted_at=fitted_at
+        scope='all', cluster_uid=None, n_points=7, fitted_at=fitted_at
     )
     meta = await embedding_viz_read._load_run_metadata()
     assert meta == {
         'projection_version': embedding_viz.VIZ_PROJECTION_VERSION,
         'scope': 'all',
-        'cluster_id': None,
+        'cluster_uid': None,
         'n_points': 7,
         'fitted_at': fitted_at,
         'n_components': embedding_viz.VIZ_N_COMPONENTS,

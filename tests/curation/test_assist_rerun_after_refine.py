@@ -17,7 +17,7 @@ pytest_plugins = ['curation.assist_queue']
 pytestmark = pytest.mark.db
 
 RUNS = '/assist/runs'
-CLUSTER = 10000
+CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def world(assist_queue: Any, stack: Any, readable_crops: None) -> Any:
 
 def _run(stack: Any) -> dict[str, Any]:
     body = {
-        'target': {'kind': 'cluster', 'cluster_id': CLUSTER},
+        'target': {'kind': 'cluster', 'cluster_uid': CLUSTER},
         'actions': ['classify'],
         'dry_run': False,
     }
@@ -52,8 +52,7 @@ def test_a_rerun_after_a_refine_keeps_human_labels_and_updates_the_suggestions(w
     for i in range(5):
         world.seed(
             f'c{i}',
-            cluster_id=CLUSTER,
-            cluster_subid=f'{CLUSTER}a',
+            cluster_uid=CLUSTER,
             class_source='item_model',
             updated_at='2026-10-01T00:00:00+00:00',
         )
@@ -63,14 +62,12 @@ def test_a_rerun_after_a_refine_keeps_human_labels_and_updates_the_suggestions(w
     first = _run(world)
     assert first['status'] == 'completed', first
 
-    # the user labels three members, then re-refines: every sub-id is rewritten
+    # the user labels three members
     store = world.items.store[ITEMS]
     for crop_id in ('c0', 'c1', 'c2'):
         store[crop_id].update(
             class_id=0, class_name='widget', class_source='human', class_validated=True
         )
-    for i in range(5):
-        store[f'c{i}']['cluster_subid'] = f'{CLUSTER}{"b" if i % 2 else "a"}'
 
     second = _run(world)
 
@@ -85,7 +82,7 @@ def test_a_rerun_after_a_refine_keeps_human_labels_and_updates_the_suggestions(w
 
 @pytest.mark.asyncio
 async def test_an_older_runs_write_after_a_newer_one_is_skipped(world: Any) -> None:
-    world.seed('c0', cluster_id=CLUSTER, class_source='item_model')
+    world.seed('c0', cluster_uid=CLUSTER, class_source='item_model')
     newer = RunMeta('asr_new', '2026-10-15T12:00:00+00:00', 'env@1', 'm', 'p', None)
     older = RunMeta('asr_old', '2026-10-15T11:00:00+00:00', 'env@1', 'm', 'p', None)
 
@@ -106,7 +103,7 @@ async def test_an_older_runs_write_after_a_newer_one_is_skipped(world: Any) -> N
 async def test_a_slot_replaces_everything_an_older_run_wrote_except_box_suggestions(
     world: Any,
 ) -> None:
-    world.seed('c0', cluster_id=CLUSTER, class_source='item_model')
+    world.seed('c0', cluster_uid=CLUSTER, class_source='item_model')
     world.items.store[ITEMS]['c0']['assist'] = {
         'run_id': 'asr_old',
         'run_created_at': '2026-10-15T10:00:00+00:00',

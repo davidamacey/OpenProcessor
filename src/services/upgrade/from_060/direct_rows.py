@@ -314,7 +314,7 @@ async def projection_state(
             project_id=project_id,
             projection_version=state.projection_version,
             scope=state.scope,
-            cluster_id=state.cluster_id,
+            cluster_uid=None,  # a 0.6.0 integer cluster id names no served cluster
             n_points=state.n_points,
             n_components=state.n_components,
             metric=state.metric,

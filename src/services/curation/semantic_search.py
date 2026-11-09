@@ -69,7 +69,7 @@ class SemanticSearchDisabledError(RuntimeError):
 def _build_filter(
     *,
     tab: str | None,
-    cluster_id: int | None,
+    cluster_uid: str | None,
     date_from: str | None,
     date_to: str | None,
     max_rank: int | None,
@@ -108,8 +108,8 @@ def _build_filter(
             filters.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
 
     filters.extend(item_filter_clauses(item_filter or ItemFilter()))
-    if cluster_id is not None:
-        filters.append({'term': {'cluster_id': cluster_id}})
+    if cluster_uid is not None:
+        filters.append({'term': {'cluster_uid': cluster_uid}})
 
     if date_from is not None or date_to is not None:
         date_range: dict[str, Any] = {}
@@ -190,7 +190,7 @@ def _filter_for(
     *,
     item_filter: ItemFilter | None,
     tab: str | None,
-    cluster_id: int | None,
+    cluster_uid: str | None,
     date_from: str | None,
     date_to: str | None,
     max_rank: int | None,
@@ -203,7 +203,7 @@ def _filter_for(
     return _build_filter(
         item_filter=item_filter.model_copy(update={'max_rank': None}),
         tab=tab,
-        cluster_id=cluster_id,
+        cluster_uid=cluster_uid,
         date_from=date_from,
         date_to=date_to,
         max_rank=max_rank if max_rank is not None else item_filter.max_rank,
@@ -337,7 +337,7 @@ async def semantic_text_search(
     query: str,
     page: int,
     page_size: int,
-    cluster_id: int | None = None,
+    cluster_uid: str | None = None,
     tab: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -381,7 +381,7 @@ async def semantic_text_search(
         filter_clause = _filter_for(
             item_filter=item_filter,
             tab=tab,
-            cluster_id=cluster_id,
+            cluster_uid=cluster_uid,
             date_from=date_from,
             date_to=date_to,
             max_rank=max_rank,
@@ -411,7 +411,7 @@ async def semantic_similar_search(
     box_id: str | None = None,
     target: SearchTarget = SearchTarget.ITEM,
     exclude_self: bool = True,
-    cluster_id: int | None = None,
+    cluster_uid: str | None = None,
     tab: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -472,7 +472,7 @@ async def semantic_similar_search(
         filter_clause = _filter_for(
             item_filter=item_filter,
             tab=tab,
-            cluster_id=cluster_id,
+            cluster_uid=cluster_uid,
             date_from=date_from,
             date_to=date_to,
             max_rank=max_rank,

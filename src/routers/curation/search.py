@@ -11,6 +11,7 @@ the operator which flag to flip, same shape ``scores.py`` uses.
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, Request, Response
@@ -58,7 +59,7 @@ async def search_text(
     ],
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
-    cluster_id: int | None = Query(None),
+    cluster_uid: uuid.UUID | None = Query(None),
     tab: str | None = Query(
         None,
         description=(
@@ -140,7 +141,7 @@ async def search_text(
                 query=q,
                 page=page,
                 page_size=page_size,
-                cluster_id=cluster_id,
+                cluster_uid=None if cluster_uid is None else str(cluster_uid),
                 tab=tab,
                 date_from=date_from,
                 date_to=date_to,
@@ -187,7 +188,7 @@ async def search_similar(
     exclude_self: bool = True,
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
-    cluster_id: int | None = Query(None),
+    cluster_uid: uuid.UUID | None = Query(None),
     tab: str | None = Query(None, description='Optional review-tab cohort id, as /search/text.'),
     date_from: str | None = Query(None, description='ISO date/datetime lower bound on created_at.'),
     date_to: str | None = Query(None, description='ISO date/datetime upper bound on created_at.'),
@@ -234,7 +235,7 @@ async def search_similar(
                 exclude_self=exclude_self,
                 page=page,
                 page_size=page_size,
-                cluster_id=cluster_id,
+                cluster_uid=None if cluster_uid is None else str(cluster_uid),
                 tab=tab,
                 date_from=date_from,
                 date_to=date_to,

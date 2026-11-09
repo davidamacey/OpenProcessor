@@ -7,6 +7,7 @@ types cannot express are :func:`validate_request` (a structured 422).
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,13 +36,12 @@ MAX_BOX_REFS = 1000
 
 
 class AssistContext(BaseModel):
-    """The (sub-)cluster a selection of crops belongs to, so the run's result
-    is listed with that scope."""
+    """The cluster of the serving partition a selection of crops belongs to, so the run's
+    result is listed with that scope."""
 
     model_config = ConfigDict(extra='forbid')
 
-    cluster_id: int
-    cluster_subid: str | None = None
+    cluster_uid: uuid.UUID
 
 
 class CropsTarget(BaseModel):
@@ -72,13 +72,12 @@ class BoxesTarget(BaseModel):
 
 
 class ClusterTarget(BaseModel):
-    """A cluster, or one sub-cluster of it, addressed by the stored ids."""
+    """A cluster of the serving partition, addressed by its ``cluster_uid``."""
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal['cluster']
-    cluster_id: int
-    cluster_subid: str | None = None
+    cluster_uid: uuid.UUID
 
 
 class FilterTarget(BaseModel):
@@ -97,15 +96,13 @@ AssistTarget = Annotated[
 
 class AssistSample(BaseModel):
     """What the VLM sees. ``all``: every member of the scope. ``representative``:
-    a seeded sample whose size grows with the scope (``size`` overrides), stratified
-    by sub-cluster when the scope has several."""
+    a seeded sample whose size grows with the scope (``size`` overrides)."""
 
     model_config = ConfigDict(extra='forbid')
 
     mode: Literal['all', 'representative'] = 'all'
     size: int | None = Field(default=None, ge=1, le=SAMPLE_HARD_MAX)
     seed: int = 0
-    stratify_by: Literal['auto', 'cluster_subid', 'none'] = 'auto'
 
 
 class SegmentSpec(BaseModel):
@@ -190,12 +187,6 @@ def _invalid(message: str) -> Exception:
 # ---- run state -----------------------------------------------------------------
 
 
-class StratumInfo(BaseModel):
-    key: str
-    size: int
-    sampled: int
-
-
 class SkippedCounts(BaseModel):
     """Members of the target the run did not send to the VLM, and why."""
 
@@ -219,7 +210,6 @@ class ResolvedScope(BaseModel):
     scope_digest: str = Field(description='sha256 over the sorted member ids.')
     sampled: int
     sample_seed: int
-    strata: list[StratumInfo] = Field(default_factory=list)
     skipped: SkippedCounts = Field(default_factory=SkippedCounts)
     vlm: dict[str, Any] | None = None
     prompt_pack: dict[str, Any] | None = None
@@ -317,7 +307,6 @@ __all__ = [
     'SegmentResult',
     'SegmentSpec',
     'SkippedCounts',
-    'StratumInfo',
     'VerifyResult',
     'validate_request',
 ]

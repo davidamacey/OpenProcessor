@@ -82,7 +82,9 @@ def _item_space(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _ctx(**params: Any) -> FakeCtx:
     return FakeCtx(
-        uuid.uuid4(), uuid.uuid4(), {'scope': 'residual', 'cluster_id': None, 'max_n': 100} | params
+        uuid.uuid4(),
+        uuid.uuid4(),
+        {'scope': 'residual', 'cluster_uid': None, 'max_n': 100} | params,
     )
 
 
@@ -138,8 +140,8 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
     assert saved['n_points'] == len(pool)
 
     # Every bulk doc body writes ONLY viz_x/viz_y/viz_projection_version --
-    # never cluster_id/cluster_subid/cluster_distance.
-    forbidden = {'cluster_id', 'cluster_subid', 'cluster_distance'}
+    # never a cluster_* field.
+    forbidden = {'cluster_uid', 'cluster_state', 'cluster_distance'}
     written_ids: set[str] = set()
     for body in bulk_bodies:
         for action, doc in zip(body[0::2], body[1::2], strict=True):
@@ -210,7 +212,7 @@ async def test_get_cached_projection_never_triggers_a_fit(
         'projection_version': 'umap_viz_v1',
         'fitted_at': '2026-09-11T00:00:00+00:00',
         'scope': 'residual',
-        'cluster_id': None,
+        'cluster_uid': None,
         'n_points': 2,
     }
     fake_os.search = AsyncMock(
@@ -222,7 +224,7 @@ async def test_get_cached_projection_never_triggers_a_fit(
                         '_source': {
                             'viz_x': 1.0,
                             'viz_y': 2.0,
-                            'cluster_id': 10173,
+                            'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
                             'class_name': '',
                             'class_source': 'vlm_unmatched',
                         },
@@ -242,7 +244,7 @@ async def test_get_cached_projection_never_triggers_a_fit(
             'crop_id': 'crop-a',
             'x': 1.0,
             'y': 2.0,
-            'cluster_id': 10173,
+            'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
             'class_name': '',
             'class_source': 'vlm_unmatched',
         }
@@ -272,12 +274,15 @@ async def test_get_cached_projection_applies_cluster_and_class_filters(
     fake_os.count = AsyncMock(return_value={'count': 0})
 
     await embedding_viz_read.get_cached_projection(
-        fake_os, cluster_id=10173, class_id=7, max_points=5
+        fake_os,
+        cluster_uid=uuid.UUID('6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'),
+        class_id=7,
+        max_points=5,
     )
 
     search_kwargs = fake_os.search.call_args.kwargs
     filter_clauses = search_kwargs['body']['query']['bool']['filter']
-    assert {'term': {'cluster_id': 10173}} in filter_clauses
+    assert {'term': {'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'}} in filter_clauses
     assert {'term': {'class_id': 7}} in filter_clauses
     assert search_kwargs['body']['size'] == 5
 
@@ -305,7 +310,7 @@ async def test_get_cached_projection_pages_with_search_after_no_oversized_reques
             '_source': {
                 'viz_x': 1.0,
                 'viz_y': 2.0,
-                'cluster_id': 1,
+                'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
                 'class_name': 'x',
                 'class_source': 'vlm',
             },
@@ -343,7 +348,7 @@ async def test_get_cached_projection_pages_with_search_after_no_oversized_reques
 # test_select_router.py's structural source-scan guard.
 # =============================================================================
 
-_FORBIDDEN_CLUSTER_FIELDS = frozenset({'cluster_id', 'cluster_subid', 'cluster_distance'})
+_FORBIDDEN_CLUSTER_FIELDS = frozenset({'cluster_uid', 'cluster_state', 'cluster_distance'})
 
 
 def test_bulk_write_coordinates_writes_only_viz_fields() -> None:
@@ -370,8 +375,8 @@ def test_embedding_viz_source_never_mutates_cluster_fields() -> None:
     # The only `doc` dict literal in this module is _bulk_write_coordinates's
     # -- already asserted exactly above. This is a coarse belt-and-suspenders
     # scan for any of the forbidden field names appearing anywhere as a
-    # quoted dict key (read-side `cluster_id` filters use a bare `{'term':
-    # {'cluster_id': ...}}` shape too, so this intentionally doesn't forbid
+    # quoted dict key (read-side `cluster_uid` filters use a bare `{'term':
+    # {'cluster_uid': ...}}` shape too, so this intentionally doesn't forbid
     # the name outright -- just confirms no *new* write site was added
     # without updating this test).
     doc_body_pattern = re.compile(r"'doc':\s*\{([^}]*)\}", re.DOTALL)

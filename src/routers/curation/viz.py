@@ -13,7 +13,7 @@ state with the retired clustering UMAP path
 ``POST {prefix}/cluster/umap/rebuild``) — see
 :mod:`src.services.curation.embedding_viz`'s module docstring for the full
 non-negotiable-rules list (own state slot, never fits on a request path,
-color decorates from the real ``cluster_id`` rather than inventing a
+color decorates from the served ``cluster_uid`` rather than inventing a
 second one, additive-only fields).
 
 Gated end-to-end by ``OP_VIZ_PROJECTION_ENABLED`` (default off, read with
@@ -28,6 +28,7 @@ entry for how the measured purity maps to this entry's
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
 from typing import Any, Literal
 
 from fastapi import HTTPException, Query
@@ -61,7 +62,7 @@ def _max_n() -> int:
 async def viz_projection_rebuild(
     session: DbSessionDep,
     scope: str = Query('residual', pattern='^(residual|cluster)$'),
-    cluster_id: int | None = Query(None),
+    cluster_uid: uuid.UUID | None = Query(None),
 ) -> Any:
     """Queue the UMAP-viz fit job. Never fits inline: answers `202` with the job's state (`409
     job_busy` while one is active); poll ``GET {prefix}/viz/projection/status``."""
@@ -70,13 +71,13 @@ async def viz_projection_rebuild(
             status_code=400,
             detail='UMAP viz projection is disabled (set OP_VIZ_PROJECTION_ENABLED=1 to enable)',
         )
-    if scope == 'cluster' and cluster_id is None:
-        raise HTTPException(status_code=400, detail='cluster_id is required when scope=cluster')
+    if scope == 'cluster' and cluster_uid is None:
+        raise HTTPException(status_code=400, detail='cluster_uid is required when scope=cluster')
 
     from src.services.curation import embedding_viz
 
     await embedding_viz.start(
-        session, current_project_id(), scope=scope, cluster_id=cluster_id, max_n=_max_n()
+        session, current_project_id(), scope=scope, cluster_uid=cluster_uid, max_n=_max_n()
     )
     return JSONResponse(status_code=202, content=await _state(session))
 
@@ -106,7 +107,7 @@ class ProjectionPoint(BaseModel):
     crop_id: str | None = None
     x: float | None = None
     y: float | None = None
-    cluster_id: int | None = None
+    cluster_uid: str | None = None
     class_name: str | None = None
     class_source: str | None = None
 
@@ -134,7 +135,7 @@ class ProjectionError(BaseModel):
 )
 async def viz_projection(
     opensearch: OpenSearchDep,
-    cluster_id: int | None = Query(None),
+    cluster_uid: uuid.UUID | None = Query(None),
     class_id: int | None = Query(None),
     max_points: int = Query(50_000, ge=1, le=200_000),
 ) -> Any:
@@ -157,7 +158,7 @@ async def viz_projection(
     try:
         return await embedding_viz_read.get_cached_projection(
             opensearch,
-            cluster_id=cluster_id,
+            cluster_uid=cluster_uid,
             class_id=class_id,
             max_points=max_points,
         )

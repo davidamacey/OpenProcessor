@@ -26,7 +26,7 @@ def items_index() -> str:
 
 
 def proposal(crop_id: str, **extra: Any) -> dict[str, Any]:
-    """An unlabeled detector proposal sitting in a residual candidate cluster."""
+    """An unlabeled detector proposal sitting in a cluster of the serving partition."""
     return {
         'crop_id': crop_id,
         'proposal_name': 'thing',
@@ -34,7 +34,8 @@ def proposal(crop_id: str, **extra: Any) -> dict[str, Any]:
         'class_source': 'detector_proposal',
         'class_detector': 'detector',
         'class_validated': False,
-        'cluster_id': 10_003,
+        'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
+        'cluster_state': 'assigned',
         'created_at': '2026-02-01T00:00:00+00:00',
         **extra,
     }

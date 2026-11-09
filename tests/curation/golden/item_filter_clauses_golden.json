@@ -359,20 +359,6 @@
    }
   }
  ],
- "cluster_id": [
-  {
-   "term": {
-    "cluster_id": 7
-   }
-  }
- ],
- "cluster_subid": [
-  {
-   "term": {
-    "cluster_subid": "7b"
-   }
-  }
- ],
  "dataset_split": [
   {
    "term": {
@@ -879,12 +865,7 @@
   },
   {
    "term": {
-    "cluster_id": 2
-   }
-  },
-  {
-   "term": {
-    "cluster_subid": "2a"
+    "cluster_uid": "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11"
    }
   },
   {
@@ -1038,6 +1019,13 @@
       }
      }
     ]
+   }
+  }
+ ],
+ "cluster_uid": [
+  {
+   "term": {
+    "cluster_uid": "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11"
    }
   }
  ]

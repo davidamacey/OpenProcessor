@@ -7,6 +7,7 @@ page, gated by the same ``OP_SEMANTIC_SEARCH_ENABLED`` flag. The query is an upl
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
 from typing import Annotated, Any
 
 from fastapi import File, Form, HTTPException, Query, Request, UploadFile
@@ -57,7 +58,7 @@ async def search_image(
     ] = SearchTarget.ITEM,
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
-    cluster_id: int | None = Query(None),
+    cluster_uid: uuid.UUID | None = Query(None),
     tab: str | None = Query(None, description='Optional review-tab cohort id, as /search/text.'),
     date_from: str | None = Query(None, description='ISO date/datetime lower bound on created_at.'),
     date_to: str | None = Query(None, description='ISO date/datetime upper bound on created_at.'),
@@ -103,7 +104,7 @@ async def search_image(
             page=page,
             page_size=page_size,
             target=target,
-            cluster_id=cluster_id,
+            cluster_uid=None if cluster_uid is None else str(cluster_uid),
             tab=tab,
             date_from=date_from,
             date_to=date_to,

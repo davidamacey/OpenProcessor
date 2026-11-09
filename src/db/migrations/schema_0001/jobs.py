@@ -366,7 +366,7 @@ def create() -> None:
         sa.Column('project_id', sa.Uuid(), nullable=False),
         sa.Column('projection_version', sa.Integer(), nullable=False),
         sa.Column('scope', sa.Text(), nullable=False),
-        sa.Column('cluster_id', sa.Integer(), nullable=True),
+        sa.Column('cluster_uid', sa.Uuid(), nullable=True),
         sa.Column('n_points', sa.Integer(), nullable=False),
         sa.Column('n_components', sa.Integer(), nullable=False),
         sa.Column('metric', sa.Text(), nullable=False),

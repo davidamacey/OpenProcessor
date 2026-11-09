@@ -162,19 +162,16 @@ def build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                     }
                 }
             },
-            # How many clusters the index holds now (noise ids < 0 are
-            # not clusters).
+            # How many clusters of the serving partition hold an item now.
             'distinct_clusters': {
-                'filter': {'range': {'cluster_id': {'gte': 0}}},
+                'filter': {'exists': {'field': 'cluster_uid'}},
                 'aggs': {
-                    'n': {'cardinality': {'field': 'cluster_id', 'precision_threshold': 4000}}
+                    'n': {'cardinality': {'field': 'cluster_uid', 'precision_threshold': 4000}}
                 },
             },
-            # Negative cluster_id is reserved for noise (legacy HDBSCAN
-            # convention; AHC doesn't emit -1 today but the agg stays so
-            # any future hybrid algorithm still surfaces noise here).
+            # Items the serving partition left unassigned.
             'noise_clusters': {
-                'filter': {'range': {'cluster_id': {'lt': 0}}},
+                'filter': {'term': {'cluster_state': 'unassigned'}},
             },
         },
     }

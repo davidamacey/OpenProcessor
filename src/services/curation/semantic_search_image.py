@@ -130,7 +130,7 @@ async def semantic_image_search(
     page: int,
     page_size: int,
     target: SearchTarget = SearchTarget.ITEM,
-    cluster_id: int | None = None,
+    cluster_uid: str | None = None,
     tab: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -169,7 +169,7 @@ async def semantic_image_search(
     filter_clause = _filter_for(
         item_filter=item_filter,
         tab=tab,
-        cluster_id=cluster_id,
+        cluster_uid=cluster_uid,
         date_from=date_from,
         date_to=date_to,
         max_rank=max_rank,
