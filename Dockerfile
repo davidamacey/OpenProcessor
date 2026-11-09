@@ -27,7 +27,7 @@
 # -----------------------------------------------------------------------------
 # base: the Debian runtime shared by every target
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS base
+FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS base
 
 # Runtime-only system packages (no build tools); upgrade first for Debian point-release
 # security fixes.
@@ -92,7 +92,7 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
 # -----------------------------------------------------------------------------
 # builder: the runtime dependency set, with compilers (never reaches an image)
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS builder
+FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /build
