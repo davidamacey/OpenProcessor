@@ -30,7 +30,7 @@ class Fingerprint:
 
     source_index: int
     image_id: str
-    imohash: str
+    content_sha256: str
     path: str
 
 
@@ -67,14 +67,14 @@ def find_duplicates(
     """``{(source_index, image_id): (priority source_index, image_id)}`` for
     every image that is a byte-identical copy of one from an earlier source.
 
-    Candidates share an ``imohash`` (which samples the file); each is
-    confirmed by a full sha256, computed only for candidates. An unreadable
+    Candidates share a ``content_sha256`` (the stored exact key); each is
+    confirmed against the file's bytes, computed only for candidates. An unreadable
     file is never called a duplicate.
     """
     by_hash: dict[str, list[Fingerprint]] = {}
     for fp in fingerprints:
-        if fp.imohash:
-            by_hash.setdefault(fp.imohash, []).append(fp)
+        if fp.content_sha256:
+            by_hash.setdefault(fp.content_sha256, []).append(fp)
     out: dict[tuple[int, str], tuple[int, str]] = {}
     for group in by_hash.values():
         if len({m.source_index for m in group}) < 2:

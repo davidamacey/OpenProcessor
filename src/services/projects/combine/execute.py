@@ -73,7 +73,7 @@ def plan_documents(analysis: Analysis, preview_sha: str) -> tuple[dict[str, Any]
         },
         'duplicates': duplicates_wire(analysis.duplicates),
         'originals': {
-            f'{i}:{image}': [prints[(i, image)].path, prints[(i, image)].imohash]
+            f'{i}:{image}': [prints[(i, image)].path, prints[(i, image)].content_sha256]
             for i, image in needed
         },
         'images_total': sum(s.images for s in analysis.stats),
@@ -96,9 +96,9 @@ def load_plan(params: Mapping[str, Any], document: Mapping[str, Any]) -> Plan:
         },
     )
     originals = {}
-    for key, (path, imohash) in document['originals'].items():
+    for key, (path, content_sha256) in document['originals'].items():
         i, _, image = key.partition(':')
-        originals[(int(i), image)] = (path, imohash)
+        originals[(int(i), image)] = (path, content_sha256)
     return Plan(
         request=request,
         mapping=mapping,
