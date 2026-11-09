@@ -9,7 +9,7 @@ touches:
   or an example profile's fixed name) -- only auto-named,
   ``YYYYMMDDTHHMMSSZ``-stamped dirs are ever candidates;
 * the resolved target of the ``current`` symlink;
-* any export dir a training job, a finished run's lineage, or a queued/
+* any export dir a training run (queued, running or finished) or a queued/
   running bake-off job still references (a "pin").
 
 Planning and applying are separate on purpose: ``plan_export_prune`` is
@@ -20,13 +20,15 @@ pure (given the filesystem state) and cheap to unit-test; only
 from __future__ import annotations
 
 import contextlib
-import json
 import re
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+from src.config.project_context import current_project_id
 from src.core.logging import get_logger
+from src.db.repos import training_runs as runs_repo
+from src.db.session import sync_project_tx, sync_session_factory
 from src.services.training.bakeoff_pins import active_bakeoff_specs
 
 
@@ -42,16 +44,6 @@ logger = get_logger(__name__)
 EXPORT_DIR_RE = re.compile(r'^\d{8}T\d{6}Z$')
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    try:
-        with path.open('r', encoding='utf-8') as fh:
-            data = json.load(fh)
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.debug('export_retention_read_failed', path=str(path), error=str(exc))
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def _resolve_or_none(path_str: str) -> Path | None:
     try:
         return Path(path_str).resolve()
@@ -59,25 +51,24 @@ def _resolve_or_none(path_str: str) -> Path | None:
         return None
 
 
-def collect_export_pins(
-    *,
-    export_root: Path,
-    jobs_dir: Path,
-) -> set[Path]:
+def _run_export_dirs() -> set[str]:
+    with (
+        sync_session_factory()() as session,
+        sync_project_tx(session, current_project_id()),
+    ):
+        return runs_repo.export_dirs(session)
+
+
+def collect_export_pins(*, export_root: Path) -> set[Path]:
     """Every export directory that must never be pruned.
 
-    Sources, each best-effort (a missing/unreadable dir or file is simply
-    skipped, never raised):
+    Sources (a database error propagates, so a prune never proceeds without its pins):
 
     * the resolved target of ``<export_root>/current``;
-    * every ``dataset_export_dir`` in ``<jobs_dir>/*.job.json`` (a training
-      job's export, queued or already run);
-    * every ``<jobs_dir>/*.manifest.json``'s ``lineage.export_dir`` (a
-      finished run's export, which may differ from its job spec's if the
-      export was re-pointed after submission);
+    * every export directory a training run of the bound project was queued with or whose
+      manifest records as its lineage, read from ``training_runs``;
     * every dataset ``path`` (and the quantize calibration dataset) in the params of an
-      active ``bakeoff`` job, read from PostgreSQL; a database error propagates so a prune
-      never proceeds without its pins.
+      active ``bakeoff`` job, read from PostgreSQL.
     """
     pins: set[Path] = set()
 
@@ -86,21 +77,10 @@ def collect_export_pins(
         with contextlib.suppress(OSError):
             pins.add(current.resolve())
 
-    if jobs_dir.is_dir():
-        for job_file in jobs_dir.glob('*.job.json'):
-            export_dir = _read_json(job_file).get('dataset_export_dir')
-            if export_dir:
-                resolved = _resolve_or_none(export_dir)
-                if resolved is not None:
-                    pins.add(resolved)
-
-        for manifest_file in jobs_dir.glob('*.manifest.json'):
-            lineage = _read_json(manifest_file).get('lineage') or {}
-            export_dir = lineage.get('export_dir') if isinstance(lineage, dict) else None
-            if export_dir:
-                resolved = _resolve_or_none(export_dir)
-                if resolved is not None:
-                    pins.add(resolved)
+    for export_dir in _run_export_dirs():
+        resolved = _resolve_or_none(export_dir)
+        if resolved is not None:
+            pins.add(resolved)
 
     for spec in active_bakeoff_specs():
         paths = [ds.get('path') for ds in spec.get('datasets') or [] if isinstance(ds, dict)]
@@ -169,13 +149,13 @@ def prune_exports_after_write(config: CurationConfig) -> None:
     """Synchronous keep-last prune, called after a successful export
     (``GenericYoloExportService.export_dataset``, via ``asyncio.to_thread``).
 
-    Pins come from the bound project's ``train_jobs_dir`` and the active bake-offs in PostgreSQL. A
+    Pins come from the bound project's training runs and the active bake-offs in PostgreSQL. A
     no-op when ``export_keep_last <= 0``.
     """
     keep_last = config.export_keep_last
     if keep_last <= 0:
         return
-    pins = collect_export_pins(export_root=config.export_root, jobs_dir=Path(config.train_jobs_dir))
+    pins = collect_export_pins(export_root=config.export_root)
     plan = plan_export_prune(config.export_root, keep_last, pins)
     if not plan:
         return

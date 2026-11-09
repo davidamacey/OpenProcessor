@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _class_registry_fake import InMemoryRegistry, use_registry
-from _project_paths import default_train_jobs_dir
 from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -53,7 +52,6 @@ def app_client(
     tmp_path: Any,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation.train import router as curation_train_router
@@ -91,7 +89,7 @@ def test_labels_txt_uses_pinned_registry_not_live(
 
     # 1. The registry snapshot pinned at submit time (P1-12) — class_id=5
     #    was 'suv' when this job was submitted.
-    snapshot_path = default_train_jobs_dir(tmp_path) / f'{job_id}.registry_snapshot.json'
+    snapshot_path = tmp_path / f'{job_id}.registry_snapshot.json'
     snapshot_path.write_text(
         json.dumps(
             {

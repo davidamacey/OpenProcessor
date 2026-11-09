@@ -49,6 +49,7 @@ UPGRADE_060_LEGACY_ENV=(
     OP_ASSIST_LOOP_JOBS_DIR
     OP_REGION_DRAIN_STATE_DIR
     OP_COMBINE_JOBS_DIR
+    OP_TRAIN_JOBS_DIR
 )
 
 # _upgrade_060_strip_legacy_env -- drop each legacy variable from .env (exact key match, atomic),

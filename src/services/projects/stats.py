@@ -83,7 +83,6 @@ def _disk_usage(slug: str, resources: Any) -> dict[str, Any]:
     result = {
         'exports_bytes': _dir_bytes(resources.export_root),
         'uploads_bytes': _dir_bytes(resources.upload_root),
-        'runs_bytes': _dir_bytes(resources.train_jobs_dir),
         'computed_at': datetime.now(UTC).isoformat(),
     }
     _disk_cache[slug] = (now, result)

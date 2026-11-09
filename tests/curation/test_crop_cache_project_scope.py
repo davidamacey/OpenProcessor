@@ -35,7 +35,6 @@ def cache_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv('OP_CROP_CACHE_DIR', str(root))
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     monkeypatch.setattr(curation_mod, '_default_curation_config', None)
     yield root
     monkeypatch.setattr(curation_mod, '_default_curation_config', None)

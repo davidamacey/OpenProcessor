@@ -74,7 +74,6 @@ def resources_wire(resources: Any) -> dict[str, Any]:
         'upload_root': str(resources.upload_root),
         'bakeoff_eval_root': str(resources.bakeoff_eval_root),
         'project_state_dir': str(resources.project_state_dir),
-        'train_jobs_dir': str(resources.train_jobs_dir),
         'autolabel_dir': str(resources.autolabel_dir),
         'bakeoff_results_dir': str(resources.bakeoff_results_dir),
         'mlflow_experiment': resources.mlflow_experiment,

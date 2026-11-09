@@ -50,13 +50,13 @@ def test_each_item_resolves_its_own_project_config(tmp_path: Any) -> None:
     alpha = _record(tmp_path, 'alpha')
     beta = _record(tmp_path, 'beta')
     # Distinct "active profile" proxy per project: mlflow_experiment and
-    # train_jobs_dir are both real per-project resource fields
+    # project_state_dir are both real per-project resource fields
     # (PROJECT_SCOPED_FIELDS) that differ by construction for any two
     # projects -- a stand-in for a per-project detection profile, which
     # does not exist as a resource field in this codebase (grepped;
     # only a process-wide OP_REGION_PROFILE env var does).
     assert alpha.resources.mlflow_experiment != beta.resources.mlflow_experiment
-    assert alpha.resources.train_jobs_dir != beta.resources.train_jobs_dir
+    assert alpha.resources.project_state_dir != beta.resources.project_state_dir
 
     task_alpha = _ItemTask(
         crop_id='a-1',
@@ -85,13 +85,16 @@ def test_each_item_resolves_its_own_project_config(tmp_path: Any) -> None:
         bound = current_project()
         assert bound.record.slug == t.project.slug
         resolved_experiments.append(bound.record.resources.mlflow_experiment)
-        resolved_train_dirs.append(bound.record.resources.train_jobs_dir)
+        resolved_train_dirs.append(bound.record.resources.project_state_dir)
 
     assert resolved_experiments == [
         alpha.resources.mlflow_experiment,
         beta.resources.mlflow_experiment,
     ]
-    assert resolved_train_dirs == [alpha.resources.train_jobs_dir, beta.resources.train_jobs_dir]
+    assert resolved_train_dirs == [
+        alpha.resources.project_state_dir,
+        beta.resources.project_state_dir,
+    ]
     # Processing beta must not have left alpha's project bound.
     assert current_project().record.slug == 'beta'
 

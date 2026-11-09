@@ -1,44 +1,38 @@
 """ST-4: keep-last retention for finished training runs.
 
-Training job state (``<job_id>.job.json`` / ``.status.json`` /
-``.manifest.json`` / ``.run.log`` / ``.cancel`` / ``.registry_snapshot.json``)
-under ``OP_TRAIN_JOBS_DIR`` accumulates forever with nothing to clean it up.
-This module plans (and, best-effort, applies) a keep-last prune that never
-touches:
+A run is a ``training_runs`` row plus its ``jobs`` row; this module plans (and applies) a keep-last
+prune of them that never touches:
 
-* a **non-terminal** run (``queued``/``starting``/``running``/``exporting``);
+* a **non-terminal** run (``queued``/``running``/``paused``/``cancelling``, and an ``interrupted``
+  one awaiting resume);
 * a run promoted to Triton (the caller passes the ``run_job_id`` of the project's live
   promotions, read from the registry in PostgreSQL);
 * a run referenced by a queued/running bake-off job (``job_id`` appears as
   a ``models[].run_id`` (or the ``quantize.run_id``) in the params of an active ``bakeoff`` job).
 
-Job ids are ISO-timestamp-prefixed (see ``src.services.training.jobs``'s
-``JOB_ID_RE``), so lexicographic sort on the id string is chronological --
-no need to parse ``started_at``/mtimes for ordering.
+Runs are ordered newest first by their job's creation time. The run's artifact blobs under its
+``artifact_prefix`` and its MLflow run are not touched here.
 """
 
 from __future__ import annotations
 
-import contextlib
-import json
 import shutil
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+from src.config.project_context import current_project_id
 from src.core.logging import get_logger
+from src.db.repos import training_runs as runs_repo
+from src.db.session import sync_project_tx, sync_session_factory
+from src.domain import job_states as js
 from src.services.training.bakeoff_pins import active_bakeoff_specs
 
 
 if TYPE_CHECKING:
+    import uuid
     from pathlib import Path
 
 
 logger = get_logger(__name__)
-
-# The terminal states a trainer job can end in. A literal here (rather than an
-# import from jobs.py) keeps this module a light, dependency-free filesystem
-# scanner: jobs.py would pull in its Pydantic status model and
-# OpenSearch-adjacent imports for four strings.
-TERMINAL_STATES = frozenset({'finished', 'failed', 'cancelled', 'lost'})
 
 
 def bakeoff_out_dir(bakeoff_results_dir: Path) -> Path:
@@ -48,39 +42,13 @@ def bakeoff_out_dir(bakeoff_results_dir: Path) -> Path:
     return bakeoff_results_dir / 'out'
 
 
-_JOB_FILE_SUFFIXES = (
-    '.job.json',
-    '.status.json',
-    '.manifest.json',
-    '.run.log',
-    '.cancel',
-    '.registry_snapshot.json',
-)
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    try:
-        with path.open('r', encoding='utf-8') as fh:
-            data = json.load(fh)
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.debug('run_retention_read_failed', path=str(path), error=str(exc))
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def list_runs(jobs_dir: Path) -> dict[str, dict[str, Any]]:
-    """Every job_id -> its status.json content (or ``{'state': None}`` for a
-    job.json with no status yet, i.e. still queued)."""
-    if not jobs_dir.is_dir():
-        return {}
-    runs: dict[str, dict[str, Any]] = {}
-    for status_file in jobs_dir.glob('*.status.json'):
-        job_id = status_file.name[: -len('.status.json')]
-        runs[job_id] = _read_json(status_file)
-    for job_file in jobs_dir.glob('*.job.json'):
-        job_id = job_file.name[: -len('.job.json')]
-        runs.setdefault(job_id, {'state': 'queued'})
-    return runs
+def list_runs() -> list[tuple[uuid.UUID, str]]:
+    """The bound project's runs as ``(job_id, status)``, newest first."""
+    with (
+        sync_session_factory()() as session,
+        sync_project_tx(session, current_project_id()),
+    ):
+        return runs_repo.refs(session)
 
 
 def collect_active_bakeoff_run_ids() -> set[str]:
@@ -102,64 +70,37 @@ def collect_active_bakeoff_run_ids() -> set[str]:
 
 
 def plan_run_prune(
+    runs: list[tuple[uuid.UUID, str]],
     *,
-    jobs_dir: Path,
     promoted_job_ids: set[str],
     bakeoff_run_ids: set[str],
     keep_last: int,
-) -> list[str]:
-    """job_ids to remove: terminal runs older than the newest ``keep_last``
-    (across every state), skipping anything promoted or bake-off-active.
+) -> list[uuid.UUID]:
+    """Job ids to remove: terminal runs older than the newest ``keep_last`` of ``runs``
+    (newest first, every state), skipping anything promoted or bake-off-active.
 
     ``keep_last <= 0`` keeps everything (returns an empty plan).
     """
     if keep_last <= 0:
         return []
-
-    runs = list_runs(jobs_dir)
-    if not runs:
-        return []
-
-    ordered = sorted(runs, reverse=True)  # newest job_id first
-    beyond_keep_last = ordered[keep_last:]
-
-    promoted = promoted_job_ids
-
-    plan: list[str] = []
-    for job_id in beyond_keep_last:
-        state = runs[job_id].get('state')
-        if state not in TERMINAL_STATES:
-            continue
-        if job_id in promoted or job_id in bakeoff_run_ids:
-            continue
-        plan.append(job_id)
-    return plan
+    pinned = promoted_job_ids | bakeoff_run_ids
+    return [
+        job_id
+        for job_id, status in runs[keep_last:]
+        if status in js.TERMINAL and str(job_id) not in pinned
+    ]
 
 
-def apply_run_prune(job_ids: list[str], *, jobs_dir: Path) -> dict[str, int]:
-    """Delete every job-state file for each planned ``job_id``.
-
-    Best-effort per file -- a missing/unremovable file is skipped, never
-    raised. Does not touch MLflow runs or the trainer's own artifact
-    directory (``OP_TRAIN_RUNS_ROOT``); those are a separate concern
-    (MLflow retention is an owner decision).
-    """
-    removed_files = 0
-    removed_runs = 0
+def apply_run_prune(job_ids: list[uuid.UUID]) -> dict[str, int]:
+    """Delete each planned run and its job row in one transaction of the bound project."""
+    with (
+        sync_session_factory()() as session,
+        sync_project_tx(session, current_project_id()),
+    ):
+        removed = runs_repo.delete_runs(session, job_ids)
     for job_id in job_ids:
-        any_removed = False
-        for suffix in _JOB_FILE_SUFFIXES:
-            path = jobs_dir / f'{job_id}{suffix}'
-            if not path.exists():
-                continue
-            with contextlib.suppress(OSError):
-                path.unlink()
-                removed_files += 1
-                any_removed = True
-        if any_removed:
-            removed_runs += 1
-            logger.info('run_pruned', job_id=job_id)
-    return {'removed_runs': removed_runs, 'removed_files': removed_files}
+        logger.info('run_pruned', job_id=str(job_id))
+    return {'removed_runs': removed}
 
 
 def plan_bakeoff_out_prune(out_dir: Path, keep_last: int) -> list[Path]:
@@ -190,7 +131,6 @@ def apply_bakeoff_out_prune(paths: list[Path]) -> dict[str, int]:
 
 
 __all__ = [
-    'TERMINAL_STATES',
     'apply_bakeoff_out_prune',
     'apply_run_prune',
     'collect_active_bakeoff_run_ids',

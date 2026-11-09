@@ -77,7 +77,6 @@ def leak_env(
     for name, sub in {
         'STATE_DIR': 'state',
         'CROP_CACHE_DIR': 'crop_cache',
-        'TRAIN_JOBS_DIR': 'jobs/train',
         'AUTO_LABEL_STATE_DIR': 'jobs/auto_label',
         'BAKEOFF_JOBS_DIR': 'state/bakeoff_jobs',
         'PROJECTS_DATA_ROOT': 'projects',

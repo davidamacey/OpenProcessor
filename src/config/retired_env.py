@@ -111,6 +111,7 @@ RETIRED_ENV: dict[str, str] = {
         ),
         f'{_REMOVED} the run is a jobs row; there is no job directory',
     ),
+    'OP_TRAIN_JOBS_DIR': f'{_REMOVED} a training run is a training_runs row; there is no job directory',
     'OP_BAKEOFF_JOBS_DIR': f'{_REMOVED} bake-offs are bakeoff jobs; there is no job directory',
     # The pause sentinel file is gone: the VLM workers read deployment_settings
     # ('vlm_paused_for_training'), which the GPU arbiter tick and `openprocessor vlm use` write.

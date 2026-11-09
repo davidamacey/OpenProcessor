@@ -57,15 +57,11 @@ from src.services.projects.script_binding import (
 
 def _run_one_project(args: argparse.Namespace) -> int:
     """Prune exports for whatever project is currently bound.
-    ``train_jobs_dir`` comes from the bound
-    project's own ``CurationConfig`` view (PROJECT_SCOPED_FIELDS), not
-    a raw env var / the global GPU-arbiter config, so each project's
-    export pins are computed against its own dirs only."""
+    The pins come from the bound project's own training runs."""
     config = get_curation_config()
     export_root = Path(args.export_root) if args.export_root else config.export_root
-    jobs_dir = config.train_jobs_dir
 
-    pins = collect_export_pins(export_root=export_root, jobs_dir=jobs_dir)
+    pins = collect_export_pins(export_root=export_root)
     plan = plan_export_prune(export_root, args.keep_last, pins)
 
     if not plan:

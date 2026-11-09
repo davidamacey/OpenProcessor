@@ -35,7 +35,6 @@ def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     d = tmp_path / 'jobs'
     d.mkdir()
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(d))
     # default's export_root resolves to OP_PROJECTS_DATA_ROOT/default/exports
     # (P1: no special-casing); point OP_PROJECTS_DATA_ROOT at tmp_path
     # directly so export_dir (below) can build under exactly that path.

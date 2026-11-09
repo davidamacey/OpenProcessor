@@ -75,7 +75,6 @@ class ProjectResources:
     upload_root: Path
     bakeoff_eval_root: Path
     project_state_dir: Path
-    train_jobs_dir: Path
     autolabel_dir: Path
     bakeoff_results_dir: Path
     mlflow_experiment: str
@@ -118,14 +117,6 @@ def projects_data_root() -> Path:
     return env_path('OP_PROJECTS_DATA_ROOT', './data/projects')
 
 
-def trainer_jobs_root() -> Path:
-    """The shared trainer volume root (``OP_TRAIN_JOBS_DIR``). Each
-    project's ``train_jobs_dir`` nests under ``<root>/projects/<slug>``;
-    trainer-global files (``.trainer_capabilities.json``) live at the
-    root itself, since one trainer serves every project."""
-    return env_path('OP_TRAIN_JOBS_DIR', '/jobs')
-
-
 # The transitional lease index is not stored in ``project_indexes`` (which records ``images`` and
 # ``items``); its name follows the creation rule. Lane 6A deletes it with the B1 leases.
 _DERIVED_INDEX_ROLES = ('leases',)
@@ -155,7 +146,6 @@ def resources_from_stored(
         upload_root=base.state_dir / 'projects' / slug / 'uploads',
         bakeoff_eval_root=data_root / 'bakeoff_eval',
         project_state_dir=base.state_dir / 'projects' / slug,
-        train_jobs_dir=trainer_jobs_root() / 'projects' / slug,
         autolabel_dir=env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects' / slug,
         # The on-disk name predates the rename: existing bake-off results stay where they are.
         bakeoff_results_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',

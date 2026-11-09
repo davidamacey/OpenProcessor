@@ -233,7 +233,6 @@ class CurationConfig:
     # built with ``state_dir=tmp`` never points at the real location.
     project_slug: str = 'default'
     project_state_dir: Path = _FOLLOWS_STATE_DIR
-    train_jobs_dir: Path = Path('/jobs')
     autolabel_dir: Path = Path('/jobs/auto_label')
     bakeoff_results_dir: Path = _FOLLOWS_STATE_DIR
     mlflow_experiment: str = 'openprocessor'

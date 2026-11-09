@@ -155,7 +155,6 @@ def test_requested_name_with_reserved_separator_is_rejected(
     process-wide default test registry is permanently stale by
     design), or it 409s before the router's own validation runs."""
     del not_stale_registry
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     no_database(monkeypatch)
 
     from _curation_app import SCOPED, curation_test_app
