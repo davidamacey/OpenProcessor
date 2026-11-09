@@ -144,7 +144,8 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
     import scripts.curation.worker.runner as runner_mod
     from scripts.curation.worker.__main__ import parse_args
 
-    _patch(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    _patch(runner_mod, 'open_routed_pool', AsyncMock(return_value=pool))
+    _patch(runner_mod, 'sync_router', AsyncMock())
     _patch(runner_mod, 'make_script_opensearch', MagicMock(return_value=client))
     import src.services.projects.registry as registry_mod
 

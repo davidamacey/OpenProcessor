@@ -34,7 +34,8 @@ class TestSignalHandling:
         pool.initialize = AsyncMock()
         pool.close = AsyncMock()
         pool.is_model_ready = AsyncMock(return_value=False)
-        monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+        monkeypatch.setattr(runner_mod, 'open_routed_pool', AsyncMock(return_value=pool))
+        monkeypatch.setattr(runner_mod, 'sync_router', AsyncMock())
 
         # B1: the producer loop now iterates the real ProjectRegistry's
         # active_projects() every cycle, so the registry needs a real

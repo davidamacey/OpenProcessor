@@ -92,7 +92,8 @@ async def run_region_worker(
     pool = MagicMock(
         initialize=AsyncMock(), close=AsyncMock(), is_model_ready=AsyncMock(return_value=False)
     )
-    monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'open_routed_pool', AsyncMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'sync_router', AsyncMock())
     monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=cluster))
     install_static_project_registry(monkeypatch, records)
 
