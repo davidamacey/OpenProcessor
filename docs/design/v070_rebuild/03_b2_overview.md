@@ -90,7 +90,7 @@ still use the earlier letters, see the "Old short names" note in [00_master_plan
 - **One Alembic head, four fixed revision ids.** The base schema, research seams included, lands in
   `0001_control_plane` (lane 1A). Each wave has at most one revision-writing lane, with a fixed id
   ([02d](02d_research_seam_schema.md) section 0): `0002_research_seams` (lane 1F, W2.1), `0003_near_duplicates`
-  (lane ND-A, W2.3a), `0004_region_text` (W5e, after B2). Every other lane adds no revision; any other
+  (lane ND-A, W2.3a), `0005_region_text` (W5e, after B2). Every other lane adds no revision; any other
   schema change is a coordinator commit on the integration branch before the lanes that need it start.
   `tests/db/test_migrations.py` asserts a single head.
 - **Append-only shared files.** `env.template`, `src/config/retired_env.py`, the baselines in

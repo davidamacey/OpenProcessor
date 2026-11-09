@@ -635,7 +635,7 @@ the frozen W5d head).
 
 ### W5e Registration-plate text (GPU window 2 closes; RD-3 answered as recommended, D-78)
 
-[06e](06e_w5e_plate_text.md): lanes `w5e/region-text-store` (revision `0004_region_text`), then
+[06e](06e_w5e_plate_text.md): lanes `w5e/region-text-store` (revision `0005_region_text`), then
 `w5e/region-text-fields` and `w5e/region-text-jobs` in parallel; the
 reader lane and a frontend lane only on their conditions. Plate text is ordinary searchable label data stored as
 real readable text (exact, fuzzy and fragment search; no privacy modes, no master secret, no separate purge:
