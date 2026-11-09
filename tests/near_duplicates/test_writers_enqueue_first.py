@@ -26,7 +26,7 @@ async def test_a_delete_is_marked_before_the_bulk_delete(pending_calls: Any) -> 
         seen_at_bulk.append(len(pending_calls.calls))
         return await real(body=body, **kw)
 
-    fake.bulk = bulk  # type: ignore[method-assign]
+    fake.bulk = bulk
 
     result = await delete_items(
         fake, ['c1', 'c2'], items_index=index, crop_cache_dir=None, deletable=_always

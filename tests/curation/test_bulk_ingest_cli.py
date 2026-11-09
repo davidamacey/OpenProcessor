@@ -41,7 +41,7 @@ def _run(status: str, **progress: Any) -> dict[str, Any]:
     return BulkIngestRun(
         project='default',
         run_id=RUN_ID,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         source={'kind': 'folder', 'path': '/imgs', 'extensions': ['.jpg']},
         options={'source_tag': 'cli_test', 'batch_size': 8, 'concurrency': 2},
         progress=BulkIngestProgress(**fields),

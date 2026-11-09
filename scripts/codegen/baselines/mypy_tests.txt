@@ -1,0 +1,6 @@
+tests.curation.test_curation_settings_router	1	still has mypy errors; fix the module and delete this line
+tests.curation.test_region_profile	1	still has mypy errors; fix the module and delete this line
+tests.integration.test_stats_router	1	still has mypy errors; fix the module and delete this line
+tests.models.test_gpu_image_prep_geometry	1	still has mypy errors; fix the module and delete this line
+tests.models.test_gpu_image_prep_stage_metrics	1	still has mypy errors; fix the module and delete this line
+tests.models.test_newest_ready_engine_wins	1	still has mypy errors; fix the module and delete this line

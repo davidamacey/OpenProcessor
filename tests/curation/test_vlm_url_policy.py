@@ -243,7 +243,7 @@ def test_unknown_and_external_send_images_externally() -> None:
     assert sends_images_externally('external')
     assert sends_images_externally('unknown')
     for local in ('compose', 'host', 'private'):
-        assert not sends_images_externally(local)  # type: ignore[arg-type]
+        assert not sends_images_externally(local)
 
 
 @pytest.mark.asyncio

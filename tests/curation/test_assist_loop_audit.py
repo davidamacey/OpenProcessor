@@ -184,6 +184,7 @@ def test_an_external_audit_endpoint_needs_the_acknowledgement(vlm_api: Any) -> N
     assert 'vlm_external_not_acknowledged' in str(refused.value.detail)
 
     pinned = asyncio.run(resolve_audit_vlm('ext', pack=None, acknowledge_external=True))
+    assert pinned is not None
     assert pinned.name == 'ext'
 
 

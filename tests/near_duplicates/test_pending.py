@@ -40,7 +40,7 @@ async def test_one_row_per_member_and_the_newest_reason_wins(pg, project) -> Non
 async def test_a_change_during_a_rescore_releases_the_claim(pg, project) -> None:
     await _enqueue(project, 'item', ['a'], 'added')
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as c:
-        job = c.execute(
+        job = c.execute(  # type: ignore[index]
             'INSERT INTO jobs (project_id, kind, queue, status, max_queue_wait, requested_by) '
             "VALUES (%s, 'noop', 'jobs', 'queued', interval '1 hour', 'test') RETURNING id",
             (project,),

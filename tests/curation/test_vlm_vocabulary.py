@@ -8,7 +8,7 @@ health envelope, and the class_source values queries filter on.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from _route_helpers import api_routes
@@ -19,7 +19,7 @@ from src.services.curation.review_tabs import KNOWN_TABS
 
 
 if TYPE_CHECKING:
-    from fastapi.routing import RouteContext
+    from fastapi.routing import APIRoute, RouteContext
 
 
 _VENDOR_RE = re.compile(r'gemma|(^|_)v6(_|$)', re.IGNORECASE)
@@ -98,8 +98,9 @@ def curation_routes() -> list[RouteContext]:
 def test_no_vendor_names_in_curation_params(curation_routes: list[RouteContext]) -> None:
     names: list[str] = []
     for route in curation_routes:
+        assert route.path is not None
         names.append(route.path)
-        dependant = route.original_route.dependant
+        dependant = cast('APIRoute', route.original_route).dependant
         params = dependant.query_params + dependant.path_params
         names.extend(f'{route.path}?{p.alias}' for p in params)
         for b in dependant.body_params:
@@ -110,7 +111,9 @@ def test_no_vendor_names_in_curation_params(curation_routes: list[RouteContext])
 
 
 def test_auto_label_params_renamed(curation_routes: list[RouteContext]) -> None:
-    start = next(r for r in curation_routes if r.path.endswith('/pipeline/auto_label/start'))
+    start = next(
+        r for r in curation_routes if (r.path or '').endswith('/pipeline/auto_label/start')
+    )
     names = {p.alias for p in start.dependant.query_params}
     assert {
         'vlm_batch_size',

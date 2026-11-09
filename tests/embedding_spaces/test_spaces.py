@@ -139,6 +139,7 @@ async def test_an_evaluation_run_lets_the_flip_through_without_force(pg_env, cat
         row = await _ready(session, project)
         async with project_tx(session, project):
             old = await repo.get_primary_space(session, project, Target.ITEM)
+            assert old is not None
             await session.execute(
                 text(
                     'INSERT INTO embedding_evaluation_runs (project_id, baseline_space_id, '
@@ -161,6 +162,7 @@ async def test_at_most_three_live_spaces_per_target(pg_env, catalog) -> None:
             version = await session.run_sync(
                 lambda s: repo.get_model_version(s, 'mobileclip2_s2', 1)
             )
+            assert version is not None
             await repo.add_space(
                 session,
                 repo.NewSpace(

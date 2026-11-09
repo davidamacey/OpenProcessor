@@ -149,7 +149,7 @@ def test_rrf_merge_scores_by_reciprocal_rank() -> None:
     ranked = [(first, [_hit('x', 1.0), _hit('y', 0.5)]), (OTHER, [_hit('y', 0.9)])]
     merged = semantic_search_run.rrf_merge(ranked)
     k = semantic_search_run.RRF_RANK_CONSTANT
-    assert [(h['_id'], s) for h, _space, s in merged] == [
+    assert [(h['_id'], s) for h, _space, s in merged] == [  # type: ignore[comparison-overlap]
         ('y', pytest.approx(1 / (k + 2) + 1 / (k + 1))),
         ('x', pytest.approx(1 / (k + 1))),
     ]

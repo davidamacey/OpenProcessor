@@ -129,7 +129,7 @@ def _expected_letterbox_pixels(img, target: int, fill=(114, 114, 114)) -> np.nda
     new_w, new_h = max(1, round(w * scale)), max(1, round(h * scale))
     canvas = PILImage.new('RGB', (target, target), fill)
     canvas.paste(
-        img.resize((new_w, new_h), PILImage.BILINEAR),
+        img.resize((new_w, new_h), PILImage.BILINEAR),  # type: ignore[attr-defined]
         (int((target - new_w) / 2.0), int((target - new_h) / 2.0)),
     )
     return np.transpose(np.asarray(canvas), (2, 0, 1))[None, ...]

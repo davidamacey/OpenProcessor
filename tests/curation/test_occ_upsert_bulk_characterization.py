@@ -8,7 +8,7 @@ and ``fill_if_absent`` rules are exercised exactly as production calls them.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import structlog
@@ -129,7 +129,7 @@ async def test_index_defaults_to_items_index(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(occ_upsert, 'items_index', lambda: 'bound_items')
     client = ScriptedClient()
     await occ_upsert_bulk(
-        client,
+        cast('Any', client),
         [{'crop_id': 'a'}],
         vector_excludes=VECTOR_EXCLUDES,
         vector_field='pe_embedding',

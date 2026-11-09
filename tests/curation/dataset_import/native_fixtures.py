@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from curation.dataset_import.harness import write_image
 
@@ -54,7 +54,7 @@ def write_voc(
         if declared is None:
             size_el = ''
         else:
-            w, h = declared  # type: ignore[misc]
+            w, h = cast('tuple[int, int]', declared)
             size_el = f'<size><width>{w}</width><height>{h}</height><depth>3</depth></size>'
         (root / f'Annotations/{stem}.xml').write_text(
             VOC_XML.format(filename=f'{stem}.jpg', size=size_el, objects=''.join(objects))

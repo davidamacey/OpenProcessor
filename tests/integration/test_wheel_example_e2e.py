@@ -425,7 +425,7 @@ def test_wheel_example_end_to_end(
             tmp_path,
             monkeypatch,
             cluster=cluster,
-            records=[get_project_registry().get(SLUG), get_project_registry().get('default')],  # type: ignore[list-item]
+            records=[get_project_registry().get(SLUG), get_project_registry().get('default')],
             segmenter=candidates,
             done=done,
         )

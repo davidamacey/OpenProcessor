@@ -64,7 +64,7 @@ def test_a_project_sees_the_loop_children_of_its_own_runs_only(pg, world) -> Non
     ):
         with psycopg.connect(pg.conninfo('app')) as c:
             bind_scope(c, 'project', world['a'])
-            seen = c.execute(f'SELECT count(*) FROM {table}').fetchone()[0]  # nosec B608  fixed names
+            seen = (c.execute(f'SELECT count(*) FROM {table}').fetchone() or (None,))[0]  # nosec B608  fixed names
             assert seen == expected, table
 
 

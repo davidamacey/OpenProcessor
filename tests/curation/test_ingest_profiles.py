@@ -10,7 +10,7 @@ the same env vars. The retired shared ``OP_DETECTION_*`` prefix fails loudly.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pytest
@@ -137,7 +137,9 @@ class _Registry:
 
 
 def _decode(profile: DetectionProfile, classes: list[int]) -> list[Any]:
-    detector = WholeImageDetector(triton_pool=None, registry=_Registry(), profile=profile)
+    detector = WholeImageDetector(
+        triton_pool=None, registry=cast('Any', _Registry()), profile=profile
+    )
     n = len(classes)
     return detector.decode_primary_row(
         np.array([n]),
@@ -192,7 +194,9 @@ def test_default_primary_does_not_assign_class(tmp_path: Any) -> None:
     labels = tmp_path / 'labels.txt'
     labels.write_text('person\nbicycle\ncar\n')
     profile = DetectionProfile(name='item', labels_path=str(labels))
-    detector = WholeImageDetector(triton_pool=None, registry=_DomainRegistry(), profile=profile)
+    detector = WholeImageDetector(
+        triton_pool=None, registry=cast('Any', _DomainRegistry()), profile=profile
+    )
     items = detector.decode_primary_row(
         np.array([2]),
         np.array([[0.1, 0.1, 0.5, 0.5]] * 2, dtype=np.float32),

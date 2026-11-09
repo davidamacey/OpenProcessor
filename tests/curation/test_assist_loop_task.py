@@ -159,7 +159,7 @@ def _stop_reason(env: LoopEnv, ref: RunRef) -> str | None:
     import psycopg
 
     with psycopg.connect(env.pg.conninfo('super'), autocommit=True) as conn:
-        return conn.execute(
+        return conn.execute(  # type: ignore[index]
             'SELECT stop_reason FROM assist_loop_runs WHERE id = %s', (ref.run_id,)
         ).fetchone()[0]
 
@@ -213,7 +213,7 @@ def test_a_vlm_that_does_not_answer_pauses_the_loop_as_unavailable(
 
     assert result == Paused('vlm_unavailable')
     assert ctx.paused_for == ['vlm_unavailable']
-    assert VlmFailedError  # the exception the slice turned into a pause
+    assert VlmFailedError  # type: ignore[truthy-function]  # the exception the slice turned into a pause
 
 
 def test_a_reached_budget_pauses_for_budget_and_a_raised_limit_lets_it_finish(

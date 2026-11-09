@@ -66,7 +66,7 @@ def test_two_projects_interleave_their_slices_and_end_with_their_own_labels(
     assert {d['class_name'] for d in second_world.os.docs(ITEMS).values()} == {'truck'}
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         for env, ref in zip(envs, refs, strict=True):
-            owner = conn.execute(
+            owner = conn.execute(  # type: ignore[index]
                 'SELECT project_id FROM assist_loop_runs WHERE id = %s', (ref.run_id,)
             ).fetchone()[0]
             assert owner == env.project

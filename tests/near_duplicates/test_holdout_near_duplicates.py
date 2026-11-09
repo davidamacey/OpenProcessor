@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import psycopg
 import pytest
@@ -112,6 +112,7 @@ async def test_the_moves_and_the_freeze_record_are_written(pg, project) -> None:
         ).fetchone()
     assert [(r[0], r[1]) for r in rows] == [('i2', 'i1'), ('i3', 'i1')]
     assert {r[2] for r in rows} == {freeze_id}
+    assert freeze is not None
     assert freeze[0] == 2
     assert freeze[1] == closure.item_run_id
 
@@ -134,7 +135,7 @@ async def test_a_project_without_an_item_run_moves_nothing(project, pg_registry)
 
 async def test_the_flag_goes_through_the_occ_writer(pg, project) -> None:
     client = _SeqNoOpenSearch({ITEMS: _docs()})
-    await holdout.flag_held_out(client, ITEMS, ['i1', 'i2'])
+    await holdout.flag_held_out(cast('Any', client), ITEMS, ['i1', 'i2'])
     assert client.docs[ITEMS]['i1']['test_holdout'] is True
     assert client.docs[ITEMS]['i2']['test_holdout'] is True
     assert 'test_holdout' not in client.docs[ITEMS]['i3']
@@ -144,13 +145,13 @@ async def test_a_conflicting_write_refuses_the_freeze() -> None:
     client = _SeqNoOpenSearch({ITEMS: _docs()})
     client.conflict = {'i2'}
     with pytest.raises(RequestRejectedError) as raised:
-        await holdout.flag_held_out(client, ITEMS, ['i1', 'i2'])
+        await holdout.flag_held_out(cast('Any', client), ITEMS, ['i1', 'i2'])
     assert raised.value.status_code == 502
 
 
 def _make_freeze(pg, project):
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-        return conn.execute(
+        return conn.execute(  # type: ignore[index]
             'INSERT INTO holdout_freezes (project_id, is_current, source, item_count, frozen_by) '
             "VALUES (%s, true, 'manual', 3, 'test') RETURNING id",
             (project,),

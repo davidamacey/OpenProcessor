@@ -34,7 +34,7 @@ def test_dataset_id_rejects_traversal(env: dict[str, Path], client: TestClient) 
             client, {'datasets': [{'id': bad}], 'models': [{'source': 'run', 'run_id': 'r1'}]}
         )
         assert r.status_code == 400, (bad, r.text)
-    assert env['started'] == {}
+    assert env['started'] == {}  # type: ignore[comparison-overlap]
 
 
 def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClient) -> None:
@@ -71,7 +71,7 @@ def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClie
     assert cm['not_covered_eval_classes'] == []
     assert m['train_test_overlap'] == {'export:20260924T233203Z': {'n_images': 0, 'fraction': 0.0}}
 
-    spec = BakeoffJobSpec.model_validate(env['started']['j1'])
+    spec = BakeoffJobSpec.model_validate(env['started']['j1'])  # type: ignore[index]
     assert spec.schema_version == 2
     assert spec.out_dir == str(env['out'] / 'j1')
     [ds] = spec.datasets
@@ -90,7 +90,8 @@ def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClie
         640,
         'full',
     )
-    assert jm.class_map_by_dataset['export:20260924T233203Z']['model_to_eval'] == {
+    assert jm.class_map_by_dataset is not None
+    assert jm.class_map_by_dataset['export:20260924T233203Z']['model_to_eval'] == {  # type: ignore[index]
         '0': 37,
         '1': 38,
         '2': 43,
@@ -169,7 +170,7 @@ def test_run_rejects_multiclass_single_cls_run(env: dict[str, Path], client: Tes
         'single_cls run over 2 classes cannot be scored per class; '
         'compare it on a single-class export'
     )
-    assert env['started'] == {}
+    assert env['started'] == {}  # type: ignore[comparison-overlap]
 
 
 def test_run_alias_run_dataset_id(env: dict[str, Path], client: TestClient) -> None:
@@ -210,7 +211,7 @@ def test_run_unknown_run_or_baseline_400(env: dict[str, Path], client: TestClien
     )
     assert r.status_code == 400
     assert 'export:missing' in r.json()['detail']
-    assert env['started'] == {}
+    assert env['started'] == {}  # type: ignore[comparison-overlap]
 
 
 def test_run_requires_models_and_datasets(env: dict[str, Path], client: TestClient) -> None:
@@ -277,7 +278,7 @@ def test_run_custom_model_explicit_and_name_mapping(
     assert (names['method'], names['model_to_eval']) == ('names', None)
     assert names['warnings'] == ['resolved by name inside the evaluator']
     assert by_key['custom:coco']['train_test_overlap'] == {'export:20260924T233203Z': None}
-    spec = env['started']['jc']
+    spec = env['started']['jc']  # type: ignore[index]
     coco = next(m for m in spec['models'] if m['model'] == 'custom:coco')
     assert coco['class_map_by_dataset'] == {'export:20260924T233203Z': None}
     served = next(m for m in spec['models'] if m['model'] == 'custom:served')
@@ -297,7 +298,7 @@ def test_run_quantize_block_filled_from_run(env: dict[str, Path], client: TestCl
         },
     )
     assert r.status_code == 200, r.text
-    q = env['started']['run5_quant']['quantize']
+    q = env['started']['run5_quant']['quantize']  # type: ignore[index]
     assert q['model_key_prefix'] == 'run:run5'
     assert (q['checkpoint'], q['imgsz'], q['calib_dataset']) == (str(ckpt), 512, str(d))
     assert q['formats'] == ['fp32_onnx', 'fp16_onnx', 'int8_onnx']

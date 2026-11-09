@@ -247,7 +247,7 @@ async def test_a_rolled_back_rename_leaves_no_outbox_row(project) -> None:
 
     async def check(s):
         n = (await s.execute(text('SELECT count(*) FROM search_projection_tasks'))).scalar_one()
-        return n, (await repo.get_class(s, project, a)).name
+        return n, (await repo.get_class(s, project, a)).name  # type: ignore[union-attr]
 
     assert await _in_tx(project, check) == (0, 'a')
 

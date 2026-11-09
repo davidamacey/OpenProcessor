@@ -129,8 +129,8 @@ def test_dct8_whole_frame_tracks_the_reduced_decode() -> None:
     )
     assert ok
     data = np.frombuffer(enc.tobytes(), np.uint8)
-    decoded = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-    reduced = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_REDUCED_COLOR_8), cv2.COLOR_BGR2RGB)
+    decoded = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)  # type: ignore[arg-type]
+    reduced = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_REDUCED_COLOR_8), cv2.COLOR_BGR2RGB)  # type: ignore[arg-type]
     old = resize_crop_rgb(reduced)
     new = whole_frame_rgb_from_image(Image.fromarray(decoded))
     dct8 = k.whole_frame_u8(torch.from_numpy(decoded), mode='dct8').numpy()

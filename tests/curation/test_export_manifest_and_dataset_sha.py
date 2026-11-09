@@ -427,7 +427,7 @@ async def test_export_item_filter_narrows_the_cohort_query_and_is_recorded(tmp_p
         queries.append(query)
         return await scroll(query)
 
-    service._scroll_items = spy  # type: ignore[method-assign]
+    service._scroll_items = spy
     flt = ItemFilter(class_names=['car'], conf_min=0.5, min_area=0.01)
 
     result = await service.export_dataset(version_tag='f1', copy_images=False, item_filter=flt)

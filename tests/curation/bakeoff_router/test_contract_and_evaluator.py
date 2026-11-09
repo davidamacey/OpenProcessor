@@ -171,7 +171,7 @@ def test_api_job_spec_runs_in_the_evaluator_and_results_are_served(
         },
     )
     assert r.status_code == 200, r.text
-    spec = env['started']['e2e']
+    spec = env['started']['e2e']  # type: ignore[index]
     status = bakeoff_runner.run_job(spec)
     assert status['state'] == 'done', status
 

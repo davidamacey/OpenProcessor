@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -149,11 +149,11 @@ async def test_the_vlm_chunks_run_under_a_bound_and_all_of_them_run(monkeypatch)
     ids = [str(i) for i in range(200)]
     out = await vlm_stage._label_all(
         _run(progress),
-        None,
+        cast('Any', None),
         ids,
         batch_size=4,
         concurrency=3,
-        meta=None,  # type: ignore[arg-type]
+        meta=None,
     )
     assert peak == 3
     assert sum(len(c) for c in seen) == 200

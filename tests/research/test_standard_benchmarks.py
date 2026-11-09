@@ -212,7 +212,7 @@ def _model(**over: object) -> dict[str, object]:
 
 
 def test_sanity_flags_each_failure_separately() -> None:
-    res = bars.sanity({'a': _model()})  # type: ignore[arg-type]
+    res = bars.sanity({'a': _model()})
     assert res['all_pass'] is True
     cases = {
         'control_is_chance': _model(control_recall1=0.5),
@@ -222,10 +222,10 @@ def test_sanity_flags_each_failure_separately() -> None:
         'recall1_plausible': _model(all_recall_max=0.97),
     }
     for key, model in cases.items():
-        got = bars.sanity({'a': model})  # type: ignore[arg-type]
+        got = bars.sanity({'a': model})
         assert got['a'][key] is False, key
         assert got['all_pass'] is False, key
-    low = bars.sanity({'a': _model(recall={'1': 0.1, '2': 0.6, '4': 0.7, '8': 0.8})})  # type: ignore[arg-type]
+    low = bars.sanity({'a': _model(recall={'1': 0.1, '2': 0.6, '4': 0.7, '8': 0.8})})
     assert low['a']['recall1_plausible'] is False
 
 

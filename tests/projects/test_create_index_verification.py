@@ -125,7 +125,7 @@ def test_real_ensure_indexes_index_create_failure_ends_create_failed() -> None:
             raise RuntimeError('simulated OpenSearch indices.create failure')
         return await real_create(index=index, body=body)
 
-    client.indices.create = _create_but_fail_one  # type: ignore[method-assign]
+    client.indices.create = _create_but_fail_one
 
     with pytest.raises(RuntimeError, match='missing indexes'):
         asyncio.run(lifecycle.create_project(client, slug='gamma', display_name='Gamma'))

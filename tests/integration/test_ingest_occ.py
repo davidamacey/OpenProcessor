@@ -29,7 +29,7 @@ tests against ``occ_skip_on_conflict_bulk``.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from curation.occ_fakes import VECTOR_EXCLUDES
@@ -232,7 +232,7 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
         'region_text_source': 'ingest',
     }
     result = await occ_upsert_bulk(
-        client,
+        cast('Any', client),
         [reingest_doc],
         vector_excludes=VECTOR_EXCLUDES,
         vector_field='pe_embedding',
@@ -288,7 +288,7 @@ async def test_parallel_ingest_of_same_image_yields_n_crops_not_2n() -> None:
 
     results = await asyncio.gather(
         occ_upsert_bulk(
-            client,
+            cast('Any', client),
             docs_a,
             vector_excludes=VECTOR_EXCLUDES,
             vector_field='pe_embedding',
@@ -298,7 +298,7 @@ async def test_parallel_ingest_of_same_image_yields_n_crops_not_2n() -> None:
             writer_id='ingest-a',
         ),
         occ_upsert_bulk(
-            client,
+            cast('Any', client),
             docs_b,
             vector_excludes=VECTOR_EXCLUDES,
             vector_field='pe_embedding',
@@ -353,7 +353,7 @@ async def test_non_human_doc_overwritten_normally() -> None:
         'class_source': 'ingest',
     }
     result = await occ_upsert_bulk(
-        client,
+        cast('Any', client),
         [reingest_doc],
         vector_excludes=VECTOR_EXCLUDES,
         vector_field='pe_embedding',
@@ -413,7 +413,7 @@ async def test_bulk_update_phase_issues_one_bulk_call_not_n() -> None:
     bulk_calls_before = len(client.bulk_calls)
 
     result = await occ_upsert_bulk(
-        client,
+        cast('Any', client),
         docs,
         vector_excludes=VECTOR_EXCLUDES,
         vector_field='pe_embedding',
@@ -503,7 +503,7 @@ async def test_reingest_keeps_every_class_field_of_a_locked_item(kind: str) -> N
         'test_holdout': False,
     }
     result = await occ_upsert_bulk(
-        client,
+        cast('Any', client),
         [reingest_doc],
         vector_excludes=VECTOR_EXCLUDES,
         vector_field='pe_embedding',

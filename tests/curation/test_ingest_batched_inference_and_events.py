@@ -205,7 +205,7 @@ class TestCropCreatedEvents:
         async def _broken_mget(*, body: Any, index: str) -> Any:
             raise RuntimeError('opensearch down')
 
-        os_fake.mget = _broken_mget  # type: ignore[method-assign]
+        os_fake.mget = _broken_mget
         result = await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
         assert result.status == 'failed'
         assert self._drain(sub) == []
@@ -228,7 +228,7 @@ class TestCropCreatedEvents:
                     os_fake.items.pop(item['create']['_id'])
             return resp
 
-        os_fake.bulk = _bulk_rejecting_first_create  # type: ignore[method-assign]
+        os_fake.bulk = _bulk_rejecting_first_create
         await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
 
         published = [e['crop_id'] for e in self._drain(sub)]

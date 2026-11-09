@@ -141,7 +141,7 @@ async def test_one_failing_project_keeps_its_previous_value(stack) -> None:
             raise ConnectionError('down')
         return await original(method, url, **kw)
 
-    bottom.perform_request = _flaky  # type: ignore[method-assign]
+    bottom.perform_request = _flaky
     await refresh.refresh_once(client, registry.active_projects())
     assert _sample('op_queue_depth', queue='segment', project='gauge-alpha') == 3
     assert _sample('op_queue_depth', queue='segment', project='gauge-beta') == 8

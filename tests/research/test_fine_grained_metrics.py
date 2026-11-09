@@ -98,7 +98,7 @@ def test_matched_point_respects_the_recall_window() -> None:
         {'recall': 0.31, 'precision': 0.9},
         {'recall': 0.40, 'precision': 0.99},
     ]
-    assert metrics.matched_point(curve, 0.30, 0.02)['precision'] == 0.9
+    assert metrics.matched_point(curve, 0.30, 0.02)['precision'] == 0.9  # type: ignore[index]
     assert metrics.matched_point(curve, 0.60, 0.02) is None
 
 

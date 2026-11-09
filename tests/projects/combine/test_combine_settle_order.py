@@ -24,7 +24,7 @@ async def test_the_target_is_settled_before_the_result_is_returned(world: World)
             order.append(f'settle:{ok}')
             real_settle_log.append(ok)
 
-    world.settled = Spy()  # type: ignore[assignment]
+    world.settled = Spy()
     run, _target = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
     order.append('returned')
     assert order == ['settle:True', 'returned']

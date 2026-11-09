@@ -20,11 +20,11 @@ async def test_an_unreadable_class_registry_stops_the_probe() -> None:
     use_registry(_Unreadable())
 
     with pytest.raises(ConnectionError, match='unreadable'):
-        await _registry_class_ids()  # type: ignore[arg-type]
+        await _registry_class_ids()
 
 
 @pytest.mark.asyncio
 async def test_an_empty_class_registry_is_no_classes() -> None:
     use_registry(InMemoryRegistry())
 
-    assert await _registry_class_ids() == {}  # type: ignore[arg-type]
+    assert await _registry_class_ids() == {}

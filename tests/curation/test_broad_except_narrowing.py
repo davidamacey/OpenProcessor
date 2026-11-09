@@ -3,7 +3,7 @@ documented fallback, any other error is a bug and propagates."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from opensearchpy.exceptions import ConnectionError as OsConnectionError
@@ -64,7 +64,7 @@ async def test_prune_box_embeddings_propagates_a_programming_error() -> None:
             raise TypeError('bug')
 
     with pytest.raises(TypeError):
-        await prune_box_embeddings(_Bug(), index='idx', crop_ids=['c1'])
+        await prune_box_embeddings(cast('Any', _Bug()), index='idx', crop_ids=['c1'])
 
 
 def test_undecodable_image_bytes_are_none_not_an_exception() -> None:

@@ -168,7 +168,7 @@ def app(pg, pg_env):
     application.include_router(router)
     application.dependency_overrides[require_disk_space] = lambda: None
     install_database_error_handlers(application)
-    application.add_exception_handler(RequestRejectedError, request_rejected_response)
+    application.add_exception_handler(RequestRejectedError, request_rejected_response)  # type: ignore[arg-type]
     return application
 
 

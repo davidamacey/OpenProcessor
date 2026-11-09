@@ -8,6 +8,7 @@ import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 
@@ -150,7 +151,7 @@ class Fake:
                 fake.query = parse_qs(urlsplit(self.path).query)
                 code, body = fake.routes.get((self.command, path), (404, {'detail': 'nf'}))
                 if callable(body):  # (payload) or (payload, query)
-                    wants_query = body.__code__.co_argcount == 2
+                    wants_query = cast('Any', body).__code__.co_argcount == 2
                     code, body = body(payload, fake.query) if wants_query else body(payload)
                 raw = body if isinstance(body, str) else json.dumps(body)
                 self.send_response(code)

@@ -43,7 +43,7 @@ async def test_concurrent_images_share_one_set_of_requests() -> None:
         mgets.append(len(kw['body']['ids']))
         return await real_mget(**kw)
 
-    os_fake.mget = counting_mget  # type: ignore[method-assign]
+    os_fake.mget = counting_mget
     results = await asyncio.gather(
         *(svc.ingest_one(_jpeg_bytes(seed=i), f'/tmp/p{i}.jpg') for i in range(8))
     )
@@ -69,7 +69,7 @@ async def test_a_refused_document_fails_only_its_own_image() -> None:
                 os_fake.items.pop('bad-item')
         return resp
 
-    os_fake.bulk = refusing_bulk  # type: ignore[method-assign]
+    os_fake.bulk = refusing_bulk
     writer = IngestWriter(os_fake)
     good1, bad, good2 = await asyncio.gather(
         _write(writer, 'a', ['a1', 'a2']),
@@ -106,7 +106,7 @@ async def test_rejected_items_are_retried_after_429() -> None:
             }
         return await real_bulk(body=body, refresh=refresh)
 
-    os_fake.bulk = queue_full_once  # type: ignore[method-assign]
+    os_fake.bulk = queue_full_once
     writer = IngestWriter(os_fake)
     one, two = await asyncio.gather(_write(writer, 'a', ['a1']), _write(writer, 'b', ['b1']))
     assert (one.created, one.refused, two.created, two.refused) == (1, [], 1, [])
@@ -132,7 +132,7 @@ async def test_a_failed_flush_answers_every_caller() -> None:
         msg = 'connection refused'
         raise ConnectionError(msg)
 
-    os_fake.mget = down  # type: ignore[method-assign]
+    os_fake.mget = down
     writer = IngestWriter(os_fake)
     outcomes = await asyncio.wait_for(
         asyncio.gather(

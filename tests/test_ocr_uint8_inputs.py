@@ -133,7 +133,7 @@ def _pool(monkeypatch: pytest.MonkeyPatch) -> tuple[AsyncTritonPool, _MetaClient
     monkeypatch.setattr('src.clients.triton_pool_core.ensure_loaded', _loaded)
     pool = AsyncTritonPool(pool_size=1)
     meta = _MetaClient()
-    pool._clients = [meta]  # type: ignore[list-item]
+    pool._clients = [meta]
     pool._lock = asyncio.Lock()
     pool._initialized = True
     return pool, meta
@@ -173,7 +173,7 @@ class TestSyncDatatypeLookup:
         monkeypatch.setattr(tc, 'ensure_loaded_sync', lambda *_a: None)
         client = tc.TritonClient.__new__(tc.TritonClient)
         client._input_datatypes = {}
-        client.client = SimpleNamespace(get_model_metadata=lambda n: calls.append(n) or metadata)
+        client.client = SimpleNamespace(get_model_metadata=lambda n: calls.append(n) or metadata)  # type: ignore[func-returns-value]
         assert client._input_datatype('ocr_pipeline', 'ocr_images') == 'UINT8'
         assert client._input_datatype('ocr_pipeline', 'ocr_images') == 'UINT8'
         assert len(calls) == 1

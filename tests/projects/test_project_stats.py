@@ -55,7 +55,7 @@ def test_project_stats_counts_and_disk() -> None:
 class _TermAwareClient(FakeLifecycleOpenSearch):
     """count() honours a ``term`` query over the seeded item docs."""
 
-    async def count(self, *, index: str, body=None):  # type: ignore[override]
+    async def count(self, *, index: str, body=None):
         docs = self.indexes.get(index, [])
         term = ((body or {}).get('query') or {}).get('term')
         if term:

@@ -226,7 +226,7 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
             lifecycle_mod._resolve_existing = AsyncMock(return_value=source)
             lifecycle_mod._get_mutable_record = AsyncMock(return_value=target)
             store_mod.run_repo = AsyncMock(return_value=target)
-            records_mod.record_from_row = lambda row: row
+            records_mod.record_from_row = lambda row: row  # type: ignore[assignment,return-value]
             reg = MagicMock()
             reg.ensure_fresh = AsyncMock(return_value=None)
             registry_mod.get_project_registry = lambda: reg

@@ -52,7 +52,7 @@ def test_delete_retry_after_failed_index_delete_succeeds(
             raise RuntimeError('simulated transient cluster hiccup')
         return await real_perform(method, url, params=params, body=body, **kw)
 
-    leak_env.transport.perform_request = _flaky_perform  # type: ignore[method-assign]
+    leak_env.transport.perform_request = _flaky_perform
 
     resp = client_http.delete(f'{API}/alpha', params={'confirm': 'alpha'})
     assert resp.status_code == 202, resp.text

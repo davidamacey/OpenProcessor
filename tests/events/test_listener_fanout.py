@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 from _events_support import seed_project
@@ -98,7 +99,7 @@ async def test_a_slow_client_is_dropped_with_a_final_marker_and_never_blocks_the
     async with running_listener(broker, tick_s=0.3, queue_max=3) as listener:
         slow = await listener.subscribe('slow')
         fast = await listener.subscribe('slow')
-        drained = []
+        drained: list[Any] = []
 
         async def drain() -> None:
             while len(drained) < 6:

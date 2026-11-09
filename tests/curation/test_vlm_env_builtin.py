@@ -30,7 +30,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _probe(root: str | None = None, **over: object) -> dict:
-    record = VlmProbeRecord(ok=True, probed_at='2026-09-28T12:00:00+00:00', root=root, **over)  # type: ignore[arg-type]
+    record = VlmProbeRecord(ok=True, probed_at='2026-09-28T12:00:00+00:00', root=root, **over)
     return {'fingerprint': None, 'record': record.model_dump()}
 
 

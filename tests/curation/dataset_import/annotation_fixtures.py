@@ -177,7 +177,7 @@ def write_labelme(
     root.mkdir(parents=True, exist_ok=True)
     for i, (stem, shapes) in enumerate(images.items()):
         actual = _image(root / f'{stem}.jpg', i, size)
-        doc = {
+        doc: dict[str, Any] = {
             'version': '5.2.1',
             'flags': {},
             'shapes': shapes,

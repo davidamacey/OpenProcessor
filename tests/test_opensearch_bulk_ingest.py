@@ -105,7 +105,7 @@ async def test_boxes_route_by_category_for_arrays_and_lists(recorder: BulkRecord
             'det_classes': [0],
         },
     ]
-    res = await Store().bulk_ingest(docs)
+    res = await Store().bulk_ingest(docs)  # type: ignore[arg-type]
     assert res == {'global': 2, 'vehicles': 1, 'people': 2, 'errors': []}
     by = _by_index(recorder)
     [veh] = by['visual_search_vehicles']

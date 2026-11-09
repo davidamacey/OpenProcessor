@@ -92,5 +92,5 @@ async def test_different_region_profiles_warn_and_name_the_target_profile(world:
 async def test_identical_region_profiles_do_not_warn(world: World) -> None:
     _two_projects(world)
     for slug in ('a', 'b'):
-        _activate_profile(world, slug, 'wheels', {'max_regions_per_item': 3})
+        _activate_profile(world, slug, 'wheels', {'max_regions_per_item': 3})  # type: ignore[unused-coroutine]
     assert 'region_profiles_differ' not in await _warnings(world)

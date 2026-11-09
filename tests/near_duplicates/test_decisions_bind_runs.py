@@ -36,6 +36,7 @@ async def test_different_splits_and_same_joins_in_a_full_build_and_a_regroup(pg,
     await _decide(env, 's1', 's2', 'same')
 
     built = await full_build(env)
+    assert built is not None
     assert {frozenset(m) for m in snapshot(pg, built.run_id, 'dedup')} == {
         frozenset({'b1', 'b2'}),
         frozenset({'s1', 's2'}),

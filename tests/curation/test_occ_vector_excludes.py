@@ -125,6 +125,6 @@ def test_a_failed_rerun_keeps_the_state_of_the_flipped_space() -> None:
     merged = {'vec_x_state': 'failed'}
     keep_stored_vector_state(merged, {'vec_x_state': 'embedded'}, 'vec_x', 'vec_x_state')
     assert merged == {}
-    merged = {'vec_x': [0.1], 'vec_x_state': 'embedded'}
+    merged = {'vec_x': [0.1], 'vec_x_state': 'embedded'}  # type: ignore[dict-item]
     keep_stored_vector_state(merged, {'vec_x_state': 'failed'}, 'vec_x', 'vec_x_state')
     assert merged['vec_x_state'] == 'embedded'

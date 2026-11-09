@@ -135,7 +135,7 @@ def test_a_failed_verify_marks_the_space_failed(pg, engine) -> None:
         index.vectors['d009'] = [0.0, 0.0, 1.0]  # stored vector no longer matches a re-encode
         return out
 
-    index.write = corrupting
+    index.write = corrupting  # type: ignore[method-assign]
     _, space, job = _start(engine, pg)
     run_job(KINDS[KIND], _handler(index, encoder), {}, str(job.id))
     assert sql(pg, 'SELECT status FROM jobs WHERE id = %s', job.id) == [('failed',)]

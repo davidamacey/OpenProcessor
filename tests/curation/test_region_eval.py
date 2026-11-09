@@ -77,7 +77,7 @@ def test_greedy_match_is_one_to_one_highest_iou_first() -> None:
     gt = [(0.0, 0.0, 0.4, 0.4), (0.05, 0.05, 0.45, 0.45)]
     pred = [(0.05, 0.05, 0.45, 0.45)]  # overlaps both GT boxes, exactly equals the 2nd
     matches = greedy_match(gt, pred, 0.5)
-    assert matches == [(1, 0, pytest.approx(1.0))]
+    assert matches == [(1, 0, pytest.approx(1.0))]  # type: ignore[comparison-overlap]
     assert greedy_match(gt, pred, 0.5) == greedy_match(gt, pred, 0.5)
     two = greedy_match(gt, [pred[0], gt[0]], 0.5)
     assert sorted((g, p) for g, p, _ in two) == [(0, 1), (1, 0)]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from typing import Any
 
 import numpy as np
 import pytest
@@ -13,7 +14,7 @@ from scripts.research.fine_grained import fg0, preprocess, setc
 
 
 def _items() -> list[setc.Item]:
-    out = []
+    out: list[Any] = []
     for make, models in {'A': ['A1', 'A2'], 'B': ['B1'], 'C': ['C1', 'C2', 'C3']}.items():
         for model in models:
             for gen in ('g1', 'g2'):

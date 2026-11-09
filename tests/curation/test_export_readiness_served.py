@@ -92,7 +92,7 @@ async def test_export_service_refuses_with_the_same_reason_and_query(
     )
     service = GenericYoloExportService.__new__(GenericYoloExportService)
     service.opensearch = AsyncMock()
-    service.config = type('C', (), {'items_index': 'idx'})()  # type: ignore[assignment]
+    service.config = type('C', (), {'items_index': 'idx'})()
     with pytest.raises(NothingToExportError) as exc:
         await service.export_dataset(copy_images=False)
     assert str(exc.value) == NO_VALIDATED_ITEMS_REASON

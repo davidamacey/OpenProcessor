@@ -133,7 +133,7 @@ async def test_a_write_racing_a_human_edit_is_re_merged_not_dropped_or_clobberin
     rows = await scroll_box_rows(os_, index=INDEX, states=('accepted',))
     edits = {r.crop_id: {r.box_id: _to_fp} for r in rows}
 
-    await write_box_edits(os_, index=INDEX, edits=edits, respect_human=True)
+    await write_box_edits(os_, index=INDEX, edits=edits, respect_human=True)  # type: ignore[arg-type]
 
     box = _boxes(os_, 'a0')['b1']
     # The human's box is kept whole -- it became locked while the rows were read.
@@ -445,7 +445,7 @@ def _random_box_items(n: int = 120) -> dict[str, dict[str, Any]]:
     for i in range(n):
         v = centres[i % 6] + 0.9 * rng.standard_normal(8)
         two = [(_box('b1'), tuple(v[:3] + 4.0)), (_box('a0', x=0.5), tuple(v[3:6] + 4.0))]
-        docs[f'c{i:03d}'] = _item(f'c{i:03d}', two)
+        docs[f'c{i:03d}'] = _item(f'c{i:03d}', two)  # type: ignore[arg-type]
     return docs
 
 

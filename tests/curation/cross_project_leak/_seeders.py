@@ -191,7 +191,7 @@ async def _reseed_config_async(record: Any, kind: str, axis: str, body: dict[str
                     ConfigDocument.name == name,
                 )
             )
-        await documents.save_config(kind=kind, name=name, body=body, expected_revision=None)
+        await documents.save_config(kind=kind, name=name, body=body, expected_revision=None)  # type: ignore[arg-type]
     reset_config_stores()
 
 

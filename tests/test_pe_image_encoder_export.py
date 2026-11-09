@@ -169,7 +169,7 @@ class TestConfigValidation:
     )
     def test_rejects_invalid_field(self, field: str, value: object) -> None:
         with pytest.raises(ValueError, match=field.split('_', maxsplit=1)[0]):
-            pe_image_triton_config.PETritonConfig(**{field: value})
+            pe_image_triton_config.PETritonConfig(**{field: value})  # type: ignore[arg-type]
 
     def test_accepts_the_two_supported_platforms(self) -> None:
         for platform in pe_image_constants.PLATFORMS:

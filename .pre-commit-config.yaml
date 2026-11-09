@@ -169,7 +169,14 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" -m mypy'
         language: system
         pass_filenames: false
-        files: ^(src|scripts|docker|export)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
+        files: ^(src|scripts|docker|export|tests)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
+
+      - id: check-mypy-tests
+        name: The list of test modules mypy still skips only shrinks
+        entry: python3 scripts/codegen/check_mypy_tests.py
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|scripts/codegen/(check_mypy_tests\.py|baselines/mypy_tests\.txt)|tests/.*\.py)$
 
       # Lean frontend gate: only the staged frontend files, through the app's own
       # node_modules (npm ci in frontend/). svelte-check and vitest stay in CI and the

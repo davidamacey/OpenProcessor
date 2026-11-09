@@ -44,6 +44,7 @@ async def test_the_eval_lands_in_the_manifest_and_the_matrix_in_the_store(
         run = await session.run_sync(lambda s: runs_repo.get(s, job_id))
     assert run is not None
     assert run.mlflow_run_id == 'mlflow-1'
+    assert run.manifest is not None
     results = run.manifest['results']
     assert results['final_state'] == 'finished'
     assert [row['name'] for row in results['eval']['per_class']] == ['car', 'bus']

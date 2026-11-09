@@ -193,4 +193,4 @@ async def test_letterbox_resize_is_refused(tmp_path):
     shift every box against them."""
     service = generic_service(tmp_path, [], ['alpha'])
     with pytest.raises(ValueError, match='letterbox'):
-        await service.export_dataset(resize_mode='letterbox')  # type: ignore[arg-type]
+        await service.export_dataset(resize_mode='letterbox')

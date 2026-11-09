@@ -40,7 +40,10 @@ def _record(slug: str) -> ProjectRecord:
 async def _save(slug: str, kind: str, name: str, **kw: Any) -> Any:
     with bind_project(_record(slug)):
         saved, _ = await documents.save_config(
-            kind=kind, name=name, body={}, expected_revision=kw.pop('expected_revision', None)
+            kind=kind,  # type: ignore[arg-type]
+            name=name,
+            body={},
+            expected_revision=kw.pop('expected_revision', None),
         )
     return saved
 
@@ -57,7 +60,7 @@ async def test_a_save_bumps_the_projects_epoch_every_write() -> None:
 
 async def _save_with_epoch(slug: str, kind: str, name: str) -> tuple[Any, int]:
     with bind_project(_record(slug)):
-        return await documents.save_config(kind=kind, name=name, body={}, expected_revision=None)
+        return await documents.save_config(kind=kind, name=name, body={}, expected_revision=None)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

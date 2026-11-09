@@ -212,7 +212,7 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
             raise RuntimeError('simulated cluster hiccup')
         return await real_delete(index=index, ignore=ignore)
 
-    client.indices.delete = _delete_but_fail_one  # type: ignore[method-assign]
+    client.indices.delete = _delete_but_fail_one
 
     asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     with pytest.raises(RequestRejectedError) as exc_info:
@@ -226,7 +226,7 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
 
     # A retried delete_project_finish, once the transient failure clears,
     # succeeds and tombstones -- idempotent resumability, not a dead end.
-    client.indices.delete = real_delete  # type: ignore[method-assign]
+    client.indices.delete = real_delete
     tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
     assert tombstoned.status == 'deleted'
 

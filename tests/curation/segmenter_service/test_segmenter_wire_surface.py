@@ -182,7 +182,7 @@ class TestMinScoreAndCandidateCap:
                 out['scores'] = [out['scores'][i] for i in keep]
             return out
 
-        many._forward_grounding = _thresholded_forward  # type: ignore[method-assign]
+        many._forward_grounding = _thresholded_forward
         assert many.confidence_threshold is None
 
         previous = segmenter._pool

@@ -424,7 +424,7 @@ exclude_lines = [
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "scripts", "docker", "export"]
+files = ["src", "scripts", "docker", "export", "tests"]
 exclude = ["^src/ultralytics_patches/"]
 plugins = ["pydantic.mypy"]
 warn_return_any = true
@@ -439,8 +439,36 @@ warn_no_return = true
 strict_equality = true
 ignore_missing_imports = true
 explicit_package_bases = true
-mypy_path = ".:export:docker/trainer"
+mypy_path = "export:docker/trainer:."
 namespace_packages = true
+
+# Test code: untyped test functions and fixtures are the norm (mypy docs, "Using mypy with an
+# existing codebase" and config_file "Untyped definitions and calls": the disallow_* flags are
+# per-module options). Bodies are still checked (check_untyped_defs stays on). Modules that still
+# have errors are listed in the ignore_errors block below.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_return_any = false
+
+# Test modules that still have mypy errors; shrink-only, guarded by scripts/codegen/check_mypy_tests.py
+[[tool.mypy.overrides]]
+module = [
+    "tests.curation.test_curation_settings_router",
+    "tests.curation.test_region_profile",
+    "tests.integration.test_stats_router",
+    "tests.models.test_gpu_image_prep_geometry",
+    "tests.models.test_gpu_image_prep_stage_metrics",
+    "tests.models.test_newest_ready_engine_wins",
+]
+ignore_errors = true
+
+# tests put export/ on sys.path and import `export_tasks` by its bare name; mypy would find
+# the same file as `export.export_tasks` too and stop ("found twice"). Skip following the bare name.
+[[tool.mypy.overrides]]
+module = ["export_tasks"]
+follow_imports = "skip"
 
 # Ignore third-party packages without type stubs
 [[tool.mypy.overrides]]

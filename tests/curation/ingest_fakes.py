@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from PIL import Image
@@ -160,7 +160,7 @@ def _make_service(
     svc = CurationIngestService(
         opensearch=os_fake,
         triton_pool=triton,
-        registry=reg,
+        registry=cast('Any', reg),
         profile=profile,
         pe_encoder=FakePEEncoder(),
         config=CurationConfig(),

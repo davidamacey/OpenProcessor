@@ -174,7 +174,7 @@ async def test_models_status_routes_segmenter_to_external_not_triton(
 
     _patch_async_client(monkeypatch, models_mod, handler)
 
-    result = await models_mod.models_status(None)
+    result = await models_mod.models_status(None)  # type: ignore[arg-type]
 
     models_by_name = {m['name']: m for m in result['models']}
     assert 'sam3' in models_by_name

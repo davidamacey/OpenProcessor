@@ -59,5 +59,5 @@ def test_queued_jobs_and_their_oldest_age_are_read_from_the_table(pg) -> None:
     run_periodic('job_stats', job_stats.tick())
 
     assert sample('op_jobs', kind=KIND, status='queued') == 2
-    assert sample('op_jobs_oldest_queued_seconds', kind=KIND) >= 1200
+    assert sample('op_jobs_oldest_queued_seconds', kind=KIND) >= 1200  # type: ignore[operator]
     assert sample('op_jobs_failed_24h', kind=KIND) == 1

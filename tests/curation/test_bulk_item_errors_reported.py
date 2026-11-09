@@ -74,7 +74,7 @@ async def test_viz_write_control_all_ok_counts_all() -> None:
 
 @pytest.mark.asyncio
 async def test_probe_flush_returns_the_refused_count() -> None:
-    body = [x for i in range(4) for x in ({'update': {'_id': f'c{i}'}}, {'doc': {}})]
+    body = [x for i in range(4) for x in ({'update': {'_id': f'c{i}'}}, {'doc': {}})]  # type: ignore[var-annotated]
 
     assert await pp._flush_bulk(_Bulk(refused=1), body) == 1
     assert await pp._flush_bulk(_Bulk(refused=0), body) == 0
@@ -92,5 +92,5 @@ def test_no_curation_service_discards_a_bulk_response() -> None:
             call = call.value if isinstance(call, ast.Await) else None
             func = getattr(call, 'func', None)
             if isinstance(func, ast.Attribute) and func.attr == 'bulk':
-                offenders.append(f'{path}:{node.lineno}')
+                offenders.append(f'{path}:{node.lineno}')  # type: ignore[attr-defined]
     assert not offenders, offenders

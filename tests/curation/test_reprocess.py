@@ -54,8 +54,8 @@ def _req(
 ) -> ReprocessRequest:
     return ReprocessRequest(
         targets=ReprocessTargets(filter=filt, crop_ids=crops, image_ids=images),
-        scopes=scopes,  # type: ignore[arg-type]
-        region_mode=mode,  # type: ignore[arg-type]
+        scopes=scopes,
+        region_mode=mode,
         dry_run=dry_run,
     )
 

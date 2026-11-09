@@ -170,6 +170,7 @@ async def test_in_flight_ids_are_excluded_from_the_next_fetch_and_released(
     async def _fetch(opensearch: Any, **kw: Any) -> list[str]:
         ids = await original_fetch(opensearch, **kw)
         if len(fakes.fetch_calls) >= 2:
+            assert fakes.label_gate is not None
             fakes.label_gate.set()
         return ids
 
@@ -349,7 +350,7 @@ async def test_a_crop_released_during_a_fetch_is_not_dispatched_again(
 
     monkeypatch.setattr(vlm_worker, 'fetch_pending_ids', _fetch)
     fakes.label_script = lambda _s, ids: (
-        labelled_once.set() or {'predicted': len(ids), 'updated': len(ids)}
+        labelled_once.set() or {'predicted': len(ids), 'updated': len(ids)}  # type: ignore[func-returns-value]
     )
     await asyncio.wait_for(vlm_worker.run(_args('--until-empty')), 10)
     assert fakes.labelled == [('alpha', ['c1', 'c2'])]

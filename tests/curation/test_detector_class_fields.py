@@ -9,7 +9,7 @@ relabel.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from _embedding_registry_fake import DEFAULT_STATE_FIELDS
@@ -219,5 +219,5 @@ async def test_mapping_migration_adds_the_fields_to_existing_indexes() -> None:
     from src.clients.curation_opensearch.items_extra import ensure_items_detector_fields
 
     client = SimpleNamespace(indices=SimpleNamespace(put_mapping=AsyncMock(return_value={})))
-    result = await ensure_items_detector_fields(client)
+    result = await ensure_items_detector_fields(cast('Any', client))
     assert set(result['fields_added']) == set(FIELDS)

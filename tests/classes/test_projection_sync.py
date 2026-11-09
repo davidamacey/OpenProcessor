@@ -152,7 +152,7 @@ async def test_the_merge_job_refuses_a_frozen_holdout_crop_and_writes_nothing(
     items = FakeItems([{'class_id': a, 'class_name': 'sedan', 'test_holdout': True}])
     with pytest.raises(sync.ProjectionTaskError, match='frozen test_holdout'):
         await sync.run_class_merge(_Ctx(pid, {'source_id': a, 'target_id': b}), items)
-    assert (await reg.snapshot()).get(a).merged_into is None
+    assert (await reg.snapshot()).get(a).merged_into is None  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio

@@ -208,7 +208,7 @@ def test_the_documented_context_model_matches_what_is_served() -> None:
     assert set(served['image']) == set(CropContextImage.model_fields)
     parsed = CropContextResponse.model_validate(served)
     assert [i.crop_id for i in parsed.items] == ['a1', 'a2']
-    openapi = _client(_fake()).app.openapi()
+    openapi = _client(_fake()).app.openapi()  # type: ignore[attr-defined]
     ref = openapi['paths']['/curation/projects/{project}/crops/{crop_id}/context']['get'][
         'responses'
     ]['200']['content']['application/json']['schema']
@@ -231,7 +231,7 @@ def test_context_items_carry_their_outline_while_lists_do_not() -> None:
         excludes[label] = kwargs['body']['_source']['excludes']
         return await real_search(**kwargs)
 
-    fake.search = _record  # type: ignore[method-assign]
+    fake.search = _record
     client = _client(fake)
     client.get('/curation/projects/default/crops/a1/context')
     client.get('/curation/projects/default/crops')

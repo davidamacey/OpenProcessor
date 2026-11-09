@@ -127,6 +127,7 @@ def test_a_scoped_claim_stops_its_service_and_is_confirmed(world) -> None:
     assert client.by('vlm').status == 'exited'
     assert client.by('triton-server').status == 'running'  # unscoped: only a multi-GPU claim
     record = section(pg)
+    assert record is not None
     assert record['claims'] == [str(job)]
     assert record['acknowledged'] == [str(job)]
     assert record['stopped'] == ['vlm']
@@ -158,7 +159,7 @@ def test_a_multi_gpu_train_claim_stops_every_service(world) -> None:
         'vlm': 'exited',
         'triton-server': 'exited',
     }
-    assert section(pg)['acknowledged'] == [str(job)]
+    assert section(pg)['acknowledged'] == [str(job)]  # type: ignore[index]
 
 
 def test_a_bakeoff_claims_every_configured_service_without_a_host_scope(world) -> None:
@@ -174,7 +175,7 @@ def test_a_bakeoff_claims_every_configured_service_without_a_host_scope(world) -
     tick()
 
     assert {c.status for c in client.all} == {'exited'}
-    assert section(pg)['acknowledged'] == [str(job)]
+    assert section(pg)['acknowledged'] == [str(job)]  # type: ignore[index]
 
 
 def test_when_the_claim_ends_only_what_the_arbiter_stopped_starts_again(world) -> None:
@@ -182,7 +183,7 @@ def test_when_the_claim_ends_only_what_the_arbiter_stopped_starts_again(world) -
     client.by('triton-server').status = 'exited'  # somebody else stopped it
     job = hold(pg, project, 'bakeoff')
     tick()
-    assert section(pg)['stopped'] == ['vlm']
+    assert section(pg)['stopped'] == ['vlm']  # type: ignore[index]
 
     sql(pg, 'DELETE FROM gpu_reservations WHERE holder_job_id = %s', job)
     tick()
@@ -201,6 +202,7 @@ def test_a_docker_failure_confirms_nothing_it_did_not_stop(world) -> None:
     tick()
 
     record = section(pg)
+    assert record is not None
     assert record['claims'] == [str(job)]
     assert record['acknowledged'] == []
     assert 'stop vlm: daemon refused' in record['error']
@@ -218,6 +220,7 @@ def test_an_unreachable_daemon_confirms_nothing(world, monkeypatch) -> None:
     tick()
 
     record = section(pg)
+    assert record is not None
     assert record['acknowledged'] == []
     assert 'not reachable' in record['error']
 

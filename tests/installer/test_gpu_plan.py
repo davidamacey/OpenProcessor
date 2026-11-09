@@ -365,8 +365,8 @@ def _decode_mib() -> int:
     """Per-instance footprint of gpu_image_prep, read from its Triton config."""
     text = (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt').read_text()
     return int(
-        re.search(r'GPU_MIB_PER_INSTANCE"\s*value:\s*{\s*string_value:\s*"(\d+)"', text).group(1)
-    )  # type: ignore[union-attr]
+        re.search(r'GPU_MIB_PER_INSTANCE"\s*value:\s*{\s*string_value:\s*"(\d+)"', text).group(1)  # type: ignore[union-attr]
+    )
 
 
 def _profile_json(name: str) -> dict:

@@ -51,7 +51,7 @@ def _labeler(content: Any, pack: Any) -> VlmLabeler:
 
 
 def _sent_text(labeler: VlmLabeler) -> str:
-    content = labeler._client.post.await_args.kwargs['json']['messages'][1]['content']
+    content = labeler._client.post.await_args.kwargs['json']['messages'][1]['content']  # type: ignore[attr-defined]
     return ' '.join(p['text'] for p in content if p['type'] == 'text')
 
 
@@ -135,6 +135,7 @@ def test_no_attributes_or_no_meta_writes_no_slot() -> None:
 def test_the_slot_meta_names_the_runtimes_endpoint_and_pack() -> None:
     rt = SimpleNamespace(vlm_identity=VlmIdentity('env@None', 'm'), pack_ref=('cars', 3))
     meta = combined_slot_meta(rt)
+    assert meta is not None
     assert (meta.vlm_endpoint, meta.vlm_model, meta.prompt_pack, meta.prompt_pack_revision) == (
         'env@None',
         'm',

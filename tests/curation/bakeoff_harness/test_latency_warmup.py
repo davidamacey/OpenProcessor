@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -28,20 +29,20 @@ def _ds(tmp_path, n: int, *, readable: bool = True):
 
 @pytest.mark.parametrize('n', [1, 3])
 def test_small_holdout_keeps_a_timed_frame_and_records_warmup(tmp_path, n):
-    _, latencies, warmup_used = _run_inference(_Backend(), _ds(tmp_path, n), warmup=3)
+    _, latencies, warmup_used = _run_inference(cast('Any', _Backend()), _ds(tmp_path, n), warmup=3)
     assert len(latencies) >= 1
     assert warmup_used == n - 1
 
 
 def test_large_holdout_uses_requested_warmup(tmp_path):
-    _, latencies, warmup_used = _run_inference(_Backend(), _ds(tmp_path, 6), warmup=3)
+    _, latencies, warmup_used = _run_inference(cast('Any', _Backend()), _ds(tmp_path, 6), warmup=3)
     assert warmup_used == 3
     assert len(latencies) == 3
 
 
 def test_no_timed_frame_is_refused_not_zeroed(tmp_path):
     with pytest.raises(SystemExit, match='latency'):
-        _run_inference(_Backend(), _ds(tmp_path, 2, readable=False), warmup=3)
+        _run_inference(cast('Any', _Backend()), _ds(tmp_path, 2, readable=False), warmup=3)
 
 
 def test_percentiles_refuses_empty_sample():

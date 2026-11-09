@@ -6,6 +6,7 @@ Also the per-crop answers the assist chunk now reports.
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 
@@ -25,7 +26,7 @@ N = 2000
 
 
 def _answers(**counts: int) -> list[ClassAnswer]:
-    out = []
+    out: list[Any] = []
     for name, count in counts.items():
         out.extend(ClassAnswer(class_name=name) for _ in range(count))
     return out
@@ -158,9 +159,7 @@ def test_process_chunk_reports_which_crop_gave_which_answer(world: World) -> Non
     ctx = asyncio.run(class_context(vlm, ClassWriteGuard('assist_run'), revision=None))
     meta = RunMeta('run1', CREATED_AT, 'fake-vlm@1', 'fake-vlm', 'generic', None)
 
-    out = asyncio.run(
-        process_chunk(world.os, ctx, ids, classify=True, attributes=False, meta=meta)  # type: ignore[arg-type]
-    )
+    out = asyncio.run(process_chunk(world.os, ctx, ids, classify=True, attributes=False, meta=meta))
 
     by_crop = {a.crop_id: a.class_name for a in out.answers}
     assert by_crop == {cid: world.truth[cid] for cid in ids[1:]}

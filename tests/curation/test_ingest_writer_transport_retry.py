@@ -39,7 +39,7 @@ def _lose_first_images_response(os_fake: FakeIngestOpenSearch) -> list[int]:
             retried.append(len(body) // 2)
         return await real_bulk(body=body, refresh=refresh)
 
-    os_fake.bulk = bulk  # type: ignore[method-assign]
+    os_fake.bulk = bulk
     return retried
 
 
@@ -122,7 +122,7 @@ async def test_a_refused_images_doc_gets_no_items() -> None:
             }
         return await real_bulk(body=body, refresh=refresh)
 
-    os_fake.bulk = refuse_images  # type: ignore[method-assign]
+    os_fake.bulk = refuse_images
     result = await IngestWriter(os_fake).write(
         {'image_id': 'img'}, [{'crop_id': 'c1', 'image_id': 'img'}], **_kw()
     )

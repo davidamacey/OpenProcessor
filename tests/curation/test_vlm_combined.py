@@ -97,7 +97,7 @@ class TestLabelCombined:
         assert reply.region_boxes[0].confidence == 'medium'
         # JSON-mode flag must be set so the upstream server grammar-
         # constrains output.
-        sent = labeler._client.post.await_args.kwargs['json']
+        sent = labeler._client.post.await_args.kwargs['json']  # type: ignore[attr-defined]
         assert sent['response_format'] == {'type': 'json_object'}
 
     @pytest.mark.asyncio
@@ -137,7 +137,7 @@ class TestLabelCombined:
     @pytest.mark.asyncio
     async def test_http_error_raises_combined_parse_failure(self) -> None:
         labeler = _make_labeler({})
-        labeler._client.post = AsyncMock(side_effect=httpx.ConnectError('boom'))
+        labeler._client.post = AsyncMock(side_effect=httpx.ConnectError('boom'))  # type: ignore[method-assign]
         with pytest.raises(CombinedParseFailure):
             await labeler.label_combined('crop-5', _make_jpeg(), class_names=['widget'])
 
@@ -274,7 +274,7 @@ class TestLabelCombinedBatch:
             ),
         ]
         await labeler.label_combined_batch(crops, class_names=['widget'])
-        sent = labeler._client.post.await_args.kwargs['json']
+        sent = labeler._client.post.await_args.kwargs['json']  # type: ignore[attr-defined]
         user_msg = sent['messages'][-1]['content']
         # Header + 2 (text directive, image) pairs.
         assert len(user_msg) == 1 + 2 * len(crops)
@@ -327,7 +327,7 @@ class TestLabelCombinedBatch:
         # No reply at all is not a reply without a verdict: the caller
         # retries an outage but caps no-verdict replies.
         labeler = _make_labeler({})
-        labeler._client.post = AsyncMock(side_effect=httpx.ConnectError('boom'))
+        labeler._client.post = AsyncMock(side_effect=httpx.ConnectError('boom'))  # type: ignore[method-assign]
         crops = [
             CombinedCrop(crop_id='c1', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[]),
             CombinedCrop(crop_id='c2', jpeg_bytes=_make_jpeg(), region_bboxes_norm=[]),
@@ -357,7 +357,7 @@ class TestLabelCombinedBatch:
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
         assert out['only'] is not None
         assert out['only'].region_boxes[0].text_reply == 'XYZ789'
-        sent = labeler._client.post.await_args.kwargs['json']
+        sent = labeler._client.post.await_args.kwargs['json']  # type: ignore[attr-defined]
         # Single-image path uses response_format json_object.
         assert sent.get('response_format') == {'type': 'json_object'}
 
@@ -383,7 +383,7 @@ class TestLabelCombinedBatch:
         out = await labeler.label_combined_batch(crops, class_names=['widget'])
         assert len(out) == 8
         # Both chunks made one upstream call each.
-        assert labeler._client.post.await_count == 2
+        assert labeler._client.post.await_count == 2  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_multi_box_reply_aligns_by_position(self) -> None:

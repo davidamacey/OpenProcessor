@@ -74,7 +74,7 @@ def _live_test_labels() -> dict[str, list[int]]:
 
 
 def make_run(
-    dirs: dict[str, Path],
+    dirs: dict[str, Any],
     run_id: str,
     *,
     export_dir: Path,
@@ -93,7 +93,7 @@ def make_run(
     fakes = dirs['run_fakes']
     fakes.statuses[run_id] = TrainJobStatus(
         job_id=run_id,
-        state=state,  # type: ignore[arg-type]  # the tests pass a wire state
+        state=state,
         finished_at='2026-09-24T23:51:09Z',
         checkpoint_path=str(ckpt),
         eval=eval_block or {'map50': 0.9356, 'split': 'test'},
@@ -126,7 +126,7 @@ def make_run(
     return ckpt
 
 
-def _live_export(dirs: dict[str, Path], rel: str = '20260924T233203Z', **kw: Any) -> Path:
+def _live_export(dirs: dict[str, Any], rel: str = '20260924T233203Z', **kw: Any) -> Path:
     kw.setdefault(
         'manifest',
         {

@@ -73,7 +73,7 @@ def _sample(name: str, **labels: str) -> float:
 
 @pytest.fixture(autouse=True)
 def _registry_with_default_project() -> Any:
-    set_project_registry(StaticProjectRegistry([default_project_record()]))  # type: ignore[arg-type]
+    set_project_registry(StaticProjectRegistry([default_project_record()]))
     yield
     set_project_registry(None)
 
@@ -85,7 +85,7 @@ def test_metric_name_type_labels(name: str) -> None:
     assert metric._type == kind
     assert tuple(metric._labelnames) == labels
     if mode is not None:
-        assert metric._multiprocess_mode == mode
+        assert metric._multiprocess_mode == mode  # type: ignore[attr-defined]
     assert 'item' not in ''.join(labels)
     assert 'crop' not in ''.join(labels)
 
@@ -138,7 +138,7 @@ def test_project_label_is_bounded_and_deterministic(monkeypatch: pytest.MonkeyPa
         base.__class__(**{**base.__dict__, 'slug': s})
         for s in ('delta', 'alpha', 'charlie', 'bravo')
     ]
-    set_project_registry(StaticProjectRegistry(records))  # type: ignore[arg-type]
+    set_project_registry(StaticProjectRegistry(records))
     monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '2')
     assert [om.project_label(s) for s in ('alpha', 'bravo', 'charlie', 'delta')] == [
         'alpha',
@@ -481,14 +481,14 @@ def test_snapshot_gauge_shows_the_latest_live_value_across_processes(tmp_path: P
 def test_project_label_of_a_project_the_snapshot_has_not_seen_yet() -> None:
     """#124: a bound project missing from this process's registry snapshot (created
     moments ago / a failed refresh) still gets its own label, not ``other``."""
-    set_project_registry(StaticProjectRegistry([default_project_record()]))  # type: ignore[arg-type]
+    set_project_registry(StaticProjectRegistry([default_project_record()]))
     assert om.project_label('p1') == 'p1'
 
 
 def test_project_label_cap_still_folds_projects_beyond_it(monkeypatch: pytest.MonkeyPatch) -> None:
     base = default_project_record()
     records = [base.__class__(**{**base.__dict__, 'slug': s}) for s in ('alpha', 'bravo')]
-    set_project_registry(StaticProjectRegistry(records))  # type: ignore[arg-type]
+    set_project_registry(StaticProjectRegistry(records))
     monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '2')
     assert om.project_label('zulu') == 'other'
     assert om.project_label('aaa-new') == 'aaa-new'
@@ -507,7 +507,7 @@ async def test_tombstones_sorting_before_a_live_project_do_not_push_it_to_other(
 
     tombstones = [rec(f'accept-{i:02d}', 'deleted') for i in range(12)]
     live = rec('v041-verify', 'active')
-    set_project_registry(StaticProjectRegistry([*tombstones, live]))  # type: ignore[arg-type]
+    set_project_registry(StaticProjectRegistry([*tombstones, live]))
     monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '10')
     assert om.project_label('v041-verify') == 'v041-verify'
 
@@ -527,7 +527,7 @@ def test_live_projects_beyond_the_cap_still_fold_to_other_with_tombstones_presen
         base.__class__(**{**base.__dict__, 'slug': s, 'status': st})
         for s, st in (('aaa', 'deleted'), ('bravo', 'active'), ('charlie', 'active'))
     ]
-    set_project_registry(StaticProjectRegistry(records))  # type: ignore[arg-type]
+    set_project_registry(StaticProjectRegistry(records))
     monkeypatch.setenv('OP_METRICS_MAX_PROJECT_LABELS', '1')
     assert om.project_label('bravo') == 'bravo'
     assert om.project_label('charlie') == 'other'

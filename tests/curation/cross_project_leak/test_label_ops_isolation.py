@@ -49,6 +49,7 @@ def _label(leak_env: LeakEnv, client: TestClient, slug: str) -> str:
         json={'crop_ids': [f'{slug}-item-0002'], 'class_id': 1},
     )
     assert resp.status_code == 202, resp.text
+    assert app_state._opensearch_client is not None
     opensearch = app_state._opensearch_client.client
     with bind_project(leak_env.records[slug]):
         result = asyncio.run(

@@ -55,7 +55,9 @@ def _scope(conn, project: uuid.UUID | None, kind: str = 'project') -> None:
 
 def _super_count(pg, table: str) -> int:
     with psycopg.connect(pg.conninfo('super')) as conn:
-        return conn.execute(f'SELECT count(*) FROM {table}').fetchone()[0]  # test table names
+        return (conn.execute(f'SELECT count(*) FROM {table}').fetchone() or (None,))[
+            0
+        ]  # test table names
 
 
 @pytest.mark.parametrize('table', PROTECTED)
@@ -75,7 +77,7 @@ IMMUTABLE = {'config_revisions'}
 @pytest.mark.parametrize('table', [t for t in PROTECTED if t not in IMMUTABLE])
 def test_a_project_cannot_update_or_delete_another_projects_rows(pg, world, table: str) -> None:
     with psycopg.connect(pg.conninfo('super')) as conn:
-        first_column = conn.execute(
+        first_column = conn.execute(  # type: ignore[index]
             'SELECT column_name FROM information_schema.columns WHERE table_name = %s '
             "AND is_identity = 'NO' ORDER BY ordinal_position LIMIT 1",
             (table,),

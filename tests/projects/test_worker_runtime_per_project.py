@@ -44,7 +44,7 @@ def _record(tmp_path: Any, slug: str) -> ProjectRecord:
         slug=slug,
         display_name=slug,
         description='',
-        status='active',  # type: ignore[arg-type]
+        status='active',
         revision=1,
         created_at=now,
         updated_at=now,

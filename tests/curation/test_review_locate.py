@@ -161,7 +161,7 @@ def test_locate_reports_not_in_queue_and_not_found(monkeypatch: pytest.MonkeyPat
 
 def test_queue_sort_ends_in_crop_id_tiebreak(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
-    fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})  # type: ignore[method-assign]
+    fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     _client(fake, monkeypatch).get('/curation/projects/default/review/all')
     assert fake.search.call_args.kwargs['body']['sort'][-1] == {'crop_id': {'order': 'asc'}}
 

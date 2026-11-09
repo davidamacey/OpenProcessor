@@ -133,7 +133,7 @@ class Backends:
 
 
 @pytest.fixture
-def backends(monkeypatch: pytest.MonkeyPatch) -> Backends:
+def backends(monkeypatch: pytest.MonkeyPatch) -> Backends:  # type: ignore[misc]
     from src.services import analyze_pipeline, ocr_service
 
     b = Backends(FakeTriton(_yolo_result()), FakeFaces(_faces_result()), FakeOcr(OCR_OK))

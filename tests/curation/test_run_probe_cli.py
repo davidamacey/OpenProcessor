@@ -13,7 +13,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from PIL import Image
@@ -135,7 +135,7 @@ async def test_resume_skips_items_already_scored_by_this_version(canned_probe, t
 
     fake = _FakeOpenSearch(_docs())
     n = await run_probe_inference(
-        tmp_path / 'm.onnx', fake, model_version='run-7', resume=True, page_size=50
+        tmp_path / 'm.onnx', cast('Any', fake), model_version='run-7', resume=True, page_size=50
     )
 
     assert n == 1
@@ -148,7 +148,7 @@ async def test_without_resume_every_non_holdout_item_is_rescored(canned_probe, t
     from src.services.curation.probe_predictions import run_probe_inference
 
     fake = _FakeOpenSearch(_docs())
-    n = await run_probe_inference(tmp_path / 'm.onnx', fake, model_version='run-7')
+    n = await run_probe_inference(tmp_path / 'm.onnx', cast('Any', fake), model_version='run-7')
 
     assert n == 2
     assert sorted(u['id'] for u in fake.updates) == ['a', 'b']
@@ -159,8 +159,8 @@ async def test_count_probe_candidates_honours_holdout_and_resume():
     from src.services.curation.probe_predictions import count_probe_candidates
 
     fake = _FakeOpenSearch(_docs())
-    assert await count_probe_candidates(fake) == 2
-    assert await count_probe_candidates(fake, skip_version='run-7') == 1
+    assert await count_probe_candidates(cast('Any', fake)) == 2
+    assert await count_probe_candidates(cast('Any', fake), skip_version='run-7') == 1
 
 
 # --------------------------------------------------------------------------- CLI

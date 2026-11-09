@@ -6,6 +6,7 @@ carries ``revision`` so a client can PATCH/clone_settings with
 from __future__ import annotations
 
 import asyncio
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -150,7 +151,7 @@ def test_clone_settings_route_serves_keymap_conflicts_structured(
     with bind_project(target_record):
         from src.routers.curation import get_class_registry
 
-        get_class_registry().seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')
+        get_class_registry().seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')  # type: ignore[attr-defined]
 
     response = asyncio.run(
         projects_router.clone_settings_route(
@@ -197,7 +198,7 @@ def test_create_project_surfaces_keymap_clone_conflicts_as_warnings(
     with bind_project(source_record):
         from src.routers.curation import get_class_registry
 
-        get_class_registry().seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')
+        get_class_registry().seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')  # type: ignore[attr-defined]
 
     # Fakes the keymap store directly (as the sibling clone_settings test
     # above does) rather than round-tripping a real PUT /keymap, which
@@ -345,10 +346,10 @@ def test_delete_finish_publishes_project_deleted(events, producer) -> None:
             accepted = await projects_router.delete_project(
                 'cars', Response(), session, confirm='cars'
             )
-        assert accepted.job_id == producer.sent()[0]
+        assert accepted.job_id == producer.sent()[0]  # type: ignore[union-attr]
         assert not [e for e in events if e['type'] == 'project.deleted']
         client = await projects_router.make_curation_opensearch()
-        await jobs_c.project_delete(_StubContext('cars', client))
+        await jobs_c.project_delete(cast('Any', _StubContext('cars', client)))
 
     asyncio.run(_delete_flow())
 

@@ -27,6 +27,8 @@ from integration.ingest_fakes import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from fastapi.testclient import TestClient
 
 
@@ -48,7 +50,7 @@ def client(
     fake_opensearch: FakeOpenSearch,
     fake_triton: FakeTritonPool,
     monkeypatch: pytest.MonkeyPatch,
-) -> TestClient:
+) -> Iterator[TestClient]:
     with curation_app(fake_opensearch, fake_triton, monkeypatch) as c:
         yield c
 

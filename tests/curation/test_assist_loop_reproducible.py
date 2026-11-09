@@ -138,7 +138,7 @@ async def test_fetch_embeddings_reads_the_given_vector_field() -> None:
         }
     )
 
-    got = await fetch_embeddings(fake, ['a', 'b', 'c', 'missing'], field=field)  # type: ignore[arg-type]
+    got = await fetch_embeddings(fake, ['a', 'b', 'c', 'missing'], field=field)
 
     assert got == {'a': [1.0, 0.0], 'b': [0.0, 1.0]}
 
