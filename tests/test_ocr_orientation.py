@@ -13,6 +13,7 @@ from typing import Any
 import cv2
 import numpy as np
 import pytest
+from _ocr_fakes import EmptyOcrResponse
 from PIL import Image
 
 from src.clients import triton_ocr
@@ -23,30 +24,18 @@ from src.services.ocr_service import OcrService
 ORIENTATION_TAG = 0x0112
 
 
-class _Response:
-    def as_numpy(self, name: str) -> np.ndarray:
-        return {
-            'num_texts': np.array([0], dtype=np.int32),
-            'text_boxes': np.zeros((128, 8), np.float32),
-            'text_boxes_normalized': np.zeros((128, 4), np.float32),
-            'texts': np.array([b''] * 128, dtype=object),
-            'text_scores': np.zeros(128, np.float32),
-            'rec_scores': np.zeros(128, np.float32),
-        }[name]
-
-
 @pytest.fixture
 def sent(monkeypatch: pytest.MonkeyPatch) -> dict[str, np.ndarray]:
     """Route ``OcrService`` through the real ``infer_ocr`` and capture what it sends."""
     captured: dict[str, np.ndarray] = {}
 
-    def infer(_model: str, inputs: list, _outputs: list) -> _Response:
+    def infer(_model: str, inputs: list, _outputs: list) -> EmptyOcrResponse:
         dtypes = {'UINT8': np.uint8, 'INT32': np.int32}
         for inp in inputs:
             captured[inp.name()] = np.frombuffer(
                 inp._get_content(), dtype=dtypes[inp.datatype()]
             ).reshape(inp.shape())
-        return _Response()
+        return EmptyOcrResponse()
 
     class _Client:
         def infer_ocr(self, image: Any) -> dict[str, Any]:

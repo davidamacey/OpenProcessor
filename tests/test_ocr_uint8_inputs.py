@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 from _image_helpers import png_bytes as _png
+from _ocr_fakes import EmptyOcrResponse
 from _ocr_model_module import FakeTensor
 from PIL import Image
 
@@ -39,24 +40,12 @@ def _values(inp: InferInput) -> np.ndarray:
     return np.frombuffer(inp._get_content(), dtype=dtypes[inp.datatype()]).reshape(inp.shape())
 
 
-class _Response:
-    def as_numpy(self, name: str) -> np.ndarray:
-        return {
-            'num_texts': np.array([0], dtype=np.int32),
-            'text_boxes': np.zeros((128, 8), np.float32),
-            'text_boxes_normalized': np.zeros((128, 4), np.float32),
-            'texts': np.array([b''] * 128, dtype=object),
-            'text_scores': np.zeros(128, np.float32),
-            'rec_scores': np.zeros(128, np.float32),
-        }[name]
-
-
 def _run_client(datatype: str, image: bytes) -> list[Any]:
     sent: list[Any] = []
 
-    def infer(_model: str, inputs: list, _outputs: list) -> _Response:
+    def infer(_model: str, inputs: list, _outputs: list) -> EmptyOcrResponse:
         sent.extend(inputs)
-        return _Response()
+        return EmptyOcrResponse()
 
     triton_ocr.infer_ocr(infer, image, lambda _name: datatype)
     return sent

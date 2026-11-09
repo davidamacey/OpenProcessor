@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import copy
 import dataclasses
-import io
 import json
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 from _fake_project_registry import install_static_project_registry
-from PIL import Image
+from _image_helpers import make_jpeg
 from tritonclient.utils import InferenceServerException
 
 from curation.vlm_opt_in import project_opts_in_to_env_vlm
@@ -54,9 +53,7 @@ def _labeler(reply: dict[str, Any] | str) -> VlmLabeler:
 
 
 def _jpeg() -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (64, 48), (90, 90, 90)).save(buf, format='JPEG')
-    return buf.getvalue()
+    return make_jpeg(64, 48, (90, 90, 90))
 
 
 def _combined(**over: Any) -> dict[str, Any]:

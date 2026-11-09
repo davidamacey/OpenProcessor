@@ -3,13 +3,12 @@
 
 from __future__ import annotations
 
-import io
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from _image_helpers import make_jpeg
 from fastapi.testclient import TestClient
-from PIL import Image
 from tritonclient.utils import InferenceServerException
 
 import src.services.inference as inf
@@ -76,9 +75,7 @@ def test_a_bug_in_the_face_client_is_not_reported_as_an_outage(
 
 
 def _jpeg() -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (8, 8), (10, 20, 30)).save(buf, format='JPEG')
-    return buf.getvalue()
+    return make_jpeg(8, 8, (10, 20, 30))
 
 
 @pytest.mark.parametrize(

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import gc
 import importlib
-import io
 import json
 import sys
 import threading
@@ -19,7 +18,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-from PIL import Image
+from _image_helpers import make_jpeg
 
 
 MODEL_DIR = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep'
@@ -304,9 +303,7 @@ def make_model(
 
 
 def _jpeg() -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (W, H), (10, 20, 30)).save(buf, 'JPEG')
-    return buf.getvalue()
+    return make_jpeg(W, H, (10, 20, 30))
 
 
 def _run(model: Any, request: _Request) -> dict[str, np.ndarray]:

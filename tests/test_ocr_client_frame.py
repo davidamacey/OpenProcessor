@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from _image_helpers import png_bytes as _png
+from _ocr_fakes import EmptyOcrResponse
 
 from src.clients import triton_ocr
 
@@ -21,28 +22,16 @@ BLS_DIR = Path(__file__).resolve().parents[1] / 'models' / 'ocr_pipeline' / '1'
 TEXT_BGR = (0, 0, 255)
 
 
-class _Response:
-    def as_numpy(self, name: str) -> np.ndarray:
-        return {
-            'num_texts': np.array([0], dtype=np.int32),
-            'text_boxes': np.zeros((128, 8), np.float32),
-            'text_boxes_normalized': np.zeros((128, 4), np.float32),
-            'texts': np.array([b''] * 128, dtype=object),
-            'text_scores': np.zeros(128, np.float32),
-            'rec_scores': np.zeros(128, np.float32),
-        }[name]
-
-
 def _sent_inputs(image: bytes | np.ndarray) -> dict[str, np.ndarray]:
     sent: dict[str, np.ndarray] = {}
 
-    def infer(_model: str, inputs: list, _outputs: list) -> _Response:
+    def infer(_model: str, inputs: list, _outputs: list) -> EmptyOcrResponse:
         dtypes = {'UINT8': np.uint8, 'INT32': np.int32}
         for inp in inputs:
             sent[inp.name()] = np.frombuffer(
                 inp._get_content(), dtype=dtypes[inp.datatype()]
             ).reshape(inp.shape())
-        return _Response()
+        return EmptyOcrResponse()
 
     data = image if isinstance(image, bytes) else _png(image)
     triton_ocr.infer_ocr(infer, data, lambda _n: 'UINT8')
